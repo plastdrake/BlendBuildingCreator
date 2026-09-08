@@ -1,0 +1,183 @@
+"""
+Architectural style presets for the Stylized Fantasy Building Generator.
+Instantly configures dimensions, roof styles, interior, and colors.
+"""
+
+PRESETS = {
+    'TAVERN': {
+        'name': "Cozy Fantasy Tavern",
+        'description': "Two-story inn with rustic ceiling beams, stone foundation, sway roof, and lantern",
+        'settings': {
+            'num_floors': 2,
+            'floor_height': 2.8,
+            'width': 6.8,
+            'depth': 5.4,
+            'wall_thickness': 0.28,
+            'has_cantilever': True,
+            'cantilever_overhang': 0.35,
+            'wonkiness': 0.08,
+            'has_foundation': True,
+            'foundation_height': 0.65,
+            'ground_floor_stone': True,
+            'has_front_steps': True,
+            'has_stairs': True,
+            'stair_style': 'STRAIGHT',
+            'stair_width': 0.95,
+            'has_ceiling_beams': True,
+            'has_front_door': True,
+            'door_angle': 40.0,
+            'has_windows': True,
+            'has_shutters': True,
+            'has_flower_boxes': True,
+            'has_lanterns': True,
+            'has_timber_framing': True,
+            'timber_diagonals': True,
+            'roof_style': 'SWAY',
+            'roof_height': 3.2,
+            'roof_sway': 0.32,
+            'has_roof_shingles': True,
+            'shingle_rows': 7,
+            'has_dormers': True,
+            'has_chimney': True,
+            'color_shingles': (0.18, 0.28, 0.46, 1.0),
+            'color_wall_ext': (0.88, 0.82, 0.72, 1.0),
+            'color_timber': (0.28, 0.16, 0.09, 1.0),
+            'window_glow_strength': 2.5
+        }
+    },
+    'WIZARD_TOWER': {
+        'name': "Wizard / Alchemist Tower",
+        'description': "Tall 3-story tower with conical turret roof, spiral staircase, and crooked chimney",
+        'settings': {
+            'num_floors': 3,
+            'floor_height': 3.0,
+            'width': 4.8,
+            'depth': 4.8,
+            'wall_thickness': 0.30,
+            'has_cantilever': True,
+            'cantilever_overhang': 0.25,
+            'wonkiness': 0.11,
+            'has_foundation': True,
+            'foundation_height': 0.8,
+            'ground_floor_stone': True,
+            'has_front_steps': True,
+            'has_stairs': True,
+            'stair_style': 'SPIRAL',
+            'stair_width': 0.90,
+            'has_ceiling_beams': True,
+            'has_front_door': True,
+            'door_angle': 25.0,
+            'has_windows': True,
+            'has_shutters': False,
+            'has_flower_boxes': False,
+            'has_lanterns': True,
+            'has_timber_framing': True,
+            'timber_diagonals': False,
+            'roof_style': 'TURRET',
+            'roof_height': 3.8,
+            'has_roof_shingles': False,
+            'has_dormers': False,
+            'has_chimney': True,
+            'color_shingles': (0.35, 0.18, 0.42, 1.0),
+            'color_wall_ext': (0.65, 0.65, 0.68, 1.0),
+            'color_timber': (0.20, 0.14, 0.12, 1.0),
+            'window_glow_strength': 4.0
+        }
+    },
+    'COTTAGE': {
+        'name': "Fairytale Country Cottage",
+        'description': "Charming 1-story cottage with high attic loft, flower boxes, and terracotta sway roof",
+        'settings': {
+            'num_floors': 1,
+            'floor_height': 2.7,
+            'width': 5.8,
+            'depth': 4.6,
+            'wall_thickness': 0.26,
+            'has_cantilever': False,
+            'wonkiness': 0.09,
+            'has_foundation': True,
+            'foundation_height': 0.5,
+            'ground_floor_stone': True,
+            'has_front_steps': True,
+            'has_stairs': True,
+            'stair_style': 'STRAIGHT',
+            'stair_width': 0.85,
+            'has_ceiling_beams': True,
+            'has_front_door': True,
+            'door_angle': 55.0,
+            'has_windows': True,
+            'has_shutters': True,
+            'has_flower_boxes': True,
+            'has_lanterns': True,
+            'has_timber_framing': True,
+            'timber_diagonals': True,
+            'roof_style': 'SWAY',
+            'roof_height': 3.0,
+            'roof_sway': 0.35,
+            'has_roof_shingles': True,
+            'shingle_rows': 6,
+            'has_dormers': True,
+            'has_chimney': True,
+            'color_shingles': (0.62, 0.24, 0.15, 1.0),
+            'color_wall_ext': (0.92, 0.88, 0.78, 1.0),
+            'color_timber': (0.32, 0.18, 0.10, 1.0),
+            'window_glow_strength': 1.5
+        }
+    },
+    'TOWNHOUSE': {
+        'name': "Medieval Townhouse",
+        'description': "Tall 3-story steep gable townhouse with multiple cantilever tiers and rich timber framing",
+        'settings': {
+            'num_floors': 3,
+            'floor_height': 2.8,
+            'width': 5.6,
+            'depth': 6.2,
+            'wall_thickness': 0.28,
+            'has_cantilever': True,
+            'cantilever_overhang': 0.30,
+            'wonkiness': 0.06,
+            'has_foundation': True,
+            'foundation_height': 0.7,
+            'ground_floor_stone': True,
+            'has_front_steps': True,
+            'has_stairs': True,
+            'stair_style': 'STRAIGHT',
+            'stair_width': 0.95,
+            'has_ceiling_beams': True,
+            'has_front_door': True,
+            'door_angle': 30.0,
+            'has_windows': True,
+            'has_shutters': True,
+            'has_flower_boxes': False,
+            'has_lanterns': True,
+            'has_timber_framing': True,
+            'timber_diagonals': True,
+            'roof_style': 'GABLE',
+            'roof_height': 3.6,
+            'has_roof_shingles': True,
+            'shingle_rows': 8,
+            'has_dormers': True,
+            'has_chimney': True,
+            'color_shingles': (0.24, 0.26, 0.28, 1.0),
+            'color_wall_ext': (0.85, 0.78, 0.68, 1.0),
+            'color_timber': (0.22, 0.14, 0.08, 1.0),
+            'window_glow_strength': 0.0
+        }
+    }
+}
+
+def apply_preset(props, preset_key):
+    """Applies preset dictionary values to the PropertyGroup."""
+    if preset_key not in PRESETS:
+        return
+        
+    data = PRESETS[preset_key]['settings']
+    # Temporarily disable auto_update during batch assignment to avoid multiple regenerations
+    old_auto = props.auto_update
+    props.auto_update = False
+    
+    for k, v in data.items():
+        if hasattr(props, k):
+            setattr(props, k, v)
+            
+    props.auto_update = old_auto
