@@ -72,6 +72,15 @@ class VIEW3D_PT_fantasy_building_dimensions(bpy.types.Panel):
         props = context.scene.fantasy_building_settings
         
         col = layout.column(align=True)
+        col.prop(props, "building_shape")
+        if props.building_shape in ('L_SHAPE', 'T_SHAPE'):
+            box_wing = col.box()
+            box_wing.label(text="Wing Geometry", icon='MOD_BUILD')
+            box_wing.prop(props, "wing_width")
+            box_wing.prop(props, "wing_depth")
+            if props.building_shape == 'L_SHAPE':
+                box_wing.prop(props, "wing_side")
+                
         col.prop(props, "num_floors")
         col.prop(props, "floor_height")
         col.prop(props, "width")

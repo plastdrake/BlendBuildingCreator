@@ -65,6 +65,45 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
     
+    building_shape: EnumProperty(
+        name="Building Shape",
+        description="Overall architectural footprint geometry",
+        items=[
+            ('RECTANGLE', "Rectangular", "Standard rectangular building footprint"),
+            ('L_SHAPE', "L-Shaped", "L-shaped footprint with a perpendicular projecting wing"),
+            ('T_SHAPE', "T-Shaped", "T-shaped footprint with a central projecting cross wing"),
+        ],
+        default='RECTANGLE',
+        update=on_property_updated
+    )
+    
+    wing_width: FloatProperty(
+        name="Wing Width",
+        description="Width of the projecting wing",
+        min=2.5, max=10.0, default=3.5,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+    
+    wing_depth: FloatProperty(
+        name="Wing Projection",
+        description="Forward projection distance of the wing",
+        min=2.0, max=10.0, default=3.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+    
+    wing_side: EnumProperty(
+        name="Wing Side",
+        description="Placement of the L-shaped wing",
+        items=[
+            ('RIGHT', "Right", "Project wing from right side (+X)"),
+            ('LEFT', "Left", "Project wing from left side (-X)"),
+        ],
+        default='RIGHT',
+        update=on_property_updated
+    )
+    
     wall_thickness: FloatProperty(
         name="Wall Thickness",
         description="Thickness of exterior and interior walls",

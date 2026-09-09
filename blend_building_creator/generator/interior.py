@@ -275,11 +275,26 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
             rotation=(pitch_angle, 0.0, 0.0),
             mat_index=MAT_INDEX_TIMBER
         )
-        # Vertical spindles along run (every 2nd step)
-        for i in range(2, num_steps - 1, 2):
-            bz = z0 + i * step_h + post_h * 0.42
-            by = y0 + (i + 0.5) * step_d
-            create_cylinder(bm, radius=0.02, height=post_h * 0.80, segments=6, location=(rail_x, by, bz), mat_index=MAT_INDEX_TIMBER)
+        # Vertical spindles along run (seated flush on tread top, inserting into handrail underside)
+        for i in range(1, num_steps):
+            # Top of step tread
+            z_tread = z0 + (i + 1) * step_h
+            # Underside of handrail at this Y coordinate
+            z_rail_center = z0 + (i + 0.5) * step_h + post_h * 0.90
+            z_rail_bot = z_rail_center - rail_thick * 0.5
+            
+            spindle_len = z_rail_bot - z_tread
+            if spindle_len > 0.08:
+                spindle_cz = z_tread + spindle_len * 0.5
+                by = y0 + (i + 0.5) * step_d
+                create_cylinder(
+                    bm,
+                    radius=0.018,
+                    height=spindle_len,
+                    segments=8,
+                    location=(rail_x, by, spindle_cz),
+                    mat_index=MAT_INDEX_TIMBER
+                )
 
 def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, start_ang_deg=-90.0, total_angle_deg=360.0):
     """
