@@ -184,38 +184,59 @@ def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
         if last_u < span - 1.3:
             solid_intervals.append((last_u, span))
             
-        for u_a, u_b in solid_intervals:
-            p_w = u_b - u_a
-            diag_w = min(1.1, p_w * 0.44)
-            diag_h = min(1.1, h * 0.44)
-            diag_len = math.sqrt(diag_w * diag_w + diag_h * diag_h)
-            alpha = math.atan2(diag_h, diag_w)
-            
-            # Rotation matrix for diagonal in the wall plane:
-            # Local X: tangent along diagonal
-            # Local Y: wall exterior normal (thickness)
-            # Local Z: binormal in wall plane
-            T1 = Vector((math.cos(alpha) * ux, math.cos(alpha) * uy, math.sin(alpha)))
-            N_vec = Vector((nx, ny, 0.0))
-            B1 = N_vec.cross(T1).normalized()
-            rot_mat1 = Matrix([T1, N_vec, B1]).transposed()
-            rot_euler1 = rot_mat1.to_euler('XYZ')
-            
-            u_c1 = u_a + diag_w * 0.5 + 0.04
-            z_c1 = z_bottom + diag_h * 0.5 + 0.04
-            cx1, cy1, cz1 = to_world_pt(u_c1, z_c1)
-            create_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx1, cy1, cz1), rotation=rot_euler1, mat_index=MAT_INDEX_TIMBER)
-            
-            # Second diagonal (mirrored) if panel is wide enough (> 2.3m)
-            if p_w > 2.3:
-                T2 = Vector((-math.cos(alpha) * ux, -math.cos(alpha) * uy, math.sin(alpha)))
-                B2 = N_vec.cross(T2).normalized()
-                rot_mat2 = Matrix([T2, N_vec, B2]).transposed()
-                rot_euler2 = rot_mat2.to_euler('XYZ')
-                
-                u_c2 = u_b - diag_w * 0.5 - 0.04
-                cx2, cy2, cz2 = to_world_pt(u_c2, z_c1)
-                create_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx2, cy2, cz2), rotation=rot_euler2, mat_index=MAT_INDEX_TIMBER)
+        # Exact vertical clear span between bottom beam top and mid-rail bottom
+        z_bot_top = z_bottom + beam_w
+        z_mid_bot = mid_z - beam_w * 0.5
+        diag_h = z_mid_bot - z_bot_top
+        z_c1 = (z_bot_top + z_mid_bot) * 0.5
+        
+        if diag_h > 0.4:
+            for u_a, u_b in solid_intervals:
+                p_w = u_b - u_a
+                if p_w < 1.0:
+                    continue
+                    
+                # If panel is wide (> 2.1m), use pair of mirrored braces meeting near center
+                if p_w > 2.1:
+                    diag_w = min(p_w * 0.46, diag_h * 1.15)
+                    diag_len = math.sqrt(diag_w * diag_w + diag_h * diag_h) + 0.05
+                    alpha = math.atan2(diag_h, diag_w)
+                    
+                    # Left brace: rises from (u_a, z_bot_top) to (u_a + diag_w, z_mid_bot)
+                    T1 = Vector((math.cos(alpha) * ux, math.cos(alpha) * uy, math.sin(alpha)))
+                    N_vec = Vector((nx, ny, 0.0))
+                    B1 = N_vec.cross(T1).normalized()
+                    rot_mat1 = Matrix([T1, N_vec, B1]).transposed()
+                    rot_euler1 = rot_mat1.to_euler('XYZ')
+                    
+                    u_c1 = u_a + diag_w * 0.5 + 0.02
+                    cx1, cy1, cz1 = to_world_pt(u_c1, z_c1)
+                    create_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx1, cy1, cz1), rotation=rot_euler1, mat_index=MAT_INDEX_TIMBER)
+                    
+                    # Right brace: rises from (u_b, z_bot_top) to (u_b - diag_w, z_mid_bot)
+                    T2 = Vector((-math.cos(alpha) * ux, -math.cos(alpha) * uy, math.sin(alpha)))
+                    B2 = N_vec.cross(T2).normalized()
+                    rot_mat2 = Matrix([T2, N_vec, B2]).transposed()
+                    rot_euler2 = rot_mat2.to_euler('XYZ')
+                    
+                    u_c2 = u_b - diag_w * 0.5 - 0.02
+                    cx2, cy2, cz2 = to_world_pt(u_c2, z_c1)
+                    create_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx2, cy2, cz2), rotation=rot_euler2, mat_index=MAT_INDEX_TIMBER)
+                else:
+                    # Single diagonal brace spanning the panel
+                    diag_w = min(p_w * 0.88, diag_h * 1.15)
+                    diag_len = math.sqrt(diag_w * diag_w + diag_h * diag_h) + 0.05
+                    alpha = math.atan2(diag_h, diag_w)
+                    
+                    T1 = Vector((math.cos(alpha) * ux, math.cos(alpha) * uy, math.sin(alpha)))
+                    N_vec = Vector((nx, ny, 0.0))
+                    B1 = N_vec.cross(T1).normalized()
+                    rot_mat1 = Matrix([T1, N_vec, B1]).transposed()
+                    rot_euler1 = rot_mat1.to_euler('XYZ')
+                    
+                    u_c1 = u_a + diag_w * 0.5 + 0.02
+                    cx1, cy1, cz1 = to_world_pt(u_c1, z_c1)
+                    create_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx1, cy1, cz1), rotation=rot_euler1, mat_index=MAT_INDEX_TIMBER)
 
 def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
                          wall_thickness=0.28,

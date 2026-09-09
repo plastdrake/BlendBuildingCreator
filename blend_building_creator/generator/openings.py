@@ -186,16 +186,29 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
     create_box(bm, size=(glass_w, 0.03, 0.035), location=w_loc, rotation=w_rot, mat_index=MAT_INDEX_TIMBER)
     create_box(bm, size=(0.035, 0.03, glass_h), location=w_loc, rotation=w_rot, mat_index=MAT_INDEX_TIMBER)
     
-    # 4. Stylized Wooden Shutters
+    # 4. Stylized Wooden Shutters (angled open into space so they never intersect wall timbers)
     if has_shutters:
-        shutter_w = win_w * 0.45
+        shutter_w = win_w * 0.44
         shutter_h = win_h * 0.94
-        shutter_t = 0.035
-        # Open shutters folded against exterior wall
-        for side, s_ang in [(-1, -0.12), (1, 0.12)]:
-            sx = side * (win_w * 0.5 + shutter_w * 0.5 + 0.02)
-            sy = -wall_thickness * 0.5 - shutter_t * 0.5 - 0.01
-            w_loc, w_rot = to_world((sx, sy, jamb_cz), rot=(0.0, 0.0, s_ang))
+        shutter_t = 0.032
+        open_ang = math.radians(52.0)
+        cos_a = math.cos(open_ang)
+        sin_a = math.sin(open_ang)
+        
+        # Left and Right shutters hinged at casing outer edges
+        for side in [-1, 1]:
+            hx = side * (win_w * 0.5 + 0.01)
+            hy = -wall_thickness * 0.5 - 0.02
+            
+            # Vector pointing along the open shutter blade
+            dx = side * cos_a
+            dy = -sin_a
+            rot_z = math.atan2(dy, dx)
+            
+            sx = hx + dx * (shutter_w * 0.5)
+            sy = hy + dy * (shutter_w * 0.5)
+            
+            w_loc, w_rot = to_world((sx, sy, jamb_cz), rot=(0.0, 0.0, rot_z))
             create_beveled_box(
                 bm,
                 size=(shutter_w, shutter_t, shutter_h),
@@ -204,6 +217,17 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
                 mat_index=MAT_INDEX_TIMBER,
                 bevel_amount=0.008
             )
+            
+            # Stylized iron hinge straps on the shutter
+            for hz in [-shutter_h * 0.32, shutter_h * 0.32]:
+                strap_loc, strap_rot = to_world((sx, sy - side * 0.002, jamb_cz + hz), rot=(0.0, 0.0, rot_z))
+                create_box(
+                    bm,
+                    size=(shutter_w * 0.75, shutter_t + 0.012, 0.035),
+                    location=strap_loc,
+                    rotation=strap_rot,
+                    mat_index=MAT_INDEX_IRON
+                )
             
     # 5. Flower Box
     if has_flower_box:

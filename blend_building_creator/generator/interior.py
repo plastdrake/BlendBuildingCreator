@@ -125,30 +125,48 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95):
     """
     Builds a safety guardrail on the upper floor along the open edge of the stairwell
     (at X = rail_x, from y_start to y_end).
+    Includes a solid grounded base timber sill so spindles never hover.
     """
     span_y = y_end - y_start
     if span_y < 0.3:
         return
         
     post_w = 0.09
-    rail_w = 0.07
+    rail_w = 0.08
+    sill_h = 0.05
+    
+    # 0. Solid Grounded Base Sill (rests firmly on floor slab)
+    create_box(
+        bm,
+        size=(rail_w, span_y + post_w * 0.5, sill_h),
+        location=(rail_x, (y_start + y_end) * 0.5, floor_z + sill_h * 0.5),
+        mat_index=MAT_INDEX_TIMBER
+    )
     
     # 1. Corner Posts at start and end of open edge
     create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(rail_x, y_start, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
     create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(rail_x, y_end, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
     
     # 2. Top Handrail
-    create_box(bm, size=(rail_w, span_y, 0.06), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h * 0.95), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, size=(rail_w, span_y + post_w * 0.5, 0.06), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h - 0.03), mat_index=MAT_INDEX_TIMBER)
     
     # 3. Mid Rail
-    create_box(bm, size=(rail_w * 0.8, span_y, 0.05), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h * 0.48), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, size=(rail_w * 0.75, span_y, 0.04), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
     
-    # 4. Spindles/Balusters
-    num_spindles = max(1, int(span_y / 0.32))
+    # 4. Spindles/Balusters (resting on the solid base sill)
+    num_spindles = max(1, int(span_y / 0.28))
     step = span_y / (num_spindles + 1)
+    spindle_h = rail_h - sill_h - 0.06
     for i in range(1, num_spindles + 1):
         sy = y_start + i * step
-        create_cylinder(bm, radius=0.022, height=rail_h * 0.85, segments=6, location=(rail_x, sy, floor_z + rail_h * 0.48), mat_index=MAT_INDEX_TIMBER)
+        create_cylinder(
+            bm,
+            radius=0.022,
+            height=spindle_h,
+            segments=6,
+            location=(rail_x, sy, floor_z + sill_h + spindle_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER
+        )
 
 def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_depth=2.2, num_steps=14, direction_y=1):
     """
@@ -261,6 +279,8 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
     
     # 2. Wedge steps
     step_len = radius - col_r
+    posts = []
+    
     for i in range(num_steps):
         cur_ang = base_ang + i * step_ang
         cur_z = z0 + i * step_h
@@ -270,27 +290,76 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
         sx = cx + mid_r * math.cos(mid_ang)
         sy = cy + mid_r * math.sin(mid_ang)
         
-        # Step wedge plank
-        step_w = 2.0 * mid_r * math.tan(step_ang * 0.5)
+        # Step wedge plank (with 15% angular overlap to eliminate any gap)
+        step_w = 2.0 * mid_r * math.tan(step_ang * 0.5) * 1.15
         create_beveled_box(
             bm,
-            size=(step_len, max(0.18, step_w), 0.06),
-            location=(sx, sy, cur_z + 0.03),
+            size=(step_len + 0.04, max(0.20, step_w), 0.065),
+            location=(sx, sy, cur_z + 0.032),
             rotation=(0.0, 0.0, mid_ang),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.01
         )
         
-        # Outer banister post on every 2nd step
-        if i % 2 == 0 or i == num_steps - 1:
-            px = cx + (radius - 0.05) * math.cos(mid_ang)
-            py = cy + (radius - 0.05) * math.sin(mid_ang)
-            create_cylinder(
+        # Outer banister post on every step
+        px = cx + (radius - 0.04) * math.cos(mid_ang)
+        py = cy + (radius - 0.04) * math.sin(mid_ang)
+        pz = cur_z + 0.45
+        posts.append(Vector((px, py, cur_z + 0.90)))
+        create_cylinder(
+            bm,
+            radius=0.026,
+            height=0.90,
+            segments=6,
+            location=(px, py, pz),
+            mat_index=MAT_INDEX_TIMBER
+        )
+        
+    # 3. Dedicated Top Landing Platform (flushes perfectly with upper floor level)
+    land_len = step_len + 0.35
+    land_w = max(0.42, 2.0 * (col_r + land_len * 0.5) * math.tan(step_ang * 0.5) * 1.5)
+    land_r = col_r + land_len * 0.5
+    land_x = cx + land_r * math.cos(base_ang)
+    land_y = cy + land_r * math.sin(base_ang)
+    create_beveled_box(
+        bm,
+        size=(land_len, land_w, 0.065),
+        location=(land_x, land_y, target_z - 0.032),
+        rotation=(0.0, 0.0, base_ang),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.012
+    )
+    
+    # Top landing post
+    top_px = cx + (radius + 0.15) * math.cos(base_ang)
+    top_py = cy + (radius + 0.15) * math.sin(base_ang)
+    posts.append(Vector((top_px, top_py, target_z + 0.90)))
+    create_cylinder(
+        bm,
+        radius=0.035,
+        height=0.95,
+        segments=8,
+        location=(top_px, top_py, target_z + 0.475),
+        mat_index=MAT_INDEX_TIMBER
+    )
+    
+    # 4. Continuous outer handrail segments connecting posts
+    for idx in range(len(posts) - 1):
+        p1 = posts[idx]
+        p2 = posts[idx + 1]
+        seg_vec = p2 - p1
+        seg_len = seg_vec.length
+        if seg_len > 0.01:
+            seg_mid = (p1 + p2) * 0.5
+            rot_z = math.atan2(seg_vec.y, seg_vec.x)
+            rot_pitch = -math.atan2(seg_vec.z, math.sqrt(seg_vec.x**2 + seg_vec.y**2))
+            # Handrail bar
+            rot_mat = Matrix.Rotation(rot_z, 4, 'Z') @ Matrix.Rotation(rot_pitch, 4, 'Y')
+            create_box(
                 bm,
-                radius=0.035,
-                height=0.9,
-                segments=6,
-                location=(px, py, cur_z + 0.45),
+                size=(seg_len, 0.05, 0.06),
+                location=seg_mid,
+                rotation=rot_mat.to_euler(),
                 mat_index=MAT_INDEX_TIMBER
             )
 

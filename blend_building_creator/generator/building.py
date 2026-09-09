@@ -145,10 +145,12 @@ def generate_building(obj, props):
             mat_idx=floor_mat
         )
         
-        # Upper floor safety guardrail around stair opening
+        # Upper floor safety guardrail around stair opening (safely inset onto floor slab)
         if fl_idx > 0 and props.has_stairs and cur_stair_hole is not None:
             sh_x1, sh_x2, sh_y1, sh_y2 = cur_stair_hole
-            build_stair_guardrail(bm, sh_x2, sh_y1, sh_y2, z_floor + 0.05)
+            # Inset rail slightly onto solid floor slab so posts & balusters never hover
+            rail_x = min(slab_xmax - 0.10, sh_x2 + 0.07)
+            build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05)
         
         # Determine next flight of stairs leading up to fl_idx + 1
         next_stair_hole = None
@@ -165,8 +167,9 @@ def generate_building(obj, props):
                     start_ang_deg=-90.0,
                     total_angle_deg=360.0
                 )
-                next_stair_hole = (spiral_cx - spiral_r - 0.08, spiral_cx + spiral_r + 0.08,
-                                   spiral_cy - spiral_r - 0.08, spiral_cy + spiral_r + 0.08)
+                # Headroom cutout leaves the landing sector (Y < spiral_cy - 0.10) solid
+                next_stair_hole = (slab_xmin, spiral_cx + spiral_r + 0.08,
+                                   spiral_cy - 0.10, slab_ymax)
             else:
                 # Straight stairs: Floor 0 -> 1 runs front to back (+Y)
                 # Floor 1 -> 2 runs back to front (-Y) on adjacent track (switchback)
@@ -387,7 +390,8 @@ def generate_building(obj, props):
             z_base=top_z,
             roof_height=props.roof_height,
             overhang=props.roof_overhang,
-            sway_amount=props.roof_sway
+            sway_amount=props.roof_sway,
+            wall_thickness=wall_t
         )
     elif roof_style == 'TURRET':
         radius = max(top_hx, top_hy) * 1.05
@@ -404,7 +408,8 @@ def generate_building(obj, props):
             y_min=-top_hy, y_max=top_hy,
             z_base=top_z,
             roof_height=props.roof_height,
-            overhang=props.roof_overhang
+            overhang=props.roof_overhang,
+            wall_thickness=wall_t
         )
         
     # Roof Shingles
