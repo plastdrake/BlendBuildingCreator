@@ -82,6 +82,18 @@ def run_tests():
     assert "is_fantasy_building" not in obj, "Building tag was not removed!"
     print("  -> Building successfully finalized to standard editable mesh.")
 
+    # 7. Test UI Icons Validity for Blender 5.2
+    print("[7/7] Testing UI icon compatibility in Blender 5.2...")
+    import re
+    ui_path = os.path.join(addon_dir, "blend_building_creator", "ui.py")
+    with open(ui_path, "r", encoding="utf-8") as f:
+        ui_text = f.read()
+    icons_used = set(re.findall(r'icon=[\'\"]([A-Z0-9_]+)[\'\"]', ui_text))
+    valid_icons = {item.identifier for item in bpy.types.UILayout.bl_rna.functions['operator'].parameters['icon'].enum_items}
+    invalid_icons = icons_used - valid_icons
+    assert len(invalid_icons) == 0, f"Found invalid icons in ui.py: {invalid_icons}"
+    print(f"  -> All {len(icons_used)} UI icons validated against Blender 5.2 RNA successfully.")
+
     # Save verification blend file
     output_blend = os.path.join(addon_dir, "test_output.blend")
     bpy.ops.wm.save_as_mainfile(filepath=output_blend)
@@ -96,8 +108,14 @@ def run_tests():
     print("=" * 60)
 
 if __name__ == "__main__":
+    import sys
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
     try:
         run_tests()
+        sys.exit(0)
     except Exception as e:
         print("TEST FAILED WITH ERROR:", e)
         import traceback

@@ -112,13 +112,13 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
         y_ext = gy + g_norm * half_wt
         y_int = gy - g_norm * half_wt
         
-        # Front & Back triangular prism vertices
-        v_ext_l = bm.verts.new(Vector((x_min - 0.04, y_ext, z_base)))
-        v_ext_r = bm.verts.new(Vector((x_max + 0.04, y_ext, z_base)))
+        # Front & Back triangular prism vertices matching exact roof pitch
+        v_ext_l = bm.verts.new(Vector((x_min - 0.02, y_ext, z_base)))
+        v_ext_r = bm.verts.new(Vector((x_max + 0.02, y_ext, z_base)))
         v_ext_t = bm.verts.new(Vector((cx, y_ext, z_base + roof_height)))
         
-        v_int_l = bm.verts.new(Vector((x_min - 0.04, y_int, z_base)))
-        v_int_r = bm.verts.new(Vector((x_max + 0.04, y_int, z_base)))
+        v_int_l = bm.verts.new(Vector((x_min - 0.02, y_int, z_base)))
+        v_int_r = bm.verts.new(Vector((x_max + 0.02, y_int, z_base)))
         v_int_t = bm.verts.new(Vector((cx, y_int, z_base + roof_height)))
         
         if g_norm < 0:
@@ -137,35 +137,22 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
         f_g_right = bm.faces.new([v_ext_t, v_ext_r, v_int_r, v_int_t])
         f_g_right.material_index = MAT_INDEX_TIMBER
         
-        # Chunky Verge Bargeboards along gable rafter slopes
-        barge_w = 0.12
-        barge_d = 0.16
-        b_len = math.sqrt((cx - rx_min)**2 + roof_height**2)
-        b_ang = math.atan2(roof_height, cx - rx_min)
+        # Verge Bargeboards along gable rafter slopes (capping the verge overhang)
+        delta_x = cx - rx_min
+        delta_z = (z_base + roof_height) - ez
+        b_len = math.sqrt(delta_x * delta_x + delta_z * delta_z) + 0.10
+        b_ang = math.atan2(delta_z, delta_x)
+        b_mid_z = (ez + z_base + roof_height) * 0.5
+        y_verge = ry_min + 0.04 if g_norm < 0 else ry_max - 0.04
         
-        # Left rafter beam
-        b_mid_l = Vector(((rx_min + cx) * 0.5, gy + g_norm * (half_wt + 0.06), z_base + roof_height * 0.5))
-        create_box(bm, size=(b_len, barge_d, barge_w), location=b_mid_l, rotation=(0.0, -b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
-        # Right rafter beam
-        b_mid_r = Vector(((rx_max + cx) * 0.5, gy + g_norm * (half_wt + 0.06), z_base + roof_height * 0.5))
-        create_box(bm, size=(b_len, barge_d, barge_w), location=b_mid_r, rotation=(0.0, b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
+        # Left rafter bargeboard
+        b_mid_l = Vector(((rx_min + cx) * 0.5, y_verge, b_mid_z))
+        create_box(bm, size=(b_len, 0.08, 0.14), location=b_mid_l, rotation=(0.0, -b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
+        # Right rafter bargeboard
+        b_mid_r = Vector(((rx_max + cx) * 0.5, y_verge, b_mid_z))
+        create_box(bm, size=(b_len, 0.08, 0.14), location=b_mid_r, rotation=(0.0, b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
 
-    # 3. Eaves Wall Plate & Frieze Closures (sealing gap between side walls and roof deck)
-    side_span_y = (y_max - y_min) + 0.10
-    create_box(
-        bm,
-        size=(wall_thickness + 0.06, side_span_y, 0.32),
-        location=(x_min, (y_min + y_max) * 0.5, z_base + 0.12),
-        mat_index=MAT_INDEX_TIMBER
-    )
-    create_box(
-        bm,
-        size=(wall_thickness + 0.06, side_span_y, 0.32),
-        location=(x_max, (y_min + y_max) * 0.5, z_base + 0.12),
-        mat_index=MAT_INDEX_TIMBER
-    )
-
-    # 4. Heavy Eaves Fascia & Ridge Beams
+    # 3. Eaves Fascia & Ridge Beams
     create_beveled_box(
         bm,
         size=(0.14, total_d + 0.15, 0.18),
@@ -267,31 +254,20 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
         bm.faces.new([v_ext_l, v_ext_t, v_int_t, v_int_l]).material_index = MAT_INDEX_TIMBER
         bm.faces.new([v_ext_t, v_ext_r, v_int_r, v_int_t]).material_index = MAT_INDEX_TIMBER
         
-        # Verge Bargeboards along gable rafter slopes
-        b_len = math.sqrt((cx - rx_min)**2 + roof_height**2)
-        b_ang = math.atan2(roof_height, cx - rx_min)
+        # Verge Bargeboards along gable rafter slopes (capping the verge overhang)
+        delta_x = cx - rx_min
+        delta_z = rz - ez
+        b_len = math.sqrt(delta_x * delta_x + delta_z * delta_z) + 0.10
+        b_ang = math.atan2(delta_z, delta_x)
+        b_mid_z = (ez + rz) * 0.5
+        y_verge = ry_min + 0.04 if g_norm < 0 else ry_max - 0.04
         
-        b_mid_l = Vector(((rx_min + cx) * 0.5, gy + g_norm * (half_wt + 0.06), z_base + roof_height * 0.5))
-        create_box(bm, size=(b_len, 0.16, 0.12), location=b_mid_l, rotation=(0.0, -b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
-        b_mid_r = Vector(((rx_max + cx) * 0.5, gy + g_norm * (half_wt + 0.06), z_base + roof_height * 0.5))
-        create_box(bm, size=(b_len, 0.16, 0.12), location=b_mid_r, rotation=(0.0, b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
+        b_mid_l = Vector(((rx_min + cx) * 0.5, y_verge, b_mid_z))
+        create_box(bm, size=(b_len, 0.08, 0.14), location=b_mid_l, rotation=(0.0, -b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
+        b_mid_r = Vector(((rx_max + cx) * 0.5, y_verge, b_mid_z))
+        create_box(bm, size=(b_len, 0.08, 0.14), location=b_mid_r, rotation=(0.0, b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
 
-    # 3. Eaves Wall Plate & Frieze Closures
-    side_span_y = (y_max - y_min) + 0.10
-    create_box(
-        bm,
-        size=(wall_thickness + 0.06, side_span_y, 0.32),
-        location=(x_min, (y_min + y_max) * 0.5, z_base + 0.12),
-        mat_index=MAT_INDEX_TIMBER
-    )
-    create_box(
-        bm,
-        size=(wall_thickness + 0.06, side_span_y, 0.32),
-        location=(x_max, (y_min + y_max) * 0.5, z_base + 0.12),
-        mat_index=MAT_INDEX_TIMBER
-    )
-
-    # 4. Eaves Fascia & Ridge Beams
+    # 3. Eaves Fascia & Ridge Beams
     create_beveled_box(
         bm,
         size=(0.14, total_d + 0.15, 0.18),
@@ -350,62 +326,75 @@ def build_conical_turret_roof(bm, center_pos, radius=2.2, height=3.8, segments=1
     )
 
 def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8,
-                         rows=6, seed=42):
+                         rows=6, seed=42, overhang=0.45, sway_amount=0.25, roof_style='SWAY'):
     """
-    Generates chunky stylized overlapping shingle rows with whimsical rotation jitter.
-    Correctly aligns shingles flat against roof slope with proper outward normal.
+    Generates chunky stylized overlapping shingle rows that match the exact roof slope
+    and sway sag profile, offset safely above the timber deck to eliminate clipping and overlap.
     """
     rng = random.Random(seed)
-    cx = (x_min + x_max) * 0.5
-    half_w = (x_max - x_min) * 0.5 + 0.35
-    total_d = (y_max - y_min) + 0.7
+    total_w = (x_max - x_min) + overhang * 2.0
+    total_d = (y_max - y_min) + overhang * 2.0
     
-    slope_len = math.sqrt(half_w * half_w + roof_height * roof_height)
-    pitch_ang = math.atan2(roof_height, half_w)
+    rx_min = x_min - overhang
+    rx_max = x_max + overhang
+    ry_min = y_min - overhang
+    ry_max = y_max + overhang
+    
+    cx = (rx_min + rx_max) * 0.5
+    half_w = total_w * 0.5
+    ez = z_base - 0.12 # Matching exact eaves level
     
     # Shingle dimensions: width along Y, length along slope, thickness along normal
     shingle_w = 0.44
-    shingle_l = (slope_len / rows) * 1.35  # Overlap between rows
-    shingle_t = 0.035
-    
-    cols = max(3, int(total_d / (shingle_w * 0.82)))
-    step_y = total_d / cols
-    
-    # Outward normal components
-    norm_x = math.sin(pitch_ang)
-    norm_z = math.cos(pitch_ang)
+    usable_d = max(0.5, total_d - shingle_w)
+    cols = max(3, int(usable_d / (shingle_w * 0.78)) + 1)
+    step_y = usable_d / max(1, cols - 1)
     
     for side in [-1, 1]:
-        # Left slope (side == -1): normal points -X and +Z; rotation around Y is -pitch_ang
-        # Right slope (side == 1): normal points +X and +Z; rotation around Y is +pitch_ang
-        slope_angle = -pitch_ang if side < 0 else pitch_ang
         tilt_sign = 1 if side < 0 else -1
         
         for r in range(rows):
-            # Fraction up the slope (from eaves to ridge)
-            t = (r + 0.3) / rows
+            t = (r + 0.45) / max(1, rows)
             
-            # Position along the slope
-            cur_z = z_base + t * roof_height
-            cur_x = cx + side * ((1.0 - t) * half_w)
+            # Base column positions covering verge to verge
+            y_positions = [ry_min + shingle_w * 0.5 + c * step_y for c in range(cols)]
+            if r % 2 == 1:
+                # Running-bond stagger: shift interior shingles and pin both edges
+                shifted = [y + step_y * 0.5 for y in y_positions[:-1]]
+                y_positions = [ry_min + shingle_w * 0.5] + shifted + [ry_max - shingle_w * 0.5]
             
-            # Slight outward offset along slope normal so shingles rest on roof
-            cur_x += side * (norm_x * 0.035)
-            cur_z += norm_z * 0.035
-            
-            # Staggered alternating brick pattern
-            offset_y = (step_y * 0.5) if (r % 2 == 1) else 0.0
-            
-            for c in range(cols):
-                cur_y = (y_min - 0.35) + (c + 0.5) * step_y + offset_y
+            for cur_y in y_positions:
+                t_y = max(0.0, min(1.0, (cur_y - ry_min) / max(0.01, total_d)))
                 
-                # Small stylized whimsical jitter
-                jitter_y = (rng.random() - 0.5) * 0.04
-                jitter_tilt = (rng.random() - 0.5) * 0.04
-                jitter_rot = (rng.random() - 0.5) * 0.05
+                # Exact matching sag and ridge height at this Y coordinate
+                sag = math.sin(t_y * math.pi) * sway_amount if (roof_style == 'SWAY') else 0.0
+                rz = z_base + roof_height - sag
                 
-                # Slight overlap pitch (shingle tilts downward slightly over row below)
-                overlap_tilt = 0.06 * tilt_sign
+                delta_z = rz - ez
+                delta_x = half_w
+                slope_len = math.sqrt(delta_x * delta_x + delta_z * delta_z)
+                shingle_l = (slope_len / rows) * 1.35
+                shingle_t = 0.035
+                
+                pitch_ang = math.atan2(delta_z, delta_x)
+                norm_x = math.sin(pitch_ang)
+                norm_z = math.cos(pitch_ang)
+                
+                # Position along the slope from eaves to ridge
+                cur_z = ez + t * delta_z
+                cur_x = cx + side * ((1.0 - t) * half_w)
+                
+                # Outward offset along local surface normal so shingles sit cleanly atop timber deck
+                cur_x += side * (norm_x * 0.046)
+                cur_z += norm_z * 0.046
+                
+                # Small whimsical jitter
+                jitter_y = (rng.random() - 0.5) * 0.03
+                jitter_tilt = (rng.random() - 0.5) * 0.03
+                jitter_rot = (rng.random() - 0.5) * 0.04
+                
+                slope_angle = -pitch_ang if side < 0 else pitch_ang
+                overlap_tilt = 0.05 * tilt_sign
                 final_angle = slope_angle + overlap_tilt + jitter_tilt
                 
                 create_beveled_box(

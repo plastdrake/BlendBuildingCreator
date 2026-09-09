@@ -108,11 +108,18 @@ def generate_building(obj, props):
         x_min, x_max = -hx, hx
         y_min, y_max = -hy, hy
         
-        # Solid floor slab bounds (embedded deeply into wall core to eliminate any gap)
-        slab_xmin = x_min + 0.03
-        slab_xmax = x_max - 0.03
-        slab_ymin = y_min + 0.03
-        slab_ymax = y_max - 0.03
+        # Solid floor slab bounds
+        # On upper floors, extend slab to cover the outer wall perimeter below (eliminates Z-overlap)
+        if fl_idx > 0:
+            slab_xmin = x_min - wall_t * 0.45
+            slab_xmax = x_max + wall_t * 0.45
+            slab_ymin = y_min - wall_t * 0.45
+            slab_ymax = y_max + wall_t * 0.45
+        else:
+            slab_xmin = x_min + 0.03
+            slab_xmax = x_max - 0.03
+            slab_ymin = y_min + 0.03
+            slab_ymax = y_max - 0.03
         
         # Interior bounds for current floor room
         ix_min, ix_max = x_min + wall_t, x_max - wall_t
@@ -145,12 +152,17 @@ def generate_building(obj, props):
             mat_idx=floor_mat
         )
         
-        # Upper floor safety guardrail around stair opening (safely inset onto floor slab)
+        # Upper floor safety guardrail around stair opening (safely inset onto floor slab with L-shaped return)
         if fl_idx > 0 and props.has_stairs and cur_stair_hole is not None:
             sh_x1, sh_x2, sh_y1, sh_y2 = cur_stair_hole
-            # Inset rail slightly onto solid floor slab so posts & balusters never hover
             rail_x = min(slab_xmax - 0.10, sh_x2 + 0.07)
-            build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05)
+            if props.stair_style == 'SPIRAL':
+                build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
+                                      return_y=sh_y1, x_start=sh_x1 + 0.20)
+            else:
+                ret_y = sh_y1 if (fl_idx % 2 == 1) else sh_y2
+                build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
+                                      return_y=ret_y, x_start=sh_x1 + 0.20)
         
         # Determine next flight of stairs leading up to fl_idx + 1
         next_stair_hole = None
@@ -159,12 +171,13 @@ def generate_building(obj, props):
                 spiral_r = min(1.15, props.stair_width * 1.05)
                 spiral_cx = fl0_ix_min + spiral_r + 0.15
                 spiral_cy = fl0_iy_max - spiral_r - 0.15
+                fl_start_ang = -90.0 + fl_idx * 30.0
                 build_spiral_staircase(
                     bm,
                     center_pos=(spiral_cx, spiral_cy, z_floor + 0.05),
                     target_z=z_ceil + 0.05,
                     radius=spiral_r,
-                    start_ang_deg=-90.0,
+                    start_ang_deg=fl_start_ang,
                     total_angle_deg=360.0
                 )
                 # Headroom cutout leaves the landing sector (Y < spiral_cy - 0.10) solid
@@ -421,7 +434,10 @@ def generate_building(obj, props):
             z_base=top_z,
             roof_height=props.roof_height,
             rows=props.shingle_rows,
-            seed=seed
+            seed=seed,
+            overhang=props.roof_overhang,
+            sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0,
+            roof_style=roof_style
         )
         
     # Dormer Windows

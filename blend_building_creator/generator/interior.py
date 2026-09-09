@@ -121,11 +121,11 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
             bevel_amount=0.015
         )
 
-def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95):
+def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, return_y=None, x_start=None):
     """
     Builds a safety guardrail on the upper floor along the open edge of the stairwell
     (at X = rail_x, from y_start to y_end).
-    Includes a solid grounded base timber sill so spindles never hover.
+    If return_y and x_start are given, also adds the short return rail along the open end.
     """
     span_y = y_end - y_start
     if span_y < 0.3:
@@ -135,7 +135,7 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95):
     rail_w = 0.08
     sill_h = 0.05
     
-    # 0. Solid Grounded Base Sill (rests firmly on floor slab)
+    # 0. Solid Grounded Base Sill (long side)
     create_box(
         bm,
         size=(rail_w, span_y + post_w * 0.5, sill_h),
@@ -153,7 +153,7 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95):
     # 3. Mid Rail
     create_box(bm, size=(rail_w * 0.75, span_y, 0.04), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
     
-    # 4. Spindles/Balusters (resting on the solid base sill)
+    # 4. Spindles/Balusters (long side)
     num_spindles = max(1, int(span_y / 0.28))
     step = span_y / (num_spindles + 1)
     spindle_h = rail_h - sill_h - 0.06
@@ -167,11 +167,31 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95):
             location=(rail_x, sy, floor_z + sill_h + spindle_h * 0.5),
             mat_index=MAT_INDEX_TIMBER
         )
+        
+    # 5. Short Return Guardrail (protecting the open end of the floor hole)
+    if return_y is not None and x_start is not None and abs(rail_x - x_start) > 0.3:
+        span_x = abs(rail_x - x_start)
+        cx = (x_start + rail_x) * 0.5
+        # Return base sill
+        create_box(bm, size=(span_x, rail_w, sill_h), location=(cx, return_y, floor_z + sill_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+        # End post at x_start
+        create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(x_start, return_y, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        # Return top rail
+        create_box(bm, size=(span_x, rail_w, 0.06), location=(cx, return_y, floor_z + rail_h - 0.03), mat_index=MAT_INDEX_TIMBER)
+        # Return mid rail
+        create_box(bm, size=(span_x, rail_w * 0.75, 0.04), location=(cx, return_y, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+        # Return spindles
+        num_sp_x = max(1, int(span_x / 0.28))
+        step_x = span_x / (num_sp_x + 1)
+        min_x = min(x_start, rail_x)
+        for i in range(1, num_sp_x + 1):
+            sx = min_x + i * step_x
+            create_cylinder(bm, radius=0.022, height=spindle_h, segments=6, location=(sx, return_y, floor_z + sill_h + spindle_h * 0.5), mat_index=MAT_INDEX_TIMBER)
 
 def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_depth=2.2, num_steps=14, direction_y=1):
     """
     Generates a wooden straight/run staircase with chunky treads, grounded stringers,
-    solid base and top anchor plates, and stylized handrail.
+    solid base and top anchor plates, and stylized handrails on BOTH SIDES.
     direction_y: 1 for +Y (front to back), -1 for -Y (back to front).
     """
     x0, y0, z0 = start_pos
@@ -184,7 +204,7 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
     # 1. Grounded Starter Base Timber (anchored to floor)
     create_beveled_box(
         bm,
-        size=(stair_width + 0.14, 0.22, 0.08),
+        size=(stair_width + 0.18, 0.22, 0.08),
         location=(x0, y0 + 0.05 * direction_y, z0 + 0.04),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
@@ -231,27 +251,35 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
     # 4. Top Landing Anchor Timber (anchors stringers solidly to the upper floor)
     create_beveled_box(
         bm,
-        size=(stair_width + 0.14, 0.22, 0.10),
+        size=(stair_width + 0.18, 0.22, 0.10),
         location=(x0, y0 + stair_depth * direction_y, target_z - 0.05),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
     )
 
-    # 5. Stylized Newel Posts & Handrail
-    rail_x = x0 + (stair_width * 0.5)
+    # 5. Stylized Newel Posts & Handrails on BOTH SIDES
     post_h = 0.95
-    # Bottom post
-    create_beveled_box(bm, size=(0.10, 0.10, post_h), location=(rail_x, y0 + 0.05 * direction_y, z0 + post_h * 0.5), mat_index=MAT_INDEX_TIMBER)
-    # Top post
-    create_beveled_box(bm, size=(0.10, 0.10, post_h), location=(rail_x, y0 + (stair_depth - 0.05) * direction_y, target_z + post_h * 0.5), mat_index=MAT_INDEX_TIMBER)
-    # Handrail
-    create_box(
-        bm,
-        size=(0.08, diag_length, 0.08),
-        location=(rail_x, y0 + (stair_depth * 0.5) * direction_y, z0 + dz * 0.5 + post_h * 0.9),
-        rotation=(pitch_angle, 0.0, 0.0),
-        mat_index=MAT_INDEX_TIMBER
-    )
+    rail_thick = 0.07
+    
+    for side in [-1, 1]:
+        rail_x = x0 + side * (stair_width * 0.5 + stringer_thick * 0.5)
+        # Bottom post with chamfered cap
+        create_beveled_box(bm, size=(0.09, 0.09, post_h), location=(rail_x, y0 + 0.05 * direction_y, z0 + post_h * 0.5), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+        # Top post with chamfered cap
+        create_beveled_box(bm, size=(0.09, 0.09, post_h), location=(rail_x, y0 + (stair_depth - 0.05) * direction_y, target_z + post_h * 0.5), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+        # Handrail bar
+        create_box(
+            bm,
+            size=(rail_thick, diag_length, rail_thick),
+            location=(rail_x, y0 + (stair_depth * 0.5) * direction_y, z0 + dz * 0.5 + post_h * 0.9),
+            rotation=(pitch_angle, 0.0, 0.0),
+            mat_index=MAT_INDEX_TIMBER
+        )
+        # Vertical spindles along run (every 2nd step)
+        for i in range(2, num_steps - 1, 2):
+            bz = z0 + i * step_h + post_h * 0.42
+            by = y0 + (i + 0.5) * step_d
+            create_cylinder(bm, radius=0.02, height=post_h * 0.80, segments=6, location=(rail_x, by, bz), mat_index=MAT_INDEX_TIMBER)
 
 def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, start_ang_deg=-90.0, total_angle_deg=360.0):
     """
@@ -283,19 +311,20 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
     
     for i in range(num_steps):
         cur_ang = base_ang + i * step_ang
-        cur_z = z0 + i * step_h
+        # Step rises from z0 to target_z
+        cur_z = z0 + (i + 1) * step_h
         
         mid_ang = cur_ang + step_ang * 0.5
         mid_r = col_r + step_len * 0.5
         sx = cx + mid_r * math.cos(mid_ang)
         sy = cy + mid_r * math.sin(mid_ang)
         
-        # Step wedge plank (with 15% angular overlap to eliminate any gap)
+        # Step wedge plank
         step_w = 2.0 * mid_r * math.tan(step_ang * 0.5) * 1.15
         create_beveled_box(
             bm,
             size=(step_len + 0.04, max(0.20, step_w), 0.065),
-            location=(sx, sy, cur_z + 0.032),
+            location=(sx, sy, cur_z - 0.032),
             rotation=(0.0, 0.0, mid_ang),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.01
@@ -304,42 +333,43 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
         # Outer banister post on every step
         px = cx + (radius - 0.04) * math.cos(mid_ang)
         py = cy + (radius - 0.04) * math.sin(mid_ang)
-        pz = cur_z + 0.45
-        posts.append(Vector((px, py, cur_z + 0.90)))
+        pz = cur_z + 0.42
+        posts.append(Vector((px, py, cur_z + 0.85)))
         create_cylinder(
             bm,
             radius=0.026,
-            height=0.90,
+            height=0.88,
             segments=6,
             location=(px, py, pz),
             mat_index=MAT_INDEX_TIMBER
         )
         
-    # 3. Dedicated Top Landing Platform (flushes perfectly with upper floor level)
+    # 3. Dedicated Top Landing Platform (flushes perfectly with upper floor level at target_z)
     land_len = step_len + 0.35
     land_w = max(0.42, 2.0 * (col_r + land_len * 0.5) * math.tan(step_ang * 0.5) * 1.5)
     land_r = col_r + land_len * 0.5
-    land_x = cx + land_r * math.cos(base_ang)
-    land_y = cy + land_r * math.sin(base_ang)
+    land_ang = base_ang + ang_rad
+    land_x = cx + land_r * math.cos(land_ang)
+    land_y = cy + land_r * math.sin(land_ang)
     create_beveled_box(
         bm,
         size=(land_len, land_w, 0.065),
         location=(land_x, land_y, target_z - 0.032),
-        rotation=(0.0, 0.0, base_ang),
+        rotation=(0.0, 0.0, land_ang),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
     )
     
     # Top landing post
-    top_px = cx + (radius + 0.15) * math.cos(base_ang)
-    top_py = cy + (radius + 0.15) * math.sin(base_ang)
-    posts.append(Vector((top_px, top_py, target_z + 0.90)))
+    top_px = cx + (radius + 0.15) * math.cos(land_ang)
+    top_py = cy + (radius + 0.15) * math.sin(land_ang)
+    posts.append(Vector((top_px, top_py, target_z + 0.85)))
     create_cylinder(
         bm,
         radius=0.035,
-        height=0.95,
+        height=0.90,
         segments=8,
-        location=(top_px, top_py, target_z + 0.475),
+        location=(top_px, top_py, target_z + 0.42),
         mat_index=MAT_INDEX_TIMBER
     )
     

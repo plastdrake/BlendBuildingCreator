@@ -43,7 +43,7 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         op = grid.operator("building.apply_preset", text="Cozy Tavern", icon='COMMUNITY')
         op.preset_key = "TAVERN"
         
-        op = grid.operator("building.apply_preset", text="Wizard Tower", icon='LIGHTPROBE_CUBE')
+        op = grid.operator("building.apply_preset", text="Wizard Tower", icon='CONE')
         op.preset_key = "WIZARD_TOWER"
         
         op = grid.operator("building.apply_preset", text="Fairytale Cottage", icon='SNAP_VOLUME')
