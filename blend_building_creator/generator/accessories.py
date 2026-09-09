@@ -35,12 +35,12 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
     canopy_cy = (y_min + y_max) * 0.5
     outer_x = wall_x + canopy_w
     
-    deck_thick = 0.18
-    # 1. Solid Grounded Workshop Deck Floor
+    deck_thick = 0.12
+    # 1. Solid Grounded Cobblestone / Flagstone Workshop Floor (grounded at z_ground)
     create_beveled_box(
         bm, size=(canopy_w + 0.15, canopy_d + 0.20, deck_thick),
         location=(wall_x + canopy_w * 0.5, canopy_cy, z_ground + deck_thick * 0.5),
-        mat_index=MAT_INDEX_WOOD if 'MAT_INDEX_WOOD' in globals() else MAT_INDEX_TIMBER,
+        mat_index=MAT_INDEX_STONE,
         bevel_amount=0.015
     )
     
@@ -52,29 +52,30 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
     for py in (p1_y, p2_y):
         # Grounded stone plinth
         create_beveled_box(
-            bm, size=(0.36, 0.36, 0.24),
-            location=(outer_x - col_w * 0.5, py, z_ground + 0.12),
+            bm, size=(0.36, 0.36, 0.20),
+            location=(outer_x - col_w * 0.5, py, z_ground + 0.10),
             mat_index=MAT_INDEX_STONE, bevel_amount=0.02
         )
         # Vertical timber pillar
-        pillar_h = canopy_h - 0.24
+        pillar_h = canopy_h - 0.20
         create_beveled_box(
             bm, size=(col_w, col_w, pillar_h),
-            location=(outer_x - col_w * 0.5, py, z_ground + 0.24 + pillar_h * 0.5),
+            location=(outer_x - col_w * 0.5, py, z_ground + 0.20 + pillar_h * 0.5),
             mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
         )
-        # Angled timber knee brace up to header beam
+        # Angled 45-degree timber knee brace up to header beam (along Y)
+        sgn = 1.0 if py < canopy_cy else -1.0
         create_beveled_box(
-            bm, size=(0.11, 0.11, 0.70),
-            location=(outer_x - col_w * 0.5, py + (0.22 if py < canopy_cy else -0.22), z_ground + canopy_h - 0.25),
-            rotation=(0.78 if py < canopy_cy else -0.78, 0.0, 0.0),
+            bm, size=(0.11, 0.11, 0.65),
+            location=(outer_x - col_w * 0.5, py + sgn * 0.23, z_ground + canopy_h - 0.23),
+            rotation=(sgn * 0.785, 0.0, 0.0),
             mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008
         )
-        # Wall-tie knee brace back to wall
+        # Wall-tie 45-degree knee brace back towards wall (along X)
         create_beveled_box(
-            bm, size=(0.11, 0.11, 0.70),
-            location=(outer_x - col_w * 0.5 - 0.28, py, z_ground + canopy_h - 0.25),
-            rotation=(0.0, -0.78, 0.0),
+            bm, size=(0.11, 0.11, 0.65),
+            location=(outer_x - col_w * 0.5 - 0.23, py, z_ground + canopy_h - 0.23),
+            rotation=(0.0, -0.785, 0.0),
             mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008
         )
         
@@ -86,20 +87,29 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
     )
     
     # 4. Sloping Rafters & Roof Deck
-    roof_pitch = 0.32
+    roof_pitch = 0.35
     roof_z_wall = z_ground + canopy_h + canopy_w * roof_pitch
     roof_z_outer = z_ground + canopy_h
     roof_mid_x = (wall_x + outer_x) * 0.5
     roof_mid_z = (roof_z_wall + roof_z_outer) * 0.5 + 0.08
-    rafter_l = math.sqrt(canopy_w * canopy_w + (roof_z_wall - roof_z_outer) ** 2) + 0.35
+    rafter_l = math.sqrt(canopy_w * canopy_w + (roof_z_wall - roof_z_outer) ** 2) + 0.40
     roof_ang = math.atan2(roof_z_wall - roof_z_outer, canopy_w)
+    
+    # Supporting rafter beams underneath roof
+    for ry in (p1_y, canopy_cy, p2_y):
+        create_beveled_box(
+            bm, size=(rafter_l, 0.10, 0.14),
+            location=(roof_mid_x, ry, roof_mid_z - 0.08),
+            rotation=(0.0, roof_ang, 0.0),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010
+        )
     
     # Sloping timber decking slab
     create_beveled_box(
-        bm, size=(rafter_l, canopy_d + 0.40, 0.09),
+        bm, size=(rafter_l, canopy_d + 0.40, 0.08),
         location=(roof_mid_x, canopy_cy, roof_mid_z),
         rotation=(0.0, roof_ang, 0.0),
-        mat_index=MAT_INDEX_WOOD if 'MAT_INDEX_WOOD' in globals() else MAT_INDEX_TIMBER,
+        mat_index=MAT_INDEX_WOOD,
         bevel_amount=0.010
     )
     # Shingle layer
@@ -110,19 +120,114 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
         mat_index=MAT_INDEX_SHINGLES,
         bevel_amount=0.008
     )
+    
+    # 5. Blacksmith Workshop Fixtures (Grounded on Stone Floor)
+    # Masonry Forge Hearth & Hood
+    forge_w, forge_d, forge_h = 0.95, 0.95, 0.85
+    forge_x = wall_x + forge_w * 0.5 + 0.15
+    forge_y = canopy_cy
+    create_beveled_box(
+        bm, size=(forge_w, forge_d, forge_h),
+        location=(forge_x, forge_y, z_ground + deck_thick + forge_h * 0.5),
+        mat_index=MAT_INDEX_STONE, bevel_amount=0.02
+    )
+    # Forge coals depression
+    create_box(
+        bm, size=(0.60, 0.60, 0.06),
+        location=(forge_x, forge_y, z_ground + deck_thick + forge_h + 0.02),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Iron exhaust chimney flue pipe through canopy roof
+    chim_pipe_h = (roof_z_wall + 0.80) - (z_ground + deck_thick + forge_h)
+    create_cylinder(
+        bm, radius=0.14, height=chim_pipe_h, segments=10,
+        location=(forge_x, forge_y, z_ground + deck_thick + forge_h + chim_pipe_h * 0.5),
+        mat_index=MAT_INDEX_IRON
+    )
+    
+    # Anvil on heavy wooden tree stump
+    stump_r = 0.24
+    stump_h = 0.46
+    stump_x = wall_x + 1.65
+    stump_y = canopy_cy - 0.40
+    create_cylinder(
+        bm, radius=stump_r, height=stump_h, segments=10,
+        location=(stump_x, stump_y, z_ground + deck_thick + stump_h * 0.5),
+        mat_index=MAT_INDEX_WOOD
+    )
+    # Forged iron anvil (waist, horn, and heel)
+    anvil_z = z_ground + deck_thick + stump_h
+    create_beveled_box(
+        bm, size=(0.28, 0.54, 0.22),
+        location=(stump_x, stump_y, anvil_z + 0.11),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.015
+    )
+    # Anvil horn cone
+    create_cone(
+        bm, radius1=0.09, radius2=0.02, height=0.22, segments=8,
+        location=(stump_x, stump_y - 0.38, anvil_z + 0.12),
+        rotation=(1.57, 0.0, 0.0),
+        mat_index=MAT_INDEX_IRON
+    )
+    
+    # Water Quenching Trough
+    trough_w, trough_d, trough_h = 0.45, 0.70, 0.46
+    trough_x = wall_x + 0.60
+    trough_y = canopy_cy + canopy_d * 0.34
+    create_beveled_box(
+        bm, size=(trough_w, trough_d, trough_h),
+        location=(trough_x, trough_y, z_ground + deck_thick + trough_h * 0.5),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012
+    )
+    # Iron barrel bands
+    for bz in [-0.14, 0.14]:
+        create_box(
+            bm, size=(trough_w + 0.02, trough_d + 0.02, 0.035),
+            location=(trough_x, trough_y, z_ground + deck_thick + trough_h * 0.5 + bz),
+            mat_index=MAT_INDEX_IRON
+        )
 
 
-def build_windmill_sails(bm, cx, front_y, hub_z, radius=3.2, rotation_deg=22.5):
+def build_windmill_sails(bm, cx, front_y, hub_z, radius=3.2, rotation_deg=22.5, wall_y=None):
     """
     Builds a large 4-blade rotating lattice timber windmill rotor:
+    - Solid timber axle machinery dormer housing connecting flush to the building wall.
+    - 45-degree diagonal timber corbel braces supporting the housing underneath.
     - Central protruding heavy timber axle hub.
     - 4 lattice timber spars with cross-ribs.
     - Stretched canvas cloth sails.
     """
-    # Central axle hub box protruding from front facade (-Y)
-    hub_y = front_y - 0.35
+    if wall_y is None:
+        wall_y = front_y
+        
+    hub_y = front_y - 0.38
+    
+    # 1. Solid Timber Axle Housing / Dormer connecting hub to tower wall
+    box_len = max(0.40, abs(hub_y - wall_y) + 0.25)
+    box_cy = (hub_y + wall_y) * 0.5
+    create_beveled_box(
+        bm, size=(1.10, box_len, 1.05),
+        location=(cx, box_cy, hub_z),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02
+    )
+    # Housing shingled ridge cap
+    create_beveled_box(
+        bm, size=(1.24, box_len + 0.12, 0.18),
+        location=(cx, box_cy, hub_z + 0.56),
+        mat_index=MAT_INDEX_SHINGLES, bevel_amount=0.012
+    )
+    # 45-degree timber supporting knee braces underneath against wall
+    for bx_off in [-0.38, 0.38]:
+        create_beveled_box(
+            bm, size=(0.10, 0.10, 0.55),
+            location=(cx + bx_off, box_cy, hub_z - 0.55),
+            rotation=(-0.785, 0.0, 0.0),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+        
+    # 2. Central Axle Hub Box protruding from housing
     create_cylinder(
-        bm, radius=0.35, height=0.55, segments=12,
+        bm, radius=0.35, height=0.45, segments=12,
         location=(cx, hub_y, hub_z),
         rotation=(1.57, 0.0, 0.0),
         mat_index=MAT_INDEX_TIMBER
@@ -130,7 +235,7 @@ def build_windmill_sails(bm, cx, front_y, hub_z, radius=3.2, rotation_deg=22.5):
     # Center iron cap
     create_cone(
         bm, radius1=0.22, radius2=0.04, height=0.20, segments=8,
-        location=(cx, hub_y - 0.32, hub_z),
+        location=(cx, hub_y - 0.28, hub_z),
         rotation=(-1.57, 0.0, 0.0),
         mat_index=MAT_INDEX_IRON
     )

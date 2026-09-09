@@ -265,10 +265,15 @@ def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=
         
     return faces
 
-def apply_box_uvs(bm, scale=1.0):
-    """Calculates clean cubic / triplanar style UVs for bmesh faces."""
+def apply_box_uvs(bm, scale=1.0, skip_materials=(3, 4, 7, 8, 9, 10)):
+    """Calculates clean cubic / triplanar style UVs for bmesh faces.
+    Skips faces whose materials already have specialized local unwraps
+    (timber frames, floor planks, doors, forged iron, wood accessories, log end caps).
+    """
     uv_layer = bm.loops.layers.uv.verify()
     for face in bm.faces:
+        if skip_materials is not None and face.material_index in skip_materials:
+            continue
         normal = face.normal
         nx, ny, nz = abs(normal.x), abs(normal.y), abs(normal.z)
         

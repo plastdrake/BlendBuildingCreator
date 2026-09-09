@@ -12,7 +12,7 @@ from .mesh_utils import create_box, create_beveled_box, create_cone, create_cyli
 from .materials import (
     MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER, MAT_INDEX_STONE,
     MAT_INDEX_GLASS, MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT,
-    MAT_INDEX_IRON
+    MAT_INDEX_IRON, MAT_INDEX_WOOD
 )
 
 def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
@@ -773,14 +773,24 @@ def build_hoist_beam(bm, front_x, front_y, z_ridge, length=1.4):
     )
     
     # 2. Diagonal 45-degree heavy timber support strut underneath
-    strut_len = math.sqrt(2.0) * 0.70
-    strut_mid_y = front_y - 0.35
-    strut_mid_z = z_ridge - 0.35
+    # Anchored against gable wall at front_y and angling up to support the beam outward
+    strut_len = math.sqrt(2.0) * 0.65
+    strut_mid_y = front_y - 0.32
+    strut_mid_z = z_ridge - 0.32
+    # Wall anchor corbel block
+    create_beveled_box(
+        bm,
+        size=(0.20, 0.12, 0.22),
+        location=(front_x, front_y + 0.02, z_ridge - 0.64),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.015
+    )
+    # 45-degree angled knee brace (sloping outward from wall up to hoist beam)
     create_box(
         bm,
         size=(0.14, 0.14, strut_len),
         location=(front_x, strut_mid_y, strut_mid_z),
-        rotation=(-math.pi * 0.25, 0.0, 0.0),
+        rotation=(math.pi * 0.25, 0.0, 0.0),
         mat_index=MAT_INDEX_TIMBER
     )
     
@@ -792,7 +802,7 @@ def build_hoist_beam(bm, front_x, front_y, z_ridge, length=1.4):
         bm,
         size=(0.18, 0.22, 0.24),
         location=(front_x, pulley_y, pulley_z),
-        mat_index=MAT_INDEX_WOOD if 'MAT_INDEX_WOOD' in globals() else MAT_INDEX_TIMBER,
+        mat_index=MAT_INDEX_WOOD,
         bevel_amount=0.018
     )
     # Iron side reinforcing straps
@@ -817,39 +827,38 @@ def build_hoist_beam(bm, front_x, front_y, z_ridge, length=1.4):
     )
     
     # 4. Suspended Heavy Cable / Chain
-    chain_h = 0.80
+    chain_h = 0.85
     chain_mid_z = pulley_z - 0.12 - chain_h * 0.5
     create_cylinder(
-        bm, radius=0.018, height=chain_h, segments=8,
+        bm, radius=0.020, height=chain_h, segments=8,
         location=(front_x, pulley_y, chain_mid_z),
         mat_index=MAT_INDEX_IRON
     )
     
-    # 5. Authentically Forged Curved J-Hook
+    # 5. Authentically Forged Curved J-Hook (functional heavy cargo lifting hook)
     hook_top_z = chain_mid_z - chain_h * 0.5 - 0.04
     
     # Swivel eyelet ring
     create_cylinder(
-        bm, radius=0.042, height=0.024, segments=12,
+        bm, radius=0.048, height=0.026, segments=12,
         location=(front_x, pulley_y, hook_top_z),
         rotation=(math.pi * 0.5, 0.0, 0.0),
         mat_index=MAT_INDEX_IRON
     )
     # Thick vertical shank
-    shank_h = 0.14
+    shank_h = 0.16
     create_cylinder(
-        bm, radius=0.028, height=shank_h, segments=8,
+        bm, radius=0.032, height=shank_h, segments=8,
         location=(front_x, pulley_y, hook_top_z - shank_h * 0.5),
         mat_index=MAT_INDEX_IRON
     )
     
     # Continuous curved hook throat/belly (smooth 180-degree circular arc)
-    throat_radius = 0.085
+    throat_radius = 0.105
     center_y = pulley_y + throat_radius
     center_z = hook_top_z - shank_h
     
     arc_segs = 12
-    # Create swept tube around the lower semicircle (from -pi to 0 in YZ plane)
     prev_ring = None
     for step in range(arc_segs + 1):
         t = step / float(arc_segs)
@@ -860,11 +869,9 @@ def build_hoist_beam(bm, front_x, front_y, z_ridge, length=1.4):
         cz = center_z + throat_radius * math.sin(phi)
         
         # Taper radius: thick at belly (t=0.3 to 0.6), tapered towards the tip (t=1.0)
-        ring_r = 0.030 * (1.0 - t * 0.45)
+        ring_r = 0.034 * (1.0 - t * 0.40)
         
         # Local tangent along arc in YZ plane
-        tangent_y = -math.sin(phi)
-        tangent_z = math.cos(phi)
         normal_y = -math.cos(phi)
         normal_z = -math.sin(phi)
         
@@ -886,8 +893,8 @@ def build_hoist_beam(bm, front_x, front_y, z_ridge, length=1.4):
         prev_ring = cur_ring
         
     # Tapered pointed hook barb / tip
-    barb_tip_y = center_y + throat_radius + 0.015
-    barb_tip_z = center_z + 0.09
+    barb_tip_y = center_y + throat_radius + 0.018
+    barb_tip_z = center_z + 0.12
     v_tip = bm.verts.new((front_x, barb_tip_y, barb_tip_z))
     for v_i in range(6):
         nxt = (v_i + 1) % 6

@@ -114,6 +114,15 @@ def build_round_tower(bm, props, seed):
                 create_cylinder(bm, radius=cur_r - 0.02, height=0.12, segments=8,
                                 location=(0.0, 0.0, z_floor + 0.06), mat_index=mat_fl)
         
+            # Walkable landing bridge connecting spiral staircase exit to the annular floor
+            create_beveled_box(
+                bm,
+                size=(0.60, well_r * 0.95, 0.12),
+                location=(0.0, -well_r * 0.52, z_floor + 0.06),
+                mat_index=mat_fl,
+                bevel_amount=0.01
+            )
+        
         # Cantilever corbels under the 8 vertices
         if fl_idx > 0 and fl_overhang > 0.01:
             for k in range(num_facets):
@@ -136,11 +145,28 @@ def build_round_tower(bm, props, seed):
                 total_angle_deg=360.0
             )
 
-        # Ceiling beams
+        # Ceiling beams (radial when stairs present to keep central void completely clear)
         if props.has_ceiling_beams:
             beam_d = 0.16
-            create_box(bm, size=(cur_r * 1.8, 0.14, beam_d), location=(0.0, 0.0, z_ceil - beam_d * 0.5), mat_index=MAT_INDEX_WOOD)
-            create_box(bm, size=(0.14, cur_r * 1.8, beam_d), location=(0.0, 0.0, z_ceil - beam_d * 0.5), mat_index=MAT_INDEX_WOOD)
+            if props.has_stairs:
+                stair_r = min(cur_r - wall_t - 0.25, 1.10)
+                well_r = stair_r + 0.08
+                beam_span = max(0.25, (cur_r - 0.05) - well_r)
+                beam_mid_r = well_r + beam_span * 0.5
+                for k in range(num_facets):
+                    b_ang = k * d_ang + offset_ang
+                    bx = beam_mid_r * math.cos(b_ang)
+                    by = beam_mid_r * math.sin(b_ang)
+                    create_box(
+                        bm,
+                        size=(beam_span, 0.14, beam_d),
+                        location=(bx, by, z_ceil - beam_d * 0.5),
+                        rotation=(0.0, 0.0, b_ang),
+                        mat_index=MAT_INDEX_WOOD
+                    )
+            else:
+                create_box(bm, size=(cur_r * 1.8, 0.14, beam_d), location=(0.0, 0.0, z_ceil - beam_d * 0.5), mat_index=MAT_INDEX_WOOD)
+                create_box(bm, size=(0.14, cur_r * 1.8, beam_d), location=(0.0, 0.0, z_ceil - beam_d * 0.5), mat_index=MAT_INDEX_WOOD)
 
         # 8 Wall Facets
         win_w = min(1.0, props.window_width)
@@ -235,8 +261,8 @@ def build_round_tower(bm, props, seed):
 
     # Architectural Archetype Accessories for Round Tower
     if archetype == 'WINDMILL':
-        hub_z = top_z + props.roof_height * 0.40
-        build_windmill_sails(bm, cx=0.0, front_y=-top_r, hub_z=hub_z, radius=max(2.8, top_r * 1.8))
+        hub_z = top_z - 0.35
+        build_windmill_sails(bm, cx=0.0, front_y=-top_r, hub_z=hub_z, radius=max(2.8, top_r * 1.8), wall_y=-top_r + 0.35)
     elif archetype == 'WATCHTOWER':
         build_watchtower_lookout(bm, -top_r, top_r, -top_r, top_r, z_platform=top_z)
 
@@ -390,17 +416,11 @@ def generate_building(obj, props):
         x_min, x_max = -hx, hx
         y_min, y_max = -hy, hy
         
-        # Solid floor slab bounds
-        if fl_idx > 0:
-            slab_xmin = x_min - wall_t * 0.45
-            slab_xmax = x_max + wall_t * 0.45
-            slab_ymin = y_min - wall_t * 0.45
-            slab_ymax = y_max + wall_t * 0.45
-        else:
-            slab_xmin = x_min + 0.03
-            slab_xmax = x_max - 0.03
-            slab_ymin = y_min + 0.03
-            slab_ymax = y_max - 0.03
+        # Solid floor slab bounds (strictly inside exterior wall perimeter to prevent poke-through)
+        slab_xmin = x_min + 0.03
+        slab_xmax = x_max - 0.03
+        slab_ymin = y_min + 0.03
+        slab_ymax = y_max - 0.03
         
         # Interior bounds for current floor room
         ix_min, ix_max = x_min + wall_t, x_max - wall_t
@@ -475,14 +495,10 @@ def generate_building(obj, props):
             wy_min = y_min - (wing_d + fl_overhang)
             wy_max = y_min
 
-            if fl_idx > 0:
-                w_slab_xmin = wx_min - wall_t * 0.45
-                w_slab_xmax = wx_max + wall_t * 0.45
-                w_slab_ymin = wy_min - wall_t * 0.45
-            else:
-                w_slab_xmin = wx_min + 0.03
-                w_slab_xmax = wx_max - 0.03
-                w_slab_ymin = wy_min + 0.03
+            # Solid wing floor slab bounds (strictly inside exterior wall perimeter)
+            w_slab_xmin = wx_min + 0.03
+            w_slab_xmax = wx_max - 0.03
+            w_slab_ymin = wy_min + 0.03
             w_slab_ymax = y_min + 0.05
             build_floor_slab(
                 bm,
@@ -1188,10 +1204,10 @@ def generate_building(obj, props):
 
     # 4.5. Specialized Architectural Archetype Accessories
     if effective_archetype == 'BLACKSMITH':
-        build_blacksmith_forge(bm, -hx, hx, -hy, hy, found_h, wall_t, seed=seed)
+        build_blacksmith_forge(bm, -hx, hx, -hy, hy, z_ground=0.04, wall_thickness=wall_t, seed=seed)
     elif effective_archetype == 'WINDMILL':
-        hub_z = top_z + props.roof_height * 0.42
-        build_windmill_sails(bm, cx=0.0, front_y=-hy, hub_z=hub_z, radius=max(2.6, props.width * 0.48))
+        hub_z = top_z - 0.35
+        build_windmill_sails(bm, cx=0.0, front_y=-hy, hub_z=hub_z, radius=max(2.6, props.width * 0.48), wall_y=-hy + 0.35)
     elif effective_archetype == 'WATCHTOWER':
         build_watchtower_lookout(bm, -top_hx, top_hx, -top_hy, top_hy, z_platform=top_z)
     elif effective_archetype == 'TAVERN':

@@ -19,6 +19,41 @@ def on_property_updated(self, context):
         from .generator.building import generate_building
         generate_building(obj, self)
 
+def on_tier_updated(self, context):
+    """When the user changes material tier, dynamically scale layout, floors, and dimensions."""
+    if not getattr(self, "auto_update", True):
+        return
+        
+    tier = getattr(self, "material_tier", "TIER_3")
+    # Temporarily prevent recursive regeneration while updating multiple parameters
+    self.auto_update = False
+    if tier == 'TIER_1':
+        self.num_floors = 1
+        self.width = 5.2
+        self.depth = 6.0
+        self.foundation_height = 0.35
+        self.has_cantilever = False
+        self.ground_floor_stone = False
+    elif tier == 'TIER_2':
+        self.num_floors = 2
+        self.width = 6.8
+        self.depth = 7.8
+        self.foundation_height = 0.55
+        self.has_cantilever = True
+        self.cantilever_overhang = 0.35
+        self.ground_floor_stone = False
+    elif tier == 'TIER_3':
+        self.num_floors = 3
+        self.width = 8.8
+        self.depth = 9.8
+        self.foundation_height = 0.90
+        self.has_cantilever = True
+        self.cantilever_overhang = 0.40
+        self.ground_floor_stone = True
+    self.auto_update = True
+    
+    on_property_updated(self, context)
+
 class FantasyBuildingSettings(bpy.types.PropertyGroup):
     auto_update: BoolProperty(
         name="Auto Update",
@@ -420,7 +455,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('TIER_3', "Tier 3: Stone & Stucco", "Dressed ashlar stone, bright medieval stucco, terracotta/slate roof"),
         ],
         default='TIER_3',
-        update=on_property_updated
+        update=on_tier_updated
     )
     
     physical_siding: BoolProperty(

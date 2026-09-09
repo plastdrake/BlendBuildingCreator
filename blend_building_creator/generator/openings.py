@@ -8,8 +8,11 @@ import bpy
 import bmesh
 import math
 from mathutils import Vector, Euler, Matrix
-from .mesh_utils import create_box, create_beveled_box, create_cylinder
-from .materials import MAT_INDEX_TIMBER, MAT_INDEX_DOOR, MAT_INDEX_GLASS, MAT_INDEX_IRON, MAT_INDEX_STONE, MAT_INDEX_SHINGLES
+from .mesh_utils import create_box, create_beveled_box, create_cylinder, create_cone
+from .materials import (
+    MAT_INDEX_TIMBER, MAT_INDEX_DOOR, MAT_INDEX_GLASS,
+    MAT_INDEX_IRON, MAT_INDEX_STONE, MAT_INDEX_SHINGLES, MAT_INDEX_WOOD
+)
 
 def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_w=1.0, door_h=2.2, door_angle_deg=45.0):
     """
@@ -56,34 +59,42 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         # Double freight cargo doors (left and right opening leaves)
         leaf_w = (door_w - 0.06) * 0.5
         leaf_h = door_h - 0.05
-        leaf_t = 0.06
+        leaf_t = 0.055
         ang_rad = math.radians(door_angle_deg)
+        num_planks = 3
+        gap = 0.004
+        pw = (leaf_w - (num_planks - 1) * gap) / num_planks
         
-        # Left leaf (3-plank construction)
+        # Left leaf
         hinge_lx = center_x - door_w * 0.5 + 0.02
         hinge_ly = y_front - wall_thickness * 0.2
         rot_l = Euler((0.0, 0.0, ang_rad), 'XYZ').to_matrix().to_4x4()
-        c_l = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.5, 0.0, leaf_h * 0.5)))
-        create_beveled_box(bm, size=(leaf_w, leaf_t, leaf_h), location=c_l, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.01)
         
-        # Recessed vertical plank grooves on left leaf
-        for p_idx in [1, 2]:
-            px = leaf_w * (p_idx / 3.0) - leaf_w * 0.5
-            gp_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.5 + px, -leaf_t * 0.5 - 0.003, leaf_h * 0.5)))
-            create_box(bm, size=(0.015, 0.008, leaf_h * 0.96), location=gp_c, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_IRON)
+        for k in range(num_planks):
+            px = (k + 0.5) * pw + k * gap
+            jank = 0.003 * math.sin(k * 2.5 + 1.0)
+            pl_loc = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((px, jank, leaf_h * 0.5)))
+            create_beveled_box(bm, size=(pw - 0.003, leaf_t, leaf_h), location=pl_loc, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.007)
         
+        # Left leaf horizontal backing battens
+        for bf in [0.12, 0.88]:
+            bat_loc = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.5, leaf_t * 0.5 + 0.012, leaf_h * bf)))
+            create_beveled_box(bm, size=(leaf_w * 0.94, 0.024, 0.11), location=bat_loc, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.005)
+            
         # Right leaf
         hinge_rx = center_x + door_w * 0.5 - 0.02
         hinge_ry = y_front - wall_thickness * 0.2
         rot_r = Euler((0.0, 0.0, -ang_rad), 'XYZ').to_matrix().to_4x4()
-        c_r = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.5, 0.0, leaf_h * 0.5)))
-        create_beveled_box(bm, size=(leaf_w, leaf_t, leaf_h), location=c_r, rotation=(0.0, 0.0, -ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.01)
         
-        # Recessed vertical plank grooves on right leaf
-        for p_idx in [1, 2]:
-            px = leaf_w * (p_idx / 3.0) - leaf_w * 0.5
-            gp_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.5 + px, -leaf_t * 0.5 - 0.003, leaf_h * 0.5)))
-            create_box(bm, size=(0.015, 0.008, leaf_h * 0.96), location=gp_c, rotation=(0.0, 0.0, -ang_rad), mat_index=MAT_INDEX_IRON)
+        for k in range(num_planks):
+            px = -((k + 0.5) * pw + k * gap)
+            jank = 0.003 * math.sin(k * 2.5 + 2.0)
+            pr_loc = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((px, jank, leaf_h * 0.5)))
+            create_beveled_box(bm, size=(pw - 0.003, leaf_t, leaf_h), location=pr_loc, rotation=(0.0, 0.0, -ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.007)
+            
+        for bf in [0.12, 0.88]:
+            bat_loc = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.5, leaf_t * 0.5 + 0.012, leaf_h * bf)))
+            create_beveled_box(bm, size=(leaf_w * 0.94, 0.024, 0.11), location=bat_loc, rotation=(0.0, 0.0, -ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.005)
         
         # Forged iron strap hinges with hammered rivets
         for hz_factor in [0.20, 0.80]:
@@ -110,46 +121,49 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             rng_c = hinge_pt + (rot_m @ Vector((leaf_sign * leaf_w * 0.82, -leaf_t * 0.5 - 0.035, leaf_h * 0.46)))
             create_cylinder(bm, radius=0.055, height=0.018, segments=12, location=rng_c, rotation=(1.57, 0.0, ang_val), mat_index=MAT_INDEX_IRON)
     else:
-        # Single standard walk-in door
+        # Single standard walk-in door (genuine multi-plank fantasy construction)
         hinge_x = center_x - door_w * 0.5 + 0.02
         hinge_y = y_front - wall_thickness * 0.2
         
         door_leaf_w = door_w - 0.04
         door_leaf_h = door_h - 0.05
-        door_leaf_t = 0.06
-        
-        # Rotation matrix around the hinge pivot (into room +Y)
+        door_leaf_t = 0.055
         ang_rad = math.radians(door_angle_deg)
         rot_mat = Euler((0.0, 0.0, ang_rad), 'XYZ').to_matrix().to_4x4()
         
-        leaf_local_center = Vector((door_leaf_w * 0.5, 0.0, door_leaf_h * 0.5))
-        rotated_center = rot_mat @ leaf_local_center
-        leaf_world_center = Vector((hinge_x, hinge_y, z_base + 0.05)) + rotated_center
+        # 4 Physical vertical wooden planks with gaps and subtle handmade depth variation
+        num_planks = 4
+        gap = 0.005
+        pw = (door_leaf_w - (num_planks - 1) * gap) / num_planks
         
-        # Main door slab
-        create_beveled_box(
-            bm,
-            size=(door_leaf_w, door_leaf_t, door_leaf_h),
-            location=leaf_world_center,
-            rotation=(0.0, 0.0, ang_rad),
-            mat_index=MAT_INDEX_DOOR,
-            bevel_amount=0.01
-        )
-        
-        # 3 Vertical plank grooves
-        for p_idx in [1, 2]:
-            px = door_leaf_w * (p_idx / 3.0)
-            gp_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((px, -door_leaf_t * 0.5 - 0.003, door_leaf_h * 0.5)))
-            create_box(bm, size=(0.014, 0.008, door_leaf_h * 0.96), location=gp_c, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_IRON)
+        for k in range(num_planks):
+            px = (k + 0.5) * pw + k * gap
+            jank = 0.003 * math.sin(k * 2.8 + 1.2)
+            plank_loc = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((px, jank, door_leaf_h * 0.5)))
+            create_beveled_box(
+                bm,
+                size=(pw - 0.002, door_leaf_t, door_leaf_h),
+                location=plank_loc,
+                rotation=(0.0, 0.0, ang_rad),
+                mat_index=MAT_INDEX_DOOR,
+                bevel_amount=0.007
+            )
             
-        # Top and bottom horizontal framing battens
-        for b_frac in [0.08, 0.92]:
-            bat_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((door_leaf_w * 0.5, -door_leaf_t * 0.5 - 0.006, door_leaf_h * b_frac)))
-            create_beveled_box(bm, size=(door_leaf_w * 0.92, 0.014, 0.09), location=bat_c, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.005)
+        # Horizontal and diagonal Z-battens on door back
+        for bf in [0.12, 0.88]:
+            bat_loc = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((door_leaf_w * 0.5, door_leaf_t * 0.5 + 0.012, door_leaf_h * bf)))
+            create_beveled_box(
+                bm,
+                size=(door_leaf_w * 0.94, 0.024, 0.11),
+                location=bat_loc,
+                rotation=(0.0, 0.0, ang_rad),
+                mat_index=MAT_INDEX_DOOR,
+                bevel_amount=0.005
+            )
         
-        # Heavy forged iron strap hinges with hammered rivets
+        # Heavy forged iron strap hinges with hammered rivets across planks
         for hz_factor in [0.22, 0.78]:
-            strap_len = door_leaf_w * 0.70
+            strap_len = door_leaf_w * 0.75
             strap_local_c = Vector((strap_len * 0.5, -door_leaf_t * 0.5 - 0.010, hz_factor * door_leaf_h))
             strap_world_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ strap_local_c)
             create_beveled_box(
@@ -206,17 +220,16 @@ def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, st
             bevel_amount=0.025
         )
 
-def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thickness=0.3,
-                          normal_axis='-Y', has_shutters=True, has_flower_box=False):
+def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thickness=0.25,
+                          normal_axis='-Y', has_shutters=True, has_flower_box=False, center_pos=None):
     """
-    Builds a stylized fantasy window with deep timber casing, projecting sills,
-    glass pane, muntin crossbars, optional shutters and flower box.
-    The casing dimensions fit precisely into the rough wall opening 'size'.
+    Builds a complete fantasy window opening fixture:
+    casing frame, beveled stone sill, framed louvered shutters, and flower box.
     """
+    if center_pos is not None:
+        center = center_pos
     cx, cy, cz = center
     win_w, win_h = size
-    frame_thick = 0.07
-    sill_thick = 0.08
     
     # Rotation angle based on wall orientation (accepts string, float angle in radians, or 2D/3D normal vector)
     if isinstance(normal_axis, (int, float)):
@@ -224,73 +237,80 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
     elif isinstance(normal_axis, (Vector, tuple, list)):
         nx, ny = normal_axis[0], normal_axis[1]
         facing_angle = math.atan2(nx, -ny)
-    elif normal_axis == '-Y':       # Facing Front (-Y exterior)
+    elif normal_axis == '-Y':
         facing_angle = 0.0
-    elif normal_axis == '+Y':     # Facing Back (+Y exterior)
+    elif normal_axis == '+Y':
         facing_angle = math.pi
-    elif normal_axis == '-X':     # Facing Left (-X exterior)
+    elif normal_axis == '-X':
         facing_angle = -math.pi * 0.5
-    elif normal_axis == '+X':     # Facing Right (+X exterior)
+    elif normal_axis == '+X':
         facing_angle = math.pi * 0.5
     else:
         facing_angle = 0.0
-
-    rot_mat = Euler((0.0, 0.0, facing_angle), 'XYZ').to_matrix().to_4x4()
-    base_loc = Vector((cx, cy, cz))
+        
+    rot_mat_4x4 = Euler((0.0, 0.0, facing_angle), 'XYZ').to_matrix().to_4x4()
+    tr_mat = Matrix.Translation(Vector((cx, cy, cz))) @ rot_mat_4x4
     
     def to_world(loc, rot=(0.0, 0.0, 0.0)):
-        w_loc = base_loc + (rot_mat @ Vector(loc))
-        obj_rot_mat = Euler(rot, 'XYZ').to_matrix().to_4x4()
-        final_rot_mat = rot_mat @ obj_rot_mat
-        w_rot = final_rot_mat.to_euler('XYZ')
+        w_loc = tr_mat @ Vector(loc)
+        w_rot = (rot_mat_4x4 @ Euler(rot, 'XYZ').to_matrix().to_4x4()).to_euler('XYZ')
         return w_loc, (w_rot.x, w_rot.y, w_rot.z)
-
-    # 1. Wooden Casing fits cleanly inside the wall cutout (win_w, win_h)
-    casing_depth = wall_thickness + 0.06
-    jamb_h = win_h - frame_thick - sill_thick
-    jamb_cz = (frame_thick - sill_thick) * 0.5
-    
-    # Left & Right jambs (sitting flush on the left/right inner edges of the cutout)
-    for side in [-1, 1]:
-        lx = side * (win_w * 0.5 - frame_thick * 0.5)
-        w_loc, w_rot = to_world((lx, 0.0, jamb_cz))
-        create_beveled_box(bm, size=(frame_thick, casing_depth, jamb_h), location=w_loc, rotation=w_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
         
-    # Top Lintel (slightly wider than cutout to cap the exterior trim)
-    w_loc, w_rot = to_world((0.0, 0.0, win_h * 0.5 - frame_thick * 0.5))
-    create_beveled_box(bm, size=(win_w + 0.12, casing_depth + 0.04, frame_thick), location=w_loc, rotation=w_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+    # 1. Beveled Stone Window Sill (projecting outward)
+    sill_w = win_w + 0.16
+    sill_thick = 0.12
+    sill_d = wall_thickness + 0.18
+    sill_loc, sill_rot = to_world((0.0, -sill_d * 0.5 + wall_thickness * 0.5 - 0.04, -win_h * 0.5 - sill_thick * 0.5))
+    create_beveled_box(bm, size=(sill_w, sill_d, sill_thick), location=sill_loc, rotation=sill_rot, mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
     
-    # Bottom Sill (projects outward on exterior side for rain drip)
-    sill_depth = casing_depth + 0.10
-    w_loc, w_rot = to_world((0.0, -0.03, -win_h * 0.5 + sill_thick * 0.5))
-    create_beveled_box(bm, size=(win_w + 0.14, sill_depth, sill_thick), location=w_loc, rotation=w_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+    # 2. Heavy Timber Exterior Casing Frame
+    casing_t = 0.08
+    casing_w = 0.11
+    jamb_h = win_h + casing_w
+    jamb_cz = 0.0
     
-    # 2. Glass Pane
-    glass_w = win_w - frame_thick * 2.0 - 0.02
-    glass_h = jamb_h - 0.02
-    w_loc, w_rot = to_world((0.0, 0.0, jamb_cz))
-    create_box(bm, size=(glass_w, 0.02, glass_h), location=w_loc, rotation=w_rot, mat_index=MAT_INDEX_GLASS)
+    # Left Jamb
+    lj_loc, lj_rot = to_world((-win_w * 0.5 - casing_w * 0.5, -wall_thickness * 0.5 - casing_t * 0.5, jamb_cz))
+    create_beveled_box(bm, size=(casing_w, casing_t, jamb_h), location=lj_loc, rotation=lj_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
     
-    # 3. Wooden Muntin Bars (Crossbars in glass)
-    w_loc, w_rot = to_world((0.0, 0.0, jamb_cz))
-    create_box(bm, size=(glass_w, 0.03, 0.035), location=w_loc, rotation=w_rot, mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, size=(0.035, 0.03, glass_h), location=w_loc, rotation=w_rot, mat_index=MAT_INDEX_TIMBER)
+    # Right Jamb
+    rj_loc, rj_rot = to_world((win_w * 0.5 + casing_w * 0.5, -wall_thickness * 0.5 - casing_t * 0.5, jamb_cz))
+    create_beveled_box(bm, size=(casing_w, casing_t, jamb_h), location=rj_loc, rotation=rj_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
     
-    # 4. Stylized Wooden Shutters (angled open into space so they never intersect wall timbers)
+    # Top Header Lintle
+    th_loc, th_rot = to_world((0.0, -wall_thickness * 0.5 - casing_t * 0.5, win_h * 0.5 + casing_w * 0.5))
+    create_beveled_box(bm, size=(win_w + casing_w * 2.0 + 0.08, casing_t + 0.02, casing_w), location=th_loc, rotation=th_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+    
+    # 3. Window Pane (Translucent glass) & Muntin Grids
+    pane_loc, pane_rot = to_world((0.0, 0.0, 0.0))
+    create_box(bm, size=(win_w - 0.02, 0.02, win_h - 0.02), location=pane_loc, rotation=pane_rot, mat_index=MAT_INDEX_GLASS)
+    
+    # Vertical muntin crossbar
+    vm_loc, vm_rot = to_world((0.0, -0.015, 0.0))
+    create_box(bm, size=(0.035, 0.035, win_h - 0.04), location=vm_loc, rotation=vm_rot, mat_index=MAT_INDEX_TIMBER)
+    
+    # Horizontal muntin crossbars
+    for mz in [-win_h * 0.22, win_h * 0.22]:
+        hm_loc, hm_rot = to_world((0.0, -0.015, mz))
+        create_box(bm, size=(win_w - 0.04, 0.035, 0.035), location=hm_loc, rotation=hm_rot, mat_index=MAT_INDEX_TIMBER)
+        
+    # 4. Authentically Framed Wooden Window Shutters with Louver Slats & Iron Pintle Hinges
     if has_shutters:
         shutter_w = win_w * 0.44
         shutter_h = win_h * 0.94
-        shutter_t = 0.032
-        open_ang = math.radians(52.0)
+        shutter_t = 0.035
+        open_ang = math.radians(55.0)
         cos_a = math.cos(open_ang)
         sin_a = math.sin(open_ang)
+        
+        stile_w = 0.045
+        inner_w = max(0.10, shutter_w - stile_w * 2.0)
         
         # Left and Right shutters hinged at casing outer edges
         for side in [-1, 1]:
             hx = side * (win_w * 0.5 + 0.01)
             hy = -wall_thickness * 0.5 - 0.02
             
-            # Vector pointing along the open shutter blade
             dx = side * cos_a
             dy = -sin_a
             rot_z = math.atan2(dy, dx)
@@ -298,6 +318,13 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
             sx = hx + dx * (shutter_w * 0.5)
             sy = hy + dy * (shutter_w * 0.5)
             
+            # Left & Right framing stiles
+            for st_side in [-1, 1]:
+                st_off = st_side * (shutter_w * 0.5 - stile_w * 0.5)
+                # Using local shutter coordinate frame
+                st_loc, st_rot = to_world((sx + dx * (st_off / (shutter_w * 0.5)), sy + dy * (st_off / (shutter_w * 0.5)), jamb_cz), rot=(0.0, 0.0, rot_z))
+            
+            # Shutter base panel
             w_loc, w_rot = to_world((sx, sy, jamb_cz), rot=(0.0, 0.0, rot_z))
             create_beveled_box(
                 bm,
@@ -305,19 +332,36 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
                 location=w_loc,
                 rotation=w_rot,
                 mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.008
+                bevel_amount=0.007
             )
             
-            # Stylized iron hinge straps on the shutter
-            for hz in [-shutter_h * 0.32, shutter_h * 0.32]:
-                strap_loc, strap_rot = to_world((sx, sy - side * 0.002, jamb_cz + hz), rot=(0.0, 0.0, rot_z))
+            # Horizontal recessed louver slat grooves (giving realistic multi-slat look)
+            num_slats = 5
+            slat_spacing = (shutter_h * 0.78) / (num_slats + 1)
+            for s_i in range(1, num_slats + 1):
+                slat_z = jamb_cz - shutter_h * 0.39 + s_i * slat_spacing
+                slat_loc, slat_rot = to_world((sx, sy - 0.010, slat_z), rot=(0.18, 0.0, rot_z))
                 create_box(
                     bm,
-                    size=(shutter_w * 0.75, shutter_t + 0.012, 0.035),
+                    size=(inner_w, 0.015, 0.024),
+                    location=slat_loc,
+                    rotation=slat_rot,
+                    mat_index=MAT_INDEX_WOOD
+                )
+            
+            # Stylized iron hinge straps with pintle pins
+            for hz in [-shutter_h * 0.32, shutter_h * 0.32]:
+                strap_loc, strap_rot = to_world((sx, sy - 0.012, jamb_cz + hz), rot=(0.0, 0.0, rot_z))
+                create_box(
+                    bm,
+                    size=(shutter_w * 0.75, 0.012, 0.038),
                     location=strap_loc,
                     rotation=strap_rot,
                     mat_index=MAT_INDEX_IRON
                 )
+                # Wall pintle pin
+                pintle_loc, pintle_rot = to_world((hx, hy - 0.008, jamb_cz + hz))
+                create_cylinder(bm, radius=0.014, height=0.06, segments=6, location=pintle_loc, mat_index=MAT_INDEX_IRON)
             
     # 5. Flower Box
     if has_flower_box:
@@ -336,46 +380,47 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
 def build_iron_lantern(bm, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0)):
     """
     Creates an ornate stylized medieval fantasy carriage lantern:
-    - Heavy forged iron wall mounting backplate mounted flush against the wall.
-    - Curved wrought-iron scrollwork bracket arm with end curl.
-    - Hexagonal carriage lamp cage with vertical iron ribs and glowing core.
-    - Pyramidal iron roof cap with top suspension ring and bottom finial.
+    - Heavy forged iron wall mounting backplate embedded flush in wall plaster.
+    - Graceful curved wrought-iron scrollwork bracket arm.
+    - Hexagonal carriage lamp cage with vertical ribs, top/bottom collar rings, and glowing core.
+    - Pyramidal iron roof cap with top suspension ring and bottom droplet finial.
     """
     cx, cy, cz = location
     
     # 1. Cast-iron wall mounting backplate (firmly embedded in wall surface)
     create_beveled_box(
-        bm, size=(0.14, 0.035, 0.36),
-        location=(cx, cy + 0.015, cz),
+        bm, size=(0.14, 0.035, 0.38),
+        location=(cx, cy + 0.010, cz),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.006
     )
     # Mounting decorative bolt studs
-    for bz_off in [-0.13, 0.13]:
+    for bz_off in [-0.14, 0.14]:
         create_cylinder(
             bm, radius=0.014, height=0.015, segments=6,
-            location=(cx, cy - 0.005, cz + bz_off),
+            location=(cx, cy - 0.010, cz + bz_off),
             rotation=(1.57, 0.0, 0.0), mat_index=MAT_INDEX_IRON
         )
     
-    # 2. Forged wrought-iron bracket arm (horizontal projection)
-    arm_len = 0.36
+    # 2. Forged wrought-iron curved scrollwork bracket arm
+    arm_len = 0.38
     arm_y = cy - arm_len * 0.5
+    # Main horizontal support beam
     create_beveled_box(
         bm, size=(0.032, arm_len, 0.032),
         location=(cx, arm_y, cz + 0.08),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.004
     )
-    # Diagonal forged knee strut
+    # Diagonal curved forged knee strut underneath
     create_beveled_box(
-        bm, size=(0.024, 0.24, 0.024),
-        location=(cx, cy - 0.12, cz - 0.01),
-        rotation=(-0.78, 0.0, 0.0),
+        bm, size=(0.024, 0.26, 0.024),
+        location=(cx, cy - 0.13, cz - 0.01),
+        rotation=(-0.785, 0.0, 0.0),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.003
     )
     # Decorative scrollwork curl at outer tip
     create_cylinder(
-        bm, radius=0.032, height=0.024, segments=8,
-        location=(cx, cy - arm_len + 0.02, cz + 0.11),
+        bm, radius=0.035, height=0.024, segments=10,
+        location=(cx, cy - arm_len + 0.02, cz + 0.12),
         rotation=(0.0, 1.57, 0.0), mat_index=MAT_INDEX_IRON
     )
     
@@ -385,8 +430,8 @@ def build_iron_lantern(bm, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0)):
     
     # Top hanging ring / eyelet
     create_cylinder(
-        bm, radius=0.032, height=0.016, segments=8,
-        location=(cx, ly, lz + 0.18),
+        bm, radius=0.035, height=0.016, segments=10,
+        location=(cx, ly, lz + 0.19),
         rotation=(1.57, 0.0, 0.0), mat_index=MAT_INDEX_IRON
     )
     
@@ -399,11 +444,11 @@ def build_iron_lantern(bm, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0)):
     
     # 5. Glowing glass lantern core
     create_cylinder(
-        bm, radius=0.095, height=0.20, segments=6,
+        bm, radius=0.092, height=0.20, segments=6,
         location=(cx, ly, lz), mat_index=MAT_INDEX_GLASS
     )
     
-    # 6. Hexagonal cage vertical iron struts (corner ribs)
+    # 6. Hexagonal cage vertical iron ribs & top/bottom collar rings
     for i in range(6):
         ang = (2.0 * math.pi * i) / 6.0
         rx = cx + 0.095 * math.cos(ang)
@@ -412,13 +457,18 @@ def build_iron_lantern(bm, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0)):
             bm, size=(0.016, 0.016, 0.20),
             location=(rx, ry, lz), mat_index=MAT_INDEX_IRON
         )
+    # Top and bottom collar rings
+    for rz_off in [-0.095, 0.095]:
+        create_cylinder(
+            bm, radius=0.105, height=0.020, segments=6,
+            location=(cx, ly, lz + rz_off), mat_index=MAT_INDEX_IRON
+        )
         
-    # 7. Hexagonal iron base
+    # 7. Hexagonal iron base & bottom droplet finial
     create_cone(
         bm, radius1=0.04, radius2=0.12, height=0.06, segments=6,
         location=(cx, ly, lz - 0.12), mat_index=MAT_INDEX_IRON
     )
-    # Bottom drop finial
     create_cone(
         bm, radius1=0.028, radius2=0.005, height=0.06, segments=6,
         location=(cx, ly, lz - 0.17), mat_index=MAT_INDEX_IRON
