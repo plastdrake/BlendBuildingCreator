@@ -279,7 +279,7 @@ def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
     build_facade_timber(bm, (x_min, y_min), (x_min, y_max), z_bottom, z_top, wall_thickness,
                          (-1.0, 0.0), left_ops, has_diagonals)
 
-def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2):
+def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True):
     """
     Builds chunky carved wooden support brackets (corbels) underneath
     the overhanging upper floors for that iconic European fantasy silhouette.
@@ -291,7 +291,6 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
     corbel_h = 0.35
     corbel_d = overhang_dist + 0.12
     
-    # Corbels on front edge
     total_x = x_max_upper - x_min_upper
     num_x = max(2, int(total_x / spacing))
     step_x = total_x / (num_x + 1)
@@ -299,21 +298,23 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
     for i in range(1, num_x + 1):
         cx = x_min_upper + i * step_x
         # Front corbel
-        create_beveled_box(
-            bm,
-            size=(corbel_w, corbel_d, corbel_h),
-            location=(cx, y_min_upper + corbel_d * 0.4, z_level - corbel_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.015
-        )
+        if include_front:
+            create_beveled_box(
+                bm,
+                size=(corbel_w, corbel_d, corbel_h),
+                location=(cx, y_min_upper + corbel_d * 0.4, z_level - corbel_h * 0.5),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.015
+            )
         # Back corbel
-        create_beveled_box(
-            bm,
-            size=(corbel_w, corbel_d, corbel_h),
-            location=(cx, y_max_upper - corbel_d * 0.4, z_level - corbel_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.015
-        )
+        if include_back:
+            create_beveled_box(
+                bm,
+                size=(corbel_w, corbel_d, corbel_h),
+                location=(cx, y_max_upper - corbel_d * 0.4, z_level - corbel_h * 0.5),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.015
+            )
 
 def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thick=0.10):
     """

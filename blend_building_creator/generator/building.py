@@ -2,13 +2,15 @@
 Master Building Generator Orchestrator for Stylized Fantasy Buildings.
 Coordinates foundation, double-walled floors, walk-in doorways, intermediate floor slabs,
 staircases, ceiling beams, roofs, shingles, dormers, and chimneys into a unified mesh.
+Supports Rectangular, L-Shaped, T-Shaped, and Round Tower footprint architectures.
 """
 
 import bpy
 import bmesh
 import math
+import random
 from mathutils import Vector, Euler, Matrix
-from .mesh_utils import create_box, create_beveled_box, apply_box_uvs, add_wonkiness
+from .mesh_utils import create_box, create_beveled_box, create_cylinder, create_cone, apply_box_uvs, add_wonkiness
 from .materials import (
     setup_building_material_slots,
     MAT_INDEX_STONE, MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT,
@@ -26,21 +28,156 @@ from .interior import (
 from .openings import build_door_assembly, build_front_steps, build_window_assembly, build_iron_lantern
 from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_dormer, build_fantasy_chimney
 
-def get_facade_window_positions(span_min, span_max, target_spacing=2.0, min_margin=0.85):
+def get_facade_window_positions(span_min, span_max, target_spacing=2.4, min_margin=0.85):
     """
     Computes dynamic window center positions along a facade segment.
     Automatically scales window count smoothly as width or depth increases.
     """
     length = span_max - span_min
     avail = length - min_margin * 2.0
-    if avail < 0.8:
+    if avail < 0.4:
         return []
-    if avail < 1.8:
-        return [(span_min + span_max) * 0.5]
     
-    count = max(2, int(round(avail / target_spacing)))
+    count = max(1, int(round(avail / target_spacing)))
+    if count == 1:
+        return [(span_min + span_max) * 0.5]
     step = avail / max(1, count - 1)
     return [span_min + min_margin + i * step for i in range(count)]
+
+def build_round_tower(bm, props, seed):
+    """
+    Generates an 8-sided faceted fantasy wizard tower with conical turret spire roof,
+    centered spiral staircase, stone foundation, and glowing windows.
+    """
+    num_floors = max(1, props.num_floors)
+    floor_h = props.floor_height
+    radius = max(1.8, props.width * 0.45)
+    wall_t = props.wall_thickness
+    found_h = props.foundation_height if props.has_foundation else 0.4
+    cantilever = props.cantilever_overhang if props.has_cantilever else 0.0
+    total_height = found_h + num_floors * floor_h + props.roof_height
+    
+    num_facets = 8
+    d_ang = 2.0 * math.pi / num_facets
+    offset_ang = -math.pi / num_facets
+
+    # Foundation
+    if props.has_foundation:
+        f_r = radius + 0.30
+        create_cylinder(bm, radius=f_r, height=found_h, segments=8,
+                        location=(0.0, 0.0, found_h * 0.5), mat_index=MAT_INDEX_STONE)
+        create_cylinder(bm, radius=f_r + 0.10, height=0.12, segments=8,
+                        location=(0.0, 0.0, found_h - 0.06), mat_index=MAT_INDEX_STONE)
+
+    # Multi-floor loop
+    prev_r = radius
+    cur_r = radius
+    
+    for fl_idx in range(num_floors):
+        z_floor = found_h + fl_idx * floor_h
+        z_ceil = z_floor + floor_h
+        fl_overhang = cantilever if (fl_idx >= 1 and props.has_cantilever) else 0.0
+        cur_r = radius + fl_overhang
+
+        # Floor slab
+        mat_fl = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_FLOOR
+        create_cylinder(bm, radius=cur_r - 0.02, height=0.12, segments=8,
+                        location=(0.0, 0.0, z_floor + 0.06), mat_index=mat_fl)
+        
+        # Cantilever corbels under the 8 vertices
+        if fl_idx > 0 and fl_overhang > 0.01:
+            for k in range(num_facets):
+                ang = k * d_ang + offset_ang
+                cx = prev_r * math.cos(ang)
+                cy = prev_r * math.sin(ang)
+                create_beveled_box(bm, size=(0.16, 0.16, 0.35),
+                                   location=(cx, cy, z_floor - 0.18),
+                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015)
+
+        # Stairs
+        if fl_idx < num_floors - 1 and props.has_stairs:
+            stair_r = min(cur_r - wall_t - 0.25, 1.10)
+            build_spiral_staircase(
+                bm,
+                center_pos=(0.0, 0.0, z_floor + 0.05),
+                target_z=z_ceil + 0.05,
+                radius=stair_r,
+                start_ang_deg=-90.0,
+                total_angle_deg=360.0
+            )
+
+        # Ceiling beams
+        if props.has_ceiling_beams:
+            beam_d = 0.16
+            create_box(bm, size=(cur_r * 1.8, 0.14, beam_d), location=(0.0, 0.0, z_ceil - beam_d * 0.5), mat_index=MAT_INDEX_TIMBER)
+            create_box(bm, size=(0.14, cur_r * 1.8, beam_d), location=(0.0, 0.0, z_ceil - beam_d * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+        # 8 Wall Facets
+        win_w = min(1.0, props.window_width)
+        win_h = props.window_height
+        win_cz = z_floor + floor_h * 0.48
+        
+        for k in range(num_facets):
+            a1 = k * d_ang + offset_ang
+            a2 = (k + 1) * d_ang + offset_ang
+            p1 = (cur_r * math.cos(a1), cur_r * math.sin(a1))
+            p2 = (cur_r * math.cos(a2), cur_r * math.sin(a2))
+            
+            facet_len = math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+            openings = []
+            
+            # Corner post at p1
+            create_beveled_box(bm, size=(0.14, 0.14, floor_h),
+                               location=(p1[0], p1[1], z_floor + floor_h * 0.5),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+            
+            # Facet 6 is the front facet (facing -Y)
+            if fl_idx == 0 and k == 6 and props.has_front_door:
+                dw = min(facet_len - 0.4, props.door_width)
+                dh = props.door_height
+                u1 = (facet_len - dw) * 0.5
+                u2 = u1 + dw
+                openings.append({'u_start': u1, 'u_end': u2, 'z_start': z_floor, 'z_end': z_floor + dh})
+                door_mid = ((p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5)
+                build_door_assembly(bm, center_x=door_mid[0], y_front=door_mid[1], z_base=z_floor,
+                                    wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle)
+                if props.has_front_steps and props.has_foundation:
+                    build_front_steps(bm, center_x=door_mid[0], y_front=door_mid[1], z_base=z_floor,
+                                      num_steps=max(2, int(found_h / 0.18)))
+            elif props.has_windows and (k % 2 == 1 or (fl_idx > 0 and k == 6)):
+                if facet_len > win_w + 0.4:
+                    u1 = (facet_len - win_w) * 0.5
+                    u2 = u1 + win_w
+                    win_z1 = win_cz - win_h * 0.5
+                    win_z2 = win_cz + win_h * 0.5
+                    openings.append({'u_start': u1, 'u_end': u2, 'z_start': win_z1, 'z_end': win_z2})
+                    mid_pt = ((p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5)
+                    n_vec = Vector((mid_pt[0], mid_pt[1], 0.0)).normalized()
+                    n_axis = '-Y' if n_vec.y < -0.5 else ('+Y' if n_vec.y > 0.5 else ('+X' if n_vec.x > 0 else '-X'))
+                    build_window_assembly(bm, center=(mid_pt[0], mid_pt[1], win_cz), size=(win_w, win_h),
+                                          wall_thickness=wall_t, normal_axis=n_axis,
+                                          has_shutters=props.has_shutters, has_flower_box=props.has_flower_boxes)
+
+            build_wall_with_opening(bm, p1, p2, z_floor, z_ceil, wall_t, openings)
+
+        prev_r = cur_r
+
+    # Conical Turret Roof
+    top_z = found_h + num_floors * floor_h
+    top_r = cur_r
+    build_conical_turret_roof(bm, center_pos=(0.0, 0.0, top_z), radius=top_r * 1.15, height=props.roof_height * 1.25, segments=16)
+
+    # Chimney
+    if props.has_chimney:
+        chim_h = total_height + 0.8
+        build_fantasy_chimney(
+            bm,
+            pos_xy=(top_r * 0.65, top_r * 0.45),
+            z_start=0.0,
+            total_height=chim_h,
+            width=0.75, depth=0.75,
+            crooked_angle=0.05
+        )
 
 def generate_building(obj, props):
     """
@@ -59,9 +196,22 @@ def generate_building(obj, props):
     cantilever = props.cantilever_overhang if props.has_cantilever else 0.0
     found_h = props.foundation_height if props.has_foundation else 0.2
     
-    # Compound building shape setup (L-Shape and T-Shape wings)
+    # Compound building shape setup (L-Shape, T-Shape, Round Tower)
     shape = getattr(props, 'building_shape', 'RECTANGLE')
+    if shape == 'ROUND_TOWER':
+        build_round_tower(bm, props, seed)
+        if props.wonkiness > 0.001:
+            total_h = found_h + num_floors * floor_h + props.roof_height
+            add_wonkiness(bm, z_min=0.0, z_max=total_h, amount=props.wonkiness, seed=seed)
+        apply_box_uvs(bm, scale=1.0)
+        setup_building_material_slots(obj, props)
+        bm.to_mesh(obj.data)
+        bm.free()
+        obj.data.update()
+        return
+
     has_wing = shape in ('L_SHAPE', 'T_SHAPE')
+    wing_floors = min(num_floors, max(1, getattr(props, 'wing_floors', 1)))
     wing_w = min(base_w * 0.70, max(2.5, getattr(props, 'wing_width', 3.5)))
     wing_d = max(2.0, getattr(props, 'wing_depth', 3.0))
     wing_side = getattr(props, 'wing_side', 'RIGHT')
@@ -141,6 +291,7 @@ def generate_building(obj, props):
     for fl_idx in range(num_floors):
         z_floor = found_h + fl_idx * floor_h
         z_ceil = z_floor + floor_h
+        fl_has_wing = has_wing and (fl_idx < wing_floors)
         
         # Upper floor cantilever expansion
         if props.has_cantilever:
@@ -161,7 +312,6 @@ def generate_building(obj, props):
         y_min, y_max = -hy, hy
         
         # Solid floor slab bounds
-        # On upper floors, extend slab to cover the outer wall perimeter below (eliminates Z-overlap)
         if fl_idx > 0:
             slab_xmin = x_min - wall_t * 0.45
             slab_xmax = x_max + wall_t * 0.45
@@ -204,10 +354,10 @@ def generate_building(obj, props):
             mat_idx=floor_mat
         )
         
-        # Upper floor safety guardrail around stair opening (safely inset onto floor slab with L-shaped return)
+        # Upper floor safety guardrail around stair opening
         if fl_idx > 0 and props.has_stairs and cur_stair_hole is not None:
             sh_x1, sh_x2, sh_y1, sh_y2 = cur_stair_hole
-            # Solid timber trimmer sill plate bridging floor and wall along the stairwell opening (eliminates Z-overlap)
+            # Solid timber trimmer sill plate bridging floor and wall along the stairwell opening
             create_beveled_box(
                 bm,
                 size=(0.14, (sh_y2 - sh_y1) + 0.08, 0.14),
@@ -225,7 +375,7 @@ def generate_building(obj, props):
                                       return_y=ret_y, x_start=sh_x1 + 0.20)
         
         # Wing floor slab for compound shapes
-        if has_wing:
+        if fl_has_wing:
             if shape == 'L_SHAPE':
                 if wing_side == 'LEFT':
                     wx_min = x_min
@@ -260,7 +410,9 @@ def generate_building(obj, props):
             )
             if fl_idx > 0 and fl_overhang > prev_fl_overhang:
                 overhang_step = fl_overhang - prev_fl_overhang
-                build_cantilever_corbels(bm, wx_min, wx_max, wy_min, wy_max, z_floor, overhang_dist=overhang_step)
+                # ONLY exterior front edge, NEVER interior ceiling junction
+                build_cantilever_corbels(bm, wx_min, wx_max, wy_min, wy_max, z_floor,
+                                        overhang_dist=overhang_step, include_back=False)
 
         # Determine next flight of stairs leading up to fl_idx + 1
         next_stair_hole = None
@@ -269,7 +421,7 @@ def generate_building(obj, props):
                 spiral_r = min(1.15, props.stair_width * 1.05)
                 spiral_cx = fl0_ix_min + spiral_r + 0.15
                 spiral_cy = fl0_iy_max - spiral_r - 0.15
-                fl_start_ang = -90.0 + fl_idx * 30.0
+                fl_start_ang = -90.0
                 build_spiral_staircase(
                     bm,
                     center_pos=(spiral_cx, spiral_cy, z_floor + 0.05),
@@ -278,9 +430,9 @@ def generate_building(obj, props):
                     start_ang_deg=fl_start_ang,
                     total_angle_deg=360.0
                 )
-                # Headroom cutout leaves floor slab intact across exterior wall (sh_x1 = ix_min + 0.02)
+                # Headroom cutout envelopes the entire circular stair path
                 next_stair_hole = (ix_min + 0.02, spiral_cx + spiral_r + 0.08,
-                                   spiral_cy - 0.10, iy_max)
+                                   spiral_cy - spiral_r - 0.06, min(iy_max, spiral_cy + spiral_r + 0.06))
             else:
                 # Straight stairs: Floor 0 -> 1 runs front to back (+Y)
                 # Floor 1 -> 2 runs back to front (-Y) on adjacent track (switchback)
@@ -288,7 +440,6 @@ def generate_building(obj, props):
                     stair_start = (stair_cx_0, stair_y_bot, z_floor + 0.05)
                     build_straight_staircase(bm, stair_start, z_ceil + 0.05,
                                              stair_width=stair_w, stair_depth=stair_len, direction_y=1)
-                    # Inset from outer wall to preserve floor coverage over exterior wall top
                     next_stair_hole = (ix_min + 0.02, stair_cx_0 + stair_w * 0.5 + 0.22,
                                        stair_y_bot - 0.25, stair_y_top + 0.10)
                 else:
@@ -359,52 +510,55 @@ def generate_building(obj, props):
                 build_iron_lantern(bm, location=(door_cx + dw * 0.5 + 0.45, door_yf - 0.05, z_floor + dh * 0.8))
 
         # Interior walk-through portal between main building and wing
-        if has_wing:
-            portal_w = min(2.4, (wx_max - wx_min) - 0.8)
+        if fl_has_wing:
+            portal_w = max(2.2, (wx_max - wx_min) - 0.45)
             portal_h = floor_h * 0.82
             p_cx = (wx_min + wx_max) * 0.5
             p_u1 = (p_cx - portal_w * 0.5) - x_min
             p_u2 = (p_cx + portal_w * 0.5) - x_min
             front_openings.append({'u_start': p_u1, 'u_end': p_u2, 'z_start': z_floor, 'z_end': z_floor + portal_h})
-            # Timber portal archway framing
-            create_beveled_box(bm, size=(0.14, 0.14, portal_h),
-                               location=(p_cx - portal_w * 0.5 - 0.07, y_min, z_floor + portal_h * 0.5),
+            
+            # Timber portal archway framing encasing full wall depth
+            jamb_w = 0.18
+            jamb_d = wall_t + 0.05
+            create_beveled_box(bm, size=(jamb_w, jamb_d, portal_h),
+                               location=(p_cx - portal_w * 0.5 - jamb_w * 0.5, y_min, z_floor + portal_h * 0.5),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-            create_beveled_box(bm, size=(0.14, 0.14, portal_h),
-                               location=(p_cx + portal_w * 0.5 + 0.07, y_min, z_floor + portal_h * 0.5),
+            create_beveled_box(bm, size=(jamb_w, jamb_d, portal_h),
+                               location=(p_cx + portal_w * 0.5 + jamb_w * 0.5, y_min, z_floor + portal_h * 0.5),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-            create_beveled_box(bm, size=(portal_w + 0.28, 0.16, 0.18),
-                               location=(p_cx, y_min, z_floor + portal_h + 0.09),
+            lintel_w = portal_w + jamb_w * 2.0 + 0.08
+            lintel_d = wall_t + 0.06
+            lintel_h = 0.20
+            create_beveled_box(bm, size=(lintel_w, lintel_d, lintel_h),
+                               location=(p_cx, y_min, z_floor + portal_h + lintel_h * 0.5),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
 
         # Dynamic Windows - Front Wall
         if props.has_windows:
-            if not has_wing:
+            front_win_xs = []
+            if not fl_has_wing:
                 if fl_idx > 0:
-                    front_win_xs = get_facade_window_positions(x_min, x_max, target_spacing=2.2, min_margin=0.9)
+                    front_win_xs = get_facade_window_positions(x_min, x_max, target_spacing=2.4, min_margin=0.9)
                 else:
-                    # Ground floor: flank the center door
-                    front_win_xs = []
-                    dw_half = props.door_width * 0.5 + 0.45
+                    dw_half = props.door_width * 0.5 + 0.55
                     if not (props.has_stairs and cur_w < 6.0):
-                        front_win_xs.extend(get_facade_window_positions(x_min, -dw_half, target_spacing=2.0, min_margin=0.6))
-                    front_win_xs.extend(get_facade_window_positions(dw_half, x_max, target_spacing=2.0, min_margin=0.6))
+                        front_win_xs.extend(get_facade_window_positions(x_min, -dw_half, target_spacing=2.2, min_margin=0.7))
+                    front_win_xs.extend(get_facade_window_positions(dw_half, x_max, target_spacing=2.2, min_margin=0.7))
             else:
-                # Compound shapes: place windows only along exposed front wall spans
-                front_win_xs = []
+                # Compound shapes: place windows only along exposed spans with 1.2m corner clearance
                 if shape == 'L_SHAPE':
                     if wing_side == 'RIGHT':
-                        exp_x1, exp_x2 = x_min, wx_min
+                        exp_x1, exp_x2 = x_min, wx_min - 1.20
                     else:
-                        exp_x1, exp_x2 = wx_max, x_max
-                    if fl_idx > 0:
-                        front_win_xs.extend(get_facade_window_positions(exp_x1, exp_x2, target_spacing=2.0, min_margin=0.7))
-                    elif exp_x2 - exp_x1 > 3.2:
-                        front_win_xs.extend(get_facade_window_positions(door_cx + 0.9, exp_x2, target_spacing=1.8, min_margin=0.5))
+                        exp_x1, exp_x2 = wx_max + 1.20, x_max
+                    if (exp_x2 - exp_x1) > 1.2:
+                        front_win_xs.extend(get_facade_window_positions(exp_x1, exp_x2, target_spacing=2.4, min_margin=0.8))
                 else: # T_SHAPE
-                    if fl_idx > 0:
-                        front_win_xs.extend(get_facade_window_positions(x_min, wx_min, target_spacing=2.0, min_margin=0.7))
-                        front_win_xs.extend(get_facade_window_positions(wx_max, x_max, target_spacing=2.0, min_margin=0.7))
+                    if (wx_min - 1.20 - x_min) > 1.2:
+                        front_win_xs.extend(get_facade_window_positions(x_min, wx_min - 1.20, target_spacing=2.4, min_margin=0.8))
+                    if (x_max - (wx_max + 1.20)) > 1.2:
+                        front_win_xs.extend(get_facade_window_positions(wx_max + 1.20, x_max, target_spacing=2.4, min_margin=0.8))
 
             for wx in front_win_xs:
                 wu = (wx - x_min)
@@ -417,7 +571,7 @@ def generate_building(obj, props):
 
         # Dynamic Windows - Back Wall
         if props.has_windows:
-            back_win_xs = get_facade_window_positions(x_min, x_max, target_spacing=2.2, min_margin=0.9)
+            back_win_xs = get_facade_window_positions(x_min, x_max, target_spacing=2.4, min_margin=0.9)
             for wx in back_win_xs:
                 wu = (wx - x_min)
                 back_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -433,7 +587,7 @@ def generate_building(obj, props):
             # Left side
             for wy in side_win_ys:
                 if fl_idx == 0 and props.has_stairs and (wy > stair_y_bot - 0.2 and wy < stair_y_top + 0.2):
-                    continue # Do not collide with ground floor staircase
+                    continue
                 wu = (wy - y_min)
                 left_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
                 build_window_assembly(
@@ -452,10 +606,10 @@ def generate_building(obj, props):
                 )
 
         # Dynamic Windows - Wing Walls
-        if has_wing and props.has_windows:
+        if fl_has_wing and props.has_windows:
             # Wing Front
             if not (fl_idx == 0 and shape == 'T_SHAPE'):
-                w_win_xs = get_facade_window_positions(wx_min, wx_max, target_spacing=2.0, min_margin=0.75)
+                w_win_xs = get_facade_window_positions(wx_min, wx_max, target_spacing=2.2, min_margin=0.85)
                 for wwx in w_win_xs:
                     wu = (wwx - wx_min)
                     w_front_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -464,8 +618,12 @@ def generate_building(obj, props):
                         wall_thickness=wall_t, normal_axis='-Y',
                         has_shutters=props.has_shutters, has_flower_box=props.has_flower_boxes
                     )
-            # Wing Left & Right
-            w_win_ys = get_facade_window_positions(wy_min, wy_max, target_spacing=2.2, min_margin=0.75)
+            # Wing Left & Right: Enforce 1.25m clearance from re-entrant corner at wy_max
+            if (wy_max - 1.25) - (wy_min + 0.85) > 0.8:
+                w_win_ys = get_facade_window_positions(wy_min + 0.85, wy_max - 1.25, target_spacing=2.4, min_margin=0.6)
+            else:
+                w_win_ys = [(wy_min + wy_max - 0.4) * 0.5] if (wy_max - wy_min > 2.2) else []
+                
             for wwy in w_win_ys:
                 wu = (wwy - wy_min)
                 w_left_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -488,7 +646,7 @@ def generate_building(obj, props):
         build_wall_with_opening(bm, (x_max, y_min), (x_max, y_max), z_floor, z_ceil, wall_t, right_openings)
         
         # Wing Solid Walls
-        if has_wing:
+        if fl_has_wing:
             build_wall_with_opening(bm, (wx_min, wy_min), (wx_max, wy_min), z_floor, z_ceil, wall_t, w_front_openings)
             build_wall_with_opening(bm, (wx_min, wy_min), (wx_min, wy_max), z_floor, z_ceil, wall_t, w_left_openings)
             build_wall_with_opening(bm, (wx_max, wy_min), (wx_max, wy_max), z_floor, z_ceil, wall_t, w_right_openings)
@@ -501,7 +659,7 @@ def generate_building(obj, props):
                 (x_min, y_max),
                 (x_max, y_max),
             ]
-            if not has_wing:
+            if not fl_has_wing:
                 corners.extend([(x_min, y_min), (x_max, y_min)])
             else:
                 if shape == 'L_SHAPE':
@@ -528,7 +686,7 @@ def generate_building(obj, props):
                                 (1.0, 0.0), right_openings, props.timber_diagonals)
 
             # Front wall: only exposed exterior spans (no framing across interior junction)
-            if not has_wing:
+            if not fl_has_wing:
                 build_facade_timber(bm, (x_min, y_min), (x_max, y_min), z_floor, z_ceil, wall_t,
                                     (0.0, -1.0), front_openings, props.timber_diagonals)
             else:
@@ -560,7 +718,7 @@ def generate_building(obj, props):
                                         (0.0, -1.0), exp_ops_r, props.timber_diagonals)
 
             # 3. Wing exterior facades (ONLY exterior faces, NEVER interior junction at wy_max)
-            if has_wing:
+            if fl_has_wing:
                 # Wing front corner posts
                 create_beveled_box(bm, size=(beam_w, beam_w, floor_h),
                                    location=(wx_min, wy_min, z_floor + floor_h * 0.5),
@@ -598,6 +756,7 @@ def generate_building(obj, props):
     top_hx = top_w * 0.5
     top_hy = top_d * 0.5
     top_z = found_h + num_floors * floor_h
+    roof_style = props.roof_style
     
     # Attic floor plate (embedded into wall core with zero gap)
     build_floor_slab(
@@ -611,18 +770,18 @@ def generate_building(obj, props):
         mat_idx=MAT_INDEX_FLOOR
     )
     
-    # Interior Roof Trusses & Collar Beams (visible inside attic)
+    # Interior Roof Trusses & Collar Beams (visible inside attic, safe clearance under sway)
     build_attic_trusses(
         bm,
         x_min=-top_hx + wall_t, x_max=top_hx - wall_t,
         y_min=-top_hy + wall_t, y_max=top_hy - wall_t,
         z_base=top_z,
         ridge_z=top_z + props.roof_height,
-        spacing=1.4
+        spacing=1.4,
+        sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0
     )
     
     # Exterior Roof Construction
-    roof_style = props.roof_style
     if roof_style == 'SWAY':
         build_sway_roof(
             bm,
@@ -650,7 +809,8 @@ def generate_building(obj, props):
             z_base=top_z,
             roof_height=props.roof_height,
             overhang=props.roof_overhang,
-            wall_thickness=wall_t
+            wall_thickness=wall_t,
+            segments_y=6
         )
         
     # Roof Shingles
@@ -668,45 +828,83 @@ def generate_building(obj, props):
             roof_style=roof_style
         )
 
-    # Compound Shape Wing Roof (Cross-Gable intersecting main roof)
+    # Compound Shape Wing Roof (Cross-Gable intersecting main roof or upper facade)
     if has_wing:
+        w_top_fl = min(wing_floors, num_floors)
+        if props.has_cantilever:
+            if props.overhang_mode == 'SECOND_FLOOR_ONLY':
+                w_overhang = cantilever if w_top_fl > 1 else 0.0
+            else:
+                w_overhang = (w_top_fl - 1) * cantilever
+        else:
+            w_overhang = 0.0
+
         if shape == 'L_SHAPE':
             if wing_side == 'LEFT':
                 w_top_xmin = -top_hx
-                w_top_xmax = -top_hx + (wing_w + top_overhang * 2.0)
+                w_top_xmax = -top_hx + (wing_w + w_overhang * 2.0)
             else:
-                w_top_xmin = top_hx - (wing_w + top_overhang * 2.0)
+                w_top_xmin = top_hx - (wing_w + w_overhang * 2.0)
                 w_top_xmax = top_hx
         else: # T_SHAPE
-            w_top_xmin = -(wing_w + top_overhang * 2.0) * 0.5
-            w_top_xmax =  (wing_w + top_overhang * 2.0) * 0.5
-        w_top_ymin = -top_hy - (wing_d + top_overhang)
+            w_top_xmin = -(wing_w + w_overhang * 2.0) * 0.5
+            w_top_xmax =  (wing_w + w_overhang * 2.0) * 0.5
+        w_top_ymin = -top_hy - (wing_d + w_overhang)
         w_top_ymax = -top_hy
+        w_top_z = found_h + w_top_fl * floor_h
         w_roof_h = props.roof_height * 0.88
 
-        build_gable_roof(
-            bm,
-            x_min=w_top_xmin, x_max=w_top_xmax,
-            y_min=w_top_ymin, y_max=w_top_ymax + 0.25,
-            z_base=top_z,
-            roof_height=w_roof_h,
-            overhang=props.roof_overhang,
-            wall_thickness=wall_t,
-            gable_ends=('FRONT',)
-        )
-        if props.has_roof_shingles:
-            build_shingle_layers(
+        if props.roof_style == 'SWAY':
+            build_sway_roof(
                 bm,
                 x_min=w_top_xmin, x_max=w_top_xmax,
-                y_min=w_top_ymin, y_max=w_top_ymax + 0.15,
-                z_base=top_z,
+                y_min=w_top_ymin, y_max=w_top_ymax + 0.25,
+                z_base=w_top_z,
                 roof_height=w_roof_h,
-                rows=max(4, int(props.shingle_rows * (wing_d / max(1.0, base_d)))),
-                seed=seed + 101,
                 overhang=props.roof_overhang,
-                sway_amount=0.0,
-                roof_style='GABLE'
+                sway_amount=props.roof_sway * 0.70,
+                segments_y=6,
+                wall_thickness=wall_t,
+                gable_ends=('FRONT',)
             )
+            if props.has_roof_shingles:
+                build_shingle_layers(
+                    bm,
+                    x_min=w_top_xmin, x_max=w_top_xmax,
+                    y_min=w_top_ymin, y_max=w_top_ymax + 0.15,
+                    z_base=w_top_z,
+                    roof_height=w_roof_h,
+                    rows=max(4, int(props.shingle_rows * (wing_d / max(1.0, base_d)))),
+                    seed=seed + 101,
+                    overhang=props.roof_overhang,
+                    sway_amount=props.roof_sway * 0.70,
+                    roof_style='SWAY'
+                )
+        else:
+            build_gable_roof(
+                bm,
+                x_min=w_top_xmin, x_max=w_top_xmax,
+                y_min=w_top_ymin, y_max=w_top_ymax + 0.25,
+                z_base=w_top_z,
+                roof_height=w_roof_h,
+                overhang=props.roof_overhang,
+                wall_thickness=wall_t,
+                gable_ends=('FRONT',),
+                segments_y=6
+            )
+            if props.has_roof_shingles:
+                build_shingle_layers(
+                    bm,
+                    x_min=w_top_xmin, x_max=w_top_xmax,
+                    y_min=w_top_ymin, y_max=w_top_ymax + 0.15,
+                    z_base=w_top_z,
+                    roof_height=w_roof_h,
+                    rows=max(4, int(props.shingle_rows * (wing_d / max(1.0, base_d)))),
+                    seed=seed + 101,
+                    overhang=props.roof_overhang,
+                    sway_amount=0.0,
+                    roof_style='GABLE'
+                )
         
     # Dormer Windows
     if props.has_dormers and roof_style in ('SWAY', 'GABLE'):

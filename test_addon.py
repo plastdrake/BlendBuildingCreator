@@ -62,7 +62,7 @@ def run_tests():
 
     # 4. Test Presets
     print("[4/6] Testing style presets...")
-    for preset_key in ['TAVERN', 'WIZARD_TOWER', 'COTTAGE', 'TOWNHOUSE']:
+    for preset_key in ['TAVERN', 'WIZARD_TOWER', 'BLACKSMITH', 'WATCHTOWER', 'COTTAGE', 'TOWNHOUSE']:
         bpy.ops.building.apply_preset(preset_key=preset_key)
         v = len(obj.data.vertices)
         p = len(obj.data.polygons)

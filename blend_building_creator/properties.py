@@ -72,8 +72,16 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('RECTANGLE', "Rectangular", "Standard rectangular building footprint"),
             ('L_SHAPE', "L-Shaped", "L-shaped footprint with a perpendicular projecting wing"),
             ('T_SHAPE', "T-Shaped", "T-shaped footprint with a central projecting cross wing"),
+            ('ROUND_TOWER', "Round Tower", "Cylindrical / octagonal fantasy tower footprint"),
         ],
         default='RECTANGLE',
+        update=on_property_updated
+    )
+    
+    wing_floors: IntProperty(
+        name="Wing Floors",
+        description="Number of storeys for the projecting wing",
+        min=1, max=5, default=1,
         update=on_property_updated
     )
     

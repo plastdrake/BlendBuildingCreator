@@ -46,6 +46,12 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         op = grid.operator("building.apply_preset", text="Wizard Tower", icon='CONE')
         op.preset_key = "WIZARD_TOWER"
         
+        op = grid.operator("building.apply_preset", text="Blacksmith", icon='TOOL_SETTINGS')
+        op.preset_key = "BLACKSMITH"
+        
+        op = grid.operator("building.apply_preset", text="Watchtower", icon='HIDE_OFF')
+        op.preset_key = "WATCHTOWER"
+        
         op = grid.operator("building.apply_preset", text="Fairytale Cottage", icon='SNAP_VOLUME')
         op.preset_key = "COTTAGE"
         
@@ -76,6 +82,7 @@ class VIEW3D_PT_fantasy_building_dimensions(bpy.types.Panel):
         if props.building_shape in ('L_SHAPE', 'T_SHAPE'):
             box_wing = col.box()
             box_wing.label(text="Wing Geometry", icon='MOD_BUILD')
+            box_wing.prop(props, "wing_floors")
             box_wing.prop(props, "wing_width")
             box_wing.prop(props, "wing_depth")
             if props.building_shape == 'L_SHAPE':

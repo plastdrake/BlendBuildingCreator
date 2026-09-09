@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "blend_building_creator"
-version = "1.1.0"
+version = "1.2.0"
 name = "Stylized Fantasy Building Generator"
 tagline = "Generate stylized fantasy buildings with walk-in interiors"
 maintainer = "Stylized 3D Studio"

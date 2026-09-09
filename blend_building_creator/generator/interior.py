@@ -423,56 +423,61 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
                 mat_index=MAT_INDEX_TIMBER
             )
 
-def build_attic_trusses(bm, x_min, x_max, y_min, y_max, z_base, ridge_z, spacing=1.5):
+def build_attic_trusses(bm, x_min, x_max, y_min, y_max, z_base, ridge_z, spacing=1.5, sway_amount=0.0):
     """
     Builds visible A-frame roof trusses and collar beams strictly inside the top floor/attic cavity.
+    Safe clearance ensures rafters never poke through roof decking under sway or wonkiness.
     """
     total_y = y_max - y_min
     num_trusses = max(2, int(total_y / spacing))
     actual_step = total_y / (num_trusses + 1)
     
     cx = (x_min + x_max) * 0.5
-    h_roof = ridge_z - z_base
     half_w = (x_max - x_min) * 0.5
-    pitch_ang = math.atan2(h_roof, half_w)
     
     beam_w = 0.12
     beam_d = 0.14
     
     for i in range(1, num_trusses + 1):
         ty = y_min + i * actual_step
+        t_span = (ty - y_min) / max(0.01, total_y)
+        local_sag = math.sin(t_span * math.pi) * sway_amount
+        local_ridge_z = ridge_z - local_sag
+        h_roof = max(0.5, local_ridge_z - z_base)
         
-        # Left rafter (inside attic, from eaves up to ridge)
-        p_left_start = Vector((cx - half_w + 0.30, ty, z_base + 0.10))
-        p_left_end = Vector((cx - 0.06, ty, ridge_z - 0.25))
+        # Left rafter (inside attic, from eaves up to ridge with safe margin)
+        p_left_start = Vector((cx - half_w + 0.45, ty, z_base + 0.08))
+        p_left_end = Vector((cx - 0.06, ty, local_ridge_z - 0.40))
         left_mid = (p_left_start + p_left_end) * 0.5
         left_len = (p_left_end - p_left_start).length
+        local_pitch_l = math.atan2(p_left_end.z - p_left_start.z, p_left_end.x - p_left_start.x)
         
         create_box(
             bm,
             size=(left_len, beam_w, beam_d),
             location=left_mid,
-            rotation=(0.0, -pitch_ang, 0.0),
+            rotation=(0.0, -local_pitch_l, 0.0),
             mat_index=MAT_INDEX_TIMBER
         )
         
-        # Right rafter (inside attic, from eaves up to ridge)
-        p_right_start = Vector((cx + half_w - 0.30, ty, z_base + 0.10))
-        p_right_end = Vector((cx + 0.06, ty, ridge_z - 0.25))
+        # Right rafter (inside attic, from ridge down to eaves with safe margin)
+        p_right_start = Vector((cx + 0.06, ty, local_ridge_z - 0.40))
+        p_right_end = Vector((cx + half_w - 0.45, ty, z_base + 0.08))
         right_mid = (p_right_start + p_right_end) * 0.5
         right_len = (p_right_end - p_right_start).length
+        local_pitch_r = math.atan2(p_right_end.z - p_right_start.z, p_right_end.x - p_right_start.x)
         
         create_box(
             bm,
             size=(right_len, beam_w, beam_d),
             location=right_mid,
-            rotation=(0.0, pitch_ang, 0.0),
+            rotation=(0.0, -local_pitch_r, 0.0),
             mat_index=MAT_INDEX_TIMBER
         )
         
         # Collar tie beam (horizontal cross beam midway up)
         collar_z = z_base + h_roof * 0.40
-        collar_w = half_w * 0.95
+        collar_w = half_w * 0.85
         create_box(
             bm,
             size=(collar_w, beam_w, beam_d),
