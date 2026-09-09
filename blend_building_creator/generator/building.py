@@ -153,9 +153,9 @@ def build_round_tower(bm, props, seed):
                     openings.append({'u_start': u1, 'u_end': u2, 'z_start': win_z1, 'z_end': win_z2})
                     mid_pt = ((p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5)
                     n_vec = Vector((mid_pt[0], mid_pt[1], 0.0)).normalized()
-                    n_axis = '-Y' if n_vec.y < -0.5 else ('+Y' if n_vec.y > 0.5 else ('+X' if n_vec.x > 0 else '-X'))
+                    facing_angle = math.atan2(n_vec.x, -n_vec.y)
                     build_window_assembly(bm, center=(mid_pt[0], mid_pt[1], win_cz), size=(win_w, win_h),
-                                          wall_thickness=wall_t, normal_axis=n_axis,
+                                          wall_thickness=wall_t, normal_axis=facing_angle,
                                           has_shutters=props.has_shutters, has_flower_box=props.has_flower_boxes)
 
             build_wall_with_opening(bm, p1, p2, z_floor, z_ceil, wall_t, openings)
@@ -547,14 +547,36 @@ def generate_building(obj, props):
             w_top_roof_z = (found_h + wing_floors * floor_h + props.roof_height * 0.88) if has_wing else 0.0
             wing_roof_occludes = has_wing and (z_floor < w_top_roof_z + 0.3)
             
+            # Door exclusion zone calculation on floor 0
+            has_door_here = (fl_idx == 0 and props.has_front_door and shape in ('RECTANGLE', 'L_SHAPE'))
+            if has_door_here:
+                door_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
+                door_clr_left = door_clr
+                door_clr_right = door_clr + (0.35 if props.has_lanterns else 0.0)
+                d_ex1 = door_cx - door_clr_left
+                d_ex2 = door_cx + door_clr_right
+            else:
+                d_ex1, d_ex2 = 999.0, -999.0
+
+            def get_cleared_spans(s_min, s_max):
+                """Subdivides a facade interval to strictly exclude the front door envelope."""
+                if not has_door_here or s_max <= d_ex1 or s_min >= d_ex2:
+                    return [(s_min, s_max)]
+                spans = []
+                if d_ex1 - s_min >= win_w + 0.35:
+                    spans.append((s_min, d_ex1))
+                if s_max - d_ex2 >= win_w + 0.35:
+                    spans.append((d_ex2, s_max))
+                return spans
+
             if not fl_has_wing and not wing_roof_occludes:
                 if fl_idx > 0:
                     front_win_xs = get_facade_window_positions(x_min, x_max, target_spacing=2.4, min_margin=0.9)
                 else:
-                    dw_half = props.door_width * 0.5 + 0.55
-                    if not (props.has_stairs and cur_w < 6.0):
-                        front_win_xs.extend(get_facade_window_positions(x_min, -dw_half, target_spacing=2.2, min_margin=0.7))
-                    front_win_xs.extend(get_facade_window_positions(dw_half, x_max, target_spacing=2.2, min_margin=0.7))
+                    for s1, s2 in get_cleared_spans(x_min, x_max):
+                        if props.has_stairs and cur_w < 6.0 and s1 < 0.0:
+                            continue
+                        front_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=2.2, min_margin=0.7))
             else:
                 # Compound shapes or floors occluded by wing roof:
                 # Place windows only along exposed spans with 1.2m corner clearance
@@ -564,12 +586,19 @@ def generate_building(obj, props):
                     else:
                         exp_x1, exp_x2 = wx_base_max + 1.20, x_max
                     if (exp_x2 - exp_x1) > 1.2:
-                        front_win_xs.extend(get_facade_window_positions(exp_x1, exp_x2, target_spacing=2.4, min_margin=0.8))
+                        for s1, s2 in get_cleared_spans(exp_x1, exp_x2):
+                            front_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=2.4, min_margin=0.75))
                 else: # T_SHAPE
                     if (wx_base_min - 1.20 - x_min) > 1.2:
-                        front_win_xs.extend(get_facade_window_positions(x_min, wx_base_min - 1.20, target_spacing=2.4, min_margin=0.8))
+                        for s1, s2 in get_cleared_spans(x_min, wx_base_min - 1.20):
+                            front_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=2.4, min_margin=0.75))
                     if (x_max - (wx_base_max + 1.20)) > 1.2:
-                        front_win_xs.extend(get_facade_window_positions(wx_base_max + 1.20, x_max, target_spacing=2.4, min_margin=0.8))
+                        for s1, s2 in get_cleared_spans(wx_base_max + 1.20, x_max):
+                            front_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=2.4, min_margin=0.75))
+
+            # Strict safety filter: ensure no window lies within door exclusion envelope
+            if has_door_here:
+                front_win_xs = [wx for wx in front_win_xs if (wx < d_ex1 or wx > d_ex2)]
 
             for wx in front_win_xs:
                 wu = (wx - x_min)
@@ -651,16 +680,34 @@ def generate_building(obj, props):
                 )
 
         # 4 Main Solid Walls with Openings
-        build_wall_with_opening(bm, (x_min, y_min), (x_max, y_min), z_floor, z_ceil, wall_t, front_openings)
-        build_wall_with_opening(bm, (x_min, y_max), (x_max, y_max), z_floor, z_ceil, wall_t, back_openings)
-        build_wall_with_opening(bm, (x_min, y_min), (x_min, y_max), z_floor, z_ceil, wall_t, left_openings)
-        build_wall_with_opening(bm, (x_max, y_min), (x_max, y_max), z_floor, z_ceil, wall_t, right_openings)
+        mat_w = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_PLASTER_EXT
+        phys_siding = getattr(props, 'physical_siding', True)
+        tier_val = getattr(props, 'material_tier', 'TIER_3')
+
+        # Check for open timber frame ground floor (e.g. warehouse covered bay)
+        if fl_idx == 0 and getattr(props, 'open_timber_frame', False):
+            # Half-height knee wall with open bays above
+            wall_top_z = z_floor + 0.90
+        else:
+            wall_top_z = z_ceil
+
+        build_wall_with_opening(bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
+                                mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
+        build_wall_with_opening(bm, (x_min, y_max), (x_max, y_max), z_floor, wall_top_z, wall_t, back_openings,
+                                mat_ext=mat_w, normal_vec=(0.0, 1.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
+        build_wall_with_opening(bm, (x_min, y_min), (x_min, y_max), z_floor, wall_top_z, wall_t, left_openings,
+                                mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
+        build_wall_with_opening(bm, (x_max, y_min), (x_max, y_max), z_floor, wall_top_z, wall_t, right_openings,
+                                mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
         
         # Wing Solid Walls
         if fl_has_wing:
-            build_wall_with_opening(bm, (wx_min, wy_min), (wx_max, wy_min), z_floor, z_ceil, wall_t, w_front_openings)
-            build_wall_with_opening(bm, (wx_min, wy_min), (wx_min, wy_max), z_floor, z_ceil, wall_t, w_left_openings)
-            build_wall_with_opening(bm, (wx_max, wy_min), (wx_max, wy_max), z_floor, z_ceil, wall_t, w_right_openings)
+            build_wall_with_opening(bm, (wx_min, wy_min), (wx_max, wy_min), z_floor, wall_top_z, wall_t, w_front_openings,
+                                    mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
+            build_wall_with_opening(bm, (wx_min, wy_min), (wx_min, wy_max), z_floor, wall_top_z, wall_t, w_left_openings,
+                                    mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
+            build_wall_with_opening(bm, (wx_max, wy_min), (wx_max, wy_max), z_floor, wall_top_z, wall_t, w_right_openings,
+                                    mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
 
         # Tudor Timber Framing on Exterior
         if props.has_timber_framing:
@@ -730,21 +777,26 @@ def generate_building(obj, props):
 
             # 3. Wing exterior facades (ONLY exterior faces, NEVER interior junction at wy_max)
             if fl_has_wing:
+                # Lower wing timber frame slightly beneath wall top/ceiling to eliminate coplanar Z conflict
+                w_timber_z_top = z_ceil - 0.06
+                w_post_h = floor_h - 0.06
+                w_post_cz = z_floor + w_post_h * 0.5
+                
                 # Wing front corner posts
-                create_beveled_box(bm, size=(beam_w, beam_w, floor_h),
-                                   location=(wx_min, wy_min, z_floor + floor_h * 0.5),
+                create_beveled_box(bm, size=(beam_w, beam_w, w_post_h),
+                                   location=(wx_min, wy_min, w_post_cz),
                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-                create_beveled_box(bm, size=(beam_w, beam_w, floor_h),
-                                   location=(wx_max, wy_min, z_floor + floor_h * 0.5),
+                create_beveled_box(bm, size=(beam_w, beam_w, w_post_h),
+                                   location=(wx_max, wy_min, w_post_cz),
                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
                 # Wing front facade
-                build_facade_timber(bm, (wx_min, wy_min), (wx_max, wy_min), z_floor, z_ceil, wall_t,
+                build_facade_timber(bm, (wx_min, wy_min), (wx_max, wy_min), z_floor, w_timber_z_top, wall_t,
                                     (0.0, -1.0), w_front_openings, props.timber_diagonals)
                 # Wing left facade
-                build_facade_timber(bm, (wx_min, wy_min), (wx_min, wy_max), z_floor, z_ceil, wall_t,
+                build_facade_timber(bm, (wx_min, wy_min), (wx_min, wy_max), z_floor, w_timber_z_top, wall_t,
                                     (-1.0, 0.0), w_left_openings, props.timber_diagonals)
                 # Wing right facade
-                build_facade_timber(bm, (wx_max, wy_min), (wx_max, wy_max), z_floor, z_ceil, wall_t,
+                build_facade_timber(bm, (wx_max, wy_min), (wx_max, wy_max), z_floor, w_timber_z_top, wall_t,
                                     (1.0, 0.0), w_right_openings, props.timber_diagonals)
 
         # Update previous floor tracking for overhang transitions

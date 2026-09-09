@@ -10,10 +10,178 @@ from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box
 from .materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER, MAT_INDEX_STONE
 
-def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness, mat_ext=MAT_INDEX_PLASTER_EXT, mat_int=MAT_INDEX_PLASTER_INT):
+def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
+                           normal_vec=None, is_corner_start=False, is_corner_end=False, seed=42):
     """
-    Builds a solid wall segment between two 2D points with double-walled faces.
+    Builds authentic rustic 3D horizontal stacked rounded logs with saddle-notched
+    projecting ends and organic handcrafted variation for Tier 1 architecture.
     """
+    x1, y1 = p_start
+    x2, y2 = p_end
+    dx = x2 - x1
+    dy = y2 - y1
+    seg_len = math.sqrt(dx * dx + dy * dy)
+    if seg_len < 0.001:
+        return
+        
+    angle = math.atan2(dy, dx)
+    height = z_top - z_bottom
+    if height < 0.05:
+        return
+        
+    # Outward normal vector
+    if normal_vec is not None:
+        nx, ny = normal_vec[0], normal_vec[1]
+    else:
+        nx = -dy / seg_len
+        ny = dx / seg_len
+    
+    # 1. Solid Interior Core (sealed flat interior surface)
+    core_thick = thickness * 0.40
+    core_cx = (x1 + x2) * 0.5 - nx * (thickness * 0.28)
+    core_cy = (y1 + y2) * 0.5 - ny * (thickness * 0.28)
+    core_cz = (z_bottom + z_top) * 0.5
+    create_box(
+        bm,
+        size=(seg_len, core_thick, height),
+        location=(core_cx, core_cy, core_cz),
+        rotation=(0.0, 0.0, angle),
+        mat_index=MAT_INDEX_PLASTER_INT
+    )
+    
+    # 2. Horizontal Stacked Physical 3D Logs on Exterior
+    target_diam = 0.26
+    num_logs = max(1, int(round(height / target_diam)))
+    log_h = height / num_logs
+    
+    ext_offset = thickness * 0.24
+    ext_cx = (x1 + x2) * 0.5 + nx * ext_offset
+    ext_cy = (y1 + y2) * 0.5 + ny * ext_offset
+    ux = dx / seg_len
+    uy = dy / seg_len
+    
+    for i in range(num_logs):
+        log_z = z_bottom + (i + 0.5) * log_h
+        
+        # Organic hash jitter per log
+        h_val = ((seed * 37 + i * 193 + int(abs(x1) * 17) + int(abs(y1) * 31)) % 1000) / 1000.0
+        r_jitter = (h_val - 0.5) * 0.02
+        d_jitter = ((h_val * 7.1) % 1.0 - 0.5) * 0.015
+        tilt_j = ((h_val * 11.3) % 1.0 - 0.5) * 0.012
+        
+        log_thick = min(thickness * 0.72, log_h * 1.02) + r_jitter
+        log_depth = thickness * 0.56 + d_jitter
+        
+        # Interlocking saddle-notched extensions at outer corners
+        ext_start = 0.20 if is_corner_start else 0.0
+        ext_end = 0.20 if is_corner_end else 0.0
+        
+        # Alternating log end offsets for organic craftsmanship
+        if is_corner_start:
+            ext_start += (0.04 if i % 2 == 0 else -0.02)
+        if is_corner_end:
+            ext_end += (0.04 if (i + 1) % 2 == 0 else -0.02)
+            
+        cur_len = seg_len + ext_start + ext_end
+        u_shift = (ext_end - ext_start) * 0.5
+        
+        cur_cx = ext_cx + ux * u_shift
+        cur_cy = ext_cy + uy * u_shift
+        
+        bevel_r = min(log_thick, log_depth) * 0.38
+        create_beveled_box(
+            bm,
+            size=(cur_len, log_depth, log_thick),
+            location=(cur_cx, cur_cy, log_z),
+            rotation=(tilt_j, 0.0, angle),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=bevel_r
+        )
+
+def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
+                             normal_vec=None, seed=42):
+    """
+    Builds physical 3D horizontal overlapping weatherboard / clapboard planks
+    with crisp lap-relief shadow lines and subtle hand-hewn variations for Tier 2 architecture.
+    """
+    x1, y1 = p_start
+    x2, y2 = p_end
+    dx = x2 - x1
+    dy = y2 - y1
+    seg_len = math.sqrt(dx * dx + dy * dy)
+    if seg_len < 0.001:
+        return
+        
+    angle = math.atan2(dy, dx)
+    height = z_top - z_bottom
+    if height < 0.05:
+        return
+        
+    if normal_vec is not None:
+        nx, ny = normal_vec[0], normal_vec[1]
+    else:
+        nx = -dy / seg_len
+        ny = dx / seg_len
+    
+    # 1. Solid Interior Core
+    core_thick = thickness * 0.40
+    core_cx = (x1 + x2) * 0.5 - nx * (thickness * 0.28)
+    core_cy = (y1 + y2) * 0.5 - ny * (thickness * 0.28)
+    core_cz = (z_bottom + z_top) * 0.5
+    create_box(
+        bm,
+        size=(seg_len, core_thick, height),
+        location=(core_cx, core_cy, core_cz),
+        rotation=(0.0, 0.0, angle),
+        mat_index=MAT_INDEX_PLASTER_INT
+    )
+    
+    # 2. Horizontal Overlapping Planks
+    plank_h = 0.20
+    reveal = 0.17
+    num_planks = max(1, int(math.ceil(height / reveal)))
+    ext_offset = thickness * 0.46
+    
+    for j in range(num_planks):
+        pz = z_bottom + min(height - plank_h * 0.5, j * reveal + plank_h * 0.5)
+        
+        h_val = ((seed * 53 + j * 239 + int(abs(x1) * 19) + int(abs(y1) * 41)) % 1000) / 1000.0
+        depth_j = ((h_val * 5.7) % 1.0 - 0.5) * 0.006
+        plank_depth = 0.026 + depth_j
+        
+        # Lap siding offset: stepped slightly outward per row
+        row_step = (j % 2) * 0.004
+        pcx = (x1 + x2) * 0.5 + nx * (ext_offset + row_step)
+        pcy = (y1 + y2) * 0.5 + ny * (ext_offset + row_step)
+        
+        create_beveled_box(
+            bm,
+            size=(seg_len, plank_depth, plank_h),
+            location=(pcx, pcy, pz),
+            rotation=(0.0, 0.0, angle),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.004
+        )
+
+def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
+                       mat_ext=MAT_INDEX_PLASTER_EXT, mat_int=MAT_INDEX_PLASTER_INT,
+                       normal_vec=None, tier='TIER_3', physical_siding=True,
+                       is_corner_start=False, is_corner_end=False, seed=42):
+    """
+    Builds a solid wall segment between two 2D points, dispatching to physical 3D
+    logs (Tier 1), overlapping planks (Tier 2), or smooth stone/stucco (Tier 3).
+    """
+    if physical_siding and mat_ext != MAT_INDEX_STONE:
+        if tier == 'TIER_1':
+            build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
+                                   normal_vec=normal_vec,
+                                   is_corner_start=is_corner_start, is_corner_end=is_corner_end, seed=seed)
+            return
+        elif tier == 'TIER_2':
+            build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
+                                     normal_vec=normal_vec, seed=seed)
+            return
+
     x1, y1 = p_start
     x2, y2 = p_end
     dx = x2 - x1
@@ -28,8 +196,6 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness, mat_ext=M
     cz = (z_bottom + z_top) * 0.5
     height = z_top - z_bottom
     
-    # We create the wall box
-    # Outer faces have plaster exterior, inner faces have plaster interior
     create_box(
         bm,
         size=(seg_len, thickness, height),
@@ -39,7 +205,9 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness, mat_ext=M
     )
 
 def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
-                            openings=[], mat_ext=MAT_INDEX_PLASTER_EXT):
+                            openings=[], mat_ext=MAT_INDEX_PLASTER_EXT,
+                            normal_vec=None, tier='TIER_3', physical_siding=True,
+                            is_corner_start=True, is_corner_end=True, seed=42):
     """
     Builds a wall along the line p_start -> p_end, cleanly cutting around
     one or more openings (e.g. door or windows) without destructive booleans.
@@ -61,7 +229,9 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
         return (x1 + ux * u, y1 + uy * u)
 
     if not openings:
-        build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness, mat_ext)
+        build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness, mat_ext,
+                           normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
+                           is_corner_start=is_corner_start, is_corner_end=is_corner_end, seed=seed)
         return
 
     # Sort openings by u_start
@@ -76,21 +246,30 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
         
         # Wall segment before this opening
         if ou1 > last_u + 0.01:
-            build_wall_segment(bm, pt_at(last_u), pt_at(ou1), z_bottom, z_top, thickness, mat_ext)
+            seg_is_start = (last_u <= 0.01) and is_corner_start
+            build_wall_segment(bm, pt_at(last_u), pt_at(ou1), z_bottom, z_top, thickness, mat_ext,
+                               normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
+                               is_corner_start=seg_is_start, is_corner_end=False, seed=seed)
             
         # Below the opening (sill portion)
         if oz1 > z_bottom + 0.01:
-            build_wall_segment(bm, pt_at(ou1), pt_at(ou2), z_bottom, oz1, thickness, mat_ext)
+            build_wall_segment(bm, pt_at(ou1), pt_at(ou2), z_bottom, oz1, thickness, mat_ext,
+                               normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
+                               is_corner_start=False, is_corner_end=False, seed=seed)
             
         # Above the opening (lintel/header portion)
         if oz2 < z_top - 0.01:
-            build_wall_segment(bm, pt_at(ou1), pt_at(ou2), oz2, z_top, thickness, mat_ext)
+            build_wall_segment(bm, pt_at(ou1), pt_at(ou2), oz2, z_top, thickness, mat_ext,
+                               normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
+                               is_corner_start=False, is_corner_end=False, seed=seed)
             
         last_u = ou2
         
     # Final wall segment after last opening
     if last_u < seg_len - 0.01:
-        build_wall_segment(bm, pt_at(last_u), pt_at(seg_len), z_bottom, z_top, thickness, mat_ext)
+        build_wall_segment(bm, pt_at(last_u), pt_at(seg_len), z_bottom, z_top, thickness, mat_ext,
+                           normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
+                           is_corner_start=False, is_corner_end=is_corner_end, seed=seed)
 
 def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
                          normal_vec, openings=[], has_diagonals=True):

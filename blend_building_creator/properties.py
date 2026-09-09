@@ -399,6 +399,20 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
     
+    physical_siding: BoolProperty(
+        name="Physical 3D Siding",
+        description="Generate physical 3D log beams (Tier 1) and overlapping lap planks (Tier 2) with organic variations and wonkiness",
+        default=True,
+        update=on_property_updated
+    )
+
+    open_timber_frame: BoolProperty(
+        name="Open Timber Frame",
+        description="Convert ground walls into open post-and-beam timber bays (ideal for warehouses, sheds, and mills)",
+        default=False,
+        update=on_property_updated
+    )
+    
     color_stone: FloatVectorProperty(
         name="Stone Color",
         subtype='COLOR',

@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.3.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.4.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 
 **BlendBuildingCreator** is a procedural 3D building generator add-on for **Blender 5.2 LTS** (compatible with 4.2+). Designed for concept artists, level designers, and game developers creating stylized fantasy, medieval, and rustic architecture in seconds.
@@ -10,28 +10,20 @@ Unlike simple facade generators, **BlendBuildingCreator generates full, walkable
 
 ---
 
-## ✨ What's New in v1.3.0
+## ✨ What's New in v1.4.0
 
-- 🪵 **3 Material Progression Tiers**:
-  - **Tier 1 (Log / Heavy Timber)**: Rugged horizontal log walls (`ShaderNodeTexWave`), cedar shake shingles, and coarse fieldstone foundations.
-  - **Tier 2 (Wood Planks / Weatherboard)**: Horizontal plank siding with saw-band texturing, slate roof tiles, and clean timber frame trim.
-  - **Tier 3 (Ashlar Stone / Stucco)**: Dressed medieval stone masonry, bright smooth plaster/stucco, and royal terracotta/slate shingles.
-  *(Dimensions remain identical across tiers for seamless modular level upgrades)*.
-- 🏛️ **31 One-Click Game Presets** across 5 filterable categories:
-  - **Civic & Manor**: Town Hall, Guild Hall, Manor House, Merchant House, Library.
-  - **Military & Defense**: Watchtower, Guard Barracks, Armory, Fortified Gatehouse, Archery Range.
-  - **Artisan Guilds**: Alchemist Shop, Herbalist Hut, Enchanter Tower, Weaver Cottage, Pottery Workshop.
-  - **Industrial & Craft**: Blacksmith Forge, Windmill, Watermill, Brewery, Bakery, Lumber Mill, Tannery.
-  - **Commercial & Living**: Fairytale Cottage, Medieval Townhouse, Wizard Tower, Cozy Tavern, Fisherman Hut, Farmer Barn, Miner Shack, Stable.
-- 📐 **Compound Footprint Refinements**:
-  - **Independent Wing Floors**: Freely configure 1-story workshops or wings on multi-story buildings (`wing_floors < num_floors`).
-  - **Flush Roof Abutment**: Lower-floor wing roofs terminate cleanly at the upper facade without cutting into upper rooms.
-  - **Solid Wing Ceilings**: Generates solid interior ceilings and exposed joist beams at the wing roofline.
-  - **Window Occlusion Avoidance**: Front windows automatically avoid intersecting lower wing roofs.
-  - **Soffit & Corbel Masking**: Cantilever brackets and soffit plates cleanly split around intersecting wing roofs.
-- 🪜 **Collision-Free Multi-Storey Stairwells**:
-  - Automatically eliminates redundant guardrails on intermediate floors in 3+ storey buildings to keep ascending stairways completely clear.
-  - Trimmer sill plates intelligently suppress when cantilever overhang is 0 to avoid newel post clipping.
+- 🪵 **Physical 3D Siding for Logs & Planks**:
+  - **Tier 1 Physical 3D Logs**: Generates actual stacked horizontal rounded logs with interlocking saddle-notched corner ends, vertical bucking jambs, and handcrafted organic variations that curve with the wonkiness slider.
+  - **Tier 2 Physical 3D Planks**: Generates physical overlapping weatherboard / clapboard lap siding with stepped shadow relief.
+  - **Physical Siding Toggle**: Toggle `physical_siding` anytime for performance or low-poly workflows.
+- 🚪 **Zero Door & Window Overlaps**:
+  - Front entrance doors now enforce a strict exclusion zone `(door_width + window_width) * 0.5 + margin`, cleanly subdividing facade segments so windows and shutters never clip into doors, casings, or lanterns.
+- 🧙 **Wizard Tower Angled Windows**:
+  - Windows on 8-sided faceted round towers now calculate the exact outward facet normal vector and rotate flush with angled walls.
+- 🏗️ **Wing Wood Frame Z Level Fix**:
+  - Wing timber framing top beams and corner posts are lowered slightly below the wall top/ceiling slab, eliminating coplanar Z-fighting.
+- 🏚️ **Tier 1 Covered Timber Warehouse**:
+  - Added the **Covered Timber Warehouse** preset (`INDUSTRIAL_WAREHOUSE`) featuring open post-and-beam heavy timber bays, knee braces, and a high protective roof canopy.
 
 ---
 

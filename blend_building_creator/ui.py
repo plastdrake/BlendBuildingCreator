@@ -41,6 +41,7 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         box_tier = layout.box()
         box_tier.label(text="Building Material Tier", icon='MATERIAL')
         box_tier.prop(props, "material_tier", expand=True)
+        box_tier.prop(props, "physical_siding")
 
         # Style Presets Box with Category Filter
         box_presets = layout.box()
@@ -179,6 +180,7 @@ class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
         box_timber.prop(props, "has_timber_framing")
         if props.has_timber_framing:
             box_timber.prop(props, "timber_diagonals")
+            box_timber.prop(props, "open_timber_frame")
 
 class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
     """Subpanel for roof, shingles, dormers, and chimney"""
@@ -226,6 +228,7 @@ class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
         box_tier = layout.box()
         box_tier.label(text="Material Tier", icon='MATERIAL')
         box_tier.prop(props, "material_tier", expand=True)
+        box_tier.prop(props, "physical_siding")
 
         box_colors = layout.box()
         box_colors.label(text="Procedural Stylized Colors", icon='COLOR')

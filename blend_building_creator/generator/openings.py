@@ -137,23 +137,32 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
     frame_thick = 0.07
     sill_thick = 0.08
     
-    # Rotation angle based on wall orientation
-    if normal_axis == '-Y':       # Facing Front (-Y exterior)
+    # Rotation angle based on wall orientation (accepts string, float angle in radians, or 2D/3D normal vector)
+    if isinstance(normal_axis, (int, float)):
+        facing_angle = float(normal_axis)
+    elif isinstance(normal_axis, (Vector, tuple, list)):
+        nx, ny = normal_axis[0], normal_axis[1]
+        facing_angle = math.atan2(nx, -ny)
+    elif normal_axis == '-Y':       # Facing Front (-Y exterior)
         facing_angle = 0.0
     elif normal_axis == '+Y':     # Facing Back (+Y exterior)
         facing_angle = math.pi
     elif normal_axis == '-X':     # Facing Left (-X exterior)
         facing_angle = -math.pi * 0.5
-    else:                         # '+X' Facing Right (+X exterior)
+    elif normal_axis == '+X':     # Facing Right (+X exterior)
         facing_angle = math.pi * 0.5
+    else:
+        facing_angle = 0.0
 
     rot_mat = Euler((0.0, 0.0, facing_angle), 'XYZ').to_matrix().to_4x4()
     base_loc = Vector((cx, cy, cz))
     
     def to_world(loc, rot=(0.0, 0.0, 0.0)):
         w_loc = base_loc + (rot_mat @ Vector(loc))
-        w_rot = (rot[0], rot[1], rot[2] + facing_angle)
-        return w_loc, w_rot
+        obj_rot_mat = Euler(rot, 'XYZ').to_matrix().to_4x4()
+        final_rot_mat = rot_mat @ obj_rot_mat
+        w_rot = final_rot_mat.to_euler('XYZ')
+        return w_loc, (w_rot.x, w_rot.y, w_rot.z)
 
     # 1. Wooden Casing fits cleanly inside the wall cutout (win_w, win_h)
     casing_depth = wall_thickness + 0.06
