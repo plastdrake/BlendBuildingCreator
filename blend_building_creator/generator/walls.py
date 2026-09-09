@@ -100,13 +100,10 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         log_rz = (log_h * 0.49) + r_jitter
         
         # Interlocking saddle-notched extensions at outer corners
-        ext_start = 0.0
-        if is_corner_start:
-            ext_start = 0.28 if (k % 2 == 0) else 0.22
-            
-        ext_end = 0.0
-        if is_corner_end:
-            ext_end = 0.28 if ((k + 1) % 2 == 0) else 0.22
+        # Matches authentic log cabin reference: logs extend 0.40m past the perpendicular wall
+        ext_len = 0.40
+        ext_start = ext_len if is_corner_start else 0.0
+        ext_end = ext_len if is_corner_end else 0.0
             
         cur_len = seg_len + ext_start + ext_end
         u_shift = (ext_end - ext_start) * 0.5
@@ -123,6 +120,7 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             location=(cur_cx, cur_cy, log_z),
             rotation=(tilt_j, 0.0, angle),
             mat_index=MAT_INDEX_TIMBER,
+            mat_index_cap=10, # MAT_INDEX_LOG_END
             smooth=True
         )
 

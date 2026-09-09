@@ -275,9 +275,8 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     
     door_angle: FloatProperty(
         name="Door Open Angle",
-        description="Angle of door leaf (0 = closed, 45 = ajar, 90 = wide open)",
+        description="Angle of door leaf in degrees (0 = closed, 45 = ajar, 90 = wide open)",
         min=0.0, max=110.0, default=40.0,
-        unit='ROTATION',
         update=on_property_updated
     )
     
@@ -497,20 +496,32 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
     
-    color_timber: FloatVectorProperty(
-        name="Timber Beams",
+    color_timber_frame: FloatVectorProperty(
+        name="Timber Frame",
+        description="Color for external wall structural beams, posts, and diagonal braces",
         subtype='COLOR',
         size=4,
-        default=(0.28, 0.16, 0.09, 1.0),
+        default=(0.22, 0.13, 0.07, 1.0),
+        min=0.0, max=1.0,
+        update=on_property_updated
+    )
+    
+    color_timber: FloatVectorProperty(
+        name="General Wood",
+        description="Color for stairs, railings, window trim, rafters, and fascia",
+        subtype='COLOR',
+        size=4,
+        default=(0.32, 0.20, 0.11, 1.0),
         min=0.0, max=1.0,
         update=on_property_updated
     )
     
     color_floor: FloatVectorProperty(
         name="Floorboards",
+        description="Color for interior floorboards",
         subtype='COLOR',
         size=4,
-        default=(0.38, 0.24, 0.14, 1.0),
+        default=(0.42, 0.28, 0.16, 1.0),
         min=0.0, max=1.0,
         update=on_property_updated
     )
@@ -528,7 +539,17 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Door Color",
         subtype='COLOR',
         size=4,
-        default=(0.32, 0.19, 0.11, 1.0),
+        default=(0.35, 0.21, 0.12, 1.0),
+        min=0.0, max=1.0,
+        update=on_property_updated
+    )
+    
+    color_log_end: FloatVectorProperty(
+        name="Log End Rings",
+        description="Color for cut end-caps of horizontal logs showing tree growth rings",
+        subtype='COLOR',
+        size=4,
+        default=(0.48, 0.32, 0.18, 1.0),
         min=0.0, max=1.0,
         update=on_property_updated
     )
@@ -553,9 +574,11 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     custom_stone: PointerProperty(type=bpy.types.Material, name="Stone Mat", update=on_property_updated)
     custom_wall_ext: PointerProperty(type=bpy.types.Material, name="Wall Ext Mat", update=on_property_updated)
     custom_wall_int: PointerProperty(type=bpy.types.Material, name="Wall Int Mat", update=on_property_updated)
-    custom_timber: PointerProperty(type=bpy.types.Material, name="Timber Mat", update=on_property_updated)
+    custom_timber_frame: PointerProperty(type=bpy.types.Material, name="Timber Frame Mat", update=on_property_updated)
+    custom_timber: PointerProperty(type=bpy.types.Material, name="General Wood Mat", update=on_property_updated)
     custom_floor: PointerProperty(type=bpy.types.Material, name="Floor Mat", update=on_property_updated)
     custom_shingles: PointerProperty(type=bpy.types.Material, name="Shingles Mat", update=on_property_updated)
     custom_glass: PointerProperty(type=bpy.types.Material, name="Glass Mat", update=on_property_updated)
     custom_door: PointerProperty(type=bpy.types.Material, name="Door Mat", update=on_property_updated)
     custom_iron: PointerProperty(type=bpy.types.Material, name="Iron Mat", update=on_property_updated)
+    custom_log_end: PointerProperty(type=bpy.types.Material, name="Log End Mat", update=on_property_updated)

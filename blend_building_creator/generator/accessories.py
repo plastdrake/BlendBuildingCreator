@@ -15,165 +15,100 @@ from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_cylinder, create_cone, create_horizontal_cylinder
 from .materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
-    MAT_INDEX_PLASTER_EXT, MAT_INDEX_SHINGLES, MAT_INDEX_GLASS
+    MAT_INDEX_PLASTER_EXT, MAT_INDEX_SHINGLES, MAT_INDEX_GLASS,
+    MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD
 )
 
 def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickness, seed=42):
     """
-    Builds an outdoor sheltered forge lean-to on the right facade (+X):
-    - Timber lean-to awning with supporting timber posts and brackets.
-    - Chunky stone forge hearth with recessed firebox and iron hood/chimney flue.
-    - Heavy timber tree stump with a stylized blacksmith's metal anvil.
-    - Water quenching tub.
+    Builds a grounded, architecturally authentic blacksmith workshop lean-to shed
+    on the right facade (+X):
+    - Grounded stone footing pedestals and heavy timber support columns.
+    - Solid timber workshop deck floor.
+    - Sloping rafters and shingle awning roof cleanly anchored to the main building wall.
+    - Open-air sheltered craft workshop without floating props.
     """
-    # Awning extends out from the right wall (+X)
     wall_x = x_max
-    canopy_w = 2.4
-    canopy_d = 2.8
-    canopy_h = 2.4
+    canopy_w = 2.6
+    canopy_d = (y_max - y_min) * 0.75
+    canopy_h = 2.45
     canopy_cy = (y_min + y_max) * 0.5
     outer_x = wall_x + canopy_w
     
-    post_r = 0.10
-    # Outer support posts
-    p1_y = canopy_cy - canopy_d * 0.42
-    p2_y = canopy_cy + canopy_d * 0.42
-    for py in (p1_y, p2_y):
-        create_beveled_box(
-            bm, size=(post_r * 2, post_r * 2, canopy_h),
-            location=(outer_x - post_r, py, z_ground + canopy_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
-        )
-        # Stone post footing base
-        create_beveled_box(
-            bm, size=(0.32, 0.32, 0.25),
-            location=(outer_x - post_r, py, z_ground + 0.125),
-            mat_index=MAT_INDEX_STONE, bevel_amount=0.02
-        )
-        # Angled timber knee brace back to wall
-        create_beveled_box(
-            bm, size=(0.10, 0.10, 0.85),
-            location=(outer_x - post_r * 2.5, py, z_ground + canopy_h - 0.35),
-            rotation=(0.0, 0.78, 0.0),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
-        )
-        
-    # Top horizontal header beam connecting posts
+    deck_thick = 0.18
+    # 1. Solid Grounded Workshop Deck Floor
     create_beveled_box(
-        bm, size=(0.14, canopy_d + 0.20, 0.16),
-        location=(outer_x - post_r, canopy_cy, z_ground + canopy_h),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+        bm, size=(canopy_w + 0.15, canopy_d + 0.20, deck_thick),
+        location=(wall_x + canopy_w * 0.5, canopy_cy, z_ground + deck_thick * 0.5),
+        mat_index=MAT_INDEX_WOOD if 'MAT_INDEX_WOOD' in globals() else MAT_INDEX_TIMBER,
+        bevel_amount=0.015
     )
     
-    # Sloping lean-to rafters and shingle roof
+    # 2. Heavy Timber Pillars on Grounded Stone Footing Plinths
+    col_w = 0.18
+    p1_y = canopy_cy - canopy_d * 0.44
+    p2_y = canopy_cy + canopy_d * 0.44
+    
+    for py in (p1_y, p2_y):
+        # Grounded stone plinth
+        create_beveled_box(
+            bm, size=(0.36, 0.36, 0.24),
+            location=(outer_x - col_w * 0.5, py, z_ground + 0.12),
+            mat_index=MAT_INDEX_STONE, bevel_amount=0.02
+        )
+        # Vertical timber pillar
+        pillar_h = canopy_h - 0.24
+        create_beveled_box(
+            bm, size=(col_w, col_w, pillar_h),
+            location=(outer_x - col_w * 0.5, py, z_ground + 0.24 + pillar_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+        )
+        # Angled timber knee brace up to header beam
+        create_beveled_box(
+            bm, size=(0.11, 0.11, 0.70),
+            location=(outer_x - col_w * 0.5, py + (0.22 if py < canopy_cy else -0.22), z_ground + canopy_h - 0.25),
+            rotation=(0.78 if py < canopy_cy else -0.78, 0.0, 0.0),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008
+        )
+        # Wall-tie knee brace back to wall
+        create_beveled_box(
+            bm, size=(0.11, 0.11, 0.70),
+            location=(outer_x - col_w * 0.5 - 0.28, py, z_ground + canopy_h - 0.25),
+            rotation=(0.0, -0.78, 0.0),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008
+        )
+        
+    # 3. Outer Horizontal Header Beam connecting pillars
+    create_beveled_box(
+        bm, size=(col_w, canopy_d + 0.30, 0.18),
+        location=(outer_x - col_w * 0.5, canopy_cy, z_ground + canopy_h),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+    )
+    
+    # 4. Sloping Rafters & Roof Deck
     roof_pitch = 0.32
-    rafter_l = math.sqrt(canopy_w * canopy_w + (canopy_w * roof_pitch) ** 2) + 0.35
     roof_z_wall = z_ground + canopy_h + canopy_w * roof_pitch
     roof_z_outer = z_ground + canopy_h
     roof_mid_x = (wall_x + outer_x) * 0.5
     roof_mid_z = (roof_z_wall + roof_z_outer) * 0.5 + 0.08
-    roof_ang = -math.atan2(canopy_w * roof_pitch, canopy_w)
+    rafter_l = math.sqrt(canopy_w * canopy_w + (roof_z_wall - roof_z_outer) ** 2) + 0.35
+    roof_ang = math.atan2(roof_z_wall - roof_z_outer, canopy_w)
     
     # Sloping timber decking slab
     create_beveled_box(
-        bm, size=(rafter_l, canopy_d + 0.35, 0.08),
+        bm, size=(rafter_l, canopy_d + 0.40, 0.09),
         location=(roof_mid_x, canopy_cy, roof_mid_z),
         rotation=(0.0, roof_ang, 0.0),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        mat_index=MAT_INDEX_WOOD if 'MAT_INDEX_WOOD' in globals() else MAT_INDEX_TIMBER,
+        bevel_amount=0.010
     )
-    # Shingle layer on awning
+    # Shingle layer
     create_beveled_box(
-        bm, size=(rafter_l + 0.04, canopy_d + 0.40, 0.04),
-        location=(roof_mid_x, canopy_cy, roof_mid_z + 0.05),
+        bm, size=(rafter_l + 0.05, canopy_d + 0.46, 0.05),
+        location=(roof_mid_x, canopy_cy, roof_mid_z + 0.06),
         rotation=(0.0, roof_ang, 0.0),
-        mat_index=MAT_INDEX_SHINGLES, bevel_amount=0.006
-    )
-
-    # --- Stone Forge Hearth ---
-    hearth_cx = wall_x + 0.75
-    hearth_cy = canopy_cy - 0.45
-    hearth_h = 0.85
-    create_beveled_box(
-        bm, size=(1.10, 1.20, hearth_h),
-        location=(hearth_cx, hearth_cy, z_ground + hearth_h * 0.5),
-        mat_index=MAT_INDEX_STONE, bevel_amount=0.03
-    )
-    # Burning coal firebox recess
-    create_beveled_box(
-        bm, size=(0.65, 0.65, 0.12),
-        location=(hearth_cx + 0.10, hearth_cy, z_ground + hearth_h + 0.02),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.01
-    )
-    
-    # Iron Exhaust Hood and Chimney Flue
-    hood_z = z_ground + hearth_h + 0.55
-    create_cone(
-        bm, radius1=0.60, radius2=0.22, height=0.65, segments=8,
-        location=(hearth_cx + 0.05, hearth_cy, hood_z),
-        mat_index=MAT_INDEX_IRON
-    )
-    # Tapering chimney pipe penetrating through awning
-    pipe_h = 2.2
-    create_cylinder(
-        bm, radius=0.18, height=pipe_h, segments=12,
-        location=(hearth_cx + 0.05, hearth_cy, hood_z + 0.30 + pipe_h * 0.5),
-        mat_index=MAT_INDEX_IRON
-    )
-    # Pipe rain cap
-    create_cone(
-        bm, radius1=0.32, radius2=0.04, height=0.25, segments=8,
-        location=(hearth_cx + 0.05, hearth_cy, hood_z + 0.30 + pipe_h + 0.15),
-        mat_index=MAT_INDEX_IRON
-    )
-
-    # --- Blacksmith Anvil ---
-    anvil_cx = wall_x + 1.55
-    anvil_cy = canopy_cy + 0.35
-    # Heavy wooden tree stump base
-    create_cylinder(
-        bm, radius=0.32, height=0.65, segments=12,
-        location=(anvil_cx, anvil_cy, z_ground + 0.325),
-        mat_index=MAT_INDEX_TIMBER
-    )
-    # Stylized Anvil: Waist, horn, and striking face
-    anvil_z = z_ground + 0.65
-    create_beveled_box(
-        bm, size=(0.35, 0.28, 0.12),
-        location=(anvil_cx, anvil_cy, anvil_z + 0.06),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.015
-    )
-    # Striking table body
-    create_beveled_box(
-        bm, size=(0.48, 0.22, 0.18),
-        location=(anvil_cx, anvil_cy, anvil_z + 0.20),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.01
-    )
-    # Conical horn on one side
-    create_cone(
-        bm, radius1=0.10, radius2=0.02, height=0.28, segments=8,
-        location=(anvil_cx, anvil_cy - 0.22, anvil_z + 0.22),
-        rotation=(-1.57, 0.0, 0.0),
-        mat_index=MAT_INDEX_IRON
-    )
-
-    # --- Wooden Quenching Water Tub ---
-    tub_cx = wall_x + 0.65
-    tub_cy = canopy_cy + 0.75
-    create_cylinder(
-        bm, radius=0.34, height=0.60, segments=12,
-        location=(tub_cx, tub_cy, z_ground + 0.30),
-        mat_index=MAT_INDEX_TIMBER
-    )
-    # Iron binding bands on tub
-    create_cylinder(
-        bm, radius=0.348, height=0.05, segments=12,
-        location=(tub_cx, tub_cy, z_ground + 0.15),
-        mat_index=MAT_INDEX_IRON
-    )
-    create_cylinder(
-        bm, radius=0.348, height=0.05, segments=12,
-        location=(tub_cx, tub_cy, z_ground + 0.45),
-        mat_index=MAT_INDEX_IRON
+        mat_index=MAT_INDEX_SHINGLES,
+        bevel_amount=0.008
     )
 
 
@@ -437,53 +372,65 @@ def build_tavern_porch_and_sign(bm, x_min, x_max, front_y, z_ground, door_x=None
         mat_index=MAT_INDEX_SHINGLES, bevel_amount=0.006
     )
 
-    # 4. Ornate Wrought-Iron Tavern Sign
-    sign_x = px_max + 0.35
-    sign_y = front_y - 0.05
-    sign_z = z_ground + 2.2
+    # 4. Ornate Wrought-Iron Tavern Sign (Mounted to outer front-right veranda post in open air)
+    post_cx = px_max - col_r
+    post_cy = py_front + col_r
+    sign_z = z_ground + porch_h - 0.15
     
-    # Iron horizontal bracket pole
-    bracket_l = 1.10
+    # Iron horizontal bracket pole projecting out to the right (+X)
+    bracket_l = 0.85
+    arm_x = post_cx + bracket_l * 0.5
     create_cylinder(
-        bm, radius=0.025, height=bracket_l, segments=8,
-        location=(sign_x, sign_y - bracket_l * 0.5, sign_z),
-        rotation=(1.57, 0.0, 0.0),
+        bm, radius=0.024, height=bracket_l, segments=8,
+        location=(arm_x, post_cy, sign_z),
+        rotation=(0.0, 1.57, 0.0),
         mat_index=MAT_INDEX_IRON
     )
-    # Angled iron support strut
-    create_cylinder(
-        bm, radius=0.020, height=0.75, segments=8,
-        location=(sign_x, sign_y - bracket_l * 0.40, sign_z - 0.25),
-        rotation=(0.78, 0.0, 0.0),
-        mat_index=MAT_INDEX_IRON
+    # Scrollwork knee brace underneath
+    create_beveled_box(
+        bm, size=(0.020, 0.020, 0.45),
+        location=(post_cx + 0.18, post_cy, sign_z - 0.18),
+        rotation=(0.0, 0.78, 0.0),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.003
     )
-    # Hanging wooden sign board
-    board_w = 0.55
+    # Outer decorative scroll curl
+    create_cylinder(
+        bm, radius=0.035, height=0.022, segments=8,
+        location=(post_cx + bracket_l - 0.02, post_cy, sign_z + 0.04),
+        rotation=(1.57, 0.0, 0.0), mat_index=MAT_INDEX_IRON
+    )
+    
+    # Hanging wooden sign board in YZ plane
+    board_x = post_cx + bracket_l * 0.68
+    board_d = 0.55
     board_h = 0.42
-    board_cy = sign_y - bracket_l * 0.65
     board_cz = sign_z - 0.35
-    # Iron chains
-    create_cylinder(
-        bm, radius=0.012, height=0.15, segments=6,
-        location=(sign_x, board_cy - board_w * 0.30, sign_z - 0.075),
-        mat_index=MAT_INDEX_IRON
-    )
-    create_cylinder(
-        bm, radius=0.012, height=0.15, segments=6,
-        location=(sign_x, board_cy + board_w * 0.30, sign_z - 0.075),
-        mat_index=MAT_INDEX_IRON
-    )
-    # Wooden tavern sign board
+    
+    # Iron suspension chains
+    for cd_off in [-board_d * 0.30, board_d * 0.30]:
+        create_cylinder(
+            bm, radius=0.012, height=0.15, segments=6,
+            location=(board_x, post_cy + cd_off, sign_z - 0.075),
+            mat_index=MAT_INDEX_IRON
+        )
+    # Outer carved wooden sign frame
     create_beveled_box(
-        bm, size=(0.04, board_w, board_h),
-        location=(sign_x, board_cy, board_cz),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        bm, size=(0.05, board_d, board_h),
+        location=(board_x, post_cy, board_cz),
+        mat_index=MAT_INDEX_WOOD if 'MAT_INDEX_WOOD' in globals() else MAT_INDEX_TIMBER,
+        bevel_amount=0.008
     )
-    # Iron frame rim around sign
+    # Inner painted pub sign board inset
     create_beveled_box(
-        bm, size=(0.05, board_w + 0.04, board_h + 0.04),
-        location=(sign_x, board_cy, board_cz),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.005
+        bm, size=(0.056, board_d - 0.08, board_h - 0.08),
+        location=(board_x, post_cy, board_cz),
+        mat_index=MAT_INDEX_PLASTER_EXT, bevel_amount=0.004
+    )
+    # Top and bottom decorative iron crest finials
+    create_cylinder(
+        bm, radius=0.018, height=0.04, segments=6,
+        location=(board_x, post_cy, board_cz - board_h * 0.5 - 0.02),
+        mat_index=MAT_INDEX_IRON
     )
 
 

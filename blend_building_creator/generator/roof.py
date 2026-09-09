@@ -784,61 +784,114 @@ def build_hoist_beam(bm, front_x, front_y, z_ridge, length=1.4):
         mat_index=MAT_INDEX_TIMBER
     )
     
-    # 3. Wooden Pulley Block near outer end of beam
+    # 3. Detailed Dual-Sheave Wooden Pulley Block near outer end of beam
     pulley_y = front_y - length + 0.22
-    pulley_z = beam_mid_z - beam_h * 0.5 - 0.10
+    pulley_z = beam_mid_z - beam_h * 0.5 - 0.12
+    # Wooden pulley casing shell
     create_beveled_box(
         bm,
-        size=(0.16, 0.18, 0.20),
+        size=(0.18, 0.22, 0.24),
         location=(front_x, pulley_y, pulley_z),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.015
+        mat_index=MAT_INDEX_WOOD if 'MAT_INDEX_WOOD' in globals() else MAT_INDEX_TIMBER,
+        bevel_amount=0.018
     )
-    # Pulley wheel iron axle hub
+    # Iron side reinforcing straps
+    for sx_off in [-0.092, 0.092]:
+        create_beveled_box(
+            bm, size=(0.012, 0.08, 0.26),
+            location=(front_x + sx_off, pulley_y, pulley_z),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.003
+        )
+    # Pulley axle hub pin
     create_cylinder(
-        bm, radius=0.04, height=0.20, segments=8,
+        bm, radius=0.035, height=0.22, segments=8,
         location=(front_x, pulley_y, pulley_z),
         rotation=(0.0, math.pi * 0.5, 0.0),
         mat_index=MAT_INDEX_IRON
     )
+    # Top iron mounting shackle connecting to beam
+    create_beveled_box(
+        bm, size=(0.08, 0.04, 0.12),
+        location=(front_x, pulley_y, pulley_z + 0.14),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.004
+    )
     
-    # 4. Suspended Iron Rope / Chain
-    chain_h = 0.85
-    chain_mid_z = pulley_z - 0.10 - chain_h * 0.5
+    # 4. Suspended Heavy Cable / Chain
+    chain_h = 0.80
+    chain_mid_z = pulley_z - 0.12 - chain_h * 0.5
     create_cylinder(
-        bm, radius=0.018, height=chain_h, segments=6,
+        bm, radius=0.018, height=chain_h, segments=8,
         location=(front_x, pulley_y, chain_mid_z),
         mat_index=MAT_INDEX_IRON
     )
     
-    # 5. Stylized Heavy Curved Iron Cargo Hook
-    hook_z = chain_mid_z - chain_h * 0.5 - 0.06
-    # Upper hook eye ring
+    # 5. Authentically Forged Curved J-Hook
+    hook_top_z = chain_mid_z - chain_h * 0.5 - 0.04
+    
+    # Swivel eyelet ring
     create_cylinder(
-        bm, radius=0.05, height=0.035, segments=8,
-        location=(front_x, pulley_y, hook_z),
+        bm, radius=0.042, height=0.024, segments=12,
+        location=(front_x, pulley_y, hook_top_z),
         rotation=(math.pi * 0.5, 0.0, 0.0),
         mat_index=MAT_INDEX_IRON
     )
-    # Hook shank
+    # Thick vertical shank
+    shank_h = 0.14
     create_cylinder(
-        bm, radius=0.024, height=0.18, segments=8,
-        location=(front_x, pulley_y, hook_z - 0.09),
+        bm, radius=0.028, height=shank_h, segments=8,
+        location=(front_x, pulley_y, hook_top_z - shank_h * 0.5),
         mat_index=MAT_INDEX_IRON
     )
-    # Curved hook bottom (beveled curved box)
-    create_beveled_box(
-        bm, size=(0.04, 0.14, 0.05),
-        location=(front_x, pulley_y + 0.04, hook_z - 0.19),
-        rotation=(math.pi * 0.15, 0.0, 0.0),
-        mat_index=MAT_INDEX_IRON,
-        bevel_amount=0.012
-    )
-    # Hook tip pointing up
-    create_beveled_box(
-        bm, size=(0.035, 0.04, 0.09),
-        location=(front_x, pulley_y + 0.09, hook_z - 0.15),
-        mat_index=MAT_INDEX_IRON,
-        bevel_amount=0.010
-    )
+    
+    # Continuous curved hook throat/belly (smooth 180-degree circular arc)
+    throat_radius = 0.085
+    center_y = pulley_y + throat_radius
+    center_z = hook_top_z - shank_h
+    
+    arc_segs = 12
+    # Create swept tube around the lower semicircle (from -pi to 0 in YZ plane)
+    prev_ring = None
+    for step in range(arc_segs + 1):
+        t = step / float(arc_segs)
+        phi = -math.pi + t * math.pi # runs from -180 deg (straight down) to 0 deg (pointing up)
+        
+        # Cross section center along the throat arc
+        cy = center_y + throat_radius * math.cos(phi)
+        cz = center_z + throat_radius * math.sin(phi)
+        
+        # Taper radius: thick at belly (t=0.3 to 0.6), tapered towards the tip (t=1.0)
+        ring_r = 0.030 * (1.0 - t * 0.45)
+        
+        # Local tangent along arc in YZ plane
+        tangent_y = -math.sin(phi)
+        tangent_z = math.cos(phi)
+        normal_y = -math.cos(phi)
+        normal_z = -math.sin(phi)
+        
+        # Construct 6-sided cross section ring
+        cur_ring = []
+        for v_i in range(6):
+            v_ang = (2.0 * math.pi * v_i) / 6.0
+            vx = front_x + ring_r * math.cos(v_ang)
+            vy = cy + (ring_r * math.sin(v_ang)) * normal_y
+            vz = cz + (ring_r * math.sin(v_ang)) * normal_z
+            cur_ring.append(bm.verts.new((vx, vy, vz)))
+            
+        if prev_ring is not None:
+            for v_i in range(6):
+                nxt = (v_i + 1) % 6
+                f_hook = bm.faces.new([prev_ring[v_i], prev_ring[nxt], cur_ring[nxt], cur_ring[v_i]])
+                f_hook.material_index = MAT_INDEX_IRON
+                f_hook.smooth = True
+        prev_ring = cur_ring
+        
+    # Tapered pointed hook barb / tip
+    barb_tip_y = center_y + throat_radius + 0.015
+    barb_tip_z = center_z + 0.09
+    v_tip = bm.verts.new((front_x, barb_tip_y, barb_tip_z))
+    for v_i in range(6):
+        nxt = (v_i + 1) % 6
+        f_tip = bm.faces.new([prev_ring[v_i], prev_ring[nxt], v_tip])
+        f_tip.material_index = MAT_INDEX_IRON
+        f_tip.smooth = True
 

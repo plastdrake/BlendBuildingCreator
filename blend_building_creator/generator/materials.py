@@ -6,16 +6,21 @@ edge highlights, and rich fantasy palettes.
 
 import bpy
 
-# Material slot index constants
+# Material slot index constants (11 canonical slots)
 MAT_INDEX_STONE = 0
 MAT_INDEX_PLASTER_EXT = 1
 MAT_INDEX_PLASTER_INT = 2
-MAT_INDEX_TIMBER = 3
+MAT_INDEX_TIMBER_FRAME = 3
 MAT_INDEX_FLOOR = 4
 MAT_INDEX_SHINGLES = 5
 MAT_INDEX_GLASS = 6
 MAT_INDEX_DOOR = 7
 MAT_INDEX_IRON = 8
+MAT_INDEX_WOOD = 9
+MAT_INDEX_LOG_END = 10
+
+# Alias for backwards compatibility
+MAT_INDEX_TIMBER = MAT_INDEX_TIMBER_FRAME
 
 def _set_bsdf_input(bsdf, input_name, value):
     """Safely sets input on Principled BSDF across Blender versions."""
@@ -114,17 +119,18 @@ def create_stylized_timber(name="M_Building_Timber", color=(0.28, 0.16, 0.09, 1.
     bsdf.location = (100, 0)
     tree.links.new(bsdf.outputs["BSDF"], node_out.inputs["Surface"])
     
-    # Stretched noise for wood grain
+    # Stretched noise along UV coordinate V (beam length axis)
     tex_coord = tree.nodes.new("ShaderNodeTexCoord")
     tex_coord.location = (-700, 0)
     mapping = tree.nodes.new("ShaderNodeMapping")
     mapping.location = (-500, 0)
-    mapping.inputs["Scale"].default_value = (0.5, 0.5, 4.0)
-    tree.links.new(tex_coord.outputs["Object"], mapping.inputs["Vector"])
+    # Stretches grain along V (length)
+    mapping.inputs["Scale"].default_value = (4.0, 0.4, 1.0)
+    tree.links.new(tex_coord.outputs["UV"], mapping.inputs["Vector"])
     
     noise = tree.nodes.new("ShaderNodeTexNoise")
     noise.location = (-300, 0)
-    noise.inputs["Scale"].default_value = 5.0
+    noise.inputs["Scale"].default_value = 6.0
     noise.inputs["Detail"].default_value = 3.0
     tree.links.new(mapping.outputs["Vector"], noise.inputs["Vector"])
     
@@ -140,8 +146,112 @@ def create_stylized_timber(name="M_Building_Timber", color=(0.28, 0.16, 0.09, 1.
     _set_bsdf_input(bsdf, "Roughness", 0.75)
     return mat
 
-def create_stylized_floorboards(name="M_Building_Floorboards", color=(0.38, 0.24, 0.14, 1.0)):
-    return create_stylized_timber(name=name, color=color)
+def create_stylized_floorboards(name="M_Building_Floorboards", color=(0.42, 0.28, 0.16, 1.0)):
+    """Procedural floorboards with repeating parallel planks and edge groove separations."""
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        mat = bpy.data.materials.new(name=name)
+        
+    mat.use_nodes = True
+    tree = mat.node_tree
+    tree.nodes.clear()
+    
+    node_out = tree.nodes.new("ShaderNodeOutputMaterial")
+    node_out.location = (450, 0)
+    bsdf = tree.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (150, 0)
+    tree.links.new(bsdf.outputs["BSDF"], node_out.inputs["Surface"])
+    
+    tex_coord = tree.nodes.new("ShaderNodeTexCoord")
+    tex_coord.location = (-750, 0)
+    
+    # Wave texture along Y for repeating floor plank strips
+    wave = tree.nodes.new("ShaderNodeTexWave")
+    wave.location = (-550, 60)
+    wave.wave_type = 'BANDS'
+    wave.bands_direction = 'Y'
+    wave.wave_profile = 'SAW'
+    wave.inputs["Scale"].default_value = 3.5
+    wave.inputs["Distortion"].default_value = 0.25
+    tree.links.new(tex_coord.outputs["Object"], wave.inputs["Vector"])
+    
+    # Subtle wood grain noise across the planks
+    noise = tree.nodes.new("ShaderNodeTexNoise")
+    noise.location = (-550, -180)
+    noise.inputs["Scale"].default_value = 4.0
+    noise.inputs["Detail"].default_value = 2.0
+    tree.links.new(tex_coord.outputs["Object"], noise.inputs["Vector"])
+    
+    mix_rgb = tree.nodes.new("ShaderNodeMix")
+    mix_rgb.location = (-300, 0)
+    mix_rgb.data_type = 'RGBA'
+    mix_rgb.inputs["Factor"].default_value = 0.35
+    tree.links.new(wave.outputs["Fac"], mix_rgb.inputs["A"])
+    tree.links.new(noise.outputs["Fac"], mix_rgb.inputs["B"])
+    
+    ramp = tree.nodes.new("ShaderNodeValToRGB")
+    ramp.location = (-100, 0)
+    c_gap = (color[0] * 0.40, color[1] * 0.38, color[2] * 0.35, 1.0)
+    c_shadow = (color[0] * 0.80, color[1] * 0.78, color[2] * 0.75, 1.0)
+    c_highlight = (min(1.0, color[0] * 1.15), min(1.0, color[1] * 1.15), min(1.0, color[2] * 1.10), 1.0)
+    ramp.color_ramp.elements[0].position = 0.0
+    ramp.color_ramp.elements[0].color = c_gap
+    ramp.color_ramp.elements[1].position = 0.15
+    ramp.color_ramp.elements[1].color = c_shadow
+    el_hi = ramp.color_ramp.elements.new(0.85)
+    el_hi.color = c_highlight
+    
+    tree.links.new(mix_rgb.outputs["Result"], ramp.inputs["Fac"])
+    tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    _set_bsdf_input(bsdf, "Roughness", 0.70)
+    return mat
+
+def create_stylized_log_ends(name="M_Building_Log_End", color=(0.48, 0.32, 0.18, 1.0)):
+    """Procedural annual growth rings for cut ends of horizontal timber logs."""
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        mat = bpy.data.materials.new(name=name)
+        
+    mat.use_nodes = True
+    tree = mat.node_tree
+    tree.nodes.clear()
+    
+    node_out = tree.nodes.new("ShaderNodeOutputMaterial")
+    node_out.location = (450, 0)
+    bsdf = tree.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (150, 0)
+    tree.links.new(bsdf.outputs["BSDF"], node_out.inputs["Surface"])
+    
+    tex_coord = tree.nodes.new("ShaderNodeTexCoord")
+    tex_coord.location = (-750, 0)
+    
+    # Center UV at (0.5, 0.5) for radial rings
+    mapping = tree.nodes.new("ShaderNodeMapping")
+    mapping.location = (-550, 0)
+    mapping.inputs["Location"].default_value = (-0.5, -0.5, 0.0)
+    tree.links.new(tex_coord.outputs["UV"], mapping.inputs["Vector"])
+    
+    # Concentric rings wave texture
+    wave = tree.nodes.new("ShaderNodeTexWave")
+    wave.location = (-320, 0)
+    wave.wave_type = 'RINGS'
+    wave.rings_direction = 'SPHERICAL'
+    wave.wave_profile = 'SAW'
+    wave.inputs["Scale"].default_value = 18.0
+    wave.inputs["Distortion"].default_value = 1.2
+    wave.inputs["Detail"].default_value = 2.0
+    tree.links.new(mapping.outputs["Vector"], wave.inputs["Vector"])
+    
+    ramp = tree.nodes.new("ShaderNodeValToRGB")
+    ramp.location = (-80, 0)
+    c_ring_dark = (color[0] * 0.55, color[1] * 0.52, color[2] * 0.45, 1.0)
+    c_ring_light = (min(1.0, color[0] * 1.15), min(1.0, color[1] * 1.15), min(1.0, color[2] * 1.10), 1.0)
+    ramp.color_ramp.elements[0].color = c_ring_dark
+    ramp.color_ramp.elements[1].color = c_ring_light
+    tree.links.new(wave.outputs["Fac"], ramp.inputs["Fac"])
+    tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    _set_bsdf_input(bsdf, "Roughness", 0.85)
+    return mat
 
 def create_stylized_shingles(name="M_Building_Shingles", color=(0.20, 0.28, 0.45, 1.0)):
     mat = bpy.data.materials.get(name)
@@ -324,9 +434,10 @@ def create_stylized_plank_siding(name="M_Building_Plank_Siding", color=(0.68, 0.
 
 def setup_building_material_slots(obj, props):
     """
-    Ensures that the 9 canonical stylized material slots are populated on the object,
-    configured according to the chosen Material Tier (Tier 1: Timber/Log, Tier 2: Planks, Tier 3: Stone/Stucco)
-    or custom user material overrides.
+    Ensures that the 11 canonical stylized material slots are populated on the object,
+    configured according to the chosen Material Tier or custom user material overrides:
+    0: Stone, 1: Ext Wall, 2: Int Wall, 3: Timber Frame, 4: Floorboards,
+    5: Shingles, 6: Glass, 7: Door, 8: Iron, 9: General Wood, 10: Log End Rings.
     """
     tier = getattr(props, "material_tier", "TIER_3")
 
@@ -357,23 +468,23 @@ def setup_building_material_slots(obj, props):
     else:
         mat_plaster_int = create_stylized_plaster("M_Building_Plaster_Int", color=props.color_wall_int, is_interior=True)
 
-    if props.custom_timber:
-        mat_timber = props.custom_timber
+    # 3. Timber Framing (external structural posts, horizontal wall plates, diagonal braces)
+    clr_tf = getattr(props, 'color_timber_frame', (0.22, 0.13, 0.07, 1.0))
+    custom_tf = getattr(props, 'custom_timber_frame', None)
+    if custom_tf:
+        mat_timber_frame = custom_tf
     elif tier == 'TIER_1':
-        mat_timber = create_stylized_timber("M_Building_Timber_T1", color=(0.20, 0.12, 0.07, 1.0))
+        mat_timber_frame = create_stylized_timber("M_Building_Timber_Frame_T1", color=clr_tf)
     elif tier == 'TIER_2':
-        mat_timber = create_stylized_timber("M_Building_Timber_T2", color=(0.32, 0.18, 0.10, 1.0))
+        mat_timber_frame = create_stylized_timber("M_Building_Timber_Frame_T2", color=clr_tf)
     else:
-        mat_timber = create_stylized_timber("M_Building_Timber_T3", color=props.color_timber)
+        mat_timber_frame = create_stylized_timber("M_Building_Timber_Frame_T3", color=clr_tf)
 
+    # 4. Interior Floorboards
     if props.custom_floor:
         mat_floor = props.custom_floor
-    elif tier == 'TIER_1':
-        mat_floor = create_stylized_floorboards("M_Building_Floor_T1", color=(0.30, 0.18, 0.10, 1.0))
-    elif tier == 'TIER_2':
-        mat_floor = create_stylized_floorboards("M_Building_Floor_T2", color=(0.38, 0.24, 0.14, 1.0))
     else:
-        mat_floor = create_stylized_floorboards("M_Building_Floor_T3", color=props.color_floor)
+        mat_floor = create_stylized_floorboards("M_Building_Floorboards", color=props.color_floor)
 
     if props.custom_shingles:
         mat_shingles = props.custom_shingles
@@ -391,16 +502,34 @@ def setup_building_material_slots(obj, props):
     mat_door = props.custom_door if props.custom_door else create_stylized_timber("M_Building_Door", color=props.color_door)
     mat_iron = props.custom_iron if props.custom_iron else create_stylized_iron()
 
+    # 9. General Wood Carpentry (stairs, railings, roof trim, window frames)
+    clr_wood = getattr(props, 'color_timber', (0.32, 0.20, 0.11, 1.0))
+    custom_wood = getattr(props, 'custom_timber', None)
+    if custom_wood:
+        mat_wood = custom_wood
+    else:
+        mat_wood = create_stylized_timber("M_Building_Wood", color=clr_wood)
+
+    # 10. Cut Log Ends (concentric annual tree growth rings)
+    clr_log_end = getattr(props, 'color_log_end', (0.48, 0.32, 0.18, 1.0))
+    custom_log_end = getattr(props, 'custom_log_end', None)
+    if custom_log_end:
+        mat_log_end = custom_log_end
+    else:
+        mat_log_end = create_stylized_log_ends("M_Building_Log_End", color=clr_log_end)
+
     required_mats = [
-        mat_stone,
-        mat_plaster_ext,
-        mat_plaster_int,
-        mat_timber,
-        mat_floor,
-        mat_shingles,
-        mat_glass,
-        mat_door,
-        mat_iron
+        mat_stone,          # 0
+        mat_plaster_ext,    # 1
+        mat_plaster_int,    # 2
+        mat_timber_frame,   # 3
+        mat_floor,          # 4
+        mat_shingles,       # 5
+        mat_glass,          # 6
+        mat_door,           # 7
+        mat_iron,           # 8
+        mat_wood,           # 9
+        mat_log_end,        # 10
     ]
     
     obj.data.materials.clear()

@@ -59,12 +59,18 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         leaf_t = 0.06
         ang_rad = math.radians(door_angle_deg)
         
-        # Left leaf
+        # Left leaf (3-plank construction)
         hinge_lx = center_x - door_w * 0.5 + 0.02
         hinge_ly = y_front - wall_thickness * 0.2
         rot_l = Euler((0.0, 0.0, ang_rad), 'XYZ').to_matrix().to_4x4()
         c_l = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.5, 0.0, leaf_h * 0.5)))
         create_beveled_box(bm, size=(leaf_w, leaf_t, leaf_h), location=c_l, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.01)
+        
+        # Recessed vertical plank grooves on left leaf
+        for p_idx in [1, 2]:
+            px = leaf_w * (p_idx / 3.0) - leaf_w * 0.5
+            gp_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.5 + px, -leaf_t * 0.5 - 0.003, leaf_h * 0.5)))
+            create_box(bm, size=(0.015, 0.008, leaf_h * 0.96), location=gp_c, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_IRON)
         
         # Right leaf
         hinge_rx = center_x + door_w * 0.5 - 0.02
@@ -73,19 +79,38 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         c_r = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.5, 0.0, leaf_h * 0.5)))
         create_beveled_box(bm, size=(leaf_w, leaf_t, leaf_h), location=c_r, rotation=(0.0, 0.0, -ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.01)
         
-        # Iron strap hinges and handles for both leaves
+        # Recessed vertical plank grooves on right leaf
+        for p_idx in [1, 2]:
+            px = leaf_w * (p_idx / 3.0) - leaf_w * 0.5
+            gp_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.5 + px, -leaf_t * 0.5 - 0.003, leaf_h * 0.5)))
+            create_box(bm, size=(0.015, 0.008, leaf_h * 0.96), location=gp_c, rotation=(0.0, 0.0, -ang_rad), mat_index=MAT_INDEX_IRON)
+        
+        # Forged iron strap hinges with hammered rivets
         for hz_factor in [0.20, 0.80]:
-            sl_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.45, -leaf_t * 0.5 - 0.006, hz_factor * leaf_h)))
-            create_box(bm, size=(leaf_w * 0.70, 0.012, 0.07), location=sl_c, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_IRON)
-            sr_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.45, -leaf_t * 0.5 - 0.006, hz_factor * leaf_h)))
-            create_box(bm, size=(leaf_w * 0.70, 0.012, 0.07), location=sr_c, rotation=(0.0, 0.0, -ang_rad), mat_index=MAT_INDEX_IRON)
+            # Left leaf strap
+            sl_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.45, -leaf_t * 0.5 - 0.008, hz_factor * leaf_h)))
+            create_beveled_box(bm, size=(leaf_w * 0.75, 0.016, 0.065), location=sl_c, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
+            # Rivet studs
+            for r_frac in [0.15, 0.50, 0.80]:
+                rv_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.75 * r_frac, -leaf_t * 0.5 - 0.018, hz_factor * leaf_h)))
+                create_cylinder(bm, radius=0.014, height=0.014, segments=6, location=rv_c, rotation=(1.57, 0.0, ang_rad), mat_index=MAT_INDEX_IRON)
             
-        # Iron ring handles
-        hl_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.82, -leaf_t * 0.5 - 0.02, leaf_h * 0.48)))
-        create_cylinder(bm, radius=0.045, height=0.02, segments=8, location=hl_c, rotation=(math.pi * 0.5, 0.0, ang_rad), mat_index=MAT_INDEX_IRON)
-        hr_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.82, -leaf_t * 0.5 - 0.02, leaf_h * 0.48)))
-        create_cylinder(bm, radius=0.045, height=0.02, segments=8, location=hr_c, rotation=(math.pi * 0.5, 0.0, -ang_rad), mat_index=MAT_INDEX_IRON)
+            # Right leaf strap
+            sr_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.45, -leaf_t * 0.5 - 0.008, hz_factor * leaf_h)))
+            create_beveled_box(bm, size=(leaf_w * 0.75, 0.016, 0.065), location=sr_c, rotation=(0.0, 0.0, -ang_rad), mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
+            for r_frac in [0.15, 0.50, 0.80]:
+                rv_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.75 * r_frac, -leaf_t * 0.5 - 0.018, hz_factor * leaf_h)))
+                create_cylinder(bm, radius=0.014, height=0.014, segments=6, location=rv_c, rotation=(1.57, 0.0, -ang_rad), mat_index=MAT_INDEX_IRON)
+            
+        # Iron ring pull handles with mounting escutcheon
+        for leaf_sign, hinge_pt, rot_m in [(-1, Vector((hinge_rx, hinge_ry, z_base + 0.05)), rot_r), (1, Vector((hinge_lx, hinge_ly, z_base + 0.05)), rot_l)]:
+            ang_val = ang_rad if leaf_sign == 1 else -ang_rad
+            esc_c = hinge_pt + (rot_m @ Vector((leaf_sign * leaf_w * 0.82, -leaf_t * 0.5 - 0.012, leaf_h * 0.48)))
+            create_beveled_box(bm, size=(0.08, 0.012, 0.12), location=esc_c, rotation=(0.0, 0.0, ang_val), mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
+            rng_c = hinge_pt + (rot_m @ Vector((leaf_sign * leaf_w * 0.82, -leaf_t * 0.5 - 0.035, leaf_h * 0.46)))
+            create_cylinder(bm, radius=0.055, height=0.018, segments=12, location=rng_c, rotation=(1.57, 0.0, ang_val), mat_index=MAT_INDEX_IRON)
     else:
+        # Single standard walk-in door
         hinge_x = center_x - door_w * 0.5 + 0.02
         hinge_y = y_front - wall_thickness * 0.2
         
@@ -93,16 +118,15 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         door_leaf_h = door_h - 0.05
         door_leaf_t = 0.06
         
-        # Rotation matrix around the hinge pivot
+        # Rotation matrix around the hinge pivot (into room +Y)
         ang_rad = math.radians(door_angle_deg)
-        # In interior direction (+Y into room)
         rot_mat = Euler((0.0, 0.0, ang_rad), 'XYZ').to_matrix().to_4x4()
         
-        # Center of leaf relative to hinge
         leaf_local_center = Vector((door_leaf_w * 0.5, 0.0, door_leaf_h * 0.5))
         rotated_center = rot_mat @ leaf_local_center
         leaf_world_center = Vector((hinge_x, hinge_y, z_base + 0.05)) + rotated_center
         
+        # Main door slab
         create_beveled_box(
             bm,
             size=(door_leaf_w, door_leaf_t, door_leaf_h),
@@ -112,29 +136,52 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             bevel_amount=0.01
         )
         
-        # Horizontal iron strap hinges (upper and lower)
+        # 3 Vertical plank grooves
+        for p_idx in [1, 2]:
+            px = door_leaf_w * (p_idx / 3.0)
+            gp_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((px, -door_leaf_t * 0.5 - 0.003, door_leaf_h * 0.5)))
+            create_box(bm, size=(0.014, 0.008, door_leaf_h * 0.96), location=gp_c, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_IRON)
+            
+        # Top and bottom horizontal framing battens
+        for b_frac in [0.08, 0.92]:
+            bat_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((door_leaf_w * 0.5, -door_leaf_t * 0.5 - 0.006, door_leaf_h * b_frac)))
+            create_beveled_box(bm, size=(door_leaf_w * 0.92, 0.014, 0.09), location=bat_c, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.005)
+        
+        # Heavy forged iron strap hinges with hammered rivets
         for hz_factor in [0.22, 0.78]:
-            hz = z_base + 0.05 + door_leaf_h * hz_factor
-            strap_len = door_leaf_w * 0.65
-            strap_local_c = Vector((strap_len * 0.5, -door_leaf_t * 0.5 - 0.006, hz_factor * door_leaf_h))
+            strap_len = door_leaf_w * 0.70
+            strap_local_c = Vector((strap_len * 0.5, -door_leaf_t * 0.5 - 0.010, hz_factor * door_leaf_h))
             strap_world_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ strap_local_c)
-            create_box(
+            create_beveled_box(
                 bm,
-                size=(strap_len, 0.012, 0.06),
+                size=(strap_len, 0.016, 0.065),
                 location=strap_world_c,
                 rotation=(0.0, 0.0, ang_rad),
-                mat_index=MAT_INDEX_IRON
+                mat_index=MAT_INDEX_IRON,
+                bevel_amount=0.004
             )
+            # Rivets on strap
+            for r_frac in [0.15, 0.45, 0.80]:
+                rv_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((strap_len * r_frac, -door_leaf_t * 0.5 - 0.020, hz_factor * door_leaf_h)))
+                create_cylinder(bm, radius=0.014, height=0.014, segments=6, location=rv_c, rotation=(1.57, 0.0, ang_rad), mat_index=MAT_INDEX_IRON)
             
-        # Iron ring handle
-        handle_local_c = Vector((door_leaf_w * 0.82, -door_leaf_t * 0.5 - 0.02, door_leaf_h * 0.48))
+        # Forged iron ring pull handle with escutcheon plate
+        handle_local_c = Vector((door_leaf_w * 0.82, -door_leaf_t * 0.5 - 0.012, door_leaf_h * 0.48))
         handle_world_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ handle_local_c)
+        create_beveled_box(
+            bm, size=(0.08, 0.012, 0.14),
+            location=handle_world_c,
+            rotation=(0.0, 0.0, ang_rad),
+            mat_index=MAT_INDEX_IRON,
+            bevel_amount=0.004
+        )
+        ring_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((door_leaf_w * 0.82, -door_leaf_t * 0.5 - 0.035, door_leaf_h * 0.45)))
         create_cylinder(
             bm,
-            radius=0.045,
-            height=0.02,
-            segments=8,
-            location=handle_world_c,
+            radius=0.055,
+            height=0.018,
+            segments=12,
+            location=ring_c,
             rotation=(math.pi * 0.5, 0.0, ang_rad),
             mat_index=MAT_INDEX_IRON
         )
@@ -288,18 +335,91 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
 
 def build_iron_lantern(bm, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0)):
     """
-    Creates a stylized hanging iron lantern bracket with a warm glowing lantern.
+    Creates an ornate stylized medieval fantasy carriage lantern:
+    - Heavy forged iron wall mounting backplate mounted flush against the wall.
+    - Curved wrought-iron scrollwork bracket arm with end curl.
+    - Hexagonal carriage lamp cage with vertical iron ribs and glowing core.
+    - Pyramidal iron roof cap with top suspension ring and bottom finial.
     """
     cx, cy, cz = location
-    # Bracket arm from wall
-    create_box(bm, size=(0.04, 0.35, 0.04), location=(cx, cy - 0.15, cz), mat_index=MAT_INDEX_IRON)
-    # Diagonal brace
-    create_box(bm, size=(0.03, 0.22, 0.03), location=(cx, cy - 0.10, cz - 0.08), rotation=(-0.78, 0.0, 0.0), mat_index=MAT_INDEX_IRON)
-    # Lantern body
-    ly = cy - 0.30
-    lz = cz - 0.18
-    # Glowing glass core
-    create_cylinder(bm, radius=0.08, height=0.18, segments=6, location=(cx, ly, lz), mat_index=MAT_INDEX_GLASS)
-    # Iron cap & base
-    create_cylinder(bm, radius=0.10, height=0.04, segments=6, location=(cx, ly, lz + 0.10), mat_index=MAT_INDEX_IRON)
-    create_cylinder(bm, radius=0.10, height=0.04, segments=6, location=(cx, ly, lz - 0.10), mat_index=MAT_INDEX_IRON)
+    
+    # 1. Cast-iron wall mounting backplate (firmly embedded in wall surface)
+    create_beveled_box(
+        bm, size=(0.14, 0.035, 0.36),
+        location=(cx, cy + 0.015, cz),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.006
+    )
+    # Mounting decorative bolt studs
+    for bz_off in [-0.13, 0.13]:
+        create_cylinder(
+            bm, radius=0.014, height=0.015, segments=6,
+            location=(cx, cy - 0.005, cz + bz_off),
+            rotation=(1.57, 0.0, 0.0), mat_index=MAT_INDEX_IRON
+        )
+    
+    # 2. Forged wrought-iron bracket arm (horizontal projection)
+    arm_len = 0.36
+    arm_y = cy - arm_len * 0.5
+    create_beveled_box(
+        bm, size=(0.032, arm_len, 0.032),
+        location=(cx, arm_y, cz + 0.08),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.004
+    )
+    # Diagonal forged knee strut
+    create_beveled_box(
+        bm, size=(0.024, 0.24, 0.024),
+        location=(cx, cy - 0.12, cz - 0.01),
+        rotation=(-0.78, 0.0, 0.0),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.003
+    )
+    # Decorative scrollwork curl at outer tip
+    create_cylinder(
+        bm, radius=0.032, height=0.024, segments=8,
+        location=(cx, cy - arm_len + 0.02, cz + 0.11),
+        rotation=(0.0, 1.57, 0.0), mat_index=MAT_INDEX_IRON
+    )
+    
+    # 3. Lantern suspension point
+    ly = cy - arm_len + 0.06
+    lz = cz - 0.08
+    
+    # Top hanging ring / eyelet
+    create_cylinder(
+        bm, radius=0.032, height=0.016, segments=8,
+        location=(cx, ly, lz + 0.18),
+        rotation=(1.57, 0.0, 0.0), mat_index=MAT_INDEX_IRON
+    )
+    
+    # 4. Pyramidal iron roof cap
+    from .mesh_utils import create_cone
+    create_cone(
+        bm, radius1=0.13, radius2=0.03, height=0.09, segments=6,
+        location=(cx, ly, lz + 0.12), mat_index=MAT_INDEX_IRON
+    )
+    
+    # 5. Glowing glass lantern core
+    create_cylinder(
+        bm, radius=0.095, height=0.20, segments=6,
+        location=(cx, ly, lz), mat_index=MAT_INDEX_GLASS
+    )
+    
+    # 6. Hexagonal cage vertical iron struts (corner ribs)
+    for i in range(6):
+        ang = (2.0 * math.pi * i) / 6.0
+        rx = cx + 0.095 * math.cos(ang)
+        ry = ly + 0.095 * math.sin(ang)
+        create_box(
+            bm, size=(0.016, 0.016, 0.20),
+            location=(rx, ry, lz), mat_index=MAT_INDEX_IRON
+        )
+        
+    # 7. Hexagonal iron base
+    create_cone(
+        bm, radius1=0.04, radius2=0.12, height=0.06, segments=6,
+        location=(cx, ly, lz - 0.12), mat_index=MAT_INDEX_IRON
+    )
+    # Bottom drop finial
+    create_cone(
+        bm, radius1=0.028, radius2=0.005, height=0.06, segments=6,
+        location=(cx, ly, lz - 0.17), mat_index=MAT_INDEX_IRON
+    )

@@ -42,11 +42,69 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
         (3, 7, 4, 0), # Left (-X)
     ]
     
+    uv_layer = bm.loops.layers.uv.verify()
+    dx, dy, dz = size
+    scale = 1.0
+
     faces = []
-    for idxs in face_indices:
+    for f_idx, idxs in enumerate(face_indices):
         f = bm.faces.new([bm_verts[i] for i in idxs])
         f.material_index = mat_index
         faces.append(f)
+        
+        # Local length-aligned UV unwrapping for wood grain flow along beam
+        # Identify major length axis:
+        if dz >= dx and dz >= dy:
+            # Vertical post / column: V along Z
+            if f_idx in (0, 1): # Bottom / Top end caps
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((dx * scale, 0.0))
+                f.loops[2][uv_layer].uv = Vector((dx * scale, dy * scale))
+                f.loops[3][uv_layer].uv = Vector((0.0, dy * scale))
+            elif f_idx == 2: # Front (-Y)
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((0.0, dz * scale))
+                f.loops[2][uv_layer].uv = Vector((dx * scale, dz * scale))
+                f.loops[3][uv_layer].uv = Vector((dx * scale, 0.0))
+            elif f_idx == 3: # Right (+X)
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((0.0, dz * scale))
+                f.loops[2][uv_layer].uv = Vector((dy * scale, dz * scale))
+                f.loops[3][uv_layer].uv = Vector((dy * scale, 0.0))
+            elif f_idx == 4: # Back (+Y)
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((0.0, dz * scale))
+                f.loops[2][uv_layer].uv = Vector((dx * scale, dz * scale))
+                f.loops[3][uv_layer].uv = Vector((dx * scale, 0.0))
+            else: # Left (-X)
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((0.0, dz * scale))
+                f.loops[2][uv_layer].uv = Vector((dy * scale, dz * scale))
+                f.loops[3][uv_layer].uv = Vector((dy * scale, 0.0))
+        elif dx >= dy:
+            # Horizontal beam along X: V along X
+            if f_idx in (3, 5): # End caps (+X, -X)
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((dy * scale, 0.0))
+                f.loops[2][uv_layer].uv = Vector((dy * scale, dz * scale))
+                f.loops[3][uv_layer].uv = Vector((0.0, dz * scale))
+            else: # Sides (Bottom, Top, Front, Back)
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((0.0, dx * scale))
+                f.loops[2][uv_layer].uv = Vector((dy * scale, dx * scale))
+                f.loops[3][uv_layer].uv = Vector((dy * scale, 0.0))
+        else:
+            # Horizontal beam along Y: V along Y
+            if f_idx in (2, 4): # End caps (-Y, +Y)
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((dx * scale, 0.0))
+                f.loops[2][uv_layer].uv = Vector((dx * scale, dz * scale))
+                f.loops[3][uv_layer].uv = Vector((0.0, dz * scale))
+            else: # Sides
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((0.0, dy * scale))
+                f.loops[2][uv_layer].uv = Vector((dx * scale, dy * scale))
+                f.loops[3][uv_layer].uv = Vector((dx * scale, 0.0))
         
     return faces
 
@@ -100,10 +158,12 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
     return faces
 
 def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, segments=16,
-                               location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, smooth=True):
+                               location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
+                               mat_index=0, mat_index_cap=10, smooth=True):
     """
     Creates a rounded horizontal cylinder oriented along local X with circular end caps.
-    Uses smooth-shaded cylindrical sides for authentic organic high-poly timber logs.
+    Uses smooth-shaded cylindrical sides for authentic organic high-poly timber logs,
+    and radial UV coordinates on end caps for concentric tree growth rings.
     """
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
@@ -120,25 +180,50 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
         start_verts.append(bm.verts.new(tr_mat @ Vector((-half_l, y, z))))
         end_verts.append(bm.verts.new(tr_mat @ Vector((half_l, y, z))))
         
+    uv_layer = bm.loops.layers.uv.verify()
     faces = []
-    # Smooth cylindrical side quads
+    
+    # Smooth cylindrical side quads (V along log length, U around perimeter)
     for i in range(segments):
         nxt = (i + 1) % segments
         f = bm.faces.new([start_verts[i], start_verts[nxt], end_verts[nxt], end_verts[i]])
         f.material_index = mat_index
         f.smooth = smooth
+        
+        u0 = i / float(segments)
+        u1 = (i + 1) / float(segments)
+        v0 = 0.0
+        v1 = length * 1.0
+        f.loops[0][uv_layer].uv = Vector((u0, v0))
+        f.loops[1][uv_layer].uv = Vector((u1, v0))
+        f.loops[2][uv_layer].uv = Vector((u1, v1))
+        f.loops[3][uv_layer].uv = Vector((u0, v1))
         faces.append(f)
         
-    # Flat start cap (facing -X)
-    f_start = bm.faces.new(list(reversed(start_verts)))
-    f_start.material_index = mat_index
+    cap_mat = mat_index_cap if mat_index_cap is not None else mat_index
+    
+    # Flat start cap (facing -X) with radial concentric UVs
+    rev_start = list(reversed(start_verts))
+    f_start = bm.faces.new(rev_start)
+    f_start.material_index = cap_mat
     f_start.smooth = False
+    for loop in f_start.loops:
+        # Compute local angle in cap plane
+        local_v = tr_mat.inverted() @ loop.vert.co
+        u = 0.5 + 0.48 * (local_v.y / max(0.001, radius_y))
+        v = 0.5 + 0.48 * (local_v.z / max(0.001, radius_z))
+        loop[uv_layer].uv = Vector((u, v))
     faces.append(f_start)
     
-    # Flat end cap (facing +X)
+    # Flat end cap (facing +X) with radial concentric UVs
     f_end = bm.faces.new(end_verts)
-    f_end.material_index = mat_index
+    f_end.material_index = cap_mat
     f_end.smooth = False
+    for loop in f_end.loops:
+        local_v = tr_mat.inverted() @ loop.vert.co
+        u = 0.5 + 0.48 * (local_v.y / max(0.001, radius_y))
+        v = 0.5 + 0.48 * (local_v.z / max(0.001, radius_z))
+        loop[uv_layer].uv = Vector((u, v))
     faces.append(f_end)
     
     return faces

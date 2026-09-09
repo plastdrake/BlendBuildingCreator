@@ -9,7 +9,7 @@ import bmesh
 import math
 from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_cylinder
-from .materials import MAT_INDEX_FLOOR, MAT_INDEX_TIMBER, MAT_INDEX_STONE
+from .materials import MAT_INDEX_FLOOR, MAT_INDEX_STONE, MAT_INDEX_WOOD, MAT_INDEX_TIMBER
 
 def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickness=0.15, stair_hole=None, mat_idx=MAT_INDEX_FLOOR):
     """
@@ -85,7 +85,7 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
             bm,
             size=(beam_w, trimmer_len, beam_d),
             location=(sh_xmax, trimmer_cy, beam_cz),
-            mat_index=MAT_INDEX_TIMBER,
+            mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.015
         )
 
@@ -105,7 +105,7 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
                         bm,
                         size=(w, beam_w, beam_d),
                         location=(cx, by, beam_cz),
-                        mat_index=MAT_INDEX_TIMBER,
+                        mat_index=MAT_INDEX_WOOD,
                         bevel_amount=0.015
                     )
                 continue
@@ -117,7 +117,7 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
             bm,
             size=(beam_length, beam_w, beam_d),
             location=(beam_cx, by, beam_cz),
-            mat_index=MAT_INDEX_TIMBER,
+            mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.015
         )
 
@@ -140,18 +140,18 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, retu
         bm,
         size=(rail_w, span_y + post_w * 0.5, sill_h),
         location=(rail_x, (y_start + y_end) * 0.5, floor_z + sill_h * 0.5),
-        mat_index=MAT_INDEX_TIMBER
+        mat_index=MAT_INDEX_WOOD
     )
     
     # 1. Corner Posts at start and end of open edge
-    create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(rail_x, y_start, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-    create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(rail_x, y_end, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+    create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(rail_x, y_start, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_WOOD, bevel_amount=0.01)
+    create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(rail_x, y_end, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_WOOD, bevel_amount=0.01)
     
     # 2. Top Handrail
-    create_box(bm, size=(rail_w, span_y + post_w * 0.5, 0.06), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h - 0.03), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, size=(rail_w, span_y + post_w * 0.5, 0.06), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h - 0.03), mat_index=MAT_INDEX_WOOD)
     
     # 3. Mid Rail
-    create_box(bm, size=(rail_w * 0.75, span_y, 0.04), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, size=(rail_w * 0.75, span_y, 0.04), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_WOOD)
     
     # 4. Spindles/Balusters (long side)
     num_spindles = max(1, int(span_y / 0.28))
@@ -165,7 +165,7 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, retu
             height=spindle_h,
             segments=6,
             location=(rail_x, sy, floor_z + sill_h + spindle_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER
+            mat_index=MAT_INDEX_WOOD
         )
         
     # 5. Short Return Guardrail (protecting the open end of the floor hole)
@@ -173,20 +173,20 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, retu
         span_x = abs(rail_x - x_start)
         cx = (x_start + rail_x) * 0.5
         # Return base sill
-        create_box(bm, size=(span_x, rail_w, sill_h), location=(cx, return_y, floor_z + sill_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, size=(span_x, rail_w, sill_h), location=(cx, return_y, floor_z + sill_h * 0.5), mat_index=MAT_INDEX_WOOD)
         # End post at x_start
-        create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(x_start, return_y, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(x_start, return_y, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_WOOD, bevel_amount=0.01)
         # Return top rail
-        create_box(bm, size=(span_x, rail_w, 0.06), location=(cx, return_y, floor_z + rail_h - 0.03), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, size=(span_x, rail_w, 0.06), location=(cx, return_y, floor_z + rail_h - 0.03), mat_index=MAT_INDEX_WOOD)
         # Return mid rail
-        create_box(bm, size=(span_x, rail_w * 0.75, 0.04), location=(cx, return_y, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, size=(span_x, rail_w * 0.75, 0.04), location=(cx, return_y, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_WOOD)
         # Return spindles
         num_sp_x = max(1, int(span_x / 0.28))
         step_x = span_x / (num_sp_x + 1)
         min_x = min(x_start, rail_x)
         for i in range(1, num_sp_x + 1):
             sx = min_x + i * step_x
-            create_cylinder(bm, radius=0.022, height=spindle_h, segments=6, location=(sx, return_y, floor_z + sill_h + spindle_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+            create_cylinder(bm, radius=0.022, height=spindle_h, segments=6, location=(sx, return_y, floor_z + sill_h + spindle_h * 0.5), mat_index=MAT_INDEX_WOOD)
 
 def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_depth=2.2, num_steps=14, direction_y=1):
     """
@@ -206,7 +206,7 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
         bm,
         size=(stair_width + 0.18, 0.22, 0.08),
         location=(x0, y0 + 0.05 * direction_y, z0 + 0.04),
-        mat_index=MAT_INDEX_TIMBER,
+        mat_index=MAT_INDEX_WOOD,
         bevel_amount=0.012
     )
     
@@ -219,7 +219,7 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
             bm,
             size=(stair_width, tread_d, tread_thick),
             location=(sx, sy, sz),
-            mat_index=MAT_INDEX_TIMBER,
+            mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.01
         )
         # Riser plank beneath tread (down to step below or floor)
@@ -227,7 +227,7 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
             bm,
             size=(stair_width - 0.02, 0.035, step_h),
             location=(sx, sy - step_d * 0.5 + 0.015 * direction_y, sz - step_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER
+            mat_index=MAT_INDEX_WOOD
         )
         
     # 3. Side Stringer Boards (anchored from starter base to upper landing)
@@ -246,7 +246,7 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
             size=(stringer_thick, diag_length, stringer_h),
             location=(str_x, str_y, str_z),
             rotation=(pitch_angle, 0.0, 0.0),
-            mat_index=MAT_INDEX_TIMBER
+            mat_index=MAT_INDEX_WOOD
         )
         
     # 4. Top Landing Anchor Timber (anchors stringers solidly to the upper floor)
@@ -254,7 +254,7 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
         bm,
         size=(stair_width + 0.18, 0.22, 0.10),
         location=(x0, y0 + stair_depth * direction_y, target_z - 0.05),
-        mat_index=MAT_INDEX_TIMBER,
+        mat_index=MAT_INDEX_WOOD,
         bevel_amount=0.012
     )
 
@@ -275,18 +275,18 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
         # Bottom post with chamfered cap
         create_beveled_box(bm, size=(post_w, post_w, post_h),
                            location=(rail_x, y0 + 0.05 * direction_y, z0 + post_h * 0.5),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+                           mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
         # Top post with chamfered cap
         create_beveled_box(bm, size=(post_w, post_w, post_h),
                            location=(rail_x, y0 + (stair_depth - 0.05) * direction_y, target_z + post_h * 0.5),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+                           mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
         # Handrail bar (terminated flush inside posts, zero external poke)
         create_box(
             bm,
             size=(rail_thick, rail_diag_len, rail_thick),
             location=(rail_x, rail_cy, rail_cz),
             rotation=(pitch_angle, 0.0, 0.0),
-            mat_index=MAT_INDEX_TIMBER
+            mat_index=MAT_INDEX_WOOD
         )
         # Vertical spindles along run (seated flush on top of stringer, inserting into handrail underside)
         for i in range(1, num_steps):
@@ -308,7 +308,7 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
                     bm,
                     size=(0.034, 0.034, spindle_len),
                     location=(rail_x, by, spindle_cz),
-                    mat_index=MAT_INDEX_TIMBER
+                    mat_index=MAT_INDEX_WOOD
                 )
 
 def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, start_ang_deg=-90.0, total_angle_deg=360.0):
@@ -332,7 +332,7 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
         height=dz + 0.05,
         segments=12,
         location=(cx, cy, z0 + dz * 0.5),
-        mat_index=MAT_INDEX_TIMBER
+        mat_index=MAT_INDEX_WOOD
     )
     
     # 2. Wedge steps
@@ -356,7 +356,7 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
             size=(step_len + 0.04, max(0.20, step_w), 0.065),
             location=(sx, sy, cur_z - 0.032),
             rotation=(0.0, 0.0, mid_ang),
-            mat_index=MAT_INDEX_TIMBER,
+            mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.01
         )
         
@@ -371,7 +371,7 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
             height=0.88,
             segments=6,
             location=(px, py, pz),
-            mat_index=MAT_INDEX_TIMBER
+            mat_index=MAT_INDEX_WOOD
         )
         
     # 3. Dedicated Top Landing Platform (flushes perfectly with upper floor level at target_z)
@@ -386,7 +386,7 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
         size=(land_len, land_w, 0.065),
         location=(land_x, land_y, target_z - 0.032),
         rotation=(0.0, 0.0, land_ang),
-        mat_index=MAT_INDEX_TIMBER,
+        mat_index=MAT_INDEX_WOOD,
         bevel_amount=0.012
     )
     
@@ -400,7 +400,7 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
         height=0.90,
         segments=8,
         location=(top_px, top_py, target_z + 0.42),
-        mat_index=MAT_INDEX_TIMBER
+        mat_index=MAT_INDEX_WOOD
     )
     
     # 4. Continuous outer handrail segments connecting posts
@@ -420,7 +420,7 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
                 size=(seg_len, 0.05, 0.06),
                 location=seg_mid,
                 rotation=rot_mat.to_euler(),
-                mat_index=MAT_INDEX_TIMBER
+                mat_index=MAT_INDEX_WOOD
             )
 
 def build_attic_trusses(bm, x_min, x_max, y_min, y_max, z_base, ridge_z, spacing=1.5, sway_amount=0.0):
@@ -457,7 +457,7 @@ def build_attic_trusses(bm, x_min, x_max, y_min, y_max, z_base, ridge_z, spacing
             size=(left_len, beam_w, beam_d),
             location=left_mid,
             rotation=(0.0, -local_pitch_l, 0.0),
-            mat_index=MAT_INDEX_TIMBER
+            mat_index=MAT_INDEX_WOOD
         )
         
         # Right rafter (inside attic, from ridge down to eaves with safe margin)
@@ -472,7 +472,7 @@ def build_attic_trusses(bm, x_min, x_max, y_min, y_max, z_base, ridge_z, spacing
             size=(right_len, beam_w, beam_d),
             location=right_mid,
             rotation=(0.0, -local_pitch_r, 0.0),
-            mat_index=MAT_INDEX_TIMBER
+            mat_index=MAT_INDEX_WOOD
         )
         
         # Collar tie beam (horizontal cross beam midway up)
@@ -482,5 +482,5 @@ def build_attic_trusses(bm, x_min, x_max, y_min, y_max, z_base, ridge_z, spacing
             bm,
             size=(collar_w, beam_w, beam_d),
             location=(cx, ty, collar_z),
-            mat_index=MAT_INDEX_TIMBER
+            mat_index=MAT_INDEX_WOOD
         )

@@ -15,7 +15,8 @@ from .materials import (
     setup_building_material_slots,
     MAT_INDEX_STONE, MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT,
     MAT_INDEX_TIMBER, MAT_INDEX_FLOOR, MAT_INDEX_SHINGLES,
-    MAT_INDEX_GLASS, MAT_INDEX_DOOR, MAT_INDEX_IRON
+    MAT_INDEX_GLASS, MAT_INDEX_DOOR, MAT_INDEX_IRON,
+    MAT_INDEX_WOOD, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_LOG_END
 )
 from .walls import (
     build_wall_with_opening, build_timber_framing, build_facade_timber,
@@ -86,8 +87,32 @@ def build_round_tower(bm, props, seed):
 
         # Floor slab
         mat_fl = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_FLOOR
-        create_cylinder(bm, radius=cur_r - 0.02, height=0.12, segments=8,
-                        location=(0.0, 0.0, z_floor + 0.06), mat_index=mat_fl)
+        if fl_idx == 0 or not props.has_stairs:
+            create_cylinder(bm, radius=cur_r - 0.02, height=0.12, segments=8,
+                            location=(0.0, 0.0, z_floor + 0.06), mat_index=mat_fl)
+        else:
+            # Build 8-faceted annular floor with central stairwell opening
+            stair_r = min(cur_r - wall_t - 0.25, 1.10)
+            well_r = stair_r + 0.08
+            ring_dr = (cur_r - 0.02) - well_r
+            if ring_dr > 0.15:
+                mid_r = well_r + ring_dr * 0.5
+                sec_w = 2.0 * mid_r * math.tan(math.pi / 8.0) * 1.05
+                for k in range(num_facets):
+                    ang = (k + 0.5) * d_ang + offset_ang
+                    fcx = mid_r * math.cos(ang)
+                    fcy = mid_r * math.sin(ang)
+                    create_beveled_box(
+                        bm,
+                        size=(ring_dr, sec_w, 0.12),
+                        location=(fcx, fcy, z_floor + 0.06),
+                        rotation=(0.0, 0.0, ang),
+                        mat_index=mat_fl,
+                        bevel_amount=0.01
+                    )
+            else:
+                create_cylinder(bm, radius=cur_r - 0.02, height=0.12, segments=8,
+                                location=(0.0, 0.0, z_floor + 0.06), mat_index=mat_fl)
         
         # Cantilever corbels under the 8 vertices
         if fl_idx > 0 and fl_overhang > 0.01:
@@ -97,7 +122,7 @@ def build_round_tower(bm, props, seed):
                 cy = prev_r * math.sin(ang)
                 create_beveled_box(bm, size=(0.16, 0.16, 0.35),
                                    location=(cx, cy, z_floor - 0.18),
-                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015)
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.015)
 
         # Stairs
         if fl_idx < num_floors - 1 and props.has_stairs:
@@ -114,8 +139,8 @@ def build_round_tower(bm, props, seed):
         # Ceiling beams
         if props.has_ceiling_beams:
             beam_d = 0.16
-            create_box(bm, size=(cur_r * 1.8, 0.14, beam_d), location=(0.0, 0.0, z_ceil - beam_d * 0.5), mat_index=MAT_INDEX_TIMBER)
-            create_box(bm, size=(0.14, cur_r * 1.8, beam_d), location=(0.0, 0.0, z_ceil - beam_d * 0.5), mat_index=MAT_INDEX_TIMBER)
+            create_box(bm, size=(cur_r * 1.8, 0.14, beam_d), location=(0.0, 0.0, z_ceil - beam_d * 0.5), mat_index=MAT_INDEX_WOOD)
+            create_box(bm, size=(0.14, cur_r * 1.8, beam_d), location=(0.0, 0.0, z_ceil - beam_d * 0.5), mat_index=MAT_INDEX_WOOD)
 
         # 8 Wall Facets
         win_w = min(1.0, props.window_width)
@@ -147,7 +172,7 @@ def build_round_tower(bm, props, seed):
             # Corner post at p1
             create_beveled_box(bm, size=(0.14, 0.14, floor_h),
                                location=(p1[0], p1[1], z_floor + floor_h * 0.5),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
             
             # Outward normal for this facet
             mid_pt = ((p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5)
@@ -157,9 +182,10 @@ def build_round_tower(bm, props, seed):
             if fl_idx == 0 and k == 6 and props.has_front_door:
                 dw = min(facet_len - 0.4, props.door_width)
                 dh = props.door_height
-                u1 = (facet_len - dw) * 0.5
-                u2 = u1 + dw
-                openings.append({'u_start': u1, 'u_end': u2, 'z_start': z_floor, 'z_end': z_floor + dh})
+                frame_margin = 0.13
+                u1 = (facet_len - dw) * 0.5 - frame_margin
+                u2 = (facet_len + dw) * 0.5 + frame_margin
+                openings.append({'u_start': max(0.02, u1), 'u_end': min(facet_len - 0.02, u2), 'z_start': z_floor, 'z_end': z_floor + dh + frame_margin})
                 door_mid = ((p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5)
                 build_door_assembly(bm, center_x=door_mid[0], y_front=door_mid[1], z_base=z_floor,
                                     wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle)
@@ -188,13 +214,15 @@ def build_round_tower(bm, props, seed):
 
         prev_r = cur_r
 
-    # Conical Turret Roof
+    # Conical Turret Roof / Watchtower Lookout Deck
     top_z = found_h + num_floors * floor_h
     top_r = cur_r
-    build_conical_turret_roof(bm, center_pos=(0.0, 0.0, top_z), radius=top_r * 1.15, height=props.roof_height * 1.25, segments=16)
+    archetype = getattr(props, 'building_archetype', 'AUTO')
+    if archetype != 'WATCHTOWER':
+        build_conical_turret_roof(bm, center_pos=(0.0, 0.0, top_z), radius=top_r * 1.15, height=props.roof_height * 1.25, segments=16)
 
     # Chimney
-    if props.has_chimney:
+    if props.has_chimney and archetype != 'WATCHTOWER':
         chim_h = total_height + 0.8
         build_fantasy_chimney(
             bm,
@@ -206,7 +234,6 @@ def build_round_tower(bm, props, seed):
         )
 
     # Architectural Archetype Accessories for Round Tower
-    archetype = getattr(props, 'building_archetype', 'AUTO')
     if archetype == 'WINDMILL':
         hub_z = top_z + props.roof_height * 0.40
         build_windmill_sails(bm, cx=0.0, front_y=-top_r, hub_z=hub_z, radius=max(2.8, top_r * 1.8))
@@ -231,6 +258,15 @@ def generate_building(obj, props):
     cantilever = props.cantilever_overhang if props.has_cantilever else 0.0
     found_h = props.foundation_height if props.has_foundation else 0.2
     
+    # Archetype resolution
+    archetype = getattr(props, 'building_archetype', 'AUTO')
+    if archetype == 'AUTO':
+        if getattr(props, 'has_hoist_beam', False):
+            archetype = 'WAREHOUSE'
+        else:
+            archetype = 'NONE'
+    effective_archetype = archetype
+
     # Compound building shape setup (L-Shape, T-Shape, Round Tower)
     shape = getattr(props, 'building_shape', 'RECTANGLE')
     if shape == 'ROUND_TOWER':
@@ -528,27 +564,28 @@ def generate_building(obj, props):
         if fl_idx == 0 and props.has_front_door:
             dw = props.door_width
             dh = props.door_height
+            frame_margin = 0.13
             if shape == 'RECTANGLE':
                 door_cx = 0.0
                 door_yf = y_min
-                door_u1 = (door_cx - dw * 0.5) - x_min
-                door_u2 = (door_cx + dw * 0.5) - x_min
-                front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': z_floor + dh})
+                door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
+                door_u2 = (door_cx + dw * 0.5 + frame_margin) - x_min
+                front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': z_floor + dh + frame_margin})
             elif shape == 'L_SHAPE':
                 if wing_side == 'RIGHT':
                     door_cx = (x_min + wx_min) * 0.5
                 else:
                     door_cx = (wx_max + x_max) * 0.5
                 door_yf = y_min
-                door_u1 = (door_cx - dw * 0.5) - x_min
-                door_u2 = (door_cx + dw * 0.5) - x_min
-                front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': z_floor + dh})
+                door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
+                door_u2 = (door_cx + dw * 0.5 + frame_margin) - x_min
+                front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': z_floor + dh + frame_margin})
             else: # T_SHAPE
                 door_cx = (wx_min + wx_max) * 0.5
                 door_yf = wy_min
-                door_u1 = (door_cx - dw * 0.5) - wx_min
-                door_u2 = (door_cx + dw * 0.5) - wx_min
-                w_front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': z_floor + dh})
+                door_u1 = (door_cx - dw * 0.5 - frame_margin) - wx_min
+                door_u2 = (door_cx + dw * 0.5 + frame_margin) - wx_min
+                w_front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': z_floor + dh + frame_margin})
 
             main_door_cx = door_cx
             main_door_yf = door_yf
@@ -557,7 +594,7 @@ def generate_building(obj, props):
                 bm, center_x=door_cx, y_front=door_yf, z_base=z_floor,
                 wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle
             )
-            if props.has_front_steps and props.has_foundation:
+            if props.has_front_steps and props.has_foundation and effective_archetype != 'TAVERN':
                 build_front_steps(bm, center_x=door_cx, y_front=door_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)))
             if props.has_lanterns:
                 build_iron_lantern(bm, location=(door_cx + dw * 0.5 + 0.45, door_yf - 0.05, z_floor + dh * 0.8))
@@ -576,16 +613,16 @@ def generate_building(obj, props):
             jamb_d = wall_t + 0.05
             create_beveled_box(bm, size=(jamb_w, jamb_d, portal_h),
                                location=(p_cx - portal_w * 0.5 - jamb_w * 0.5, y_min, z_floor + portal_h * 0.5),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+                               mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
             create_beveled_box(bm, size=(jamb_w, jamb_d, portal_h),
                                location=(p_cx + portal_w * 0.5 + jamb_w * 0.5, y_min, z_floor + portal_h * 0.5),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+                               mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
             lintel_w = portal_w + jamb_w * 2.0 + 0.08
             lintel_d = wall_t + 0.06
             lintel_h = 0.20
             create_beveled_box(bm, size=(lintel_w, lintel_d, lintel_h),
                                location=(p_cx, y_min, z_floor + portal_h + lintel_h * 0.5),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+                               mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
 
         # Dynamic Windows - Front Wall
         if props.has_windows:
@@ -912,81 +949,82 @@ def generate_building(obj, props):
         mat_idx=MAT_INDEX_FLOOR
     )
     
-    # Interior Roof Trusses & Collar Beams (visible inside attic, safe clearance under sway)
-    build_attic_trusses(
-        bm,
-        x_min=-top_hx + wall_t, x_max=top_hx - wall_t,
-        y_min=-top_hy + wall_t, y_max=top_hy - wall_t,
-        z_base=top_z,
-        ridge_z=top_z + props.roof_height,
-        spacing=1.4,
-        sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0
-    )
-    
-    # Exterior Roof Construction
     tier_val = getattr(props, 'material_tier', 'TIER_3')
     plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
 
-    if roof_style == 'SWAY':
-        build_sway_roof(
+    if effective_archetype != 'WATCHTOWER':
+        # Interior Roof Trusses & Collar Beams (visible inside attic, safe clearance under sway)
+        build_attic_trusses(
             bm,
-            x_min=-top_hx, x_max=top_hx,
-            y_min=-top_hy, y_max=top_hy,
+            x_min=-top_hx + wall_t, x_max=top_hx - wall_t,
+            y_min=-top_hy + wall_t, y_max=top_hy - wall_t,
             z_base=top_z,
-            roof_height=props.roof_height,
-            overhang=props.roof_overhang,
-            sway_amount=props.roof_sway,
-            wall_thickness=wall_t,
-            tier=tier_val,
-            plank_direction=plank_dir
-        )
-    elif roof_style == 'TURRET':
-        radius = max(top_hx, top_hy) * 1.05
-        build_conical_turret_roof(
-            bm,
-            center_pos=(0.0, 0.0, top_z),
-            radius=radius,
-            height=props.roof_height * 1.3
-        )
-    else: # 'GABLE'
-        build_gable_roof(
-            bm,
-            x_min=-top_hx, x_max=top_hx,
-            y_min=-top_hy, y_max=top_hy,
-            z_base=top_z,
-            roof_height=props.roof_height,
-            overhang=props.roof_overhang,
-            wall_thickness=wall_t,
-            segments_y=6,
-            tier=tier_val,
-            plank_direction=plank_dir
-        )
-
-    # Roof Hoist Beam with Cargo Hook (Warehouse / freight feature)
-    if getattr(props, 'has_hoist_beam', False) and roof_style in ('SWAY', 'GABLE'):
-        from .roof import build_hoist_beam
-        build_hoist_beam(
-            bm,
-            front_x=0.0,
-            front_y=-top_hy - props.roof_overhang,
-            z_ridge=top_z + props.roof_height,
-            length=1.4
+            ridge_z=top_z + props.roof_height,
+            spacing=1.4,
+            sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0
         )
         
-    # Roof Shingles
-    if props.has_roof_shingles and roof_style in ('SWAY', 'GABLE'):
-        build_shingle_layers(
-            bm,
-            x_min=-top_hx, x_max=top_hx,
-            y_min=-top_hy, y_max=top_hy,
-            z_base=top_z,
-            roof_height=props.roof_height,
-            rows=props.shingle_rows,
-            seed=seed,
-            overhang=props.roof_overhang,
-            sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0,
-            roof_style=roof_style
-        )
+        # Exterior Roof Construction
+        if roof_style == 'SWAY':
+            build_sway_roof(
+                bm,
+                x_min=-top_hx, x_max=top_hx,
+                y_min=-top_hy, y_max=top_hy,
+                z_base=top_z,
+                roof_height=props.roof_height,
+                overhang=props.roof_overhang,
+                sway_amount=props.roof_sway,
+                wall_thickness=wall_t,
+                tier=tier_val,
+                plank_direction=plank_dir
+            )
+        elif roof_style == 'TURRET':
+            radius = max(top_hx, top_hy) * 1.05
+            build_conical_turret_roof(
+                bm,
+                center_pos=(0.0, 0.0, top_z),
+                radius=radius,
+                height=props.roof_height * 1.3
+            )
+        else: # 'GABLE'
+            build_gable_roof(
+                bm,
+                x_min=-top_hx, x_max=top_hx,
+                y_min=-top_hy, y_max=top_hy,
+                z_base=top_z,
+                roof_height=props.roof_height,
+                overhang=props.roof_overhang,
+                wall_thickness=wall_t,
+                segments_y=6,
+                tier=tier_val,
+                plank_direction=plank_dir
+            )
+
+        # Roof Hoist Beam with Cargo Hook (Warehouse / freight feature)
+        if getattr(props, 'has_hoist_beam', False) and roof_style in ('SWAY', 'GABLE'):
+            from .roof import build_hoist_beam
+            build_hoist_beam(
+                bm,
+                front_x=0.0,
+                front_y=-top_hy - props.roof_overhang,
+                z_ridge=top_z + props.roof_height,
+                length=1.4
+            )
+            
+        # Roof Shingles
+        if props.has_roof_shingles and roof_style in ('SWAY', 'GABLE'):
+            build_shingle_layers(
+                bm,
+                x_min=-top_hx, x_max=top_hx,
+                y_min=-top_hy, y_max=top_hy,
+                z_base=top_z,
+                roof_height=props.roof_height,
+                rows=props.shingle_rows,
+                seed=seed,
+                overhang=props.roof_overhang,
+                sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0,
+                roof_style=roof_style
+            )
 
     # Compound Shape Wing Roof (Cross-Gable intersecting main roof or upper facade)
     if has_wing:
@@ -1124,7 +1162,7 @@ def generate_building(obj, props):
                 )
         
     # Dormer Windows
-    if props.has_dormers and roof_style in ('SWAY', 'GABLE'):
+    if props.has_dormers and roof_style in ('SWAY', 'GABLE') and effective_archetype != 'WATCHTOWER':
         dormer_y = -top_hy * 0.5
         build_dormer(
             bm,
@@ -1135,7 +1173,7 @@ def generate_building(obj, props):
         )
         
     # Stylized Crooked Chimney
-    if props.has_chimney:
+    if props.has_chimney and effective_archetype != 'WATCHTOWER':
         chim_x = top_hx * 0.72
         chim_y = top_hy * 0.45
         chim_total_h = total_height + 0.8
@@ -1149,27 +1187,20 @@ def generate_building(obj, props):
         )
 
     # 4.5. Specialized Architectural Archetype Accessories
-    archetype = getattr(props, 'building_archetype', 'AUTO')
-    if archetype == 'AUTO':
-        if getattr(props, 'has_hoist_beam', False):
-            archetype = 'WAREHOUSE'
-        else:
-            archetype = 'NONE'
-
-    if archetype == 'BLACKSMITH':
+    if effective_archetype == 'BLACKSMITH':
         build_blacksmith_forge(bm, -hx, hx, -hy, hy, found_h, wall_t, seed=seed)
-    elif archetype == 'WINDMILL':
+    elif effective_archetype == 'WINDMILL':
         hub_z = top_z + props.roof_height * 0.42
         build_windmill_sails(bm, cx=0.0, front_y=-hy, hub_z=hub_z, radius=max(2.6, props.width * 0.48))
-    elif archetype == 'WATCHTOWER':
+    elif effective_archetype == 'WATCHTOWER':
         build_watchtower_lookout(bm, -top_hx, top_hx, -top_hy, top_hy, z_platform=top_z)
-    elif archetype == 'TAVERN':
+    elif effective_archetype == 'TAVERN':
         build_tavern_porch_and_sign(bm, -hx, hx, front_y=main_door_yf, z_ground=0.0, door_x=main_door_cx, seed=seed)
-    elif archetype == 'FISHERMAN':
+    elif effective_archetype == 'FISHERMAN':
         build_fisherman_stilts(bm, -hx, hx, -hy, hy, z_ground=0.0, z_floor=found_h)
-    elif archetype == 'BAKERY':
+    elif effective_archetype == 'BAKERY':
         build_bakery_oven(bm, -hx, hx, -hy, hy, z_ground=0.0)
-    elif archetype == 'WAREHOUSE':
+    elif effective_archetype == 'WAREHOUSE':
         build_warehouse_cargo(bm, front_x=0.0, front_y=-hy, z_ground=0.0)
 
     # 5. Whimsical Curvature / Wonkiness Deformation
