@@ -214,7 +214,8 @@ def build_round_tower(bm, props, seed):
                 openings.append({'u_start': max(0.02, u1), 'u_end': min(facet_len - 0.02, u2), 'z_start': z_floor, 'z_end': z_floor + dh + frame_margin})
                 door_mid = ((p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5)
                 build_door_assembly(bm, center_x=door_mid[0], y_front=door_mid[1], z_base=z_floor,
-                                    wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle)
+                                    wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
+                                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone)
                 if props.has_front_steps and props.has_foundation:
                     build_front_steps(bm, center_x=door_mid[0], y_front=door_mid[1], z_base=z_floor,
                                       num_steps=max(2, int(found_h / 0.18)))
@@ -608,7 +609,8 @@ def generate_building(obj, props):
 
             build_door_assembly(
                 bm, center_x=door_cx, y_front=door_yf, z_base=z_floor,
-                wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle
+                wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
+                door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone
             )
             if props.has_front_steps and props.has_foundation and effective_archetype != 'TAVERN':
                 build_front_steps(bm, center_x=door_cx, y_front=door_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)))
@@ -981,6 +983,7 @@ def generate_building(obj, props):
         )
         
         # Exterior Roof Construction
+        flare_val = getattr(props, 'roof_flare', 0.35)
         if roof_style == 'SWAY':
             build_sway_roof(
                 bm,
@@ -992,7 +995,8 @@ def generate_building(obj, props):
                 sway_amount=props.roof_sway,
                 wall_thickness=wall_t,
                 tier=tier_val,
-                plank_direction=plank_dir
+                plank_direction=plank_dir,
+                roof_flare=flare_val
             )
         elif roof_style == 'TURRET':
             radius = max(top_hx, top_hy) * 1.05
@@ -1013,7 +1017,8 @@ def generate_building(obj, props):
                 wall_thickness=wall_t,
                 segments_y=6,
                 tier=tier_val,
-                plank_direction=plank_dir
+                plank_direction=plank_dir,
+                roof_flare=flare_val
             )
 
         # Roof Hoist Beam with Cargo Hook (Warehouse / freight feature)
@@ -1039,7 +1044,8 @@ def generate_building(obj, props):
                 seed=seed,
                 overhang=props.roof_overhang,
                 sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0,
-                roof_style=roof_style
+                roof_style=roof_style,
+                roof_flare=flare_val
             )
 
     # Compound Shape Wing Roof (Cross-Gable intersecting main roof or upper facade)
@@ -1131,7 +1137,8 @@ def generate_building(obj, props):
                 gable_ends=('FRONT',),
                 abut_back=abut_back,
                 tier=tier_val,
-                plank_direction=plank_dir
+                plank_direction=plank_dir,
+                roof_flare=flare_val
             )
             if props.has_roof_shingles:
                 build_shingle_layers(
@@ -1145,7 +1152,8 @@ def generate_building(obj, props):
                     overhang=props.roof_overhang,
                     sway_amount=props.roof_sway * 0.70,
                     roof_style='SWAY',
-                    abut_back=abut_back
+                    abut_back=abut_back,
+                    roof_flare=flare_val
                 )
         else:
             build_gable_roof(
@@ -1160,7 +1168,8 @@ def generate_building(obj, props):
                 segments_y=6,
                 abut_back=abut_back,
                 tier=tier_val,
-                plank_direction=plank_dir
+                plank_direction=plank_dir,
+                roof_flare=flare_val
             )
             if props.has_roof_shingles:
                 build_shingle_layers(
@@ -1174,7 +1183,8 @@ def generate_building(obj, props):
                     overhang=props.roof_overhang,
                     sway_amount=0.0,
                     roof_style='GABLE',
-                    abut_back=abut_back
+                    abut_back=abut_back,
+                    roof_flare=flare_val
                 )
         
     # Dormer Windows

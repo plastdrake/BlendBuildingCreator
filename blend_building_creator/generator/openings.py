@@ -14,45 +14,124 @@ from .materials import (
     MAT_INDEX_IRON, MAT_INDEX_STONE, MAT_INDEX_SHINGLES, MAT_INDEX_WOOD
 )
 
-def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_w=1.0, door_h=2.2, door_angle_deg=45.0):
+def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_w=1.0, door_h=2.2, door_angle_deg=45.0, door_shape='AUTO', ground_floor_stone=True):
     """
     Builds the door frame, casing, openable door panel, iron hinges, and ring handle.
     door_angle_deg controls how open the door leaf is (0 = closed, 90 = fully open into interior).
+    door_shape: 'AUTO', 'ARCHED', or 'SQUARE'.
     """
     frame_thick = 0.12
     frame_depth = wall_thickness + 0.06
+    is_arched = (door_shape == 'ARCHED') or (door_shape == 'AUTO' and ground_floor_stone and door_w < 1.6)
     
-    # 1. Door Frame Jambs (Left & Right)
-    create_beveled_box(
-        bm,
-        size=(frame_thick, frame_depth, door_h),
-        location=(center_x - (door_w * 0.5 + frame_thick * 0.5), y_front, z_base + door_h * 0.5),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.015
-    )
-    create_beveled_box(
-        bm,
-        size=(frame_thick, frame_depth, door_h),
-        location=(center_x + (door_w * 0.5 + frame_thick * 0.5), y_front, z_base + door_h * 0.5),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.015
-    )
-    # Lintel (Top header beam)
-    create_beveled_box(
-        bm,
-        size=(door_w + frame_thick * 2.4, frame_depth + 0.04, frame_thick),
-        location=(center_x, y_front, z_base + door_h + frame_thick * 0.5),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.015
-    )
-    # Stone threshold
-    create_beveled_box(
-        bm,
-        size=(door_w + frame_thick * 2.0, frame_depth + 0.08, 0.08),
-        location=(center_x, y_front, z_base + 0.04),
-        mat_index=MAT_INDEX_STONE,
-        bevel_amount=0.015
-    )
+    if is_arched:
+        R_in = door_w * 0.5
+        R_out = R_in + 0.22
+        z_spring = z_base + door_h - R_in
+        
+        # 1. Stone threshold
+        create_beveled_box(
+            bm,
+            size=(door_w + 0.55, frame_depth + 0.08, 0.09),
+            location=(center_x, y_front, z_base + 0.045),
+            mat_index=MAT_INDEX_STONE,
+            bevel_amount=0.018
+        )
+        
+        # 2. Quoin Stone Jambs (Stacked alternating ashlar blocks)
+        jamb_h = max(0.4, z_spring - (z_base + 0.09))
+        num_blocks = max(3, int(round(jamb_h / 0.32)))
+        block_step = jamb_h / num_blocks
+        
+        for side_sign in [-1, 1]:
+            for b in range(num_blocks):
+                bz = z_base + 0.09 + (b + 0.5) * block_step
+                bw = 0.24 if (b % 2 == 0) else 0.18
+                bx = center_x + side_sign * (R_in + bw * 0.5)
+                create_beveled_box(
+                    bm,
+                    size=(bw, frame_depth + 0.03, block_step - 0.008),
+                    location=(bx, y_front, bz),
+                    mat_index=MAT_INDEX_STONE,
+                    bevel_amount=0.015
+                )
+                
+        # 3. Radial Stone Arch with 7 voussoirs and prominent keystone
+        num_v = 7
+        for i in range(num_v):
+            a0 = i * math.pi / num_v
+            a1 = (i + 1) * math.pi / num_v
+            is_key = (i == num_v // 2)
+            r_out_cur = R_out + (0.05 if is_key else 0.0)
+            y_pop = -0.02 if is_key else 0.0
+            
+            yf_f = y_front - frame_depth * 0.5 + y_pop
+            yf_b = y_front + frame_depth * 0.5
+            
+            v_in0_f  = bm.verts.new(Vector((center_x + R_in * math.cos(a0), yf_f, z_spring + R_in * math.sin(a0))))
+            v_in1_f  = bm.verts.new(Vector((center_x + R_in * math.cos(a1), yf_f, z_spring + R_in * math.sin(a1))))
+            v_out1_f = bm.verts.new(Vector((center_x + r_out_cur * math.cos(a1), yf_f, z_spring + r_out_cur * math.sin(a1))))
+            v_out0_f = bm.verts.new(Vector((center_x + r_out_cur * math.cos(a0), yf_f, z_spring + r_out_cur * math.sin(a0))))
+            
+            v_in0_b  = bm.verts.new(Vector((center_x + R_in * math.cos(a0), yf_b, z_spring + R_in * math.sin(a0))))
+            v_in1_b  = bm.verts.new(Vector((center_x + R_in * math.cos(a1), yf_b, z_spring + R_in * math.sin(a1))))
+            v_out1_b = bm.verts.new(Vector((center_x + r_out_cur * math.cos(a1), yf_b, z_spring + r_out_cur * math.sin(a1))))
+            v_out0_b = bm.verts.new(Vector((center_x + r_out_cur * math.cos(a0), yf_b, z_spring + r_out_cur * math.sin(a0))))
+            
+            for f_verts in [
+                [v_in0_f, v_out0_f, v_out1_f, v_in1_f],
+                [v_in0_b, v_in1_b, v_out1_b, v_out0_b],
+                [v_in0_f, v_in1_f, v_in1_b, v_in0_b],
+                [v_out0_f, v_out0_b, v_out1_b, v_out1_f],
+                [v_in0_f, v_in0_b, v_out0_b, v_out0_f],
+                [v_in1_f, v_out1_f, v_out1_b, v_in1_b]
+            ]:
+                f = bm.faces.new(f_verts)
+                f.material_index = MAT_INDEX_STONE
+                
+        # Inner timber door casing
+        create_beveled_box(
+            bm, size=(0.06, frame_depth - 0.04, jamb_h),
+            location=(center_x - (R_in - 0.03), y_front, z_base + 0.09 + jamb_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+        )
+        create_beveled_box(
+            bm, size=(0.06, frame_depth - 0.04, jamb_h),
+            location=(center_x + (R_in - 0.03), y_front, z_base + 0.09 + jamb_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+        )
+    else:
+        # Standard Square Timber Post-and-Lintel Frame
+        create_beveled_box(
+            bm,
+            size=(frame_thick, frame_depth, door_h),
+            location=(center_x - (door_w * 0.5 + frame_thick * 0.5), y_front, z_base + door_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.015
+        )
+        create_beveled_box(
+            bm,
+            size=(frame_thick, frame_depth, door_h),
+            location=(center_x + (door_w * 0.5 + frame_thick * 0.5), y_front, z_base + door_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.015
+        )
+        # Lintel (Top header beam)
+        create_beveled_box(
+            bm,
+            size=(door_w + frame_thick * 2.4, frame_depth + 0.04, frame_thick),
+            location=(center_x, y_front, z_base + door_h + frame_thick * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.015
+        )
+        # Stone threshold
+        create_beveled_box(
+            bm,
+            size=(door_w + frame_thick * 2.0, frame_depth + 0.08, 0.08),
+            location=(center_x, y_front, z_base + 0.04),
+            mat_index=MAT_INDEX_STONE,
+            bevel_amount=0.015
+        )
     
     # 2. Door Panel (Single or Double Freight Doors)
     if door_w >= 1.6:
@@ -138,11 +217,18 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         
         for k in range(num_planks):
             px = (k + 0.5) * pw + k * gap
+            if is_arched:
+                x_rel = px - door_leaf_w * 0.5
+                r_sq = max(0.04, (R_in * 0.96) ** 2 - x_rel * x_rel)
+                arch_top = z_spring + math.sqrt(r_sq) - 0.03
+                cur_plank_h = max(0.5, arch_top - (z_base + 0.05))
+            else:
+                cur_plank_h = door_leaf_h
             jank = 0.003 * math.sin(k * 2.8 + 1.2)
-            plank_loc = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((px, jank, door_leaf_h * 0.5)))
+            plank_loc = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((px, jank, cur_plank_h * 0.5)))
             create_beveled_box(
                 bm,
-                size=(pw - 0.002, door_leaf_t, door_leaf_h),
+                size=(pw - 0.002, door_leaf_t, cur_plank_h),
                 location=plank_loc,
                 rotation=(0.0, 0.0, ang_rad),
                 mat_index=MAT_INDEX_DOOR,
@@ -150,7 +236,8 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             )
             
         # Horizontal and diagonal Z-battens on door back
-        for bf in [0.12, 0.88]:
+        bat_fractions = [0.12, 0.68 if is_arched else 0.88]
+        for bf in bat_fractions:
             bat_loc = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((door_leaf_w * 0.5, door_leaf_t * 0.5 + 0.012, door_leaf_h * bf)))
             create_beveled_box(
                 bm,

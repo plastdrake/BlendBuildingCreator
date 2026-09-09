@@ -170,6 +170,7 @@ class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
         box_door.prop(props, "has_front_door")
         if props.has_front_door:
             col = box_door.column(align=True)
+            col.prop(props, "door_shape")
             col.prop(props, "door_width")
             col.prop(props, "door_height")
             col.prop(props, "door_angle", slider=True)
@@ -209,6 +210,7 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
         col.prop(props, "roof_style")
         col.prop(props, "roof_height")
         col.prop(props, "roof_overhang")
+        col.prop(props, "roof_flare", slider=True)
         if props.roof_style == 'SWAY':
             col.prop(props, "roof_sway", slider=True)
             
@@ -255,6 +257,7 @@ class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
 
         box_colors = layout.box()
         box_colors.label(text="Procedural Stylized Colors", icon='COLOR')
+        box_colors.prop(props, "color_palette")
         grid = box_colors.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
         grid.prop(props, "color_shingles", text="Shingles")
         grid.prop(props, "color_wall_ext", text="Wall Ext")

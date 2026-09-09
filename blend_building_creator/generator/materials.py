@@ -441,8 +441,12 @@ def setup_building_material_slots(obj, props):
     """
     tier = getattr(props, "material_tier", "TIER_3")
 
+    is_palette = getattr(props, "color_palette", "CUSTOM") != "CUSTOM"
+
     if props.custom_stone:
         mat_stone = props.custom_stone
+    elif is_palette:
+        mat_stone = create_stylized_stone(f"M_Building_Stone_{tier}", color=props.color_stone)
     elif tier == 'TIER_1':
         mat_stone = create_stylized_stone("M_Building_Stone_T1", color=(0.32, 0.30, 0.28, 1.0))
     elif tier == 'TIER_2':
@@ -452,6 +456,8 @@ def setup_building_material_slots(obj, props):
 
     if props.custom_wall_ext:
         mat_plaster_ext = props.custom_wall_ext
+    elif is_palette:
+        mat_plaster_ext = create_stylized_plaster("M_Building_Plaster_Ext", color=props.color_wall_ext, is_interior=False)
     elif tier == 'TIER_1':
         mat_plaster_ext = create_stylized_log_walls("M_Building_Log_Ext", color=(0.32, 0.20, 0.12, 1.0))
     elif tier == 'TIER_2':
@@ -461,6 +467,8 @@ def setup_building_material_slots(obj, props):
 
     if props.custom_wall_int:
         mat_plaster_int = props.custom_wall_int
+    elif is_palette:
+        mat_plaster_int = create_stylized_plaster("M_Building_Plaster_Int", color=props.color_wall_int, is_interior=True)
     elif tier == 'TIER_1':
         mat_plaster_int = create_stylized_timber("M_Building_Log_Int", color=(0.42, 0.30, 0.20, 1.0))
     elif tier == 'TIER_2':
@@ -473,6 +481,8 @@ def setup_building_material_slots(obj, props):
     custom_tf = getattr(props, 'custom_timber_frame', None)
     if custom_tf:
         mat_timber_frame = custom_tf
+    elif is_palette:
+        mat_timber_frame = create_stylized_timber("M_Building_Timber_Frame", color=clr_tf)
     elif tier == 'TIER_1':
         mat_timber_frame = create_stylized_timber("M_Building_Timber_Frame_T1", color=clr_tf)
     elif tier == 'TIER_2':
@@ -488,6 +498,8 @@ def setup_building_material_slots(obj, props):
 
     if props.custom_shingles:
         mat_shingles = props.custom_shingles
+    elif is_palette:
+        mat_shingles = create_stylized_shingles(f"M_Building_Shingles_{tier}", color=props.color_shingles)
     elif tier == 'TIER_1':
         mat_shingles = create_stylized_shingles("M_Building_Shingles_T1", color=(0.28, 0.18, 0.11, 1.0))
     elif tier == 'TIER_2':

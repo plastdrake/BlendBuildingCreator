@@ -54,6 +54,56 @@ def on_tier_updated(self, context):
     
     on_property_updated(self, context)
 
+def on_palette_updated(self, context):
+    """Applies curated stylized fantasy color palettes inspired by game and animation art."""
+    if not getattr(self, "auto_update", True):
+        return
+        
+    palette = getattr(self, "color_palette", "CUSTOM")
+    if palette == 'CUSTOM':
+        return
+        
+    self.auto_update = False
+    if palette == 'STORMWIND':
+        self.color_shingles = (0.12, 0.22, 0.48, 1.0)
+        self.color_stone = (0.46, 0.44, 0.42, 1.0)
+        self.color_wall_ext = (0.92, 0.86, 0.74, 1.0)
+        self.color_wall_int = (0.90, 0.86, 0.80, 1.0)
+        self.color_timber_frame = (0.24, 0.14, 0.08, 1.0)
+        self.color_timber = (0.34, 0.20, 0.12, 1.0)
+        self.color_door = (0.30, 0.18, 0.10, 1.0)
+        self.color_floor = (0.42, 0.28, 0.16, 1.0)
+    elif palette == 'HEARTHSIDE':
+        self.color_shingles = (0.75, 0.38, 0.16, 1.0)
+        self.color_stone = (0.38, 0.38, 0.38, 1.0)
+        self.color_wall_ext = (0.88, 0.83, 0.73, 1.0)
+        self.color_wall_int = (0.92, 0.88, 0.82, 1.0)
+        self.color_timber_frame = (0.32, 0.18, 0.09, 1.0)
+        self.color_timber = (0.40, 0.24, 0.14, 1.0)
+        self.color_door = (0.42, 0.26, 0.15, 1.0)
+        self.color_floor = (0.46, 0.30, 0.18, 1.0)
+    elif palette == 'MOSS_CEDAR':
+        self.color_shingles = (0.22, 0.38, 0.20, 1.0)
+        self.color_stone = (0.36, 0.37, 0.35, 1.0)
+        self.color_wall_ext = (0.82, 0.79, 0.72, 1.0)
+        self.color_wall_int = (0.86, 0.84, 0.78, 1.0)
+        self.color_timber_frame = (0.26, 0.20, 0.14, 1.0)
+        self.color_timber = (0.32, 0.25, 0.18, 1.0)
+        self.color_door = (0.30, 0.22, 0.15, 1.0)
+        self.color_floor = (0.38, 0.28, 0.18, 1.0)
+    elif palette == 'VINTAGE_SLATE':
+        self.color_shingles = (0.32, 0.24, 0.38, 1.0)
+        self.color_stone = (0.40, 0.39, 0.38, 1.0)
+        self.color_wall_ext = (0.86, 0.82, 0.75, 1.0)
+        self.color_wall_int = (0.90, 0.87, 0.82, 1.0)
+        self.color_timber_frame = (0.20, 0.12, 0.08, 1.0)
+        self.color_timber = (0.28, 0.17, 0.10, 1.0)
+        self.color_door = (0.32, 0.18, 0.10, 1.0)
+        self.color_floor = (0.36, 0.24, 0.14, 1.0)
+    self.auto_update = True
+    
+    on_property_updated(self, context)
+
 class FantasyBuildingSettings(bpy.types.PropertyGroup):
     auto_update: BoolProperty(
         name="Auto Update",
@@ -315,6 +365,18 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
     
+    door_shape: EnumProperty(
+        name="Portal Style",
+        description="Architectural design of the entrance doorway",
+        items=[
+            ('AUTO', "Auto (Stone Arch / Timber)", "Stone arch on stone walls/foundations, square timber on wood walls"),
+            ('ARCHED', "Arched Stone Portal", "Iconic fantasy arched stone portal with radial voussoirs and keystone"),
+            ('SQUARE', "Square Timber Frame", "Sturdy timber post-and-lintel door frame"),
+        ],
+        default='AUTO',
+        update=on_property_updated
+    )
+    
     has_windows: BoolProperty(
         name="Windows",
         description="Stylized multi-pane framed windows",
@@ -410,6 +472,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
     
+    roof_flare: FloatProperty(
+        name="Bell-Cast Flare",
+        description="Concave swooping curve flare at the roof eaves",
+        min=0.0, max=0.8, default=0.35,
+        update=on_property_updated
+    )
+    
     has_roof_shingles: BoolProperty(
         name="Layered Shingles",
         description="Stylized overlapping 3D roof shingles with whimsical jitter",
@@ -502,6 +571,20 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         description="Convert ground walls into open post-and-beam timber bays (ideal for sheds and mills)",
         default=False,
         update=on_property_updated
+    )
+    
+    color_palette: EnumProperty(
+        name="Color Palette",
+        description="Curated stylized fantasy color scheme inspired by references",
+        items=[
+            ('CUSTOM', "Custom Colors", "Use manual color pickers below"),
+            ('STORMWIND', "Stormwind (Cobalt & Gold)", "Deep cobalt blue roof, warm sandstone plaster, rich chocolate timber framing"),
+            ('HEARTHSIDE', "Hearthside (Amber Terracotta)", "Warm terracotta orange roof, creamy plaster, honey oak timber, charcoal slate"),
+            ('MOSS_CEDAR', "Forest Moss (Green & Cedar)", "Forest moss green roof, weathered cedar timber, rustic fieldstone"),
+            ('VINTAGE_SLATE', "Vintage Fantasy (Indigo & Cream)", "Deep purple-indigo slate roof, antique plaster, dark walnut timber"),
+        ],
+        default='CUSTOM',
+        update=on_palette_updated
     )
     
     color_stone: FloatVectorProperty(

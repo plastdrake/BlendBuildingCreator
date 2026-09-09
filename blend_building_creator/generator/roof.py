@@ -105,9 +105,63 @@ def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm
                     bevel_amount=0.004
                 )
 
+def build_curved_bargeboards(bm, cx, rx_min, rx_max, y_verge, ez, rz, roof_flare=0.35, segments=4):
+    """
+    Builds segmented curved bargeboards matching the bell-cast flare of the roof,
+    complete with stylized upturned carved finial horns at the eave corners and an apex cap.
+    """
+    for side in [-1, 1]:
+        rx_target = rx_min if side < 0 else rx_max
+        for k in range(segments):
+            u0 = k / segments
+            u1 = (k + 1) / segments
+            x0 = cx + side * u0 * abs(rx_target - cx)
+            x1 = cx + side * u1 * abs(rx_target - cx)
+            drop0 = (1.0 - roof_flare) * u0 + roof_flare * (1.0 - (1.0 - u0) ** 2)
+            drop1 = (1.0 - roof_flare) * u1 + roof_flare * (1.0 - (1.0 - u1) ** 2)
+            z0 = rz - drop0 * (rz - ez)
+            z1 = rz - drop1 * (rz - ez)
+            
+            mid_x = (x0 + x1) * 0.5
+            mid_z = (z0 + z1) * 0.5
+            dx = x1 - x0
+            dz = z1 - z0
+            seg_len = math.sqrt(dx * dx + dz * dz) + 0.03
+            seg_ang = math.atan2(dz, dx)
+            create_beveled_box(
+                bm,
+                size=(seg_len, 0.10, 0.16),
+                location=(mid_x, y_verge, mid_z),
+                rotation=(0.0, -seg_ang, 0.0),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.012
+            )
+            
+        # Upturned horn at eave tip
+        horn_x = rx_target + side * 0.06
+        horn_z = ez + 0.12
+        horn_ang = -side * 0.65
+        create_beveled_box(
+            bm,
+            size=(0.14, 0.11, 0.32),
+            location=(horn_x, y_verge, horn_z),
+            rotation=(0.0, horn_ang, 0.0),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.015
+        )
+        
+    # Apex finial cap
+    create_beveled_box(
+        bm,
+        size=(0.20, 0.12, 0.28),
+        location=(cx, y_verge, rz + 0.10),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.015
+    )
+
 def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, overhang=0.45,
                     sway_amount=0.25, segments_y=6, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'),
-                    abut_back=False, tier='TIER_3', plank_direction='HORIZONTAL'):
+                    abut_back=False, tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35):
     """
     Builds a whimsical fairytale curved/saddle roof with flared eaves, saggy ridge,
     solid 0.12m thick timber roof decking, thick volumetric gable walls, and full eave closures.
@@ -124,7 +178,10 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
     cx = (rx_min + rx_max) * 0.5
     deck_thick = 0.12
     
-    # 1. Solid Volumetric 3D Timber Roof Deck (Left and Right Slopes)
+    # 1. Solid Volumetric 3D Timber Roof Deck (Left and Right Slopes) with Bell-Cast Curvature
+    segments_x = 4
+    half_w = total_w * 0.5
+    
     for j in range(segments_y):
         t0 = j / segments_y
         t1 = (j + 1) / segments_y
@@ -139,62 +196,66 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
         rz1 = z_base + roof_height - sag1
         ez = z_base - 0.12 # Eaves level
         
-        # --- Left Slope Solid Slab ---
-        s_left = Vector((cx - rx_min, 0.0, (rz0 + rz1) * 0.5 - ez))
-        # Vector pointing inward/downward into attic
-        inward_l = Vector((s_left.z, 0.0, -s_left.x)).normalized() * deck_thick
-        
-        vl0_t = bm.verts.new(Vector((rx_min, y0, ez)))
-        vl1_t = bm.verts.new(Vector((rx_min, y1, ez)))
-        vr1_t = bm.verts.new(Vector((cx, y1, rz1)))
-        vr0_t = bm.verts.new(Vector((cx, y0, rz0)))
-        
-        vl0_b = bm.verts.new(Vector((rx_min, y0, ez)) + inward_l)
-        vl1_b = bm.verts.new(Vector((rx_min, y1, ez)) + inward_l)
-        vr1_b = bm.verts.new(Vector((cx, y1, rz1)) + inward_l)
-        vr0_b = bm.verts.new(Vector((cx, y0, rz0)) + inward_l)
-        
-        # Deck faces: top, bottom, outer eave side
-        f_top_l = bm.faces.new([vl0_t, vl1_t, vr1_t, vr0_t])
-        f_top_l.material_index = MAT_INDEX_TIMBER
-        f_bot_l = bm.faces.new([vr0_b, vr1_b, vl1_b, vl0_b])
-        f_bot_l.material_index = MAT_INDEX_TIMBER
-        f_eave_l = bm.faces.new([vl0_t, vl0_b, vl1_b, vl1_t])
-        f_eave_l.material_index = MAT_INDEX_TIMBER
-        
-        if j == 0:
-            f_fl = bm.faces.new([vr0_t, vr0_b, vl0_b, vl0_t])
-            f_fl.material_index = MAT_INDEX_TIMBER
-        if j == segments_y - 1:
-            f_rl = bm.faces.new([vl1_t, vl1_b, vr1_b, vr1_t])
-            f_rl.material_index = MAT_INDEX_TIMBER
-            
-        # --- Right Slope Solid Slab ---
-        delta_xr = rx_max - cx
-        delta_zr = (rz0 + rz1) * 0.5 - ez
-        inward_r = Vector((-delta_zr, 0.0, -delta_xr)).normalized() * deck_thick
-        
-        vrr0_t = bm.verts.new(Vector((rx_max, y0, ez)))
-        vrr1_t = bm.verts.new(Vector((rx_max, y1, ez)))
-        
-        vrr0_b = bm.verts.new(Vector((rx_max, y0, ez)) + inward_r)
-        vrr1_b = bm.verts.new(Vector((rx_max, y1, ez)) + inward_r)
-        vr1_rb = bm.verts.new(Vector((cx, y1, rz1)) + inward_r)
-        vr0_rb = bm.verts.new(Vector((cx, y0, rz0)) + inward_r)
-        
-        f_top_r = bm.faces.new([vr0_t, vr1_t, vrr1_t, vrr0_t])
-        f_top_r.material_index = MAT_INDEX_TIMBER
-        f_bot_r = bm.faces.new([vrr0_b, vrr1_b, vr1_rb, vr0_rb])
-        f_bot_r.material_index = MAT_INDEX_TIMBER
-        f_eave_r = bm.faces.new([vrr1_t, vrr1_b, vrr0_b, vrr0_t])
-        f_eave_r.material_index = MAT_INDEX_TIMBER
-        
-        if j == 0:
-            f_fr = bm.faces.new([vrr0_t, vrr0_b, vr0_rb, vr0_t])
-            f_fr.material_index = MAT_INDEX_TIMBER
-        if j == segments_y - 1:
-            f_rr = bm.faces.new([vr1_t, vr1_rb, vrr1_b, vrr1_t])
-            f_rr.material_index = MAT_INDEX_TIMBER
+        for side in [-1, 1]:
+            for k in range(segments_x):
+                u0 = k / segments_x
+                u1 = (k + 1) / segments_x
+                
+                drop0 = (1.0 - roof_flare) * u0 + roof_flare * (1.0 - (1.0 - u0) ** 2)
+                drop1 = (1.0 - roof_flare) * u1 + roof_flare * (1.0 - (1.0 - u1) ** 2)
+                
+                xa = cx + side * u0 * half_w
+                xb = cx + side * u1 * half_w
+                
+                za0 = rz0 - drop0 * (rz0 - ez)
+                za1 = rz1 - drop0 * (rz1 - ez)
+                zb0 = rz0 - drop1 * (rz0 - ez)
+                zb1 = rz1 - drop1 * (rz1 - ez)
+                
+                dx = xb - xa
+                dz = ((zb0 + zb1) - (za0 + za1)) * 0.5
+                inward = Vector((dz * side, 0.0, -abs(dx))).normalized() * deck_thick if (dx * dx + dz * dz) > 1e-6 else Vector((0, 0, -deck_thick))
+                
+                v_in0_t = bm.verts.new(Vector((xa, y0, za0)))
+                v_in1_t = bm.verts.new(Vector((xa, y1, za1)))
+                v_out1_t = bm.verts.new(Vector((xb, y1, zb1)))
+                v_out0_t = bm.verts.new(Vector((xb, y0, zb0)))
+                
+                v_in0_b = bm.verts.new(Vector((xa, y0, za0)) + inward)
+                v_in1_b = bm.verts.new(Vector((xa, y1, za1)) + inward)
+                v_out1_b = bm.verts.new(Vector((xb, y1, zb1)) + inward)
+                v_out0_b = bm.verts.new(Vector((xb, y0, zb0)) + inward)
+                
+                if side < 0:
+                    f_top = bm.faces.new([v_out0_t, v_out1_t, v_in1_t, v_in0_t])
+                    f_top.material_index = MAT_INDEX_SHINGLES
+                    f_bot = bm.faces.new([v_in0_b, v_in1_b, v_out1_b, v_out0_b])
+                    f_bot.material_index = MAT_INDEX_TIMBER
+                    
+                    if k == segments_x - 1:
+                        f_eave = bm.faces.new([v_out0_t, v_out0_b, v_out1_b, v_out1_t])
+                        f_eave.material_index = MAT_INDEX_TIMBER
+                    if j == 0:
+                        f_f = bm.faces.new([v_in0_t, v_in0_b, v_out0_b, v_out0_t])
+                        f_f.material_index = MAT_INDEX_TIMBER
+                    if j == segments_y - 1:
+                        f_r = bm.faces.new([v_out1_t, v_out1_b, v_in1_b, v_in1_t])
+                        f_r.material_index = MAT_INDEX_TIMBER
+                else:
+                    f_top = bm.faces.new([v_in0_t, v_in1_t, v_out1_t, v_out0_t])
+                    f_top.material_index = MAT_INDEX_SHINGLES
+                    f_bot = bm.faces.new([v_out0_b, v_out1_b, v_in1_b, v_in0_b])
+                    f_bot.material_index = MAT_INDEX_TIMBER
+                    
+                    if k == segments_x - 1:
+                        f_eave = bm.faces.new([v_out1_t, v_out1_b, v_out0_b, v_out0_t])
+                        f_eave.material_index = MAT_INDEX_TIMBER
+                    if j == 0:
+                        f_f = bm.faces.new([v_out0_t, v_out0_b, v_in0_b, v_in0_t])
+                        f_f.material_index = MAT_INDEX_TIMBER
+                    if j == segments_y - 1:
+                        f_r = bm.faces.new([v_in1_t, v_in1_b, v_out1_b, v_out1_t])
+                        f_r.material_index = MAT_INDEX_TIMBER
 
     # 2. Volumetric Gable End Walls matching exact roof pitch with zero gaps
     half_wt = wall_thickness * 0.5
@@ -295,15 +356,8 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
         )
         
         # Verge Bargeboards along gable rafter slopes (capping the verge overhang)
-        b_len = math.sqrt(delta_x * delta_x + delta_z * delta_z) + 0.10
-        b_ang = math.atan2(delta_z, delta_x)
-        b_mid_z = (ez + rz) * 0.5
         y_verge = ry_min + 0.04 if g_norm < 0 else ry_max - 0.04
-        
-        b_mid_l = Vector(((rx_min + cx) * 0.5, y_verge, b_mid_z))
-        create_box(bm, size=(b_len, 0.08, 0.14), location=b_mid_l, rotation=(0.0, -b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
-        b_mid_r = Vector(((rx_max + cx) * 0.5, y_verge, b_mid_z))
-        create_box(bm, size=(b_len, 0.08, 0.14), location=b_mid_r, rotation=(0.0, b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
+        build_curved_bargeboards(bm, cx, rx_min, rx_max, y_verge, ez, rz, roof_flare=roof_flare)
 
     # 3. Eaves Fascia & Segmented Ridge Beams (curves with sway and wonkiness)
     fascia_d = total_d if abut_back else total_d + 0.15
@@ -349,7 +403,7 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
             bevel_amount=0.015
         )
 
-def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, overhang=0.45, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6, abut_back=False, tier='TIER_3', plank_direction='HORIZONTAL'):
+def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, overhang=0.45, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6, abut_back=False, tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35):
     """
     Builds a classic steep medieval gable roof with solid 0.12m thick timber decking,
     thick volumetric gable walls, and complete eave closures.
@@ -360,6 +414,7 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
     rx_max = x_max + overhang
     ry_min = y_min - overhang
     ry_max = y_max if abut_back else (y_max + overhang)
+    total_w = rx_max - rx_min
     total_d = ry_max - ry_min
     
     cx = (x_min + x_max) * 0.5
@@ -374,47 +429,73 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
     delta_zr = rz - ez
     inward_r = Vector((-delta_zr, 0.0, -delta_xr)).normalized() * deck_thick
 
+    segments_x = 4
+    half_w = total_w * 0.5
+    
     for j in range(segments_y):
         t0 = j / segments_y
         t1 = (j + 1) / segments_y
         y0 = ry_min + t0 * total_d
         y1 = ry_min + t1 * total_d
 
-        # Left slope
-        vl0_t = bm.verts.new(Vector((rx_min, y0, ez)))
-        vl1_t = bm.verts.new(Vector((rx_min, y1, ez)))
-        vr1_t = bm.verts.new(Vector((cx, y1, rz)))
-        vr0_t = bm.verts.new(Vector((cx, y0, rz)))
-
-        vl0_b = bm.verts.new(Vector((rx_min, y0, ez)) + inward_l)
-        vl1_b = bm.verts.new(Vector((rx_min, y1, ez)) + inward_l)
-        vr1_b = bm.verts.new(Vector((cx, y1, rz)) + inward_l)
-        vr0_b = bm.verts.new(Vector((cx, y0, rz)) + inward_l)
-
-        bm.faces.new([vl0_t, vl1_t, vr1_t, vr0_t]).material_index = MAT_INDEX_TIMBER
-        bm.faces.new([vr0_b, vr1_b, vl1_b, vl0_b]).material_index = MAT_INDEX_TIMBER
-        bm.faces.new([vl0_t, vl0_b, vl1_b, vl1_t]).material_index = MAT_INDEX_TIMBER
-        if j == 0:
-            bm.faces.new([vr0_t, vr0_b, vl0_b, vl0_t]).material_index = MAT_INDEX_TIMBER
-        if j == segments_y - 1:
-            bm.faces.new([vl1_t, vl1_b, vr1_b, vr1_t]).material_index = MAT_INDEX_TIMBER
-
-        # Right slope
-        vrr0_t = bm.verts.new(Vector((rx_max, y0, ez)))
-        vrr1_t = bm.verts.new(Vector((rx_max, y1, ez)))
-
-        vrr0_b = bm.verts.new(Vector((rx_max, y0, ez)) + inward_r)
-        vrr1_b = bm.verts.new(Vector((rx_max, y1, ez)) + inward_r)
-        vr1_rb = bm.verts.new(Vector((cx, y1, rz)) + inward_r)
-        vr0_rb = bm.verts.new(Vector((cx, y0, rz)) + inward_r)
-
-        bm.faces.new([vr0_t, vr1_t, vrr1_t, vrr0_t]).material_index = MAT_INDEX_TIMBER
-        bm.faces.new([vrr0_b, vrr1_b, vr1_rb, vr0_rb]).material_index = MAT_INDEX_TIMBER
-        bm.faces.new([vrr1_t, vrr1_b, vrr0_b, vrr0_t]).material_index = MAT_INDEX_TIMBER
-        if j == 0:
-            bm.faces.new([vrr0_t, vrr0_b, vr0_rb, vr0_t]).material_index = MAT_INDEX_TIMBER
-        if j == segments_y - 1:
-            bm.faces.new([vr1_t, vr1_rb, vrr1_b, vrr1_t]).material_index = MAT_INDEX_TIMBER
+        for side in [-1, 1]:
+            for k in range(segments_x):
+                u0 = k / segments_x
+                u1 = (k + 1) / segments_x
+                
+                drop0 = (1.0 - roof_flare) * u0 + roof_flare * (1.0 - (1.0 - u0) ** 2)
+                drop1 = (1.0 - roof_flare) * u1 + roof_flare * (1.0 - (1.0 - u1) ** 2)
+                
+                xa = cx + side * u0 * half_w
+                xb = cx + side * u1 * half_w
+                
+                za = rz - drop0 * (rz - ez)
+                zb = rz - drop1 * (rz - ez)
+                
+                dx = xb - xa
+                dz = zb - za
+                inward = Vector((dz * side, 0.0, -abs(dx))).normalized() * deck_thick if (dx * dx + dz * dz) > 1e-6 else Vector((0, 0, -deck_thick))
+                
+                v_in0_t = bm.verts.new(Vector((xa, y0, za)))
+                v_in1_t = bm.verts.new(Vector((xa, y1, za)))
+                v_out1_t = bm.verts.new(Vector((xb, y1, zb)))
+                v_out0_t = bm.verts.new(Vector((xb, y0, zb)))
+                
+                v_in0_b = bm.verts.new(Vector((xa, y0, za)) + inward)
+                v_in1_b = bm.verts.new(Vector((xa, y1, za)) + inward)
+                v_out1_b = bm.verts.new(Vector((xb, y1, zb)) + inward)
+                v_out0_b = bm.verts.new(Vector((xb, y0, zb)) + inward)
+                
+                if side < 0:
+                    f_top = bm.faces.new([v_out0_t, v_out1_t, v_in1_t, v_in0_t])
+                    f_top.material_index = MAT_INDEX_SHINGLES
+                    f_bot = bm.faces.new([v_in0_b, v_in1_b, v_out1_b, v_out0_b])
+                    f_bot.material_index = MAT_INDEX_TIMBER
+                    
+                    if k == segments_x - 1:
+                        f_eave = bm.faces.new([v_out0_t, v_out0_b, v_out1_b, v_out1_t])
+                        f_eave.material_index = MAT_INDEX_TIMBER
+                    if j == 0:
+                        f_f = bm.faces.new([v_in0_t, v_in0_b, v_out0_b, v_out0_t])
+                        f_f.material_index = MAT_INDEX_TIMBER
+                    if j == segments_y - 1:
+                        f_r = bm.faces.new([v_out1_t, v_out1_b, v_in1_b, v_in1_t])
+                        f_r.material_index = MAT_INDEX_TIMBER
+                else:
+                    f_top = bm.faces.new([v_in0_t, v_in1_t, v_out1_t, v_out0_t])
+                    f_top.material_index = MAT_INDEX_SHINGLES
+                    f_bot = bm.faces.new([v_out0_b, v_out1_b, v_in1_b, v_in0_b])
+                    f_bot.material_index = MAT_INDEX_TIMBER
+                    
+                    if k == segments_x - 1:
+                        f_eave = bm.faces.new([v_out1_t, v_out1_b, v_out0_b, v_out0_t])
+                        f_eave.material_index = MAT_INDEX_TIMBER
+                    if j == 0:
+                        f_f = bm.faces.new([v_out0_t, v_out0_b, v_in0_b, v_in0_t])
+                        f_f.material_index = MAT_INDEX_TIMBER
+                    if j == segments_y - 1:
+                        f_r = bm.faces.new([v_in1_t, v_in1_b, v_out1_b, v_out1_t])
+                        f_r.material_index = MAT_INDEX_TIMBER
     
     # 2. Volumetric Gable End Walls matching exact roof pitch with zero gaps
     half_wt = wall_thickness * 0.5
@@ -509,15 +590,8 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
         )
         
         # Verge Bargeboards along gable rafter slopes (capping the verge overhang)
-        b_len = math.sqrt(delta_x * delta_x + delta_z * delta_z) + 0.10
-        b_ang = math.atan2(delta_z, delta_x)
-        b_mid_z = (ez + rz) * 0.5
         y_verge = ry_min + 0.04 if g_norm < 0 else ry_max - 0.04
-        
-        b_mid_l = Vector(((rx_min + cx) * 0.5, y_verge, b_mid_z))
-        create_box(bm, size=(b_len, 0.08, 0.14), location=b_mid_l, rotation=(0.0, -b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
-        b_mid_r = Vector(((rx_max + cx) * 0.5, y_verge, b_mid_z))
-        create_box(bm, size=(b_len, 0.08, 0.14), location=b_mid_r, rotation=(0.0, b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
+        build_curved_bargeboards(bm, cx, rx_min, rx_max, y_verge, ez, rz, roof_flare=roof_flare)
 
     # 3. Eaves Fascia & Ridge Beams
     fascia_d = total_d if abut_back else total_d + 0.15
@@ -588,7 +662,7 @@ def build_conical_turret_roof(bm, center_pos, radius=2.2, height=3.8, segments=1
 
 def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8,
                          rows=6, seed=42, overhang=0.45, sway_amount=0.25, roof_style='SWAY',
-                         abut_back=False):
+                         abut_back=False, roof_flare=0.35):
     """
     Generates chunky stylized overlapping shingle rows that match the exact roof slope
     and sway sag profile, offset safely above the timber deck to eliminate clipping and overlap.
@@ -634,17 +708,19 @@ def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8
                 
                 delta_z = rz - ez
                 delta_x = half_w
+                u = 1.0 - t
+                drop_frac = (1.0 - roof_flare) * u + roof_flare * (1.0 - (1.0 - u) ** 2)
+                cur_z = rz - drop_frac * delta_z
+                cur_x = cx + side * (u * half_w)
+                
+                slope_mult = (1.0 - roof_flare) + roof_flare * 2.0 * (1.0 - u)
+                pitch_ang = math.atan2(delta_z * slope_mult, delta_x)
                 slope_len = math.sqrt(delta_x * delta_x + delta_z * delta_z)
                 shingle_l = (slope_len / rows) * 1.35
                 shingle_t = 0.035
                 
-                pitch_ang = math.atan2(delta_z, delta_x)
                 norm_x = math.sin(pitch_ang)
                 norm_z = math.cos(pitch_ang)
-                
-                # Position along the slope from eaves to ridge
-                cur_z = ez + t * delta_z
-                cur_x = cx + side * ((1.0 - t) * half_w)
                 
                 # Outward offset along local surface normal so shingles sit cleanly atop timber deck
                 cur_x += side * (norm_x * 0.095)
