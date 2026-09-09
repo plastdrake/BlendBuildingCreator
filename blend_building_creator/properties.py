@@ -163,7 +163,25 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     wonkiness: FloatProperty(
         name="Fantasy Wonkiness",
         description="Whimsical leaning, curvature, and organic asymmetry",
-        min=0.0, max=0.30, default=0.08,
+        min=0.0, max=0.40, default=0.08,
+        update=on_property_updated
+    )
+    
+    building_archetype: EnumProperty(
+        name="Building Archetype",
+        description="Purpose-built specialized architectural features matching the building's role",
+        items=[
+            ('AUTO', "Auto (From Preset)", "Use specialized features defined by the selected preset"),
+            ('NONE', "None (Standard)", "Standard fantasy building without archetype additions"),
+            ('BLACKSMITH', "Blacksmith Forge", "Outdoor forge lean-to canopy, stone furnace with chimney, and metal anvil"),
+            ('WINDMILL', "Windmill Sails", "4-blade rotating lattice timber windmill rotor on upper facade"),
+            ('WATCHTOWER', "Watchtower Parapet", "Machicolated defensive timber hoarding, corbel brackets, and arrow slits"),
+            ('TAVERN', "Tavern Porch & Sign", "Covered entrance veranda porch and hanging ornate tavern sign"),
+            ('FISHERMAN', "Fisherman Pier & Nets", "Raised timber piling pier stilts and outdoor fish drying net frame"),
+            ('BAKERY', "Bakery Bread Oven", "Protruding outdoor curved brick bread oven with chimney flue"),
+            ('WAREHOUSE', "Warehouse Hoist & Crates", "Front roof hoist beam, cargo hook, double doors, and stacked crates"),
+        ],
+        default='AUTO',
         update=on_property_updated
     )
     
@@ -427,7 +445,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     plank_jankiness: FloatProperty(
         name="Plank Jankiness",
         description="Handcrafted irregularity, depth pop, and tilt for wooden plank siding",
-        min=0.0, max=1.0, default=0.35,
+        min=0.0, max=1.5, default=0.45,
         update=on_property_updated
     )
 
@@ -441,7 +459,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     stone_disorder: FloatProperty(
         name="Stone Disorder",
         description="Random depth pop, block tilt, and irregularity for stone walls",
-        min=0.0, max=1.0, default=0.35,
+        min=0.0, max=1.5, default=0.45,
         update=on_property_updated
     )
 

@@ -133,10 +133,40 @@ def run_tests():
     assert len(invalid_icons) == 0, f"Found invalid icons in ui.py: {invalid_icons}"
     print(f"  -> All {len(icons_used)} UI icons validated against Blender 5.2 RNA successfully.")
 
-    # Save verification blend file
-    output_blend = os.path.join(addon_dir, "test_output.blend")
-    bpy.ops.wm.save_as_mainfile(filepath=output_blend)
-    print(f"  -> Saved test scene to: {output_blend}")
+    # 8. Test Archetypes & Accessories
+    print("[8/10] Testing Specialized Architectural Archetypes...")
+    obj["is_fantasy_building"] = True
+    for arch in ['BLACKSMITH', 'WINDMILL', 'WATCHTOWER', 'TAVERN', 'FISHERMAN', 'BAKERY', 'WAREHOUSE']:
+        props.building_archetype = arch
+        bpy.ops.building.regenerate()
+        print(f"  -> Archetype '{arch}': {len(obj.data.vertices)} verts, {len(obj.data.polygons)} polys.")
+        assert len(obj.data.vertices) > 500, f"Archetype {arch} failed to build geometry!"
+
+    # 9. Test Reset and Multi-Building Offset
+    print("[9/10] Testing Reset Operator and Multi-Building Independence...")
+    # Change some properties
+    props.num_floors = 4
+    props.wonkiness = 0.25
+    props.building_archetype = 'WINDMILL'
+    # Run Reset Operator
+    bpy.ops.building.reset_settings(regenerate_active=False)
+    assert props.num_floors == 2, f"Expected reset to 2 floors, got {props.num_floors}"
+    assert abs(props.wonkiness - 0.08) < 0.001, f"Expected reset to wonkiness 0.08, got {props.wonkiness}"
+    assert props.building_archetype == 'AUTO', f"Expected reset to AUTO archetype, got {props.building_archetype}"
+    print("  -> Reset operator restored all settings to defaults.")
+
+    # Test creating second building (must be offset along X and not overlap)
+    bpy.ops.building.create_fantasy_building()
+    bldg2 = bpy.context.active_object
+    assert bldg2 != obj, "Second building creation did not produce a new object!"
+    assert bldg2.location.x > obj.location.x + 4.0, f"Building 2 was not offset properly: {bldg2.location.x} vs {obj.location.x}"
+    print(f"  -> Multi-building offset verified: Building 1 at {obj.location.x:.1f}, Building 2 at {bldg2.location.x:.1f}")
+
+    # Test loading settings from Building 1
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.building.load_settings()
+    print("  -> Loaded settings from Building 1 successfully.")
 
     # Unregister
     blend_building_creator.unregister()

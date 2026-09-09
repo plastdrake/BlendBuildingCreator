@@ -56,9 +56,9 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     )
     
     # 2. Stacked Physical 3D Rounded Cylindrical Logs on Exterior
-    target_diam = 0.26
-    num_logs = max(1, int(round(height / target_diam)))
-    log_h = height / num_logs
+    # Use consistent global log height grid (0.28m) so windows/cutouts align with corners
+    target_diam = 0.28
+    log_h = target_diam
     
     ext_offset = thickness * 0.20
     ext_cx = (x1 + x2) * 0.5 + nx * ext_offset
@@ -69,39 +69,44 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     # Saddle-notch vertical offset: Y-walls are shifted by +0.5 * log_h relative to X-walls
     z_shift = 0.5 * log_h if is_y_wall else 0.0
     
-    # If Y-wall, add base sill half-log at bottom to seal foundation contact
-    if is_y_wall and height > log_h:
-        sill_z = z_bottom + 0.18 * log_h
-        sill_r = log_h * 0.44
+    # Global grid indexing ensures logs across window openings align with solid walls
+    k_start = int(math.floor((z_bottom - z_shift) / log_h))
+    k_end = int(math.ceil((z_top - z_shift) / log_h))
+    
+    # If Y-wall at the very bottom sill level, add base foundation sill log
+    if is_y_wall and z_bottom < 0.15:
+        sill_z = z_bottom + 0.15 * log_h
+        sill_r = log_h * 0.42
         create_horizontal_cylinder(
             bm, radius_y=sill_r * 0.85, radius_z=sill_r * 0.65, length=seg_len,
-            segments=12, location=(ext_cx, ext_cy, sill_z),
-            rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_TIMBER
+            segments=16, location=(ext_cx, ext_cy, sill_z),
+            rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_TIMBER, smooth=True
         )
     
-    for i in range(num_logs):
-        log_z = z_bottom + (i + 0.5) * log_h + z_shift
-        if log_z > z_top + 0.06:
+    for k in range(k_start, k_end + 1):
+        log_z = (k + 0.5) * log_h + z_shift
+        # Ensure log center falls within current wall vertical slice
+        if log_z < z_bottom - 0.05 or log_z > z_top + 0.05:
             continue
             
-        # Organic hash jitter per log
-        h_val = ((seed * 37 + i * 193 + int(abs(x1) * 17) + int(abs(y1) * 31)) % 1000) / 1000.0
-        r_jitter = (h_val - 0.5) * 0.015
-        d_jitter = ((h_val * 7.1) % 1.0 - 0.5) * 0.012
-        tilt_j = ((h_val * 11.3) % 1.0 - 0.5) * 0.010
+        # Handcrafted organic jitter per log
+        h_val = ((seed * 37 + k * 193 + int(abs(x1) * 17) + int(abs(y1) * 31)) % 1000) / 1000.0
+        r_jitter = (h_val - 0.5) * 0.030
+        d_jitter = ((h_val * 7.1) % 1.0 - 0.5) * 0.024
+        tilt_j = ((h_val * 11.3) % 1.0 - 0.5) * 0.020
         
-        log_ry = min(thickness * 0.46, log_h * 0.56) + d_jitter
-        log_rz = (log_h * 0.52) + r_jitter
+        log_ry = min(thickness * 0.46, log_h * 0.54) + d_jitter
+        # Radius 0.49 * log_h prevents vertical intersection at perpendicular corner joints
+        log_rz = (log_h * 0.49) + r_jitter
         
         # Interlocking saddle-notched extensions at outer corners
-        ext_start = 0.22 if is_corner_start else 0.0
-        ext_end = 0.22 if is_corner_end else 0.0
-        
-        # Alternating subtle end offset for hand-hewn craftsmanship
+        ext_start = 0.0
         if is_corner_start:
-            ext_start += (0.03 if i % 2 == 0 else -0.02)
+            ext_start = 0.28 if (k % 2 == 0) else 0.22
+            
+        ext_end = 0.0
         if is_corner_end:
-            ext_end += (0.03 if (i + 1) % 2 == 0 else -0.02)
+            ext_end = 0.28 if ((k + 1) % 2 == 0) else 0.22
             
         cur_len = seg_len + ext_start + ext_end
         u_shift = (ext_end - ext_start) * 0.5
@@ -114,10 +119,11 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             radius_y=log_ry,
             radius_z=log_rz,
             length=cur_len,
-            segments=12,
+            segments=16,
             location=(cur_cx, cur_cy, log_z),
             rotation=(tilt_j, 0.0, angle),
-            mat_index=MAT_INDEX_TIMBER
+            mat_index=MAT_INDEX_TIMBER,
+            smooth=True
         )
 
 def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
@@ -141,6 +147,7 @@ def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     if height < 0.05:
         return
         
+    # Outward normal vector
     if normal_vec is not None:
         nx, ny = normal_vec[0], normal_vec[1]
     else:
@@ -177,10 +184,10 @@ def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             
             # Jankiness perturbations per board
             h_val = ((seed * 47 + k * 181 + int(abs(x1) * 23) + int(abs(y1) * 37)) % 1000) / 1000.0
-            depth_j = (h_val - 0.5) * (0.014 * jankiness)
-            tilt_v = ((h_val * 5.3) % 1.0 - 0.5) * (0.024 * jankiness)
-            tilt_h = ((h_val * 9.7) % 1.0 - 0.5) * (0.015 * jankiness)
-            w_jitter = (h_val - 0.5) * (0.020 * jankiness)
+            depth_j = (h_val - 0.5) * (0.035 * jankiness)
+            tilt_v = ((h_val * 5.3) % 1.0 - 0.5) * (0.055 * jankiness)
+            tilt_h = ((h_val * 9.7) % 1.0 - 0.5) * (0.035 * jankiness)
+            w_jitter = (h_val - 0.5) * (0.035 * jankiness)
             
             bx = x1 + ux * mid_u + nx * (ext_offset + depth_j)
             by = y1 + uy * mid_u + ny * (ext_offset + depth_j)
@@ -219,9 +226,9 @@ def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             pz = z_bottom + min(height - plank_h * 0.5, j * reveal + plank_h * 0.5)
             
             h_val = ((seed * 53 + j * 239 + int(abs(x1) * 19) + int(abs(y1) * 41)) % 1000) / 1000.0
-            depth_j = (h_val - 0.5) * (0.016 * jankiness)
-            tilt_j = ((h_val * 7.9) % 1.0 - 0.5) * (0.040 * jankiness)
-            z_tilt = ((h_val * 13.1) % 1.0 - 0.5) * (0.015 * jankiness)
+            depth_j = (h_val - 0.5) * (0.045 * jankiness)
+            tilt_j = ((h_val * 7.9) % 1.0 - 0.5) * (0.090 * jankiness)
+            z_tilt = ((h_val * 13.1) % 1.0 - 0.5) * (0.035 * jankiness)
             
             row_step = (j % 2) * 0.005
             pcx = (x1 + x2) * 0.5 + nx * (ext_offset + row_step + depth_j)
@@ -309,7 +316,7 @@ def build_stone_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             else:
                 target_l = nominal_bl
                 
-            len_jitter = (h_val - 0.5) * (0.28 * nominal_bl * disorder)
+            len_jitter = (h_val - 0.5) * (0.42 * nominal_bl * disorder)
             this_bl = target_l + len_jitter
             
             # Clamp to remaining wall length
@@ -326,13 +333,13 @@ def build_stone_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             
             # Disorder perturbations: depth pop and subtle 3D tilt
             h_pop = (((seed * 73 + c * 191 + b_idx * 311) % 1000) / 1000.0 - 0.5)
-            pop_dist = h_pop * (0.040 * disorder)
+            pop_dist = h_pop * (0.080 * disorder)
             
             h_tilt_v = (((seed * 31 + c * 97 + b_idx * 503) % 1000) / 1000.0 - 0.5)
-            tilt_x = h_tilt_v * (0.045 * disorder)
+            tilt_x = h_tilt_v * (0.095 * disorder)
             
             h_tilt_h = (((seed * 67 + c * 43 + b_idx * 617) % 1000) / 1000.0 - 0.5)
-            tilt_y = h_tilt_h * (0.025 * disorder)
+            tilt_y = h_tilt_h * (0.055 * disorder)
             
             bx = x1 + ux * mid_u + nx * (ext_center_dist + pop_dist)
             by = y1 + uy * mid_u + ny * (ext_center_dist + pop_dist)

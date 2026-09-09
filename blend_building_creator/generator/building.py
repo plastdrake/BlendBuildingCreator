@@ -27,6 +27,11 @@ from .interior import (
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly, build_iron_lantern
 from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_dormer, build_fantasy_chimney
+from .accessories import (
+    build_blacksmith_forge, build_windmill_sails, build_watchtower_lookout,
+    build_tavern_porch_and_sign, build_fisherman_stilts, build_bakery_oven,
+    build_warehouse_cargo
+)
 
 def get_facade_window_positions(span_min, span_max, target_spacing=2.4, min_margin=0.85):
     """
@@ -200,6 +205,15 @@ def build_round_tower(bm, props, seed):
             crooked_angle=0.05
         )
 
+    # Architectural Archetype Accessories for Round Tower
+    archetype = getattr(props, 'building_archetype', 'AUTO')
+    if archetype == 'WINDMILL':
+        hub_z = top_z + props.roof_height * 0.40
+        build_windmill_sails(bm, cx=0.0, front_y=-top_r, hub_z=hub_z, radius=max(2.8, top_r * 1.8))
+    elif archetype == 'WATCHTOWER':
+        build_watchtower_lookout(bm, -top_r, top_r, -top_r, top_r, z_platform=top_z)
+
+
 def generate_building(obj, props):
     """
     Main generator function called when properties change or generate button is clicked.
@@ -229,6 +243,12 @@ def generate_building(obj, props):
         bm.to_mesh(obj.data)
         bm.free()
         obj.data.update()
+        try:
+            from ..operators import get_props_dict
+            import json
+            obj["building_settings"] = json.dumps(get_props_dict(props))
+        except Exception:
+            pass
         return
 
     has_wing = shape in ('L_SHAPE', 'T_SHAPE')
@@ -252,6 +272,8 @@ def generate_building(obj, props):
     
     # Track overall bounding box for wonkiness
     total_height = found_h + num_floors * floor_h + props.roof_height
+    main_door_cx = 0.0
+    main_door_yf = -base_d * 0.5
     
     # 2. Foundation Base
     if props.has_foundation:
@@ -527,6 +549,9 @@ def generate_building(obj, props):
                 door_u1 = (door_cx - dw * 0.5) - wx_min
                 door_u2 = (door_cx + dw * 0.5) - wx_min
                 w_front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': z_floor + dh})
+
+            main_door_cx = door_cx
+            main_door_yf = door_yf
 
             build_door_assembly(
                 bm, center_x=door_cx, y_front=door_yf, z_base=z_floor,
@@ -1123,6 +1148,30 @@ def generate_building(obj, props):
             crooked_angle=0.05
         )
 
+    # 4.5. Specialized Architectural Archetype Accessories
+    archetype = getattr(props, 'building_archetype', 'AUTO')
+    if archetype == 'AUTO':
+        if getattr(props, 'has_hoist_beam', False):
+            archetype = 'WAREHOUSE'
+        else:
+            archetype = 'NONE'
+
+    if archetype == 'BLACKSMITH':
+        build_blacksmith_forge(bm, -hx, hx, -hy, hy, found_h, wall_t, seed=seed)
+    elif archetype == 'WINDMILL':
+        hub_z = top_z + props.roof_height * 0.42
+        build_windmill_sails(bm, cx=0.0, front_y=-hy, hub_z=hub_z, radius=max(2.6, props.width * 0.48))
+    elif archetype == 'WATCHTOWER':
+        build_watchtower_lookout(bm, -top_hx, top_hx, -top_hy, top_hy, z_platform=top_z)
+    elif archetype == 'TAVERN':
+        build_tavern_porch_and_sign(bm, -hx, hx, front_y=main_door_yf, z_ground=0.0, door_x=main_door_cx, seed=seed)
+    elif archetype == 'FISHERMAN':
+        build_fisherman_stilts(bm, -hx, hx, -hy, hy, z_ground=0.0, z_floor=found_h)
+    elif archetype == 'BAKERY':
+        build_bakery_oven(bm, -hx, hx, -hy, hy, z_ground=0.0)
+    elif archetype == 'WAREHOUSE':
+        build_warehouse_cargo(bm, front_x=0.0, front_y=-hy, z_ground=0.0)
+
     # 5. Whimsical Curvature / Wonkiness Deformation
     if props.wonkiness > 0.001:
         add_wonkiness(bm, z_min=0.0, z_max=total_height, amount=props.wonkiness, seed=seed)
@@ -1137,3 +1186,11 @@ def generate_building(obj, props):
     bm.to_mesh(obj.data)
     bm.free()
     obj.data.update()
+    
+    # Store settings dictionary on object for independent multi-building recall
+    try:
+        from ..operators import get_props_dict
+        import json
+        obj["building_settings"] = json.dumps(get_props_dict(props))
+    except Exception:
+        pass

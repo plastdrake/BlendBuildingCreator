@@ -99,11 +99,11 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
     
     return faces
 
-def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, segments=12,
-                               location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0):
+def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, segments=16,
+                               location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, smooth=True):
     """
     Creates a rounded horizontal cylinder oriented along local X with circular end caps.
-    Ideal for authentic chunky wooden logs and tree trunks.
+    Uses smooth-shaded cylindrical sides for authentic organic high-poly timber logs.
     """
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
@@ -121,21 +121,24 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
         end_verts.append(bm.verts.new(tr_mat @ Vector((half_l, y, z))))
         
     faces = []
-    # Side quads
+    # Smooth cylindrical side quads
     for i in range(segments):
         nxt = (i + 1) % segments
         f = bm.faces.new([start_verts[i], start_verts[nxt], end_verts[nxt], end_verts[i]])
         f.material_index = mat_index
+        f.smooth = smooth
         faces.append(f)
         
-    # Start cap (facing -X)
+    # Flat start cap (facing -X)
     f_start = bm.faces.new(list(reversed(start_verts)))
     f_start.material_index = mat_index
+    f_start.smooth = False
     faces.append(f_start)
     
-    # End cap (facing +X)
+    # Flat end cap (facing +X)
     f_end = bm.faces.new(end_verts)
     f_end.material_index = mat_index
+    f_end.smooth = False
     faces.append(f_end)
     
     return faces
@@ -202,27 +205,27 @@ def apply_box_uvs(bm, scale=1.0):
 
 def add_wonkiness(bm, z_min, z_max, amount=0.08, seed=0):
     """
-    Subtly perturbs vertices based on height and random seed to give
-    the iconic whimsical fantasy curvature and handmade lean.
+    Perturbs vertices based on height and random seed to give
+    the iconic whimsical fantasy curvature, handmade lean, and Warcraft-style silhouette.
     """
     if amount <= 0.001:
         return
         
     rng = random.Random(seed + 999)
-    lean_x = (rng.random() - 0.5) * amount * 0.6
-    lean_y = (rng.random() - 0.5) * amount * 0.6
+    lean_x = (rng.random() - 0.5) * amount * 1.5
+    lean_y = (rng.random() - 0.5) * amount * 1.5
     sag_dir = (rng.random() - 0.5) * amount
     
     h_span = max(0.1, z_max - z_min)
     
     for v in bm.verts:
         rel_z = max(0.0, min(1.0, (v.co.z - z_min) / h_span))
-        # Upper levels lean slightly
+        # Upper levels lean progressively
         lean_factor = rel_z * rel_z
         v.co.x += lean_x * lean_factor
         v.co.y += lean_y * lean_factor
         
-        # Subtle horizontal wave
-        wave = math.sin(v.co.z * 1.5 + seed) * (amount * 0.15)
+        # Stylized horizontal S-curve / wave
+        wave = math.sin(v.co.z * 1.2 + seed) * (amount * 0.45)
         v.co.x += wave
-        v.co.y += wave * 0.5
+        v.co.y += wave * 0.65

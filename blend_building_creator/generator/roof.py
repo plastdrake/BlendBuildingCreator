@@ -8,12 +8,102 @@ import bmesh
 import math
 import random
 from mathutils import Vector, Euler, Matrix
-from .mesh_utils import create_box, create_beveled_box, create_cone, create_cylinder
+from .mesh_utils import create_box, create_beveled_box, create_cone, create_cylinder, create_horizontal_cylinder
 from .materials import (
     MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER, MAT_INDEX_STONE,
     MAT_INDEX_GLASS, MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT,
     MAT_INDEX_IRON
 )
+
+def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
+                               z_base, ez, rz, deck_thick, slope, tier='TIER_3', plank_direction='HORIZONTAL'):
+    """
+    Populates the triangular gable wall under the roof pitch with physical 3D
+    horizontal rounded logs (Tier 1) or overlapping/batten planks (Tier 2) sliced
+    to match the sloping rafters with zero gap.
+    """
+    if tier not in ('TIER_1', 'TIER_2'):
+        return
+
+    z_deck_top = rz - deck_thick
+    y_siding = gy + g_norm * (half_wt + 0.05)
+    total_gable_h = z_deck_top - z_base
+    if total_gable_h < 0.3:
+        return
+
+    def get_width_at_z(z_val):
+        x_l = rx_min + (z_val + deck_thick - ez) / max(0.01, slope)
+        x_r = rx_max - (z_val + deck_thick - ez) / max(0.01, slope)
+        x_l = max(x_min, min(cx - 0.05, x_l))
+        x_r = min(x_max, max(cx + 0.05, x_r))
+        return x_l, x_r
+
+    if tier == 'TIER_1':
+        # Stacked physical rounded horizontal logs matching lower walls
+        log_h = 0.28
+        num_logs = int(math.ceil(total_gable_h / log_h))
+        for k in range(num_logs):
+            cur_z = z_base + (k + 0.5) * log_h
+            if cur_z >= z_deck_top - 0.08:
+                break
+            x_l, x_r = get_width_at_z(cur_z)
+            span = x_r - x_l
+            if span < 0.25:
+                break
+            mid_x = (x_l + x_r) * 0.5
+            create_horizontal_cylinder(
+                bm,
+                radius_y=0.11,
+                radius_z=0.125,
+                length=span + 0.06,
+                segments=16,
+                location=(mid_x, y_siding, cur_z),
+                rotation=(0.0, 0.0, 0.0),
+                mat_index=MAT_INDEX_TIMBER,
+                smooth=True
+            )
+    elif tier == 'TIER_2':
+        if plank_direction == 'VERTICAL':
+            # Vertical board siding trimmed to sloping rafters
+            target_bw = 0.22
+            full_w = x_max - x_min
+            num_boards = max(1, int(round(full_w / target_bw)))
+            actual_bw = full_w / num_boards
+            for b in range(num_boards):
+                bx = x_min + (b + 0.5) * actual_bw
+                dist_from_cx = abs(bx - cx)
+                z_rafter = z_deck_top - dist_from_cx * slope
+                bh = max(0.15, z_rafter - z_base)
+                bz = z_base + bh * 0.5
+                create_beveled_box(
+                    bm,
+                    size=(actual_bw - 0.01, 0.024, bh),
+                    location=(bx, y_siding, bz),
+                    mat_index=MAT_INDEX_TIMBER,
+                    bevel_amount=0.004
+                )
+        else:
+            # Horizontal weatherboards sliced to triangle
+            plank_h = 0.20
+            reveal = 0.17
+            num_planks = int(math.ceil(total_gable_h / reveal))
+            for p in range(num_planks):
+                cur_z = z_base + p * reveal + plank_h * 0.5
+                if cur_z >= z_deck_top - 0.05:
+                    break
+                x_l, x_r = get_width_at_z(cur_z)
+                span = x_r - x_l
+                if span < 0.20:
+                    break
+                mid_x = (x_l + x_r) * 0.5
+                row_step = (p % 2) * 0.006
+                create_beveled_box(
+                    bm,
+                    size=(span + 0.04, 0.026, plank_h),
+                    location=(mid_x, y_siding + g_norm * row_step, cur_z),
+                    mat_index=MAT_INDEX_TIMBER,
+                    bevel_amount=0.004
+                )
 
 def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, overhang=0.45,
                     sway_amount=0.25, segments_y=6, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'),
@@ -179,6 +269,12 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
                 bm.faces.new([v_s_eave_int, v_s_wall_int, v_s_top_int]).material_index = MAT_INDEX_TIMBER
             # Underside face of soffit
             bm.faces.new([v_s_eave_ext, v_s_eave_int, v_s_wall_int, v_s_wall_ext]).material_index = MAT_INDEX_TIMBER
+            
+        # Physical 3D siding for gable wall matching lower walls (Tier 1 logs or Tier 2 planks)
+        build_gable_physical_siding(
+            bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
+            z_base, ez, rz, deck_thick, slope, tier=tier, plank_direction=plank_direction
+        )
             
         # Decorative Horizontal Timber Belt at gable base
         create_beveled_box(
@@ -387,6 +483,12 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                 bm.faces.new([v_s_top_ext, v_s_wall_ext, v_s_eave_ext]).material_index = MAT_INDEX_TIMBER
                 bm.faces.new([v_s_eave_int, v_s_wall_int, v_s_top_int]).material_index = MAT_INDEX_TIMBER
             bm.faces.new([v_s_eave_ext, v_s_eave_int, v_s_wall_int, v_s_wall_ext]).material_index = MAT_INDEX_TIMBER
+            
+        # Physical 3D siding for gable wall matching lower walls (Tier 1 logs or Tier 2 planks)
+        build_gable_physical_siding(
+            bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
+            z_base, ez, rz, deck_thick, slope, tier=tier, plank_direction=plank_direction
+        )
             
         # Decorative Horizontal Timber Belt at gable base
         create_beveled_box(

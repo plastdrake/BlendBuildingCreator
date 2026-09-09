@@ -1506,6 +1506,22 @@ PRESETS = {
     }
 }
 
+ARCHETYPE_MAP = {
+    'BLACKSMITH': 'BLACKSMITH',
+    'ARTISAN_TOOLSMITH': 'BLACKSMITH',
+    'INDUSTRIAL_ARMOR_SMITH': 'BLACKSMITH',
+    'INDUSTRIAL_SMELTER': 'BLACKSMITH',
+    'INDUSTRIAL_WINDMILL': 'WINDMILL',
+    'WATCHTOWER': 'WATCHTOWER',
+    'TAVERN': 'TAVERN',
+    'INN': 'TAVERN',
+    'FISHERMAN': 'FISHERMAN',
+    'FISHERMANS_SHACK': 'FISHERMAN',
+    'ARTISAN_BAKERY': 'BAKERY',
+    'COMMERCIAL_WAREHOUSE': 'WAREHOUSE',
+    'COVERED_TIMBER_WAREHOUSE': 'WAREHOUSE',
+}
+
 def apply_preset(props, preset_key):
     """Applies preset dictionary values to the PropertyGroup."""
     if preset_key not in PRESETS:
@@ -1516,6 +1532,11 @@ def apply_preset(props, preset_key):
     old_auto = props.auto_update
     props.auto_update = False
     
+    # Assign archetype
+    arch = ARCHETYPE_MAP.get(preset_key, 'NONE')
+    if hasattr(props, 'building_archetype'):
+        props.building_archetype = arch
+        
     for k, v in data.items():
         if hasattr(props, k):
             setattr(props, k, v)

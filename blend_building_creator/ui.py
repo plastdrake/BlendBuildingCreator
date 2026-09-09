@@ -23,21 +23,31 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         
         # Primary Action Buttons
         col = layout.column(align=True)
-        if not is_bldg:
-            col.scale_y = 1.6
-            col.operator("building.create_fantasy_building", text="Create Fantasy Building", icon='HOME')
-        else:
-            row = col.row(align=True)
-            row.scale_y = 1.4
-            row.operator("building.randomize_seed", text="Randomize / Re-roll", icon='FILE_REFRESH')
-            row.operator("building.regenerate", text="Regenerate", icon='FILE_CACHE')
+        col.scale_y = 1.4
+        col.operator("building.create_fantasy_building", text="Create New Building", icon='ADD')
+        
+        row_res = col.row(align=True)
+        row_res.scale_y = 1.1
+        row_res.operator("building.reset_settings", text="Reset to Defaults", icon='LOOP_BACK')
+        if is_bldg and "building_settings" in obj:
+            row_res.operator("building.load_settings", text="Load from Active", icon='IMPORT')
             
-            row2 = col.row(align=True)
-            row2.scale_y = 1.2
-            row2.operator("building.toggle_door", text="Open / Close Door", icon='RESTRICT_VIEW_OFF')
-            row2.operator("building.finalize_mesh", text="Finalize Mesh", icon='CHECKMARK')
+        if is_bldg:
+            row_act = col.row(align=True)
+            row_act.scale_y = 1.2
+            row_act.operator("building.randomize_seed", text="Randomize", icon='FILE_REFRESH')
+            row_act.operator("building.regenerate", text="Regenerate", icon='FILE_CACHE')
+            
+            row_door = col.row(align=True)
+            row_door.scale_y = 1.1
+            row_door.operator("building.toggle_door", text="Open / Close Door", icon='RESTRICT_VIEW_OFF')
+            row_door.operator("building.finalize_mesh", text="Bake / Finalize", icon='CHECKMARK')
 
-        # Material Progression Tier Selector
+        # Building Archetype & Material Tier
+        box_arch = layout.box()
+        box_arch.label(text="Architectural Purpose & Archetype", icon='ASSET_MANAGER')
+        box_arch.prop(props, "building_archetype", text="")
+        
         box_tier = layout.box()
         box_tier.label(text="Building Material Tier", icon='MATERIAL')
         box_tier.prop(props, "material_tier", expand=True)

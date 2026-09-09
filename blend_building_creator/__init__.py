@@ -7,7 +7,7 @@ curved sway roofs, timber framing, and rich stylized shaders.
 bl_info = {
     "name": "Stylized Fantasy Building Generator",
     "author": "Stylized 3D Studio",
-    "version": (1, 5, 0),
+    "version": (1, 6, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar (N) > Fantasy Building",
     "description": "Quickly create and iterate stylized fantasy buildings with walk-in interiors and materials",
@@ -20,6 +20,8 @@ import bpy
 from .properties import FantasyBuildingSettings
 from .operators import (
     BUILDING_OT_create,
+    BUILDING_OT_reset,
+    BUILDING_OT_load_settings,
     BUILDING_OT_regenerate,
     BUILDING_OT_randomize,
     BUILDING_OT_apply_preset,
@@ -38,6 +40,8 @@ from .ui import (
 classes = (
     FantasyBuildingSettings,
     BUILDING_OT_create,
+    BUILDING_OT_reset,
+    BUILDING_OT_load_settings,
     BUILDING_OT_regenerate,
     BUILDING_OT_randomize,
     BUILDING_OT_apply_preset,
