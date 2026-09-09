@@ -71,14 +71,32 @@ def run_tests():
     bpy.ops.building.regenerate()
     print(f"  -> L-Shape with 1-floor wing on 3-floor building: {len(obj.data.vertices)} verts.")
 
-    # Test Material Tiers
-    print("[4/8] Testing Material Tiers (Tier 1, Tier 2, Tier 3)...")
+    # Test Material Tiers & Siding Styles
+    print("[4/8] Testing Material Tiers & Siding Styles (Logs, Planks, Stone)...")
     for tier in ['TIER_1', 'TIER_2', 'TIER_3']:
         props.material_tier = tier
-        bpy.ops.building.regenerate()
+        if tier == 'TIER_2':
+            for p_dir in ['HORIZONTAL', 'VERTICAL']:
+                props.plank_direction = p_dir
+                props.plank_jankiness = 0.5
+                bpy.ops.building.regenerate()
+                print(f"  -> Tier 2 with {p_dir} planks (jankiness=0.5): {len(obj.data.vertices)} verts.")
+        elif tier == 'TIER_3':
+            props.stone_block_scale = 1.3
+            props.stone_disorder = 0.6
+            bpy.ops.building.regenerate()
+            print(f"  -> Tier 3 with chunky stone masonry (scale=1.3, disorder=0.6): {len(obj.data.vertices)} verts.")
+        else:
+            bpy.ops.building.regenerate()
+            print(f"  -> Tier 1 with rounded interlocking logs: {len(obj.data.vertices)} verts.")
         m_count = len(obj.data.materials)
         assert m_count == 9, f"Expected 9 material slots for {tier}, got {m_count}"
         print(f"  -> Material {tier}: verified 9 procedural shader slots successfully.")
+
+    # Test Hoist Beam
+    props.has_hoist_beam = True
+    bpy.ops.building.regenerate()
+    print(f"  -> Verified roof hoist beam with cargo hook: {len(obj.data.vertices)} verts.")
 
     # 5. Test Presets
     from blend_building_creator.presets import PRESETS

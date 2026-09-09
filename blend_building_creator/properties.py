@@ -386,13 +386,20 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
     
+    has_hoist_beam: BoolProperty(
+        name="Roof Hoist Beam",
+        description="Projecting heavy timber ridge beam with suspended cargo hook / pulley on the front gable",
+        default=False,
+        update=on_property_updated
+    )
+    
     # --- Material Tier & Stylized Procedural Shaders ---
     material_tier: EnumProperty(
         name="Material Tier",
         description="Progression tier determining building wall, roof, and trim materials",
         items=[
             ('TIER_1', "Tier 1: Timber & Log", "Heavy dark timber/log walls, cedar shake roof, fieldstone base"),
-            ('TIER_2', "Tier 2: Planks & Weatherboard", "Horizontal wooden planks siding, slate roof, clean timber frame"),
+            ('TIER_2', "Tier 2: Planks & Weatherboard", "Wooden planks siding, slate roof, clean timber frame"),
             ('TIER_3', "Tier 3: Stone & Stucco", "Dressed ashlar stone, bright medieval stucco, terracotta/slate roof"),
         ],
         default='TIER_3',
@@ -401,14 +408,46 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     
     physical_siding: BoolProperty(
         name="Physical 3D Siding",
-        description="Generate physical 3D log beams (Tier 1) and overlapping lap planks (Tier 2) with organic variations and wonkiness",
+        description="Generate physical 3D log beams (Tier 1), overlapping lap/batten planks (Tier 2), and chunky stone blocks (Tier 3)",
         default=True,
+        update=on_property_updated
+    )
+
+    plank_direction: EnumProperty(
+        name="Plank Direction",
+        description="Orientation of physical wooden plank siding for Tier 2 buildings",
+        items=[
+            ('HORIZONTAL', "Horizontal", "Classic horizontal overlapping weatherboard lap planks"),
+            ('VERTICAL', "Vertical", "Stylized board-and-batten vertical plank siding"),
+        ],
+        default='HORIZONTAL',
+        update=on_property_updated
+    )
+
+    plank_jankiness: FloatProperty(
+        name="Plank Jankiness",
+        description="Handcrafted irregularity, depth pop, and tilt for wooden plank siding",
+        min=0.0, max=1.0, default=0.35,
+        update=on_property_updated
+    )
+
+    stone_block_scale: FloatProperty(
+        name="Stone Block Size",
+        description="Scale factor for chunky 3D stone blocks / masonry",
+        min=0.4, max=2.5, default=1.0,
+        update=on_property_updated
+    )
+
+    stone_disorder: FloatProperty(
+        name="Stone Disorder",
+        description="Random depth pop, block tilt, and irregularity for stone walls",
+        min=0.0, max=1.0, default=0.35,
         update=on_property_updated
     )
 
     open_timber_frame: BoolProperty(
         name="Open Timber Frame",
-        description="Convert ground walls into open post-and-beam timber bays (ideal for warehouses, sheds, and mills)",
+        description="Convert ground walls into open post-and-beam timber bays (ideal for sheds and mills)",
         default=False,
         update=on_property_updated
     )

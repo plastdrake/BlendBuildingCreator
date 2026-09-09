@@ -11,12 +11,13 @@ from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_cone, create_cylinder
 from .materials import (
     MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER, MAT_INDEX_STONE,
-    MAT_INDEX_GLASS, MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT
+    MAT_INDEX_GLASS, MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT,
+    MAT_INDEX_IRON
 )
 
 def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, overhang=0.45,
                     sway_amount=0.25, segments_y=6, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'),
-                    abut_back=False):
+                    abut_back=False, tier='TIER_3', plank_direction='HORIZONTAL'):
     """
     Builds a whimsical fairytale curved/saddle roof with flared eaves, saggy ridge,
     solid 0.12m thick timber roof decking, thick volumetric gable walls, and full eave closures.
@@ -144,11 +145,12 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
         v_int_t  = bm.verts.new(Vector((cx, y_int, z_deck_top)))
         v_int_ml = bm.verts.new(Vector((x_min, y_int, z_deck_left)))
         
+        gable_mat = MAT_INDEX_TIMBER if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_PLASTER_EXT
         if g_norm < 0:
-            bm.faces.new([v_ext_bl, v_ext_br, v_ext_mr, v_ext_t, v_ext_ml]).material_index = MAT_INDEX_PLASTER_EXT
+            bm.faces.new([v_ext_bl, v_ext_br, v_ext_mr, v_ext_t, v_ext_ml]).material_index = gable_mat
             bm.faces.new([v_int_ml, v_int_t, v_int_mr, v_int_br, v_int_bl]).material_index = MAT_INDEX_PLASTER_INT
         else:
-            bm.faces.new([v_ext_ml, v_ext_t, v_ext_mr, v_ext_br, v_ext_bl]).material_index = MAT_INDEX_PLASTER_EXT
+            bm.faces.new([v_ext_ml, v_ext_t, v_ext_mr, v_ext_br, v_ext_bl]).material_index = gable_mat
             bm.faces.new([v_int_bl, v_int_br, v_int_mr, v_int_t, v_int_ml]).material_index = MAT_INDEX_PLASTER_INT
             
         # Top sloping boundary seals (under roof deck)
@@ -251,7 +253,7 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
             bevel_amount=0.015
         )
 
-def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, overhang=0.45, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6, abut_back=False):
+def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, overhang=0.45, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6, abut_back=False, tier='TIER_3', plank_direction='HORIZONTAL'):
     """
     Builds a classic steep medieval gable roof with solid 0.12m thick timber decking,
     thick volumetric gable walls, and complete eave closures.
@@ -352,11 +354,12 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
         v_int_t  = bm.verts.new(Vector((cx, y_int, z_deck_top)))
         v_int_ml = bm.verts.new(Vector((x_min, y_int, z_deck_left)))
         
+        gable_mat = MAT_INDEX_TIMBER if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_PLASTER_EXT
         if g_norm < 0:
-            bm.faces.new([v_ext_bl, v_ext_br, v_ext_mr, v_ext_t, v_ext_ml]).material_index = MAT_INDEX_PLASTER_EXT
+            bm.faces.new([v_ext_bl, v_ext_br, v_ext_mr, v_ext_t, v_ext_ml]).material_index = gable_mat
             bm.faces.new([v_int_ml, v_int_t, v_int_mr, v_int_br, v_int_bl]).material_index = MAT_INDEX_PLASTER_INT
         else:
-            bm.faces.new([v_ext_ml, v_ext_t, v_ext_mr, v_ext_br, v_ext_bl]).material_index = MAT_INDEX_PLASTER_EXT
+            bm.faces.new([v_ext_ml, v_ext_t, v_ext_mr, v_ext_br, v_ext_bl]).material_index = gable_mat
             bm.faces.new([v_int_bl, v_int_br, v_int_mr, v_int_t, v_int_ml]).material_index = MAT_INDEX_PLASTER_INT
             
         # Top sloping boundary seals (under roof deck)
@@ -645,3 +648,95 @@ def build_fantasy_chimney(bm, pos_xy, z_start, total_height, width=0.85, depth=0
         location=(cx, cy, cap_z + 0.06 + 0.21),
         mat_index=MAT_INDEX_SHINGLES
     )
+
+def build_hoist_beam(bm, front_x, front_y, z_ridge, length=1.4):
+    """
+    Builds an authentic fantasy warehouse roof hoist beam extending forward from
+    the front gable peak, with a 45-degree timber support strut, wooden pulley block,
+    hanging iron chain/rope, and a curved iron cargo hook.
+    """
+    beam_w = 0.22
+    beam_h = 0.24
+    half_l = length * 0.5
+    
+    # 1. Main projecting horizontal timber hoist beam (extends along -Y from front_y)
+    beam_mid_y = front_y - half_l
+    beam_mid_z = z_ridge + 0.04
+    create_beveled_box(
+        bm,
+        size=(beam_w, length + 0.35, beam_h),
+        location=(front_x, beam_mid_y + 0.15, beam_mid_z),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.015
+    )
+    
+    # 2. Diagonal 45-degree heavy timber support strut underneath
+    strut_len = math.sqrt(2.0) * 0.70
+    strut_mid_y = front_y - 0.35
+    strut_mid_z = z_ridge - 0.35
+    create_box(
+        bm,
+        size=(0.14, 0.14, strut_len),
+        location=(front_x, strut_mid_y, strut_mid_z),
+        rotation=(-math.pi * 0.25, 0.0, 0.0),
+        mat_index=MAT_INDEX_TIMBER
+    )
+    
+    # 3. Wooden Pulley Block near outer end of beam
+    pulley_y = front_y - length + 0.22
+    pulley_z = beam_mid_z - beam_h * 0.5 - 0.10
+    create_beveled_box(
+        bm,
+        size=(0.16, 0.18, 0.20),
+        location=(front_x, pulley_y, pulley_z),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.015
+    )
+    # Pulley wheel iron axle hub
+    create_cylinder(
+        bm, radius=0.04, height=0.20, segments=8,
+        location=(front_x, pulley_y, pulley_z),
+        rotation=(0.0, math.pi * 0.5, 0.0),
+        mat_index=MAT_INDEX_IRON
+    )
+    
+    # 4. Suspended Iron Rope / Chain
+    chain_h = 0.85
+    chain_mid_z = pulley_z - 0.10 - chain_h * 0.5
+    create_cylinder(
+        bm, radius=0.018, height=chain_h, segments=6,
+        location=(front_x, pulley_y, chain_mid_z),
+        mat_index=MAT_INDEX_IRON
+    )
+    
+    # 5. Stylized Heavy Curved Iron Cargo Hook
+    hook_z = chain_mid_z - chain_h * 0.5 - 0.06
+    # Upper hook eye ring
+    create_cylinder(
+        bm, radius=0.05, height=0.035, segments=8,
+        location=(front_x, pulley_y, hook_z),
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Hook shank
+    create_cylinder(
+        bm, radius=0.024, height=0.18, segments=8,
+        location=(front_x, pulley_y, hook_z - 0.09),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Curved hook bottom (beveled curved box)
+    create_beveled_box(
+        bm, size=(0.04, 0.14, 0.05),
+        location=(front_x, pulley_y + 0.04, hook_z - 0.19),
+        rotation=(math.pi * 0.15, 0.0, 0.0),
+        mat_index=MAT_INDEX_IRON,
+        bevel_amount=0.012
+    )
+    # Hook tip pointing up
+    create_beveled_box(
+        bm, size=(0.035, 0.04, 0.09),
+        location=(front_x, pulley_y + 0.09, hook_z - 0.15),
+        mat_index=MAT_INDEX_IRON,
+        bevel_amount=0.010
+    )
+

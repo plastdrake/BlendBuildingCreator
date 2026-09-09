@@ -117,6 +117,19 @@ def build_round_tower(bm, props, seed):
         win_h = props.window_height
         win_cz = z_floor + floor_h * 0.48
         
+        tier_val = getattr(props, 'material_tier', 'TIER_3')
+        phys_siding = getattr(props, 'physical_siding', True)
+        plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
+        plank_jank = getattr(props, 'plank_jankiness', 0.35)
+        stone_scale = getattr(props, 'stone_block_scale', 1.0)
+        stone_disorder = getattr(props, 'stone_disorder', 0.35)
+        if tier_val == 'TIER_1':
+            mat_w = MAT_INDEX_TIMBER
+        elif tier_val == 'TIER_2':
+            mat_w = MAT_INDEX_TIMBER
+        else:
+            mat_w = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_PLASTER_EXT
+        
         for k in range(num_facets):
             a1 = k * d_ang + offset_ang
             a2 = (k + 1) * d_ang + offset_ang
@@ -130,6 +143,10 @@ def build_round_tower(bm, props, seed):
             create_beveled_box(bm, size=(0.14, 0.14, floor_h),
                                location=(p1[0], p1[1], z_floor + floor_h * 0.5),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+            
+            # Outward normal for this facet
+            mid_pt = ((p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5)
+            fn_vec = Vector((mid_pt[0], mid_pt[1], 0.0)).normalized()
             
             # Facet 6 is the front facet (facing -Y)
             if fl_idx == 0 and k == 6 and props.has_front_door:
@@ -151,14 +168,18 @@ def build_round_tower(bm, props, seed):
                     win_z1 = win_cz - win_h * 0.5
                     win_z2 = win_cz + win_h * 0.5
                     openings.append({'u_start': u1, 'u_end': u2, 'z_start': win_z1, 'z_end': win_z2})
-                    mid_pt = ((p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5)
-                    n_vec = Vector((mid_pt[0], mid_pt[1], 0.0)).normalized()
-                    facing_angle = math.atan2(n_vec.x, -n_vec.y)
+                    facing_angle = math.atan2(fn_vec.x, -fn_vec.y)
                     build_window_assembly(bm, center=(mid_pt[0], mid_pt[1], win_cz), size=(win_w, win_h),
                                           wall_thickness=wall_t, normal_axis=facing_angle,
                                           has_shutters=props.has_shutters, has_flower_box=props.has_flower_boxes)
 
-            build_wall_with_opening(bm, p1, p2, z_floor, z_ceil, wall_t, openings)
+            build_wall_with_opening(
+                bm, p1, p2, z_floor, z_ceil, wall_t, openings,
+                mat_ext=mat_w, normal_vec=(fn_vec.x, fn_vec.y), tier=tier_val,
+                physical_siding=phys_siding, plank_direction=plank_dir,
+                plank_jankiness=plank_jank, stone_block_scale=stone_scale,
+                stone_disorder=stone_disorder, seed=seed + k * 17
+            )
 
         prev_r = cur_r
 
@@ -680,34 +701,67 @@ def generate_building(obj, props):
                 )
 
         # 4 Main Solid Walls with Openings
-        mat_w = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_PLASTER_EXT
-        phys_siding = getattr(props, 'physical_siding', True)
         tier_val = getattr(props, 'material_tier', 'TIER_3')
-
-        # Check for open timber frame ground floor (e.g. warehouse covered bay)
-        if fl_idx == 0 and getattr(props, 'open_timber_frame', False):
-            # Half-height knee wall with open bays above
-            wall_top_z = z_floor + 0.90
+        if tier_val == 'TIER_1':
+            mat_w = MAT_INDEX_TIMBER
+        elif tier_val == 'TIER_2':
+            mat_w = MAT_INDEX_TIMBER
         else:
-            wall_top_z = z_ceil
+            mat_w = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_PLASTER_EXT
 
-        build_wall_with_opening(bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
-                                mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
-        build_wall_with_opening(bm, (x_min, y_max), (x_max, y_max), z_floor, wall_top_z, wall_t, back_openings,
-                                mat_ext=mat_w, normal_vec=(0.0, 1.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
-        build_wall_with_opening(bm, (x_min, y_min), (x_min, y_max), z_floor, wall_top_z, wall_t, left_openings,
-                                mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
-        build_wall_with_opening(bm, (x_max, y_min), (x_max, y_max), z_floor, wall_top_z, wall_t, right_openings,
-                                mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
+        phys_siding = getattr(props, 'physical_siding', True)
+        plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
+        plank_jank = getattr(props, 'plank_jankiness', 0.35)
+        stone_scale = getattr(props, 'stone_block_scale', 1.0)
+        stone_disorder = getattr(props, 'stone_disorder', 0.35)
+
+        wall_top_z = z_ceil
+
+        build_wall_with_opening(
+            bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
+            mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding,
+            plank_direction=plank_dir, plank_jankiness=plank_jank,
+            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+        )
+        build_wall_with_opening(
+            bm, (x_min, y_max), (x_max, y_max), z_floor, wall_top_z, wall_t, back_openings,
+            mat_ext=mat_w, normal_vec=(0.0, 1.0), tier=tier_val, physical_siding=phys_siding,
+            plank_direction=plank_dir, plank_jankiness=plank_jank,
+            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+        )
+        build_wall_with_opening(
+            bm, (x_min, y_min), (x_min, y_max), z_floor, wall_top_z, wall_t, left_openings,
+            mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
+            plank_direction=plank_dir, plank_jankiness=plank_jank,
+            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+        )
+        build_wall_with_opening(
+            bm, (x_max, y_min), (x_max, y_max), z_floor, wall_top_z, wall_t, right_openings,
+            mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
+            plank_direction=plank_dir, plank_jankiness=plank_jank,
+            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+        )
         
         # Wing Solid Walls
         if fl_has_wing:
-            build_wall_with_opening(bm, (wx_min, wy_min), (wx_max, wy_min), z_floor, wall_top_z, wall_t, w_front_openings,
-                                    mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
-            build_wall_with_opening(bm, (wx_min, wy_min), (wx_min, wy_max), z_floor, wall_top_z, wall_t, w_left_openings,
-                                    mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
-            build_wall_with_opening(bm, (wx_max, wy_min), (wx_max, wy_max), z_floor, wall_top_z, wall_t, w_right_openings,
-                                    mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding, seed=seed)
+            build_wall_with_opening(
+                bm, (wx_min, wy_min), (wx_max, wy_min), z_floor, wall_top_z, wall_t, w_front_openings,
+                mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding,
+                plank_direction=plank_dir, plank_jankiness=plank_jank,
+                stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+            )
+            build_wall_with_opening(
+                bm, (wx_min, wy_min), (wx_min, wy_max), z_floor, wall_top_z, wall_t, w_left_openings,
+                mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
+                plank_direction=plank_dir, plank_jankiness=plank_jank,
+                stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+            )
+            build_wall_with_opening(
+                bm, (wx_max, wy_min), (wx_max, wy_max), z_floor, wall_top_z, wall_t, w_right_openings,
+                mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
+                plank_direction=plank_dir, plank_jankiness=plank_jank,
+                stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+            )
 
         # Tudor Timber Framing on Exterior
         if props.has_timber_framing:
@@ -845,6 +899,9 @@ def generate_building(obj, props):
     )
     
     # Exterior Roof Construction
+    tier_val = getattr(props, 'material_tier', 'TIER_3')
+    plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
+
     if roof_style == 'SWAY':
         build_sway_roof(
             bm,
@@ -854,7 +911,9 @@ def generate_building(obj, props):
             roof_height=props.roof_height,
             overhang=props.roof_overhang,
             sway_amount=props.roof_sway,
-            wall_thickness=wall_t
+            wall_thickness=wall_t,
+            tier=tier_val,
+            plank_direction=plank_dir
         )
     elif roof_style == 'TURRET':
         radius = max(top_hx, top_hy) * 1.05
@@ -873,7 +932,20 @@ def generate_building(obj, props):
             roof_height=props.roof_height,
             overhang=props.roof_overhang,
             wall_thickness=wall_t,
-            segments_y=6
+            segments_y=6,
+            tier=tier_val,
+            plank_direction=plank_dir
+        )
+
+    # Roof Hoist Beam with Cargo Hook (Warehouse / freight feature)
+    if getattr(props, 'has_hoist_beam', False) and roof_style in ('SWAY', 'GABLE'):
+        from .roof import build_hoist_beam
+        build_hoist_beam(
+            bm,
+            front_x=0.0,
+            front_y=-top_hy - props.roof_overhang,
+            z_ridge=top_z + props.roof_height,
+            length=1.4
         )
         
     # Roof Shingles
@@ -978,7 +1050,9 @@ def generate_building(obj, props):
                 segments_y=6,
                 wall_thickness=wall_t,
                 gable_ends=('FRONT',),
-                abut_back=abut_back
+                abut_back=abut_back,
+                tier=tier_val,
+                plank_direction=plank_dir
             )
             if props.has_roof_shingles:
                 build_shingle_layers(
@@ -1005,7 +1079,9 @@ def generate_building(obj, props):
                 wall_thickness=wall_t,
                 gable_ends=('FRONT',),
                 segments_y=6,
-                abut_back=abut_back
+                abut_back=abut_back,
+                tier=tier_val,
+                plank_direction=plank_dir
             )
             if props.has_roof_shingles:
                 build_shingle_layers(

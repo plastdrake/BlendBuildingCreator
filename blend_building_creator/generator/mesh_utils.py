@@ -99,6 +99,47 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
     
     return faces
 
+def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, segments=12,
+                               location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0):
+    """
+    Creates a rounded horizontal cylinder oriented along local X with circular end caps.
+    Ideal for authentic chunky wooden logs and tree trunks.
+    """
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector(location))
+    tr_mat = loc_mat @ rot_mat
+    
+    half_l = length * 0.5
+    start_verts = []
+    end_verts = []
+    
+    for i in range(segments):
+        angle = (2.0 * math.pi * i) / segments
+        y = radius_y * math.cos(angle)
+        z = radius_z * math.sin(angle)
+        start_verts.append(bm.verts.new(tr_mat @ Vector((-half_l, y, z))))
+        end_verts.append(bm.verts.new(tr_mat @ Vector((half_l, y, z))))
+        
+    faces = []
+    # Side quads
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f = bm.faces.new([start_verts[i], start_verts[nxt], end_verts[nxt], end_verts[i]])
+        f.material_index = mat_index
+        faces.append(f)
+        
+    # Start cap (facing -X)
+    f_start = bm.faces.new(list(reversed(start_verts)))
+    f_start.material_index = mat_index
+    faces.append(f_start)
+    
+    # End cap (facing +X)
+    f_end = bm.faces.new(end_verts)
+    f_end.material_index = mat_index
+    faces.append(f_end)
+    
+    return faces
+
 def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0):
     """Creates a cone/frustum for turrets and chimneys."""
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()

@@ -51,59 +51,93 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         bevel_amount=0.015
     )
     
-    # 2. Door Panel (Hinged on the left side)
-    hinge_x = center_x - door_w * 0.5 + 0.02
-    hinge_y = y_front - wall_thickness * 0.2
-    
-    door_leaf_w = door_w - 0.04
-    door_leaf_h = door_h - 0.05
-    door_leaf_t = 0.06
-    
-    # Rotation matrix around the hinge pivot
-    ang_rad = math.radians(door_angle_deg)
-    # In interior direction (+Y into room)
-    rot_mat = Euler((0.0, 0.0, ang_rad), 'XYZ').to_matrix().to_4x4()
-    
-    # Center of leaf relative to hinge
-    leaf_local_center = Vector((door_leaf_w * 0.5, 0.0, door_leaf_h * 0.5))
-    rotated_center = rot_mat @ leaf_local_center
-    leaf_world_center = Vector((hinge_x, hinge_y, z_base + 0.05)) + rotated_center
-    
-    create_beveled_box(
-        bm,
-        size=(door_leaf_w, door_leaf_t, door_leaf_h),
-        location=leaf_world_center,
-        rotation=(0.0, 0.0, ang_rad),
-        mat_index=MAT_INDEX_DOOR,
-        bevel_amount=0.01
-    )
-    
-    # Horizontal iron strap hinges (upper and lower)
-    for hz_factor in [0.22, 0.78]:
-        hz = z_base + 0.05 + door_leaf_h * hz_factor
-        strap_len = door_leaf_w * 0.65
-        strap_local_c = Vector((strap_len * 0.5, -door_leaf_t * 0.5 - 0.006, hz_factor * door_leaf_h))
-        strap_world_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ strap_local_c)
-        create_box(
+    # 2. Door Panel (Single or Double Freight Doors)
+    if door_w >= 1.6:
+        # Double freight cargo doors (left and right opening leaves)
+        leaf_w = (door_w - 0.06) * 0.5
+        leaf_h = door_h - 0.05
+        leaf_t = 0.06
+        ang_rad = math.radians(door_angle_deg)
+        
+        # Left leaf
+        hinge_lx = center_x - door_w * 0.5 + 0.02
+        hinge_ly = y_front - wall_thickness * 0.2
+        rot_l = Euler((0.0, 0.0, ang_rad), 'XYZ').to_matrix().to_4x4()
+        c_l = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.5, 0.0, leaf_h * 0.5)))
+        create_beveled_box(bm, size=(leaf_w, leaf_t, leaf_h), location=c_l, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.01)
+        
+        # Right leaf
+        hinge_rx = center_x + door_w * 0.5 - 0.02
+        hinge_ry = y_front - wall_thickness * 0.2
+        rot_r = Euler((0.0, 0.0, -ang_rad), 'XYZ').to_matrix().to_4x4()
+        c_r = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.5, 0.0, leaf_h * 0.5)))
+        create_beveled_box(bm, size=(leaf_w, leaf_t, leaf_h), location=c_r, rotation=(0.0, 0.0, -ang_rad), mat_index=MAT_INDEX_DOOR, bevel_amount=0.01)
+        
+        # Iron strap hinges and handles for both leaves
+        for hz_factor in [0.20, 0.80]:
+            sl_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.45, -leaf_t * 0.5 - 0.006, hz_factor * leaf_h)))
+            create_box(bm, size=(leaf_w * 0.70, 0.012, 0.07), location=sl_c, rotation=(0.0, 0.0, ang_rad), mat_index=MAT_INDEX_IRON)
+            sr_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.45, -leaf_t * 0.5 - 0.006, hz_factor * leaf_h)))
+            create_box(bm, size=(leaf_w * 0.70, 0.012, 0.07), location=sr_c, rotation=(0.0, 0.0, -ang_rad), mat_index=MAT_INDEX_IRON)
+            
+        # Iron ring handles
+        hl_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.82, -leaf_t * 0.5 - 0.02, leaf_h * 0.48)))
+        create_cylinder(bm, radius=0.045, height=0.02, segments=8, location=hl_c, rotation=(math.pi * 0.5, 0.0, ang_rad), mat_index=MAT_INDEX_IRON)
+        hr_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.82, -leaf_t * 0.5 - 0.02, leaf_h * 0.48)))
+        create_cylinder(bm, radius=0.045, height=0.02, segments=8, location=hr_c, rotation=(math.pi * 0.5, 0.0, -ang_rad), mat_index=MAT_INDEX_IRON)
+    else:
+        hinge_x = center_x - door_w * 0.5 + 0.02
+        hinge_y = y_front - wall_thickness * 0.2
+        
+        door_leaf_w = door_w - 0.04
+        door_leaf_h = door_h - 0.05
+        door_leaf_t = 0.06
+        
+        # Rotation matrix around the hinge pivot
+        ang_rad = math.radians(door_angle_deg)
+        # In interior direction (+Y into room)
+        rot_mat = Euler((0.0, 0.0, ang_rad), 'XYZ').to_matrix().to_4x4()
+        
+        # Center of leaf relative to hinge
+        leaf_local_center = Vector((door_leaf_w * 0.5, 0.0, door_leaf_h * 0.5))
+        rotated_center = rot_mat @ leaf_local_center
+        leaf_world_center = Vector((hinge_x, hinge_y, z_base + 0.05)) + rotated_center
+        
+        create_beveled_box(
             bm,
-            size=(strap_len, 0.012, 0.06),
-            location=strap_world_c,
+            size=(door_leaf_w, door_leaf_t, door_leaf_h),
+            location=leaf_world_center,
             rotation=(0.0, 0.0, ang_rad),
-            mat_index=MAT_INDEX_IRON
+            mat_index=MAT_INDEX_DOOR,
+            bevel_amount=0.01
         )
         
-    # Iron ring handle
-    handle_local_c = Vector((door_leaf_w * 0.82, -door_leaf_t * 0.5 - 0.02, door_leaf_h * 0.48))
-    handle_world_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ handle_local_c)
-    create_cylinder(
-        bm,
-        radius=0.045,
-        height=0.02,
-        segments=8,
-        location=handle_world_c,
-        rotation=(math.pi * 0.5, 0.0, ang_rad),
-        mat_index=MAT_INDEX_IRON
-    )
+        # Horizontal iron strap hinges (upper and lower)
+        for hz_factor in [0.22, 0.78]:
+            hz = z_base + 0.05 + door_leaf_h * hz_factor
+            strap_len = door_leaf_w * 0.65
+            strap_local_c = Vector((strap_len * 0.5, -door_leaf_t * 0.5 - 0.006, hz_factor * door_leaf_h))
+            strap_world_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ strap_local_c)
+            create_box(
+                bm,
+                size=(strap_len, 0.012, 0.06),
+                location=strap_world_c,
+                rotation=(0.0, 0.0, ang_rad),
+                mat_index=MAT_INDEX_IRON
+            )
+            
+        # Iron ring handle
+        handle_local_c = Vector((door_leaf_w * 0.82, -door_leaf_t * 0.5 - 0.02, door_leaf_h * 0.48))
+        handle_world_c = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ handle_local_c)
+        create_cylinder(
+            bm,
+            radius=0.045,
+            height=0.02,
+            segments=8,
+            location=handle_world_c,
+            rotation=(math.pi * 0.5, 0.0, ang_rad),
+            mat_index=MAT_INDEX_IRON
+        )
 
 def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, step_d=0.35, step_h=0.18):
     """

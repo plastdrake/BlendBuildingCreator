@@ -1,29 +1,33 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.4.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.5.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 
-**BlendBuildingCreator** is a procedural 3D building generator add-on for **Blender 5.2 LTS** (compatible with 4.2+). Designed for concept artists, level designers, and game developers creating stylized fantasy, medieval, and rustic architecture in seconds.
+**BlendBuildingCreator** is a procedural 3D building generator add-on for **Blender 5.2 LTS** (compatible with 4.2+). Designed for concept artists, level designers, and game developers creating stylized modern fantasy, medieval, and rustic architecture in seconds.
 
 Unlike simple facade generators, **BlendBuildingCreator generates full, walkable interiors**—including switchback or spiral staircases with railings, structural floor and ceiling joists, framed walk-in doorways with opening doors, and timber-decked attics with king-post trusses.
 
 ---
 
-## ✨ What's New in v1.4.0
+## ✨ What's New in v1.5.0
 
-- 🪵 **Physical 3D Siding for Logs & Planks**:
-  - **Tier 1 Physical 3D Logs**: Generates actual stacked horizontal rounded logs with interlocking saddle-notched corner ends, vertical bucking jambs, and handcrafted organic variations that curve with the wonkiness slider.
-  - **Tier 2 Physical 3D Planks**: Generates physical overlapping weatherboard / clapboard lap siding with stepped shadow relief.
-  - **Physical Siding Toggle**: Toggle `physical_siding` anytime for performance or low-poly workflows.
-- 🚪 **Zero Door & Window Overlaps**:
-  - Front entrance doors now enforce a strict exclusion zone `(door_width + window_width) * 0.5 + margin`, cleanly subdividing facade segments so windows and shutters never clip into doors, casings, or lanterns.
-- 🧙 **Wizard Tower Angled Windows**:
-  - Windows on 8-sided faceted round towers now calculate the exact outward facet normal vector and rotate flush with angled walls.
-- 🏗️ **Wing Wood Frame Z Level Fix**:
-  - Wing timber framing top beams and corner posts are lowered slightly below the wall top/ceiling slab, eliminating coplanar Z-fighting.
-- 🏚️ **Tier 1 Covered Timber Warehouse**:
-  - Added the **Covered Timber Warehouse** preset (`INDUSTRIAL_WAREHOUSE`) featuring open post-and-beam heavy timber bays, knee braces, and a high protective roof canopy.
+- 🪵 **Horizontal OR Vertical Plank Siding with Plank Jankiness (Tier 2)**:
+  - **Plank Direction**: Toggle between `HORIZONTAL` (classic overlapping weatherboard lap planks) and `VERTICAL` (stylized Scandinavian / fantasy board-and-batten siding with raised battens over seams).
+  - **Plank Jankiness**: Control handcrafted board wobble, depth variations, and subtle angular tilts with a dedicated slider.
+- 🧱 **Chunky 3D Stylized Stone Blocks with Size & Disorder Controls (Tier 3)**:
+  - Generates actual chunky volumetric stone blocks / bricks with staggered running-bond courses, soft stylized bevels, and recessed mortar seams.
+  - **Stone Block Size** (`stone_block_scale`): Scales the course height and nominal block dimensions from tight bricks to massive castle ashlar blocks.
+  - **Stone Disorder** (`stone_disorder`): Controls random depth protrusion pop, irregular seam lengths, and 3D face tilts for heavy, stylized fantasy masonry.
+- 🌲 **Authentic Rounded Logs with Staggered Interlocking Saddle-Notch Corners (Tier 1)**:
+  - 12-sided rounded horizontal cylindrical logs with authentic circular end-grain caps.
+  - **Saddle-Notch Vertical Staggering**: Perpendicular X and Y walls are automatically vertically staggered by half a log height ($0.5 \times \Delta z$), allowing projecting corner ends to cleanly alternate without intersecting collisions.
+- 🏔️ **Gable Wall Material Matching**:
+  - Triangular attic walls under gable and sway roof pitches now match the facade material (logs in Tier 1, planks in Tier 2, stone/stucco in Tier 3).
+- 🧙 **Wizard Tower Faceted Siding**:
+  - Angled facet walls on round towers now receive the selected tier material (logs or planks) with flush-rotated faceted window assemblies.
+- 🏚️ **Solid Freight Warehouse with Hoist Beam & Double Cargo Doors**:
+  - Solid full-height walls (no open gaps), massive double freight cargo doors (2.2m wide) with dual hinged leaves, and a projecting roof hoist beam with suspended chain and curved iron cargo hook.
 
 ---
 

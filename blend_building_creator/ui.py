@@ -210,6 +210,7 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
         col_det = layout.column(align=True)
         col_det.prop(props, "has_dormers")
         col_det.prop(props, "has_chimney")
+        col_det.prop(props, "has_hoist_beam")
 
 class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
     """Subpanel for procedural stylized colors and custom material overrides"""
@@ -229,6 +230,18 @@ class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
         box_tier.label(text="Material Tier", icon='MATERIAL')
         box_tier.prop(props, "material_tier", expand=True)
         box_tier.prop(props, "physical_siding")
+        
+        if props.material_tier == 'TIER_2' and props.physical_siding:
+            box_tier.label(text="Plank Wall Style", icon='MOD_BUILD')
+            row_p = box_tier.row(align=True)
+            row_p.prop(props, "plank_direction", expand=True)
+            box_tier.prop(props, "plank_jankiness", slider=True)
+            
+        if (props.material_tier == 'TIER_3' or props.ground_floor_stone) and props.physical_siding:
+            box_tier.label(text="Stone Masonry Style", icon='SNAP_VOLUME')
+            col_st = box_tier.column(align=True)
+            col_st.prop(props, "stone_block_scale", slider=True)
+            col_st.prop(props, "stone_disorder", slider=True)
 
         box_colors = layout.box()
         box_colors.label(text="Procedural Stylized Colors", icon='COLOR')
