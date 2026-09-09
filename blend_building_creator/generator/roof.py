@@ -15,18 +15,20 @@ from .materials import (
 )
 
 def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, overhang=0.45,
-                    sway_amount=0.25, segments_y=6, wall_thickness=0.28, gable_ends=('FRONT', 'BACK')):
+                    sway_amount=0.25, segments_y=6, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'),
+                    abut_back=False):
     """
     Builds a whimsical fairytale curved/saddle roof with flared eaves, saggy ridge,
     solid 0.12m thick timber roof decking, thick volumetric gable walls, and full eave closures.
+    abut_back: If True, roof deck, ridge, and shingles terminate flush at y_max with zero rear overhang.
     """
-    total_w = (x_max - x_min) + overhang * 2.0
-    total_d = (y_max - y_min) + overhang * 2.0
-    
     rx_min = x_min - overhang
     rx_max = x_max + overhang
     ry_min = y_min - overhang
-    ry_max = y_max + overhang
+    ry_max = y_max if abut_back else (y_max + overhang)
+    
+    total_w = rx_max - rx_min
+    total_d = ry_max - ry_min
     
     cx = (rx_min + rx_max) * 0.5
     deck_thick = 0.12
@@ -206,16 +208,17 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
         create_box(bm, size=(b_len, 0.08, 0.14), location=b_mid_r, rotation=(0.0, b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
 
     # 3. Eaves Fascia & Segmented Ridge Beams (curves with sway and wonkiness)
+    fascia_d = total_d if abut_back else total_d + 0.15
     create_beveled_box(
         bm,
-        size=(0.14, total_d + 0.15, 0.18),
+        size=(0.14, fascia_d, 0.18),
         location=(rx_min, (ry_min + ry_max) * 0.5, ez),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
     )
     create_beveled_box(
         bm,
-        size=(0.14, total_d + 0.15, 0.18),
+        size=(0.14, fascia_d, 0.18),
         location=(rx_max, (ry_min + ry_max) * 0.5, ez),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
@@ -235,7 +238,8 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
         mid_z = (rz0 + rz1) * 0.5 + 0.05
         dy = y1 - y0
         dz = rz1 - rz0
-        seg_len = math.sqrt(dy * dy + dz * dz) + 0.04
+        extra_len = 0.01 if (abut_back and j == segments_y - 1) else 0.04
+        seg_len = math.sqrt(dy * dy + dz * dz) + extra_len
         seg_pitch = math.atan2(dz, dy)
         
         create_beveled_box(
@@ -247,17 +251,18 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
             bevel_amount=0.015
         )
 
-def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, overhang=0.45, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6):
+def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, overhang=0.45, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6, abut_back=False):
     """
     Builds a classic steep medieval gable roof with solid 0.12m thick timber decking,
     thick volumetric gable walls, and complete eave closures.
     Segmented along Y to allow organic wonkiness and curvature deformation.
+    abut_back: If True, roof deck, ridge, and shingles terminate flush at y_max with zero rear overhang.
     """
-    total_d = (y_max - y_min) + overhang * 2.0
     rx_min = x_min - overhang
     rx_max = x_max + overhang
     ry_min = y_min - overhang
-    ry_max = y_max + overhang
+    ry_max = y_max if abut_back else (y_max + overhang)
+    total_d = ry_max - ry_min
     
     cx = (x_min + x_max) * 0.5
     rz = z_base + roof_height
@@ -410,16 +415,17 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
         create_box(bm, size=(b_len, 0.08, 0.14), location=b_mid_r, rotation=(0.0, b_ang, 0.0), mat_index=MAT_INDEX_TIMBER)
 
     # 3. Eaves Fascia & Ridge Beams
+    fascia_d = total_d if abut_back else total_d + 0.15
     create_beveled_box(
         bm,
-        size=(0.14, total_d + 0.15, 0.18),
+        size=(0.14, fascia_d, 0.18),
         location=(rx_min, (ry_min + ry_max) * 0.5, ez),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
     )
     create_beveled_box(
         bm,
-        size=(0.14, total_d + 0.15, 0.18),
+        size=(0.14, fascia_d, 0.18),
         location=(rx_max, (ry_min + ry_max) * 0.5, ez),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
@@ -430,7 +436,8 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
         t1 = (j + 1) / segments_y
         y0 = ry_min + t0 * total_d
         y1 = ry_min + t1 * total_d
-        seg_len = (y1 - y0) + 0.04
+        extra_len = 0.01 if (abut_back and j == segments_y - 1) else 0.04
+        seg_len = (y1 - y0) + extra_len
         create_beveled_box(
             bm,
             size=(0.20, seg_len, 0.22),
@@ -475,19 +482,20 @@ def build_conical_turret_roof(bm, center_pos, radius=2.2, height=3.8, segments=1
     )
 
 def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8,
-                         rows=6, seed=42, overhang=0.45, sway_amount=0.25, roof_style='SWAY'):
+                         rows=6, seed=42, overhang=0.45, sway_amount=0.25, roof_style='SWAY',
+                         abut_back=False):
     """
     Generates chunky stylized overlapping shingle rows that match the exact roof slope
     and sway sag profile, offset safely above the timber deck to eliminate clipping and overlap.
+    abut_back: If True, shingles stop flush at y_max with zero rear overhang.
     """
     rng = random.Random(seed)
-    total_w = (x_max - x_min) + overhang * 2.0
-    total_d = (y_max - y_min) + overhang * 2.0
-    
     rx_min = x_min - overhang
     rx_max = x_max + overhang
     ry_min = y_min - overhang
-    ry_max = y_max + overhang
+    ry_max = y_max if abut_back else (y_max + overhang)
+    total_w = rx_max - rx_min
+    total_d = ry_max - ry_min
     
     cx = (rx_min + rx_max) * 0.5
     half_w = total_w * 0.5

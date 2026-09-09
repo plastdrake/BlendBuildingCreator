@@ -330,12 +330,15 @@ def generate_building(obj, props):
         # Corbels and solid wooden soffit underneath upper floor overhang
         if fl_idx > 0 and fl_overhang > prev_fl_overhang:
             overhang_step = fl_overhang - prev_fl_overhang
-            build_cantilever_corbels(bm, x_min, x_max, y_min, y_max, z_floor, overhang_dist=overhang_step)
+            front_ex = (wx_base_min - 0.15, wx_base_max + 0.15) if (has_wing and fl_idx >= wing_floors) else None
+            build_cantilever_corbels(bm, x_min, x_max, y_min, y_max, z_floor,
+                                    overhang_dist=overhang_step, front_exclude_x=front_ex)
             build_cantilever_soffit(
                 bm,
                 (prev_x_min, prev_x_max, prev_y_min, prev_y_max),
                 (x_min, x_max, y_min, y_max),
-                z_floor
+                z_floor,
+                front_exclude_x=front_ex
             )
 
         # Determine staircase cutout for this floor (if coming from below)
@@ -357,22 +360,26 @@ def generate_building(obj, props):
         # Upper floor safety guardrail around stair opening
         if fl_idx > 0 and props.has_stairs and cur_stair_hole is not None:
             sh_x1, sh_x2, sh_y1, sh_y2 = cur_stair_hole
-            # Solid timber trimmer sill plate bridging floor and wall along the stairwell opening
-            create_beveled_box(
-                bm,
-                size=(0.14, (sh_y2 - sh_y1) + 0.08, 0.14),
-                location=(ix_min + 0.02, (sh_y1 + sh_y2) * 0.5, z_floor + 0.05),
-                mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.015
-            )
+            # Solid timber trimmer sill plate only when there is an actual void gap between stairwell and wall
+            if (sh_x1 - ix_min) > 0.18:
+                create_beveled_box(
+                    bm,
+                    size=(0.14, (sh_y2 - sh_y1) + 0.08, 0.14),
+                    location=(sh_x1 - 0.07, (sh_y1 + sh_y2) * 0.5, z_floor + 0.05),
+                    mat_index=MAT_INDEX_TIMBER,
+                    bevel_amount=0.015
+                )
             rail_x = min(slab_xmax - 0.10, sh_x2 + 0.07)
             if props.stair_style == 'SPIRAL':
                 build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
                                       return_y=sh_y1, x_start=sh_x1 + 0.20)
             else:
-                ret_y = sh_y1 if (fl_idx % 2 == 1) else sh_y2
-                build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
-                                      return_y=ret_y, x_start=sh_x1 + 0.20)
+                # Straight stairs: only guard open void on the top floor where no more stairs ascend
+                # On intermediate floors, the ascending flight's own handrail protects the opening
+                if fl_idx == num_floors - 1:
+                    ret_y = sh_y1 if (fl_idx % 2 == 1) else sh_y2
+                    build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
+                                          return_y=ret_y, x_start=sh_x1 + 0.20)
         
         # Wing floor slab for compound shapes
         if fl_has_wing:
@@ -537,7 +544,10 @@ def generate_building(obj, props):
         # Dynamic Windows - Front Wall
         if props.has_windows:
             front_win_xs = []
-            if not fl_has_wing:
+            w_top_roof_z = (found_h + wing_floors * floor_h + props.roof_height * 0.88) if has_wing else 0.0
+            wing_roof_occludes = has_wing and (z_floor < w_top_roof_z + 0.3)
+            
+            if not fl_has_wing and not wing_roof_occludes:
                 if fl_idx > 0:
                     front_win_xs = get_facade_window_positions(x_min, x_max, target_spacing=2.4, min_margin=0.9)
                 else:
@@ -546,19 +556,20 @@ def generate_building(obj, props):
                         front_win_xs.extend(get_facade_window_positions(x_min, -dw_half, target_spacing=2.2, min_margin=0.7))
                     front_win_xs.extend(get_facade_window_positions(dw_half, x_max, target_spacing=2.2, min_margin=0.7))
             else:
-                # Compound shapes: place windows only along exposed spans with 1.2m corner clearance
+                # Compound shapes or floors occluded by wing roof:
+                # Place windows only along exposed spans with 1.2m corner clearance
                 if shape == 'L_SHAPE':
                     if wing_side == 'RIGHT':
-                        exp_x1, exp_x2 = x_min, wx_min - 1.20
+                        exp_x1, exp_x2 = x_min, wx_base_min - 1.20
                     else:
-                        exp_x1, exp_x2 = wx_max + 1.20, x_max
+                        exp_x1, exp_x2 = wx_base_max + 1.20, x_max
                     if (exp_x2 - exp_x1) > 1.2:
                         front_win_xs.extend(get_facade_window_positions(exp_x1, exp_x2, target_spacing=2.4, min_margin=0.8))
                 else: # T_SHAPE
-                    if (wx_min - 1.20 - x_min) > 1.2:
-                        front_win_xs.extend(get_facade_window_positions(x_min, wx_min - 1.20, target_spacing=2.4, min_margin=0.8))
-                    if (x_max - (wx_max + 1.20)) > 1.2:
-                        front_win_xs.extend(get_facade_window_positions(wx_max + 1.20, x_max, target_spacing=2.4, min_margin=0.8))
+                    if (wx_base_min - 1.20 - x_min) > 1.2:
+                        front_win_xs.extend(get_facade_window_positions(x_min, wx_base_min - 1.20, target_spacing=2.4, min_margin=0.8))
+                    if (x_max - (wx_base_max + 1.20)) > 1.2:
+                        front_win_xs.extend(get_facade_window_positions(wx_base_max + 1.20, x_max, target_spacing=2.4, min_margin=0.8))
 
             for wx in front_win_xs:
                 wu = (wx - x_min)
@@ -831,79 +842,132 @@ def generate_building(obj, props):
     # Compound Shape Wing Roof (Cross-Gable intersecting main roof or upper facade)
     if has_wing:
         w_top_fl = min(wing_floors, num_floors)
+        is_lower_wing = (wing_floors < num_floors)
+        w_fl_idx = w_top_fl - 1
+        
         if props.has_cantilever:
             if props.overhang_mode == 'SECOND_FLOOR_ONLY':
-                w_overhang = cantilever if w_top_fl > 1 else 0.0
+                w_overhang = cantilever if w_fl_idx >= 1 else 0.0
             else:
-                w_overhang = (w_top_fl - 1) * cantilever
+                w_overhang = w_fl_idx * cantilever
         else:
             w_overhang = 0.0
 
+        # Main building coordinates at the wing's top floor height
+        w_main_hx = (base_w + w_overhang * 2.0) * 0.5
+        w_main_hy = (base_d + w_overhang * 2.0) * 0.5
+        w_main_front_y = -w_main_hy
+
         if shape == 'L_SHAPE':
             if wing_side == 'LEFT':
-                w_top_xmin = -top_hx
-                w_top_xmax = -top_hx + (wing_w + w_overhang * 2.0)
+                w_top_xmin = -w_main_hx
+                w_top_xmax = -w_main_hx + (wing_w + w_overhang * 2.0)
             else:
-                w_top_xmin = top_hx - (wing_w + w_overhang * 2.0)
-                w_top_xmax = top_hx
+                w_top_xmin = w_main_hx - (wing_w + w_overhang * 2.0)
+                w_top_xmax = w_main_hx
         else: # T_SHAPE
             w_top_xmin = -(wing_w + w_overhang * 2.0) * 0.5
             w_top_xmax =  (wing_w + w_overhang * 2.0) * 0.5
-        w_top_ymin = -top_hy - (wing_d + w_overhang)
-        w_top_ymax = -top_hy
+            
+        w_top_ymin = w_main_front_y - (wing_d + w_overhang)
         w_top_z = found_h + w_top_fl * floor_h
         w_roof_h = props.roof_height * 0.88
+
+        if is_lower_wing:
+            # Upper facade front wall coordinate directly above the wing
+            if props.has_cantilever:
+                if props.overhang_mode == 'SECOND_FLOOR_ONLY':
+                    up_fl_overhang = cantilever if w_top_fl >= 1 else 0.0
+                else:
+                    up_fl_overhang = w_top_fl * cantilever
+            else:
+                up_fl_overhang = 0.0
+            up_front_y = -(base_d + up_fl_overhang * 2.0) * 0.5
+            w_top_ymax = up_front_y + 0.04 # Embedded 4cm into wall plaster, zero interior intrusion!
+            abut_back = True
+
+            # Interior ceiling slab for the wing (enclosing the wing interior from above)
+            build_floor_slab(
+                bm,
+                floor_idx=w_top_fl,
+                x_min=w_top_xmin + 0.02,
+                x_max=w_top_xmax - 0.02,
+                y_min=w_top_ymin + 0.02,
+                y_max=w_main_front_y + 0.02,
+                z_level=w_top_z - 0.02,
+                thickness=0.10,
+                stair_hole=None,
+                mat_idx=MAT_INDEX_FLOOR
+            )
+            # Exposed wooden ceiling beams in wing interior
+            if props.has_ceiling_beams:
+                build_ceiling_beams(
+                    bm,
+                    x_min=w_top_xmin + wall_t,
+                    x_max=w_top_xmax - wall_t,
+                    y_min=w_top_ymin + wall_t,
+                    y_max=w_main_front_y,
+                    z_ceil=w_top_z - 0.02,
+                    spacing=1.2
+                )
+        else:
+            w_top_ymax = -top_hy + 0.25 # Intersects with main roof attic
+            abut_back = False
 
         if props.roof_style == 'SWAY':
             build_sway_roof(
                 bm,
                 x_min=w_top_xmin, x_max=w_top_xmax,
-                y_min=w_top_ymin, y_max=w_top_ymax + 0.25,
+                y_min=w_top_ymin, y_max=w_top_ymax,
                 z_base=w_top_z,
                 roof_height=w_roof_h,
                 overhang=props.roof_overhang,
                 sway_amount=props.roof_sway * 0.70,
                 segments_y=6,
                 wall_thickness=wall_t,
-                gable_ends=('FRONT',)
+                gable_ends=('FRONT',),
+                abut_back=abut_back
             )
             if props.has_roof_shingles:
                 build_shingle_layers(
                     bm,
                     x_min=w_top_xmin, x_max=w_top_xmax,
-                    y_min=w_top_ymin, y_max=w_top_ymax + 0.15,
+                    y_min=w_top_ymin, y_max=w_top_ymax,
                     z_base=w_top_z,
                     roof_height=w_roof_h,
                     rows=max(4, int(props.shingle_rows * (wing_d / max(1.0, base_d)))),
                     seed=seed + 101,
                     overhang=props.roof_overhang,
                     sway_amount=props.roof_sway * 0.70,
-                    roof_style='SWAY'
+                    roof_style='SWAY',
+                    abut_back=abut_back
                 )
         else:
             build_gable_roof(
                 bm,
                 x_min=w_top_xmin, x_max=w_top_xmax,
-                y_min=w_top_ymin, y_max=w_top_ymax + 0.25,
+                y_min=w_top_ymin, y_max=w_top_ymax,
                 z_base=w_top_z,
                 roof_height=w_roof_h,
                 overhang=props.roof_overhang,
                 wall_thickness=wall_t,
                 gable_ends=('FRONT',),
-                segments_y=6
+                segments_y=6,
+                abut_back=abut_back
             )
             if props.has_roof_shingles:
                 build_shingle_layers(
                     bm,
                     x_min=w_top_xmin, x_max=w_top_xmax,
-                    y_min=w_top_ymin, y_max=w_top_ymax + 0.15,
+                    y_min=w_top_ymin, y_max=w_top_ymax,
                     z_base=w_top_z,
                     roof_height=w_roof_h,
                     rows=max(4, int(props.shingle_rows * (wing_d / max(1.0, base_d)))),
                     seed=seed + 101,
                     overhang=props.roof_overhang,
                     sway_amount=0.0,
-                    roof_style='GABLE'
+                    roof_style='GABLE',
+                    abut_back=abut_back
                 )
         
     # Dormer Windows

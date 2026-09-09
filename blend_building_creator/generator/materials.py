@@ -227,33 +227,170 @@ def create_stylized_iron(name="M_Building_Iron", color=(0.12, 0.12, 0.13, 1.0)):
     _set_bsdf_input(bsdf, "Roughness", 0.45)
     return mat
 
+def create_stylized_log_walls(name="M_Building_Log_Walls", color=(0.32, 0.20, 0.12, 1.0)):
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        mat = bpy.data.materials.new(name=name)
+        
+    mat.use_nodes = True
+    tree = mat.node_tree
+    tree.nodes.clear()
+    
+    node_out = tree.nodes.new("ShaderNodeOutputMaterial")
+    node_out.location = (400, 0)
+    bsdf = tree.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (100, 0)
+    tree.links.new(bsdf.outputs["BSDF"], node_out.inputs["Surface"])
+    
+    tex_coord = tree.nodes.new("ShaderNodeTexCoord")
+    tex_coord.location = (-700, 0)
+    
+    # Wave texture for horizontal logs
+    wave = tree.nodes.new("ShaderNodeTexWave")
+    wave.location = (-450, 50)
+    wave.wave_type = 'BANDS'
+    wave.bands_direction = 'Z'
+    wave.inputs["Scale"].default_value = 3.2
+    wave.inputs["Distortion"].default_value = 1.2
+    wave.inputs["Detail"].default_value = 2.0
+    tree.links.new(tex_coord.outputs["Object"], wave.inputs["Vector"])
+    
+    # Soft wood noise
+    noise = tree.nodes.new("ShaderNodeTexNoise")
+    noise.location = (-450, -150)
+    noise.inputs["Scale"].default_value = 6.0
+    tree.links.new(tex_coord.outputs["Object"], noise.inputs["Vector"])
+    
+    # Mix wave and noise
+    mix = tree.nodes.new("ShaderNodeMix")
+    mix.location = (-250, 0)
+    mix.data_type = 'FLOAT'
+    mix.inputs["Factor"].default_value = 0.25
+    tree.links.new(wave.outputs["Color"], mix.inputs[2])
+    tree.links.new(noise.outputs["Fac"], mix.inputs[3])
+    
+    # Color ramp for rich bark and wood tones
+    ramp = tree.nodes.new("ShaderNodeValToRGB")
+    ramp.location = (-50, 0)
+    c_crevice = (color[0] * 0.55, color[1] * 0.55, color[2] * 0.50, 1.0)
+    c_highlight = (min(1.0, color[0] * 1.3), min(1.0, color[1] * 1.3), min(1.0, color[2] * 1.25), 1.0)
+    ramp.color_ramp.elements[0].color = c_crevice
+    ramp.color_ramp.elements[1].color = c_highlight
+    tree.links.new(mix.outputs["Result"], ramp.inputs["Fac"])
+    tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    
+    _set_bsdf_input(bsdf, "Roughness", 0.85)
+    return mat
+
+def create_stylized_plank_siding(name="M_Building_Plank_Siding", color=(0.68, 0.58, 0.44, 1.0)):
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        mat = bpy.data.materials.new(name=name)
+        
+    mat.use_nodes = True
+    tree = mat.node_tree
+    tree.nodes.clear()
+    
+    node_out = tree.nodes.new("ShaderNodeOutputMaterial")
+    node_out.location = (400, 0)
+    bsdf = tree.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (100, 0)
+    tree.links.new(bsdf.outputs["BSDF"], node_out.inputs["Surface"])
+    
+    tex_coord = tree.nodes.new("ShaderNodeTexCoord")
+    tex_coord.location = (-600, 0)
+    
+    # Wave texture for crisp horizontal weatherboard planks
+    wave = tree.nodes.new("ShaderNodeTexWave")
+    wave.location = (-400, 0)
+    wave.wave_type = 'BANDS'
+    wave.bands_direction = 'Z'
+    wave.wave_profile = 'SAW'
+    wave.inputs["Scale"].default_value = 5.0
+    wave.inputs["Distortion"].default_value = 0.4
+    tree.links.new(tex_coord.outputs["Object"], wave.inputs["Vector"])
+    
+    ramp = tree.nodes.new("ShaderNodeValToRGB")
+    ramp.location = (-150, 0)
+    c_shadow = (color[0] * 0.70, color[1] * 0.70, color[2] * 0.68, 1.0)
+    c_body = (color[0], color[1], color[2], 1.0)
+    ramp.color_ramp.elements[0].color = c_shadow
+    ramp.color_ramp.elements[1].color = c_body
+    tree.links.new(wave.outputs["Fac"], ramp.inputs["Fac"])
+    tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    
+    _set_bsdf_input(bsdf, "Roughness", 0.78)
+    return mat
+
 def setup_building_material_slots(obj, props):
     """
     Ensures that the 9 canonical stylized material slots are populated on the object,
-    using either user-specified custom material overrides or freshly created stylized procedural shaders.
+    configured according to the chosen Material Tier (Tier 1: Timber/Log, Tier 2: Planks, Tier 3: Stone/Stucco)
+    or custom user material overrides.
     """
-    # 0: Stone
-    mat_stone = props.custom_stone if props.custom_stone else create_stylized_stone(color=props.color_stone)
-    # 1: Plaster Exterior
-    mat_plaster_ext = props.custom_wall_ext if props.custom_wall_ext else create_stylized_plaster("M_Building_Plaster_Ext", color=props.color_wall_ext, is_interior=False)
-    # 2: Plaster Interior
-    mat_plaster_int = props.custom_wall_int if props.custom_wall_int else create_stylized_plaster("M_Building_Plaster_Int", color=props.color_wall_int, is_interior=True)
-    # 3: Timber Beams
-    mat_timber = props.custom_timber if props.custom_timber else create_stylized_timber(color=props.color_timber)
-    # 4: Floorboards
-    mat_floor = props.custom_floor if props.custom_floor else create_stylized_floorboards(color=props.color_floor)
-    # 5: Roof Shingles
-    mat_shingles = props.custom_shingles if props.custom_shingles else create_stylized_shingles(color=props.color_shingles)
-    # 6: Window Glass
+    tier = getattr(props, "material_tier", "TIER_3")
+
+    if props.custom_stone:
+        mat_stone = props.custom_stone
+    elif tier == 'TIER_1':
+        mat_stone = create_stylized_stone("M_Building_Stone_T1", color=(0.32, 0.30, 0.28, 1.0))
+    elif tier == 'TIER_2':
+        mat_stone = create_stylized_stone("M_Building_Stone_T2", color=(0.42, 0.40, 0.38, 1.0))
+    else:
+        mat_stone = create_stylized_stone("M_Building_Stone_T3", color=props.color_stone)
+
+    if props.custom_wall_ext:
+        mat_plaster_ext = props.custom_wall_ext
+    elif tier == 'TIER_1':
+        mat_plaster_ext = create_stylized_log_walls("M_Building_Log_Ext", color=(0.32, 0.20, 0.12, 1.0))
+    elif tier == 'TIER_2':
+        mat_plaster_ext = create_stylized_plank_siding("M_Building_Plank_Ext", color=(0.68, 0.58, 0.44, 1.0))
+    else:
+        mat_plaster_ext = create_stylized_plaster("M_Building_Plaster_Ext", color=props.color_wall_ext, is_interior=False)
+
+    if props.custom_wall_int:
+        mat_plaster_int = props.custom_wall_int
+    elif tier == 'TIER_1':
+        mat_plaster_int = create_stylized_timber("M_Building_Log_Int", color=(0.42, 0.30, 0.20, 1.0))
+    elif tier == 'TIER_2':
+        mat_plaster_int = create_stylized_plank_siding("M_Building_Plank_Int", color=(0.76, 0.68, 0.56, 1.0))
+    else:
+        mat_plaster_int = create_stylized_plaster("M_Building_Plaster_Int", color=props.color_wall_int, is_interior=True)
+
+    if props.custom_timber:
+        mat_timber = props.custom_timber
+    elif tier == 'TIER_1':
+        mat_timber = create_stylized_timber("M_Building_Timber_T1", color=(0.20, 0.12, 0.07, 1.0))
+    elif tier == 'TIER_2':
+        mat_timber = create_stylized_timber("M_Building_Timber_T2", color=(0.32, 0.18, 0.10, 1.0))
+    else:
+        mat_timber = create_stylized_timber("M_Building_Timber_T3", color=props.color_timber)
+
+    if props.custom_floor:
+        mat_floor = props.custom_floor
+    elif tier == 'TIER_1':
+        mat_floor = create_stylized_floorboards("M_Building_Floor_T1", color=(0.30, 0.18, 0.10, 1.0))
+    elif tier == 'TIER_2':
+        mat_floor = create_stylized_floorboards("M_Building_Floor_T2", color=(0.38, 0.24, 0.14, 1.0))
+    else:
+        mat_floor = create_stylized_floorboards("M_Building_Floor_T3", color=props.color_floor)
+
+    if props.custom_shingles:
+        mat_shingles = props.custom_shingles
+    elif tier == 'TIER_1':
+        mat_shingles = create_stylized_shingles("M_Building_Shingles_T1", color=(0.28, 0.18, 0.11, 1.0))
+    elif tier == 'TIER_2':
+        mat_shingles = create_stylized_shingles("M_Building_Shingles_T2", color=(0.30, 0.40, 0.48, 1.0))
+    else:
+        mat_shingles = create_stylized_shingles("M_Building_Shingles_T3", color=props.color_shingles)
+
     mat_glass = props.custom_glass if props.custom_glass else create_stylized_glass(
         glow_strength=props.window_glow_strength,
         emissive_glow=props.color_window_glow
     )
-    # 7: Door
     mat_door = props.custom_door if props.custom_door else create_stylized_timber("M_Building_Door", color=props.color_door)
-    # 8: Iron
     mat_iron = props.custom_iron if props.custom_iron else create_stylized_iron()
-    
+
     required_mats = [
         mat_stone,
         mat_plaster_ext,

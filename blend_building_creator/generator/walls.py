@@ -279,7 +279,7 @@ def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
     build_facade_timber(bm, (x_min, y_min), (x_min, y_max), z_bottom, z_top, wall_thickness,
                          (-1.0, 0.0), left_ops, has_diagonals)
 
-def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True):
+def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, front_exclude_x=None):
     """
     Builds chunky carved wooden support brackets (corbels) underneath
     the overhanging upper floors for that iconic European fantasy silhouette.
@@ -299,13 +299,14 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
         cx = x_min_upper + i * step_x
         # Front corbel
         if include_front:
-            create_beveled_box(
-                bm,
-                size=(corbel_w, corbel_d, corbel_h),
-                location=(cx, y_min_upper + corbel_d * 0.4, z_level - corbel_h * 0.5),
-                mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.015
-            )
+            if not (front_exclude_x and front_exclude_x[0] <= cx <= front_exclude_x[1]):
+                create_beveled_box(
+                    bm,
+                    size=(corbel_w, corbel_d, corbel_h),
+                    location=(cx, y_min_upper + corbel_d * 0.4, z_level - corbel_h * 0.5),
+                    mat_index=MAT_INDEX_TIMBER,
+                    bevel_amount=0.015
+                )
         # Back corbel
         if include_back:
             create_beveled_box(
@@ -316,7 +317,7 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
                 bevel_amount=0.015
             )
 
-def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thick=0.10):
+def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thick=0.10, front_exclude_x=None):
     """
     Builds solid wooden soffit plates sealing the underside of the overhanging upper floor.
     lower_bounds: (lx_min, lx_max, ly_min, ly_max)
@@ -329,10 +330,21 @@ def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thic
     # Front soffit (from uy_min to ly_min)
     if uy_min < ly_min:
         d = ly_min - uy_min + 0.05
-        w = ux_max - ux_min + 0.05
         cy = (uy_min + ly_min) * 0.5
-        cx = (ux_min + ux_max) * 0.5
-        create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        if front_exclude_x:
+            ex1, ex2 = front_exclude_x
+            if ex1 > ux_min:
+                w1 = ex1 - ux_min + 0.05
+                cx1 = (ux_min + ex1) * 0.5
+                create_beveled_box(bm, size=(w1, d, soffit_thick), location=(cx1, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+            if ex2 < ux_max:
+                w2 = ux_max - ex2 + 0.05
+                cx2 = (ex2 + ux_max) * 0.5
+                create_beveled_box(bm, size=(w2, d, soffit_thick), location=(cx2, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        else:
+            w = ux_max - ux_min + 0.05
+            cx = (ux_min + ux_max) * 0.5
+            create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
         
     # Back soffit (from ly_max to uy_max)
     if uy_max > ly_max:

@@ -54,15 +54,36 @@ def run_tests():
     print(f"  -> Toggled door angle from {initial_angle} to {props.door_angle}")
     assert props.door_angle != initial_angle, "Door toggle did not alter angle!"
     
-    # Test Spiral staircase on 3 floors
+    # Test Multi-story straight & spiral stairs
     props.num_floors = 3
+    props.stair_style = 'STRAIGHT'
+    props.cantilever_overhang = 0.0 # Test 0-overhang trimmer beam safety
+    bpy.ops.building.regenerate()
+    print(f"  -> 3-floor building with straight stairs (0-overhang): {len(obj.data.vertices)} verts.")
+
     props.stair_style = 'SPIRAL'
     bpy.ops.building.regenerate()
     print(f"  -> 3-floor building with spiral stairs: {len(obj.data.vertices)} verts, {len(obj.data.polygons)} polys.")
 
-    # 4. Test Presets
-    print("[4/6] Testing style presets...")
-    for preset_key in ['TAVERN', 'WIZARD_TOWER', 'BLACKSMITH', 'WATCHTOWER', 'COTTAGE', 'TOWNHOUSE']:
+    # Test L-Shape with 1-floor wing on 3-floor building (Wing ceiling & no roof overlap)
+    props.building_shape = 'L_SHAPE'
+    props.wing_floors = 1
+    bpy.ops.building.regenerate()
+    print(f"  -> L-Shape with 1-floor wing on 3-floor building: {len(obj.data.vertices)} verts.")
+
+    # Test Material Tiers
+    print("[4/8] Testing Material Tiers (Tier 1, Tier 2, Tier 3)...")
+    for tier in ['TIER_1', 'TIER_2', 'TIER_3']:
+        props.material_tier = tier
+        bpy.ops.building.regenerate()
+        m_count = len(obj.data.materials)
+        assert m_count == 9, f"Expected 9 material slots for {tier}, got {m_count}"
+        print(f"  -> Material {tier}: verified 9 procedural shader slots successfully.")
+
+    # 5. Test Presets
+    from blend_building_creator.presets import PRESETS
+    print(f"[5/8] Testing all {len(PRESETS)} architectural style presets...")
+    for preset_key in PRESETS.keys():
         bpy.ops.building.apply_preset(preset_key=preset_key)
         v = len(obj.data.vertices)
         p = len(obj.data.polygons)

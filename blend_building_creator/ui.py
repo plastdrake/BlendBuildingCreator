@@ -5,6 +5,8 @@ Features clean layout, collapsible sections, style presets, and live parameter s
 
 import bpy
 
+from .presets import PRESETS
+
 class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
     """Main panel for Stylized Fantasy Building Generator"""
     bl_label = "Fantasy Building Generator"
@@ -35,28 +37,39 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
             row2.operator("building.toggle_door", text="Open / Close Door", icon='RESTRICT_VIEW_OFF')
             row2.operator("building.finalize_mesh", text="Finalize Mesh", icon='CHECKMARK')
 
-        # Style Presets Box
+        # Material Progression Tier Selector
+        box_tier = layout.box()
+        box_tier.label(text="Building Material Tier", icon='MATERIAL')
+        box_tier.prop(props, "material_tier", expand=True)
+
+        # Style Presets Box with Category Filter
         box_presets = layout.box()
         box_presets.label(text="Architectural Presets", icon='ASSET_MANAGER')
+        box_presets.prop(props, "preset_category", text="")
+        
         grid = box_presets.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
-        
-        op = grid.operator("building.apply_preset", text="Cozy Tavern", icon='COMMUNITY')
-        op.preset_key = "TAVERN"
-        
-        op = grid.operator("building.apply_preset", text="Wizard Tower", icon='CONE')
-        op.preset_key = "WIZARD_TOWER"
-        
-        op = grid.operator("building.apply_preset", text="Blacksmith", icon='TOOL_SETTINGS')
-        op.preset_key = "BLACKSMITH"
-        
-        op = grid.operator("building.apply_preset", text="Watchtower", icon='HIDE_OFF')
-        op.preset_key = "WATCHTOWER"
-        
-        op = grid.operator("building.apply_preset", text="Fairytale Cottage", icon='SNAP_VOLUME')
-        op.preset_key = "COTTAGE"
-        
-        op = grid.operator("building.apply_preset", text="Townhouse", icon='MOD_BUILD')
-        op.preset_key = "TOWNHOUSE"
+        cat_filter = props.preset_category
+        for key, p_data in PRESETS.items():
+            if cat_filter == 'ALL' or p_data.get('category') == cat_filter:
+                icon_name = 'ASSET_MANAGER'
+                cat = p_data.get('category')
+                if cat == 'CIVIC':
+                    icon_name = 'HOME'
+                elif cat == 'MILITARY':
+                    icon_name = 'HIDE_OFF'
+                elif cat == 'ARTISAN':
+                    icon_name = 'TOOL_SETTINGS'
+                elif cat == 'INDUSTRIAL':
+                    icon_name = 'MOD_BUILD'
+                elif key == 'WIZARD_TOWER':
+                    icon_name = 'CONE'
+                elif key == 'COTTAGE':
+                    icon_name = 'SNAP_VOLUME'
+                else:
+                    icon_name = 'COMMUNITY'
+                    
+                op = grid.operator("building.apply_preset", text=p_data['name'], icon=icon_name)
+                op.preset_key = key
 
         # Global parameters
         box_global = layout.box()
@@ -210,6 +223,10 @@ class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
         layout = self.layout
         props = context.scene.fantasy_building_settings
         
+        box_tier = layout.box()
+        box_tier.label(text="Material Tier", icon='MATERIAL')
+        box_tier.prop(props, "material_tier", expand=True)
+
         box_colors = layout.box()
         box_colors.label(text="Procedural Stylized Colors", icon='COLOR')
         grid = box_colors.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)

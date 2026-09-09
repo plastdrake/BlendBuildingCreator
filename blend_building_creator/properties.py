@@ -33,6 +33,20 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
     
+    preset_category: EnumProperty(
+        name="Preset Category",
+        description="Filter architectural presets by category",
+        items=[
+            ('ALL', "All Presets", "Show all building style presets"),
+            ('CIVIC', "Civic & Manor", "Town halls, manors, chapels, and grand inns"),
+            ('MILITARY', "Military", "Barracks, archery ranges, and watchtowers"),
+            ('ARTISAN', "Artisan Guilds", "Specialized craft shops, bakeries, breweries, and workshops"),
+            ('INDUSTRIAL', "Industrial & Craft", "Heavy production, smelteries, mills, and factories"),
+            ('COMMERCIAL', "Commercial & Living", "Stores, markets, houses, cottages, and towers"),
+        ],
+        default='ALL'
+    )
+    
     # --- Dimensions & Floors ---
     num_floors: IntProperty(
         name="Floors",
@@ -372,7 +386,19 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
     
-    # --- Stylized Colors (Procedural Shaders) ---
+    # --- Material Tier & Stylized Procedural Shaders ---
+    material_tier: EnumProperty(
+        name="Material Tier",
+        description="Progression tier determining building wall, roof, and trim materials",
+        items=[
+            ('TIER_1', "Tier 1: Timber & Log", "Heavy dark timber/log walls, cedar shake roof, fieldstone base"),
+            ('TIER_2', "Tier 2: Planks & Weatherboard", "Horizontal wooden planks siding, slate roof, clean timber frame"),
+            ('TIER_3', "Tier 3: Stone & Stucco", "Dressed ashlar stone, bright medieval stucco, terracotta/slate roof"),
+        ],
+        default='TIER_3',
+        update=on_property_updated
+    )
+    
     color_stone: FloatVectorProperty(
         name="Stone Color",
         subtype='COLOR',
