@@ -15,7 +15,10 @@ from .materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_FLOOR, MAT_INDEX_SHINGLES,
     MAT_INDEX_GLASS, MAT_INDEX_DOOR, MAT_INDEX_IRON
 )
-from .walls import build_wall_with_opening, build_timber_framing, build_cantilever_corbels, build_cantilever_soffit
+from .walls import (
+    build_wall_with_opening, build_timber_framing, build_facade_timber,
+    build_cantilever_corbels, build_cantilever_soffit
+)
 from .interior import (
     build_floor_slab, build_ceiling_beams, build_straight_staircase,
     build_spiral_staircase, build_attic_trusses, build_stair_guardrail
@@ -492,25 +495,88 @@ def generate_building(obj, props):
 
         # Tudor Timber Framing on Exterior
         if props.has_timber_framing:
-            build_timber_framing(
-                bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
-                wall_thickness=wall_t,
-                front_ops=front_openings,
-                back_ops=back_openings,
-                left_ops=left_openings,
-                right_ops=right_openings,
-                has_diagonals=props.timber_diagonals
-            )
-            if has_wing:
-                build_timber_framing(
-                    bm, wx_min, wx_max, wy_min, wy_max, z_floor, z_ceil,
-                    wall_thickness=wall_t,
-                    front_ops=w_front_openings,
-                    back_ops=[],
-                    left_ops=w_left_openings,
-                    right_ops=w_right_openings,
-                    has_diagonals=props.timber_diagonals
+            beam_w = 0.14
+            # 1. Main building corner posts
+            corners = [
+                (x_min, y_max),
+                (x_max, y_max),
+            ]
+            if not has_wing:
+                corners.extend([(x_min, y_min), (x_max, y_min)])
+            else:
+                if shape == 'L_SHAPE':
+                    if wing_side == 'RIGHT':
+                        corners.append((x_min, y_min))
+                    else:
+                        corners.append((x_max, y_min))
+                else: # T_SHAPE
+                    corners.extend([(x_min, y_min), (x_max, y_min)])
+                    
+            for cx, cy in corners:
+                create_beveled_box(
+                    bm, size=(beam_w, beam_w, floor_h),
+                    location=(cx, cy, z_floor + floor_h * 0.5),
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
                 )
+
+            # 2. Main building exterior facades
+            build_facade_timber(bm, (x_min, y_max), (x_max, y_max), z_floor, z_ceil, wall_t,
+                                (0.0, 1.0), back_openings, props.timber_diagonals)
+            build_facade_timber(bm, (x_min, y_min), (x_min, y_max), z_floor, z_ceil, wall_t,
+                                (-1.0, 0.0), left_openings, props.timber_diagonals)
+            build_facade_timber(bm, (x_max, y_min), (x_max, y_max), z_floor, z_ceil, wall_t,
+                                (1.0, 0.0), right_openings, props.timber_diagonals)
+
+            # Front wall: only exposed exterior spans (no framing across interior junction)
+            if not has_wing:
+                build_facade_timber(bm, (x_min, y_min), (x_max, y_min), z_floor, z_ceil, wall_t,
+                                    (0.0, -1.0), front_openings, props.timber_diagonals)
+            else:
+                if shape == 'L_SHAPE':
+                    if wing_side == 'RIGHT':
+                        exp_ops = [op for op in front_openings if op.get('u_end', 0) <= (wx_min - x_min) + 0.01]
+                        build_facade_timber(bm, (x_min, y_min), (wx_min, y_min), z_floor, z_ceil, wall_t,
+                                            (0.0, -1.0), exp_ops, props.timber_diagonals)
+                    else:
+                        exp_ops = []
+                        for op in front_openings:
+                            u1 = op.get('u_start', 0) - (wx_max - x_min)
+                            u2 = op.get('u_end', 0) - (wx_max - x_min)
+                            if u1 >= -0.01:
+                                exp_ops.append({'u_start': u1, 'u_end': u2, 'z_start': op['z_start'], 'z_end': op['z_end']})
+                        build_facade_timber(bm, (wx_max, y_min), (x_max, y_min), z_floor, z_ceil, wall_t,
+                                            (0.0, -1.0), exp_ops, props.timber_diagonals)
+                else: # T_SHAPE
+                    exp_ops_l = [op for op in front_openings if op.get('u_end', 0) <= (wx_min - x_min) + 0.01]
+                    build_facade_timber(bm, (x_min, y_min), (wx_min, y_min), z_floor, z_ceil, wall_t,
+                                        (0.0, -1.0), exp_ops_l, props.timber_diagonals)
+                    exp_ops_r = []
+                    for op in front_openings:
+                        u1 = op.get('u_start', 0) - (wx_max - x_min)
+                        u2 = op.get('u_end', 0) - (wx_max - x_min)
+                        if u1 >= -0.01:
+                            exp_ops_r.append({'u_start': u1, 'u_end': u2, 'z_start': op['z_start'], 'z_end': op['z_end']})
+                    build_facade_timber(bm, (wx_max, y_min), (x_max, y_min), z_floor, z_ceil, wall_t,
+                                        (0.0, -1.0), exp_ops_r, props.timber_diagonals)
+
+            # 3. Wing exterior facades (ONLY exterior faces, NEVER interior junction at wy_max)
+            if has_wing:
+                # Wing front corner posts
+                create_beveled_box(bm, size=(beam_w, beam_w, floor_h),
+                                   location=(wx_min, wy_min, z_floor + floor_h * 0.5),
+                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+                create_beveled_box(bm, size=(beam_w, beam_w, floor_h),
+                                   location=(wx_max, wy_min, z_floor + floor_h * 0.5),
+                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+                # Wing front facade
+                build_facade_timber(bm, (wx_min, wy_min), (wx_max, wy_min), z_floor, z_ceil, wall_t,
+                                    (0.0, -1.0), w_front_openings, props.timber_diagonals)
+                # Wing left facade
+                build_facade_timber(bm, (wx_min, wy_min), (wx_min, wy_max), z_floor, z_ceil, wall_t,
+                                    (-1.0, 0.0), w_left_openings, props.timber_diagonals)
+                # Wing right facade
+                build_facade_timber(bm, (wx_max, wy_min), (wx_max, wy_max), z_floor, z_ceil, wall_t,
+                                    (1.0, 0.0), w_right_openings, props.timber_diagonals)
 
         # Update previous floor tracking for overhang transitions
         prev_fl_overhang = fl_overhang

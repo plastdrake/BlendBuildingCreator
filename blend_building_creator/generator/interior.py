@@ -231,10 +231,11 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
         )
         
     # 3. Side Stringer Boards (anchored from starter base to upper landing)
-    stringer_thick = 0.06
+    stringer_thick = 0.08
     stringer_h = 0.20
     diag_length = math.sqrt(dz * dz + stair_depth * stair_depth)
     pitch_angle = math.atan2(dz, stair_depth) * direction_y
+    cos_pitch = math.cos(abs(pitch_angle))
     
     for side in [-1, 1]:
         str_x = x0 + side * (stair_width * 0.5 + stringer_thick * 0.5)
@@ -259,39 +260,53 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
 
     # 5. Stylized Newel Posts & Handrails on BOTH SIDES
     post_h = 0.95
+    post_w = 0.09
     rail_thick = 0.07
+    
+    # Handrail spans precisely between the inner faces of bottom and top newel posts
+    post_span_y = stair_depth - 0.10
+    rail_span_y = max(0.2, post_span_y - post_w + 0.02)
+    rail_diag_len = rail_span_y / cos_pitch
+    rail_cy = y0 + (stair_depth * 0.5) * direction_y
+    rail_cz = z0 + dz * 0.5 + post_h * 0.88
     
     for side in [-1, 1]:
         rail_x = x0 + side * (stair_width * 0.5 + stringer_thick * 0.5)
         # Bottom post with chamfered cap
-        create_beveled_box(bm, size=(0.09, 0.09, post_h), location=(rail_x, y0 + 0.05 * direction_y, z0 + post_h * 0.5), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+        create_beveled_box(bm, size=(post_w, post_w, post_h),
+                           location=(rail_x, y0 + 0.05 * direction_y, z0 + post_h * 0.5),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
         # Top post with chamfered cap
-        create_beveled_box(bm, size=(0.09, 0.09, post_h), location=(rail_x, y0 + (stair_depth - 0.05) * direction_y, target_z + post_h * 0.5), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-        # Handrail bar
+        create_beveled_box(bm, size=(post_w, post_w, post_h),
+                           location=(rail_x, y0 + (stair_depth - 0.05) * direction_y, target_z + post_h * 0.5),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+        # Handrail bar (terminated flush inside posts, zero external poke)
         create_box(
             bm,
-            size=(rail_thick, diag_length, rail_thick),
-            location=(rail_x, y0 + (stair_depth * 0.5) * direction_y, z0 + dz * 0.5 + post_h * 0.9),
+            size=(rail_thick, rail_diag_len, rail_thick),
+            location=(rail_x, rail_cy, rail_cz),
             rotation=(pitch_angle, 0.0, 0.0),
             mat_index=MAT_INDEX_TIMBER
         )
-        # Vertical spindles along run (seated flush on tread top, inserting into handrail underside)
+        # Vertical spindles along run (seated flush on top of stringer, inserting into handrail underside)
         for i in range(1, num_steps):
-            # Top of step tread
-            z_tread = z0 + (i + 1) * step_h
-            # Underside of handrail at this Y coordinate
-            z_rail_center = z0 + (i + 0.5) * step_h + post_h * 0.90
-            z_rail_bot = z_rail_center - rail_thick * 0.5
+            by = y0 + (i + 0.5) * step_d
+            t_y = ((by - y0) * direction_y) / stair_depth
             
-            spindle_len = z_rail_bot - z_tread
-            if spindle_len > 0.08:
-                spindle_cz = z_tread + spindle_len * 0.5
-                by = y0 + (i + 0.5) * step_d
-                create_cylinder(
+            # Exact top surface of the diagonal stringer beam at this Y position
+            z_str_center = z0 + t_y * dz
+            z_str_top = z_str_center + (stringer_h * 0.5) / cos_pitch
+            
+            # Exact underside of the handrail beam at this Y position
+            z_rail_center = z0 + t_y * dz + post_h * 0.88
+            z_rail_bot = z_rail_center - (rail_thick * 0.5) / cos_pitch
+            
+            spindle_len = z_rail_bot - z_str_top
+            if spindle_len > 0.05:
+                spindle_cz = (z_str_top + z_rail_bot) * 0.5
+                create_box(
                     bm,
-                    radius=0.018,
-                    height=spindle_len,
-                    segments=8,
+                    size=(0.034, 0.034, spindle_len),
                     location=(rail_x, by, spindle_cz),
                     mat_index=MAT_INDEX_TIMBER
                 )

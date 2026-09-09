@@ -77,8 +77,9 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
             f_rl.material_index = MAT_INDEX_TIMBER
             
         # --- Right Slope Solid Slab ---
-        s_right = Vector((rx_max - cx, 0.0, ez - (rz0 + rz1) * 0.5))
-        inward_r = Vector((-s_right.z, 0.0, s_right.x)).normalized() * deck_thick
+        delta_xr = rx_max - cx
+        delta_zr = (rz0 + rz1) * 0.5 - ez
+        inward_r = Vector((-delta_zr, 0.0, -delta_xr)).normalized() * deck_thick
         
         vrr0_t = bm.verts.new(Vector((rx_max, y0, ez)))
         vrr1_t = bm.verts.new(Vector((rx_max, y1, ez)))
@@ -265,8 +266,9 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
     bm.faces.new([vl1_t, vl1_b, vr1_b, vr1_t]).material_index = MAT_INDEX_TIMBER
     
     # Right Slope
-    s_right = Vector((rx_max - cx, 0.0, ez - rz))
-    inward_r = Vector((-s_right.z, 0.0, s_right.x)).normalized() * deck_thick
+    delta_xr = rx_max - cx
+    delta_zr = rz - ez
+    inward_r = Vector((-delta_zr, 0.0, -delta_xr)).normalized() * deck_thick
     
     vrr0_t = bm.verts.new(Vector((rx_max, ry_min, ez)))
     vrr1_t = bm.verts.new(Vector((rx_max, ry_max, ez)))
@@ -496,8 +498,8 @@ def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8
                 cur_x = cx + side * ((1.0 - t) * half_w)
                 
                 # Outward offset along local surface normal so shingles sit cleanly atop timber deck
-                cur_x += side * (norm_x * 0.078)
-                cur_z += norm_z * 0.078
+                cur_x += side * (norm_x * 0.095)
+                cur_z += norm_z * 0.095
                 
                 # Small whimsical jitter
                 jitter_y = (rng.random() - 0.5) * 0.03
