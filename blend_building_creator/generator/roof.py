@@ -783,14 +783,14 @@ def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8
                 pitch_ang = math.atan2(delta_z * slope_mult, delta_x)
                 slope_len = math.sqrt(delta_x * delta_x + delta_z * delta_z)
                 shingle_l = (slope_len / rows) * 1.35
-                shingle_t = 0.035
+                shingle_t = 0.05
                 
                 norm_x = math.sin(pitch_ang)
                 norm_z = math.cos(pitch_ang)
                 
                 # Outward offset along local surface normal so shingles sit cleanly atop timber deck
-                cur_x += side * (norm_x * 0.095)
-                cur_z += norm_z * 0.095
+                cur_x += side * (norm_x * 0.14)
+                cur_z += norm_z * 0.14
                 
                 # Small whimsical jitter
                 jitter_y = (rng.random() - 0.5) * 0.03
@@ -810,8 +810,8 @@ def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8
                     bevel_amount=0.006
                 )
 
-def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1.2, dormer_d=1.4, dormer_h=1.3,
-                 roof_flare=0.35, tier='TIER_3', center_x=None, center_y=None):
+def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1.2, dormer_d=1.4, dormer_h=1.05,
+                 roof_flare=0.35, tier='TIER_3', center_x=None, center_y=None, max_back_reach=None, dormer_roof_h=0.58):
     """
     Builds a stylized medieval dormer window structure projecting from the roof slope.
     Features:
@@ -843,13 +843,23 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     wall_mat = MAT_INDEX_TIMBER if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_PLASTER_EXT
     col_w = 0.14
 
+    # Back reach: ensure dormer roof, ridge, and cheek walls penetrate into main roof slope without overshooting
+    d_overhang = 0.22
+    front_reach = half_dd + d_overhang + 0.06
+    back_reach = max_back_reach if max_back_reach is not None else (half_dd + 1.20)
+    roof_len = front_reach + back_reach
+    roof_mid_offset = (front_reach - back_reach) * 0.5
+    roof_cx = cx + fx * roof_mid_offset
+    roof_cy = cy + fy * roof_mid_offset
+
     # 1. Cheek Walls (Side Walls extending deep through roof deck into attic)
-    cheek_len = dormer_d + 0.50
-    cheek_h = dormer_h + 0.85
-    cheek_mid_z = z_base + dormer_h * 0.5 - 0.28
+    cheek_len = half_dd + back_reach
+    cheek_h = dormer_h + 0.62  # taller + inset
+    cheek_mid_z = z_base + dormer_h * 0.5 - 0.12
+    cheek_mid_offset = (half_dd - back_reach) * 0.5
     for s_sign in [-1, 1]:
-        ch_x = cx + sx * (half_dw - col_w * 0.5) * s_sign - fx * 0.10
-        ch_y = cy + sy * (half_dw - col_w * 0.5) * s_sign - fy * 0.10
+        ch_x = cx + sx * (half_dw - col_w * 0.5 - 0.04) * s_sign + fx * cheek_mid_offset
+        ch_y = cy + sy * (half_dw - col_w * 0.5 - 0.04) * s_sign + fy * cheek_mid_offset
         create_beveled_box(
             bm,
             size=(cheek_len, col_w, cheek_h),
@@ -858,18 +868,34 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
             mat_index=wall_mat,
             bevel_amount=0.012
         )
+    
+    # 1b. Rear Closing Wall (seals dormer back against main roof inside attic)
+    rear_wall_w = dormer_w - col_w * 0.5
+    rear_wall_h = max(0.40, dormer_h * 0.60)
+    rear_x = cx - fx * (back_reach - 0.05)
+    rear_y = cy - fy * (back_reach - 0.05)
+    rear_mid_z = z_base + rear_wall_h * 0.5
+    create_beveled_box(
+        bm,
+        size=(col_w + 0.04, rear_wall_w, rear_wall_h),
+        location=(rear_x, rear_y, rear_mid_z),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=wall_mat,
+        bevel_amount=0.012
+    )
 
-    # 2. Front Timber Corner Posts
+    # 2. Front Timber Corner Posts — thickened + outset to kill coplanar
+    col_w_thick = 0.16
     for s_sign in [-1, 1]:
-        px = cx + fx * (half_dd - col_w * 0.5) + sx * (half_dw - col_w * 0.5) * s_sign
-        py = cy + fy * (half_dd - col_w * 0.5) + sy * (half_dw - col_w * 0.5) * s_sign
+        px = cx + fx * (half_dd - col_w_thick * 0.5 + 0.018) + sx * (half_dw - col_w_thick * 0.5) * s_sign
+        py = cy + fy * (half_dd - col_w_thick * 0.5 + 0.018) + sy * (half_dw - col_w_thick * 0.5) * s_sign
         create_beveled_box(
             bm,
-            size=(col_w, col_w, dormer_h + 0.12),
+            size=(col_w_thick, col_w_thick, dormer_h + 0.12),
             location=(px, py, z_base + dormer_h * 0.5),
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER_FRAME,
-            bevel_amount=0.012
+            bevel_amount=0.014
         )
         
     # 3. 100% Solid Front Wall, Leaded Glass Window & Framing (Zero Daylight Gaps)
@@ -961,7 +987,7 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     )
     
     # 4. Triangular Front Gable Wall Closure (All the way to apex)
-    d_roof_h = 0.82
+    d_roof_h = dormer_roof_h
     d_rz = z_base + dormer_h + d_roof_h
     d_ez = z_base + dormer_h - 0.04
     
@@ -1025,16 +1051,14 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     )
 
     # 6. Volumetric Roof Deck & Shingles
-    d_overhang = 0.22
-    roof_len = dormer_d + d_overhang * 2.2
     roof_span = dormer_w + d_overhang * 2.0
     half_rspan = roof_span * 0.5
     
-    # Heavy timber ridge cap beam along dormer peak
+    # Heavy timber ridge cap beam along dormer peak (penetrates deep into main roof slope)
     create_beveled_box(
         bm,
         size=(roof_len, 0.16, 0.16),
-        location=(cx - fx * 0.05, cy - fy * 0.05, d_rz + 0.04),
+        location=(roof_cx, roof_cy, d_rz + 0.04),
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER_FRAME,
         bevel_amount=0.012
@@ -1045,8 +1069,8 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     b_ang = math.atan2(d_roof_h, half_rspan)
     
     for s_sign in [-1, 1]:
-        sc_x = cx + sx * (half_rspan * 0.5 * s_sign) - fx * 0.05
-        sc_y = cy + sy * (half_rspan * 0.5 * s_sign) - fy * 0.05
+        sc_x = roof_cx + sx * (half_rspan * 0.5 * s_sign)
+        sc_y = roof_cy + sy * (half_rspan * 0.5 * s_sign)
         sc_z = z_base + dormer_h + d_roof_h * 0.5
         
         # Volumetric timber deck slab
@@ -1064,8 +1088,8 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
             u_row = (s_row + 0.5) / float(shingle_rows_dormer)
             sh_z = (d_rz + 0.05) - u_row * (d_roof_h + 0.02)
             sh_off = s_sign * u_row * half_rspan
-            sh_x = cx + sx * sh_off - fx * 0.05
-            sh_y = cy + sy * sh_off - fy * 0.05
+            sh_x = roof_cx + sx * sh_off
+            sh_y = roof_cy + sy * sh_off
             create_beveled_box(
                 bm,
                 size=(roof_len + 0.04, rafter_len / float(shingle_rows_dormer) + 0.04, 0.04),

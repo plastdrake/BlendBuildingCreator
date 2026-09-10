@@ -654,6 +654,9 @@ def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
     mid-rails, and diagonal braces, cleanly cutting around all openings.
     """
     beam_w = 0.22
+    # Corner posts read visually thin at typical wall thicknesses — bulk them up so they
+    # look like load-bearing timbers rather than the same thin rails used for mid-framing.
+    corner_w = max(0.34, wall_thickness * 1.05)
     h = z_top - z_bottom
     
     # 4 Vertical Corner Posts
@@ -666,10 +669,10 @@ def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
     for cx, cy in corners:
         create_beveled_box(
             bm,
-            size=(beam_w, beam_w, h),
+            size=(corner_w, corner_w, h),
             location=(cx, cy, z_bottom + h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.016
+            bevel_amount=0.022
         )
         
     # Build each facade with its respective opening cutouts and explicit exterior normal
@@ -686,7 +689,7 @@ def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
     build_facade_timber(bm, (x_min, y_min), (x_min, y_max), z_bottom, z_top, wall_thickness,
                          (-1.0, 0.0), left_ops, has_diagonals)
 
-def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth=0.42, height=0.44, mat_index=MAT_INDEX_TIMBER):
+def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth=0.62, height=0.68, mat_index=MAT_INDEX_TIMBER):
     """
     Builds a stylized carved wooden console corbel bracket with:
     - Top horizontal beveled bolster block
@@ -749,7 +752,7 @@ def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth
         f_p = bm.faces.new([vl[k], vl[kn], vr[kn], vr[k]])
         f_p.material_index = mat_index
 
-def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, front_exclude_x=None):
+def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, front_exclude_x=None, drop=0.16):
     """
     Builds chunky carved wooden support brackets (corbels) underneath
     the overhanging upper floors for that iconic European fantasy silhouette.
@@ -760,6 +763,12 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
     corbel_w = 0.18
     corbel_h = 0.44
     corbel_d = overhang_dist + 0.10
+    # Drop the corbel's mounting point below the upper floor's timber top-plate beam
+    # so the bracket sits under it instead of poking up through it.
+    z_mount = z_level - drop
+    # Embed the corbel's inner (wall-side) tip slightly into the wall face so it always
+    # makes solid contact instead of just grazing it.
+    embed = 0.08
     
     total_x = x_max_upper - x_min_upper
     num_x = max(2, int(total_x / spacing))
@@ -771,18 +780,18 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
         # Front corbel
         if include_front:
             if not (front_exclude_x and front_exclude_x[0] <= cx <= front_exclude_x[1]):
-                loc_front = Vector((cx, y_min_upper + overhang_dist, z_level))
+                loc_front = Vector((cx, y_min_upper + overhang_dist + embed, z_mount))
                 create_curved_corbel(
                     bm, loc=loc_front, facing_dir=(0.0, -1.0, 0.0),
-                    width=corbel_w, depth=corbel_d, height=corbel_h,
+                    width=corbel_w, depth=corbel_d + embed, height=corbel_h,
                     mat_index=MAT_INDEX_TIMBER
                 )
         # Back corbel
         if include_back:
-            loc_back = Vector((cx, y_max_upper - overhang_dist, z_level))
+            loc_back = Vector((cx, y_max_upper - overhang_dist - embed, z_mount))
             create_curved_corbel(
                 bm, loc=loc_back, facing_dir=(0.0, 1.0, 0.0),
-                width=corbel_w, depth=corbel_d, height=corbel_h,
+                width=corbel_w, depth=corbel_d + embed, height=corbel_h,
                 mat_index=MAT_INDEX_TIMBER
             )
             
@@ -791,25 +800,26 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
     if include_front:
         # Front-Left corner
         if not (front_exclude_x and front_exclude_x[0] <= x_min_upper <= front_exclude_x[1]):
-            loc_fl = Vector((x_min_upper + overhang_dist, y_min_upper + overhang_dist, z_level))
+            loc_fl = Vector((x_min_upper + overhang_dist + embed * 0.707, y_min_upper + overhang_dist + embed * 0.707, z_mount))
             create_curved_corbel(bm, loc=loc_fl, facing_dir=(-0.707, -0.707, 0.0),
-                                width=corbel_w, depth=corner_d, height=corbel_h)
+                                width=corbel_w, depth=corner_d + embed, height=corbel_h)
         # Front-Right corner
         if not (front_exclude_x and front_exclude_x[0] <= x_max_upper <= front_exclude_x[1]):
-            loc_fr = Vector((x_max_upper - overhang_dist, y_min_upper + overhang_dist, z_level))
+            loc_fr = Vector((x_max_upper - overhang_dist - embed * 0.707, y_min_upper + overhang_dist + embed * 0.707, z_mount))
             create_curved_corbel(bm, loc=loc_fr, facing_dir=(0.707, -0.707, 0.0),
-                                width=corbel_w, depth=corner_d, height=corbel_h)
+                                width=corbel_w, depth=corner_d + embed, height=corbel_h)
     if include_back:
         # Back-Left corner
-        loc_bl = Vector((x_min_upper + overhang_dist, y_max_upper - overhang_dist, z_level))
+        loc_bl = Vector((x_min_upper + overhang_dist + embed * 0.707, y_max_upper - overhang_dist - embed * 0.707, z_mount))
         create_curved_corbel(bm, loc=loc_bl, facing_dir=(-0.707, 0.707, 0.0),
-                            width=corbel_w, depth=corner_d, height=corbel_h)
+                            width=corbel_w, depth=corner_d + embed, height=corbel_h)
         # Back-Right corner
-        loc_br = Vector((x_max_upper - overhang_dist, y_max_upper - overhang_dist, z_level))
+        loc_br = Vector((x_max_upper - overhang_dist - embed * 0.707, y_max_upper - overhang_dist - embed * 0.707, z_mount))
         create_curved_corbel(bm, loc=loc_br, facing_dir=(0.707, 0.707, 0.0),
-                            width=corbel_w, depth=corner_d, height=corbel_h)
+                            width=corbel_w, depth=corner_d + embed, height=corbel_h)
 
-def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thick=0.10, front_exclude_x=None):
+def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thick=0.10, front_exclude_x=None,
+                            include_front=True, include_back=True, include_left=True, include_right=True):
     """
     Builds solid wooden soffit plates sealing the underside of the overhanging upper floor.
     lower_bounds: (lx_min, lx_max, ly_min, ly_max)
@@ -820,7 +830,7 @@ def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thic
     cz = z_level - soffit_thick * 0.5
     
     # Front soffit (from uy_min to ly_min)
-    if uy_min < ly_min:
+    if include_front and uy_min < ly_min:
         d = ly_min - uy_min + 0.05
         cy = (uy_min + ly_min) * 0.5
         if front_exclude_x:
@@ -839,7 +849,7 @@ def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thic
             create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
         
     # Back soffit (from ly_max to uy_max)
-    if uy_max > ly_max:
+    if include_back and uy_max > ly_max:
         d = uy_max - ly_max + 0.05
         w = ux_max - ux_min + 0.05
         cy = (uy_max + ly_max) * 0.5
@@ -847,7 +857,7 @@ def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thic
         create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
         
     # Left soffit (from ux_min to lx_min)
-    if ux_min < lx_min:
+    if include_left and ux_min < lx_min:
         w = lx_min - ux_min + 0.05
         d = ly_max - ly_min + 0.05
         cx = (ux_min + lx_min) * 0.5
@@ -855,7 +865,7 @@ def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thic
         create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
         
     # Right soffit (from lx_max to ux_max)
-    if ux_max > lx_max:
+    if include_right and ux_max > lx_max:
         w = ux_max - lx_max + 0.05
         d = ly_max - ly_min + 0.05
         cx = (lx_max + ux_max) * 0.5

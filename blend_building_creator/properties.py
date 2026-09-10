@@ -545,6 +545,20 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default=True,
         update=on_property_updated
     )
+
+    chimney_pos_x: FloatProperty(
+        name="Chimney X",
+        description="Front-back / left-right offset across roof (-1 to 1). Move to avoid dormers/windows",
+        min=-1.0, max=1.0, default=0.55,
+        update=on_property_updated
+    )
+
+    chimney_pos_y: FloatProperty(
+        name="Chimney Y",
+        description="Along-roof offset (-1 to 1)",
+        min=-1.0, max=1.0, default=0.55,
+        update=on_property_updated
+    )
     
     has_hoist_beam: BoolProperty(
         name="Roof Hoist Beam",

@@ -108,13 +108,13 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
         
     return faces
 
-def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, bevel_amount=0.03):
+def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, bevel_amount=0.03, bevel_segments=1):
     """Creates a box and slightly chamfers/bevels its edges for a chunky stylized look."""
     faces = create_box(bm, size, location, rotation, mat_index)
     if bevel_amount > 0.001:
         edges = list({e for f in faces for e in f.edges})
         try:
-            res = bmesh.ops.bevel(bm, geom=edges, offset=bevel_amount, segments=1, profile=0.5, affect='EDGES')
+            res = bmesh.ops.bevel(bm, geom=edges, offset=bevel_amount, segments=bevel_segments, profile=0.7, affect='EDGES')
             for f in res.get('faces', []):
                 f.material_index = mat_index
         except Exception:
