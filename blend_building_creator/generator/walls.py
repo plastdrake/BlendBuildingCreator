@@ -618,7 +618,7 @@ def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
                     
                     u_c1 = u_a + diag_w * 0.5 + 0.02
                     cx1, cy1, cz1 = to_world_pt(u_c1, z_c1)
-                    create_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx1, cy1, cz1), rotation=rot_euler1, mat_index=MAT_INDEX_TIMBER)
+                    create_beveled_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx1, cy1, cz1), rotation=rot_euler1, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015)
                     
                     # Right brace: rises from (u_b, z_bot_top) to (u_b - diag_w, z_mid_bot)
                     T2 = Vector((-math.cos(alpha) * ux, -math.cos(alpha) * uy, math.sin(alpha)))
@@ -628,7 +628,7 @@ def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
                     
                     u_c2 = u_b - diag_w * 0.5 - 0.02
                     cx2, cy2, cz2 = to_world_pt(u_c2, z_c1)
-                    create_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx2, cy2, cz2), rotation=rot_euler2, mat_index=MAT_INDEX_TIMBER)
+                    create_beveled_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx2, cy2, cz2), rotation=rot_euler2, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015)
                 else:
                     # Single diagonal brace spanning the panel
                     diag_w = min(p_w * 0.88, diag_h * 1.15)
@@ -643,7 +643,7 @@ def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
                     
                     u_c1 = u_a + diag_w * 0.5 + 0.02
                     cx1, cy1, cz1 = to_world_pt(u_c1, z_c1)
-                    create_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx1, cy1, cz1), rotation=rot_euler1, mat_index=MAT_INDEX_TIMBER)
+                    create_beveled_box(bm, size=(diag_len, beam_d * 0.85, beam_w * 0.8), location=(cx1, cy1, cz1), rotation=rot_euler1, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015)
 
 def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
                          wall_thickness=0.28,
