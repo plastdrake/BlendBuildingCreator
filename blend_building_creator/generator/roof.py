@@ -16,26 +16,42 @@ from .materials import (
 )
 
 def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
-                               z_base, ez, rz, deck_thick, slope, tier='TIER_3', plank_direction='HORIZONTAL'):
+                               z_base, ez, rz, deck_thick, slope, tier='TIER_3', plank_direction='HORIZONTAL',
+                               roof_flare=0.35):
     """
     Populates the triangular gable wall under the roof pitch with physical 3D
     horizontal rounded logs (Tier 1) or overlapping/batten planks (Tier 2) sliced
-    to match the sloping rafters with zero gap.
+    to match the sloping bell-cast rafters with zero gap.
     """
     if tier not in ('TIER_1', 'TIER_2'):
         return
 
-    z_deck_top = rz - deck_thick
+    half_w = max(0.01, (rx_max - rx_min) * 0.5)
+    z_deck_top = rz - deck_thick - 0.02
     y_siding = gy + g_norm * (half_wt + 0.05)
     total_gable_h = z_deck_top - z_base
     if total_gable_h < 0.3:
         return
 
+    def get_deck_z_at_x(px):
+        u = min(1.0, abs(px - cx) / half_w)
+        drop = (1.0 - roof_flare) * u + roof_flare * (1.0 - (1.0 - u) ** 2)
+        return rz - drop * (rz - ez) - deck_thick - 0.02
+
     def get_width_at_z(z_val):
-        x_l = rx_min + (z_val + deck_thick - ez) / max(0.01, slope)
-        x_r = rx_max - (z_val + deck_thick - ez) / max(0.01, slope)
-        x_l = max(x_min, min(cx - 0.05, x_l))
-        x_r = min(x_max, max(cx + 0.05, x_r))
+        u_target = max(0.0, min(1.0, (rz - deck_thick - 0.02 - z_val) / max(0.01, rz - ez)))
+        lo, hi = 0.0, 1.0
+        for _ in range(6):
+            mid = (lo + hi) * 0.5
+            d_mid = (1.0 - roof_flare) * mid + roof_flare * (1.0 - (1.0 - mid) ** 2)
+            if d_mid < u_target:
+                lo = mid
+            else:
+                hi = mid
+        u_exact = (lo + hi) * 0.5
+        half_span = u_exact * half_w
+        x_l = max(x_min, cx - half_span)
+        x_r = min(x_max, cx + half_span)
         return x_l, x_r
 
     if tier == 'TIER_1':
@@ -71,8 +87,7 @@ def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm
             actual_bw = full_w / num_boards
             for b in range(num_boards):
                 bx = x_min + (b + 0.5) * actual_bw
-                dist_from_cx = abs(bx - cx)
-                z_rafter = z_deck_top - dist_from_cx * slope
+                z_rafter = get_deck_z_at_x(bx)
                 bh = max(0.15, z_rafter - z_base)
                 bz = z_base + bh * 0.5
                 create_beveled_box(
@@ -272,45 +287,52 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
         # Sag at this gable wall (t_y = 0 or 1, sag = 0)
         rz = z_base + roof_height
         
-        # Underside of roof deck at wall boundaries and ridge
-        delta_x = cx - rx_min
-        delta_z = rz - ez
-        slope = delta_z / max(0.01, delta_x)
+        # Height of deck underside along the bell curve
+        def get_gable_deck_z(px):
+            u = min(1.0, max(0.0, abs(px - cx) / max(0.001, half_w)))
+            d = (1.0 - roof_flare) * u + roof_flare * (1.0 - (1.0 - u) ** 2)
+            return (rz - d * (rz - ez)) - deck_thick - 0.02
         
-        # Height of deck underside at x_min and x_max
-        z_deck_left = ez + (x_min - rx_min) * slope - deck_thick
-        z_deck_right = ez + (rx_max - x_max) * slope - deck_thick
-        z_deck_top = rz - deck_thick
+        z_deck_left = get_gable_deck_z(x_min)
+        z_deck_right = get_gable_deck_z(x_max)
+        z_deck_top = get_gable_deck_z(cx)
         
-        # 5-vertex polygon on exterior face: Base-L, Base-R, Mid-R, Apex, Mid-L
+        # Segmented top contour matching bell curve pitch
+        n_segs = 6
+        xs_left = [x_min + (cx - x_min) * (i / n_segs) for i in range(n_segs + 1)]
+        xs_right = [cx + (x_max - cx) * (i / n_segs) for i in range(1, n_segs + 1)]
+        top_xs = xs_left + xs_right
+        
+        top_verts_ext = [bm.verts.new(Vector((tx, y_ext, get_gable_deck_z(tx)))) for tx in top_xs]
         v_ext_bl = bm.verts.new(Vector((x_min, y_ext, z_base)))
         v_ext_br = bm.verts.new(Vector((x_max, y_ext, z_base)))
-        v_ext_mr = bm.verts.new(Vector((x_max, y_ext, z_deck_right)))
-        v_ext_t  = bm.verts.new(Vector((cx, y_ext, z_deck_top)))
-        v_ext_ml = bm.verts.new(Vector((x_min, y_ext, z_deck_left)))
         
-        # Matching interior vertices
+        top_verts_int = [bm.verts.new(Vector((tx, y_int, get_gable_deck_z(tx)))) for tx in top_xs]
         v_int_bl = bm.verts.new(Vector((x_min, y_int, z_base)))
         v_int_br = bm.verts.new(Vector((x_max, y_int, z_base)))
-        v_int_mr = bm.verts.new(Vector((x_max, y_int, z_deck_right)))
-        v_int_t  = bm.verts.new(Vector((cx, y_int, z_deck_top)))
-        v_int_ml = bm.verts.new(Vector((x_min, y_int, z_deck_left)))
         
         gable_mat = MAT_INDEX_TIMBER if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_PLASTER_EXT
         if g_norm < 0:
-            bm.faces.new([v_ext_bl, v_ext_br, v_ext_mr, v_ext_t, v_ext_ml]).material_index = gable_mat
-            bm.faces.new([v_int_ml, v_int_t, v_int_mr, v_int_br, v_int_bl]).material_index = MAT_INDEX_PLASTER_INT
+            bm.faces.new([v_ext_bl, v_ext_br] + list(reversed(top_verts_ext))).material_index = gable_mat
+            bm.faces.new(list(top_verts_int) + [v_int_br, v_int_bl]).material_index = MAT_INDEX_PLASTER_INT
         else:
-            bm.faces.new([v_ext_ml, v_ext_t, v_ext_mr, v_ext_br, v_ext_bl]).material_index = gable_mat
-            bm.faces.new([v_int_bl, v_int_br, v_int_mr, v_int_t, v_int_ml]).material_index = MAT_INDEX_PLASTER_INT
+            bm.faces.new(list(top_verts_ext) + [v_ext_br, v_ext_bl]).material_index = gable_mat
+            bm.faces.new([v_int_bl, v_int_br] + list(reversed(top_verts_int))).material_index = MAT_INDEX_PLASTER_INT
             
         # Top sloping boundary seals (under roof deck)
-        bm.faces.new([v_ext_ml, v_ext_t, v_int_t, v_int_ml]).material_index = MAT_INDEX_TIMBER
-        bm.faces.new([v_ext_t, v_ext_mr, v_int_mr, v_int_t]).material_index = MAT_INDEX_TIMBER
+        for k in range(len(top_xs) - 1):
+            if g_norm < 0:
+                bm.faces.new([top_verts_ext[k], top_verts_ext[k+1], top_verts_int[k+1], top_verts_int[k]]).material_index = MAT_INDEX_TIMBER
+            else:
+                bm.faces.new([top_verts_ext[k+1], top_verts_ext[k], top_verts_int[k], top_verts_int[k+1]]).material_index = MAT_INDEX_TIMBER
         
         # Vertical side boundary seals at x_min and x_max
-        bm.faces.new([v_ext_bl, v_ext_ml, v_int_ml, v_int_bl]).material_index = MAT_INDEX_TIMBER
-        bm.faces.new([v_ext_mr, v_ext_br, v_int_br, v_int_mr]).material_index = MAT_INDEX_TIMBER
+        if g_norm < 0:
+            bm.faces.new([v_ext_bl, top_verts_ext[0], top_verts_int[0], v_int_bl]).material_index = MAT_INDEX_TIMBER
+            bm.faces.new([v_ext_br, v_int_br, top_verts_int[-1], top_verts_ext[-1]]).material_index = MAT_INDEX_TIMBER
+        else:
+            bm.faces.new([v_ext_bl, v_int_bl, top_verts_int[0], top_verts_ext[0]]).material_index = MAT_INDEX_TIMBER
+            bm.faces.new([v_ext_br, top_verts_ext[-1], top_verts_int[-1], v_int_br]).material_index = MAT_INDEX_TIMBER
         
         # Eaves Soffit Box: completely closes the open wedge between rx_min/rx_max and x_min/x_max
         for side_sign, rx_eave, x_wall, z_deck_side in [(-1, rx_min, x_min, z_deck_left), (1, rx_max, x_max, z_deck_right)]:
@@ -332,9 +354,11 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
             bm.faces.new([v_s_eave_ext, v_s_eave_int, v_s_wall_int, v_s_wall_ext]).material_index = MAT_INDEX_TIMBER
             
         # Physical 3D siding for gable wall matching lower walls (Tier 1 logs or Tier 2 planks)
+        slope = (rz - ez) / max(0.01, cx - rx_min)
         build_gable_physical_siding(
             bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
-            z_base, ez, rz, deck_thick, slope, tier=tier, plank_direction=plank_direction
+            z_base, ez, rz, deck_thick, slope, tier=tier, plank_direction=plank_direction,
+            roof_flare=roof_flare
         )
             
         # Decorative Horizontal Timber Belt at gable base
@@ -360,18 +384,22 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
         build_curved_bargeboards(bm, cx, rx_min, rx_max, y_verge, ez, rz, roof_flare=roof_flare)
 
     # 3. Eaves Fascia & Segmented Ridge Beams (curves with sway and wonkiness)
-    fascia_d = total_d if abut_back else total_d + 0.15
+    # Clamp fascia beam inside verge bargeboards so it never protrudes past the gable verges
+    y_f_start = ry_min + 0.06
+    y_f_end = (ry_max - 0.06) if not abut_back else ry_max
+    fascia_d = max(0.2, y_f_end - y_f_start)
+    fascia_mid_y = (y_f_start + y_f_end) * 0.5
     create_beveled_box(
         bm,
         size=(0.14, fascia_d, 0.18),
-        location=(rx_min, (ry_min + ry_max) * 0.5, ez),
+        location=(rx_min, fascia_mid_y, ez),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
     )
     create_beveled_box(
         bm,
         size=(0.14, fascia_d, 0.18),
-        location=(rx_max, (ry_min + ry_max) * 0.5, ez),
+        location=(rx_max, fascia_mid_y, ez),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
     )
@@ -508,44 +536,52 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
         y_ext = gy + g_norm * (half_wt + 0.005)
         y_int = gy - g_norm * half_wt
         
-        # Underside of roof deck at wall boundaries and ridge
-        delta_x = cx - rx_min
-        delta_z = rz - ez
-        slope = delta_z / max(0.01, delta_x)
+        # Height of deck underside along the bell curve
+        def get_gable_deck_z(px):
+            u = min(1.0, max(0.0, abs(px - cx) / max(0.001, half_w)))
+            d = (1.0 - roof_flare) * u + roof_flare * (1.0 - (1.0 - u) ** 2)
+            return (rz - d * (rz - ez)) - deck_thick - 0.02
         
-        z_deck_left = ez + (x_min - rx_min) * slope - deck_thick
-        z_deck_right = ez + (rx_max - x_max) * slope - deck_thick
-        z_deck_top = rz - deck_thick
+        z_deck_left = get_gable_deck_z(x_min)
+        z_deck_right = get_gable_deck_z(x_max)
+        z_deck_top = get_gable_deck_z(cx)
         
-        # 5-vertex polygon on exterior face: Base-L, Base-R, Mid-R, Apex, Mid-L
+        # Segmented top contour matching bell curve pitch
+        n_segs = 6
+        xs_left = [x_min + (cx - x_min) * (i / n_segs) for i in range(n_segs + 1)]
+        xs_right = [cx + (x_max - cx) * (i / n_segs) for i in range(1, n_segs + 1)]
+        top_xs = xs_left + xs_right
+        
+        top_verts_ext = [bm.verts.new(Vector((tx, y_ext, get_gable_deck_z(tx)))) for tx in top_xs]
         v_ext_bl = bm.verts.new(Vector((x_min, y_ext, z_base)))
         v_ext_br = bm.verts.new(Vector((x_max, y_ext, z_base)))
-        v_ext_mr = bm.verts.new(Vector((x_max, y_ext, z_deck_right)))
-        v_ext_t  = bm.verts.new(Vector((cx, y_ext, z_deck_top)))
-        v_ext_ml = bm.verts.new(Vector((x_min, y_ext, z_deck_left)))
         
-        # Matching interior vertices
+        top_verts_int = [bm.verts.new(Vector((tx, y_int, get_gable_deck_z(tx)))) for tx in top_xs]
         v_int_bl = bm.verts.new(Vector((x_min, y_int, z_base)))
         v_int_br = bm.verts.new(Vector((x_max, y_int, z_base)))
-        v_int_mr = bm.verts.new(Vector((x_max, y_int, z_deck_right)))
-        v_int_t  = bm.verts.new(Vector((cx, y_int, z_deck_top)))
-        v_int_ml = bm.verts.new(Vector((x_min, y_int, z_deck_left)))
         
         gable_mat = MAT_INDEX_TIMBER if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_PLASTER_EXT
         if g_norm < 0:
-            bm.faces.new([v_ext_bl, v_ext_br, v_ext_mr, v_ext_t, v_ext_ml]).material_index = gable_mat
-            bm.faces.new([v_int_ml, v_int_t, v_int_mr, v_int_br, v_int_bl]).material_index = MAT_INDEX_PLASTER_INT
+            bm.faces.new([v_ext_bl, v_ext_br] + list(reversed(top_verts_ext))).material_index = gable_mat
+            bm.faces.new(list(top_verts_int) + [v_int_br, v_int_bl]).material_index = MAT_INDEX_PLASTER_INT
         else:
-            bm.faces.new([v_ext_ml, v_ext_t, v_ext_mr, v_ext_br, v_ext_bl]).material_index = gable_mat
-            bm.faces.new([v_int_bl, v_int_br, v_int_mr, v_int_t, v_int_ml]).material_index = MAT_INDEX_PLASTER_INT
+            bm.faces.new(list(top_verts_ext) + [v_ext_br, v_ext_bl]).material_index = gable_mat
+            bm.faces.new([v_int_bl, v_int_br] + list(reversed(top_verts_int))).material_index = MAT_INDEX_PLASTER_INT
             
         # Top sloping boundary seals (under roof deck)
-        bm.faces.new([v_ext_ml, v_ext_t, v_int_t, v_int_ml]).material_index = MAT_INDEX_TIMBER
-        bm.faces.new([v_ext_t, v_ext_mr, v_int_mr, v_int_t]).material_index = MAT_INDEX_TIMBER
+        for k in range(len(top_xs) - 1):
+            if g_norm < 0:
+                bm.faces.new([top_verts_ext[k], top_verts_ext[k+1], top_verts_int[k+1], top_verts_int[k]]).material_index = MAT_INDEX_TIMBER
+            else:
+                bm.faces.new([top_verts_ext[k+1], top_verts_ext[k], top_verts_int[k], top_verts_int[k+1]]).material_index = MAT_INDEX_TIMBER
         
         # Vertical side boundary seals at x_min and x_max
-        bm.faces.new([v_ext_bl, v_ext_ml, v_int_ml, v_int_bl]).material_index = MAT_INDEX_TIMBER
-        bm.faces.new([v_ext_mr, v_ext_br, v_int_br, v_int_mr]).material_index = MAT_INDEX_TIMBER
+        if g_norm < 0:
+            bm.faces.new([v_ext_bl, top_verts_ext[0], top_verts_int[0], v_int_bl]).material_index = MAT_INDEX_TIMBER
+            bm.faces.new([v_ext_br, v_int_br, top_verts_int[-1], top_verts_ext[-1]]).material_index = MAT_INDEX_TIMBER
+        else:
+            bm.faces.new([v_ext_bl, v_int_bl, top_verts_int[0], top_verts_ext[0]]).material_index = MAT_INDEX_TIMBER
+            bm.faces.new([v_ext_br, top_verts_ext[-1], top_verts_int[-1], v_int_br]).material_index = MAT_INDEX_TIMBER
         
         # Eaves Soffit Box: completely closes the open wedge between rx_min/rx_max and x_min/x_max
         for side_sign, rx_eave, x_wall, z_deck_side in [(-1, rx_min, x_min, z_deck_left), (1, rx_max, x_max, z_deck_right)]:
@@ -566,9 +602,11 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
             bm.faces.new([v_s_eave_ext, v_s_eave_int, v_s_wall_int, v_s_wall_ext]).material_index = MAT_INDEX_TIMBER
             
         # Physical 3D siding for gable wall matching lower walls (Tier 1 logs or Tier 2 planks)
+        slope = (rz - ez) / max(0.01, cx - rx_min)
         build_gable_physical_siding(
             bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
-            z_base, ez, rz, deck_thick, slope, tier=tier, plank_direction=plank_direction
+            z_base, ez, rz, deck_thick, slope, tier=tier, plank_direction=plank_direction,
+            roof_flare=roof_flare
         )
             
         # Decorative Horizontal Timber Belt at gable base
@@ -594,18 +632,22 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
         build_curved_bargeboards(bm, cx, rx_min, rx_max, y_verge, ez, rz, roof_flare=roof_flare)
 
     # 3. Eaves Fascia & Ridge Beams
-    fascia_d = total_d if abut_back else total_d + 0.15
+    # Clamp fascia beam inside verge bargeboards so it never protrudes past the gable verges
+    y_f_start = ry_min + 0.06
+    y_f_end = (ry_max - 0.06) if not abut_back else ry_max
+    fascia_d = max(0.2, y_f_end - y_f_start)
+    fascia_mid_y = (y_f_start + y_f_end) * 0.5
     create_beveled_box(
         bm,
         size=(0.14, fascia_d, 0.18),
-        location=(rx_min, (ry_min + ry_max) * 0.5, ez),
+        location=(rx_min, fascia_mid_y, ez),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
     )
     create_beveled_box(
         bm,
         size=(0.14, fascia_d, 0.18),
-        location=(rx_max, (ry_min + ry_max) * 0.5, ez),
+        location=(rx_max, fascia_mid_y, ez),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.012
     )
@@ -744,43 +786,359 @@ def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8
                     bevel_amount=0.006
                 )
 
-def build_dormer(bm, center_x, center_y, z_base, dormer_w=1.1, dormer_d=1.4, dormer_h=1.3):
+def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1.2, dormer_d=1.4, dormer_h=1.3,
+                 roof_flare=0.35, tier='TIER_3', center_x=None, center_y=None):
     """
-    Builds a dormer window structure projecting from the roof slope.
+    Builds a stylized medieval dormer window structure projecting cleanly from the roof slope.
+    facing_dir: horizontal (fx, fy) pointing outward perpendicular to the slope, typically (-1, 0) or (1, 0).
     """
-    # Dormer body box
+    if center_x is not None and center_y is not None:
+        center_pos = (center_x, center_y)
+    elif center_pos is None:
+        center_pos = (0.0, 0.0)
+
+    fx, fy = facing_dir
+    f_len = math.sqrt(fx * fx + fy * fy)
+    if f_len > 1e-4:
+        fx /= f_len
+        fy /= f_len
+    else:
+        fx, fy = -1.0, 0.0
+    sx, sy = -fy, fx
+    
+    cx, cy = center_pos
+    half_dw = dormer_w * 0.5
+    half_dd = dormer_d * 0.5
+    rot_z = math.atan2(fy, fx)
+    
+    # 1. Main Dormer Body Box (cheeks and front)
+    create_beveled_box(
+        bm,
+        size=(dormer_d, dormer_w, dormer_h),
+        location=(cx, cy, z_base + dormer_h * 0.5),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_PLASTER_EXT,
+        bevel_amount=0.012
+    )
+    
+    # 4 Chunky Timber Corner Posts
+    for s_side in [-1, 1]:
+        for f_side in [-1, 1]:
+            px = cx + fx * (half_dd - 0.06) * f_side + sx * (half_dw - 0.06) * s_side
+            py = cy + fy * (half_dd - 0.06) * f_side + sy * (half_dw - 0.06) * s_side
+            create_beveled_box(
+                bm,
+                size=(0.12, 0.12, dormer_h + 0.04),
+                location=(px, py, z_base + dormer_h * 0.5),
+                rotation=(0.0, 0.0, rot_z),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.010
+            )
+            
+    # 2. Window on Front Face
+    front_x = cx + fx * (half_dd + 0.02)
+    front_y = cy + fy * (half_dd + 0.02)
+    win_w = dormer_w * 0.62
+    win_h = dormer_h * 0.58
+    win_z = z_base + dormer_h * 0.52
+    
+    # Timber Window Sill
+    create_beveled_box(
+        bm,
+        size=(0.10, win_w + 0.14, 0.08),
+        location=(front_x + fx * 0.04, front_y + fy * 0.04, win_z - win_h * 0.5 - 0.04),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.008
+    )
+    # Window Frame & Leaded Glass
     create_box(
         bm,
-        size=(dormer_w, dormer_d, dormer_h),
-        location=(center_x, center_y, z_base + dormer_h * 0.5),
+        size=(0.06, win_w, win_h),
+        location=(front_x, front_y, win_z),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_GLASS
+    )
+    # Wooden Frame Perimeter and Mullion Cross
+    create_beveled_box(
+        bm,
+        size=(0.08, win_w + 0.04, 0.06),
+        location=(front_x + fx * 0.01, front_y + fy * 0.01, win_z + win_h * 0.5 + 0.02),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.006
+    )
+    create_box(
+        bm,
+        size=(0.07, 0.04, win_h),
+        location=(front_x + fx * 0.01, front_y + fy * 0.01, win_z),
+        rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER
     )
-    # Dormer gable roof
-    d_rx_min = center_x - dormer_w * 0.5 - 0.15
-    d_rx_max = center_x + dormer_w * 0.5 + 0.15
-    d_ry_min = center_y - dormer_d * 0.5 - 0.15
-    d_ry_max = center_y + dormer_d * 0.5
-    d_rz = z_base + dormer_h + 0.65
-    
-    # Mini gable slopes
-    v_l0 = bm.verts.new(Vector((d_rx_min, d_ry_min, z_base + dormer_h)))
-    v_l1 = bm.verts.new(Vector((d_rx_min, d_ry_max, z_base + dormer_h)))
-    v_r1 = bm.verts.new(Vector((center_x, d_ry_max, d_rz)))
-    v_r0 = bm.verts.new(Vector((center_x, d_ry_min, d_rz)))
-    f_l = bm.faces.new([v_l0, v_l1, v_r1, v_r0])
-    f_l.material_index = MAT_INDEX_SHINGLES
-    
-    v_rr0 = bm.verts.new(Vector((d_rx_max, d_ry_min, z_base + dormer_h)))
-    v_rr1 = bm.verts.new(Vector((d_rx_max, d_ry_max, z_base + dormer_h)))
-    f_r = bm.faces.new([v_r0, v_r1, v_rr1, v_rr0])
-    f_r.material_index = MAT_INDEX_SHINGLES
-    
-    # Dormer window
     create_box(
         bm,
-        size=(dormer_w * 0.7, 0.04, dormer_h * 0.6),
-        location=(center_x, center_y - dormer_d * 0.5 - 0.02, z_base + dormer_h * 0.5),
-        mat_index=MAT_INDEX_GLASS
+        size=(0.07, win_w, 0.04),
+        location=(front_x + fx * 0.01, front_y + fy * 0.01, win_z),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER
+    )
+    
+    # 3. Mini Flared Gable Roof over Dormer
+    d_roof_h = 0.75
+    d_overhang = 0.18
+    d_rz = z_base + dormer_h + d_roof_h
+    d_ez = z_base + dormer_h - 0.06
+    roof_len = dormer_d + d_overhang * 2
+    roof_span = dormer_w + d_overhang * 2
+    
+    # Build mini gable deck slopes along side_dir
+    segments_slope = 3
+    for s_sign in [-1, 1]:
+        for k in range(segments_slope):
+            u0 = k / float(segments_slope)
+            u1 = (k + 1) / float(segments_slope)
+            drop0 = (1.0 - roof_flare) * u0 + roof_flare * (1.0 - (1.0 - u0) ** 2)
+            drop1 = (1.0 - roof_flare) * u1 + roof_flare * (1.0 - (1.0 - u1) ** 2)
+            z0 = d_rz - drop0 * (d_rz - d_ez)
+            z1 = d_rz - drop1 * (d_rz - d_ez)
+            
+            offset0 = s_sign * u0 * (roof_span * 0.5)
+            offset1 = s_sign * u1 * (roof_span * 0.5)
+            
+            seg_y0 = -roof_len * 0.5
+            seg_y1 = roof_len * 0.5
+            p0_a = Vector((cx + sx * offset0 + fx * seg_y0, cy + sy * offset0 + fy * seg_y0, z0))
+            p0_b = Vector((cx + sx * offset0 + fx * seg_y1, cy + sy * offset0 + fy * seg_y1, z0))
+            p1_b = Vector((cx + sx * offset1 + fx * seg_y1, cy + sy * offset1 + fy * seg_y1, z1))
+            p1_a = Vector((cx + sx * offset1 + fx * seg_y0, cy + sy * offset1 + fy * seg_y0, z1))
+            
+            inward = Vector((0.0, 0.0, -0.06))
+            v0_t = bm.verts.new(p0_a)
+            v1_t = bm.verts.new(p0_b)
+            v2_t = bm.verts.new(p1_b)
+            v3_t = bm.verts.new(p1_a)
+            
+            v0_b = bm.verts.new(p0_a + inward)
+            v1_b = bm.verts.new(p0_b + inward)
+            v2_b = bm.verts.new(p1_b + inward)
+            v3_b = bm.verts.new(p1_a + inward)
+            
+            if s_sign > 0:
+                bm.faces.new([v0_t, v1_t, v2_t, v3_t]).material_index = MAT_INDEX_SHINGLES
+                bm.faces.new([v3_b, v2_b, v1_b, v0_b]).material_index = MAT_INDEX_TIMBER
+            else:
+                bm.faces.new([v3_t, v2_t, v1_t, v0_t]).material_index = MAT_INDEX_SHINGLES
+                bm.faces.new([v0_b, v1_b, v2_b, v3_b]).material_index = MAT_INDEX_TIMBER
+                
+    # Front Bargeboards & Apex Finial
+    front_edge_x = cx + fx * (half_dd + d_overhang * 0.8)
+    front_edge_y = cy + fy * (half_dd + d_overhang * 0.8)
+    for s_sign in [-1, 1]:
+        b_x = front_edge_x + sx * (roof_span * 0.28 * s_sign)
+        b_y = front_edge_y + sy * (roof_span * 0.28 * s_sign)
+        b_z = (d_rz + d_ez) * 0.5
+        b_len = math.sqrt((roof_span * 0.5) ** 2 + (d_rz - d_ez) ** 2)
+        b_ang = math.atan2(d_rz - d_ez, roof_span * 0.5)
+        create_beveled_box(
+            bm,
+            size=(0.06, 0.08, b_len + 0.06),
+            location=(b_x, b_y, b_z),
+            rotation=(-s_sign * b_ang, 0.0, rot_z + math.pi * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.008
+        )
+    # Apex Finial Needle
+    create_cylinder(
+        bm,
+        radius=0.035,
+        height=0.35,
+        segments=8,
+        location=(front_edge_x, front_edge_y, d_rz + 0.16),
+        mat_index=MAT_INDEX_TIMBER
+    )
+
+def build_roof_turret(bm, center_pos, z_base, turret_w=1.3, turret_h=1.9, spire_h=2.4, style='OCTAGONAL', roof_flare=0.35):
+    """
+    Builds a magical fairytale belfry/spire turret perched on the roof (matching Reference Image 5).
+    Features chunky corner posts, arched openings, bracketed cornice, steep bell-cast spire, and finial needle.
+    """
+    cx, cy = center_pos
+    num_sides = 8 if style == 'OCTAGONAL' else 4
+    rot_offset = (math.pi / 8.0) if style == 'OCTAGONAL' else (math.pi / 4.0)
+    radius = turret_w * 0.5
+    
+    # 1. Timber Base Collar / Mounting Platform
+    collar_h = 0.35
+    create_beveled_box(
+        bm,
+        size=(turret_w + 0.28, turret_w + 0.28, collar_h),
+        location=(cx, cy, z_base + collar_h * 0.5),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.02
+    )
+    
+    # 2. Turret Body Walls & Chunky Corner Posts
+    body_base_z = z_base + collar_h
+    body_h = turret_h - collar_h
+    
+    post_angles = [rot_offset + i * (2.0 * math.pi / num_sides) for i in range(num_sides)]
+    post_locs = []
+    for ang in post_angles:
+        px = cx + radius * math.cos(ang)
+        py = cy + radius * math.sin(ang)
+        post_locs.append((px, py))
+        create_beveled_box(
+            bm,
+            size=(0.14, 0.14, body_h),
+            location=(px, py, body_base_z + body_h * 0.5),
+            rotation=(0.0, 0.0, ang),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.012
+        )
+        
+    # Facet Walls & Arched Openings between posts
+    for i in range(num_sides):
+        nxt = (i + 1) % num_sides
+        x0, y0 = post_locs[i]
+        x1, y1 = post_locs[nxt]
+        mid_x = (x0 + x1) * 0.5
+        mid_y = (y0 + y1) * 0.5
+        facet_w = math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2)
+        facet_ang = math.atan2(y1 - y0, x1 - x0)
+        
+        has_opening = (i % 2 == 0) if style == 'OCTAGONAL' else True
+        if has_opening:
+            parapet_h = body_h * 0.35
+            create_beveled_box(
+                bm,
+                size=(facet_w + 0.02, 0.09, parapet_h),
+                location=(mid_x, mid_y, body_base_z + parapet_h * 0.5),
+                rotation=(0.0, 0.0, facet_ang),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.008
+            )
+            open_h = body_h * 0.48
+            open_z = body_base_z + parapet_h + open_h * 0.5
+            create_box(
+                bm,
+                size=(facet_w * 0.70, 0.05, open_h),
+                location=(mid_x, mid_y, open_z),
+                rotation=(0.0, 0.0, facet_ang),
+                mat_index=MAT_INDEX_GLASS
+            )
+            head_h = body_h - parapet_h - open_h
+            create_beveled_box(
+                bm,
+                size=(facet_w + 0.02, 0.09, head_h),
+                location=(mid_x, mid_y, body_base_z + body_h - head_h * 0.5),
+                rotation=(0.0, 0.0, facet_ang),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.008
+            )
+        else:
+            create_beveled_box(
+                bm,
+                size=(facet_w + 0.02, 0.09, body_h),
+                location=(mid_x, mid_y, body_base_z + body_h * 0.5),
+                rotation=(0.0, 0.0, facet_ang),
+                mat_index=MAT_INDEX_PLASTER_EXT,
+                bevel_amount=0.008
+            )
+            
+    # 3. Projecting Cornice with Decorative Corbel Brackets
+    cornice_z = body_base_z + body_h
+    cornice_overhang = 0.20
+    cornice_r = radius + cornice_overhang
+    cornice_h = 0.16
+    create_cylinder(
+        bm,
+        radius=cornice_r,
+        height=cornice_h,
+        segments=num_sides,
+        location=(cx, cy, cornice_z + cornice_h * 0.5),
+        rotation=(0.0, 0.0, rot_offset),
+        mat_index=MAT_INDEX_TIMBER
+    )
+    for px, py in post_locs:
+        bx = cx + (px - cx) * 1.15
+        by = cy + (py - cy) * 1.15
+        create_beveled_box(
+            bm,
+            size=(0.10, 0.14, 0.20),
+            location=(bx, by, cornice_z - 0.10),
+            rotation=(0.0, 0.0, math.atan2(by - cy, bx - cx)),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.010
+        )
+        
+    # 4. Steep Bell-Cast Faceted Spire Roof (Fairytale style)
+    spire_base_z = cornice_z + cornice_h
+    spire_r = cornice_r + 0.06
+    spire_apex_z = spire_base_z + spire_h
+    
+    spire_segs = 4
+    prev_ring = []
+    for i in range(num_sides):
+        ang = post_angles[i]
+        vx = cx + spire_r * math.cos(ang)
+        vy = cy + spire_r * math.sin(ang)
+        prev_ring.append(bm.verts.new(Vector((vx, vy, spire_base_z))))
+        
+    for s_step in range(1, spire_segs + 1):
+        u = s_step / float(spire_segs)
+        flare_factor = (1.0 - roof_flare) * u + roof_flare * (u ** 1.8)
+        cur_z = spire_base_z + u * spire_h
+        cur_r = spire_r * (1.0 - flare_factor)
+        
+        if s_step == spire_segs or cur_r < 0.04:
+            v_apex = bm.verts.new(Vector((cx, cy, spire_apex_z)))
+            for i in range(num_sides):
+                nxt = (i + 1) % num_sides
+                f_cap = bm.faces.new([prev_ring[i], prev_ring[nxt], v_apex])
+                f_cap.material_index = MAT_INDEX_SHINGLES
+                f_cap.smooth = False
+            break
+        else:
+            cur_ring = []
+            for i in range(num_sides):
+                ang = post_angles[i]
+                vx = cx + cur_r * math.cos(ang)
+                vy = cy + cur_r * math.sin(ang)
+                cur_ring.append(bm.verts.new(Vector((vx, vy, cur_z))))
+                
+            for i in range(num_sides):
+                nxt = (i + 1) % num_sides
+                f_side = bm.faces.new([prev_ring[i], prev_ring[nxt], cur_ring[nxt], cur_ring[i]])
+                f_side.material_index = MAT_INDEX_SHINGLES
+                f_side.smooth = False
+            prev_ring = cur_ring
+            
+    # 5. Finial Spire Needle & Iron Ornament at Apex
+    needle_h = 0.85
+    create_cylinder(
+        bm,
+        radius=0.035,
+        height=needle_h,
+        segments=8,
+        location=(cx, cy, spire_apex_z + needle_h * 0.5),
+        mat_index=MAT_INDEX_TIMBER
+    )
+    create_cylinder(
+        bm,
+        radius=0.08,
+        height=0.12,
+        segments=10,
+        location=(cx, cy, spire_apex_z + needle_h * 0.65),
+        mat_index=MAT_INDEX_IRON
+    )
+    create_cylinder(
+        bm,
+        radius=0.015,
+        height=0.55,
+        segments=6,
+        location=(cx, cy, spire_apex_z + needle_h * 0.85),
+        rotation=(0.0, math.pi * 0.5, math.pi * 0.25),
+        mat_index=MAT_INDEX_IRON
     )
 
 def build_fantasy_chimney(bm, pos_xy, z_start, total_height, width=0.85, depth=0.85, crooked_angle=0.0):

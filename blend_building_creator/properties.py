@@ -499,6 +499,24 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default=True,
         update=on_property_updated
     )
+
+    has_roof_turret: BoolProperty(
+        name="Roof Spire Turret",
+        description="Fairytale spire dormer tower perched on the roof",
+        default=False,
+        update=on_property_updated
+    )
+
+    roof_turret_style: EnumProperty(
+        name="Turret Style",
+        description="Architectural shape of the roof spire turret",
+        items=[
+            ('OCTAGONAL', "Octagonal Spire", "8-sided fairytale fantasy belfry with conical spire"),
+            ('SQUARE', "Square Belfry", "4-sided timber belfry with pyramid spire"),
+        ],
+        default='OCTAGONAL',
+        update=on_property_updated
+    )
     
     has_chimney: BoolProperty(
         name="Stone Chimney",

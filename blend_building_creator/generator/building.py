@@ -27,7 +27,7 @@ from .interior import (
     build_spiral_staircase, build_attic_trusses, build_stair_guardrail
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly, build_iron_lantern
-from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_dormer, build_fantasy_chimney
+from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_dormer, build_roof_turret, build_fantasy_chimney
 from .accessories import (
     build_blacksmith_forge, build_windmill_sails, build_watchtower_lookout,
     build_tavern_porch_and_sign, build_fisherman_stilts, build_bakery_oven,
@@ -1189,13 +1189,64 @@ def generate_building(obj, props):
         
     # Dormer Windows
     if props.has_dormers and roof_style in ('SWAY', 'GABLE') and effective_archetype != 'WATCHTOWER':
-        dormer_y = -top_hy * 0.5
+        roof_half_w = top_hx + props.roof_overhang
+        dormer_u = 0.52
+        dormer_drop = (1.0 - flare_val) * dormer_u + flare_val * (1.0 - (1.0 - dormer_u) ** 2)
+        slope_deck_z = (top_z + props.roof_height) - dormer_drop * (props.roof_height + 0.10)
+        z_dormer_base = slope_deck_z - 0.22
+        
+        # Determine dormer Y positions along the length of the roof
+        if top_hy * 2.0 > 4.2:
+            dormer_ys = [-top_hy * 0.35, top_hy * 0.35]
+        else:
+            dormer_ys = [0.0]
+            
+        tier_val = getattr(props, 'material_tier', 'TIER_3')
+        # Left slope dormer (facing -X)
+        dormer_x_left = -roof_half_w * dormer_u
         build_dormer(
             bm,
-            center_x=0.0,
-            center_y=dormer_y,
-            z_base=top_z + props.roof_height * 0.25,
-            dormer_w=1.2, dormer_d=1.5, dormer_h=1.3
+            center_pos=(dormer_x_left, dormer_ys[0]),
+            z_base=z_dormer_base,
+            facing_dir=(-1, 0),
+            dormer_w=1.2, dormer_d=1.4, dormer_h=1.3,
+            roof_flare=flare_val,
+            tier=tier_val
+        )
+        # If building is long enough, place a second dormer on the right slope (+X)
+        if len(dormer_ys) > 1:
+            dormer_x_right = roof_half_w * dormer_u
+            build_dormer(
+                bm,
+                center_pos=(dormer_x_right, dormer_ys[1]),
+                z_base=z_dormer_base,
+                facing_dir=(1, 0),
+                dormer_w=1.2, dormer_d=1.4, dormer_h=1.3,
+                roof_flare=flare_val,
+                tier=tier_val
+            )
+            
+    # Fairytale Roof Spire Turret (Reference Image 5)
+    if getattr(props, 'has_roof_turret', False) and effective_archetype != 'WATCHTOWER':
+        if roof_style == 'SWAY':
+            ridge_z = top_z + props.roof_height - getattr(props, 'roof_sway', 0.25)
+        else:
+            ridge_z = top_z + props.roof_height
+            
+        turret_style = getattr(props, 'roof_turret_style', 'OCTAGONAL')
+        turret_w = 1.3
+        turret_h = 1.9
+        spire_h = 2.4
+        turret_y = 0.0 if not props.has_chimney else -top_hy * 0.25
+        build_roof_turret(
+            bm,
+            center_pos=(0.0, turret_y),
+            z_base=ridge_z - 0.15,
+            turret_w=turret_w,
+            turret_h=turret_h,
+            spire_h=spire_h,
+            style=turret_style,
+            roof_flare=flare_val
         )
         
     # Stylized Crooked Chimney

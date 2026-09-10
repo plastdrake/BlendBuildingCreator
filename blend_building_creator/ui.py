@@ -221,6 +221,9 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
             
         col_det = layout.column(align=True)
         col_det.prop(props, "has_dormers")
+        col_det.prop(props, "has_roof_turret")
+        if props.has_roof_turret:
+            col_det.prop(props, "roof_turret_style")
         col_det.prop(props, "has_chimney")
         col_det.prop(props, "has_hoist_beam")
 

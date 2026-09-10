@@ -155,10 +155,10 @@ def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     ux = dx / seg_len
     uy = dy / seg_len
     
-    # 1. Solid Interior Core (sealed flat interior surface)
-    core_thick = thickness * 0.40
-    core_cx = (x1 + x2) * 0.5 - nx * (thickness * 0.28)
-    core_cy = (y1 + y2) * 0.5 - ny * (thickness * 0.28)
+    # 1. Solid Interior Core (sealed flat interior surface, flush with planks)
+    core_thick = thickness * 0.84
+    core_cx = (x1 + x2) * 0.5 - nx * (thickness * 0.06)
+    core_cy = (y1 + y2) * 0.5 - ny * (thickness * 0.06)
     core_cz = (z_bottom + z_top) * 0.5
     create_box(
         bm,
@@ -168,7 +168,7 @@ def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         mat_index=MAT_INDEX_PLASTER_INT
     )
     
-    ext_offset = thickness * 0.46
+    ext_offset = thickness * 0.40
     
     if direction == 'VERTICAL':
         # --- VERTICAL BOARD AND BATTEN SIDING ---
@@ -194,21 +194,21 @@ def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             # Base wide board
             create_beveled_box(
                 bm,
-                size=(max(0.08, actual_bw - 0.008 + w_jitter), 0.024, height),
+                size=(max(0.08, actual_bw - 0.008 + w_jitter), 0.032, height),
                 location=(bx, by, bz),
                 rotation=(tilt_h, tilt_v, angle),
                 mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.004
+                bevel_amount=0.005
             )
             
             # Raised batten strip over vertical seam
             seam_u = k * actual_bw
             if 0.02 < seam_u < seg_len - 0.02:
-                batten_x = x1 + ux * seam_u + nx * (ext_offset + 0.012 + depth_j * 0.5)
-                batten_y = y1 + uy * seam_u + ny * (ext_offset + 0.012 + depth_j * 0.5)
+                batten_x = x1 + ux * seam_u + nx * (ext_offset + 0.016 + depth_j * 0.5)
+                batten_y = y1 + uy * seam_u + ny * (ext_offset + 0.016 + depth_j * 0.5)
                 create_beveled_box(
                     bm,
-                    size=(batten_w, 0.032, height),
+                    size=(batten_w, 0.035, height),
                     location=(batten_x, batten_y, bz),
                     rotation=(tilt_h * 0.5, tilt_v * 0.5, angle),
                     mat_index=MAT_INDEX_TIMBER,
@@ -234,11 +234,11 @@ def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             
             create_beveled_box(
                 bm,
-                size=(seg_len, 0.028, plank_h),
+                size=(seg_len, 0.035, plank_h),
                 location=(pcx, pcy, pz),
                 rotation=(tilt_j, z_tilt, angle),
                 mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.005
+                bevel_amount=0.006
             )
 
 def build_stone_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
@@ -517,12 +517,12 @@ def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
     uy = dy / span
     nx, ny = normal_vec
     
-    beam_w = 0.14
-    beam_d = 0.06
+    beam_w = 0.19
+    beam_d = 0.09
     h = z_top - z_bottom
     
     # Exterior surface offset from wall centerline
-    ext_dist = wall_thickness * 0.5 + beam_d * 0.4
+    ext_dist = wall_thickness * 0.5 + beam_d * 0.35
     
     def to_world_pt(u, z):
         wx = x1 + ux * u + nx * ext_dist
@@ -534,7 +534,7 @@ def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
     # 1. Top Plate Beam (under the ceiling / floor above)
     top_z = z_top - beam_w * 0.5
     cx, cy, cz = to_world_pt(span * 0.5, top_z)
-    create_beveled_box(bm, size=(span, beam_d, beam_w), location=(cx, cy, cz), rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+    create_beveled_box(bm, size=(span, beam_d, beam_w), location=(cx, cy, cz), rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
 
     # 2. Bottom Sill Beam (skips doors)
     bot_z = z_bottom + beam_w * 0.5
@@ -653,7 +653,7 @@ def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
     Builds classic stylized Tudor half-timbering with corner posts, top/bottom plates,
     mid-rails, and diagonal braces, cleanly cutting around all openings.
     """
-    beam_w = 0.14
+    beam_w = 0.22
     h = z_top - z_bottom
     
     # 4 Vertical Corner Posts
@@ -669,7 +669,7 @@ def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
             size=(beam_w, beam_w, h),
             location=(cx, cy, z_bottom + h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.012
+            bevel_amount=0.016
         )
         
     # Build each facade with its respective opening cutouts and explicit exterior normal

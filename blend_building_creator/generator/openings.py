@@ -89,16 +89,24 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 f = bm.faces.new(f_verts)
                 f.material_index = MAT_INDEX_STONE
                 
-        # Inner timber door casing
+        # 4. Solid Masonry Spandrel Infill (completely seals the rectangular wall cutout around the arch)
+        spandrel_w = 0.22
+        spandrel_h = (door_h - (z_spring - z_base)) + 0.14
         create_beveled_box(
-            bm, size=(0.06, frame_depth - 0.04, jamb_h),
-            location=(center_x - (R_in - 0.03), y_front, z_base + 0.09 + jamb_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+            bm, size=(spandrel_w, wall_thickness + 0.04, spandrel_h),
+            location=(center_x - (R_in + spandrel_w * 0.45), y_front, z_spring + spandrel_h * 0.45),
+            mat_index=MAT_INDEX_STONE, bevel_amount=0.012
         )
         create_beveled_box(
-            bm, size=(0.06, frame_depth - 0.04, jamb_h),
-            location=(center_x + (R_in - 0.03), y_front, z_base + 0.09 + jamb_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+            bm, size=(spandrel_w, wall_thickness + 0.04, spandrel_h),
+            location=(center_x + (R_in + spandrel_w * 0.45), y_front, z_spring + spandrel_h * 0.45),
+            mat_index=MAT_INDEX_STONE, bevel_amount=0.012
+        )
+        # Top masonry lintel backing sealing the top gap of the wall cutout
+        create_beveled_box(
+            bm, size=(door_w + 0.44, wall_thickness + 0.04, 0.16),
+            location=(center_x, y_front, z_spring + R_out + 0.08),
+            mat_index=MAT_INDEX_STONE, bevel_amount=0.012
         )
     else:
         # Standard Square Timber Post-and-Lintel Frame
@@ -201,14 +209,15 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             create_cylinder(bm, radius=0.055, height=0.018, segments=12, location=rng_c, rotation=(1.57, 0.0, ang_val), mat_index=MAT_INDEX_IRON)
     else:
         # Single standard walk-in door (genuine multi-plank fantasy construction)
-        hinge_x = center_x - door_w * 0.5 + 0.02
-        hinge_y = y_front - wall_thickness * 0.2
-        
         door_leaf_w = door_w - 0.04
         door_leaf_h = door_h - 0.05
         door_leaf_t = 0.055
         ang_rad = math.radians(door_angle_deg)
         rot_mat = Euler((0.0, 0.0, ang_rad), 'XYZ').to_matrix().to_4x4()
+        
+        z_door_bot = z_base + (0.095 if is_arched else 0.05)
+        hinge_x = center_x - door_w * 0.5 + 0.025
+        hinge_y = (y_front - frame_depth * 0.5 + 0.14) if is_arched else (y_front - wall_thickness * 0.2)
         
         # 4 Physical vertical wooden planks with gaps and subtle handmade depth variation
         num_planks = 4
@@ -219,13 +228,14 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             px = (k + 0.5) * pw + k * gap
             if is_arched:
                 x_rel = px - door_leaf_w * 0.5
-                r_sq = max(0.04, (R_in * 0.96) ** 2 - x_rel * x_rel)
-                arch_top = z_spring + math.sqrt(r_sq) - 0.03
-                cur_plank_h = max(0.5, arch_top - (z_base + 0.05))
+                r_door = max(0.01, R_in - 0.025)
+                r_sq = max(0.0, r_door * r_door - x_rel * x_rel)
+                arch_top = z_spring + math.sqrt(r_sq)
+                cur_plank_h = max(0.5, arch_top - z_door_bot)
             else:
                 cur_plank_h = door_leaf_h
             jank = 0.003 * math.sin(k * 2.8 + 1.2)
-            plank_loc = Vector((hinge_x, hinge_y, z_base + 0.05)) + (rot_mat @ Vector((px, jank, cur_plank_h * 0.5)))
+            plank_loc = Vector((hinge_x, hinge_y, z_door_bot)) + (rot_mat @ Vector((px, jank, cur_plank_h * 0.5)))
             create_beveled_box(
                 bm,
                 size=(pw - 0.002, door_leaf_t, cur_plank_h),
