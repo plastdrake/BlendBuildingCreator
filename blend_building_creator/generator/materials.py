@@ -28,6 +28,30 @@ def _set_bsdf_input(bsdf, input_name, value):
     if sock is not None:
         sock.default_value = value
 
+def _apply_crevice_ao(tree, bsdf, color_socket, strength=0.45, distance=0.15):
+    """
+    Darkens base color in geometric crevices (between logs, beams, stone courses) via
+    Ambient Occlusion, giving surfaces a hand-painted, less flat/plastic look.
+    """
+    ao = tree.nodes.new("ShaderNodeAmbientOcclusion")
+    ao.location = (color_socket.node.location.x + 40, color_socket.node.location.y - 260)
+    ao.inputs["Distance"].default_value = distance
+    ramp_ao = tree.nodes.new("ShaderNodeValToRGB")
+    ramp_ao.location = (ao.location.x + 180, ao.location.y)
+    ramp_ao.color_ramp.elements[0].position = 0.0
+    ramp_ao.color_ramp.elements[0].color = (1.0 - strength, 1.0 - strength, 1.0 - strength, 1.0)
+    ramp_ao.color_ramp.elements[1].position = 1.0
+    ramp_ao.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+    tree.links.new(ao.outputs["AO"], ramp_ao.inputs["Fac"])
+    mix = tree.nodes.new("ShaderNodeMix")
+    mix.data_type = 'RGBA'
+    mix.blend_type = 'MULTIPLY'
+    mix.location = (ramp_ao.location.x + 180, ramp_ao.location.y)
+    mix.inputs["Factor"].default_value = 1.0
+    tree.links.new(color_socket, mix.inputs["A"])
+    tree.links.new(ramp_ao.outputs["Color"], mix.inputs["B"])
+    tree.links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
+
 def create_stylized_stone(name="M_Building_Stone", color=(0.42, 0.40, 0.38, 1.0)):
     mat = bpy.data.materials.get(name)
     if mat is None:
@@ -62,7 +86,7 @@ def create_stylized_stone(name="M_Building_Stone", color=(0.42, 0.40, 0.38, 1.0)
     color_ramp.color_ramp.elements[0].color = c_dark
     color_ramp.color_ramp.elements[1].color = c_light
     tree.links.new(noise.outputs["Fac"], color_ramp.inputs["Fac"])
-    tree.links.new(color_ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    _apply_crevice_ao(tree, bsdf, color_ramp.outputs["Color"], strength=0.40, distance=0.20)
     
     _set_bsdf_input(bsdf, "Roughness", 0.88)
     return mat
@@ -99,7 +123,7 @@ def create_stylized_plaster(name="M_Building_Plaster", color=(0.88, 0.82, 0.73, 
     ramp.color_ramp.elements[0].color = c_shadow
     ramp.color_ramp.elements[1].color = c_base
     tree.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
-    tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    _apply_crevice_ao(tree, bsdf, ramp.outputs["Color"], strength=0.35, distance=0.15)
     
     _set_bsdf_input(bsdf, "Roughness", 0.92)
     return mat
@@ -141,7 +165,7 @@ def create_stylized_timber(name="M_Building_Timber", color=(0.28, 0.16, 0.09, 1.
     ramp.color_ramp.elements[0].color = c_bark
     ramp.color_ramp.elements[1].color = c_grain
     tree.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
-    tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    _apply_crevice_ao(tree, bsdf, ramp.outputs["Color"], strength=0.40, distance=0.12)
     
     _set_bsdf_input(bsdf, "Roughness", 0.75)
     return mat
@@ -284,7 +308,7 @@ def create_stylized_shingles(name="M_Building_Shingles", color=(0.20, 0.28, 0.45
     ramp.color_ramp.elements[0].color = c1
     ramp.color_ramp.elements[1].color = c2
     tree.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
-    tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    _apply_crevice_ao(tree, bsdf, ramp.outputs["Color"], strength=0.35, distance=0.10)
     
     _set_bsdf_input(bsdf, "Roughness", 0.65)
     return mat
