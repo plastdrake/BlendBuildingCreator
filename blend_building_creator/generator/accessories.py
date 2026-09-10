@@ -730,6 +730,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
     - Features timber corner posts, leaded glass window, and dedicated shingled roof.
     """
     wx, wy, ox, oy, tx, ty, rot_z = _get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
+    facade_rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
     
     half_w = width * 0.5
     half_d = depth * 0.5
@@ -737,127 +738,202 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
     cy = wy + oy * half_d
     
     # 1. Foundation or Console Corbels
+    # 1. Foundation or Console Corbels
     if floor_mode == 'GROUND':
         found_depth = depth + 0.15
         found_width = width + 0.20
         create_beveled_box(
             bm,
-            size=(found_depth if abs(ox) > 0.5 else found_width,
-                  found_width if abs(ox) > 0.5 else found_depth,
-                  0.30),
+            size=(found_depth, found_width, 0.30),
             location=(wx + ox * (half_d + 0.05), wy + oy * (half_d + 0.05), z_base - 0.15),
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_STONE,
             bevel_amount=0.02
         )
     else: # UPPER floor oriel bay
-        # Heavy diagonal timber corbels underneath
+        # Heavy diagonal timber console corbels underneath
         bracket_spacing = width * 0.38
+        diag_len = math.sqrt((depth * 0.80) ** 2 + 0.75 ** 2)
+        diag_ang = math.atan2(0.75, depth * 0.80)
+        bx_vec = Vector((math.cos(diag_ang), 0.0, math.sin(diag_ang)))
+        by_vec = Vector((0.0, 1.0, 0.0))
+        bz_vec = Vector((-math.sin(diag_ang), 0.0, math.cos(diag_ang)))
+        corbel_euler = (facade_rot_mat @ Matrix((bx_vec, by_vec, bz_vec)).transposed().to_4x4()).to_euler()
+        
         for b_sign in [-1, 0, 1]:
-            bx = wx + tx * (b_sign * bracket_spacing)
-            by = wy + ty * (b_sign * bracket_spacing)
-            # Diagonal strut
-            diag_len = math.sqrt((depth * 0.85) ** 2 + 0.85 ** 2)
-            diag_ang = math.atan2(0.85, depth * 0.85)
-            # Position halfway along diagonal
-            b_mid_x = bx + ox * (depth * 0.42)
-            b_mid_y = by + oy * (depth * 0.42)
+            loc_c = Vector((depth * 0.40, b_sign * bracket_spacing, z_base - 0.42))
+            world_c = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_c.to_4d()).to_3d()
             create_beveled_box(
                 bm,
                 size=(diag_len, 0.12, 0.14),
-                location=(b_mid_x, b_mid_y, z_base - 0.42),
-                rotation=(0.0, diag_ang if abs(ox) > 0.5 else 0.0, rot_z),
+                location=world_c,
+                rotation=corbel_euler,
                 mat_index=MAT_INDEX_TIMBER_FRAME,
                 bevel_amount=0.012
             )
             
-    # 2. Solid Floor Slab
+    # 2. Walk-in Interior Wooden Floor & Ceiling Planks
+    # Continuous level walk-in floor
+    loc_fl = Vector((depth * 0.50, 0.0, z_base + 0.03))
+    world_fl = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_fl.to_4d()).to_3d()
     create_beveled_box(
         bm,
-        size=(depth, width, 0.12),
-        location=(cx, cy, z_base + 0.06),
+        size=(depth + 0.04, width - 0.04, 0.06),
+        location=world_fl,
         rotation=(0.0, 0.0, rot_z),
-        mat_index=MAT_INDEX_TIMBER if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_STONE,
-        bevel_amount=0.012
+        mat_index=MAT_INDEX_WOOD,
+        bevel_amount=0.008
+    )
+    # Interior ceiling planks
+    loc_ceil = Vector((depth * 0.50, 0.0, z_base + height - 0.03))
+    world_ceil = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_ceil.to_4d()).to_3d()
+    create_beveled_box(
+        bm,
+        size=(depth + 0.04, width - 0.04, 0.06),
+        location=world_ceil,
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_WOOD,
+        bevel_amount=0.008
     )
     
-    # 3. Walls and Timber Corner Posts
+    # 3. Hollow Walls: Front Wall & Side Walls (Leaving Rear Open into Main Room)
     wall_mat = MAT_INDEX_TIMBER if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_PLASTER_EXT
-    # Main wall box
-    create_beveled_box(
-        bm,
-        size=(depth - 0.04, width - 0.04, height),
-        location=(cx, cy, z_base + height * 0.5),
-        rotation=(0.0, 0.0, rot_z),
-        mat_index=wall_mat,
-        bevel_amount=0.015
-    )
-    # Chunky outer corner posts
     col_w = 0.16
-    outer_edge_dist = depth - col_w * 0.5
+    wall_thick = 0.18
+    
+    # 3a. Two Side Walls (Left and Right)
     for s_sign in [-1, 1]:
-        px = wx + ox * outer_edge_dist + tx * (half_w - col_w * 0.5) * s_sign
-        py = wy + oy * outer_edge_dist + ty * (half_w - col_w * 0.5) * s_sign
+        loc_sw = Vector((depth * 0.50, (half_w - wall_thick * 0.5) * s_sign, z_base + height * 0.5))
+        world_sw = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_sw.to_4d()).to_3d()
         create_beveled_box(
             bm,
-            size=(col_w, col_w, height + 0.08),
-            location=(px, py, z_base + height * 0.5),
+            size=(depth, wall_thick, height),
+            location=world_sw,
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=wall_mat,
+            bevel_amount=0.012
+        )
+        # Wall-anchor post at house wall
+        loc_post = Vector((col_w * 0.5, (half_w - col_w * 0.5) * s_sign, z_base + height * 0.5))
+        world_post = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_post.to_4d()).to_3d()
+        create_beveled_box(
+            bm,
+            size=(col_w, col_w, height),
+            location=world_post,
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME,
+            bevel_amount=0.010
+        )
+        # Outer corner post
+        loc_cpost = Vector((depth - col_w * 0.5, (half_w - col_w * 0.5) * s_sign, z_base + height * 0.5))
+        world_cpost = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_cpost.to_4d()).to_3d()
+        create_beveled_box(
+            bm,
+            size=(col_w, col_w, height + 0.06),
+            location=world_cpost,
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.012
         )
         
-    # Top horizontal header beam
+    # 3b. Outer Front Wall with Window Cutout
+    win_w = width * 0.52
+    win_h = height * 0.46
+    win_z = z_base + height * 0.52
+    win_bot_z = win_z - win_h * 0.5
+    win_top_z = win_z + win_h * 0.5
+    
+    # Outer front wall center
+    f_wall_x = depth - wall_thick * 0.5
+    # Front spandrel below window
+    spand_h = win_bot_z - z_base
+    loc_spand = Vector((f_wall_x, 0.0, z_base + spand_h * 0.5))
+    world_spand = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_spand.to_4d()).to_3d()
+    create_beveled_box(
+        bm,
+        size=(wall_thick, width - col_w * 1.5, spand_h),
+        location=world_spand,
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=wall_mat,
+        bevel_amount=0.010
+    )
+    # Front side jambs flanking window
+    jamb_w = (width - col_w * 2.0 - win_w) * 0.5 + 0.02
+    for s_sign in [-1, 1]:
+        jamb_off = (win_w * 0.5 + jamb_w * 0.5 - 0.01) * s_sign
+        loc_j = Vector((f_wall_x, jamb_off, win_z))
+        world_j = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_j.to_4d()).to_3d()
+        create_beveled_box(
+            bm,
+            size=(wall_thick, jamb_w, win_h + 0.04),
+            location=world_j,
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=wall_mat,
+            bevel_amount=0.008
+        )
+    # Front header above window
+    head_h = (z_base + height) - win_top_z
+    loc_head = Vector((f_wall_x, 0.0, win_top_z + head_h * 0.5))
+    world_head = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_head.to_4d()).to_3d()
+    create_beveled_box(
+        bm,
+        size=(wall_thick, width - col_w * 1.5, head_h),
+        location=world_head,
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=wall_mat,
+        bevel_amount=0.008
+    )
+    
+    # Outer top horizontal header beam across front
+    loc_fhead = Vector((depth - col_w * 0.5, 0.0, z_base + height))
+    world_fhead = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_fhead.to_4d()).to_3d()
     create_beveled_box(
         bm,
         size=(col_w, width + 0.06, 0.16),
-        location=(wx + ox * (depth - col_w * 0.5), wy + oy * (depth - col_w * 0.5), z_base + height),
+        location=world_fhead,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER_FRAME,
         bevel_amount=0.012
     )
     
-    # 4. Outcrop Window on outer face
-    win_w = width * 0.55
-    win_h = height * 0.48
-    win_z = z_base + height * 0.52
-    fx_out = wx + ox * (depth + 0.02)
-    fy_out = wy + oy * (depth + 0.02)
-    # Sill
+    # 4. Outcrop Window Assembly
+    loc_sill = Vector((depth + 0.04, 0.0, win_bot_z - 0.04))
+    world_sill = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_sill.to_4d()).to_3d()
     create_beveled_box(
         bm,
         size=(0.10, win_w + 0.16, 0.08),
-        location=(fx_out + ox * 0.04, fy_out + oy * 0.04, win_z - win_h * 0.5 - 0.04),
+        location=world_sill,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.008
     )
     # Glass & mullions
+    loc_win = Vector((depth, 0.0, win_z))
+    world_win = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_win.to_4d()).to_3d()
     create_box(
         bm,
         size=(0.05, win_w, win_h),
-        location=(fx_out, fy_out, win_z),
+        location=world_win,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_GLASS
     )
     create_box(
         bm,
         size=(0.07, 0.04, win_h),
-        location=(fx_out + ox * 0.01, fy_out + oy * 0.01, win_z),
+        location=world_win,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER
     )
     create_box(
         bm,
         size=(0.07, win_w, 0.04),
-        location=(fx_out + ox * 0.01, fy_out + oy * 0.01, win_z),
+        location=world_win,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER
     )
     
-    # 5. Dedicated Roof
+    # 5. Dedicated Roof with Sealed Side Cheek Walls (Zero Gaps)
     roof_z_start = z_base + height
-    facade_rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
     
     if roof_style == 'LEAN_TO':
         roof_pitch = 0.38
@@ -898,9 +974,10 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             bevel_amount=0.008
         )
         
-        # Sloping timber verge bargeboards on side edges (sealing roof edges)
+        # Side triangular cheek closure walls & sloping timber bargeboards
         barge_w = 0.08
         for s_sign in [-1, 1]:
+            # Sloping bargeboard on side overhang edge
             loc_barge = Vector((depth * 0.48, (half_w + 0.16) * s_sign, roof_z_start + r_rise * 0.52 + 0.02))
             world_barge = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_barge.to_4d()).to_3d()
             create_beveled_box(
@@ -911,28 +988,42 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                 mat_index=MAT_INDEX_TIMBER_FRAME,
                 bevel_amount=0.008
             )
-            # Side horizontal timber top-plate beam along wall top
-            loc_plate = Vector((depth * 0.50, (half_w - col_w * 0.5) * s_sign, z_base + height - 0.06))
-            world_plate = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_plate.to_4d()).to_3d()
+            # Sloping timber rafter plate directly atop the side wall
+            loc_side_rafter = Vector((depth * 0.48, (half_w - wall_thick * 0.5) * s_sign, roof_z_start + r_rise * 0.52 - 0.04))
+            world_side_rafter = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_side_rafter.to_4d()).to_3d()
             create_beveled_box(
                 bm,
-                size=(depth, col_w, 0.14),
-                location=world_plate,
-                rotation=(0.0, 0.0, rot_z),
+                size=(r_len, wall_thick + 0.02, 0.10),
+                location=world_side_rafter,
+                rotation=roof_euler,
                 mat_index=MAT_INDEX_TIMBER_FRAME,
-                bevel_amount=0.010
+                bevel_amount=0.008
             )
-            # Wall-anchor vertical timber post at house junction
-            loc_post = Vector((col_w * 0.5, (half_w - col_w * 0.5) * s_sign, z_base + height * 0.5))
-            world_post = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_post.to_4d()).to_3d()
-            create_beveled_box(
-                bm,
-                size=(col_w, col_w, height),
-                location=world_post,
-                rotation=(0.0, 0.0, rot_z),
-                mat_index=MAT_INDEX_TIMBER_FRAME,
-                bevel_amount=0.010
-            )
+            # Solid triangular cheek prism filling the wedge between flat side wall top and sloping rafter
+            tri_y_center = (half_w - wall_thick * 0.5) * s_sign
+            half_t = wall_thick * 0.5
+            # Vertices in local space
+            p_top_back = Vector((0.0, 0.0, roof_z_start + r_rise))
+            p_bot_front = Vector((depth, 0.0, roof_z_start))
+            p_bot_back = Vector((0.0, 0.0, roof_z_start))
+            
+            # Create triangular cheek prism faces
+            v_t_b1 = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((0.0, tri_y_center - half_t, roof_z_start + r_rise)).to_4d()).to_3d())
+            v_b_f1 = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((depth, tri_y_center - half_t, roof_z_start)).to_4d()).to_3d())
+            v_b_b1 = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((0.0, tri_y_center - half_t, roof_z_start)).to_4d()).to_3d())
+            
+            v_t_b2 = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((0.0, tri_y_center + half_t, roof_z_start + r_rise)).to_4d()).to_3d())
+            v_b_f2 = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((depth, tri_y_center + half_t, roof_z_start)).to_4d()).to_3d())
+            v_b_b2 = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((0.0, tri_y_center + half_t, roof_z_start)).to_4d()).to_3d())
+            
+            f1 = bm.faces.new([v_t_b1, v_b_f1, v_b_b1])
+            f1.material_index = wall_mat
+            f2 = bm.faces.new([v_t_b2, v_b_b2, v_b_f2])
+            f2.material_index = wall_mat
+            f_slope = bm.faces.new([v_t_b1, v_t_b2, v_b_f2, v_b_f1])
+            f_slope.material_index = wall_mat
+            f_back = bm.faces.new([v_t_b1, v_b_b1, v_b_b2, v_t_b2])
+            f_back.material_index = wall_mat
     else: # GABLE roof
         g_roof_h = 0.85
         # Front triangular gable wall on outer face
@@ -971,50 +1062,62 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
     """
     Builds an authentic cantilevered wooden balcony platform on an upper floor:
     - Cantilevered floor joists projecting from the wall.
-    - 45-degree diagonal timber knee braces / corbel struts underneath.
+    - Matrix-aligned 45-degree diagonal timber corbel struts underneath.
     - Thick rustic wooden plank deck.
-    - Timber balustrade / railing with corner newel posts and handrails.
-    - Doorway frame opening on the wall facade.
+    - Timber balustrade railing with newel posts and handrails.
+    - Authentic plank door with iron hinges inside the wall doorway.
     """
     wx, wy, ox, oy, tx, ty, rot_z = _get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
+    facade_rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
     
     half_w = width * 0.5
     half_d = depth * 0.5
     cx = wx + ox * half_d
     cy = wy + oy * half_d
     
-    # 1. Cantilevered Timber Floor Joist Beams
+    # 1. Cantilevered Timber Floor Joist Beams & Matrix-Aligned Diagonal Struts
     joist_count = 3
-    spacing = width * 0.40
+    spacing = width * 0.38
+    
     for j_sign in [-1, 0, 1]:
-        jx = wx + tx * (j_sign * spacing)
-        jy = wy + ty * (j_sign * spacing)
-        # Horizontal joist beam extending from inside wall out to depth
+        # Horizontal joist beam
+        loc_j = Vector((depth * 0.50, j_sign * spacing, z_floor - 0.08))
+        world_j = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_j.to_4d()).to_3d()
         create_beveled_box(
             bm,
             size=(depth + 0.35, 0.12, 0.16),
-            location=(jx + ox * (half_d - 0.05), jy + oy * (half_d - 0.05), z_floor - 0.08),
+            location=world_j,
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.012
         )
-        # Diagonal timber corbel strut underneath
-        diag_len = math.sqrt((depth * 0.8) ** 2 + 0.75 ** 2)
-        diag_ang = math.atan2(0.75, depth * 0.8)
+        # Diagonal timber corbel strut underneath reaching from wall up to joist
+        p_wall = Vector((wx, wy, z_floor - 0.65)) + Vector((tx, ty, 0.0)) * (j_sign * spacing)
+        p_joist = Vector((wx, wy, z_floor - 0.12)) + Vector((ox, oy, 0.0)) * (depth * 0.72) + Vector((tx, ty, 0.0)) * (j_sign * spacing)
+        v_strut = p_joist - p_wall
+        strut_len = v_strut.length
+        strut_dir = v_strut.normalized()
+        strut_norm = Vector((tx, ty, 0.0)).normalized()
+        strut_side = strut_dir.cross(strut_norm).normalized()
+        strut_mat = Matrix((strut_norm, strut_side, strut_dir)).transposed().to_4x4()
+        
+        loc_strut = (p_wall + p_joist) * 0.5
         create_beveled_box(
             bm,
-            size=(diag_len, 0.10, 0.12),
-            location=(jx + ox * (depth * 0.40), jy + oy * (depth * 0.40), z_floor - 0.45),
-            rotation=(0.0, diag_ang if abs(ox) > 0.5 else 0.0, rot_z),
+            size=(0.11, 0.13, strut_len),
+            location=loc_strut,
+            rotation=strut_mat.to_euler(),
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.010
         )
         
     # 2. Rustic Wood Deck Planks
+    loc_deck = Vector((depth * 0.50, 0.0, z_floor + 0.03))
+    world_deck = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_deck.to_4d()).to_3d()
     create_beveled_box(
         bm,
         size=(depth + 0.08, width + 0.10, 0.06),
-        location=(cx, cy, z_floor + 0.03),
+        location=world_deck,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_WOOD,
         bevel_amount=0.008
@@ -1024,65 +1127,70 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
     rail_h = 0.95
     post_w = 0.10
     outer_d = depth + 0.02
-    # Corner newel posts
     for s_sign in [-1, 1]:
         # Outer corner posts
-        px = wx + ox * outer_d + tx * (half_w * s_sign)
-        py = wy + oy * outer_d + ty * (half_w * s_sign)
+        loc_cp = Vector((outer_d, half_w * s_sign, z_floor + 0.06 + rail_h * 0.5))
+        world_cp = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_cp.to_4d()).to_3d()
         create_beveled_box(
             bm,
             size=(post_w, post_w, rail_h),
-            location=(px, py, z_floor + 0.06 + rail_h * 0.5),
+            location=world_cp,
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.010
         )
         # Wall-anchor posts
-        w_px = wx + ox * 0.08 + tx * (half_w * s_sign)
-        w_py = wy + oy * 0.08 + ty * (half_w * s_sign)
+        loc_wp = Vector((0.08, half_w * s_sign, z_floor + 0.06 + rail_h * 0.5))
+        world_wp = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_wp.to_4d()).to_3d()
         create_beveled_box(
             bm,
             size=(post_w, post_w, rail_h),
-            location=(w_px, w_py, z_floor + 0.06 + rail_h * 0.5),
+            location=world_wp,
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.010
         )
         # Side return top handrail
-        s_mid_x = (px + w_px) * 0.5
-        s_mid_y = (py + w_py) * 0.5
+        loc_sr = Vector((depth * 0.50, half_w * s_sign, z_floor + 0.06 + rail_h))
+        world_sr = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_sr.to_4d()).to_3d()
         create_beveled_box(
             bm,
             size=(depth - 0.08, 0.08, 0.08),
-            location=(s_mid_x, s_mid_y, z_floor + 0.06 + rail_h),
+            location=world_sr,
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.008
         )
         # Side mid-rail
+        loc_sm = Vector((depth * 0.50, half_w * s_sign, z_floor + 0.06 + rail_h * 0.45))
+        world_sm = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_sm.to_4d()).to_3d()
         create_beveled_box(
             bm,
             size=(depth - 0.08, 0.06, 0.06),
-            location=(s_mid_x, s_mid_y, z_floor + 0.06 + rail_h * 0.45),
+            location=world_sm,
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.006
         )
         
     # Front outer top handrail
+    loc_fr = Vector((outer_d, 0.0, z_floor + 0.06 + rail_h))
+    world_fr = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_fr.to_4d()).to_3d()
     create_beveled_box(
         bm,
         size=(0.08, width + 0.04, 0.08),
-        location=(wx + ox * outer_d, wy + oy * outer_d, z_floor + 0.06 + rail_h),
+        location=world_fr,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.008
     )
     # Front mid-rail
+    loc_fm = Vector((outer_d, 0.0, z_floor + 0.06 + rail_h * 0.45))
+    world_fm = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_fm.to_4d()).to_3d()
     create_beveled_box(
         bm,
         size=(0.06, width - 0.04, 0.06),
-        location=(wx + ox * outer_d, wy + oy * outer_d, z_floor + 0.06 + rail_h * 0.45),
+        location=world_fm,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.006
@@ -1091,39 +1199,82 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
     baluster_count = 5
     for b_idx in range(baluster_count):
         t_pos = -half_w * 0.8 + (b_idx / (baluster_count - 1)) * (width * 0.8)
-        bx = wx + ox * outer_d + tx * t_pos
-        by = wy + oy * outer_d + ty * t_pos
+        loc_b = Vector((outer_d, t_pos, z_floor + 0.06 + rail_h * 0.48))
+        world_b = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_b.to_4d()).to_3d()
         create_beveled_box(
             bm,
             size=(0.04, 0.04, rail_h * 0.85),
-            location=(bx, by, z_floor + 0.06 + rail_h * 0.48),
+            location=world_b,
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.004
         )
         
-    # 4. Doorway frame on wall behind balcony
-    door_w = 0.95
-    door_h = 1.95
+    # 4. Authentic Plank Door Leading Out to Balcony
+    door_w = 0.92
+    door_h = 2.02
+    door_thick = 0.05
+    # Heavy timber door frame
+    loc_dl = Vector((0.02, 0.0, z_floor + door_h + 0.06))
+    world_dl = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_dl.to_4d()).to_3d()
     create_beveled_box(
         bm,
-        size=(0.10, door_w + 0.16, 0.10),
-        location=(wx + ox * 0.04, wy + oy * 0.04, z_floor + door_h + 0.05),
+        size=(0.14, door_w + 0.20, 0.12),
+        location=world_dl,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER_FRAME,
-        bevel_amount=0.01
+        bevel_amount=0.010
     )
     for d_sign in [-1, 1]:
+        loc_dj = Vector((0.02, (door_w * 0.5 + 0.06) * d_sign, z_floor + door_h * 0.5))
+        world_dj = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_dj.to_4d()).to_3d()
         create_beveled_box(
             bm,
-            size=(0.10, 0.10, door_h),
-            location=(wx + ox * 0.04 + tx * (door_w * 0.5 * d_sign),
-                      wy + oy * 0.04 + ty * (door_w * 0.5 * d_sign),
-                      z_floor + door_h * 0.5),
+            size=(0.14, 0.12, door_h),
+            location=world_dj,
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER_FRAME,
-            bevel_amount=0.01
+            bevel_amount=0.010
         )
+        
+    # Vertical plank wooden door leaf (slightly ajar 15 degrees outwards onto balcony)
+    ajar_ang = 0.26 # ~15 degrees
+    door_leaf_rot = (facade_rot_mat @ Matrix.Rotation(ajar_ang, 4, 'Z')).to_euler()
+    # Hinge is at -Y jamb
+    hinge_y = -door_w * 0.5 + 0.04
+    loc_door = Vector((0.06 + math.sin(ajar_ang) * door_w * 0.45, hinge_y + math.cos(ajar_ang) * door_w * 0.45, z_floor + door_h * 0.5))
+    world_door = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_door.to_4d()).to_3d()
+    create_beveled_box(
+        bm,
+        size=(door_thick, door_w - 0.04, door_h - 0.04),
+        location=world_door,
+        rotation=door_leaf_rot,
+        mat_index=MAT_INDEX_WOOD,
+        bevel_amount=0.008
+    )
+    # Decorative iron strap hinges
+    for h_rel in [0.25, 0.75]:
+        loc_h = Vector((0.08 + math.sin(ajar_ang) * 0.22, hinge_y + math.cos(ajar_ang) * 0.22, z_floor + door_h * h_rel))
+        world_h = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_h.to_4d()).to_3d()
+        create_beveled_box(
+            bm,
+            size=(0.02, 0.42, 0.05),
+            location=world_h,
+            rotation=door_leaf_rot,
+            mat_index=MAT_INDEX_IRON,
+            bevel_amount=0.003
+        )
+    # Iron latch handle
+    loc_latch = Vector((0.08 + math.sin(ajar_ang) * (door_w * 0.78), hinge_y + math.cos(ajar_ang) * (door_w * 0.78), z_floor + door_h * 0.48))
+    world_latch = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_latch.to_4d()).to_3d()
+    create_cylinder(
+        bm,
+        radius=0.025,
+        height=0.14,
+        segments=8,
+        location=world_latch,
+        mat_index=MAT_INDEX_IRON
+    )
 
 
 def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
@@ -1187,22 +1338,20 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
                 mat_index=MAT_INDEX_TIMBER_FRAME,
                 bevel_amount=0.012
             )
-            # 45-deg angled knee braces up to header beam
-            if p_i > 0:
+            # 45-deg angled knee braces up to header beam in the colonnade plane
+            brace_len = 0.55
+            for sgn in ([-1] if p_i == pillar_count - 1 else ([1] if p_i == 0 else [-1, 1])):
+                brace_dir = (Vector((tx, ty, 0.0)) * sgn + Vector((0.0, 0.0, 1.0))).normalized()
+                brace_norm = Vector((ox, oy, 0.0)).normalized()
+                brace_side = brace_dir.cross(brace_norm).normalized()
+                brace_rot_mat = Matrix((brace_norm, brace_side, brace_dir)).transposed().to_4x4()
+                
+                loc_b = Vector((px, py, z_ceiling - header_h)) + (Vector((tx, ty, 0.0)) * sgn * 0.19 - Vector((0.0, 0.0, 0.19)))
                 create_beveled_box(
                     bm,
-                    size=(0.10, 0.10, 0.60),
-                    location=(px - tx * 0.20, py - ty * 0.20, z_ceiling - header_h - 0.18),
-                    rotation=(0.0, 0.0, rot_z),
-                    mat_index=MAT_INDEX_TIMBER_FRAME,
-                    bevel_amount=0.008
-                )
-            if p_i < pillar_count - 1:
-                create_beveled_box(
-                    bm,
-                    size=(0.10, 0.10, 0.60),
-                    location=(px + tx * 0.20, py + ty * 0.20, z_ceiling - header_h - 0.18),
-                    rotation=(0.0, 0.0, rot_z),
+                    size=(0.10, 0.10, brace_len),
+                    location=loc_b,
+                    rotation=brace_rot_mat.to_euler(),
                     mat_index=MAT_INDEX_TIMBER_FRAME,
                     bevel_amount=0.008
                 )

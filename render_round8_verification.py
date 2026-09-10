@@ -1,150 +1,176 @@
 import bpy
 import math
 import os
+import sys
+from mathutils import Vector, Euler
 
-addon_dir = os.path.dirname(os.path.abspath(__file__))
-if addon_dir not in bpy.utils.script_paths():
-    import sys
-    if addon_dir not in sys.path:
-        sys.path.insert(0, addon_dir)
-
+sys.path.insert(0, r"d:\BlendBuildingCreator")
 import blend_building_creator
+blend_building_creator.register()
 
-# Ensure registered
-try:
-    blend_building_creator.register()
-except Exception:
-    pass
-
-output_dir = os.path.join(addon_dir, "renders_round8")
-os.makedirs(output_dir, exist_ok=True)
-
-def setup_studio():
-    bpy.ops.object.select_all(action='SELECT')
-    bpy.ops.object.delete()
+def setup_render_scene():
+    for obj in list(bpy.data.objects):
+        bpy.data.objects.remove(obj, do_unlink=True)
+        
+    scene = bpy.context.scene
+    scene.render.engine = 'BLENDER_EEVEE'
+    scene.render.resolution_x = 1280
+    scene.render.resolution_y = 720
+    scene.render.resolution_percentage = 100
     
-    # Camera
-    cam_data = bpy.data.cameras.new("RenderCam")
-    cam_data.lens = 42
-    cam_obj = bpy.data.objects.new("RenderCam", cam_data)
-    bpy.context.scene.collection.objects.link(cam_obj)
-    bpy.context.scene.camera = cam_obj
-    
+    world = bpy.data.worlds.new("VerificationWorld")
+    scene.world = world
+    bg = world.node_tree.nodes.get('Background')
+    if bg:
+        bg.inputs['Color'].default_value = (0.75, 0.82, 0.90, 1.0)
+        bg.inputs['Strength'].default_value = 0.9
+        
     # Sun light
-    sun_data = bpy.data.lights.new("Sun", 'SUN')
-    sun_data.energy = 4.0
-    sun_data.color = (1.0, 0.95, 0.88)
-    sun_obj = bpy.data.objects.new("Sun", sun_data)
-    sun_obj.rotation_euler = (math.radians(50), math.radians(15), math.radians(-35))
-    bpy.context.scene.collection.objects.link(sun_obj)
+    sun_data = bpy.data.lights.new(name="Sun", type='SUN')
+    sun_data.energy = 3.5
+    sun_data.color = (1.0, 0.96, 0.90)
+    sun_obj = bpy.data.objects.new(name="Sun", object_data=sun_data)
+    scene.collection.objects.link(sun_obj)
+    sun_obj.rotation_euler = Euler((math.radians(50), math.radians(20), math.radians(-40)), 'XYZ')
     
     # Fill light
-    fill_data = bpy.data.lights.new("Fill", 'SUN')
-    fill_data.energy = 1.8
-    fill_data.color = (0.75, 0.85, 1.0)
-    fill_obj = bpy.data.objects.new("Fill", fill_data)
-    fill_obj.rotation_euler = (math.radians(35), math.radians(-20), math.radians(145))
-    bpy.context.scene.collection.objects.link(fill_obj)
-    
-    # Render settings
-    scene = bpy.context.scene
-    scene.render.engine = 'BLENDER_EEVEE_NEXT' if hasattr(bpy.types, 'RenderSettings') and 'BLENDER_EEVEE_NEXT' in [e.identifier for e in bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items] else 'BLENDER_EEVEE'
-    scene.render.resolution_x = 1280
-    scene.render.resolution_y = 960
+    fill_data = bpy.data.lights.new(name="Fill", type='SUN')
+    fill_data.energy = 1.5
+    fill_data.color = (0.80, 0.88, 1.0)
+    fill_obj = bpy.data.objects.new(name="Fill", object_data=fill_data)
+    scene.collection.objects.link(fill_obj)
+    fill_obj.rotation_euler = Euler((math.radians(45), 0, math.radians(140)), 'XYZ')
+
+    # Interior room point light
+    int_light = bpy.data.lights.new(name="IntLight", type='POINT')
+    int_light.energy = 300.0
+    int_light.color = (1.0, 0.92, 0.82)
+    int_obj = bpy.data.objects.new(name="IntLight", object_data=int_light)
+    scene.collection.objects.link(int_obj)
+    int_obj.location = (0.0, 0.0, 1.8)
+
+    # Camera
+    cam_data = bpy.data.cameras.new(name="Camera")
+    cam_data.lens = 45
+    cam_obj = bpy.data.objects.new(name="Camera", object_data=cam_data)
+    scene.collection.objects.link(cam_obj)
+    scene.camera = cam_obj
     return cam_obj
 
-def point_camera_at(cam_obj, target_pos):
-    import mathutils
-    direction = mathutils.Vector(target_pos) - cam_obj.location
-    rot_quat = direction.to_track_quat('-Z', 'Y')
-    cam_obj.rotation_euler = rot_quat.to_euler()
+def render_view(cam_obj, loc, rot, output_path):
+    cam_obj.location = loc
+    cam_obj.rotation_euler = rot
+    bpy.context.scene.render.filepath = output_path
+    bpy.ops.render.render(write_still=True)
+    print(f"Rendered: {output_path}")
 
-# --- 1. Dormer & Chimney Overview ---
-setup_studio()
-cam = bpy.context.scene.camera
+out_dir = r"C:\Users\Sebastian\.gemini\antigravity-ide\brain\1d5ba5c4-fa5e-48fb-b2f3-d255ee369c46"
+
+# Setup scene
+cam = setup_render_scene()
+
+# -------------------------------------------------------------
+# SCENE 1: Dormer & Roof Horn verification
+# -------------------------------------------------------------
 bpy.ops.building.create_fantasy_building()
+b_obj = bpy.context.active_object
 props = bpy.context.scene.fantasy_building_settings
-props.has_dormers = True
-props.has_chimney = True
-props.has_roof_turret = False
-props.width = 4.8
-props.depth = 6.2
+props.width = 6.0
+props.depth = 6.0
 props.num_floors = 2
+props.has_dormers = True
+props.roof_style = 'SWAY'
+props.has_roof_shingles = True
 bpy.ops.building.regenerate()
 
-# Position camera to look directly at the right roof slope showing dormer and chimney
-cam.location = (7.5, 0.0, 8.5)
-point_camera_at(cam, (1.8, 0.0, 7.2))
-bpy.context.scene.render.filepath = os.path.join(output_dir, "01_dormer_and_chimney.png")
-bpy.ops.render.render(write_still=True)
-print("Rendered 01_dormer_and_chimney.png")
+# View 1: Dormer front view showing window frame, solid header, spandrel, and cheek walls
+render_view(
+    cam,
+    loc=(-4.8, 1.05, 8.2),
+    rot=(math.radians(78), 0, math.radians(-90)),
+    output_path=os.path.join(out_dir, "round8_view1_dormer_closeup.png")
+)
 
-# --- 2. Turret on Roof Slope ---
-props.has_roof_turret = True
-props.roof_turret_pos_x = -0.55 # On left slope
-props.roof_turret_pos_y = -0.10
-props.roof_turret_scale = 1.0
-bpy.ops.building.regenerate()
+# View 2: Downhill slope view in front of dormer showing continuous shingle coverage (no hole)
+render_view(
+    cam,
+    loc=(-5.2, -1.2, 9.4),
+    rot=(math.radians(68), 0, math.radians(-65)),
+    output_path=os.path.join(out_dir, "round8_view2_dormer_roof_slope.png")
+)
 
-# Camera viewing the turret perched on the slope with its deep skirt
-cam.location = (-6.5, -4.5, 9.5)
-point_camera_at(cam, (-1.3, -0.3, 7.5))
-bpy.context.scene.render.filepath = os.path.join(output_dir, "02_turret_slope_mounted.png")
-bpy.ops.render.render(write_still=True)
-print("Rendered 02_turret_slope_mounted.png")
+# View 3: Main roof corner eave showing removed horn (clean bargeboard verge termination)
+render_view(
+    cam,
+    loc=(-5.0, -5.0, 7.2),
+    rot=(math.radians(75), 0, math.radians(-45)),
+    output_path=os.path.join(out_dir, "round8_view3_roof_corner_nohorn.png")
+)
 
-# --- 3. Mini-Wing Outcrop (Ground Bay) ---
+# -------------------------------------------------------------
+# SCENE 2: Outcrop mini-wing, Balcony, and Pillared Overhang
+# -------------------------------------------------------------
+props.has_dormers = False
+props.has_stairs = False # Wide open interior for walk-in view
+props.has_cantilever = True
 props.has_mini_wing = True
 props.mini_wing_side = 'LEFT'
 props.mini_wing_floor = 'GROUND'
-props.mini_wing_roof = 'LEAN_TO'
 props.mini_wing_width = 2.4
 props.mini_wing_depth = 1.6
-bpy.ops.building.regenerate()
+props.mini_wing_roof = 'LEAN_TO'
 
-# Camera framing the left facade showing the entire mini-wing outcrop
-cam.location = (-8.2, -4.8, 3.2)
-point_camera_at(cam, (-2.4, 0.0, 1.6))
-bpy.context.scene.render.filepath = os.path.join(output_dir, "03_mini_wing_ground.png")
-bpy.ops.render.render(write_still=True)
-print("Rendered 03_mini_wing_ground.png")
-
-# --- 4. Timber Balcony & Pillared Overhang ---
 props.has_balcony = True
-props.balcony_side = 'FRONT'
+props.balcony_side = 'BACK'
 props.balcony_floor = 2
 props.balcony_width = 2.4
-props.balcony_depth = 1.4
+props.balcony_depth = 1.3
 
 props.has_pillared_overhang = True
 props.pillared_overhang_side = 'FRONT'
 props.pillared_overhang_depth = 1.8
 props.pillared_overhang_pillars = 3
-props.pillared_overhang_style = 'TIMBER_STONE'
+
 bpy.ops.building.regenerate()
 
-# Camera framing the front facade showing the balcony above and pillared colonnade below
-cam.location = (4.5, -9.5, 3.8)
-point_camera_at(cam, (0.0, -3.1, 2.5))
-bpy.context.scene.render.filepath = os.path.join(output_dir, "04_balcony_and_pillared_overhang.png")
-bpy.ops.render.render(write_still=True)
-print("Rendered 04_balcony_and_pillared_overhang.png")
+# View 4: Outcrop Mini-Wing exterior full view showing sealed wedge under lean-to roof
+render_view(
+    cam,
+    loc=(-7.5, -3.8, 3.2),
+    rot=(math.radians(74), 0, math.radians(-62)),
+    output_path=os.path.join(out_dir, "round8_view4_miniwing_exterior.png")
+)
 
-# --- 5. Attic Interior View of Dormer Walk-in Alcove ---
-# Add an interior light inside the attic
-attic_light_data = bpy.data.lights.new("AtticLight", 'POINT')
-attic_light_data.energy = 800.0
-attic_light_data.color = (1.0, 0.95, 0.85)
-attic_light_obj = bpy.data.objects.new("AtticLight", attic_light_data)
-attic_light_obj.location = (0.8, -0.8, 6.8)
-bpy.context.scene.collection.objects.link(attic_light_obj)
+# View 5: Pillared overhang & upper-floor jetting with correct planar knee braces
+render_view(
+    cam,
+    loc=(4.2, -7.5, 3.2),
+    rot=(math.radians(78), 0, math.radians(28)),
+    output_path=os.path.join(out_dir, "round8_view5_pillared_overhang_jetting.png")
+)
 
-# Position camera inside attic looking outward toward dormer window alcove
-cam.location = (0.1, -0.3, 6.1)
-point_camera_at(cam, (1.6, -1.24, 6.2))
-bpy.context.scene.render.filepath = os.path.join(output_dir, "05_attic_dormer_interior.png")
-bpy.ops.render.render(write_still=True)
-print("Rendered 05_attic_dormer_interior.png")
+# View 6: Balcony with correct diagonal corbel struts under joists
+render_view(
+    cam,
+    loc=(2.2, 6.8, 3.6),
+    rot=(math.radians(82), 0, math.radians(160)),
+    output_path=os.path.join(out_dir, "round8_view6_balcony_corbels_door.png")
+)
 
-print("ALL VERIFICATION RENDERS COMPLETE!")
+# View 7: Interior walk-in view through timber archway into mini-wing
+render_view(
+    cam,
+    loc=(-0.8, 0.0, 1.4),
+    rot=(math.radians(90), 0, math.radians(-90)),
+    output_path=os.path.join(out_dir, "round8_view7_interior_walkin_miniwing.png")
+)
 
+# View 8: Balcony doorway head-on view from balcony looking towards house wall
+render_view(
+    cam,
+    loc=(0.0, 5.2, 4.4),
+    rot=(math.radians(80), 0, math.radians(180)),
+    output_path=os.path.join(out_dir, "round8_view8_balcony_door_closeup.png")
+)
+
+print("All 8 verification views rendered successfully!")

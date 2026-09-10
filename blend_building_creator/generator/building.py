@@ -391,8 +391,9 @@ def generate_building(obj, props):
     stair_len = min(2.4, max(1.8, (fl0_iy_max - fl0_iy_min) - landing_depth - 1.0))
     stair_y_bot = stair_y_top - stair_len
 
-    # Track stair holes per floor
+    # Track stair holes and wall bounds per floor
     floor_stair_holes = {}
+    floor_wall_bounds = {}
 
     for fl_idx in range(num_floors):
         z_floor = found_h + fl_idx * floor_h
@@ -416,6 +417,21 @@ def generate_building(obj, props):
         
         x_min, x_max = -hx, hx
         y_min, y_max = -hy, hy
+
+        # Upper floor jettying over pillared overhang colonnade
+        if getattr(props, 'has_pillared_overhang', False) and fl_idx >= 1:
+            p_side = getattr(props, 'pillared_overhang_side', 'FRONT')
+            p_depth = getattr(props, 'pillared_overhang_depth', 1.6)
+            if p_side == 'FRONT':
+                y_min -= p_depth
+            elif p_side == 'BACK':
+                y_max += p_depth
+            elif p_side == 'LEFT':
+                x_min -= p_depth
+            elif p_side == 'RIGHT':
+                x_max += p_depth
+
+        floor_wall_bounds[fl_idx] = (x_min, x_max, y_min, y_max)
         
         # Solid floor slab bounds (strictly inside exterior wall perimeter to prevent poke-through)
         slab_xmin = x_min + 0.03
@@ -431,8 +447,13 @@ def generate_building(obj, props):
         if fl_idx > 0 and fl_overhang > prev_fl_overhang:
             overhang_step = fl_overhang - prev_fl_overhang
             front_ex = (wx_base_min - 0.15, wx_base_max + 0.15) if (has_wing and fl_idx >= wing_floors) else None
+            has_po = getattr(props, 'has_pillared_overhang', False)
+            po_s = getattr(props, 'pillared_overhang_side', 'FRONT')
+            inc_f = not (has_po and po_s == 'FRONT')
+            inc_b = not (has_po and po_s == 'BACK')
             build_cantilever_corbels(bm, x_min, x_max, y_min, y_max, z_floor,
-                                    overhang_dist=overhang_step, front_exclude_x=front_ex)
+                                    overhang_dist=overhang_step, front_exclude_x=front_ex,
+                                    include_front=inc_f, include_back=inc_b)
             build_cantilever_soffit(
                 bm,
                 (prev_x_min, prev_x_max, prev_y_min, prev_y_max),
@@ -642,6 +663,116 @@ def generate_building(obj, props):
                                location=(p_cx, y_min, z_floor + portal_h + lintel_h * 0.5),
                                mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
 
+        # Walk-in portal into mini-wing outcrop
+        has_mw = getattr(props, 'has_mini_wing', False)
+        mw_side = getattr(props, 'mini_wing_side', 'LEFT')
+        mw_floor_mode = getattr(props, 'mini_wing_floor', 'GROUND')
+        mw_fl = 0 if mw_floor_mode == 'GROUND' else min(num_floors - 1, 1)
+        mw_w = getattr(props, 'mini_wing_width', 2.2)
+
+        if has_mw and fl_idx == mw_fl:
+            mw_portal_w = min(1.30, mw_w - 0.45)
+            mw_portal_h = min(2.20, floor_h * 0.80)
+            if mw_side in ('FRONT', 'BACK'):
+                mw_u_mid = (x_max - x_min) * 0.5
+            else:
+                mw_u_mid = (y_max - y_min) * 0.5
+            
+            mw_op = {
+                'u_start': mw_u_mid - mw_portal_w * 0.5,
+                'u_end': mw_u_mid + mw_portal_w * 0.5,
+                'z_start': z_floor,
+                'z_end': z_floor + mw_portal_h
+            }
+            jamb_w = 0.16
+            jamb_d = wall_t + 0.05
+            if mw_side == 'FRONT':
+                front_openings.append(mw_op)
+                p_cx = (x_min + x_max) * 0.5
+                create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
+                                   location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5, y_min, z_floor + mw_portal_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
+                                   location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5, y_min, z_floor + mw_portal_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                lintel_w = mw_portal_w + jamb_w * 2.0 + 0.06
+                lintel_h = 0.18
+                create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
+                                   location=(p_cx, y_min, z_floor + mw_portal_h + lintel_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+            elif mw_side == 'BACK':
+                back_openings.append(mw_op)
+                p_cx = (x_min + x_max) * 0.5
+                create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
+                                   location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5, y_max, z_floor + mw_portal_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
+                                   location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5, y_max, z_floor + mw_portal_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                lintel_w = mw_portal_w + jamb_w * 2.0 + 0.06
+                lintel_h = 0.18
+                create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
+                                   location=(p_cx, y_max, z_floor + mw_portal_h + lintel_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+            elif mw_side == 'LEFT':
+                left_openings.append(mw_op)
+                p_cy = (y_min + y_max) * 0.5
+                create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
+                                   location=(x_min, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5, z_floor + mw_portal_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
+                                   location=(x_min, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5, z_floor + mw_portal_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                lintel_w = mw_portal_w + jamb_w * 2.0 + 0.06
+                lintel_h = 0.18
+                create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
+                                   location=(x_min, p_cy, z_floor + mw_portal_h + lintel_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+            elif mw_side == 'RIGHT':
+                right_openings.append(mw_op)
+                p_cy = (y_min + y_max) * 0.5
+                create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
+                                   location=(x_max, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5, z_floor + mw_portal_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
+                                   location=(x_max, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5, z_floor + mw_portal_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                lintel_w = mw_portal_w + jamb_w * 2.0 + 0.06
+                lintel_h = 0.18
+                create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
+                                   location=(x_max, p_cy, z_floor + mw_portal_h + lintel_h * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+
+        # Balcony Doorway Cutout
+        has_balc = getattr(props, 'has_balcony', False) and num_floors >= 2
+        b_side = getattr(props, 'balcony_side', 'FRONT')
+        b_fl = min(num_floors, max(2, getattr(props, 'balcony_floor', 2)))
+        balc_fl_idx = b_fl - 1
+        b_width = getattr(props, 'balcony_width', 2.4)
+
+        if has_balc and fl_idx == balc_fl_idx:
+            balc_door_w = 0.95
+            balc_door_h = min(2.15, floor_h * 0.76)
+            if b_side in ('FRONT', 'BACK'):
+                b_u_mid = (x_max - x_min) * 0.5
+            else:
+                b_u_mid = (y_max - y_min) * 0.5
+            
+            b_op = {
+                'u_start': b_u_mid - balc_door_w * 0.5,
+                'u_end': b_u_mid + balc_door_w * 0.5,
+                'z_start': z_floor,
+                'z_end': z_floor + balc_door_h
+            }
+            if b_side == 'FRONT':
+                front_openings.append(b_op)
+            elif b_side == 'BACK':
+                back_openings.append(b_op)
+            elif b_side == 'LEFT':
+                left_openings.append(b_op)
+            elif b_side == 'RIGHT':
+                right_openings.append(b_op)
+
         # Dynamic Windows - Front Wall
         if props.has_windows:
             front_win_xs = []
@@ -697,9 +828,13 @@ def generate_building(obj, props):
                         for s1, s2 in get_cleared_spans(wx_base_max + 1.20, x_max):
                             front_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=2.4, min_margin=0.75))
 
-            # Strict safety filter: ensure no window lies within door exclusion envelope
+            # Strict safety filter: ensure no window lies within door, mini-wing, or balcony envelopes
             if has_door_here:
                 front_win_xs = [wx for wx in front_win_xs if (wx < d_ex1 or wx > d_ex2)]
+            if has_mw and fl_idx == mw_fl and mw_side == 'FRONT':
+                front_win_xs = [wx for wx in front_win_xs if abs(wx - (x_min + x_max) * 0.5) > (mw_w * 0.5 + 0.35)]
+            if has_balc and fl_idx == balc_fl_idx and b_side == 'FRONT':
+                front_win_xs = [wx for wx in front_win_xs if abs(wx - (x_min + x_max) * 0.5) > (b_width * 0.5 + 0.20)]
 
             for wx in front_win_xs:
                 wu = (wx - x_min)
@@ -713,6 +848,10 @@ def generate_building(obj, props):
         # Dynamic Windows - Back Wall
         if props.has_windows:
             back_win_xs = get_facade_window_positions(x_min, x_max, target_spacing=2.4, min_margin=0.9)
+            if has_mw and fl_idx == mw_fl and mw_side == 'BACK':
+                back_win_xs = [wx for wx in back_win_xs if abs(wx - (x_min + x_max) * 0.5) > (mw_w * 0.5 + 0.35)]
+            if has_balc and fl_idx == balc_fl_idx and b_side == 'BACK':
+                back_win_xs = [wx for wx in back_win_xs if abs(wx - (x_min + x_max) * 0.5) > (b_width * 0.5 + 0.20)]
             for wx in back_win_xs:
                 wu = (wx - x_min)
                 back_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -729,6 +868,10 @@ def generate_building(obj, props):
             for wy in side_win_ys:
                 if fl_idx == 0 and props.has_stairs and (wy > stair_y_bot - 0.2 and wy < stair_y_top + 0.2):
                     continue
+                if has_mw and fl_idx == mw_fl and mw_side == 'LEFT' and abs(wy - (y_min + y_max) * 0.5) < (mw_w * 0.5 + 0.35):
+                    continue
+                if has_balc and fl_idx == balc_fl_idx and b_side == 'LEFT' and abs(wy - (y_min + y_max) * 0.5) < (b_width * 0.5 + 0.20):
+                    continue
                 wu = (wy - y_min)
                 left_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
                 build_window_assembly(
@@ -738,6 +881,10 @@ def generate_building(obj, props):
                 )
             # Right side
             for wy in side_win_ys:
+                if has_mw and fl_idx == mw_fl and mw_side == 'RIGHT' and abs(wy - (y_min + y_max) * 0.5) < (mw_w * 0.5 + 0.35):
+                    continue
+                if has_balc and fl_idx == balc_fl_idx and b_side == 'RIGHT' and abs(wy - (y_min + y_max) * 0.5) < (b_width * 0.5 + 0.20):
+                    continue
                 wu = (wy - y_min)
                 right_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
                 build_window_assembly(
@@ -940,18 +1087,13 @@ def generate_building(obj, props):
 
     # 4. Roof & Attic Level
     top_fl_idx = num_floors - 1
-    if props.has_cantilever:
-        if props.overhang_mode == 'SECOND_FLOOR_ONLY':
-            top_overhang = cantilever if top_fl_idx >= 1 else 0.0
-        else:
-            top_overhang = top_fl_idx * cantilever
-    else:
-        top_overhang = 0.0
-
-    top_w = base_w + top_overhang * 2.0
-    top_d = base_d + top_overhang * 2.0
+    top_x_min, top_x_max, top_y_min, top_y_max = floor_wall_bounds[top_fl_idx]
+    top_w = top_x_max - top_x_min
+    top_d = top_y_max - top_y_min
     top_hx = top_w * 0.5
     top_hy = top_d * 0.5
+    top_cx = (top_x_min + top_x_max) * 0.5
+    top_cy = (top_y_min + top_y_max) * 0.5
     top_z = found_h + num_floors * floor_h
     roof_style = props.roof_style
     
@@ -959,8 +1101,8 @@ def generate_building(obj, props):
     build_floor_slab(
         bm,
         floor_idx=num_floors,
-        x_min=-top_hx + 0.03, x_max=top_hx - 0.03,
-        y_min=-top_hy + 0.03, y_max=top_hy - 0.03,
+        x_min=top_x_min + 0.03, x_max=top_x_max - 0.03,
+        y_min=top_y_min + 0.03, y_max=top_y_max - 0.03,
         z_level=top_z + 0.05,
         thickness=0.12,
         stair_hole=floor_stair_holes.get(num_floors, None),
@@ -974,8 +1116,8 @@ def generate_building(obj, props):
         # Interior Roof Trusses & Collar Beams (visible inside attic, safe clearance under sway)
         build_attic_trusses(
             bm,
-            x_min=-top_hx + wall_t, x_max=top_hx - wall_t,
-            y_min=-top_hy + wall_t, y_max=top_hy - wall_t,
+            x_min=top_x_min + wall_t, x_max=top_x_max - wall_t,
+            y_min=top_y_min + wall_t, y_max=top_y_max - wall_t,
             z_base=top_z,
             ridge_z=top_z + props.roof_height,
             spacing=1.4,
@@ -998,28 +1140,28 @@ def generate_building(obj, props):
             # Determine dormer Y positions avoiding chimney collision
             # Chimney is at +X (right slope) and +Y (top_hy * 0.45)
             if top_hy * 2.0 > 4.2:
-                left_y = top_hy * 0.35
-                right_y = -top_hy * 0.40 if props.has_chimney else top_hy * 0.35
-                dormer_placements.append({'pos': (-roof_half_w * dormer_u, left_y), 'facing': (-1, 0), 'side': -1})
-                dormer_placements.append({'pos': (roof_half_w * dormer_u, right_y), 'facing': (1, 0), 'side': 1})
+                left_y = top_cy + top_hy * 0.35
+                right_y = top_cy - top_hy * 0.40 if props.has_chimney else top_cy + top_hy * 0.35
+                dormer_placements.append({'pos': (top_cx - roof_half_w * dormer_u, left_y), 'facing': (-1, 0), 'side': -1})
+                dormer_placements.append({'pos': (top_cx + roof_half_w * dormer_u, right_y), 'facing': (1, 0), 'side': 1})
             else:
-                dormer_placements.append({'pos': (-roof_half_w * dormer_u, 0.0), 'facing': (-1, 0), 'side': -1})
+                dormer_placements.append({'pos': (top_cx - roof_half_w * dormer_u, top_cy), 'facing': (-1, 0), 'side': -1})
                 
             for dp in dormer_placements:
                 d_cx, d_cy = dp['pos']
                 dormer_apertures.append({
                     'side': dp['side'],
-                    'y_min': d_cy - 0.52,
-                    'y_max': d_cy + 0.52,
-                    'u_min': 0.22,
-                    'u_max': 0.76
+                    'y_min': d_cy - 0.42,
+                    'y_max': d_cy + 0.42,
+                    'u_min': 0.28,
+                    'u_max': 0.65
                 })
 
         if roof_style == 'SWAY':
             build_sway_roof(
                 bm,
-                x_min=-top_hx, x_max=top_hx,
-                y_min=-top_hy, y_max=top_hy,
+                x_min=top_x_min, x_max=top_x_max,
+                y_min=top_y_min, y_max=top_y_max,
                 z_base=top_z,
                 roof_height=props.roof_height,
                 overhang=props.roof_overhang,
@@ -1034,15 +1176,15 @@ def generate_building(obj, props):
             radius = max(top_hx, top_hy) * 1.05
             build_conical_turret_roof(
                 bm,
-                center_pos=(0.0, 0.0, top_z),
+                center_pos=(top_cx, top_cy, top_z),
                 radius=radius,
                 height=props.roof_height * 1.3
             )
         else: # 'GABLE'
             build_gable_roof(
                 bm,
-                x_min=-top_hx, x_max=top_hx,
-                y_min=-top_hy, y_max=top_hy,
+                x_min=top_x_min, x_max=top_x_max,
+                y_min=top_y_min, y_max=top_y_max,
                 z_base=top_z,
                 roof_height=props.roof_height,
                 overhang=props.roof_overhang,
@@ -1059,8 +1201,8 @@ def generate_building(obj, props):
             from .roof import build_hoist_beam
             build_hoist_beam(
                 bm,
-                front_x=0.0,
-                front_y=-top_hy - props.roof_overhang,
+                front_x=top_cx,
+                front_y=top_y_min - props.roof_overhang,
                 z_ridge=top_z + props.roof_height,
                 length=1.4
             )
@@ -1069,8 +1211,8 @@ def generate_building(obj, props):
         if props.has_roof_shingles and roof_style in ('SWAY', 'GABLE'):
             build_shingle_layers(
                 bm,
-                x_min=-top_hx, x_max=top_hx,
-                y_min=-top_hy, y_max=top_hy,
+                x_min=top_x_min, x_max=top_x_max,
+                y_min=top_y_min, y_max=top_y_max,
                 z_base=top_z,
                 roof_height=props.roof_height,
                 rows=props.shingle_rows,
@@ -1242,14 +1384,14 @@ def generate_building(obj, props):
         t_scale = getattr(props, 'roof_turret_scale', 1.0)
         
         roof_half_w = top_hx + props.roof_overhang
-        turret_cx = t_px * roof_half_w * 0.65
-        turret_cy = t_py * top_hy * 0.75
+        turret_cx = top_cx + t_px * roof_half_w * 0.65
+        turret_cy = top_cy + t_py * top_hy * 0.75
         
         # Calculate surface contact height at turret position considering sway sag and flare drop
-        u_turret = min(1.0, max(0.0, abs(turret_cx) / max(0.01, roof_half_w)))
+        u_turret = min(1.0, max(0.0, abs(turret_cx - top_cx) / max(0.01, roof_half_w)))
         drop_turret = (1.0 - flare_val) * u_turret + flare_val * (1.0 - (1.0 - u_turret) ** 2)
         if roof_style == 'SWAY':
-            t_y = max(0.0, min(1.0, (turret_cy - (-top_hy)) / max(0.01, 2.0 * top_hy)))
+            t_y = max(0.0, min(1.0, (turret_cy - top_y_min) / max(0.01, 2.0 * top_hy)))
             sway_val = getattr(props, 'roof_sway', 0.25)
             sag_turret = math.sin(t_y * math.pi) * sway_val
         else:
@@ -1271,8 +1413,8 @@ def generate_building(obj, props):
         
     # Stylized Crooked Chimney
     if props.has_chimney and effective_archetype != 'WATCHTOWER':
-        chim_x = top_hx * 0.72
-        chim_y = top_hy * 0.45
+        chim_x = top_cx + top_hx * 0.72
+        chim_y = top_cy + top_hy * 0.45
         chim_total_h = total_height + 0.8
         build_fantasy_chimney(
             bm,
@@ -1311,15 +1453,13 @@ def generate_building(obj, props):
         w_depth = getattr(props, 'mini_wing_depth', 1.6)
         w_roof = getattr(props, 'mini_wing_roof', 'LEAN_TO')
         
-        if w_floor == 'GROUND':
-            z_wing_base = found_h
-        else: # UPPER floor
-            target_fl = min(num_floors - 1, 1)
-            z_wing_base = found_h + target_fl * floor_h
+        target_fl = 0 if w_floor == 'GROUND' else min(num_floors - 1, 1)
+        z_wing_base = found_h + target_fl * floor_h
+        mw_bounds = floor_wall_bounds.get(target_fl, (-hx, hx, -hy, hy))
             
         build_mini_wing(
             bm, side=w_side, floor_mode=w_floor,
-            wall_x_min=-hx, wall_x_max=hx, wall_y_min=-hy, wall_y_max=hy,
+            wall_x_min=mw_bounds[0], wall_x_max=mw_bounds[1], wall_y_min=mw_bounds[2], wall_y_max=mw_bounds[3],
             z_base=z_wing_base, width=w_width, depth=w_depth, height=floor_h * 0.92,
             roof_style=w_roof, tier=tier_val
         )
@@ -1330,10 +1470,12 @@ def generate_building(obj, props):
         b_floor = min(num_floors, max(2, getattr(props, 'balcony_floor', 2)))
         b_width = getattr(props, 'balcony_width', 2.4)
         b_depth = getattr(props, 'balcony_depth', 1.3)
-        z_balc = found_h + (b_floor - 1) * floor_h
+        balc_fl_idx = b_floor - 1
+        z_balc = found_h + balc_fl_idx * floor_h
+        b_bounds = floor_wall_bounds.get(balc_fl_idx, (-hx, hx, -hy, hy))
         build_balcony(
             bm, side=b_side,
-            wall_x_min=-hx, wall_x_max=hx, wall_y_min=-hy, wall_y_max=hy,
+            wall_x_min=b_bounds[0], wall_x_max=b_bounds[1], wall_y_min=b_bounds[2], wall_y_max=b_bounds[3],
             z_floor=z_balc, width=b_width, depth=b_depth, tier=tier_val
         )
         
@@ -1344,9 +1486,10 @@ def generate_building(obj, props):
         p_count = getattr(props, 'pillared_overhang_pillars', 3)
         p_style = getattr(props, 'pillared_overhang_style', 'TIMBER_STONE')
         z_overhang_ceil = found_h + floor_h
+        po_bounds = floor_wall_bounds.get(0, (-hx, hx, -hy, hy))
         build_pillared_overhang(
             bm, side=p_side,
-            wall_x_min=-hx, wall_x_max=hx, wall_y_min=-hy, wall_y_max=hy,
+            wall_x_min=po_bounds[0], wall_x_max=po_bounds[1], wall_y_min=po_bounds[2], wall_y_max=po_bounds[3],
             z_ground=0.0, z_ceiling=z_overhang_ceil, depth=p_depth,
             pillar_count=p_count, pillar_style=p_style, tier=tier_val
         )

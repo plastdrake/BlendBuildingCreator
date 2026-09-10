@@ -152,19 +152,6 @@ def build_curved_bargeboards(bm, cx, rx_min, rx_max, y_verge, ez, rz, roof_flare
                 bevel_amount=0.012
             )
             
-        # Upturned horn at eave tip
-        horn_x = rx_target + side * 0.06
-        horn_z = ez + 0.12
-        horn_ang = -side * 0.65
-        create_beveled_box(
-            bm,
-            size=(0.14, 0.11, 0.32),
-            location=(horn_x, y_verge, horn_z),
-            rotation=(0.0, horn_ang, 0.0),
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.015
-        )
-        
     # Apex finial cap
     create_beveled_box(
         bm,
@@ -774,7 +761,7 @@ def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8
                     skip_shingle = False
                     for ap in dormer_apertures:
                         if ap.get('side') == side:
-                            if (ap['y_min'] - 0.15) <= cur_y <= (ap['y_max'] + 0.15) and (ap['u_min'] - 0.08) <= u <= (ap['u_max'] + 0.08):
+                            if (ap['y_min'] + 0.02) <= cur_y <= (ap['y_max'] - 0.02) and ap['u_min'] <= u <= ap['u_max']:
                                 skip_shingle = True
                                 break
                     if skip_shingle:
@@ -857,9 +844,9 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     col_w = 0.14
 
     # 1. Cheek Walls (Side Walls extending deep through roof deck into attic)
-    cheek_len = dormer_d + 0.45
-    cheek_h = dormer_h + 0.55
-    cheek_mid_z = z_base + dormer_h * 0.5 - 0.20
+    cheek_len = dormer_d + 0.50
+    cheek_h = dormer_h + 0.85
+    cheek_mid_z = z_base + dormer_h * 0.5 - 0.28
     for s_sign in [-1, 1]:
         ch_x = cx + sx * (half_dw - col_w * 0.5) * s_sign - fx * 0.10
         ch_y = cy + sy * (half_dw - col_w * 0.5) * s_sign - fy * 0.10
@@ -885,19 +872,23 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
             bevel_amount=0.012
         )
         
-    # 3. Front Wall, Timber Window Sill & Leaded Glass Window
+    # 3. 100% Solid Front Wall, Leaded Glass Window & Framing (Zero Daylight Gaps)
     front_x = cx + fx * (half_dd - col_w * 0.5)
     front_y = cy + fy * (half_dd - col_w * 0.5)
-    win_w = dormer_w * 0.62
-    win_h = dormer_h * 0.55
-    win_z = z_base + dormer_h * 0.52
+    clear_w = dormer_w - col_w * 2.0
+    win_w = dormer_w * 0.56
+    win_h = dormer_h * 0.50
+    win_z = z_base + dormer_h * 0.50
+    win_bot_z = win_z - win_h * 0.5
+    win_top_z = win_z + win_h * 0.5
     
-    # Spandrel wall under window
-    spandrel_h = (win_z - win_h * 0.5) - (z_base - 0.25)
+    # 3a. Deep Solid Spandrel Wall under window (penetrates deep below roof deck)
+    spandrel_bot_z = z_base - 0.45
+    spandrel_h = win_bot_z - spandrel_bot_z
     create_beveled_box(
         bm,
-        size=(col_w, dormer_w - col_w * 1.5, spandrel_h),
-        location=(front_x, front_y, z_base - 0.25 + spandrel_h * 0.5),
+        size=(col_w, clear_w + 0.04, spandrel_h),
+        location=(front_x, front_y, spandrel_bot_z + spandrel_h * 0.5),
         rotation=(0.0, 0.0, rot_z),
         mat_index=wall_mat,
         bevel_amount=0.010
@@ -906,12 +897,38 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     create_beveled_box(
         bm,
         size=(0.14, win_w + 0.16, 0.08),
-        location=(front_x + fx * 0.04, front_y + fy * 0.04, win_z - win_h * 0.5 - 0.04),
+        location=(front_x + fx * 0.04, front_y + fy * 0.04, win_bot_z - 0.04),
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.008
     )
-    # Window Frame & Leaded Glass
+    # 3b. Solid Side Jamb Wall Panels (Flanking the window between window frame and corner posts)
+    jamb_w = (clear_w - win_w) * 0.5 + 0.03
+    for s_sign in [-1, 1]:
+        jamb_offset = (win_w * 0.5 + jamb_w * 0.5 - 0.015) * s_sign
+        jx = front_x + sx * jamb_offset
+        jy = front_y + sy * jamb_offset
+        create_beveled_box(
+            bm,
+            size=(col_w, jamb_w, win_h + 0.04),
+            location=(jx, jy, win_z),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=wall_mat,
+            bevel_amount=0.008
+        )
+    # 3c. Solid Top Header Wall Panel (Spans above window up to collar tie beam)
+    head_top_z = z_base + dormer_h + 0.02
+    head_h = head_top_z - win_top_z
+    create_beveled_box(
+        bm,
+        size=(col_w, clear_w + 0.04, head_h),
+        location=(front_x, front_y, win_top_z + head_h * 0.5),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=wall_mat,
+        bevel_amount=0.008
+    )
+    
+    # 3d. Window Frame & Leaded Glass
     create_box(
         bm,
         size=(0.06, win_w, win_h),
@@ -923,7 +940,7 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     create_beveled_box(
         bm,
         size=(0.10, win_w + 0.06, 0.08),
-        location=(front_x + fx * 0.01, front_y + fy * 0.01, win_z + win_h * 0.5 + 0.02),
+        location=(front_x + fx * 0.01, front_y + fy * 0.01, win_top_z + 0.02),
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.006
