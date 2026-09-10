@@ -783,7 +783,7 @@ def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8
                 pitch_ang = math.atan2(delta_z * slope_mult, delta_x)
                 slope_len = math.sqrt(delta_x * delta_x + delta_z * delta_z)
                 shingle_l = (slope_len / rows) * 1.35
-                shingle_t = 0.05
+                shingle_t = 0.09
                 
                 norm_x = math.sin(pitch_ang)
                 norm_z = math.cos(pitch_ang)
@@ -801,13 +801,16 @@ def build_shingle_layers(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8
                 overlap_tilt = 0.05 * tilt_sign
                 final_angle = slope_angle + overlap_tilt + jitter_tilt
                 
+                # Thicker with a generous rounded bevel so each tab reads as a puffy,
+                # hand-carved shingle instead of a flat paper-thin plane.
                 create_beveled_box(
                     bm,
                     size=(shingle_l, shingle_w, shingle_t),
                     location=(cur_x, cur_y + jitter_y, cur_z),
                     rotation=(0.0, final_angle, jitter_rot),
                     mat_index=MAT_INDEX_SHINGLES,
-                    bevel_amount=0.006
+                    bevel_amount=0.032,
+                    bevel_segments=3
                 )
 
 def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1.2, dormer_d=1.4, dormer_h=1.05,
