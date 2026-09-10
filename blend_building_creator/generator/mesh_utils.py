@@ -9,6 +9,27 @@ import math
 from mathutils import Vector, Matrix, Euler
 import random
 
+def apply_organic_shading(obj, angle_deg=42.0):
+    """
+    Smooths the finished building mesh by angle so bevels/cylinders read as soft and
+    rounded (organic hand-carved look) while sharp unbeveled corners stay crisp.
+    Uses the Blender 4.1+ 'Smooth by Angle' operator, with a flat shade_smooth fallback.
+    """
+    try:
+        prev_active = bpy.context.view_layer.objects.active
+        bpy.context.view_layer.objects.active = obj
+        was_selected = obj.select_get()
+        obj.select_set(True)
+        bpy.ops.object.shade_auto_smooth(angle=math.radians(angle_deg))
+        obj.select_set(was_selected)
+        bpy.context.view_layer.objects.active = prev_active
+    except Exception:
+        try:
+            for poly in obj.data.polygons:
+                poly.use_smooth = True
+        except Exception:
+            pass
+
 def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0):
     """
     Creates an oriented box in bmesh with center or base alignment.
@@ -108,8 +129,8 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
         
     return faces
 
-def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, bevel_amount=0.03, bevel_segments=1):
-    """Creates a box and slightly chamfers/bevels its edges for a chunky stylized look."""
+def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, bevel_amount=0.03, bevel_segments=2):
+    """Creates a box and softly rounds its edges for a chunky, hand-carved organic look."""
     faces = create_box(bm, size, location, rotation, mat_index)
     if bevel_amount > 0.001:
         edges = list({e for f in faces for e in f.edges})

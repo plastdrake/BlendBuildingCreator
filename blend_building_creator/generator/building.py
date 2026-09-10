@@ -10,7 +10,7 @@ import bmesh
 import math
 import random
 from mathutils import Vector, Euler, Matrix
-from .mesh_utils import create_box, create_beveled_box, create_cylinder, create_cone, apply_box_uvs, add_wonkiness
+from .mesh_utils import create_box, create_beveled_box, create_cylinder, create_cone, apply_box_uvs, add_wonkiness, apply_organic_shading
 from .materials import (
     setup_building_material_slots,
     MAT_INDEX_STONE, MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT,
@@ -306,6 +306,7 @@ def generate_building(obj, props):
         bm.to_mesh(obj.data)
         bm.free()
         obj.data.update()
+        apply_organic_shading(obj)
         try:
             from ..operators import get_props_dict
             import json
@@ -1626,6 +1627,7 @@ def generate_building(obj, props):
     bm.to_mesh(obj.data)
     bm.free()
     obj.data.update()
+    apply_organic_shading(obj)
     
     # Store settings dictionary on object for independent multi-building recall
     try:
