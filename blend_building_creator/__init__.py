@@ -34,6 +34,7 @@ from .ui import (
     VIEW3D_PT_fantasy_building_interior,
     VIEW3D_PT_fantasy_building_openings,
     VIEW3D_PT_fantasy_building_roof,
+    VIEW3D_PT_fantasy_building_extensions,
     VIEW3D_PT_fantasy_building_materials,
 )
 
@@ -52,6 +53,7 @@ classes = (
     VIEW3D_PT_fantasy_building_interior,
     VIEW3D_PT_fantasy_building_openings,
     VIEW3D_PT_fantasy_building_roof,
+    VIEW3D_PT_fantasy_building_extensions,
     VIEW3D_PT_fantasy_building_materials,
 )
 

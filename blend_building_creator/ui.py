@@ -221,11 +221,62 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
             
         col_det = layout.column(align=True)
         col_det.prop(props, "has_dormers")
-        col_det.prop(props, "has_roof_turret")
+        
+        box_turret = col_det.box()
+        box_turret.prop(props, "has_roof_turret")
         if props.has_roof_turret:
-            col_det.prop(props, "roof_turret_style")
+            box_turret.prop(props, "roof_turret_style")
+            box_turret.prop(props, "roof_turret_pos_x", slider=True)
+            box_turret.prop(props, "roof_turret_pos_y", slider=True)
+            box_turret.prop(props, "roof_turret_scale")
+
         col_det.prop(props, "has_chimney")
         col_det.prop(props, "has_hoist_beam")
+
+class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
+    """Subpanel for mini-wing outcrops, balconies, and pillared colonnades"""
+    bl_label = "Wings, Balconies & Overhangs"
+    bl_idname = "VIEW3D_PT_fantasy_building_extensions"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Fantasy Building"
+    bl_parent_id = "VIEW3D_PT_fantasy_building_main"
+    bl_options = {'DEFAULT_CLOSED'}
+    
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.fantasy_building_settings
+        
+        # Mini-Wing Outcrop
+        box_wing = layout.box()
+        box_wing.prop(props, "has_mini_wing")
+        if props.has_mini_wing:
+            col = box_wing.column(align=True)
+            col.prop(props, "mini_wing_side")
+            col.prop(props, "mini_wing_floor")
+            col.prop(props, "mini_wing_roof")
+            col.prop(props, "mini_wing_width")
+            col.prop(props, "mini_wing_depth")
+            
+        # Balcony
+        box_balc = layout.box()
+        box_balc.prop(props, "has_balcony")
+        if props.has_balcony:
+            col = box_balc.column(align=True)
+            col.prop(props, "balcony_side")
+            col.prop(props, "balcony_floor")
+            col.prop(props, "balcony_width")
+            col.prop(props, "balcony_depth")
+            
+        # Pillared Overhang / Colonnade
+        box_over = layout.box()
+        box_over.prop(props, "has_pillared_overhang")
+        if props.has_pillared_overhang:
+            col = box_over.column(align=True)
+            col.prop(props, "pillared_overhang_side")
+            col.prop(props, "pillared_overhang_depth")
+            col.prop(props, "pillared_overhang_pillars")
+            col.prop(props, "pillared_overhang_style")
 
 class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
     """Subpanel for procedural stylized colors and custom material overrides"""

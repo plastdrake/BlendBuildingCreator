@@ -31,7 +31,7 @@ from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, 
 from .accessories import (
     build_blacksmith_forge, build_windmill_sails, build_watchtower_lookout,
     build_tavern_porch_and_sign, build_fisherman_stilts, build_bakery_oven,
-    build_warehouse_cargo
+    build_warehouse_cargo, build_mini_wing, build_balcony, build_pillared_overhang
 )
 
 def get_facade_window_positions(span_min, span_max, target_spacing=2.4, min_margin=0.85):
@@ -984,6 +984,37 @@ def generate_building(obj, props):
         
         # Exterior Roof Construction
         flare_val = getattr(props, 'roof_flare', 0.35)
+        
+        # Pre-compute dormer apertures to open attic holes in the roof deck and shingles
+        dormer_apertures = []
+        dormer_placements = []
+        if props.has_dormers and roof_style in ('SWAY', 'GABLE') and effective_archetype != 'WATCHTOWER':
+            roof_half_w = top_hx + props.roof_overhang
+            dormer_u = 0.52
+            dormer_drop = (1.0 - flare_val) * dormer_u + flare_val * (1.0 - (1.0 - dormer_u) ** 2)
+            slope_deck_z = (top_z + props.roof_height) - dormer_drop * (props.roof_height + 0.10)
+            z_dormer_base = slope_deck_z - 0.22
+            
+            # Determine dormer Y positions avoiding chimney collision
+            # Chimney is at +X (right slope) and +Y (top_hy * 0.45)
+            if top_hy * 2.0 > 4.2:
+                left_y = top_hy * 0.35
+                right_y = -top_hy * 0.40 if props.has_chimney else top_hy * 0.35
+                dormer_placements.append({'pos': (-roof_half_w * dormer_u, left_y), 'facing': (-1, 0), 'side': -1})
+                dormer_placements.append({'pos': (roof_half_w * dormer_u, right_y), 'facing': (1, 0), 'side': 1})
+            else:
+                dormer_placements.append({'pos': (-roof_half_w * dormer_u, 0.0), 'facing': (-1, 0), 'side': -1})
+                
+            for dp in dormer_placements:
+                d_cx, d_cy = dp['pos']
+                dormer_apertures.append({
+                    'side': dp['side'],
+                    'y_min': d_cy - 0.52,
+                    'y_max': d_cy + 0.52,
+                    'u_min': 0.22,
+                    'u_max': 0.76
+                })
+
         if roof_style == 'SWAY':
             build_sway_roof(
                 bm,
@@ -996,7 +1027,8 @@ def generate_building(obj, props):
                 wall_thickness=wall_t,
                 tier=tier_val,
                 plank_direction=plank_dir,
-                roof_flare=flare_val
+                roof_flare=flare_val,
+                dormer_apertures=dormer_apertures
             )
         elif roof_style == 'TURRET':
             radius = max(top_hx, top_hy) * 1.05
@@ -1018,7 +1050,8 @@ def generate_building(obj, props):
                 segments_y=6,
                 tier=tier_val,
                 plank_direction=plank_dir,
-                roof_flare=flare_val
+                roof_flare=flare_val,
+                dormer_apertures=dormer_apertures
             )
 
         # Roof Hoist Beam with Cargo Hook (Warehouse / freight feature)
@@ -1045,7 +1078,8 @@ def generate_building(obj, props):
                 overhang=props.roof_overhang,
                 sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0,
                 roof_style=roof_style,
-                roof_flare=flare_val
+                roof_flare=flare_val,
+                dormer_apertures=dormer_apertures
             )
 
     # Compound Shape Wing Roof (Cross-Gable intersecting main roof or upper facade)
@@ -1189,64 +1223,50 @@ def generate_building(obj, props):
         
     # Dormer Windows
     if props.has_dormers and roof_style in ('SWAY', 'GABLE') and effective_archetype != 'WATCHTOWER':
-        roof_half_w = top_hx + props.roof_overhang
-        dormer_u = 0.52
-        dormer_drop = (1.0 - flare_val) * dormer_u + flare_val * (1.0 - (1.0 - dormer_u) ** 2)
-        slope_deck_z = (top_z + props.roof_height) - dormer_drop * (props.roof_height + 0.10)
-        z_dormer_base = slope_deck_z - 0.22
-        
-        # Determine dormer Y positions along the length of the roof
-        if top_hy * 2.0 > 4.2:
-            dormer_ys = [-top_hy * 0.35, top_hy * 0.35]
-        else:
-            dormer_ys = [0.0]
-            
         tier_val = getattr(props, 'material_tier', 'TIER_3')
-        # Left slope dormer (facing -X)
-        dormer_x_left = -roof_half_w * dormer_u
-        build_dormer(
-            bm,
-            center_pos=(dormer_x_left, dormer_ys[0]),
-            z_base=z_dormer_base,
-            facing_dir=(-1, 0),
-            dormer_w=1.2, dormer_d=1.4, dormer_h=1.3,
-            roof_flare=flare_val,
-            tier=tier_val
-        )
-        # If building is long enough, place a second dormer on the right slope (+X)
-        if len(dormer_ys) > 1:
-            dormer_x_right = roof_half_w * dormer_u
+        for dp in dormer_placements:
             build_dormer(
                 bm,
-                center_pos=(dormer_x_right, dormer_ys[1]),
+                center_pos=dp['pos'],
                 z_base=z_dormer_base,
-                facing_dir=(1, 0),
+                facing_dir=dp['facing'],
                 dormer_w=1.2, dormer_d=1.4, dormer_h=1.3,
                 roof_flare=flare_val,
                 tier=tier_val
             )
             
-    # Fairytale Roof Spire Turret (Reference Image 5)
+    # Fairytale Roof Spire Turret (Positionable across roof pitch with attic penetration)
     if getattr(props, 'has_roof_turret', False) and effective_archetype != 'WATCHTOWER':
+        t_px = getattr(props, 'roof_turret_pos_x', 0.0)
+        t_py = getattr(props, 'roof_turret_pos_y', -0.25)
+        t_scale = getattr(props, 'roof_turret_scale', 1.0)
+        
+        roof_half_w = top_hx + props.roof_overhang
+        turret_cx = t_px * roof_half_w * 0.65
+        turret_cy = t_py * top_hy * 0.75
+        
+        # Calculate surface contact height at turret position considering sway sag and flare drop
+        u_turret = min(1.0, max(0.0, abs(turret_cx) / max(0.01, roof_half_w)))
+        drop_turret = (1.0 - flare_val) * u_turret + flare_val * (1.0 - (1.0 - u_turret) ** 2)
         if roof_style == 'SWAY':
-            ridge_z = top_z + props.roof_height - getattr(props, 'roof_sway', 0.25)
+            t_y = max(0.0, min(1.0, (turret_cy - (-top_hy)) / max(0.01, 2.0 * top_hy)))
+            sway_val = getattr(props, 'roof_sway', 0.25)
+            sag_turret = math.sin(t_y * math.pi) * sway_val
         else:
-            ridge_z = top_z + props.roof_height
-            
+            sag_turret = 0.0
+        z_turret_surf = (top_z + props.roof_height - sag_turret) - drop_turret * (props.roof_height + 0.10)
+        
         turret_style = getattr(props, 'roof_turret_style', 'OCTAGONAL')
-        turret_w = 1.3
-        turret_h = 1.9
-        spire_h = 2.4
-        turret_y = 0.0 if not props.has_chimney else -top_hy * 0.25
         build_roof_turret(
             bm,
-            center_pos=(0.0, turret_y),
-            z_base=ridge_z - 0.15,
-            turret_w=turret_w,
-            turret_h=turret_h,
-            spire_h=spire_h,
+            center_pos=(turret_cx, turret_cy),
+            z_base=z_turret_surf,
+            turret_w=1.3,
+            turret_h=1.9,
+            spire_h=2.4,
             style=turret_style,
-            roof_flare=flare_val
+            roof_flare=flare_val,
+            scale=t_scale
         )
         
     # Stylized Crooked Chimney
@@ -1279,6 +1299,57 @@ def generate_building(obj, props):
         build_bakery_oven(bm, -hx, hx, -hy, hy, z_ground=0.0)
     elif effective_archetype == 'WAREHOUSE':
         build_warehouse_cargo(bm, front_x=0.0, front_y=-hy, z_ground=0.0)
+
+    # 4.6. Architectural Outcrops, Balconies & Pillared Overhangs
+    tier_val = getattr(props, 'material_tier', 'TIER_3')
+    
+    # Mini-Wing Outcrop
+    if getattr(props, 'has_mini_wing', False):
+        w_side = getattr(props, 'mini_wing_side', 'LEFT')
+        w_floor = getattr(props, 'mini_wing_floor', 'GROUND')
+        w_width = getattr(props, 'mini_wing_width', 2.2)
+        w_depth = getattr(props, 'mini_wing_depth', 1.6)
+        w_roof = getattr(props, 'mini_wing_roof', 'LEAN_TO')
+        
+        if w_floor == 'GROUND':
+            z_wing_base = found_h
+        else: # UPPER floor
+            target_fl = min(num_floors - 1, 1)
+            z_wing_base = found_h + target_fl * floor_h
+            
+        build_mini_wing(
+            bm, side=w_side, floor_mode=w_floor,
+            wall_x_min=-hx, wall_x_max=hx, wall_y_min=-hy, wall_y_max=hy,
+            z_base=z_wing_base, width=w_width, depth=w_depth, height=floor_h * 0.92,
+            roof_style=w_roof, tier=tier_val
+        )
+        
+    # Timber Balcony
+    if getattr(props, 'has_balcony', False) and num_floors >= 2:
+        b_side = getattr(props, 'balcony_side', 'FRONT')
+        b_floor = min(num_floors, max(2, getattr(props, 'balcony_floor', 2)))
+        b_width = getattr(props, 'balcony_width', 2.4)
+        b_depth = getattr(props, 'balcony_depth', 1.3)
+        z_balc = found_h + (b_floor - 1) * floor_h
+        build_balcony(
+            bm, side=b_side,
+            wall_x_min=-hx, wall_x_max=hx, wall_y_min=-hy, wall_y_max=hy,
+            z_floor=z_balc, width=b_width, depth=b_depth, tier=tier_val
+        )
+        
+    # Pillared Overhang / Colonnade
+    if getattr(props, 'has_pillared_overhang', False):
+        p_side = getattr(props, 'pillared_overhang_side', 'FRONT')
+        p_depth = getattr(props, 'pillared_overhang_depth', 1.6)
+        p_count = getattr(props, 'pillared_overhang_pillars', 3)
+        p_style = getattr(props, 'pillared_overhang_style', 'TIMBER_STONE')
+        z_overhang_ceil = found_h + floor_h
+        build_pillared_overhang(
+            bm, side=p_side,
+            wall_x_min=-hx, wall_x_max=hx, wall_y_min=-hy, wall_y_max=hy,
+            z_ground=0.0, z_ceiling=z_overhang_ceil, depth=p_depth,
+            pillar_count=p_count, pillar_style=p_style, tier=tier_val
+        )
 
     # 5. Whimsical Curvature / Wonkiness Deformation
     if props.wonkiness > 0.001:

@@ -517,6 +517,27 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default='OCTAGONAL',
         update=on_property_updated
     )
+
+    roof_turret_pos_x: FloatProperty(
+        name="Turret Slope Position",
+        description="Position across roof slope (-1.0 left slope, 0.0 ridge, 1.0 right slope)",
+        min=-1.0, max=1.0, default=0.0,
+        update=on_property_updated
+    )
+
+    roof_turret_pos_y: FloatProperty(
+        name="Turret Length Position",
+        description="Position along roof length (-1.0 to 1.0)",
+        min=-1.0, max=1.0, default=-0.25,
+        update=on_property_updated
+    )
+
+    roof_turret_scale: FloatProperty(
+        name="Turret Scale",
+        description="Overall scale multiplier of the roof spire turret",
+        min=0.5, max=2.0, default=1.0,
+        update=on_property_updated
+    )
     
     has_chimney: BoolProperty(
         name="Stone Chimney",
@@ -529,6 +550,150 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Roof Hoist Beam",
         description="Projecting heavy timber ridge beam with suspended cargo hook / pulley on the front gable",
         default=False,
+        update=on_property_updated
+    )
+
+    # --- Architectural Outcrops, Balconies & Overhangs ---
+    has_mini_wing: BoolProperty(
+        name="Mini-Wing Outcrop",
+        description="Add a small outcrop bay room / annex projection to the building",
+        default=False,
+        update=on_property_updated
+    )
+
+    mini_wing_side: EnumProperty(
+        name="Outcrop Side",
+        description="Wall facade where the mini wing is attached",
+        items=[
+            ('LEFT', "Left (-X)", "Attached to left facade"),
+            ('RIGHT', "Right (+X)", "Attached to right facade"),
+            ('BACK', "Back (+Y)", "Attached to rear facade"),
+            ('FRONT', "Front (-Y)", "Attached to front facade"),
+        ],
+        default='LEFT',
+        update=on_property_updated
+    )
+
+    mini_wing_floor: EnumProperty(
+        name="Outcrop Level",
+        description="Floor level for the mini-wing outcrop",
+        items=[
+            ('GROUND', "Ground Floor (Grounded)", "Grounded room resting on stone foundation plinth"),
+            ('UPPER', "Upper Floor (Oriel)", "Cantilevered upper-floor oriel bay supported by heavy timber corbels"),
+        ],
+        default='GROUND',
+        update=on_property_updated
+    )
+
+    mini_wing_width: FloatProperty(
+        name="Outcrop Width",
+        description="Width of the mini wing along the facade wall",
+        min=1.4, max=4.5, default=2.2,
+        update=on_property_updated
+    )
+
+    mini_wing_depth: FloatProperty(
+        name="Outcrop Depth",
+        description="Projection distance outward from the facade",
+        min=0.9, max=3.2, default=1.6,
+        update=on_property_updated
+    )
+
+    mini_wing_roof: EnumProperty(
+        name="Outcrop Roof",
+        description="Roof style of the mini wing",
+        items=[
+            ('LEAN_TO', "Lean-To Shed", "Sloping shed roof with timber rafters and shingles"),
+            ('GABLE', "Mini Gable", "Pitched gable roof with bargeboards and shingles"),
+        ],
+        default='LEAN_TO',
+        update=on_property_updated
+    )
+
+    has_balcony: BoolProperty(
+        name="Timber Balcony",
+        description="Cantilevered wooden balcony on an upper floor with heavy timber brackets and balustrade",
+        default=False,
+        update=on_property_updated
+    )
+
+    balcony_side: EnumProperty(
+        name="Balcony Side",
+        description="Wall facade where the balcony is situated",
+        items=[
+            ('FRONT', "Front (-Y)", "Front facade balcony"),
+            ('BACK', "Back (+Y)", "Rear facade balcony"),
+            ('LEFT', "Left (-X)", "Left facade balcony"),
+            ('RIGHT', "Right (+X)", "Right facade balcony"),
+        ],
+        default='FRONT',
+        update=on_property_updated
+    )
+
+    balcony_floor: IntProperty(
+        name="Balcony Floor",
+        description="Upper floor index where the balcony is located (2 = second story)",
+        min=2, max=6, default=2,
+        update=on_property_updated
+    )
+
+    balcony_width: FloatProperty(
+        name="Balcony Width",
+        description="Width of the cantilevered balcony platform",
+        min=1.2, max=4.5, default=2.4,
+        update=on_property_updated
+    )
+
+    balcony_depth: FloatProperty(
+        name="Balcony Depth",
+        description="Projection depth of the cantilevered balcony platform",
+        min=0.8, max=2.2, default=1.3,
+        update=on_property_updated
+    )
+
+    has_pillared_overhang: BoolProperty(
+        name="Pillared Overhang",
+        description="Colonnaded porch or upper floor overhang supported by heavy vertical pillars down to ground",
+        default=False,
+        update=on_property_updated
+    )
+
+    pillared_overhang_side: EnumProperty(
+        name="Pillared Facade",
+        description="Wall facade where the colonnade/overhang is erected",
+        items=[
+            ('FRONT', "Front (-Y)", "Front covered portico / entrance colonnade"),
+            ('LEFT', "Left (-X)", "Left side covered portico"),
+            ('RIGHT', "Right (+X)", "Right side covered portico"),
+            ('BACK', "Back (+Y)", "Rear covered portico"),
+        ],
+        default='FRONT',
+        update=on_property_updated
+    )
+
+    pillared_overhang_depth: FloatProperty(
+        name="Overhang Depth",
+        description="Projection distance of the pillared colonnade / overhang",
+        min=0.9, max=3.5, default=1.6,
+        update=on_property_updated
+    )
+
+    pillared_overhang_pillars: IntProperty(
+        name="Pillar Count",
+        description="Number of vertical pillars along the facade",
+        min=2, max=6, default=3,
+        update=on_property_updated
+    )
+
+    pillared_overhang_style: EnumProperty(
+        name="Pillar Style",
+        description="Structural style of vertical pillars",
+        items=[
+            ('TIMBER_STONE', "Timber on Stone Plinth", "Square timber posts resting on stone plinths with 45-deg braces"),
+            ('ROUND_POST', "Rustic Log Posts", "Round tree-trunk log columns with stone bases"),
+            ('STONE_COLUMN', "Stone Pillars", "Chunky masonry stone columns"),
+        ],
+        default='TIMBER_STONE',
         update=on_property_updated
     )
     
