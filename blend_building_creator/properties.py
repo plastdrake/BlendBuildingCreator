@@ -34,6 +34,7 @@ def on_tier_updated(self, context):
         self.foundation_height = 0.35
         self.has_cantilever = False
         self.ground_floor_stone = False
+        self.has_timber_framing = False
     elif tier == 'TIER_2':
         self.num_floors = 2
         self.width = 6.8
@@ -42,6 +43,7 @@ def on_tier_updated(self, context):
         self.has_cantilever = True
         self.cantilever_overhang = 0.35
         self.ground_floor_stone = False
+        self.has_timber_framing = True
     elif tier == 'TIER_3':
         self.num_floors = 3
         self.width = 8.8
@@ -50,6 +52,7 @@ def on_tier_updated(self, context):
         self.has_cantilever = True
         self.cantilever_overhang = 0.40
         self.ground_floor_stone = True
+        self.has_timber_framing = True
     self.auto_update = True
     
     on_property_updated(self, context)
@@ -410,14 +413,14 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     has_flower_boxes: BoolProperty(
         name="Flower Boxes",
         description="Flower planter boxes underneath exterior window sills",
-        default=True,
+        default=False,
         update=on_property_updated
     )
     
     has_lanterns: BoolProperty(
         name="Iron Lanterns",
         description="Stylized glowing iron lanterns mounted beside entrance",
-        default=True,
+        default=False,
         update=on_property_updated
     )
     
@@ -769,6 +772,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default=False,
         update=on_property_updated
     )
+
+    split_by_material: BoolProperty(
+        name="Split by Material",
+        description="Separate building into multiple objects by material — each piece then has its own conformal UV islands (logs, beams, boards all unwrapped in same fiber direction) for easy handpainting",
+        default=False,
+        update=on_property_updated
+    )
     
     color_palette: EnumProperty(
         name="Color Palette",
@@ -897,3 +907,8 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     custom_door: PointerProperty(type=bpy.types.Material, name="Door Mat", update=on_property_updated)
     custom_iron: PointerProperty(type=bpy.types.Material, name="Iron Mat", update=on_property_updated)
     custom_log_end: PointerProperty(type=bpy.types.Material, name="Log End Mat", update=on_property_updated)
+    custom_log: PointerProperty(type=bpy.types.Material, name="Log Mat", update=on_property_updated)
+    custom_stairs: PointerProperty(type=bpy.types.Material, name="Stairs Mat", update=on_property_updated)
+    custom_railing: PointerProperty(type=bpy.types.Material, name="Railing Mat", update=on_property_updated)
+    custom_window_frame: PointerProperty(type=bpy.types.Material, name="Window Frame Mat", update=on_property_updated)
+    custom_shutter: PointerProperty(type=bpy.types.Material, name="Shutter Mat", update=on_property_updated)

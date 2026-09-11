@@ -11,6 +11,36 @@ from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_cylinder
 from .materials import MAT_INDEX_FLOOR, MAT_INDEX_STONE, MAT_INDEX_WOOD, MAT_INDEX_TIMBER, MAT_INDEX_STAIRS, MAT_INDEX_RAILING
 
+
+def _add_floorboard_finish(bm, x_min, x_max, y_min, y_max, z_top, seed=0, thickness=0.10):
+    """Build the floor itself from slightly irregular, segmented timber boards rotated 90 degrees (along Y)."""
+    rng = __import__('random').Random(731 + seed * 97)
+    board_h = thickness
+    x = x_min
+    col = 0
+    while x < x_max - 0.05:
+        board_w = min(x_max - x, 0.28 + rng.uniform(-0.035, 0.045))
+        y = y_min
+        # Stagger every other column along Y: no uninterrupted grid seams.
+        if col % 2:
+            y -= 0.62 + rng.uniform(-0.14, 0.14)
+        while y < y_max - 0.04:
+            length = 1.65 + rng.uniform(-0.38, 0.42)
+            y2 = min(y_max, y + length)
+            if y2 > y_min + 0.04:
+                bot = max(y_min, y)
+                top = y2
+                if top - bot > 0.07:
+                    create_beveled_box(
+                        bm, size=(max(0.06, board_w - 0.010), top - bot - 0.012, board_h),
+                        location=(x + board_w * 0.5, (bot + top) * 0.5,
+                                  z_top - board_h * 0.5),
+                        mat_index=MAT_INDEX_FLOOR, bevel_amount=0.008
+                    )
+            y += length
+        x += board_w
+        col += 1
+
 def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickness=0.15, stair_hole=None, mat_idx=MAT_INDEX_FLOOR):
     """
     Builds a solid floor slab. If stair_hole (xmin, xmax, ymin, ymax) is provided,
@@ -18,15 +48,19 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
     """
     z_bottom = z_level - thickness
     z_top = z_level
+
+    def add_floor_region(rx_min, rx_max, ry_min, ry_max, region_seed):
+        if rx_max - rx_min < 0.04 or ry_max - ry_min < 0.04:
+            return
+        create_box(
+            bm, size=(rx_max - rx_min, ry_max - ry_min, thickness),
+            location=((rx_min + rx_max) * 0.5, (ry_min + ry_max) * 0.5,
+                      (z_bottom + z_top) * 0.5), mat_index=mat_idx
+        )
     
     if stair_hole is None or floor_idx == 0:
-        # Solid slab (e.g. ground floor)
-        create_box(
-            bm,
-            size=(x_max - x_min, y_max - y_min, thickness),
-            location=((x_min + x_max) * 0.5, (y_min + y_max) * 0.5, (z_bottom + z_top) * 0.5),
-            mat_index=mat_idx
-        )
+        # Timber floors are the planks themselves—no duplicate hidden slab below.
+        add_floor_region(x_min, x_max, y_min, y_max, floor_idx)
         return
 
     # Decompose floor into 2 or 3 rectangular slabs around the stairwell cutout
@@ -41,9 +75,7 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
     if sx_max < x_max:
         w = x_max - sx_max
         cx = (x_max + sx_max) * 0.5
-        create_box(bm, size=(w, y_max - y_min, thickness),
-                   location=(cx, (y_min + y_max) * 0.5, (z_bottom + z_top) * 0.5),
-                   mat_index=mat_idx)
+        add_floor_region(sx_max, x_max, y_min, y_max, floor_idx)
 
     # Front portion in front of stairwell (from y_min up to sy_min)
     if sy_min > y_min:
@@ -51,9 +83,7 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
         cx = (sx_max + x_min) * 0.5
         h = sy_min - y_min
         cy = (sy_min + y_min) * 0.5
-        create_box(bm, size=(w, h, thickness),
-                   location=(cx, cy, (z_bottom + z_top) * 0.5),
-                   mat_index=mat_idx)
+        add_floor_region(x_min, sx_max, y_min, sy_min, floor_idx + 11)
 
     # Back portion behind stairwell (if any space)
     if sy_max < y_max:
@@ -61,9 +91,7 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
         cx = (sx_max + x_min) * 0.5
         h = y_max - sy_max
         cy = (y_max + sy_max) * 0.5
-        create_box(bm, size=(w, h, thickness),
-                   location=(cx, cy, (z_bottom + z_top) * 0.5),
-                   mat_index=mat_idx)
+        add_floor_region(x_min, sx_max, sy_max, y_max, floor_idx + 23)
 
 def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, beam_w=0.14, beam_d=0.18, stair_hole=None):
     """
@@ -110,8 +138,8 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
                     )
                 continue
                 
-        # Full width beam
-        beam_length = x_max - x_min + 0.05
+        # Full width beam — extended 0.28 into walls to prevent short gap
+        beam_length = x_max - x_min + 0.28
         beam_cx = (x_min + x_max) * 0.5
         create_beveled_box(
             bm,
@@ -120,6 +148,83 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
             mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.015
         )
+
+def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
+                         wall_thickness=0.28, stair_hole=None, wall_openings=None):
+    """Build interior baseboards and crown moulding flush to the *inside* wall faces.
+
+    ``wall_openings`` uses the same local-U opening dictionaries as the wall builder.
+    Baseboards are split around ground-reaching openings (doors and portals), rather
+    than running across the walk-through.  The small inward offset prevents trims
+    from poking through the exterior side of a double wall.
+    """
+    import math
+
+    trim_h_floor = 0.11
+    trim_d = 0.028
+    reveal = 0.035
+    wall_openings = wall_openings or {}
+
+    # Ordered clockwise so the supplied inward vectors always point into the room.
+    sides = (
+        ('front', x_min, y_min, x_max, y_min, (0.0, 1.0)),
+        ('right', x_max, y_min, x_max, y_max, (-1.0, 0.0)),
+        ('back',  x_max, y_max, x_min, y_max, (0.0, -1.0)),
+        ('left',  x_min, y_max, x_min, y_min, (1.0, 0.0)),
+    )
+
+    def add_trim_segment(x1, y1, x2, y2, inward, z_center, depth, height, bevel):
+        length = math.hypot(x2 - x1, y2 - y1)
+        if length < 0.08:
+            return
+        angle = math.atan2(y2 - y1, x2 - x1)
+        cx = (x1 + x2) * 0.5 + inward[0] * (depth * 0.5 + 0.002)
+        cy = (y1 + y2) * 0.5 + inward[1] * (depth * 0.5 + 0.002)
+        create_beveled_box(
+            bm, size=(length, depth, height), location=(cx, cy, z_center),
+            rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_WOOD,
+            bevel_amount=bevel
+        )
+
+    for side, x1, y1, x2, y2, inward in sides:
+        dx, dy = x2 - x1, y2 - y1
+        length = math.hypot(dx, dy)
+        ux, uy = dx / length, dy / length
+
+        # Door/portal openings are stored relative to the exterior wall start.
+        # Convert them to this interior segment and expand a little for the jamb.
+        cuts = []
+        reversed_from_wall_builder = side in {'back', 'left'}
+        outer_length = length + wall_thickness * 2.0
+        for opening in wall_openings.get(side, []):
+            if opening.get('z_start', z_floor + 1.0) <= z_floor + trim_h_floor:
+                if reversed_from_wall_builder:
+                    a = outer_length - opening.get('u_end', 0.0) - wall_thickness - reveal
+                    b = outer_length - opening.get('u_start', 0.0) - wall_thickness + reveal
+                else:
+                    a = opening.get('u_start', 0.0) - wall_thickness - reveal
+                    b = opening.get('u_end', 0.0) - wall_thickness + reveal
+                a = max(0.0, a)
+                b = min(length, b)
+                if b > a:
+                    cuts.append((a, b))
+        cuts.sort()
+
+        cursor = 0.0
+        for a, b in cuts:
+            if a > cursor:
+                add_trim_segment(x1 + ux * cursor, y1 + uy * cursor,
+                                 x1 + ux * a, y1 + uy * a, inward,
+                                 z_floor + trim_h_floor * 0.5, trim_d, trim_h_floor, 0.009)
+            cursor = max(cursor, b)
+        if cursor < length:
+            add_trim_segment(x1 + ux * cursor, y1 + uy * cursor, x2, y2, inward,
+                             z_floor + trim_h_floor * 0.5, trim_d, trim_h_floor, 0.009)
+
+        # Crown trims sit clear of ordinary doors and remain continuous by design.
+        trim_h_ceil = 0.09
+        add_trim_segment(x1, y1, x2, y2, inward,
+                         z_ceil - trim_h_ceil * 0.5 - 0.008, 0.026, trim_h_ceil, 0.008)
 
 def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, return_y=None, x_start=None):
     """
@@ -201,34 +306,59 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
     tread_d = (stair_depth / num_steps) + 0.04
     tread_thick = 0.05
     
+    uv_layer = bm.loops.layers.uv.verify()
+    
     # 1. Grounded Starter Base Timber (anchored to floor)
-    create_beveled_box(
+    base_faces = create_beveled_box(
         bm,
         size=(stair_width + 0.18, 0.22, 0.08),
         location=(x0, y0 + 0.05 * direction_y, z0 + 0.04),
-        mat_index=MAT_INDEX_WOOD,
+        mat_index=MAT_INDEX_STAIRS,
         bevel_amount=0.012
     )
+    for f in base_faces:
+        if f.is_valid:
+            for loop in f.loops:
+                co = loop.vert.co
+                loop[uv_layer].uv = Vector(((co.y - y0) * 1.5 + (co.z - z0) * 1.5, (co.x - x0) * 0.65))
     
     # 2. Wooden Treads and Risers
     for i in range(num_steps):
         sz = z0 + i * step_h + step_h * 0.5
         sy = y0 + i * step_d + step_d * 0.5
         sx = x0
-        create_beveled_box(
+        tread_faces = create_beveled_box(
             bm,
             size=(stair_width, tread_d, tread_thick),
             location=(sx, sy, sz),
-            mat_index=MAT_INDEX_WOOD,
+            mat_index=MAT_INDEX_STAIRS,
             bevel_amount=0.01
         )
+        # Clean conformal unwrap: 90-degree rotated grain across flat tread surface
+        for f in tread_faces:
+            if not f.is_valid:
+                continue
+            for loop in f.loops:
+                co = loop.vert.co
+                u = (co.y - (sy - tread_d * 0.5)) * 1.5 + (i * 0.37)
+                v = (co.x - (sx - stair_width * 0.5)) * 0.65 + (co.z - sz) * 1.2 + (i * 0.19)
+                loop[uv_layer].uv = Vector((u, v))
+
         # Riser plank beneath tread (down to step below or floor)
-        create_box(
+        riser_faces = create_box(
             bm,
             size=(stair_width - 0.02, 0.035, step_h),
             location=(sx, sy - step_d * 0.5 + 0.015 * direction_y, sz - step_h * 0.5),
-            mat_index=MAT_INDEX_WOOD
+            mat_index=MAT_INDEX_STAIRS
         )
+        for f in riser_faces:
+            if not f.is_valid:
+                continue
+            for loop in f.loops:
+                co = loop.vert.co
+                u = (co.x - (sx - stair_width * 0.5)) * 1.5 + (i * 0.37 + 0.15)
+                v = (co.z - (sz - step_h * 0.5)) * 0.65 + (i * 0.19)
+                loop[uv_layer].uv = Vector((u, v))
         
     # 3. Side Stringer Boards (anchored from starter base to upper landing)
     stringer_thick = 0.08
@@ -241,22 +371,28 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
         str_x = x0 + side * (stair_width * 0.5 + stringer_thick * 0.5)
         str_y = y0 + (stair_depth * 0.5) * direction_y
         str_z = z0 + dz * 0.5
+        # create_box automatically unwraps V strictly along the diagonal beam length (dy)
         create_box(
             bm,
             size=(stringer_thick, diag_length, stringer_h),
             location=(str_x, str_y, str_z),
             rotation=(pitch_angle, 0.0, 0.0),
-            mat_index=MAT_INDEX_WOOD
+            mat_index=MAT_INDEX_STAIRS
         )
         
     # 4. Top Landing Anchor Timber (anchors stringers solidly to the upper floor)
-    create_beveled_box(
+    top_faces = create_beveled_box(
         bm,
         size=(stair_width + 0.18, 0.22, 0.10),
         location=(x0, y0 + stair_depth * direction_y, target_z - 0.05),
-        mat_index=MAT_INDEX_WOOD,
+        mat_index=MAT_INDEX_STAIRS,
         bevel_amount=0.012
     )
+    for f in top_faces:
+        if f.is_valid:
+            for loop in f.loops:
+                co = loop.vert.co
+                loop[uv_layer].uv = Vector(((co.x - x0) * 1.5, (co.y - (y0 + stair_depth * direction_y)) * 0.65 + (co.z - target_z) * 1.2))
 
     # 5. Stylized Newel Posts & Handrails on BOTH SIDES
     post_h = 0.95
@@ -275,18 +411,18 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
         # Bottom post with chamfered cap
         create_beveled_box(bm, size=(post_w, post_w, post_h),
                            location=(rail_x, y0 + 0.05 * direction_y, z0 + post_h * 0.5),
-                           mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                           mat_index=MAT_INDEX_RAILING, bevel_amount=0.012)
         # Top post with chamfered cap
         create_beveled_box(bm, size=(post_w, post_w, post_h),
                            location=(rail_x, y0 + (stair_depth - 0.05) * direction_y, target_z + post_h * 0.5),
-                           mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-        # Handrail bar (terminated flush inside posts, zero external poke)
+                           mat_index=MAT_INDEX_RAILING, bevel_amount=0.012)
+        # Handrail bar (terminated flush inside posts, zero external poke; V unwrapped along length)
         create_box(
             bm,
             size=(rail_thick, rail_diag_len, rail_thick),
             location=(rail_x, rail_cy, rail_cz),
             rotation=(pitch_angle, 0.0, 0.0),
-            mat_index=MAT_INDEX_WOOD
+            mat_index=MAT_INDEX_RAILING
         )
         # Vertical spindles along run (seated flush on top of stringer, inserting into handrail underside)
         for i in range(1, num_steps):
@@ -308,7 +444,7 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
                     bm,
                     size=(0.034, 0.034, spindle_len),
                     location=(rail_x, by, spindle_cz),
-                    mat_index=MAT_INDEX_WOOD
+                    mat_index=MAT_INDEX_RAILING
                 )
 
 def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, start_ang_deg=-90.0, total_angle_deg=360.0):

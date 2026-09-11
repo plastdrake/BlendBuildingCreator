@@ -8,11 +8,12 @@ import bpy
 import bmesh
 import math
 from mathutils import Vector, Euler, Matrix
-from .mesh_utils import create_box, create_beveled_box, create_cylinder, create_cone
+from .mesh_utils import create_box, create_beveled_box, create_cylinder, create_cone, apply_box_uvs
 from .materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_DOOR, MAT_INDEX_GLASS,
     MAT_INDEX_IRON, MAT_INDEX_STONE, MAT_INDEX_SHINGLES, MAT_INDEX_WOOD,
-    MAT_INDEX_WINDOW_FRAME, MAT_INDEX_SHUTTER, MAT_INDEX_LOG, MAT_INDEX_STAIRS, MAT_INDEX_RAILING
+    MAT_INDEX_WINDOW_FRAME, MAT_INDEX_SHUTTER, MAT_INDEX_LOG, MAT_INDEX_STAIRS, MAT_INDEX_RAILING,
+    MAT_INDEX_CUT_STONE
 )
 
 def _create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055, minor_radius=0.011, major_segments=16, minor_segments=8, mat_index=MAT_INDEX_IRON):
@@ -230,38 +231,61 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             mat_index=MAT_INDEX_STONE, bevel_amount=0.015
         )
     else:
+        # Full-depth square timber casing spanning through wall from exterior to interior
+        timber_frame_d = wall_thickness + 0.22
+        yf_timber = y_front + wall_thickness * 0.5 - 0.03
         create_beveled_box(
             bm,
-            size=(frame_thick, frame_depth, door_h),
-            location=(center_x - (door_w * 0.5 + frame_thick * 0.5), y_front, z_base + door_h * 0.5),
+            size=(frame_thick, timber_frame_d, door_h),
+            location=(center_x - (door_w * 0.5 + frame_thick * 0.5), yf_timber, z_base + door_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.015
         )
         create_beveled_box(
             bm,
-            size=(frame_thick, frame_depth, door_h),
-            location=(center_x + (door_w * 0.5 + frame_thick * 0.5), y_front, z_base + door_h * 0.5),
+            size=(frame_thick, timber_frame_d, door_h),
+            location=(center_x + (door_w * 0.5 + frame_thick * 0.5), yf_timber, z_base + door_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.015
         )
+        # Heavy timber lintel/header beam proud of wall (top reaching continuous lintel log at 2.16m)
+        head_h = frame_thick + 0.04
         create_beveled_box(
             bm,
-            size=(door_w + frame_thick * 2.4, frame_depth + 0.04, frame_thick),
-            location=(center_x, y_front, z_base + door_h + frame_thick * 0.5),
+            size=(door_w + frame_thick * 2.4, timber_frame_d + 0.04, head_h),
+            location=(center_x, yf_timber, z_base + door_h + head_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.016
+        )
+        # Ground stone sill threshold
+        create_beveled_box(
+            bm,
+            size=(door_w + frame_thick * 2.0, timber_frame_d + 0.08, 0.08),
+            location=(center_x, yf_timber, z_base + 0.04),
+            mat_index=MAT_INDEX_CUT_STONE,
             bevel_amount=0.015
         )
+        # Interior casing frame sticking into room
+        in_door_y = y_front + wall_thickness + 0.02
         create_beveled_box(
-            bm,
-            size=(door_w + frame_thick * 2.0, frame_depth + 0.08, 0.08),
-            location=(center_x, y_front, z_base + 0.04),
-            mat_index=MAT_INDEX_STONE,
-            bevel_amount=0.015
+            bm, size=(frame_thick * 0.85, 0.05, door_h + frame_thick),
+            location=(center_x - (door_w * 0.5 + frame_thick * 0.42), in_door_y, z_base + (door_h + frame_thick) * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+        create_beveled_box(
+            bm, size=(frame_thick * 0.85, 0.05, door_h + frame_thick),
+            location=(center_x + (door_w * 0.5 + frame_thick * 0.42), in_door_y, z_base + (door_h + frame_thick) * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+        create_beveled_box(
+            bm, size=(door_w + frame_thick * 2.0, 0.05, frame_thick),
+            location=(center_x, in_door_y, z_base + door_h + frame_thick * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
     
     leaf_t = 0.055
     arch_clear = 0.014
-    outer_face_y = y_front - frame_depth * 0.5
+    outer_face_y = (y_front - frame_depth * 0.5) if is_arched else (y_front - 0.12)
     hinge_y_out = outer_face_y + 0.033
 
     if door_w >= 1.6:
@@ -431,27 +455,43 @@ def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, st
     """
     Creates solid grounded fantasy stone steps leading up to the front door.
     Each step extends solidly down to ground level (Z=0) so no steps float.
-    Slight inward offset prevents coplanar z-fighting with foundation.
+    Steps start in front of the door threshold and lower than z_base so the threshold
+    and jamb bases remain cleanly visible above the stairs.
     """
+    step_back_y = y_front - 0.22
     for i in range(num_steps):
         cur_w = step_w + (num_steps - 1 - i) * 0.14
-        cur_y = y_front - (i + 1) * step_d + step_d * 0.5 - 0.01
-        top_z = z_base - i * step_h
+        cur_y = step_back_y - (i + 0.5) * step_d
+        top_z = z_base - 0.04 - i * step_h
         step_total_h = max(0.08, top_z)
         cz = step_total_h * 0.5
-        create_beveled_box(
+        step_faces = create_beveled_box(
             bm,
-            size=(cur_w, step_d + 0.04, step_total_h - 0.005),
+            size=(cur_w, step_d + 0.02, step_total_h - 0.005),
             location=(center_x, cur_y, cz),
-            mat_index=MAT_INDEX_STONE,
+            mat_index=MAT_INDEX_CUT_STONE,
             bevel_amount=0.025
         )
+        uv_layer = bm.loops.layers.uv.verify()
+        for f in step_faces:
+            nx, ny, nz = abs(f.normal.x), abs(f.normal.y), abs(f.normal.z)
+            for loop in f.loops:
+                co = loop.vert.co
+                if nz >= nx and nz >= ny:
+                    u, v = co.x * 0.85, co.y * 0.85
+                elif nx >= ny:
+                    u, v = co.y * 0.85, co.z * 0.85
+                else:
+                    u, v = co.x * 0.85, co.z * 0.85
+                loop[uv_layer].uv = Vector((u, v))
 
 def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thickness=0.25,
                           normal_axis='-Y', has_shutters=True, has_flower_box=False, center_pos=None):
     """
     Builds a complete fantasy window opening fixture:
-    casing frame, beveled stone sill, framed louvered shutters, and flower box.
+    full wall-depth jamb liner sleeve, exterior casing & stone sill,
+    interior casing frame & sill stool, framed louvered shutters, and flower box.
+    Frames straddle the cutout hole edges cleanly to eliminate coplanar fighting.
     """
     if center_pos is not None:
         center = center_pos
@@ -481,26 +521,65 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
         w_loc = tr_mat @ Vector(loc)
         w_rot = (rot_mat_4x4 @ Euler(rot, 'XYZ').to_matrix().to_4x4()).to_euler('XYZ')
         return w_loc, (w_rot.x, w_rot.y, w_rot.z)
-        
-    sill_w = win_w + 0.16
-    sill_thick = 0.12
-    sill_d = wall_thickness + 0.18
-    sill_loc, sill_rot = to_world((0.0, -sill_d * 0.5 + wall_thickness * 0.5 - 0.04, -win_h * 0.5 - sill_thick * 0.5 + 0.005))
-    create_beveled_box(bm, size=(sill_w, sill_d, sill_thick), location=sill_loc, rotation=sill_rot, mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
+
+    # 1. Full-depth cutout lining sleeve sitting inside the cutout hole with clearance to eliminate coplanar fighting
+    lining_depth = wall_thickness + 0.10
+    liner_t = 0.035
+    sleeve_clear = 0.008
+    sleeve_w = max(0.3, win_w - sleeve_clear * 2.0)
+    sleeve_h = max(0.3, win_h - sleeve_clear * 2.0)
+    inner_h = max(0.2, sleeve_h - liner_t * 2.0)
+    # Left and Right Jamb Liners
+    ljl_loc, ljl_rot = to_world((-sleeve_w * 0.5 + liner_t * 0.5, 0.0, 0.0))
+    create_beveled_box(bm, size=(liner_t, lining_depth, inner_h), location=ljl_loc, rotation=ljl_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
+    rjl_loc, rjl_rot = to_world((sleeve_w * 0.5 - liner_t * 0.5, 0.0, 0.0))
+    create_beveled_box(bm, size=(liner_t, lining_depth, inner_h), location=rjl_loc, rotation=rjl_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
+    # Head and Sill Liners
+    thl_loc, thl_rot = to_world((0.0, 0.0, sleeve_h * 0.5 - liner_t * 0.5))
+    create_beveled_box(bm, size=(sleeve_w - 0.01, lining_depth, liner_t), location=thl_loc, rotation=thl_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
+    bsl_loc, bsl_rot = to_world((0.0, 0.0, -sleeve_h * 0.5 + liner_t * 0.5))
+    create_beveled_box(bm, size=(sleeve_w - 0.01, lining_depth, liner_t), location=bsl_loc, rotation=bsl_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
+
+    # 2. Exterior Heavy Cut Stone Sill
+    sill_w = win_w + 0.20
+    sill_thick = 0.11
+    sill_d = wall_thickness + 0.26
+    sill_y = -sill_d * 0.5 + wall_thickness * 0.5 - 0.06
+    sill_loc, sill_rot = to_world((0.0, sill_y, -win_h * 0.5 - sill_thick * 0.5))
+    create_beveled_box(bm, size=(sill_w, sill_d, sill_thick), location=sill_loc, rotation=sill_rot, mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
     
-    casing_t = 0.08
+    # 3. Exterior Timber Casing Frame: straddles the cutout boundary (part inside cutout, part overlapping wall)
+    casing_t = 0.10
     casing_w = 0.11
     jamb_h = win_h + casing_w
     jamb_cz = 0.0
+    casing_y = -wall_thickness * 0.5 - casing_t * 0.5 - (0.05 if wall_thickness >= 0.20 else 0.0)
     
-    lj_loc, lj_rot = to_world((-win_w * 0.5 - casing_w * 0.5, -wall_thickness * 0.5 - casing_t * 0.5, jamb_cz))
+    lj_loc, lj_rot = to_world((-win_w * 0.5 + casing_w * 0.10, casing_y, jamb_cz))
     create_beveled_box(bm, size=(casing_w, casing_t, jamb_h), location=lj_loc, rotation=lj_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
     
-    rj_loc, rj_rot = to_world((win_w * 0.5 + casing_w * 0.5, -wall_thickness * 0.5 - casing_t * 0.5, jamb_cz))
+    rj_loc, rj_rot = to_world((win_w * 0.5 - casing_w * 0.10, casing_y, jamb_cz))
     create_beveled_box(bm, size=(casing_w, casing_t, jamb_h), location=rj_loc, rotation=rj_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
     
-    th_loc, th_rot = to_world((0.0, -wall_thickness * 0.5 - casing_t * 0.5, win_h * 0.5 + casing_w * 0.5))
-    create_beveled_box(bm, size=(win_w + casing_w * 2.0 + 0.08, casing_t + 0.02, casing_w), location=th_loc, rotation=th_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+    th_loc, th_rot = to_world((0.0, casing_y, win_h * 0.5 + casing_w * 0.35))
+    create_beveled_box(bm, size=(win_w + casing_w * 2.0 + 0.04, casing_t + 0.02, casing_w), location=th_loc, rotation=th_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+
+    # 4. Interior Timber Casing Frame: straddles interior wall cutout edge
+    in_casing_y = wall_thickness * 0.5 + 0.025
+    in_casing_t = 0.05
+    in_casing_w = 0.09
+    
+    ilj_loc, ilj_rot = to_world((-win_w * 0.5 + in_casing_w * 0.10, in_casing_y, 0.0))
+    create_beveled_box(bm, size=(in_casing_w, in_casing_t, win_h + in_casing_w * 1.6), location=ilj_loc, rotation=ilj_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    
+    irj_loc, irj_rot = to_world((win_w * 0.5 - in_casing_w * 0.10, in_casing_y, 0.0))
+    create_beveled_box(bm, size=(in_casing_w, in_casing_t, win_h + in_casing_w * 1.6), location=irj_loc, rotation=irj_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    
+    ith_loc, ith_rot = to_world((0.0, in_casing_y, win_h * 0.5 + in_casing_w * 0.35))
+    create_beveled_box(bm, size=(win_w + in_casing_w * 2.0, in_casing_t, in_casing_w), location=ith_loc, rotation=ith_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    
+    ist_loc, ist_rot = to_world((0.0, in_casing_y + 0.015, -win_h * 0.5 - 0.025))
+    create_beveled_box(bm, size=(win_w + in_casing_w * 2.0 + 0.06, in_casing_t + 0.04, 0.05), location=ist_loc, rotation=ist_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
     
     pane_loc, pane_rot = to_world((0.0, 0.002, 0.0))
     create_box(bm, size=(win_w - 0.02, 0.02, win_h - 0.02), location=pane_loc, rotation=pane_rot, mat_index=MAT_INDEX_GLASS)
@@ -525,7 +604,7 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
         
         for side in [-1, 1]:
             hx = side * (win_w * 0.5 + 0.01)
-            hy = -wall_thickness * 0.5 - 0.02
+            hy = casing_y - 0.01
             
             dx = side * cos_a
             dy = -sin_a

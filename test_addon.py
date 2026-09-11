@@ -44,7 +44,7 @@ def run_tests():
     m_count = len(obj.data.materials)
     print(f"  -> Generated default building: {v_count} verts, {p_count} polys, {m_count} materials.")
     assert v_count > 500, f"Expected rich geometry (>500 verts), got {v_count}"
-    assert m_count == 11, f"Expected 11 material slots, got {m_count}"
+    assert m_count == 17, f"Expected 17 material slots, got {m_count}"
     
     # 3. Test Interior Floor and Door Angle
     print("[3/6] Testing door toggle & walk-in interior...")
@@ -90,8 +90,8 @@ def run_tests():
             bpy.ops.building.regenerate()
             print(f"  -> Tier 1 with rounded interlocking logs: {len(obj.data.vertices)} verts.")
         m_count = len(obj.data.materials)
-        assert m_count == 11, f"Expected 11 material slots for {tier}, got {m_count}"
-        print(f"  -> Material {tier}: verified 11 procedural shader slots successfully.")
+        assert m_count == 17, f"Expected 17 material slots for {tier}, got {m_count}"
+        print(f"  -> Material {tier}: verified 17 procedural shader slots successfully.")
 
     # Test Hoist Beam
     props.has_hoist_beam = True

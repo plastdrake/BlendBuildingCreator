@@ -103,29 +103,43 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                 f.loops[2][uv_layer].uv = Vector((dy * scale, dz * scale))
                 f.loops[3][uv_layer].uv = Vector((dy * scale, 0.0))
         elif dx >= dy:
-            # Horizontal beam along X: V along X
+            # Horizontal beam along X: V along length (X), U around circumference (Y and Z)
+            su = scale * 1.2
+            sv = scale * 0.40
             if f_idx in (3, 5): # End caps (+X, -X)
                 f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((dy * scale, 0.0))
-                f.loops[2][uv_layer].uv = Vector((dy * scale, dz * scale))
-                f.loops[3][uv_layer].uv = Vector((0.0, dz * scale))
-            else: # Sides (Bottom, Top, Front, Back)
+                f.loops[1][uv_layer].uv = Vector((0.0, dz * su))
+                f.loops[2][uv_layer].uv = Vector((dy * su, dz * su))
+                f.loops[3][uv_layer].uv = Vector((dy * su, 0.0))
+            elif f_idx in (2, 4): # Front (-Y) and Back (+Y): height is dz, length is dx
                 f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((0.0, dx * scale))
-                f.loops[2][uv_layer].uv = Vector((dy * scale, dx * scale))
-                f.loops[3][uv_layer].uv = Vector((dy * scale, 0.0))
+                f.loops[1][uv_layer].uv = Vector((dz * su, 0.0))
+                f.loops[2][uv_layer].uv = Vector((dz * su, dx * sv))
+                f.loops[3][uv_layer].uv = Vector((0.0, dx * sv))
+            else: # Bottom (-Z) and Top (+Z): width is dy, length is dx
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((0.0, dx * sv))
+                f.loops[2][uv_layer].uv = Vector((dy * su, dx * sv))
+                f.loops[3][uv_layer].uv = Vector((dy * su, 0.0))
         else:
-            # Horizontal beam along Y: V along Y
+            # Horizontal beam along Y: V along length (Y), U around circumference (X and Z)
+            su = scale * 1.2
+            sv = scale * 0.40
             if f_idx in (2, 4): # End caps (-Y, +Y)
                 f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((dx * scale, 0.0))
-                f.loops[2][uv_layer].uv = Vector((dx * scale, dz * scale))
-                f.loops[3][uv_layer].uv = Vector((0.0, dz * scale))
-            else: # Sides
+                f.loops[1][uv_layer].uv = Vector((0.0, dz * su))
+                f.loops[2][uv_layer].uv = Vector((dx * su, dz * su))
+                f.loops[3][uv_layer].uv = Vector((dx * su, 0.0))
+            elif f_idx in (3, 5): # Right (+X) and Left (-X): height is dz, length is dy
                 f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((0.0, dy * scale))
-                f.loops[2][uv_layer].uv = Vector((dx * scale, dy * scale))
-                f.loops[3][uv_layer].uv = Vector((dx * scale, 0.0))
+                f.loops[1][uv_layer].uv = Vector((dz * su, 0.0))
+                f.loops[2][uv_layer].uv = Vector((dz * su, dy * sv))
+                f.loops[3][uv_layer].uv = Vector((0.0, dy * sv))
+            else: # Bottom (-Z) and Top (+Z): width is dx, length is dy
+                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((0.0, dy * sv))
+                f.loops[2][uv_layer].uv = Vector((dx * su, dy * sv))
+                f.loops[3][uv_layer].uv = Vector((dx * su, 0.0))
         
     return faces
 
@@ -137,9 +151,93 @@ def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotat
         try:
             res = bmesh.ops.bevel(bm, geom=edges, offset=bevel_amount, segments=bevel_segments, profile=0.7, affect='EDGES')
             for f in res.get('faces', []):
-                f.material_index = mat_index
+                if f.is_valid:
+                    f.material_index = mat_index
+            faces = [f for f in faces if f.is_valid] + [f for f in res.get('faces', []) if f.is_valid]
         except Exception:
             pass
+    return [f for f in faces if f.is_valid]
+
+def create_flared_post(bm, size=(0.28, 0.28, 3.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
+                       mat_index=3, flare=0.25, jankiness=0.0):
+    """
+    Creates a chunky stylized fantasy vertical timber post flared out at the top and bottom,
+    with subtle organic jankiness and oriented vertical UV coordinates for handpainted timber grain.
+    """
+    dx, dy, dz = size
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector(location))
+    tr_mat = loc_mat @ rot_mat
+
+    taper_len = min(dz * 0.25, 0.45)
+    z_slices = [
+        -dz * 0.5,
+        -dz * 0.5 + taper_len,
+        0.0,
+        dz * 0.5 - taper_len,
+        dz * 0.5
+    ]
+    scales = [
+        1.0 + flare,
+        1.0,
+        1.0,
+        1.0,
+        1.0 + flare
+    ]
+
+    import random
+    rng = random.Random(int(abs(location[0]*100 + location[1]*37 + location[2]*19)))
+
+    rings = []
+    for s_idx, (z, sc) in enumerate(zip(z_slices, scales)):
+        ring = []
+        jx = (rng.random() - 0.5) * jankiness * 0.04 if (0 < s_idx < 4) else 0.0
+        jy = (rng.random() - 0.5) * jankiness * 0.04 if (0 < s_idx < 4) else 0.0
+        for corner_x, corner_y in [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)]:
+            vx = corner_x * dx * sc + jx
+            vy = corner_y * dy * sc + jy
+            ring.append(bm.verts.new(tr_mat @ Vector((vx, vy, z))))
+        rings.append(ring)
+
+    uv_layer = bm.loops.layers.uv.verify()
+    faces = []
+
+    # Bottom cap
+    f_bot = bm.faces.new(list(reversed(rings[0])))
+    f_bot.material_index = mat_index
+    for loop in f_bot.loops:
+        local_co = tr_mat.inverted() @ loop.vert.co
+        loop[uv_layer].uv = Vector(((local_co.x + dx*0.5), (local_co.y + dy*0.5)))
+    faces.append(f_bot)
+
+    # Top cap
+    f_top = bm.faces.new(rings[-1])
+    f_top.material_index = mat_index
+    for loop in f_top.loops:
+        local_co = tr_mat.inverted() @ loop.vert.co
+        loop[uv_layer].uv = Vector(((local_co.x + dx*0.5), (local_co.y + dy*0.5)))
+    faces.append(f_top)
+
+    # Side faces
+    for r in range(len(rings) - 1):
+        r0 = rings[r]
+        r1 = rings[r+1]
+        z0 = z_slices[r] + dz * 0.5
+        z1 = z_slices[r+1] + dz * 0.5
+        for c in range(4):
+            nxt = (c + 1) % 4
+            f = bm.faces.new([r0[c], r0[nxt], r1[nxt], r1[c]])
+            f.material_index = mat_index
+            u0 = c * 0.25
+            u1 = (c + 1) * 0.25
+            v0 = z0 * 1.0
+            v1 = z1 * 1.0
+            f.loops[0][uv_layer].uv = Vector((u0, v0))
+            f.loops[1][uv_layer].uv = Vector((u1, v0))
+            f.loops[2][uv_layer].uv = Vector((u1, v1))
+            f.loops[3][uv_layer].uv = Vector((u0, v1))
+            faces.append(f)
+
     return faces
 
 def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0):
@@ -180,26 +278,34 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
 
 def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, segments=16,
                                location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
-                               mat_index=0, mat_index_cap=10, smooth=True, seam_offset=-1.5707963267948966, uv_offset=0.0):
+                               mat_index=0, mat_index_cap=10, smooth=True, seam_offset=-1.5707963267948966, uv_offset=0.0,
+                               flare_start=0.0, flare_end=0.0):
     """
     Creates a rounded horizontal cylinder oriented along local X with circular end caps.
     Uses smooth-shaded cylindrical sides for authentic organic high-poly timber logs,
-    and radial UV coordinates on end caps for concentric tree growth rings.
+    radial UV coordinates on end caps for concentric tree growth rings, and optional flaring at ends.
     """
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
     tr_mat = loc_mat @ rot_mat
     
     half_l = length * 0.5
+    scale_start = 1.0 + flare_start
+    scale_end = 1.0 + flare_end
+    
     start_verts = []
     end_verts = []
     
     for i in range(segments):
         angle = (2.0 * math.pi * i) / segments + seam_offset
-        y = radius_y * math.cos(angle)
-        z = radius_z * math.sin(angle)
-        start_verts.append(bm.verts.new(tr_mat @ Vector((-half_l, y, z))))
-        end_verts.append(bm.verts.new(tr_mat @ Vector((half_l, y, z))))
+        y_base = math.cos(angle)
+        z_base = math.sin(angle)
+        y_s = radius_y * y_base * scale_start
+        z_s = radius_z * z_base * scale_start
+        y_e = radius_y * y_base * scale_end
+        z_e = radius_z * z_base * scale_end
+        start_verts.append(bm.verts.new(tr_mat @ Vector((-half_l, y_s, z_s))))
+        end_verts.append(bm.verts.new(tr_mat @ Vector((half_l, y_e, z_e))))
         
     uv_layer = bm.loops.layers.uv.verify()
     faces = []
@@ -223,7 +329,6 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
         
     cap_mat = mat_index_cap if mat_index_cap is not None else mat_index
     
-    bark_extra = 0.025
     inset = 0.014
     import random as _rnd
     # Create inner wood verts inset — chunkier bark 1.5cm inset + irregular outer bark
@@ -231,19 +336,20 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
     end_inner = []
     for i in range(segments):
         angle = (2.0 * math.pi * i) / segments + seam_offset
-        # irregular bark thickness like reference — chunky, not uniform
         bark_jitter = (_rnd.Random(i*997).random() - 0.5) * 0.018
-        y = radius_y * math.cos(angle) * (0.86 + bark_jitter)
-        z = radius_z * math.sin(angle) * (0.86 + bark_jitter)
-        start_inner.append(bm.verts.new(tr_mat @ Vector((-half_l + inset, y, z))))
-        end_inner.append(bm.verts.new(tr_mat @ Vector((half_l - inset, y, z))))
+        y_base = math.cos(angle) * (0.86 + bark_jitter)
+        z_base = math.sin(angle) * (0.86 + bark_jitter)
+        y_s = radius_y * y_base * scale_start
+        z_s = radius_z * z_base * scale_start
+        y_e = radius_y * y_base * scale_end
+        z_e = radius_z * z_base * scale_end
+        start_inner.append(bm.verts.new(tr_mat @ Vector((-half_l + inset, y_s, z_s))))
+        end_inner.append(bm.verts.new(tr_mat @ Vector((half_l - inset, y_e, z_e))))
     # also jitter outer verts slightly for irregular bark edge
     for idx, v in enumerate(start_verts + end_verts):
         ang = (2.0 * math.pi * (idx % segments)) / segments + seam_offset
         j = (_rnd.Random(idx*431).random() - 0.5) * 0.012
-        # push outward along radial
         local = tr_mat.inverted() @ v.co
-        # local.y,z is radial
         r = (local.y**2 + local.z**2) **0.5
         if r > 1e-6:
             local.y += local.y / r * j
@@ -256,30 +362,45 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
         f = bm.faces.new([start_verts[i], start_verts[nxt], start_inner[nxt], start_inner[i]])
         f.material_index = mat_index
         f.smooth = True
+        u0 = i / float(segments)
+        u1 = (i + 1) / float(segments)
+        f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+        f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+        f.loops[2][uv_layer].uv = Vector((u1, 0.05))
+        f.loops[3][uv_layer].uv = Vector((u0, 0.05))
+        
         # End bark ring
         f2 = bm.faces.new([end_inner[i], end_inner[nxt], end_verts[nxt], end_verts[i]])
         f2.material_index = mat_index
         f2.smooth = True
+        f2.loops[0][uv_layer].uv = Vector((u0, 0.0))
+        f2.loops[1][uv_layer].uv = Vector((u1, 0.0))
+        f2.loops[2][uv_layer].uv = Vector((u1, 0.05))
+        f2.loops[3][uv_layer].uv = Vector((u0, 0.05))
     
-    # Flat inner wood caps (recessed) with radial concentric UVs — exact values from reference image
+    # Flat inner wood caps (recessed) with radial concentric UVs matching log end texture
     rev_inner_start = list(reversed(start_inner))
     f_start = bm.faces.new(rev_inner_start)
     f_start.material_index = cap_mat
     f_start.smooth = False
+    eff_ry_s = max(0.001, radius_y * scale_start)
+    eff_rz_s = max(0.001, radius_z * scale_start)
     for loop in f_start.loops:
         local_v = tr_mat.inverted() @ loop.vert.co
-        u = 0.5 + 0.48 * (local_v.y / max(0.001, radius_y))
-        v = 0.5 + 0.48 * (local_v.z / max(0.001, radius_z))
+        u = 0.5 + 0.48 * (local_v.y / eff_ry_s)
+        v = 0.5 + 0.48 * (local_v.z / eff_rz_s)
         loop[uv_layer].uv = Vector((u, v))
     faces.append(f_start)
     
     f_end = bm.faces.new(end_inner)
     f_end.material_index = cap_mat
     f_end.smooth = False
+    eff_ry_e = max(0.001, radius_y * scale_end)
+    eff_rz_e = max(0.001, radius_z * scale_end)
     for loop in f_end.loops:
         local_v = tr_mat.inverted() @ loop.vert.co
-        u = 0.5 + 0.48 * (local_v.y / max(0.001, radius_y))
-        v = 0.5 + 0.48 * (local_v.z / max(0.001, radius_z))
+        u = 0.5 + 0.48 * (local_v.y / eff_ry_e)
+        v = 0.5 + 0.48 * (local_v.z / eff_rz_e)
         loop[uv_layer].uv = Vector((u, v))
     faces.append(f_end)
 
@@ -341,10 +462,11 @@ def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=
         
     return faces
 
-def apply_box_uvs(bm, scale=1.0, skip_materials=(3, 4, 7, 8, 9, 10)):
+def apply_box_uvs(bm, scale=1.0, skip_materials=(3, 5, 8, 9, 10, 11, 12, 13, 14, 15)):
     """Calculates clean cubic / triplanar style UVs for bmesh faces.
     Skips faces whose materials already have specialized local unwraps
-    (timber frames, floor planks, doors, forged iron, wood accessories, log end caps).
+    (timber frames, roof shingles, forged iron, wood accessories, log end caps, logs, stairs, railings, window frames, shutters).
+    Floor (4), stone (0), plaster (1, 2), cut stone (16), and door fallbacks receive continuous world-space meter-scaled UVs.
     """
     uv_layer = bm.loops.layers.uv.verify()
     for face in bm.faces:

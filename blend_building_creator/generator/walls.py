@@ -11,7 +11,7 @@ from .mesh_utils import create_box, create_beveled_box, create_horizontal_cylind
 from .materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER, MAT_INDEX_STONE, MAT_INDEX_LOG
 
 def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
-                           normal_vec=None, is_corner_start=False, is_corner_end=False,
+                           openings=[], normal_vec=None, is_corner_start=False, is_corner_end=False,
                            is_y_wall=None, seed=42):
     """
     Builds authentic rustic 3D rounded logs with staggered interlocking saddle-notched
@@ -43,45 +43,33 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         is_y_wall = abs(dy) > abs(dx)
     
     # 1. Solid Interior Core (sealed flat interior surface)
-    core_thick = thickness * 0.40
-    core_cx = (x1 + x2) * 0.5 - nx * (thickness * 0.28)
-    core_cy = (y1 + y2) * 0.5 - ny * (thickness * 0.28)
-    core_cz = (z_bottom + z_top) * 0.5
-    create_box(
-        bm,
-        size=(seg_len, core_thick, height),
-        location=(core_cx, core_cy, core_cz),
-        rotation=(0.0, 0.0, angle),
-        mat_index=MAT_INDEX_PLASTER_INT
-    )
+    if not openings:
+        core_thick = thickness * 0.40
+        core_cx = (x1 + x2) * 0.5 - nx * (thickness * 0.28)
+        core_cy = (y1 + y2) * 0.5 - ny * (thickness * 0.28)
+        core_cz = (z_bottom + z_top) * 0.5
+        create_box(
+            bm,
+            size=(seg_len, core_thick, height),
+            location=(core_cx, core_cy, core_cz),
+            rotation=(0.0, 0.0, angle),
+            mat_index=MAT_INDEX_PLASTER_INT
+        )
     
     # 2. Stacked Physical 3D Rounded Cylindrical Logs on Exterior
-    # Use consistent global log height grid (0.28m) so windows/cutouts align with corners
-    target_diam = 0.28
+    # Use consistent global log height grid (0.36m) matching roof gable logs
+    target_diam = 0.36
     log_h = target_diam
     
-    ext_offset = thickness * 0.20
-    ext_cx = (x1 + x2) * 0.5 + nx * ext_offset
-    ext_cy = (y1 + y2) * 0.5 + ny * ext_offset
+    ext_offset = thickness * 0.32
     ux = dx / seg_len
     uy = dy / seg_len
     
-    # Saddle-notch vertical offset: Y-walls are shifted by +0.5 * log_h relative to X-walls
-    z_shift = 0.5 * log_h if is_y_wall else 0.0
+    # Consistent global vertical grid on ALL walls (no half-height stagger, matching Reference Image 4)
+    z_shift = 0.0
     
-    # Global grid indexing ensures logs across window openings align with solid walls
     k_start = int(math.floor((z_bottom - z_shift) / log_h))
     k_end = int(math.ceil((z_top - z_shift) / log_h))
-    
-    # If Y-wall at the very bottom sill level, add base foundation sill log — lifted 2cm to avoid interior wall coplanar fight
-    if is_y_wall and z_bottom < 0.15:
-        sill_z = z_bottom + 0.15 * log_h + 0.02
-        sill_r = log_h * 0.42
-        create_horizontal_cylinder(
-            bm, radius_y=sill_r * 0.85, radius_z=sill_r * 0.65, length=seg_len,
-            segments=16, location=(ext_cx + nx*0.015, ext_cy + ny*0.015, sill_z),
-            rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_LOG, smooth=True
-        )
     
     for k in range(k_start, k_end + 1):
         log_z = (k + 0.5) * log_h + z_shift
@@ -95,37 +83,76 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         d_jitter = ((h_val * 7.1) % 1.0 - 0.5) * 0.024
         tilt_j = ((h_val * 11.3) % 1.0 - 0.5) * 0.020
         
-        log_ry = min(thickness * 0.46, log_h * 0.54) + d_jitter
-        # Radius 0.49 * log_h prevents vertical intersection at perpendicular corner joints
+        log_ry = min(thickness * 0.65, log_h * 0.56) + d_jitter
         log_rz = (log_h * 0.49) + r_jitter
         
-        # Interlocking saddle-notched extensions at outer corners
-        # Matches authentic log cabin reference: logs extend 0.40m past the perpendicular wall
-        ext_len = 0.40
-        ext_start = ext_len if is_corner_start else 0.0
-        ext_end = ext_len if is_corner_end else 0.0
+        # Check openings that intersect this log row's vertical span
+        cut_intervals = []
+        for op in openings:
+            op_z1 = op.get('z_start', z_bottom)
+            op_z2 = op.get('z_end', z_top)
+            if op_z1 - 0.04 <= log_z <= op_z2 + 0.04:
+                u1 = max(0.0, min(seg_len, op.get('u_start', 0.0)))
+                u2 = max(0.0, min(seg_len, op.get('u_end', seg_len)))
+                if u2 > u1 + 0.01:
+                    cut_intervals.append((u1, u2))
+        
+        if cut_intervals:
+            cut_intervals.sort(key=lambda x: x[0])
+            merged = []
+            for cu1, cu2 in cut_intervals:
+                if not merged:
+                    merged.append([cu1, cu2])
+                else:
+                    if cu1 <= merged[-1][1] + 0.01:
+                        merged[-1][1] = max(merged[-1][1], cu2)
+                    else:
+                        merged.append([cu1, cu2])
+            spans = []
+            cur_u = 0.0
+            for cu1, cu2 in merged:
+                if cu1 > cur_u + 0.04:
+                    spans.append((cur_u, cu1))
+                cur_u = max(cur_u, cu2)
+            if cur_u < seg_len - 0.04:
+                spans.append((cur_u, seg_len))
+        else:
+            spans = [(0.0, seg_len)]
             
-        cur_len = seg_len + ext_start + ext_end
-        u_shift = (ext_end - ext_start) * 0.5
-        
-        cur_cx = ext_cx + ux * u_shift
-        cur_cy = ext_cy + uy * u_shift
-        
-        # Shared UV — offset V per log so all logs on this wall share one continuous handpaint atlas (no overlapping islands)
-        shared_uv = (k - k_start) * (cur_len * 0.12)
-        create_horizontal_cylinder(
-            bm,
-            radius_y=log_ry,
-            radius_z=log_rz,
-            length=cur_len,
-            segments=16,
-            location=(cur_cx, cur_cy, log_z),
-            rotation=(tilt_j, 0.0, angle),
-            mat_index=MAT_INDEX_LOG,
-            mat_index_cap=10,
-            smooth=True,
-            uv_offset=shared_uv
-        )
+        ext_len = 0.38
+        if is_y_wall:
+            row_extends = (k % 2 == 0)
+        else:
+            row_extends = (k % 2 == 1)
+            
+        for u_a, u_b in spans:
+            span_len = u_b - u_a
+            if span_len < 0.04:
+                continue
+                
+            ext_start = ext_len if (is_corner_start and row_extends and u_a <= 0.01) else 0.0
+            ext_end = ext_len if (is_corner_end and row_extends and u_b >= seg_len - 0.01) else 0.0
+            
+            cur_len = span_len + ext_start + ext_end
+            u_mid = (u_a + u_b) * 0.5 + (ext_end - ext_start) * 0.5
+            
+            cur_cx = (x1 + ux * u_mid) + nx * ext_offset
+            cur_cy = (y1 + uy * u_mid) + ny * ext_offset
+            
+            shared_uv = (k - k_start) * (cur_len * 0.12)
+            create_horizontal_cylinder(
+                bm,
+                radius_y=log_ry,
+                radius_z=log_rz,
+                length=cur_len,
+                segments=16,
+                location=(cur_cx, cur_cy, log_z),
+                rotation=(tilt_j, 0.0, angle),
+                mat_index=MAT_INDEX_LOG,
+                mat_index_cap=10,
+                smooth=True,
+                uv_offset=shared_uv
+            )
 
 def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                              normal_vec=None, direction='HORIZONTAL', jankiness=0.35, seed=42):
@@ -368,28 +395,16 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     rounded logs (Tier 1), overlapping/batten planks (Tier 2), chunky stone blocks (Tier 3),
     or smooth plaster/stone core boxes.
     """
-    if physical_siding:
-        if mat_ext == MAT_INDEX_STONE:
-            build_stone_wall_segment(
-                bm, p_start, p_end, z_bottom, z_top, thickness,
-                normal_vec=normal_vec, block_scale=stone_block_scale, disorder=stone_disorder,
-                is_corner_start=is_corner_start, is_corner_end=is_corner_end, seed=seed
-            )
-            return
-        elif tier == 'TIER_1':
-            build_log_wall_segment(
-                bm, p_start, p_end, z_bottom, z_top, thickness,
-                normal_vec=normal_vec, is_corner_start=is_corner_start, is_corner_end=is_corner_end,
-                seed=seed
-            )
-            return
-        elif tier == 'TIER_2':
-            build_plank_wall_segment(
-                bm, p_start, p_end, z_bottom, z_top, thickness,
-                normal_vec=normal_vec, direction=plank_direction, jankiness=plank_jankiness,
-                seed=seed
-            )
-            return
+    if physical_siding and tier == 'TIER_1':
+        build_log_wall_segment(
+            bm, p_start, p_end, z_bottom, z_top, thickness,
+            normal_vec=normal_vec, is_corner_start=is_corner_start, is_corner_end=is_corner_end,
+            seed=seed
+        )
+        return
+
+    if tier == 'TIER_2' and mat_ext in (MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER):
+        mat_ext = MAT_INDEX_WOOD
 
     x1, y1 = p_start
     x2, y2 = p_end
@@ -449,6 +464,24 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
         )
         return
 
+    if tier == 'TIER_1' and physical_siding:
+        # Build authentic cylindrical log wall with openings handled per-log
+        build_log_wall_segment(
+            bm, p_start, p_end, z_bottom, z_top, thickness,
+            openings=openings, normal_vec=normal_vec,
+            is_corner_start=is_corner_start, is_corner_end=is_corner_end,
+            seed=seed
+        )
+        # Build sealed interior core around openings
+        build_wall_with_opening(
+            bm, p_start, p_end, z_bottom, z_top, thickness,
+            openings=openings, mat_ext=mat_ext, normal_vec=normal_vec,
+            tier='TIER_3', physical_siding=False,
+            is_corner_start=is_corner_start, is_corner_end=is_corner_end,
+            seed=seed
+        )
+        return
+
     # Sort openings by u_start
     sorted_ops = sorted(openings, key=lambda op: op['u_start'])
     
@@ -459,94 +492,48 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
         oz1 = max(z_bottom, min(z_top, op['z_start']))
         oz2 = max(z_bottom, min(z_top, op['z_end']))
         
-        is_log = (tier == 'TIER_1' and physical_siding)
         # Wall segment before this opening
         if ou1 > last_u + 0.01:
             seg_is_start = (last_u <= 0.01) and is_corner_start
-            if is_log:
-                build_wall_segment(
-                    bm, pt_at(last_u), pt_at(ou1), oz1, oz2, thickness, mat_ext=mat_ext,
-                    normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                    plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                    stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                    is_corner_start=seg_is_start, is_corner_end=False, seed=seed
-                )
-            else:
-                build_wall_segment(
-                    bm, pt_at(last_u), pt_at(ou1), z_bottom, z_top, thickness, mat_ext=mat_ext,
-                    normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                    plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                    stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                    is_corner_start=seg_is_start, is_corner_end=False, seed=seed
-                )
+            build_wall_segment(
+                bm, pt_at(last_u), pt_at(ou1), z_bottom, z_top, thickness, mat_ext=mat_ext,
+                normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
+                plank_direction=plank_direction, plank_jankiness=plank_jankiness,
+                stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
+                is_corner_start=seg_is_start, is_corner_end=False, seed=seed
+            )
             
-        if not is_log:
-            # Below the opening (sill portion)
-            if oz1 > z_bottom + 0.01:
-                build_wall_segment(
-                    bm, pt_at(ou1), pt_at(ou2), z_bottom, oz1, thickness, mat_ext=mat_ext,
-                    normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                    plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                    stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                    is_corner_start=False, is_corner_end=False, seed=seed
-                )
-                
-            # Above the opening (lintel/header portion)
-            if oz2 < z_top - 0.01:
-                build_wall_segment(
-                    bm, pt_at(ou1), pt_at(ou2), oz2, z_top, thickness, mat_ext=mat_ext,
-                    normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                    plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                    stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                    is_corner_start=False, is_corner_end=False, seed=seed
-                )
+        # Below the opening (sill portion)
+        if oz1 > z_bottom + 0.01:
+            build_wall_segment(
+                bm, pt_at(ou1), pt_at(ou2), z_bottom, oz1, thickness, mat_ext=mat_ext,
+                normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
+                plank_direction=plank_direction, plank_jankiness=plank_jankiness,
+                stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
+                is_corner_start=False, is_corner_end=False, seed=seed
+            )
             
-        last_u = ou2
-        last_oz1 = oz1
-        last_oz2 = oz2
+        # Above the opening (lintel/header portion)
+        if oz2 < z_top - 0.01:
+            build_wall_segment(
+                bm, pt_at(ou1), pt_at(ou2), oz2, z_top, thickness, mat_ext=mat_ext,
+                normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
+                plank_direction=plank_direction, plank_jankiness=plank_jankiness,
+                stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
+                is_corner_start=False, is_corner_end=False, seed=seed
+            )
         
-    is_log_final = (tier == 'TIER_1' and physical_siding)
-    if is_log_final:
-        # Logs continuous: single full-width sill below lowest opening and single full-width lintel above highest opening
-        min_oz = min(op['z_start'] for op in sorted_ops)
-        max_oz = max(op['z_end'] for op in sorted_ops)
-        min_oz = max(z_bottom, min(z_top, min_oz))
-        max_oz = max(z_bottom, min(z_top, max_oz))
-        if min_oz > z_bottom + 0.01:
-            build_wall_segment(
-                bm, p_start, p_end, z_bottom, min_oz, thickness, mat_ext=mat_ext,
-                normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                is_corner_start=is_corner_start, is_corner_end=is_corner_end, seed=seed
-            )
-        if max_oz < z_top - 0.01:
-            build_wall_segment(
-                bm, p_start, p_end, max_oz, z_top, thickness, mat_ext=mat_ext,
-                normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                is_corner_start=is_corner_start, is_corner_end=is_corner_end, seed=seed
-            )
+        last_u = ou2
         
     # Final wall segment after last opening
     if last_u < seg_len - 0.01:
-        if is_log_final:
-            build_wall_segment(
-                bm, pt_at(last_u), pt_at(seg_len), last_oz1, last_oz2, thickness, mat_ext=mat_ext,
-                normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                is_corner_start=False, is_corner_end=is_corner_end, seed=seed
-            )
-        else:
-            build_wall_segment(
-                bm, pt_at(last_u), pt_at(seg_len), z_bottom, z_top, thickness, mat_ext=mat_ext,
-                normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                is_corner_start=False, is_corner_end=is_corner_end, seed=seed
-            )
+        build_wall_segment(
+            bm, pt_at(last_u), pt_at(seg_len), z_bottom, z_top, thickness, mat_ext=mat_ext,
+            normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
+            plank_direction=plank_direction, plank_jankiness=plank_jankiness,
+            stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
+            is_corner_start=False, is_corner_end=is_corner_end, seed=seed
+        )
 
 def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
                          normal_vec, openings=[], has_diagonals=True):

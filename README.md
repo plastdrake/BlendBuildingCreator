@@ -1,8 +1,8 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.5.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
+[![Version](https://img.shields.io/badge/Version-1.7.7-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 **BlendBuildingCreator** is a procedural 3D building generator add-on for **Blender 5.2 LTS** (compatible with 4.2+). Designed for concept artists, level designers, and game developers creating stylized modern fantasy, medieval, and rustic architecture in seconds.
 
@@ -10,7 +10,7 @@ Unlike simple facade generators, **BlendBuildingCreator generates full, walkable
 
 ---
 
-## ✨ What's New in v1.5.0
+## ✨ What's New in v1.7.7
 
 - 🪵 **Horizontal OR Vertical Plank Siding with Plank Jankiness (Tier 2)**:
   - **Plank Direction**: Toggle between `HORIZONTAL` (classic overlapping weatherboard lap planks) and `VERTICAL` (stylized Scandinavian / fantasy board-and-batten siding with raised battens over seams).
@@ -98,5 +98,5 @@ Copy the `blend_building_creator` directory into your Blender 5.2 user extension
 ---
 
 ## 📄 License
-Licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
-Free for personal and non-commercial educational use.
+Licensed under [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html), matching
+the Blender extension manifest.

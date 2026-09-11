@@ -984,22 +984,17 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
     if roof_style == 'LEAN_TO':
         roof_pitch = 0.38
         r_rise = depth * roof_pitch
-        r_len = math.sqrt(depth * depth + r_rise * r_rise) + 0.38
+        # Shorten inside overhang to not go through wall, shift outward 4cm
+        r_len = math.sqrt(depth * depth + r_rise * r_rise) + 0.14
         r_ang = math.atan2(r_rise, depth)
-        
-        # Local roof orientation: slopes DOWNWARDS away from wall (+X local tilts down)
         rx_vec = Vector((math.cos(-r_ang), 0.0, math.sin(-r_ang)))
         ry_vec = Vector((0.0, 1.0, 0.0))
         rz_vec = Vector((-math.sin(-r_ang), 0.0, math.cos(-r_ang)))
         local_rot_mat = Matrix((rx_vec, ry_vec, rz_vec)).transposed().to_4x4()
         total_roof_mat = facade_rot_mat @ local_rot_mat
         roof_euler = total_roof_mat.to_euler()
-        
-        # Center of roof in local space: halfway along depth and rise
-        loc_center = Vector((depth * 0.48, 0.0, roof_z_start + r_rise * 0.52))
+        loc_center = Vector((depth * 0.52, 0.0, roof_z_start + r_rise * 0.52))
         world_center = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_center.to_4d()).to_3d()
-        
-        # Timber rafter decking
         create_beveled_box(
             bm,
             size=(r_len, width + 0.32, 0.08),
@@ -1008,8 +1003,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.010
         )
-        # Shingle layer
-        loc_shingle = Vector((depth * 0.48, 0.0, roof_z_start + r_rise * 0.52 + 0.055))
+        loc_shingle = Vector((depth * 0.52, 0.0, roof_z_start + r_rise * 0.52 + 0.055))
         world_shingle = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_shingle.to_4d()).to_3d()
         create_beveled_box(
             bm,
@@ -1310,13 +1304,13 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
     )
     door_leaf_euler = door_leaf_mat.to_euler()
     
-    # 4 Vertical door planks rigidly attached to door leaf frame
+    # 4 Vertical door planks rigidly attached to door leaf frame — UV rotated 90deg so grain runs vertically
     for k in range(num_planks):
         py = (k + 0.5) * pw + k * plank_gap
         jank = 0.002 * math.sin(k * 2.8 + 1.2)
         local_plank = Vector((jank, py, door_leaf_h * 0.5))
         world_plank = (door_leaf_mat @ local_plank.to_4d()).to_3d()
-        create_beveled_box(
+        plank_faces = create_beveled_box(
             bm,
             size=(door_thick, pw - 0.003, door_leaf_h),
             location=world_plank,
@@ -1324,6 +1318,11 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
             mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.006
         )
+        uvl = bm.loops.layers.uv.verify()
+        for f in plank_faces:
+            for loop in f.loops:
+                uv = loop[uvl].uv
+                loop[uvl].uv = Vector((uv.y, -uv.x))
     
     # Horizontal battens across the back of the door planks
     for bf in [0.18, 0.82]:
@@ -1467,10 +1466,12 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
                 bevel_amount=0.02
             )
             
-    # 3. Timber Ceiling Beams underneath the overhang
-    beam_spacing = total_w / max(1, pillar_count - 1)
-    for b_i in range(pillar_count):
-        t_off = -half_w + b_i * beam_spacing
+    # 3. Timber Ceiling Beams underneath the overhang — dense joists covering interior floor like adjacent floors
+    beam_spacing = 0.62
+    num_beams = max(pillar_count, int(total_w / beam_spacing) + 1)
+    actual_spacing = total_w / max(1, num_beams - 1) if num_beams > 1 else total_w
+    for b_i in range(num_beams):
+        t_off = -half_w + b_i * actual_spacing
         bx = wx + ox * half_d + tx * t_off
         by = wy + oy * half_d + ty * t_off
         create_beveled_box(
@@ -1481,6 +1482,15 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.01
         )
+    # Additional transverse header tying joist ends at outer edge (like rim joist)
+    create_beveled_box(
+        bm,
+        size=(0.14, total_w + 0.10, 0.14),
+        location=(wx + ox * (depth - 0.07), wy + oy * (depth - 0.07), z_ceiling - 0.07),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER_FRAME,
+        bevel_amount=0.01
+    )
     # Wood soffit (keeps wood look) + exterior cladding below hides interior floor from outside
     soffit_cx = wx + ox * (half_d + 0.06)
     soffit_cy = wy + oy * (half_d + 0.06)

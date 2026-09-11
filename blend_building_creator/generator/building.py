@@ -10,7 +10,7 @@ import bmesh
 import math
 import random
 from mathutils import Vector, Euler, Matrix
-from .mesh_utils import create_box, create_beveled_box, create_cylinder, create_cone, apply_box_uvs, add_wonkiness, apply_organic_shading
+from .mesh_utils import create_box, create_beveled_box, create_flared_post, create_cylinder, create_cone, apply_box_uvs, add_wonkiness, apply_organic_shading
 from .materials import (
     setup_building_material_slots,
     MAT_INDEX_STONE, MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT,
@@ -23,7 +23,7 @@ from .walls import (
     build_cantilever_corbels, build_cantilever_soffit
 )
 from .interior import (
-    build_floor_slab, build_ceiling_beams, build_straight_staircase,
+    build_floor_slab, build_ceiling_beams, build_interior_trims, build_straight_staircase,
     build_spiral_staircase, build_attic_trusses, build_stair_guardrail
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly, build_iron_lantern
@@ -182,7 +182,7 @@ def build_round_tower(bm, props, seed):
         if tier_val == 'TIER_1':
             mat_w = MAT_INDEX_TIMBER
         elif tier_val == 'TIER_2':
-            mat_w = MAT_INDEX_TIMBER
+            mat_w = MAT_INDEX_WOOD
         else:
             mat_w = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_PLASTER_EXT
         
@@ -434,15 +434,14 @@ def generate_building(obj, props):
 
         floor_wall_bounds[fl_idx] = (x_min, x_max, y_min, y_max)
         
-        # Solid floor slab bounds (covers full expanded footprint — interior+overhang share floor, soffit hides underside)
-        slab_xmin = x_min + 0.03
-        slab_xmax = x_max - 0.03
-        slab_ymin = y_min + 0.03
-        slab_ymax = y_max - 0.03
-        
-        # Interior bounds for current floor room
-        ix_min, ix_max = x_min + wall_t, x_max - wall_t
-        iy_min, iy_max = y_min + wall_t, y_max - wall_t
+        # Interior bounds for current floor room (inner wall face at wall_t * 0.50)
+        ix_min, ix_max = x_min + wall_t * 0.50, x_max - wall_t * 0.50
+        iy_min, iy_max = y_min + wall_t * 0.50, y_max - wall_t * 0.50
+        # Floor slab strictly interior so no double floor line visible outside
+        slab_xmin = ix_min + 0.02
+        slab_xmax = ix_max - 0.02
+        slab_ymin = iy_min + 0.02
+        slab_ymax = iy_max - 0.02
         
         # Wing coordinates if this floor has an active wing
         if fl_has_wing:
@@ -523,11 +522,10 @@ def generate_building(obj, props):
         
         # Wing floor slab for compound shapes
         if fl_has_wing:
-            # Solid wing floor slab bounds (strictly inside exterior wall perimeter)
-            w_slab_xmin = wx_min + 0.03
-            w_slab_xmax = wx_max - 0.03
-            w_slab_ymin = wy_min + 0.03
-            w_slab_ymax = y_min + 0.05
+            w_slab_xmin = wx_min + wall_t * 0.50 + 0.02
+            w_slab_xmax = wx_max - wall_t * 0.50 - 0.02
+            w_slab_ymin = wy_min + wall_t * 0.50 + 0.02
+            w_slab_ymax = y_min - 0.02
             build_floor_slab(
                 bm,
                 floor_idx=fl_idx,
@@ -617,7 +615,6 @@ def generate_building(obj, props):
                 bm, ix_min, ix_max, iy_min, iy_max, z_ceil - 0.02, spacing=1.2,
                 stair_hole=next_stair_hole if (fl_idx < num_floors - 1 and props.has_stairs) else None
             )
-                
         # Openings definitions for this floor
         front_openings = []
         back_openings = []
@@ -630,21 +627,45 @@ def generate_building(obj, props):
 
         win_w = props.window_width
         win_h = props.window_height
-        win_cz = z_floor + floor_h * 0.48
-        win_z1 = win_cz - win_h * 0.5
-        win_z2 = win_cz + win_h * 0.5
+        tier_val = getattr(props, 'material_tier', 'TIER_3')
+        if tier_val == 'TIER_1':
+            # For authentic log cabins: window fits cleanly across 3 sawed-off logs
+            # Row 1 (sill log) top is at 2.0 * log_diam (0.72)
+            # Row 5 (lintel log) bottom is at 5.0 * log_diam (1.80)
+            # Opening cutout height = 1.08m
+            log_diam = 0.36
+            win_cz = z_floor + 3.5 * log_diam
+            win_z1 = z_floor + 2.0 * log_diam
+            win_z2 = z_floor + 5.0 * log_diam
+            win_w = min(win_w, 0.90)
+            # Total assembly height (frame + sill + header) = 3.0 * log_diam = 1.08m
+            win_h = 0.86
+        else:
+            win_cz = z_floor + floor_h * 0.48
+            win_z1 = win_cz - win_h * 0.5
+            win_z2 = win_cz + win_h * 0.5
 
         # Doorway placement
         if fl_idx == 0 and props.has_front_door:
+            tier_val = getattr(props, 'material_tier', 'TIER_3')
             dw = props.door_width
             dh = props.door_height
-            frame_margin = 0.13
+            if tier_val == 'TIER_1':
+                log_diam = 0.36
+                # Log cabin door cutout spans exactly 6 logs (Rows 0-5), Row 6 is continuous lintel log at 2.16m
+                dh = 2.02
+                door_top_z = z_floor + 6.0 * log_diam
+                frame_margin = 0.08
+            else:
+                frame_margin = 0.12
+                door_top_z = z_floor + dh + frame_margin
+
             if shape == 'RECTANGLE':
                 door_cx = 0.0
                 door_yf = y_min
                 door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
                 door_u2 = (door_cx + dw * 0.5 + frame_margin) - x_min
-                front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': z_floor + dh + frame_margin})
+                front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': door_top_z})
             elif shape == 'L_SHAPE':
                 if wing_side == 'RIGHT':
                     door_cx = (x_min + wx_min) * 0.5
@@ -653,13 +674,13 @@ def generate_building(obj, props):
                 door_yf = y_min
                 door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
                 door_u2 = (door_cx + dw * 0.5 + frame_margin) - x_min
-                front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': z_floor + dh + frame_margin})
+                front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': door_top_z})
             else: # T_SHAPE
                 door_cx = (wx_min + wx_max) * 0.5
                 door_yf = wy_min
                 door_u1 = (door_cx - dw * 0.5 - frame_margin) - wx_min
                 door_u2 = (door_cx + dw * 0.5 + frame_margin) - wx_min
-                w_front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': z_floor + dh + frame_margin})
+                w_front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': door_top_z})
 
             main_door_cx = door_cx
             main_door_yf = door_yf
@@ -669,7 +690,7 @@ def generate_building(obj, props):
                 wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
                 door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone
             )
-            if props.has_front_steps and props.has_foundation and effective_archetype != 'TAVERN':
+            if props.has_front_steps and props.has_foundation:
                 build_front_steps(bm, center_x=door_cx, y_front=door_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)))
             if props.has_lanterns:
                 build_iron_lantern(bm, location=(door_cx + dw * 0.5 + 0.45, door_yf - 0.05, z_floor + dh * 0.8))
@@ -981,7 +1002,7 @@ def generate_building(obj, props):
         if tier_val == 'TIER_1':
             mat_w = MAT_INDEX_TIMBER
         elif tier_val == 'TIER_2':
-            mat_w = MAT_INDEX_TIMBER
+            mat_w = MAT_INDEX_WOOD
         else:
             mat_w = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_PLASTER_EXT
 
@@ -990,6 +1011,19 @@ def generate_building(obj, props):
         plank_jank = getattr(props, 'plank_jankiness', 0.35)
         stone_scale = getattr(props, 'stone_block_scale', 1.0)
         stone_disorder = getattr(props, 'stone_disorder', 0.35)
+
+        # Interior joinery must be generated after openings are known so its
+        # baseboards are cleanly interrupted at doors and walk-through portals.
+        build_interior_trims(
+            bm, ix_min, ix_max, iy_min, iy_max, z_floor, z_ceil,
+            wall_thickness=wall_t, stair_hole=cur_stair_hole,
+            wall_openings={
+                'front': front_openings,
+                'back': back_openings,
+                'left': left_openings,
+                'right': right_openings,
+            },
+        )
 
         wall_top_z = z_ceil
 
@@ -1039,10 +1073,11 @@ def generate_building(obj, props):
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
             )
 
-        # Tudor Timber Framing on Exterior
-        if props.has_timber_framing:
-            beam_w = 0.14
-            # 1. Main building corner posts
+        # Tudor Timber Framing on Exterior (skip on Tier 1 full log walls to avoid slicing into logs)
+        if props.has_timber_framing and tier_val != 'TIER_1':
+            post_w = 0.32
+            timber_jank = getattr(props, 'timber_jankiness', 0.35)
+            # 1. Main building corner posts (chunky, flared at ends, subtly wonky)
             corners = [
                 (x_min, y_max),
                 (x_max, y_max),
@@ -1059,10 +1094,34 @@ def generate_building(obj, props):
                     corners.extend([(x_min, y_min), (x_max, y_min)])
                     
             for cx, cy in corners:
-                create_beveled_box(
-                    bm, size=(beam_w, beam_w, floor_h),
-                    location=(cx, cy, z_floor + floor_h * 0.5),
-                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+                is_ground = (fl_idx == 0 and props.has_foundation)
+                if is_ground:
+                    ph = floor_h + found_h
+                    pz = ph * 0.5
+                else:
+                    if fl_idx == num_floors - 1:
+                        ph = floor_h - 0.02
+                        pz = z_floor + ph * 0.5
+                    else:
+                        ph = floor_h
+                        pz = z_floor + ph * 0.5
+                b_cx = (x_min + x_max) * 0.5
+                b_cy = (y_min + y_max) * 0.5
+                dx = cx - b_cx
+                dy = cy - b_cy
+                dlen = math.sqrt(dx * dx + dy * dy)
+                if dlen > 1e-4:
+                    nx = dx / dlen
+                    ny = dy / dlen
+                else:
+                    nx, ny = 0.0, 0.0
+                off = wall_t * 0.42
+                ocx = cx + nx * off
+                ocy = cy + ny * off
+                create_flared_post(
+                    bm, size=(post_w, post_w, ph),
+                    location=(ocx, ocy, pz),
+                    mat_index=MAT_INDEX_TIMBER, flare=0.35, jankiness=timber_jank
                 )
 
             # 2. Main building exterior facades
@@ -1129,16 +1188,35 @@ def generate_building(obj, props):
             # 3. Wing exterior facades — aligned height/size with main house
             if fl_has_wing:
                 w_timber_z_top = z_ceil
-                w_post_h = floor_h
-                w_post_cz = z_floor + w_post_h * 0.5
-                
-                # Wing front corner posts
-                create_beveled_box(bm, size=(beam_w, beam_w, w_post_h),
-                                   location=(wx_min, wy_min, w_post_cz),
-                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-                create_beveled_box(bm, size=(beam_w, beam_w, w_post_h),
-                                   location=(wx_max, wy_min, w_post_cz),
-                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+                is_w_ground = (fl_idx == 0 and props.has_foundation)
+                if is_w_ground:
+                    w_post_h = floor_h + found_h
+                    w_post_cz = w_post_h * 0.5
+                else:
+                    if fl_idx == num_floors - 1:
+                        w_post_h = floor_h - 0.02
+                        w_post_cz = z_floor + w_post_h * 0.5
+                    else:
+                        w_post_h = floor_h
+                        w_post_cz = z_floor + w_post_h * 0.5
+                # offset outward diagonally like main posts
+                w_cx = (wx_min + wx_max) * 0.5
+                w_cy = (wy_min + wy_max) * 0.5
+                for wpx, wpy in [(wx_min, wy_min), (wx_max, wy_min)]:
+                    dx_w = wpx - w_cx
+                    dy_w = wpy - w_cy
+                    dlen_w = math.sqrt(dx_w * dx_w + dy_w * dy_w)
+                    if dlen_w > 1e-4:
+                        nx_w = dx_w / dlen_w
+                        ny_w = dy_w / dlen_w
+                    else:
+                        nx_w, ny_w = 0.0, -1.0
+                    off_w = wall_t * 0.42
+                    ocx_w = wpx + nx_w * off_w
+                    ocy_w = wpy + ny_w * off_w
+                    create_flared_post(bm, size=(post_w, post_w, w_post_h),
+                                       location=(ocx_w, ocy_w, w_post_cz),
+                                       mat_index=MAT_INDEX_TIMBER, flare=0.35, jankiness=timber_jank)
                 # Wing front facade
                 build_facade_timber(bm, (wx_min, wy_min), (wx_max, wy_min), z_floor, w_timber_z_top, wall_t,
                                     (0.0, -1.0), w_front_openings, props.timber_diagonals)
@@ -1182,17 +1260,6 @@ def generate_building(obj, props):
     plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
 
     if effective_archetype != 'WATCHTOWER':
-        # Interior Roof Trusses & Collar Beams (visible inside attic, safe clearance under sway)
-        build_attic_trusses(
-            bm,
-            x_min=top_x_min + wall_t, x_max=top_x_max - wall_t,
-            y_min=top_y_min + wall_t, y_max=top_y_max - wall_t,
-            z_base=top_z,
-            ridge_z=top_z + props.roof_height,
-            spacing=1.4,
-            sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0
-        )
-        
         # Exterior Roof Construction
         flare_val = getattr(props, 'roof_flare', 0.35)
         
@@ -1292,8 +1359,8 @@ def generate_building(obj, props):
                 length=1.4
             )
             
-        # Roof Shingles
-        if props.has_roof_shingles and roof_style in ('SWAY', 'GABLE'):
+        # Physical shingle layers disabled: textured roof deck provides stylized clay tiles cleanly without micro-geometry
+        if False and props.has_roof_shingles and roof_style in ('SWAY', 'GABLE'):
             build_shingle_layers(
                 bm,
                 x_min=top_x_min, x_max=top_x_max,
@@ -1401,7 +1468,7 @@ def generate_building(obj, props):
                 plank_direction=plank_dir,
                 roof_flare=flare_val
             )
-            if props.has_roof_shingles:
+            if False and props.has_roof_shingles:
                 build_shingle_layers(
                     bm,
                     x_min=w_top_xmin, x_max=w_top_xmax,
@@ -1432,7 +1499,7 @@ def generate_building(obj, props):
                 plank_direction=plank_dir,
                 roof_flare=flare_val
             )
-            if props.has_roof_shingles:
+            if False and props.has_roof_shingles:
                 build_shingle_layers(
                     bm,
                     x_min=w_top_xmin, x_max=w_top_xmax,
@@ -1461,7 +1528,9 @@ def generate_building(obj, props):
                 dormer_roof_h=cur_dormer_roof_h,
                 roof_flare=flare_val,
                 tier=tier_val,
-                max_back_reach=cur_dormer_reach
+                max_back_reach=cur_dormer_reach,
+                roof_style=roof_style,
+                sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0
             )
             
     # Fairytale Roof Spire Turret (Positionable across roof pitch with attic penetration)
@@ -1578,7 +1647,7 @@ def generate_building(obj, props):
         build_mini_wing(
             bm, side=w_side, floor_mode=w_floor,
             wall_x_min=mw_bounds[0], wall_x_max=mw_bounds[1], wall_y_min=mw_bounds[2], wall_y_max=mw_bounds[3],
-            z_base=z_wing_base, width=w_width, depth=w_depth, height=floor_h * 0.92,
+            z_base=z_wing_base, width=w_width, depth=w_depth, height=floor_h * 0.86,
             roof_style=w_roof, tier=tier_val
         )
         
@@ -1627,6 +1696,24 @@ def generate_building(obj, props):
     bm.free()
     obj.data.update()
     apply_organic_shading(obj)
+    # 8b. Optional split by material — each piece (log, beam, board) becomes separate object with conformal islands
+    if getattr(props, 'split_by_material', False):
+        try:
+            import bpy as _bpy
+            _bpy.context.view_layer.objects.active = obj
+            obj.select_set(True)
+            _bpy.ops.object.mode_set(mode='EDIT')
+            _bpy.ops.mesh.separate(type='MATERIAL')
+            _bpy.ops.object.mode_set(mode='OBJECT')
+            # After separate, ensure every new piece has consistent fiber direction via smart UV for handpaint if needed
+            for o in [o for o in _bpy.context.scene.objects if o.get("is_fantasy_building", False) or o == obj]:
+                if len(o.data.polygons) == 0: continue
+                # Keep existing manual UVs (already along length) — no auto re-unwrap to preserve fiber direction
+                pass
+        except Exception as e:
+            print(f"split_by_material failed: {e}")
+            try: _bpy.ops.object.mode_set(mode='OBJECT')
+            except: pass
     
     # Store settings dictionary on object for independent multi-building recall
     try:
