@@ -548,13 +548,13 @@ def generate_building(obj, props):
                     if wing_side == 'LEFT':
                         prev_w_xmin = prev_x_min
                         prev_w_xmax = prev_x_min + (wing_w + prev_fl_overhang * 2.0)
-                        w_inc_l = False # flush with main left wall, covered by main soffit
-                        w_inc_r = True
+                        w_inc_l = True
+                        w_inc_r = False
                     else:
                         prev_w_xmin = prev_x_max - (wing_w + prev_fl_overhang * 2.0)
                         prev_w_xmax = prev_x_max
-                        w_inc_l = True
-                        w_inc_r = False # flush with main right wall
+                        w_inc_l = False
+                        w_inc_r = True
                 else: # T_SHAPE
                     prev_w_xmin = -(wing_w + prev_fl_overhang * 2.0) * 0.5
                     prev_w_xmax =  (wing_w + prev_fl_overhang * 2.0) * 0.5
@@ -1126,11 +1126,10 @@ def generate_building(obj, props):
                     build_facade_timber(bm, (wx_max, y_min), (x_max, y_min), z_floor, z_ceil, wall_t,
                                         (0.0, -1.0), exp_ops_r, props.timber_diagonals)
 
-            # 3. Wing exterior facades (ONLY exterior faces, NEVER interior junction at wy_max)
+            # 3. Wing exterior facades — aligned height/size with main house
             if fl_has_wing:
-                # Lower wing timber frame slightly beneath wall top/ceiling to eliminate coplanar Z conflict
-                w_timber_z_top = z_ceil - 0.06
-                w_post_h = floor_h - 0.06
+                w_timber_z_top = z_ceil
+                w_post_h = floor_h
                 w_post_cz = z_floor + w_post_h * 0.5
                 
                 # Wing front corner posts

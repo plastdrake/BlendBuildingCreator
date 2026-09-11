@@ -1481,7 +1481,7 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.01
         )
-    # Solid wooden soffit ceiling plate — extended 0.12 into wall to close gap
+    # Wood soffit (keeps wood look) + exterior cladding below hides interior floor from outside
     soffit_cx = wx + ox * (half_d + 0.06)
     soffit_cy = wy + oy * (half_d + 0.06)
     create_beveled_box(
@@ -1491,6 +1491,15 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_WOOD,
         bevel_amount=0.008
+    )
+    ext_mat = MAT_INDEX_PLASTER_EXT
+    create_beveled_box(
+        bm,
+        size=((depth + 0.12) * 1.2, (total_w + 0.12) * 1.2, 0.07),
+        location=(soffit_cx, soffit_cy, z_ceiling - 0.075),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=ext_mat,
+        bevel_amount=0.006
     )
     # Fascia closure at wall line to hide slab side
     fascia_x = wx + ox * 0.06
@@ -1505,4 +1514,5 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
         mat_index=MAT_INDEX_STONE,
         bevel_amount=0.015
     )
+
 

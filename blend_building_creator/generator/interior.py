@@ -9,7 +9,7 @@ import bmesh
 import math
 from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_cylinder
-from .materials import MAT_INDEX_FLOOR, MAT_INDEX_STONE, MAT_INDEX_WOOD, MAT_INDEX_TIMBER
+from .materials import MAT_INDEX_FLOOR, MAT_INDEX_STONE, MAT_INDEX_WOOD, MAT_INDEX_TIMBER, MAT_INDEX_STAIRS, MAT_INDEX_RAILING
 
 def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickness=0.15, stair_hole=None, mat_idx=MAT_INDEX_FLOOR):
     """
@@ -484,3 +484,4 @@ def build_attic_trusses(bm, x_min, x_max, y_min, y_max, z_base, ridge_z, spacing
             location=(cx, ty, collar_z),
             mat_index=MAT_INDEX_WOOD
         )
+

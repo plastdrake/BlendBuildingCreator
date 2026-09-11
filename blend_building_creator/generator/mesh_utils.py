@@ -180,7 +180,7 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
 
 def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, segments=16,
                                location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
-                               mat_index=0, mat_index_cap=10, smooth=True):
+                               mat_index=0, mat_index_cap=10, smooth=True, seam_offset=-1.5707963267948966, uv_offset=0.0):
     """
     Creates a rounded horizontal cylinder oriented along local X with circular end caps.
     Uses smooth-shaded cylindrical sides for authentic organic high-poly timber logs,
@@ -195,7 +195,7 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
     end_verts = []
     
     for i in range(segments):
-        angle = (2.0 * math.pi * i) / segments
+        angle = (2.0 * math.pi * i) / segments + seam_offset
         y = radius_y * math.cos(angle)
         z = radius_z * math.sin(angle)
         start_verts.append(bm.verts.new(tr_mat @ Vector((-half_l, y, z))))
@@ -213,8 +213,8 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
         
         u0 = i / float(segments)
         u1 = (i + 1) / float(segments)
-        v0 = 0.0
-        v1 = length * 1.0
+        v0 = uv_offset
+        v1 = length * 1.0 + uv_offset
         f.loops[0][uv_layer].uv = Vector((u0, v0))
         f.loops[1][uv_layer].uv = Vector((u1, v0))
         f.loops[2][uv_layer].uv = Vector((u1, v1))
@@ -223,21 +223,57 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
         
     cap_mat = mat_index_cap if mat_index_cap is not None else mat_index
     
-    # Flat start cap (facing -X) with radial concentric UVs
-    rev_start = list(reversed(start_verts))
-    f_start = bm.faces.new(rev_start)
+    bark_extra = 0.025
+    inset = 0.014
+    import random as _rnd
+    # Create inner wood verts inset — chunkier bark 1.5cm inset + irregular outer bark
+    start_inner = []
+    end_inner = []
+    for i in range(segments):
+        angle = (2.0 * math.pi * i) / segments + seam_offset
+        # irregular bark thickness like reference — chunky, not uniform
+        bark_jitter = (_rnd.Random(i*997).random() - 0.5) * 0.018
+        y = radius_y * math.cos(angle) * (0.86 + bark_jitter)
+        z = radius_z * math.sin(angle) * (0.86 + bark_jitter)
+        start_inner.append(bm.verts.new(tr_mat @ Vector((-half_l + inset, y, z))))
+        end_inner.append(bm.verts.new(tr_mat @ Vector((half_l - inset, y, z))))
+    # also jitter outer verts slightly for irregular bark edge
+    for idx, v in enumerate(start_verts + end_verts):
+        ang = (2.0 * math.pi * (idx % segments)) / segments + seam_offset
+        j = (_rnd.Random(idx*431).random() - 0.5) * 0.012
+        # push outward along radial
+        local = tr_mat.inverted() @ v.co
+        # local.y,z is radial
+        r = (local.y**2 + local.z**2) **0.5
+        if r > 1e-6:
+            local.y += local.y / r * j
+            local.z += local.z / r * j
+            v.co = tr_mat @ local
+    # Bark side ring faces between outer and inner at each end
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        # Start end bark ring
+        f = bm.faces.new([start_verts[i], start_verts[nxt], start_inner[nxt], start_inner[i]])
+        f.material_index = mat_index
+        f.smooth = True
+        # End bark ring
+        f2 = bm.faces.new([end_inner[i], end_inner[nxt], end_verts[nxt], end_verts[i]])
+        f2.material_index = mat_index
+        f2.smooth = True
+    
+    # Flat inner wood caps (recessed) with radial concentric UVs — exact values from reference image
+    rev_inner_start = list(reversed(start_inner))
+    f_start = bm.faces.new(rev_inner_start)
     f_start.material_index = cap_mat
     f_start.smooth = False
     for loop in f_start.loops:
-        # Compute local angle in cap plane
         local_v = tr_mat.inverted() @ loop.vert.co
         u = 0.5 + 0.48 * (local_v.y / max(0.001, radius_y))
         v = 0.5 + 0.48 * (local_v.z / max(0.001, radius_z))
         loop[uv_layer].uv = Vector((u, v))
     faces.append(f_start)
     
-    # Flat end cap (facing +X) with radial concentric UVs
-    f_end = bm.faces.new(end_verts)
+    f_end = bm.faces.new(end_inner)
     f_end.material_index = cap_mat
     f_end.smooth = False
     for loop in f_end.loops:
@@ -246,6 +282,25 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
         v = 0.5 + 0.48 * (local_v.z / max(0.001, radius_z))
         loop[uv_layer].uv = Vector((u, v))
     faces.append(f_end)
+
+    # Manual UV seams: bottom-most longitudinal edge + both end circles (5 seams total -> side seam + 2 caps)
+    try:
+        # side seam (wrap edge at bottom)
+        for e in bm.edges:
+            if (e.verts[0] in start_verts and e.verts[1] in end_verts) or (e.verts[0] in end_verts and e.verts[1] in start_verts):
+                # check if edge is at seam angle (bottom)
+                mid = (e.verts[0].co + e.verts[1].co) * 0.5
+                local_mid = tr_mat.inverted() @ mid
+                ang = math.atan2(local_mid.z, local_mid.y)
+                if abs(ang + 1.57079632679) < 0.25:
+                    e.seam = True
+        # cap perimeters
+        for e in bm.edges:
+            if (e.verts[0] in start_verts and e.verts[1] in start_verts) or (e.verts[0] in start_inner and e.verts[1] in start_inner):
+                e.seam = True
+            if (e.verts[0] in end_verts and e.verts[1] in end_verts) or (e.verts[0] in end_inner and e.verts[1] in end_inner):
+                e.seam = True
+    except: pass
     
     return faces
 

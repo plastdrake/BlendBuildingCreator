@@ -12,7 +12,7 @@ from .mesh_utils import create_box, create_beveled_box, create_cone, create_cyli
 from .materials import (
     MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER, MAT_INDEX_STONE,
     MAT_INDEX_GLASS, MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT,
-    MAT_INDEX_IRON, MAT_INDEX_WOOD, MAT_INDEX_TIMBER_FRAME
+    MAT_INDEX_IRON, MAT_INDEX_WOOD, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_LOG
 )
 
 def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
@@ -67,6 +67,8 @@ def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm
             if span < 0.25:
                 break
             mid_x = (x_l + x_r) * 0.5
+            # Shared UV across gable — seam at bottom, offset per log
+            uv_off = k * (span * 0.12)
             create_horizontal_cylinder(
                 bm,
                 radius_y=0.11,
@@ -75,8 +77,9 @@ def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm
                 segments=16,
                 location=(mid_x, y_siding, cur_z),
                 rotation=(0.0, 0.0, 0.0),
-                mat_index=MAT_INDEX_TIMBER,
-                smooth=True
+                mat_index=MAT_INDEX_LOG,
+                smooth=True,
+                uv_offset=uv_off
             )
     elif tier == 'TIER_2':
         if plank_direction == 'VERTICAL':

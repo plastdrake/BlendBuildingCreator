@@ -11,7 +11,8 @@ from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_cylinder, create_cone
 from .materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_DOOR, MAT_INDEX_GLASS,
-    MAT_INDEX_IRON, MAT_INDEX_STONE, MAT_INDEX_SHINGLES, MAT_INDEX_WOOD
+    MAT_INDEX_IRON, MAT_INDEX_STONE, MAT_INDEX_SHINGLES, MAT_INDEX_WOOD,
+    MAT_INDEX_WINDOW_FRAME, MAT_INDEX_SHUTTER, MAT_INDEX_LOG, MAT_INDEX_STAIRS, MAT_INDEX_RAILING
 )
 
 def _create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055, minor_radius=0.011, major_segments=16, minor_segments=8, mat_index=MAT_INDEX_IRON):
@@ -662,5 +663,6 @@ def build_iron_lantern(bm, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0)):
         bm, radius1=0.028, radius2=0.005, height=0.06, segments=6,
         location=(cx, ly, lz - 0.17), mat_index=MAT_INDEX_IRON
     )
+
 
 
