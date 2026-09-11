@@ -60,7 +60,7 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     cheek_len = half_dd + back_reach
     cheek_mid_xf = (half_dd - back_reach) * 0.5
     cheek_bot_z = z_base - 0.85
-    cheek_top_z = z_base + dormer_h + 0.20
+    cheek_top_z = z_base + dormer_h + 0.10
     cheek_h = cheek_top_z - cheek_bot_z
     cheek_mid_z = (cheek_top_z + cheek_bot_z) * 0.5
     for s_sign in [-1, 1]:

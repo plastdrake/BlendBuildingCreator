@@ -753,7 +753,7 @@ def create_stylized_facade_planks(name="M_Building_Wood", color=(0.86, 0.74, 0.5
     out, bsdf = _out_bsdf(tree, loc_x=1400)
     c = _coord(tree, loc_x=-1100)
 
-    tex_node = _load_image_texture(tree, "facade_wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.10, 1.10, 1.0), rotation=(0.0, 0.0, 1.5707963))
+    tex_node = _load_image_texture(tree, "facade_wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(0.60, 0.60, 1.0), rotation=(0.0, 0.0, 1.5707963))
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'

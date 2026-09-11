@@ -8,7 +8,7 @@ import bmesh
 import math
 from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_horizontal_cylinder
-from .materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER, MAT_INDEX_STONE, MAT_INDEX_LOG
+from .materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER, MAT_INDEX_STONE, MAT_INDEX_LOG, MAT_INDEX_WOOD
 
 def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                            openings=[], normal_vec=None, is_corner_start=False, is_corner_end=False,
@@ -385,13 +385,13 @@ def build_stone_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             b_idx += 1
 
 def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
-                       mat_ext=MAT_INDEX_PLASTER_EXT, mat_int=MAT_INDEX_PLASTER_INT,
-                       normal_vec=None, tier='TIER_3', physical_siding=True,
+                       mat_ext=MAT_INDEX_PLASTER_EXT, normal_vec=None,
+                       tier='TIER_3', physical_siding=True,
                        plank_direction='HORIZONTAL', plank_jankiness=0.35,
                        stone_block_scale=1.0, stone_disorder=0.35,
-                       is_corner_start=False, is_corner_end=False, seed=42):
+                       is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0):
     """
-    Builds a solid wall segment between two 2D points, dispatching to physical 3D
+    Constructs a single wall section between p_start and p_end:
     rounded logs (Tier 1), overlapping/batten planks (Tier 2), chunky stone blocks (Tier 3),
     or smooth plaster/stone core boxes.
     """
@@ -403,7 +403,7 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         )
         return
 
-    if tier == 'TIER_2' and mat_ext in (MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER):
+    if tier in ('TIER_1', 'TIER_2') and mat_ext in (MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER):
         mat_ext = MAT_INDEX_WOOD
 
     x1, y1 = p_start
@@ -425,7 +425,9 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         size=(seg_len, thickness, height),
         location=(cx, cy, cz),
         rotation=(0.0, 0.0, angle),
-        mat_index=mat_ext
+        mat_index=mat_ext,
+        is_wall=True,
+        u_offset=u_offset
     )
 
 def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
@@ -433,7 +435,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                             normal_vec=None, tier='TIER_3', physical_siding=True,
                             plank_direction='HORIZONTAL', plank_jankiness=0.35,
                             stone_block_scale=1.0, stone_disorder=0.35,
-                            is_corner_start=True, is_corner_end=True, seed=42):
+                            is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0):
     """
     Builds a wall along the line p_start -> p_end, cleanly cutting around
     one or more openings (e.g. door or windows) without destructive booleans.
@@ -460,7 +462,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
             plank_direction=plank_direction, plank_jankiness=plank_jankiness,
             stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-            is_corner_start=is_corner_start, is_corner_end=is_corner_end, seed=seed
+            is_corner_start=is_corner_start, is_corner_end=is_corner_end, seed=seed,
+            u_offset=u_offset
         )
         return
 
@@ -472,13 +475,13 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end,
             seed=seed
         )
-        # Build sealed interior core around openings
+        # Build sealed interior core around openings in matching warm wood planks
         build_wall_with_opening(
             bm, p_start, p_end, z_bottom, z_top, thickness,
-            openings=openings, mat_ext=mat_ext, normal_vec=normal_vec,
+            openings=openings, mat_ext=MAT_INDEX_WOOD, normal_vec=normal_vec,
             tier='TIER_3', physical_siding=False,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end,
-            seed=seed
+            seed=seed, u_offset=u_offset
         )
         return
 
@@ -500,7 +503,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                 normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
                 plank_direction=plank_direction, plank_jankiness=plank_jankiness,
                 stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                is_corner_start=seg_is_start, is_corner_end=False, seed=seed
+                is_corner_start=seg_is_start, is_corner_end=False, seed=seed,
+                u_offset=u_offset + last_u
             )
             
         # Below the opening (sill portion)
@@ -510,7 +514,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                 normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
                 plank_direction=plank_direction, plank_jankiness=plank_jankiness,
                 stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                is_corner_start=False, is_corner_end=False, seed=seed
+                is_corner_start=False, is_corner_end=False, seed=seed,
+                u_offset=u_offset + ou1
             )
             
         # Above the opening (lintel/header portion)
@@ -520,7 +525,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                 normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
                 plank_direction=plank_direction, plank_jankiness=plank_jankiness,
                 stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                is_corner_start=False, is_corner_end=False, seed=seed
+                is_corner_start=False, is_corner_end=False, seed=seed,
+                u_offset=u_offset + ou1
             )
         
         last_u = ou2
@@ -532,14 +538,16 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
             plank_direction=plank_direction, plank_jankiness=plank_jankiness,
             stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-            is_corner_start=False, is_corner_end=is_corner_end, seed=seed
+            is_corner_start=False, is_corner_end=is_corner_end, seed=seed,
+            u_offset=u_offset + last_u
         )
 
 def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
-                         normal_vec, openings=[], has_diagonals=True):
+                         normal_vec, openings=[], has_diagonals=True, is_top_floor=False):
     """
     Builds authentic Tudor half-timbering along one exterior facade,
     cleanly cutting around doorways and windows so beams never block openings.
+    When is_top_floor is True, the top plate beam is chamfered/inset at the ends to stay under roof eaves.
     """
     x1, y1 = p_start
     x2, y2 = p_end
@@ -569,8 +577,9 @@ def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
 
     # 1. Top Plate Beam (under the ceiling / floor above)
     top_z = z_top - beam_w * 0.5
+    top_span = max(0.2, span - 0.32) if is_top_floor else span
     cx, cy, cz = to_world_pt(span * 0.5, top_z)
-    create_beveled_box(bm, size=(span, beam_d, beam_w), location=(cx, cy, cz), rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
+    create_beveled_box(bm, size=(top_span, beam_d, beam_w), location=(cx, cy, cz), rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
 
     # 2. Bottom Sill Beam (skips doors)
     bot_z = z_bottom + beam_w * 0.5
@@ -788,7 +797,7 @@ def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth
         f_p = bm.faces.new([vl[k], vl[kn], vr[kn], vr[k]])
         f_p.material_index = mat_index
 
-def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, front_exclude_x=None, drop=0.16):
+def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, front_exclude_x=None, drop=0.10):
     """
     Builds chunky carved wooden support brackets (corbels) underneath
     the overhanging upper floors for that iconic European fantasy silhouette.

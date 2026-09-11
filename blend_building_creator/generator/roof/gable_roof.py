@@ -28,7 +28,7 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
     cx = (x_min + x_max) * 0.5
     rz = z_base + roof_height
     ez = z_base - 0.10
-    deck_thick = 0.16
+    deck_thick = 0.21
     uv_layer = bm.loops.layers.uv.verify()
     
     segments_x = 4
@@ -56,7 +56,7 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                 dx_du = side * half_w
                 inward = Vector((dz_du * side, 0.0, -abs(dx_du))).normalized() * deck_thick if (dx_du**2 + dz_du**2) > 1e-6 else Vector((0, 0, -deck_thick))
                 
-                row_top.append(bm.verts.new(Vector((x_val, y_val, z_val))))
+                row_top.append(bm.verts.new(Vector((x_val, y_val, z_val + 0.05))))
                 row_bot.append(bm.verts.new(Vector((x_val, y_val, z_val)) + inward))
             grid_top.append(row_top)
             grid_bot.append(row_bot)

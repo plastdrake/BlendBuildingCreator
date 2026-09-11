@@ -72,8 +72,6 @@ def build_round_tower(bm, props, seed):
         f_r = radius + 0.30
         create_cylinder(bm, radius=f_r, height=found_h, segments=8,
                         location=(0.0, 0.0, found_h * 0.5), mat_index=MAT_INDEX_STONE)
-        create_cylinder(bm, radius=f_r + 0.10, height=0.12, segments=8,
-                        location=(0.0, 0.0, found_h - 0.06), mat_index=MAT_INDEX_STONE)
 
     # Multi-floor loop
     prev_r = radius
@@ -349,14 +347,6 @@ def generate_building(obj, props):
             location=(0.0, 0.0, found_h * 0.5),
             mat_index=MAT_INDEX_STONE,
             bevel_amount=0.04
-        )
-        # Decorative stone plinth trim
-        create_beveled_box(
-            bm,
-            size=(fw + 0.12, fd + 0.12, 0.12),
-            location=(0.0, 0.0, found_h - 0.06),
-            mat_index=MAT_INDEX_STONE,
-            bevel_amount=0.02
         )
         # Foundation for Wing
         if has_wing:
@@ -999,9 +989,7 @@ def generate_building(obj, props):
 
         # 4 Main Solid Walls with Openings
         tier_val = getattr(props, 'material_tier', 'TIER_3')
-        if tier_val == 'TIER_1':
-            mat_w = MAT_INDEX_TIMBER
-        elif tier_val == 'TIER_2':
+        if tier_val in ('TIER_1', 'TIER_2'):
             mat_w = MAT_INDEX_WOOD
         else:
             mat_w = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_PLASTER_EXT
@@ -1073,10 +1061,13 @@ def generate_building(obj, props):
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
             )
 
-        # Tudor Timber Framing on Exterior (skip on Tier 1 full log walls to avoid slicing into logs)
-        if props.has_timber_framing and tier_val != 'TIER_1':
-            post_w = 0.32
-            timber_jank = getattr(props, 'timber_jankiness', 0.35)
+        # Timber Framing (Tudor Half-Timbering)
+        # In Tier 1 (Log Cabin), authentic interlocking logs already provide all structural aesthetics
+        if props.has_timber_framing and effective_archetype != 'WATCHTOWER' and tier_val != 'TIER_1':
+            post_w = 0.22
+            timber_jank = props.wonkiness * 0.5
+            is_top_fl = (fl_idx == num_floors - 1)
+
             # 1. Main building corner posts (chunky, flared at ends, subtly wonky)
             corners = [
                 (x_min, y_max),
@@ -1099,8 +1090,8 @@ def generate_building(obj, props):
                     ph = floor_h + found_h
                     pz = ph * 0.5
                 else:
-                    if fl_idx == num_floors - 1:
-                        ph = floor_h - 0.02
+                    if is_top_fl:
+                        ph = floor_h - 0.08
                         pz = z_floor + ph * 0.5
                     else:
                         ph = floor_h
@@ -1121,7 +1112,8 @@ def generate_building(obj, props):
                 create_flared_post(
                     bm, size=(post_w, post_w, ph),
                     location=(ocx, ocy, pz),
-                    mat_index=MAT_INDEX_TIMBER, flare=0.35, jankiness=timber_jank
+                    mat_index=MAT_INDEX_TIMBER, flare=0.35, jankiness=timber_jank,
+                    chamfer_top=is_top_fl
                 )
 
             # 2. Main building exterior facades
@@ -1147,22 +1139,22 @@ def generate_building(obj, props):
                     f_timber_ops.append(mw_mask)
 
             build_facade_timber(bm, (x_min, y_max), (x_max, y_max), z_floor, z_ceil, wall_t,
-                                (0.0, 1.0), b_timber_ops, props.timber_diagonals)
+                                (0.0, 1.0), b_timber_ops, props.timber_diagonals, is_top_floor=is_top_fl)
             build_facade_timber(bm, (x_min, y_min), (x_min, y_max), z_floor, z_ceil, wall_t,
-                                (-1.0, 0.0), l_timber_ops, props.timber_diagonals)
+                                (-1.0, 0.0), l_timber_ops, props.timber_diagonals, is_top_floor=is_top_fl)
             build_facade_timber(bm, (x_max, y_min), (x_max, y_max), z_floor, z_ceil, wall_t,
-                                (1.0, 0.0), r_timber_ops, props.timber_diagonals)
+                                (1.0, 0.0), r_timber_ops, props.timber_diagonals, is_top_floor=is_top_fl)
 
             # Front wall: only exposed exterior spans (no framing across interior junction)
             if not fl_has_wing:
                 build_facade_timber(bm, (x_min, y_min), (x_max, y_min), z_floor, z_ceil, wall_t,
-                                    (0.0, -1.0), f_timber_ops, props.timber_diagonals)
+                                    (0.0, -1.0), f_timber_ops, props.timber_diagonals, is_top_floor=is_top_fl)
             else:
                 if shape == 'L_SHAPE':
                     if wing_side == 'RIGHT':
                         exp_ops = [op for op in f_timber_ops if op.get('u_end', 0) <= (wx_min - x_min) + 0.01]
                         build_facade_timber(bm, (x_min, y_min), (wx_min, y_min), z_floor, z_ceil, wall_t,
-                                            (0.0, -1.0), exp_ops, props.timber_diagonals)
+                                            (0.0, -1.0), exp_ops, props.timber_diagonals, is_top_floor=is_top_fl)
                     else:
                         exp_ops = []
                         for op in f_timber_ops:
@@ -1171,11 +1163,11 @@ def generate_building(obj, props):
                             if u1 >= -0.01:
                                 exp_ops.append({'u_start': u1, 'u_end': u2, 'z_start': op['z_start'], 'z_end': op['z_end']})
                         build_facade_timber(bm, (wx_max, y_min), (x_max, y_min), z_floor, z_ceil, wall_t,
-                                            (0.0, -1.0), exp_ops, props.timber_diagonals)
+                                            (0.0, -1.0), exp_ops, props.timber_diagonals, is_top_floor=is_top_fl)
                 else: # T_SHAPE
                     exp_ops_l = [op for op in f_timber_ops if op.get('u_end', 0) <= (wx_min - x_min) + 0.01]
                     build_facade_timber(bm, (x_min, y_min), (wx_min, y_min), z_floor, z_ceil, wall_t,
-                                        (0.0, -1.0), exp_ops_l, props.timber_diagonals)
+                                        (0.0, -1.0), exp_ops_l, props.timber_diagonals, is_top_floor=is_top_fl)
                     exp_ops_r = []
                     for op in f_timber_ops:
                         u1 = op.get('u_start', 0) - (wx_max - x_min)
@@ -1183,7 +1175,7 @@ def generate_building(obj, props):
                         if u1 >= -0.01:
                             exp_ops_r.append({'u_start': u1, 'u_end': u2, 'z_start': op['z_start'], 'z_end': op['z_end']})
                     build_facade_timber(bm, (wx_max, y_min), (x_max, y_min), z_floor, z_ceil, wall_t,
-                                        (0.0, -1.0), exp_ops_r, props.timber_diagonals)
+                                        (0.0, -1.0), exp_ops_r, props.timber_diagonals, is_top_floor=is_top_fl)
 
             # 3. Wing exterior facades — aligned height/size with main house
             if fl_has_wing:
@@ -1193,8 +1185,8 @@ def generate_building(obj, props):
                     w_post_h = floor_h + found_h
                     w_post_cz = w_post_h * 0.5
                 else:
-                    if fl_idx == num_floors - 1:
-                        w_post_h = floor_h - 0.02
+                    if is_top_fl:
+                        w_post_h = floor_h - 0.08
                         w_post_cz = z_floor + w_post_h * 0.5
                     else:
                         w_post_h = floor_h
@@ -1216,16 +1208,17 @@ def generate_building(obj, props):
                     ocy_w = wpy + ny_w * off_w
                     create_flared_post(bm, size=(post_w, post_w, w_post_h),
                                        location=(ocx_w, ocy_w, w_post_cz),
-                                       mat_index=MAT_INDEX_TIMBER, flare=0.35, jankiness=timber_jank)
+                                       mat_index=MAT_INDEX_TIMBER, flare=0.35, jankiness=timber_jank,
+                                       chamfer_top=is_top_fl)
                 # Wing front facade
                 build_facade_timber(bm, (wx_min, wy_min), (wx_max, wy_min), z_floor, w_timber_z_top, wall_t,
-                                    (0.0, -1.0), w_front_openings, props.timber_diagonals)
+                                    (0.0, -1.0), w_front_openings, props.timber_diagonals, is_top_floor=is_top_fl)
                 # Wing left facade
                 build_facade_timber(bm, (wx_min, wy_min), (wx_min, wy_max), z_floor, w_timber_z_top, wall_t,
-                                    (-1.0, 0.0), w_left_openings, props.timber_diagonals)
+                                    (-1.0, 0.0), w_left_openings, props.timber_diagonals, is_top_floor=is_top_fl)
                 # Wing right facade
                 build_facade_timber(bm, (wx_max, wy_min), (wx_max, wy_max), z_floor, w_timber_z_top, wall_t,
-                                    (1.0, 0.0), w_right_openings, props.timber_diagonals)
+                                    (1.0, 0.0), w_right_openings, props.timber_diagonals, is_top_floor=is_top_fl)
 
         # Update previous floor tracking for overhang transitions
         prev_fl_overhang = fl_overhang

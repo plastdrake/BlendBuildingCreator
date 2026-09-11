@@ -98,7 +98,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             bm,
             size=(door_w + 0.55, frame_depth + 0.08, 0.09),
             location=(center_x, y_front, z_base + 0.045),
-            mat_index=MAT_INDEX_STONE,
+            mat_index=MAT_INDEX_CUT_STONE,
             bevel_amount=0.018
         )
         
@@ -115,41 +115,9 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                     bm,
                     size=(bw, frame_depth + 0.03, block_step - 0.008),
                     location=(bx, y_front, bz),
-                    mat_index=MAT_INDEX_STONE,
+                    mat_index=MAT_INDEX_CUT_STONE,
                     bevel_amount=0.015
                 )
-                
-        num_v = 7
-        for i in range(num_v):
-            a0 = i * math.pi / num_v
-            a1 = (i + 1) * math.pi / num_v
-            is_key = (i == num_v // 2)
-            r_out_cur = R_out + (0.05 if is_key else 0.0)
-            y_pop = -0.02 if is_key else 0.0
-            
-            yf_f = y_front - frame_depth * 0.5 + y_pop
-            yf_b = y_front + frame_depth * 0.5
-            
-            v_in0_f  = bm.verts.new(Vector((center_x + R_in * math.cos(a0), yf_f, z_spring + R_in * math.sin(a0))))
-            v_in1_f  = bm.verts.new(Vector((center_x + R_in * math.cos(a1), yf_f, z_spring + R_in * math.sin(a1))))
-            v_out1_f = bm.verts.new(Vector((center_x + r_out_cur * math.cos(a1), yf_f, z_spring + r_out_cur * math.sin(a1))))
-            v_out0_f = bm.verts.new(Vector((center_x + r_out_cur * math.cos(a0), yf_f, z_spring + r_out_cur * math.sin(a0))))
-            
-            v_in0_b  = bm.verts.new(Vector((center_x + R_in * math.cos(a0), yf_b, z_spring + R_in * math.sin(a0))))
-            v_in1_b  = bm.verts.new(Vector((center_x + R_in * math.cos(a1), yf_b, z_spring + R_in * math.sin(a1))))
-            v_out1_b = bm.verts.new(Vector((center_x + r_out_cur * math.cos(a1), yf_b, z_spring + r_out_cur * math.sin(a1))))
-            v_out0_b = bm.verts.new(Vector((center_x + r_out_cur * math.cos(a0), yf_b, z_spring + r_out_cur * math.sin(a0))))
-            
-            for f_verts in [
-                [v_in0_f, v_out0_f, v_out1_f, v_in1_f],
-                [v_in0_b, v_in1_b, v_out1_b, v_out0_b],
-                [v_in0_f, v_in1_f, v_in1_b, v_in0_b],
-                [v_out0_f, v_out0_b, v_out1_b, v_out1_f],
-                [v_in0_f, v_in0_b, v_out0_b, v_out0_f],
-                [v_in1_f, v_out1_f, v_out1_b, v_in1_b]
-            ]:
-                f = bm.faces.new(f_verts)
-                f.material_index = MAT_INDEX_STONE
                 
         sp_outer_w = R_in + 0.32
         sp_top_z = z_spring + R_in + 0.25
@@ -191,9 +159,9 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                     f_f = bm.faces.new([v_a0_f, v_a1_f, v_corn_f])
                     f_b = bm.faces.new([v_corn_b, v_a1_b, v_a0_b])
                     f_s = bm.faces.new([v_a1_f, v_a1_b, v_a0_b, v_a0_f])
-                f_f.material_index = MAT_INDEX_STONE
-                f_b.material_index = MAT_INDEX_STONE
-                f_s.material_index = MAT_INDEX_STONE
+                f_f.material_index = MAT_INDEX_CUT_STONE
+                f_b.material_index = MAT_INDEX_CUT_STONE
+                f_s.material_index = MAT_INDEX_CUT_STONE
                 
             first_vf = arc_vf[0] if side_sign < 0 else arc_vf[-1]
             first_vb = arc_vb[0] if side_sign < 0 else arc_vb[-1]
@@ -208,7 +176,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 f_side = bm.faces.new([v_corn_f, v_corn_b, v_bot_b, v_bot_f])
                 f_base = bm.faces.new([v_bot_f, v_bot_b, first_vb, first_vf])
             for f_elem in [f_bot_f, f_bot_b, f_side, f_base]:
-                f_elem.material_index = MAT_INDEX_STONE
+                f_elem.material_index = MAT_INDEX_CUT_STONE
                 
             apex_vf = arc_vf[-1] if side_sign < 0 else arc_vf[0]
             apex_vb = arc_vb[-1] if side_sign < 0 else arc_vb[0]
@@ -223,12 +191,12 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 f_top_roof = bm.faces.new([v_top_f, v_top_b, v_corn_b, v_corn_f])
                 f_center = bm.faces.new([apex_vf, apex_vb, v_top_b, v_top_f])
             for f_elem in [f_top_f, f_top_b, f_top_roof, f_center]:
-                f_elem.material_index = MAT_INDEX_STONE
+                f_elem.material_index = MAT_INDEX_CUT_STONE
                 
         create_beveled_box(
             bm, size=(door_w + 0.64, frame_depth + 0.04, 0.16),
             location=(center_x, y_front, sp_top_z + 0.08),
-            mat_index=MAT_INDEX_STONE, bevel_amount=0.015
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015
         )
     else:
         # Full-depth square timber casing spanning through wall from exterior to interior
@@ -623,18 +591,6 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
                 bevel_amount=0.007
             )
             
-            num_slats = 5
-            slat_spacing = (shutter_h * 0.78) / (num_slats + 1)
-            for s_i in range(1, num_slats + 1):
-                slat_z = jamb_cz - shutter_h * 0.39 + s_i * slat_spacing
-                slat_loc, slat_rot = to_world((sx, sy - 0.010, slat_z), rot=(0.18, 0.0, rot_z))
-                create_box(
-                    bm,
-                    size=(inner_w, 0.015, 0.024),
-                    location=slat_loc,
-                    rotation=slat_rot,
-                    mat_index=MAT_INDEX_WOOD
-                )
             
             for hz in [-shutter_h * 0.32, shutter_h * 0.32]:
                 strap_loc, strap_rot = to_world((sx, sy - 0.012, jamb_cz + hz), rot=(0.0, 0.0, rot_z))

@@ -331,17 +331,17 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
             bm,
             size=(stair_width, tread_d, tread_thick),
             location=(sx, sy, sz),
-            mat_index=MAT_INDEX_STAIRS,
+            mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.01
         )
-        # Clean conformal unwrap: 90-degree rotated grain across flat tread surface
+        # Wood grain oriented along length (X) of each stair step
         for f in tread_faces:
             if not f.is_valid:
                 continue
             for loop in f.loops:
                 co = loop.vert.co
-                u = (co.y - (sy - tread_d * 0.5)) * 1.5 + (i * 0.37)
-                v = (co.x - (sx - stair_width * 0.5)) * 0.65 + (co.z - sz) * 1.2 + (i * 0.19)
+                u = (co.x - (sx - stair_width * 0.5)) * 0.65 + (i * 0.37)
+                v = (co.y - (sy - tread_d * 0.5)) * 1.5 + (co.z - sz) * 1.2 + (i * 0.19)
                 loop[uv_layer].uv = Vector((u, v))
 
         # Riser plank beneath tread (down to step below or floor)

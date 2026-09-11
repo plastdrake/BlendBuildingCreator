@@ -30,7 +30,7 @@ def apply_organic_shading(obj, angle_deg=42.0):
         except Exception:
             pass
 
-def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0):
+def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, is_wall=False, u_offset=0.0):
     """
     Creates an oriented box in bmesh with center or base alignment.
     Returns list of faces.
@@ -73,9 +73,37 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
         f.material_index = mat_index
         faces.append(f)
         
-        # Local length-aligned UV unwrapping for wood grain flow along beam
-        # Identify major length axis:
-        if dz >= dx and dz >= dy:
+        if is_wall:
+            # Consistent length & height wall unwrapping for planks & stone:
+            # U is ALWAYS along wall length (X, horizontal), offset by u_offset
+            # V is ALWAYS along wall height (Z, vertical)
+            su = 0.55
+            sv = 0.55
+            u0 = u_offset * su
+            u1 = (u_offset + dx) * su
+            v0 = 0.0
+            v1 = dz * sv
+            if f_idx == 2: # Front (-Y, exterior)
+                f.loops[0][uv_layer].uv = Vector((u0, v0))
+                f.loops[1][uv_layer].uv = Vector((u0, v1))
+                f.loops[2][uv_layer].uv = Vector((u1, v1))
+                f.loops[3][uv_layer].uv = Vector((u1, v0))
+            elif f_idx == 4: # Back (+Y, interior)
+                f.loops[0][uv_layer].uv = Vector((u1, v0))
+                f.loops[1][uv_layer].uv = Vector((u1, v1))
+                f.loops[2][uv_layer].uv = Vector((u0, v1))
+                f.loops[3][uv_layer].uv = Vector((u0, v0))
+            elif f_idx in (3, 5): # End jambs (+X, -X)
+                f.loops[0][uv_layer].uv = Vector((0.0, v0))
+                f.loops[1][uv_layer].uv = Vector((0.0, v1))
+                f.loops[2][uv_layer].uv = Vector((dy * su, v1))
+                f.loops[3][uv_layer].uv = Vector((dy * su, v0))
+            else: # Top (1) and Bottom (0)
+                f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+                f.loops[2][uv_layer].uv = Vector((u1, dy * sv))
+                f.loops[3][uv_layer].uv = Vector((u0, dy * sv))
+        elif dz >= dx and dz >= dy:
             # Vertical post / column: V along Z
             if f_idx in (0, 1): # Bottom / Top end caps
                 f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
@@ -159,10 +187,11 @@ def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotat
     return [f for f in faces if f.is_valid]
 
 def create_flared_post(bm, size=(0.28, 0.28, 3.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
-                       mat_index=3, flare=0.25, jankiness=0.0):
+                       mat_index=3, flare=0.25, jankiness=0.0, chamfer_top=False):
     """
     Creates a chunky stylized fantasy vertical timber post flared out at the top and bottom,
     with subtle organic jankiness and oriented vertical UV coordinates for handpainted timber grain.
+    When chamfer_top is True (e.g. top floor under roof eave), the top is chamfered inward/downward.
     """
     dx, dy, dz = size
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
@@ -170,19 +199,21 @@ def create_flared_post(bm, size=(0.28, 0.28, 3.0), location=(0.0, 0.0, 0.0), rot
     tr_mat = loc_mat @ rot_mat
 
     taper_len = min(dz * 0.25, 0.45)
+    top_z = dz * 0.5 - (0.08 if chamfer_top else 0.0)
+    top_scale = 0.90 if chamfer_top else (1.0 + flare)
     z_slices = [
         -dz * 0.5,
         -dz * 0.5 + taper_len,
         0.0,
         dz * 0.5 - taper_len,
-        dz * 0.5
+        top_z
     ]
     scales = [
         1.0 + flare,
         1.0,
         1.0,
         1.0,
-        1.0 + flare
+        top_scale
     ]
 
     import random
