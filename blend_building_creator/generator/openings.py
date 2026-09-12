@@ -194,14 +194,12 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.015
         )
-        # Heavy timber lintel/header beam proud of wall. It reaches 4cm lower
-        # (bottom edge) so the whole doorway reads 4cm lower while sill and
-        # wall cutout stay put; top edge unchanged so the opening stays covered.
-        head_h = frame_thick + 0.08
+        # Heavy timber lintel/header beam proud of wall (top reaching continuous lintel log at 2.16m)
+        head_h = frame_thick + 0.04
         create_beveled_box(
             bm,
             size=(door_w + frame_thick * 2.4, timber_frame_d + 0.04, head_h),
-            location=(center_x, yf_timber, z_base + door_h + head_h * 0.5 - 0.04),
+            location=(center_x, yf_timber, z_base + door_h + head_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.016
         )
@@ -225,10 +223,9 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             location=(center_x + (door_w * 0.5 + frame_thick * 0.42), in_door_y, z_base + (door_h + frame_thick) * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
-        # Interior header drops with the leaf top so no gap shows from inside.
         create_beveled_box(
-            bm, size=(door_w + frame_thick * 2.0, 0.05, frame_thick + 0.04),
-            location=(center_x, in_door_y, z_base + door_h + frame_thick * 0.5 - 0.02),
+            bm, size=(door_w + frame_thick * 2.0, 0.05, frame_thick),
+            location=(center_x, in_door_y, z_base + door_h + frame_thick * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
     
