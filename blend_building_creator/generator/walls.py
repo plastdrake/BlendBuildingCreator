@@ -8,7 +8,7 @@ import bmesh
 import math
 from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_horizontal_cylinder
-from .materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER, MAT_INDEX_STONE, MAT_INDEX_LOG, MAT_INDEX_WOOD
+from .materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER, MAT_INDEX_STONE, MAT_INDEX_LOG, MAT_INDEX_LOG_END, MAT_INDEX_WOOD
 
 def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                            openings=[], normal_vec=None, is_corner_start=False, is_corner_end=False,
@@ -163,7 +163,7 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                 location=(cur_cx, cur_cy, log_z),
                 rotation=(tilt_j, 0.0, angle),
                 mat_index=MAT_INDEX_LOG,
-                mat_index_cap=10,
+                mat_index_cap=MAT_INDEX_LOG_END,
                 smooth=True,
                 uv_offset=shared_uv
             )

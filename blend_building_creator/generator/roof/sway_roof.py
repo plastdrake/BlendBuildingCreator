@@ -98,23 +98,23 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
                 v_out0_b = grid_bot[k+1][j]
                 
                 if side < 0:
-                    f_top = bm.faces.new([v_out0_t, v_out1_t, v_in1_t, v_in0_t])
-                    f_bot = bm.faces.new([v_in0_b, v_in1_b, v_out1_b, v_out0_b])
-                    if k == segments_x - 1:
-                        bm.faces.new([v_out0_t, v_out0_b, v_out1_b, v_out1_t]).material_index = MAT_INDEX_TIMBER
-                    if j == 0:
-                        bm.faces.new([v_in0_t, v_in0_b, v_out0_b, v_out0_t]).material_index = MAT_INDEX_TIMBER
-                    if j == segments_y - 1:
-                        bm.faces.new([v_out1_t, v_out1_b, v_in1_b, v_in1_t]).material_index = MAT_INDEX_TIMBER
-                else:
                     f_top = bm.faces.new([v_in0_t, v_in1_t, v_out1_t, v_out0_t])
                     f_bot = bm.faces.new([v_out0_b, v_out1_b, v_in1_b, v_in0_b])
                     if k == segments_x - 1:
-                        bm.faces.new([v_out1_t, v_out1_b, v_out0_b, v_out0_t]).material_index = MAT_INDEX_TIMBER
+                        bm.faces.new([v_out0_b, v_out0_t, v_out1_t, v_out1_b]).material_index = MAT_INDEX_TIMBER
                     if j == 0:
-                        bm.faces.new([v_out0_t, v_out0_b, v_in0_b, v_in0_t]).material_index = MAT_INDEX_TIMBER
+                        bm.faces.new([v_in0_t, v_out0_t, v_out0_b, v_in0_b]).material_index = MAT_INDEX_TIMBER
                     if j == segments_y - 1:
-                        bm.faces.new([v_in1_t, v_in1_b, v_out1_b, v_out1_t]).material_index = MAT_INDEX_TIMBER
+                        bm.faces.new([v_out1_t, v_in1_t, v_in1_b, v_out1_b]).material_index = MAT_INDEX_TIMBER
+                else:
+                    f_top = bm.faces.new([v_out0_t, v_out1_t, v_in1_t, v_in0_t])
+                    f_bot = bm.faces.new([v_in0_b, v_in1_b, v_out1_b, v_out0_b])
+                    if k == segments_x - 1:
+                        bm.faces.new([v_out1_b, v_out1_t, v_out0_t, v_out0_b]).material_index = MAT_INDEX_TIMBER
+                    if j == 0:
+                        bm.faces.new([v_out0_t, v_in0_t, v_in0_b, v_out0_b]).material_index = MAT_INDEX_TIMBER
+                    if j == segments_y - 1:
+                        bm.faces.new([v_in1_t, v_out1_t, v_out1_b, v_in1_b]).material_index = MAT_INDEX_TIMBER
                         
                 f_top.material_index = MAT_INDEX_SHINGLES
                 f_bot.material_index = MAT_INDEX_TIMBER

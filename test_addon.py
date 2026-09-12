@@ -44,7 +44,7 @@ def run_tests():
     m_count = len(obj.data.materials)
     print(f"  -> Generated default building: {v_count} verts, {p_count} polys, {m_count} materials.")
     assert v_count > 500, f"Expected rich geometry (>500 verts), got {v_count}"
-    assert m_count == 17, f"Expected 17 material slots, got {m_count}"
+    assert m_count == 11, f"Expected 11 material slots, got {m_count}"
     
     # 3. Test Interior Floor and Door Angle
     print("[3/6] Testing door toggle & walk-in interior...")
@@ -90,8 +90,16 @@ def run_tests():
             bpy.ops.building.regenerate()
             print(f"  -> Tier 1 with rounded interlocking logs: {len(obj.data.vertices)} verts.")
         m_count = len(obj.data.materials)
-        assert m_count == 17, f"Expected 17 material slots for {tier}, got {m_count}"
-        print(f"  -> Material {tier}: verified 17 procedural shader slots successfully.")
+        assert m_count == 11, f"Expected 11 material slots for {tier}, got {m_count}"
+        mat_names = [m.name for m in obj.data.materials]
+        expected_names = [
+            "M_Building_Stone", "M_Building_Plaster", "M_Building_Timber",
+            "M_Building_Floor", "M_Building_Shingles", "M_Building_Glass",
+            "M_Building_Iron", "M_Building_Wood", "M_Building_Cut_Stone",
+            "M_Building_Log", "M_Building_Log_End"
+        ]
+        assert mat_names == expected_names, f"Unexpected material names for {tier}: {mat_names}"
+        print(f"  -> Material {tier}: verified 11 generic procedural shader slots successfully: {mat_names}")
 
     # Test Hoist Beam
     props.has_hoist_beam = True

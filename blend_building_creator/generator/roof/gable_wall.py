@@ -93,35 +93,85 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
     y_ext = gy + g_norm * (half_wt + 0.005)
     y_int = gy - g_norm * half_wt
 
+    # Find the exact span at z_base where the roof underside meets z_base
+    half_w = max(0.01, (rx_max - rx_min) * 0.5)
+    z_deck_top = rz - deck_thick - 0.02
+    u_target = max(0.0, min(1.0, (z_deck_top - z_base) / max(0.01, rz - ez)))
+    lo, hi = 0.0, 1.0
+    for _ in range(12):
+        mid = (lo + hi) * 0.5
+        d_mid = (1.0 - roof_flare) * mid + roof_flare * (1.0 - (1.0 - mid) ** 2)
+        if d_mid < u_target:
+            lo = mid
+        else:
+            hi = mid
+    u_exact = (lo + hi) * 0.5
+    half_span = u_exact * half_w
+
+    # Clamp base bounds so the gable wall never extends past the building walls
+    # and never extends into the region where the roof deck is below z_base
+    base_x_left = max(x_min, cx - half_span)
+    base_x_right = min(x_max, cx + half_span)
+
+    z_left = max(z_base, get_gable_deck_z_func(base_x_left))
+    z_right = max(z_base, get_gable_deck_z_func(base_x_right))
+
     # Segmented top contour matching pitch
     n_segs = 6
-    xs_left = [x_min + (cx - x_min) * (i / n_segs) for i in range(n_segs + 1)]
-    xs_right = [cx + (x_max - cx) * (i / n_segs) for i in range(1, n_segs + 1)]
+    xs_left = [base_x_left + (cx - base_x_left) * (i / n_segs) for i in range(n_segs + 1)]
+    xs_right = [cx + (base_x_right - cx) * (i / n_segs) for i in range(1, n_segs + 1)]
     top_xs = xs_left + xs_right
 
-    top_verts_ext = [bm.verts.new(Vector((tx, y_ext, get_gable_deck_z_func(tx)))) for tx in top_xs]
-    v_ext_bl = bm.verts.new(Vector((x_min, y_ext, z_base)))
-    v_ext_br = bm.verts.new(Vector((x_max, y_ext, z_base)))
+    top_verts_ext = [bm.verts.new(Vector((tx, y_ext, max(z_base, get_gable_deck_z_func(tx))))) for tx in top_xs]
+    top_verts_int = [bm.verts.new(Vector((tx, y_int, max(z_base, get_gable_deck_z_func(tx))))) for tx in top_xs]
 
-    top_verts_int = [bm.verts.new(Vector((tx, y_int, get_gable_deck_z_func(tx)))) for tx in top_xs]
-    v_int_bl = bm.verts.new(Vector((x_min, y_int, z_base)))
-    v_int_br = bm.verts.new(Vector((x_max, y_int, z_base)))
+    has_left_jamb = (z_left > z_base + 0.005)
+    has_right_jamb = (z_right > z_base + 0.005)
+
+    if has_left_jamb:
+        v_ext_bl = bm.verts.new(Vector((base_x_left, y_ext, z_base)))
+        v_int_bl = bm.verts.new(Vector((base_x_left, y_int, z_base)))
+    else:
+        v_ext_bl = top_verts_ext[0]
+        v_int_bl = top_verts_int[0]
+
+    if has_right_jamb:
+        v_ext_br = bm.verts.new(Vector((base_x_right, y_ext, z_base)))
+        v_int_br = bm.verts.new(Vector((base_x_right, y_int, z_base)))
+    else:
+        v_ext_br = top_verts_ext[-1]
+        v_int_br = top_verts_int[-1]
 
     if tier in ('TIER_1', 'TIER_2'):
         gable_mat = MAT_INDEX_WOOD
     else:
         gable_mat = MAT_INDEX_PLASTER_EXT
 
+    # Construct clean, non-self-intersecting exterior & interior faces
+    ext_loop = [v_ext_bl, v_ext_br]
+    if has_right_jamb:
+        ext_loop.append(top_verts_ext[-1])
+    ext_loop.extend(reversed(top_verts_ext[1:-1]))
+    if has_left_jamb:
+        ext_loop.append(top_verts_ext[0])
+
+    int_loop = [v_int_bl]
+    if has_left_jamb:
+        int_loop.append(top_verts_int[0])
+    int_loop.extend(top_verts_int[1:-1])
+    if has_right_jamb:
+        int_loop.append(top_verts_int[-1])
+    int_loop.append(v_int_br)
+
     if g_norm < 0:
-        f_ext = bm.faces.new([v_ext_bl, v_ext_br] + list(reversed(top_verts_ext)))
-        f_ext.material_index = gable_mat
-        f_int = bm.faces.new(list(top_verts_int) + [v_int_br, v_int_bl])
-        f_int.material_index = MAT_INDEX_PLASTER_INT
+        f_ext = bm.faces.new(ext_loop)
+        f_int = bm.faces.new(int_loop)
     else:
-        f_ext = bm.faces.new(list(top_verts_ext) + [v_ext_br, v_ext_bl])
-        f_ext.material_index = gable_mat
-        f_int = bm.faces.new([v_int_bl, v_int_br] + list(reversed(top_verts_int)))
-        f_int.material_index = MAT_INDEX_PLASTER_INT
+        f_ext = bm.faces.new(list(reversed(ext_loop)))
+        f_int = bm.faces.new(list(reversed(int_loop)))
+
+    f_ext.material_index = gable_mat
+    f_int.material_index = MAT_INDEX_PLASTER_INT
 
     uv_g = bm.loops.layers.uv.verify()
     for f in (f_ext, f_int):
@@ -136,35 +186,26 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
         if g_norm < 0:
             bm.faces.new([top_verts_ext[k], top_verts_ext[k+1], top_verts_int[k+1], top_verts_int[k]]).material_index = MAT_INDEX_TIMBER
         else:
-            bm.faces.new([top_verts_ext[k+1], top_verts_ext[k], top_verts_int[k], top_verts_int[k+1]]).material_index = MAT_INDEX_TIMBER
+            bm.faces.new([top_verts_int[k], top_verts_int[k+1], top_verts_ext[k+1], top_verts_ext[k]]).material_index = MAT_INDEX_TIMBER
 
-    # Vertical side boundary seals at x_min and x_max
+    # Vertical side boundary seals (only if vertical jamb exists)
+    if has_left_jamb:
+        if g_norm < 0:
+            bm.faces.new([v_ext_bl, top_verts_ext[0], top_verts_int[0], v_int_bl]).material_index = MAT_INDEX_TIMBER
+        else:
+            bm.faces.new([v_ext_bl, v_int_bl, top_verts_int[0], top_verts_ext[0]]).material_index = MAT_INDEX_TIMBER
+
+    if has_right_jamb:
+        if g_norm < 0:
+            bm.faces.new([v_ext_br, v_int_br, top_verts_int[-1], top_verts_ext[-1]]).material_index = MAT_INDEX_TIMBER
+        else:
+            bm.faces.new([v_ext_br, top_verts_ext[-1], top_verts_int[-1], v_int_br]).material_index = MAT_INDEX_TIMBER
+
+    # Bottom sealing face closing the bottom of the gable wall against attic floor
     if g_norm < 0:
-        bm.faces.new([v_ext_bl, top_verts_ext[0], top_verts_int[0], v_int_bl]).material_index = MAT_INDEX_TIMBER
-        bm.faces.new([v_ext_br, v_int_br, top_verts_int[-1], top_verts_ext[-1]]).material_index = MAT_INDEX_TIMBER
+        bm.faces.new([v_ext_bl, v_int_bl, v_int_br, v_ext_br]).material_index = MAT_INDEX_TIMBER
     else:
-        bm.faces.new([v_ext_bl, v_int_bl, top_verts_int[0], top_verts_ext[0]]).material_index = MAT_INDEX_TIMBER
-        bm.faces.new([v_ext_br, top_verts_ext[-1], top_verts_int[-1], v_int_br]).material_index = MAT_INDEX_TIMBER
-
-    # Side eave triangular filling wedges
-    for is_right, side_x, sign_side in [(False, x_min, -1.0), (True, x_max, 1.0)]:
-        z_eave = get_gable_deck_z_func(side_x)
-        if z_eave > z_base + 0.05:
-            eave_overhang_x = (rx_max - x_max) if is_right else (x_min - rx_min)
-            sx_eave = side_x + sign_side * eave_overhang_x
-            v_s_wall_ext = bm.verts.new(Vector((side_x, y_ext, z_base)))
-            v_s_wall_int = bm.verts.new(Vector((side_x, y_int, z_base)))
-            v_s_top_ext = bm.verts.new(Vector((side_x, y_ext, z_eave)))
-            v_s_top_int = bm.verts.new(Vector((side_x, y_int, z_eave)))
-            v_s_eave_ext = bm.verts.new(Vector((sx_eave, y_ext, z_base)))
-            v_s_eave_int = bm.verts.new(Vector((sx_eave, y_int, z_base)))
-            if g_norm < 0:
-                bm.faces.new([v_s_eave_ext, v_s_wall_ext, v_s_top_ext]).material_index = gable_mat
-                bm.faces.new([v_s_top_int, v_s_wall_int, v_s_eave_int]).material_index = MAT_INDEX_PLASTER_INT
-            else:
-                bm.faces.new([v_s_top_ext, v_s_wall_ext, v_s_eave_ext]).material_index = gable_mat
-                bm.faces.new([v_s_eave_int, v_s_wall_int, v_s_top_int]).material_index = MAT_INDEX_PLASTER_INT
-            bm.faces.new([v_s_eave_ext, v_s_eave_int, v_s_wall_int, v_s_wall_ext]).material_index = MAT_INDEX_TIMBER
+        bm.faces.new([v_int_bl, v_ext_bl, v_ext_br, v_int_br]).material_index = MAT_INDEX_TIMBER
 
     # Half-timber tie beam and king post for non-log tiers
     if tier != 'TIER_1':
@@ -172,7 +213,7 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
         tie_t = half_wt * 2.0 + 0.08
         tie_h = 0.18
         tie_y = gy + g_norm * (half_wt * 0.10)
-        tie_span = max(0.2, (x_max - x_min) - 0.08)
+        tie_span = max(0.2, min((x_max - x_min) - 0.08, (base_x_right - base_x_left) - 0.04))
         create_beveled_box(
             bm,
             size=(tie_span, tie_t, tie_h),

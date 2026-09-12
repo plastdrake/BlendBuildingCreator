@@ -41,8 +41,16 @@ def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z
     tv1 = bm.verts.new(vt1)
     tv2 = bm.verts.new(vt2)
     tv3 = bm.verts.new(vt3)
-    faces=[]
-    for fvs in [[bv0,bv1,bv2,bv3],[tv3,tv2,tv1,tv0],[bv0,bv3,tv3,tv0],[bv1,tv1,tv2,bv2],[bv3,bv2,tv2,tv3],[bv0,tv0,tv1,bv1]]:
+    faces = []
+    face_vertex_lists = [
+        [bv0, bv3, bv2, bv1],  # Bottom (-Z)
+        [tv0, tv1, tv2, tv3],  # Top (+Z)
+        [bv0, bv1, tv1, tv0],  # Front (-Y)
+        [bv1, bv2, tv2, tv1],  # Right (+X)
+        [bv2, bv3, tv3, tv2],  # Back (+Y)
+        [bv3, bv0, tv0, tv3],  # Left (-X)
+    ]
+    for fvs in face_vertex_lists:
         f = bm.faces.new(fvs)
         f.material_index = mat_index
         faces.append(f)
@@ -130,11 +138,11 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 v_a1_b = arc_vb[ai + 1]
                 
                 if side_sign < 0:
-                    f_f = bm.faces.new([v_a0_f, v_corn_f, v_a1_f])
-                    f_b = bm.faces.new([v_a1_b, v_corn_b, v_a0_b])
+                    f_f = bm.faces.new([v_a0_f, v_a1_f, v_corn_f])
+                    f_b = bm.faces.new([v_a0_b, v_corn_b, v_a1_b])
                     f_s = bm.faces.new([v_a0_f, v_a0_b, v_a1_b, v_a1_f])
                 else:
-                    f_f = bm.faces.new([v_a0_f, v_a1_f, v_corn_f])
+                    f_f = bm.faces.new([v_corn_f, v_a0_f, v_a1_f])
                     f_b = bm.faces.new([v_corn_b, v_a1_b, v_a0_b])
                     f_s = bm.faces.new([v_a1_f, v_a1_b, v_a0_b, v_a0_f])
                 f_f.material_index = MAT_INDEX_CUT_STONE
@@ -144,28 +152,28 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             first_vf = arc_vf[0] if side_sign < 0 else arc_vf[-1]
             first_vb = arc_vb[0] if side_sign < 0 else arc_vb[-1]
             if side_sign < 0:
-                f_bot_f = bm.faces.new([v_bot_f, v_corn_f, first_vf])
-                f_bot_b = bm.faces.new([first_vb, v_corn_b, v_bot_b])
-                f_side = bm.faces.new([v_bot_f, v_bot_b, v_corn_b, v_corn_f])
-                f_base = bm.faces.new([first_vf, first_vb, v_bot_b, v_bot_f])
-            else:
-                f_bot_f = bm.faces.new([first_vf, v_corn_f, v_bot_f])
+                f_bot_f = bm.faces.new([v_bot_f, first_vf, v_corn_f])
                 f_bot_b = bm.faces.new([v_bot_b, v_corn_b, first_vb])
-                f_side = bm.faces.new([v_corn_f, v_corn_b, v_bot_b, v_bot_f])
+                f_side = bm.faces.new([v_bot_f, v_corn_f, v_corn_b, v_bot_b])
                 f_base = bm.faces.new([v_bot_f, v_bot_b, first_vb, first_vf])
+            else:
+                f_bot_f = bm.faces.new([first_vf, v_bot_f, v_corn_f])
+                f_bot_b = bm.faces.new([first_vb, v_corn_b, v_bot_b])
+                f_side = bm.faces.new([v_bot_b, v_corn_b, v_corn_f, v_bot_f])
+                f_base = bm.faces.new([first_vf, first_vb, v_bot_b, v_bot_f])
             for f_elem in [f_bot_f, f_bot_b, f_side, f_base]:
                 f_elem.material_index = MAT_INDEX_CUT_STONE
                 
             apex_vf = arc_vf[-1] if side_sign < 0 else arc_vf[0]
             apex_vb = arc_vb[-1] if side_sign < 0 else arc_vb[0]
             if side_sign < 0:
-                f_top_f = bm.faces.new([v_corn_f, v_top_f, apex_vf])
-                f_top_b = bm.faces.new([apex_vb, v_top_b, v_corn_b])
+                f_top_f = bm.faces.new([v_corn_f, apex_vf, v_top_f])
+                f_top_b = bm.faces.new([v_corn_b, v_top_b, apex_vb])
                 f_top_roof = bm.faces.new([v_corn_f, v_corn_b, v_top_b, v_top_f])
                 f_center = bm.faces.new([v_top_f, v_top_b, apex_vb, apex_vf])
             else:
-                f_top_f = bm.faces.new([apex_vf, v_top_f, v_corn_f])
-                f_top_b = bm.faces.new([v_corn_b, v_top_b, apex_vb])
+                f_top_f = bm.faces.new([v_corn_f, v_top_f, apex_vf])
+                f_top_b = bm.faces.new([v_corn_b, apex_vb, v_top_b])
                 f_top_roof = bm.faces.new([v_top_f, v_top_b, v_corn_b, v_corn_f])
                 f_center = bm.faces.new([apex_vf, apex_vb, v_top_b, v_top_f])
             for f_elem in [f_top_f, f_top_b, f_top_roof, f_center]:

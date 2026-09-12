@@ -59,26 +59,27 @@ def _load_image_texture(tree, filename, coord, loc_x=-800, loc_y=120, scale=(1.0
     return tex_node
 
 # ---------------------------------------------------------------------------
-# Material slot index constants (16 canonical slots)
+# Material slot index constants (11 canonical slots for UE optimization)
 # ---------------------------------------------------------------------------
 MAT_INDEX_STONE        = 0
+MAT_INDEX_PLASTER      = 1
 MAT_INDEX_PLASTER_EXT  = 1
-MAT_INDEX_PLASTER_INT  = 2
-MAT_INDEX_TIMBER_FRAME = 3
-MAT_INDEX_FLOOR        = 4
-MAT_INDEX_SHINGLES     = 5
-MAT_INDEX_GLASS        = 6
-MAT_INDEX_DOOR         = 7
-MAT_INDEX_IRON         = 8
-MAT_INDEX_WOOD         = 9
+MAT_INDEX_PLASTER_INT  = 1
+MAT_INDEX_TIMBER       = 2
+MAT_INDEX_TIMBER_FRAME = 2
+MAT_INDEX_DOOR         = 2
+MAT_INDEX_STAIRS       = 2
+MAT_INDEX_RAILING      = 2
+MAT_INDEX_WINDOW_FRAME = 2
+MAT_INDEX_SHUTTER      = 2
+MAT_INDEX_FLOOR        = 3
+MAT_INDEX_SHINGLES     = 4
+MAT_INDEX_GLASS        = 5
+MAT_INDEX_IRON         = 6
+MAT_INDEX_WOOD         = 7
+MAT_INDEX_CUT_STONE    = 8
+MAT_INDEX_LOG          = 9
 MAT_INDEX_LOG_END      = 10
-MAT_INDEX_LOG          = 11
-MAT_INDEX_STAIRS       = 12
-MAT_INDEX_RAILING      = 13
-MAT_INDEX_WINDOW_FRAME = 14
-MAT_INDEX_SHUTTER      = 15
-MAT_INDEX_CUT_STONE    = 16
-MAT_INDEX_TIMBER       = MAT_INDEX_TIMBER_FRAME
 
 
 # ---------------------------------------------------------------------------
@@ -712,7 +713,7 @@ def create_stylized_timber(name="M_Building_Timber", color=(0.30, 0.16, 0.08, 1.
 # 4. Floorboards — Staggered wide planks with thin dark seams
 # ---------------------------------------------------------------------------
 
-def create_stylized_floorboards(name="M_Building_Floorboards",
+def create_stylized_floorboards(name="M_Building_Floor",
                                  color=(0.48, 0.32, 0.18, 1.0)):
     """
     Authentic stylized tavern floorboards matching reference image:
@@ -1330,6 +1331,7 @@ def create_stylized_stairs(name="M_Building_Stairs", color=(0.32, 0.20, 0.11, 1.
 # Backward compatibility aliases
 create_stylized_log_walls = create_stylized_log
 create_stylized_plank_siding = create_stylized_interior_planks
+create_stylized_floor = create_stylized_floorboards
 
 
 # ---------------------------------------------------------------------------
@@ -1338,162 +1340,75 @@ create_stylized_plank_siding = create_stylized_interior_planks
 
 def setup_building_material_slots(obj, props):
     """
-    Populates all 16 canonical material slots on obj.
+    Populates all 11 canonical material slots on obj.
     Slot indices match MAT_INDEX_* constants.
+    Material names are generic and consistent across all tiers (no _T1, _T2, etc.)
+    for seamless, reusable master materials in Unreal Engine.
     Custom material overrides on props take priority.
     """
-    tier       = getattr(props, "material_tier", "TIER_3")
-    is_palette = getattr(props, "color_palette", "CUSTOM") != "CUSTOM"
+    # 0. Stone (stone_wall_diffuse.jpg)
+    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone("M_Building_Stone", color=props.color_stone)
 
-    # 0. Stone
-    if props.custom_stone:
-        mat_stone = props.custom_stone
-    elif is_palette:
-        mat_stone = create_stylized_stone(f"M_Building_Stone_{tier}", color=props.color_stone)
-    elif tier == 'TIER_1':
-        mat_stone = create_stylized_stone("M_Building_Stone_T1", color=(0.38, 0.34, 0.30, 1.0))
-    elif tier == 'TIER_2':
-        mat_stone = create_stylized_stone("M_Building_Stone_T2", color=(0.52, 0.48, 0.42, 1.0))
-    else:
-        mat_stone = create_stylized_stone("M_Building_Stone_T3", color=props.color_stone)
+    # 1. Plaster (plaster_wall_diffuse.jpg) - consolidated exterior and interior plaster
+    mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
+                   getattr(props, 'custom_wall_int', None) or 
+                   create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False))
 
-    # 1. Plaster Ext
-    if props.custom_wall_ext:
-        mat_plaster_ext = props.custom_wall_ext
-    elif is_palette:
-        mat_plaster_ext = create_stylized_plaster(
-            "M_Building_Plaster_Ext", color=props.color_wall_ext, is_interior=False)
-    elif tier == 'TIER_1':
-        mat_plaster_ext = create_stylized_log("M_Building_Log_Ext", color=(0.34, 0.22, 0.12, 1.0))
-    elif tier == 'TIER_2':
-        mat_plaster_ext = create_stylized_interior_planks("M_Building_Plank_Ext", color=(0.68, 0.58, 0.44, 1.0))
-    else:
-        mat_plaster_ext = create_stylized_plaster(
-            "M_Building_Plaster_Ext", color=props.color_wall_ext, is_interior=False)
+    # 2. Timber (timber_beam_diffuse.jpg) - consolidates timber frames, doors, stairs, railings, window frames, shutters
+    clr_tf = getattr(props, 'color_timber_frame', (0.24, 0.14, 0.08, 1.0))
+    custom_tf = (getattr(props, 'custom_timber_frame', None) or 
+                 getattr(props, 'custom_door', None) or 
+                 getattr(props, 'custom_stairs', None) or 
+                 getattr(props, 'custom_railing', None) or 
+                 getattr(props, 'custom_window_frame', None) or 
+                 getattr(props, 'custom_shutter', None))
+    mat_timber = custom_tf or create_stylized_timber("M_Building_Timber", color=clr_tf)
 
-    # 2. Plaster Int
-    # If the user or preset set a light plaster color (like default (0.90, 0.86, 0.80)),
-    # use clean cozy plaster for plaster interior, OR wide rustic boards if wooden!
-    clr_int = getattr(props, 'color_wall_int', (0.90, 0.86, 0.80, 1.0))
-    brightness = (clr_int[0] + clr_int[1] + clr_int[2]) / 3.0
-    is_plaster_like = brightness > 0.65 and tier == 'TIER_3'
+    # 3. Floor (wood_planks_diffuse.jpg) - floorboards and interior wood planks
+    mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards("M_Building_Floor", color=props.color_floor)
 
-    if props.custom_wall_int:
-        mat_plaster_int = props.custom_wall_int
-    elif is_plaster_like:
-        mat_plaster_int = create_stylized_plaster(
-            "M_Building_Plaster_Int", color=clr_int, is_interior=True)
-    elif is_palette:
-        mat_plaster_int = create_stylized_interior_planks(
-            "M_Building_Interior_Planks",
-            color=(min(1.0, clr_int[0] * 0.95), min(1.0, clr_int[1] * 0.88), min(1.0, clr_int[2] * 0.72), 1.0))
-    elif tier == 'TIER_1':
-        mat_plaster_int = create_stylized_interior_planks(
-            "M_Building_Interior_Planks_T1", color=(0.60, 0.48, 0.33, 1.0))
-    elif tier == 'TIER_2':
-        mat_plaster_int = create_stylized_interior_planks(
-            "M_Building_Interior_Planks_T2", color=(0.70, 0.60, 0.46, 1.0))
-    else:
-        mat_plaster_int = create_stylized_plaster(
-            "M_Building_Plaster_Int", color=clr_int, is_interior=True)
+    # 4. Shingles (roof_tiles_diffuse.jpg)
+    mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_shingles("M_Building_Shingles", color=props.color_shingles)
 
-    # 3. Timber Frame
-    clr_tf    = getattr(props, 'color_timber_frame', (0.24, 0.14, 0.08, 1.0))
-    custom_tf = getattr(props, 'custom_timber_frame', None)
-    if custom_tf:
-        mat_timber_frame = custom_tf
-    else:
-        sfx = tier if not is_palette else "Palette"
-        mat_timber_frame = create_stylized_timber(f"M_Building_Timber_Frame_{sfx}", color=clr_tf)
+    # 5. Glass (procedural emissive glass)
+    mat_glass = getattr(props, 'custom_glass', None) or create_stylized_glass(
+        "M_Building_Glass",
+        glow_strength=props.window_glow_strength,
+        emissive_glow=props.color_window_glow
+    )
 
-    # 4. Floor
-    if props.custom_floor:
-        mat_floor = props.custom_floor
-    else:
-        mat_floor = create_stylized_floorboards("M_Building_Floorboards", color=props.color_floor)
+    # 6. Iron (iron_metal_diffuse.jpg)
+    mat_iron = getattr(props, 'custom_iron', None) or create_stylized_iron("M_Building_Iron")
 
-    # 5. Shingles
-    if props.custom_shingles:
-        mat_shingles = props.custom_shingles
-    elif is_palette:
-        mat_shingles = create_stylized_shingles(f"M_Building_Shingles_{tier}", color=props.color_shingles)
-    elif tier == 'TIER_1':
-        mat_shingles = create_stylized_shingles("M_Building_Shingles_T1", color=(0.45, 0.28, 0.16, 1.0))
-    elif tier == 'TIER_2':
-        mat_shingles = create_stylized_shingles("M_Building_Shingles_T2", color=(0.22, 0.32, 0.48, 1.0))
-    else:
-        mat_shingles = create_stylized_shingles("M_Building_Shingles_T3", color=props.color_shingles)
+    # 7. Wood (facade_wood_planks_diffuse.jpg) - facade planks, dormer cheeks, weatherboards
+    clr_wood = getattr(props, 'color_timber', (0.86, 0.74, 0.58, 1.0))
+    mat_wood = getattr(props, 'custom_timber', None) or create_stylized_facade_planks("M_Building_Wood", color=clr_wood)
 
-    # 6. Glass
-    mat_glass = props.custom_glass if props.custom_glass else create_stylized_glass(
-        glow_strength=props.window_glow_strength, emissive_glow=props.color_window_glow)
-
-    # 7. Door
-    mat_door = props.custom_door if props.custom_door else create_stylized_door(
-        "M_Building_Door", color=props.color_door)
-
-    # 8. Iron
-    mat_iron = props.custom_iron if props.custom_iron else create_stylized_iron()
-
-    # 9. Wood (general / facade planks / dormer walls / weatherboard)
-    clr_wood    = getattr(props, 'color_timber', (0.86, 0.74, 0.58, 1.0))
-    custom_wood = getattr(props, 'custom_timber', None)
-    mat_wood = custom_wood if custom_wood else create_stylized_facade_planks("M_Building_Wood", color=clr_wood)
-
-    # 10. Log End
-    clr_le    = getattr(props, 'color_log_end', (0.50, 0.34, 0.18, 1.0))
-    custom_le = getattr(props, 'custom_log_end', None)
-    mat_log_end = custom_le if custom_le else create_stylized_log_ends("M_Building_Log_End", color=clr_le)
-
-    # 11. Log
-    clr_log = (clr_tf[0] * 0.92, clr_tf[1] * 0.88, clr_tf[2] * 0.82, 1.0)
-    mat_log = getattr(props, 'custom_log', None) or create_stylized_log(
-        "M_Building_Log", color=clr_log)
-
-    # 12. Stairs
-    clr_st = (clr_wood[0] * 1.02, clr_wood[1] * 1.01, clr_wood[2] * 0.98, 1.0)
-    mat_stairs = getattr(props, 'custom_stairs', None) or create_stylized_stairs(
-        "M_Building_Stairs", color=clr_st)
-
-    # 13. Railing
-    clr_rl = (min(1.0, clr_wood[0] * 1.08), min(1.0, clr_wood[1] * 1.06), min(1.0, clr_wood[2] * 1.02), 1.0)
-    mat_railing = getattr(props, 'custom_railing', None) or create_stylized_timber(
-        "M_Building_Railing", color=clr_rl)
-
-    # 14. Window Frame
-    clr_wf = (min(1.0, clr_wood[0] * 1.05), min(1.0, clr_wood[1] * 1.02), clr_wood[2], 1.0)
-    mat_window = getattr(props, 'custom_window_frame', None) or create_stylized_timber(
-        "M_Building_Window_Frame", color=clr_wf)
-
-    # 15. Shutter
-    clr_sh = (clr_wf[0] * 0.92, clr_wf[1] * 0.90, clr_wf[2] * 0.88, 1.0)
-    mat_shutter = getattr(props, 'custom_shutter', None) or create_stylized_timber(
-        "M_Building_Shutter", color=clr_sh)
-
-    # 16. Cut Stone (steps, sills, door arches, thresholds)
+    # 8. Cut Stone (cut_stone_diffuse.jpg) - steps, sills, door arches, thresholds
     clr_cs = (0.78, 0.74, 0.68, 1.0)
-    mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone(
-        "M_Building_Cut_Stone", color=clr_cs)
+    mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone("M_Building_Cut_Stone", color=clr_cs)
 
-    # Assemble all 17 slots in strict order
+    # 9. Log (log_bark_diffuse.jpg) - Tier 1 rounded logs
+    clr_log = (clr_tf[0] * 0.92, clr_tf[1] * 0.88, clr_tf[2] * 0.82, 1.0)
+    mat_log = getattr(props, 'custom_log', None) or create_stylized_log("M_Building_Log", color=clr_log)
+
+    # 10. Log End (log_end_diffuse.jpg) - Tier 1 log ends
+    clr_le = getattr(props, 'color_log_end', (0.50, 0.34, 0.18, 1.0))
+    mat_log_end = getattr(props, 'custom_log_end', None) or create_stylized_log_ends("M_Building_Log_End", color=clr_le)
+
+    # Assemble all 11 canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
-        mat_plaster_ext,    # 1  MAT_INDEX_PLASTER_EXT
-        mat_plaster_int,    # 2  MAT_INDEX_PLASTER_INT
-        mat_timber_frame,   # 3  MAT_INDEX_TIMBER_FRAME
-        mat_floor,          # 4  MAT_INDEX_FLOOR
-        mat_shingles,       # 5  MAT_INDEX_SHINGLES
-        mat_glass,          # 6  MAT_INDEX_GLASS
-        mat_door,           # 7  MAT_INDEX_DOOR
-        mat_iron,           # 8  MAT_INDEX_IRON
-        mat_wood,           # 9  MAT_INDEX_WOOD
+        mat_plaster,        # 1  MAT_INDEX_PLASTER
+        mat_timber,         # 2  MAT_INDEX_TIMBER
+        mat_floor,          # 3  MAT_INDEX_FLOOR
+        mat_shingles,       # 4  MAT_INDEX_SHINGLES
+        mat_glass,          # 5  MAT_INDEX_GLASS
+        mat_iron,           # 6  MAT_INDEX_IRON
+        mat_wood,           # 7  MAT_INDEX_WOOD
+        mat_cut_stone,      # 8  MAT_INDEX_CUT_STONE
+        mat_log,            # 9  MAT_INDEX_LOG
         mat_log_end,        # 10 MAT_INDEX_LOG_END
-        mat_log,            # 11 MAT_INDEX_LOG
-        mat_stairs,         # 12 MAT_INDEX_STAIRS
-        mat_railing,        # 13 MAT_INDEX_RAILING
-        mat_window,         # 14 MAT_INDEX_WINDOW_FRAME
-        mat_shutter,        # 15 MAT_INDEX_SHUTTER
-        mat_cut_stone,      # 16 MAT_INDEX_CUT_STONE
     ]
     obj.data.materials.clear()
     for m in required_mats:

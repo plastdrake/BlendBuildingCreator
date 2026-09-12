@@ -55,12 +55,12 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
     bm_verts = [bm.verts.new(tr_mat @ v) for v in verts]
     
     face_indices = [
-        (0, 1, 2, 3), # Bottom (-Z)
-        (4, 7, 6, 5), # Top (+Z)
-        (0, 4, 5, 1), # Front (-Y)
-        (1, 5, 6, 2), # Right (+X)
-        (2, 6, 7, 3), # Back (+Y)
-        (3, 7, 4, 0), # Left (-X)
+        (0, 3, 2, 1), # Bottom (-Z)
+        (4, 5, 6, 7), # Top (+Z)
+        (0, 1, 5, 4), # Front (-Y)
+        (1, 2, 6, 5), # Right (+X)
+        (2, 3, 7, 6), # Back (+Y)
+        (3, 0, 4, 7), # Left (-X)
     ]
     
     uv_layer = bm.loops.layers.uv.verify()
@@ -85,24 +85,29 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
             v1 = (v_offset + dz) * sv
             if f_idx == 2: # Front (-Y, exterior)
                 f.loops[0][uv_layer].uv = Vector((u0, v0))
-                f.loops[1][uv_layer].uv = Vector((u0, v1))
+                f.loops[1][uv_layer].uv = Vector((u1, v0))
                 f.loops[2][uv_layer].uv = Vector((u1, v1))
-                f.loops[3][uv_layer].uv = Vector((u1, v0))
+                f.loops[3][uv_layer].uv = Vector((u0, v1))
             elif f_idx == 4: # Back (+Y, interior)
                 f.loops[0][uv_layer].uv = Vector((u1, v0))
-                f.loops[1][uv_layer].uv = Vector((u1, v1))
+                f.loops[1][uv_layer].uv = Vector((u0, v0))
                 f.loops[2][uv_layer].uv = Vector((u0, v1))
-                f.loops[3][uv_layer].uv = Vector((u0, v0))
+                f.loops[3][uv_layer].uv = Vector((u1, v1))
             elif f_idx in (3, 5): # End jambs (+X, -X)
                 f.loops[0][uv_layer].uv = Vector((0.0, v0))
-                f.loops[1][uv_layer].uv = Vector((0.0, v1))
+                f.loops[1][uv_layer].uv = Vector((dy * su, v0))
                 f.loops[2][uv_layer].uv = Vector((dy * su, v1))
-                f.loops[3][uv_layer].uv = Vector((dy * su, v0))
-            else: # Top (1) and Bottom (0)
+                f.loops[3][uv_layer].uv = Vector((0.0, v1))
+            elif f_idx == 1: # Top (+Z)
                 f.loops[0][uv_layer].uv = Vector((u0, 0.0))
                 f.loops[1][uv_layer].uv = Vector((u1, 0.0))
                 f.loops[2][uv_layer].uv = Vector((u1, dy * sv))
                 f.loops[3][uv_layer].uv = Vector((u0, dy * sv))
+            else: # Bottom (-Z, 0)
+                f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+                f.loops[1][uv_layer].uv = Vector((u0, dy * sv))
+                f.loops[2][uv_layer].uv = Vector((u1, dy * sv))
+                f.loops[3][uv_layer].uv = Vector((u1, 0.0))
         elif dz >= dx and dz >= dy:
             # Vertical post / column: V along longitudinal Z axis, U around circumference
             for loop_idx, v_idx in enumerate(idxs):
@@ -168,7 +173,7 @@ def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotat
     return [f for f in faces if f.is_valid]
 
 def create_flared_post(bm, size=(0.28, 0.28, 3.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
-                       mat_index=3, flare=0.25, jankiness=0.0, chamfer_top=False):
+                       mat_index=2, flare=0.25, jankiness=0.0, chamfer_top=False):
     """
     Creates a chunky stylized fantasy vertical timber post flared out at the top and bottom,
     with subtle organic jankiness and oriented vertical UV coordinates for handpainted timber grain.
@@ -290,7 +295,7 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
 
 def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, segments=16,
                                location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
-                               mat_index=0, mat_index_cap=10, smooth=True, seam_offset=-1.5707963267948966, uv_offset=0.0,
+                               mat_index=9, mat_index_cap=10, smooth=True, seam_offset=-1.5707963267948966, uv_offset=0.0,
                                flare_start=0.0, flare_end=0.0):
     """
     Creates a rounded horizontal cylinder oriented along local X with circular end caps.
@@ -474,11 +479,11 @@ def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=
         
     return faces
 
-def apply_box_uvs(bm, scale=1.0, skip_materials=(3, 5, 8, 9, 10, 11, 12, 13, 14, 15)):
+def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10)):
     """Calculates clean cubic / triplanar style UVs for bmesh faces.
     Skips faces whose materials already have specialized local unwraps
-    (timber frames, roof shingles, forged iron, wood accessories, log end caps, logs, stairs, railings, window frames, shutters).
-    Floor (4), stone (0), plaster (1, 2), cut stone (16), and door fallbacks receive continuous world-space meter-scaled UVs.
+    (timber frames 2, roof shingles 4, forged iron 6, wood facade/accessories 7, logs 9, log end caps 10).
+    Stone (0), plaster (1), floor (3), and cut stone (8) receive continuous world-space meter-scaled UVs.
     Tagged faces (face.tag == True) are also preserved.
     """
     uv_layer = bm.loops.layers.uv.verify()
@@ -506,7 +511,7 @@ def apply_box_uvs(bm, scale=1.0, skip_materials=(3, 5, 8, 9, 10, 11, 12, 13, 14,
                 v = co.z * scale
             loop[uv_layer].uv = Vector((u, v))
 
-def create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055, minor_radius=0.011, major_segments=16, minor_segments=8, mat_index=8):
+def create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055, minor_radius=0.011, major_segments=16, minor_segments=8, mat_index=6):
     """Generates a smooth torus ring for door pull rings and fantasy iron hardware."""
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
@@ -537,7 +542,7 @@ def create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055
             faces.append(f)
     return faces
 
-def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=7, bevel_amount=0.004, bevel_segments=2):
+def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=2, bevel_amount=0.004, bevel_segments=2):
     """
     Creates a horizontal door batten with UVs properly oriented so that wood grain
     flows along the length of the board (rather than across its narrow height).

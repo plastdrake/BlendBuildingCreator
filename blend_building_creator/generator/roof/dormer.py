@@ -361,15 +361,13 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
                 vb11 = grid_bot[k+1][j+1]
 
                 if side_sign > 0:
+                    f_top = bm.faces.new([vt00, vt10, vt11, vt01])
+                    f_bot = bm.faces.new([vb01, vb11, vb10, vb00])
+                    loop_k_j = [(k, j), (k+1, j), (k+1, j+1), (k, j+1)]
+                else:
                     f_top = bm.faces.new([vt00, vt01, vt11, vt10])
                     f_bot = bm.faces.new([vb10, vb11, vb01, vb00])
-                    # Vertex mapping for quad loops:
-                    # vt00 is (k, j), vt01 is (k, j+1), vt11 is (k+1, j+1), vt10 is (k+1, j)
                     loop_k_j = [(k, j), (k, j+1), (k+1, j+1), (k+1, j)]
-                else:
-                    f_top = bm.faces.new([vt10, vt11, vt01, vt00])
-                    f_bot = bm.faces.new([vb00, vb01, vb11, vb10])
-                    loop_k_j = [(k+1, j), (k+1, j+1), (k, j+1), (k, j)]
 
                 f_top.material_index = MAT_INDEX_SHINGLES
                 f_bot.material_index = MAT_INDEX_TIMBER
@@ -391,9 +389,9 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
         # Front verge edge closure
         for k in range(n_slope):
             if side_sign > 0:
-                f_cl = bm.faces.new([grid_top[k][0], grid_top[k+1][0], grid_bot[k+1][0], grid_bot[k][0]])
-            else:
                 f_cl = bm.faces.new([grid_top[k+1][0], grid_top[k][0], grid_bot[k][0], grid_bot[k+1][0]])
+            else:
+                f_cl = bm.faces.new([grid_top[k][0], grid_top[k+1][0], grid_bot[k+1][0], grid_bot[k][0]])
             f_cl.material_index = MAT_INDEX_TIMBER
             for loop in f_cl.loops:
                 loop[uv_layer_d].uv = Vector(((loop.vert.co.x + loop.vert.co.y) * 0.5, loop.vert.co.z * 0.5))
@@ -401,9 +399,9 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
         # Side eave outer edge closure
         for j in range(n_len):
             if side_sign > 0:
-                f_cl = bm.faces.new([grid_top[-1][j], grid_top[-1][j+1], grid_bot[-1][j+1], grid_bot[-1][j]])
+                f_cl = bm.faces.new([grid_top[-1][j], grid_bot[-1][j], grid_bot[-1][j+1], grid_top[-1][j+1]])
             else:
-                f_cl = bm.faces.new([grid_top[-1][j+1], grid_top[-1][j], grid_bot[-1][j], grid_bot[-1][j+1]])
+                f_cl = bm.faces.new([grid_top[-1][j], grid_top[-1][j+1], grid_bot[-1][j+1], grid_bot[-1][j]])
             f_cl.material_index = MAT_INDEX_TIMBER
             for loop in f_cl.loops:
                 loop[uv_layer_d].uv = Vector(((loop.vert.co.x + loop.vert.co.y) * 0.5, loop.vert.co.z * 0.5))
