@@ -793,7 +793,7 @@ def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth
     h_nose = 0.08
     
     prof_pts = [(0.0, -bolster_h), (d_console, -bolster_h), (d_console, -bolster_h - h_nose)]
-    for i in range(num_pts, -1, -1):
+    for i in range(num_pts - 1, -1, -1):
         t = i / num_pts
         d_val = d_console * (t ** 1.6)
         h_val = -bolster_h - h_nose - (h_console - h_nose) * ((1.0 - t) ** 1.6)
@@ -812,10 +812,13 @@ def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth
     f_r.material_index = mat_index
     
     M = len(prof_pts)
+    corbel_faces = [f_l, f_r]
     for k in range(M):
         kn = (k + 1) % M
-        f_p = bm.faces.new([vl[k], vl[kn], vr[kn], vr[k]])
+        f_p = bm.faces.new([vl[k], vr[k], vr[kn], vl[kn]])
         f_p.material_index = mat_index
+        corbel_faces.append(f_p)
+    bmesh.ops.recalc_face_normals(bm, faces=corbel_faces)
 
 def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, front_exclude_x=None, drop=0.10):
     """

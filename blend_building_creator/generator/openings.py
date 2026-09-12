@@ -165,6 +165,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             v_top_f = bm.verts.new(Vector((x_mid, yf_f, sp_top_z)))
             v_top_b = bm.verts.new(Vector((x_mid, yf_b, sp_top_z)))
             
+            sp_faces = []
             for ai in range(num_arc):
                 v_a0_f = arc_vf[ai]
                 v_a1_f = arc_vf[ai + 1]
@@ -178,10 +179,11 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 else:
                     f_f = bm.faces.new([v_corn_f, v_a0_f, v_a1_f])
                     f_b = bm.faces.new([v_corn_b, v_a1_b, v_a0_b])
-                    f_s = bm.faces.new([v_a1_f, v_a1_b, v_a0_b, v_a0_f])
+                    f_s = bm.faces.new([v_a0_f, v_a0_b, v_a1_b, v_a1_f])
                 f_f.material_index = MAT_INDEX_CUT_STONE
                 f_b.material_index = MAT_INDEX_CUT_STONE
                 f_s.material_index = MAT_INDEX_CUT_STONE
+                sp_faces.extend([f_f, f_b, f_s])
                 
             first_vf = arc_vf[0] if side_sign < 0 else arc_vf[-1]
             first_vb = arc_vb[0] if side_sign < 0 else arc_vb[-1]
@@ -197,6 +199,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 f_base = bm.faces.new([first_vf, first_vb, v_bot_b, v_bot_f])
             for f_elem in [f_bot_f, f_bot_b, f_side, f_base]:
                 f_elem.material_index = MAT_INDEX_CUT_STONE
+            sp_faces.extend([f_bot_f, f_bot_b, f_side, f_base])
                 
             apex_vf = arc_vf[-1] if side_sign < 0 else arc_vf[0]
             apex_vb = arc_vb[-1] if side_sign < 0 else arc_vb[0]
@@ -212,6 +215,16 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 f_center = bm.faces.new([apex_vf, apex_vb, v_top_b, v_top_f])
             for f_elem in [f_top_f, f_top_b, f_top_roof, f_center]:
                 f_elem.material_index = MAT_INDEX_CUT_STONE
+            sp_faces.extend([f_top_f, f_top_b, f_top_roof, f_center])
+            
+            bmesh.ops.recalc_face_normals(bm, faces=sp_faces)
+            sp_vol = 0.0
+            for sf in sp_faces:
+                v0 = sf.verts[0].co
+                for vi in range(1, len(sf.verts) - 1):
+                    sp_vol += v0.dot(sf.verts[vi].co.cross(sf.verts[vi + 1].co)) / 6.0
+            if sp_vol < 0.0:
+                bmesh.ops.reverse_faces(bm, faces=sp_faces)
                 
         create_beveled_box(
             bm, size=(door_w + 0.64, frame_depth + 0.04, 0.16),
