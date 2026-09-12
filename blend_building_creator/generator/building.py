@@ -489,16 +489,7 @@ def generate_building(obj, props):
         # Upper floor safety guardrail around stair opening
         if fl_idx > 0 and props.has_stairs and cur_stair_hole is not None:
             sh_x1, sh_x2, sh_y1, sh_y2 = cur_stair_hole
-            # Solid timber trimmer sill plate only when there is an actual void gap between stairwell and wall
-            if (sh_x1 - ix_min) > 0.18:
-                create_beveled_box(
-                    bm,
-                    size=(0.14, (sh_y2 - sh_y1) + 0.08, 0.14),
-                    location=(sh_x1 - 0.07, (sh_y1 + sh_y2) * 0.5, z_floor + 0.05),
-                    mat_index=MAT_INDEX_TIMBER,
-                    bevel_amount=0.015
-                )
-            rail_x = min(slab_xmax - 0.10, sh_x2 + 0.07)
+            rail_x = min(slab_xmax - 0.10, sh_x2 + 0.05)
             if props.stair_style == 'SPIRAL':
                 build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
                                       return_y=sh_y1, x_start=sh_x1 + 0.20)
@@ -507,8 +498,13 @@ def generate_building(obj, props):
                 # On intermediate floors, the ascending flight's own handrail protects the opening
                 if fl_idx == num_floors - 1:
                     ret_y = sh_y1 if (fl_idx % 2 == 1) else sh_y2
+                    # Guardrail along the right side and across the void edge
                     build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
-                                          return_y=ret_y, x_start=sh_x1 + 0.20)
+                                          return_y=ret_y, x_start=sh_x1)
+                    # If there is walkable floor to the left of the stair opening (e.g. over lower flight),
+                    # protect that open edge with a matching left guardrail
+                    if sh_x1 > ix_min + 0.35:
+                        build_stair_guardrail(bm, sh_x1, sh_y1, sh_y2, z_floor + 0.05)
         
         # Wing floor slab for compound shapes
         if fl_has_wing:
@@ -579,23 +575,27 @@ def generate_building(obj, props):
                     total_angle_deg=360.0
                 )
                 # Headroom cutout envelopes the entire circular stair path
-                next_stair_hole = (ix_min + 0.02, spiral_cx + spiral_r + 0.08,
+                spiral_hole_xmin = spiral_cx - spiral_r - 0.08
+                spiral_hole_xmax = spiral_cx + spiral_r + 0.08
+                next_stair_hole = (spiral_hole_xmin, spiral_hole_xmax,
                                    spiral_cy - spiral_r - 0.06, min(iy_max, spiral_cy + spiral_r + 0.06))
             else:
-                # Straight stairs: Floor 0 -> 1 runs front to back (+Y)
-                # Floor 1 -> 2 runs back to front (-Y) on adjacent track (switchback)
+                # Straight stairs: Floor 0 -> 1 runs front to back (+Y) on track 0
+                # Floor 1 -> 2 runs back to front (-Y) on adjacent track 1 (switchback)
                 if fl_idx % 2 == 0:
                     stair_start = (stair_cx_0, stair_y_bot, z_floor + 0.05)
                     build_straight_staircase(bm, stair_start, z_ceil + 0.05,
                                              stair_width=stair_w, stair_depth=stair_len, direction_y=1)
-                    next_stair_hole = (ix_min + 0.02, stair_cx_0 + stair_w * 0.5 + 0.22,
-                                       stair_y_bot - 0.25, stair_y_top + 0.10)
+                    # Opening on upper floor only spans this active track, leaving any overhang and adjacent track as solid floor
+                    next_stair_hole = (stair_cx_0 - stair_w * 0.5 - 0.08, stair_cx_0 + stair_w * 0.5 + 0.12,
+                                       stair_y_bot - 0.15, stair_y_top + 0.05)
                 else:
                     stair_start = (stair_cx_1, stair_y_top, z_floor + 0.05)
                     build_straight_staircase(bm, stair_start, z_ceil + 0.05,
                                              stair_width=stair_w, stair_depth=stair_len, direction_y=-1)
-                    next_stair_hole = (stair_cx_1 - stair_w * 0.5 - 0.12, stair_cx_1 + stair_w * 0.5 + 0.22,
-                                       stair_y_bot - 0.10, stair_y_top + 0.25)
+                    # Opening on upper floor only spans this active track, leaving adjacent track as solid floor
+                    next_stair_hole = (stair_cx_1 - stair_w * 0.5 - 0.08, stair_cx_1 + stair_w * 0.5 + 0.12,
+                                       stair_y_bot - 0.05, stair_y_top + 0.15)
             
             floor_stair_holes[fl_idx + 1] = next_stair_hole
 
@@ -627,9 +627,8 @@ def generate_building(obj, props):
             win_cz = z_floor + 3.5 * log_diam
             win_z1 = z_floor + 2.0 * log_diam
             win_z2 = z_floor + 5.0 * log_diam
-            win_w = min(win_w, 0.90)
-            # Total assembly height (frame + sill + header) = 3.0 * log_diam = 1.08m
-            win_h = 0.86
+            win_h = win_z2 - win_z1
+            win_w = props.window_width
         else:
             win_cz = z_floor + floor_h * 0.48
             win_z1 = win_cz - win_h * 0.5
@@ -726,69 +725,69 @@ def generate_building(obj, props):
             else:
                 mw_u_mid = (y_max - y_min) * 0.5
             
+            shift_in = 0.05
+            shift_down = 0.04
+            jamb_w = 0.16
+            jamb_d = wall_t + 0.10
+            lintel_h = 0.18
+            lintel_w = mw_portal_w + jamb_w * 2.0 - shift_in * 2.0 + 0.08
+            trim_clr = jamb_w - shift_in + 0.015
+
             mw_op = {
                 'u_start': mw_u_mid - mw_portal_w * 0.5,
                 'u_end': mw_u_mid + mw_portal_w * 0.5,
                 'z_start': z_floor,
-                'z_end': z_floor + mw_portal_h
+                'z_end': z_floor + mw_portal_h,
+                'trim_clearance': trim_clr
             }
-            jamb_w = 0.16
-            jamb_d = wall_t + 0.05
+
             if mw_side == 'FRONT':
                 front_openings.append(mw_op)
                 p_cx = (x_min + x_max) * 0.5
                 create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                   location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5, y_min, z_floor + mw_portal_h * 0.5),
+                                   location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, y_min, z_floor + mw_portal_h * 0.5),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                 create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                   location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5, y_min, z_floor + mw_portal_h * 0.5),
+                                   location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, y_min, z_floor + mw_portal_h * 0.5),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                lintel_w = mw_portal_w + jamb_w * 2.0 + 0.06
-                lintel_h = 0.18
                 create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
-                                   location=(p_cx, y_min, z_floor + mw_portal_h + lintel_h * 0.5),
+                                   location=(p_cx, y_min, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
             elif mw_side == 'BACK':
                 back_openings.append(mw_op)
                 p_cx = (x_min + x_max) * 0.5
                 create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                   location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5, y_max, z_floor + mw_portal_h * 0.5),
+                                   location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, y_max, z_floor + mw_portal_h * 0.5),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                 create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                   location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5, y_max, z_floor + mw_portal_h * 0.5),
+                                   location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, y_max, z_floor + mw_portal_h * 0.5),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                lintel_w = mw_portal_w + jamb_w * 2.0 + 0.06
-                lintel_h = 0.18
                 create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
-                                   location=(p_cx, y_max, z_floor + mw_portal_h + lintel_h * 0.5),
+                                   location=(p_cx, y_max, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
             elif mw_side == 'LEFT':
                 left_openings.append(mw_op)
                 p_cy = (y_min + y_max) * 0.5
                 create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                   location=(x_min, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5, z_floor + mw_portal_h * 0.5),
+                                   location=(x_min, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                 create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                   location=(x_min, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5, z_floor + mw_portal_h * 0.5),
+                                   location=(x_min, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                lintel_w = mw_portal_w + jamb_w * 2.0 + 0.06
-                lintel_h = 0.18
                 create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
-                                   location=(x_min, p_cy, z_floor + mw_portal_h + lintel_h * 0.5),
+                                   location=(x_min, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
             elif mw_side == 'RIGHT':
                 right_openings.append(mw_op)
                 p_cy = (y_min + y_max) * 0.5
                 create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                   location=(x_max, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5, z_floor + mw_portal_h * 0.5),
+                                   location=(x_max, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                 create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                   location=(x_max, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5, z_floor + mw_portal_h * 0.5),
+                                   location=(x_max, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                lintel_w = mw_portal_w + jamb_w * 2.0 + 0.06
-                lintel_h = 0.18
                 create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
-                                   location=(x_max, p_cy, z_floor + mw_portal_h + lintel_h * 0.5),
+                                   location=(x_max, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
 
         # Balcony Doorway Cutout
@@ -1653,9 +1652,12 @@ def generate_building(obj, props):
         balc_fl_idx = b_floor - 1
         z_balc = found_h + balc_fl_idx * floor_h
         b_bounds = floor_wall_bounds.get(balc_fl_idx, (-hx, hx, -hy, hy))
+        lower_bounds = floor_wall_bounds.get(max(0, balc_fl_idx - 1), b_bounds)
         build_balcony(
             bm, side=b_side,
             wall_x_min=b_bounds[0], wall_x_max=b_bounds[1], wall_y_min=b_bounds[2], wall_y_max=b_bounds[3],
+            lower_wall_x_min=lower_bounds[0], lower_wall_x_max=lower_bounds[1],
+            lower_wall_y_min=lower_bounds[2], lower_wall_y_max=lower_bounds[3],
             z_floor=z_balc, width=b_width, depth=b_depth, tier=tier_val
         )
         

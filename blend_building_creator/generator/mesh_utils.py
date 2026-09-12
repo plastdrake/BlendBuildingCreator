@@ -30,7 +30,7 @@ def apply_organic_shading(obj, angle_deg=42.0):
         except Exception:
             pass
 
-def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, is_wall=False, u_offset=0.0):
+def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, is_wall=False, u_offset=0.0, v_offset=0.0):
     """
     Creates an oriented box in bmesh with center or base alignment.
     Returns list of faces.
@@ -55,8 +55,8 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
     bm_verts = [bm.verts.new(tr_mat @ v) for v in verts]
     
     face_indices = [
-        (0, 1, 2, 3), # Bottom
-        (4, 7, 6, 5), # Top
+        (0, 1, 2, 3), # Bottom (-Z)
+        (4, 7, 6, 5), # Top (+Z)
         (0, 4, 5, 1), # Front (-Y)
         (1, 5, 6, 2), # Right (+X)
         (2, 6, 7, 3), # Back (+Y)
@@ -76,13 +76,13 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
         if is_wall:
             # Consistent length & height wall unwrapping for planks & stone:
             # U is ALWAYS along wall length (X, horizontal), offset by u_offset
-            # V is ALWAYS along wall height (Z, vertical)
+            # V is ALWAYS along wall height (Z, vertical), offset by v_offset
             su = 0.55
             sv = 0.55
             u0 = u_offset * su
             u1 = (u_offset + dx) * su
-            v0 = 0.0
-            v1 = dz * sv
+            v0 = v_offset * sv
+            v1 = (v_offset + dz) * sv
             if f_idx == 2: # Front (-Y, exterior)
                 f.loops[0][uv_layer].uv = Vector((u0, v0))
                 f.loops[1][uv_layer].uv = Vector((u0, v1))
@@ -104,76 +104,57 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                 f.loops[2][uv_layer].uv = Vector((u1, dy * sv))
                 f.loops[3][uv_layer].uv = Vector((u0, dy * sv))
         elif dz >= dx and dz >= dy:
-            # Vertical post / column: V along Z
-            if f_idx in (0, 1): # Bottom / Top end caps
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((dx * scale, 0.0))
-                f.loops[2][uv_layer].uv = Vector((dx * scale, dy * scale))
-                f.loops[3][uv_layer].uv = Vector((0.0, dy * scale))
-            elif f_idx == 2: # Front (-Y)
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((0.0, dz * scale))
-                f.loops[2][uv_layer].uv = Vector((dx * scale, dz * scale))
-                f.loops[3][uv_layer].uv = Vector((dx * scale, 0.0))
-            elif f_idx == 3: # Right (+X)
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((0.0, dz * scale))
-                f.loops[2][uv_layer].uv = Vector((dy * scale, dz * scale))
-                f.loops[3][uv_layer].uv = Vector((dy * scale, 0.0))
-            elif f_idx == 4: # Back (+Y)
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((0.0, dz * scale))
-                f.loops[2][uv_layer].uv = Vector((dx * scale, dz * scale))
-                f.loops[3][uv_layer].uv = Vector((dx * scale, 0.0))
-            else: # Left (-X)
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((0.0, dz * scale))
-                f.loops[2][uv_layer].uv = Vector((dy * scale, dz * scale))
-                f.loops[3][uv_layer].uv = Vector((dy * scale, 0.0))
-        elif dx >= dy:
-            # Horizontal beam along X: V along length (X), U around circumference (Y and Z)
+            # Vertical post / column: V along longitudinal Z axis, U around circumference
+            for loop_idx, v_idx in enumerate(idxs):
+                lv = verts[v_idx]
+                if f_idx in (0, 1): # End caps (-Z, +Z)
+                    u = (lv.x + sx) * scale
+                    v = (lv.y + sy) * scale
+                elif f_idx in (2, 4): # Front (-Y), Back (+Y)
+                    u = (lv.x + sx) * scale
+                    v = (lv.z + sz) * scale
+                else: # Right (+X), Left (-X)
+                    u = (lv.y + sy) * scale
+                    v = (lv.z + sz) * scale
+                f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+        elif dx >= dy and dx >= dz:
+            # Horizontal beam along X: V along longitudinal X axis, U around circumference
             su = scale * 1.2
             sv = scale * 0.40
-            if f_idx in (3, 5): # End caps (+X, -X)
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((0.0, dz * su))
-                f.loops[2][uv_layer].uv = Vector((dy * su, dz * su))
-                f.loops[3][uv_layer].uv = Vector((dy * su, 0.0))
-            elif f_idx in (2, 4): # Front (-Y) and Back (+Y): height is dz, length is dx
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((dz * su, 0.0))
-                f.loops[2][uv_layer].uv = Vector((dz * su, dx * sv))
-                f.loops[3][uv_layer].uv = Vector((0.0, dx * sv))
-            else: # Bottom (-Z) and Top (+Z): width is dy, length is dx
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((0.0, dx * sv))
-                f.loops[2][uv_layer].uv = Vector((dy * su, dx * sv))
-                f.loops[3][uv_layer].uv = Vector((dy * su, 0.0))
+            for loop_idx, v_idx in enumerate(idxs):
+                lv = verts[v_idx]
+                if f_idx in (3, 5): # End caps (+X, -X)
+                    u = (lv.y + sy) * su
+                    v = (lv.z + sz) * su
+                elif f_idx in (0, 1): # Bottom (-Z), Top (+Z)
+                    u = (lv.y + sy) * su
+                    v = (lv.x + sx) * sv
+                else: # Front (-Y), Back (+Y)
+                    u = (lv.z + sz) * su
+                    v = (lv.x + sx) * sv
+                f.loops[loop_idx][uv_layer].uv = Vector((u, v))
         else:
-            # Horizontal beam along Y: V along length (Y), U around circumference (X and Z)
+            # Horizontal beam along Y: V along longitudinal Y axis, U around circumference
             su = scale * 1.2
             sv = scale * 0.40
-            if f_idx in (2, 4): # End caps (-Y, +Y)
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((0.0, dz * su))
-                f.loops[2][uv_layer].uv = Vector((dx * su, dz * su))
-                f.loops[3][uv_layer].uv = Vector((dx * su, 0.0))
-            elif f_idx in (3, 5): # Right (+X) and Left (-X): height is dz, length is dy
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((dz * su, 0.0))
-                f.loops[2][uv_layer].uv = Vector((dz * su, dy * sv))
-                f.loops[3][uv_layer].uv = Vector((0.0, dy * sv))
-            else: # Bottom (-Z) and Top (+Z): width is dx, length is dy
-                f.loops[0][uv_layer].uv = Vector((0.0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((0.0, dy * sv))
-                f.loops[2][uv_layer].uv = Vector((dx * su, dy * sv))
-                f.loops[3][uv_layer].uv = Vector((dx * su, 0.0))
+            for loop_idx, v_idx in enumerate(idxs):
+                lv = verts[v_idx]
+                if f_idx in (2, 4): # End caps (-Y, +Y)
+                    u = (lv.x + sx) * su
+                    v = (lv.z + sz) * su
+                elif f_idx in (0, 1): # Bottom (-Z), Top (+Z)
+                    u = (lv.x + sx) * su
+                    v = (lv.y + sy) * sv
+                else: # Right (+X), Left (-X)
+                    u = (lv.z + sz) * su
+                    v = (lv.y + sy) * sv
+                f.loops[loop_idx][uv_layer].uv = Vector((u, v))
         
     return faces
 
-def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, bevel_amount=0.03, bevel_segments=2):
+def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, bevel_amount=0.03, bevel_segments=2, is_wall=False, u_offset=0.0, v_offset=0.0):
     """Creates a box and softly rounds its edges for a chunky, hand-carved organic look."""
-    faces = create_box(bm, size, location, rotation, mat_index)
+    faces = create_box(bm, size, location, rotation, mat_index, is_wall=is_wall, u_offset=u_offset, v_offset=v_offset)
     if bevel_amount > 0.001:
         edges = list({e for f in faces for e in f.edges})
         try:
@@ -498,9 +479,12 @@ def apply_box_uvs(bm, scale=1.0, skip_materials=(3, 5, 8, 9, 10, 11, 12, 13, 14,
     Skips faces whose materials already have specialized local unwraps
     (timber frames, roof shingles, forged iron, wood accessories, log end caps, logs, stairs, railings, window frames, shutters).
     Floor (4), stone (0), plaster (1, 2), cut stone (16), and door fallbacks receive continuous world-space meter-scaled UVs.
+    Tagged faces (face.tag == True) are also preserved.
     """
     uv_layer = bm.loops.layers.uv.verify()
     for face in bm.faces:
+        if face.tag:
+            continue
         if skip_materials is not None and face.material_index in skip_materials:
             continue
         normal = face.normal
@@ -521,6 +505,98 @@ def apply_box_uvs(bm, scale=1.0, skip_materials=(3, 5, 8, 9, 10, 11, 12, 13, 14,
                 u = co.x * scale
                 v = co.z * scale
             loop[uv_layer].uv = Vector((u, v))
+
+def create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055, minor_radius=0.011, major_segments=16, minor_segments=8, mat_index=8):
+    """Generates a smooth torus ring for door pull rings and fantasy iron hardware."""
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector(location))
+    tr_mat = loc_mat @ rot_mat
+    verts = []
+    for i in range(major_segments):
+        a = 2.0 * math.pi * i / major_segments
+        ca = math.cos(a)
+        sa = math.sin(a)
+        center = Vector((ca * major_radius, sa * major_radius, 0.0))
+        ring = []
+        for j in range(minor_segments):
+            b = 2.0 * math.pi * j / minor_segments
+            cb = math.cos(b)
+            sb = math.sin(b)
+            off = Vector((ca * cb * minor_radius, sa * cb * minor_radius, sb * minor_radius))
+            v = bm.verts.new(tr_mat @ (center + off))
+            ring.append(v)
+        verts.append(ring)
+    faces = []
+    for i in range(major_segments):
+        ni = (i + 1) % major_segments
+        for j in range(minor_segments):
+            nj = (j + 1) % minor_segments
+            f = bm.faces.new([verts[i][j], verts[ni][j], verts[ni][nj], verts[i][nj]])
+            f.material_index = mat_index
+            f.smooth = True
+            faces.append(f)
+    return faces
+
+def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=7, bevel_amount=0.004, bevel_segments=2):
+    """
+    Creates a horizontal door batten with UVs properly oriented so that wood grain
+    flows along the length of the board (rather than across its narrow height).
+    Faces are tagged (face.tag = True) so apply_box_uvs will preserve these specialized UVs.
+    """
+    faces = create_beveled_box(bm, size=size, location=location, rotation=rotation,
+                              mat_index=mat_index, bevel_amount=bevel_amount, bevel_segments=bevel_segments)
+    uv_layer = bm.loops.layers.uv.verify()
+    
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    inv_tr = (Matrix.Translation(Vector(location)) @ rot_mat).inverted()
+    
+    sx, sy, sz = size
+    # Determine which axis is the long board axis (length): typically X for front door, Y for balcony door
+    is_x_long = (sx >= sy)
+    
+    for f in faces:
+        f.tag = True
+        # Face normal in local coordinates
+        local_norm = (rot_mat.to_3x3().inverted() @ f.normal).normalized()
+        nx, ny, nz = abs(local_norm.x), abs(local_norm.y), abs(local_norm.z)
+        
+        for loop in f.loops:
+            lco = inv_tr @ loop.vert.co
+            if is_x_long:
+                # Board length along X, thickness along Y, height along Z
+                if nx >= ny and nx >= nz:
+                    # End caps (+X, -X)
+                    u = lco.y
+                    v = lco.z
+                elif nz >= ny:
+                    # Top / bottom (+Z, -Z)
+                    u = lco.y
+                    v = lco.x
+                else:
+                    # Front / back (+Y, -Y)
+                    # For door material (which has a 90 deg rotation in shader):
+                    # Setting u = lco.z and v = lco.x results in shader u_rot = -v = -lco.x
+                    # so grain flows along X (length of the board).
+                    u = lco.z
+                    v = lco.x
+            else:
+                # Board length along Y, thickness along X, height along Z
+                if ny >= nx and ny >= nz:
+                    # End caps (+Y, -Y)
+                    u = lco.x
+                    v = lco.z
+                elif nz >= nx:
+                    # Top / bottom (+Z, -Z)
+                    u = lco.x
+                    v = lco.y
+                else:
+                    # Front / back (+X, -X)
+                    u = lco.z
+                    v = lco.y
+            loop[uv_layer].uv = Vector((u, v))
+            
+    return faces
+
 
 def add_wonkiness(bm, z_min, z_max, amount=0.08, seed=0):
     """

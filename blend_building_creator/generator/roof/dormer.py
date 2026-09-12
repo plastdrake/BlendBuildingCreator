@@ -44,6 +44,7 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     
     col_w = 0.18
     uv_layer = bm.loops.layers.uv.verify()
+    dormer_wall_mat = MAT_INDEX_PLASTER_EXT if tier == 'TIER_3' else MAT_INDEX_WOOD
 
     # Local-to-world helper
     def to_w(x_f, y_s, z_val):
@@ -70,7 +71,7 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
             size=(cheek_len, 0.07, cheek_h),
             location=ch_pos,
             rotation=(0.0, 0.0, rot_z),
-            mat_index=MAT_INDEX_WOOD,
+            mat_index=dormer_wall_mat,
             bevel_amount=0.010
         )
         for f in ch_faces:
@@ -90,7 +91,7 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
         size=(col_w + 0.04, rear_wall_w, rear_wall_h),
         location=rear_pos,
         rotation=(0.0, 0.0, rot_z),
-        mat_index=MAT_INDEX_WOOD,
+        mat_index=dormer_wall_mat,
         bevel_amount=0.010
     )
     for f in rear_faces:
@@ -201,7 +202,7 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
         size=(col_w - 0.04, clear_w + 0.02, apron_h),
         location=apron_pos,
         rotation=(0.0, 0.0, rot_z),
-        mat_index=MAT_INDEX_WOOD,
+        mat_index=dormer_wall_mat,
         bevel_amount=0.008
     )
     for f in apron_faces:
@@ -246,12 +247,17 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     vr_b = bm.verts.new(v_right_b)
     
     f_gf = bm.faces.new([vt_f, vl_f, vr_f])
-    f_gf.material_index = MAT_INDEX_WOOD
+    f_gf.material_index = dormer_wall_mat
     f_gb = bm.faces.new([vr_b, vl_b, vt_b])
     f_gb.material_index = MAT_INDEX_TIMBER
-    bm.faces.new([vt_f, vt_b, vl_b, vl_f]).material_index = MAT_INDEX_TIMBER
-    bm.faces.new([vr_f, vr_b, vt_b, vt_f]).material_index = MAT_INDEX_TIMBER
-    bm.faces.new([vl_f, vl_b, vr_b, vr_f]).material_index = MAT_INDEX_TIMBER
+    f_top_edge = bm.faces.new([vt_f, vt_b, vl_b, vl_f])
+    f_right_edge = bm.faces.new([vr_f, vr_b, vt_b, vt_f])
+    f_bot_edge = bm.faces.new([vl_f, vl_b, vr_b, vr_f])
+    for f_timber in [f_gb, f_top_edge, f_right_edge, f_bot_edge]:
+        f_timber.material_index = MAT_INDEX_TIMBER
+        for loop in f_timber.loops:
+            co = loop.vert.co
+            loop[uv_layer].uv = Vector(((co.x * sx + co.y * sy) * 0.75, (co.z - z_base) * 0.75))
     for loop in f_gf.loops:
         co = loop.vert.co
         u = (co.x * sx + co.y * sy) * 0.75
@@ -355,20 +361,31 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
                     u_uv = (lj / float(n_len)) * roof_len * 0.32
                     v_uv = -(lk / float(n_slope)) * dormer_slope_len * 0.32
                     loop[uv_layer_d].uv = Vector((u_uv, v_uv))
+                for l_idx, loop in enumerate(f_bot.loops):
+                    lk, lj = loop_k_j[l_idx]
+                    u_uv = (lj / float(n_len)) * roof_len * 0.32
+                    v_uv = -(lk / float(n_slope)) * dormer_slope_len * 0.32
+                    loop[uv_layer_d].uv = Vector((u_uv, v_uv))
 
         # Front verge edge closure
         for k in range(n_slope):
             if side_sign > 0:
-                bm.faces.new([grid_top[k][0], grid_top[k+1][0], grid_bot[k+1][0], grid_bot[k][0]]).material_index = MAT_INDEX_TIMBER
+                f_cl = bm.faces.new([grid_top[k][0], grid_top[k+1][0], grid_bot[k+1][0], grid_bot[k][0]])
             else:
-                bm.faces.new([grid_top[k+1][0], grid_top[k][0], grid_bot[k][0], grid_bot[k+1][0]]).material_index = MAT_INDEX_TIMBER
+                f_cl = bm.faces.new([grid_top[k+1][0], grid_top[k][0], grid_bot[k][0], grid_bot[k+1][0]])
+            f_cl.material_index = MAT_INDEX_TIMBER
+            for loop in f_cl.loops:
+                loop[uv_layer_d].uv = Vector(((loop.vert.co.x + loop.vert.co.y) * 0.5, loop.vert.co.z * 0.5))
 
         # Side eave outer edge closure
         for j in range(n_len):
             if side_sign > 0:
-                bm.faces.new([grid_top[-1][j], grid_top[-1][j+1], grid_bot[-1][j+1], grid_bot[-1][j]]).material_index = MAT_INDEX_TIMBER
+                f_cl = bm.faces.new([grid_top[-1][j], grid_top[-1][j+1], grid_bot[-1][j+1], grid_bot[-1][j]])
             else:
-                bm.faces.new([grid_top[-1][j+1], grid_top[-1][j], grid_bot[-1][j], grid_bot[-1][j+1]]).material_index = MAT_INDEX_TIMBER
+                f_cl = bm.faces.new([grid_top[-1][j+1], grid_top[-1][j], grid_bot[-1][j], grid_bot[-1][j+1]])
+            f_cl.material_index = MAT_INDEX_TIMBER
+            for loop in f_cl.loops:
+                loop[uv_layer_d].uv = Vector(((loop.vert.co.x + loop.vert.co.y) * 0.5, loop.vert.co.z * 0.5))
 
     # 7. Curved Verge Bargeboards
     barge_t = 0.10

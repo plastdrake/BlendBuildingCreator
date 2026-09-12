@@ -63,7 +63,7 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
         add_floor_region(x_min, x_max, y_min, y_max, floor_idx)
         return
 
-    # Decompose floor into 2 or 3 rectangular slabs around the stairwell cutout
+    # Decompose floor into 4 rectangular slabs around the stairwell cutout:
     sx_min, sx_max, sy_min, sy_max = stair_hole
     # Clamp to bounds
     sx_min = max(x_min, min(x_max, sx_min))
@@ -71,27 +71,21 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
     sy_min = max(y_min, min(y_max, sy_min))
     sy_max = max(y_min, min(y_max, sy_max))
 
-    # Main room slab alongside stairwell (from x_max down to sx_max)
-    if sx_max < x_max:
-        w = x_max - sx_max
-        cx = (x_max + sx_max) * 0.5
+    # 1. Left slab alongside stairwell from x_min up to sx_min (covers overhang & unused flight tracks)
+    if sx_min > x_min + 0.02:
+        add_floor_region(x_min, sx_min, y_min, y_max, floor_idx + 37)
+
+    # 2. Right slab alongside stairwell from sx_max up to x_max
+    if sx_max < x_max - 0.02:
         add_floor_region(sx_max, x_max, y_min, y_max, floor_idx)
 
-    # Front portion in front of stairwell (from y_min up to sy_min)
-    if sy_min > y_min:
-        w = sx_max - x_min
-        cx = (sx_max + x_min) * 0.5
-        h = sy_min - y_min
-        cy = (sy_min + y_min) * 0.5
-        add_floor_region(x_min, sx_max, y_min, sy_min, floor_idx + 11)
+    # 3. Front portion in front of stairwell (from y_min up to sy_min across stair width)
+    if sy_min > y_min + 0.02:
+        add_floor_region(sx_min, sx_max, y_min, sy_min, floor_idx + 11)
 
-    # Back portion behind stairwell (if any space)
-    if sy_max < y_max:
-        w = sx_max - x_min
-        cx = (sx_max + x_min) * 0.5
-        h = y_max - sy_max
-        cy = (y_max + sy_max) * 0.5
-        add_floor_region(x_min, sx_max, sy_max, y_max, floor_idx + 23)
+    # 4. Back portion behind stairwell (from sy_max up to y_max across stair width)
+    if sy_max < y_max - 0.02:
+        add_floor_region(sx_min, sx_max, sy_max, y_max, floor_idx + 23)
 
 def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, beam_w=0.14, beam_d=0.18, stair_hole=None):
     """
@@ -127,7 +121,7 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
             if (sh_ymin - 0.25) <= by <= (sh_ymax + 0.25):
                 # Trim the beam so it only spans from sh_xmax to x_max
                 if sh_xmax < x_max - 0.3:
-                    w = x_max - sh_xmax
+                    w = (x_max + 0.02) - sh_xmax
                     cx = sh_xmax + w * 0.5
                     create_beveled_box(
                         bm,
@@ -136,10 +130,21 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
                         mat_index=MAT_INDEX_WOOD,
                         bevel_amount=0.015
                     )
+                # Also span beam on the left if there is floor on the left
+                if sh_xmin > x_min + 0.4:
+                    w_left = sh_xmin - (x_min - 0.02)
+                    cx_left = (x_min - 0.02) + w_left * 0.5
+                    create_beveled_box(
+                        bm,
+                        size=(w_left, beam_w, beam_d),
+                        location=(cx_left, by, beam_cz),
+                        mat_index=MAT_INDEX_WOOD,
+                        bevel_amount=0.015
+                    )
                 continue
                 
-        # Full width beam — extended 0.28 into walls to prevent short gap
-        beam_length = x_max - x_min + 0.28
+        # Full width beam — embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
+        beam_length = (x_max - x_min) + 0.04
         beam_cx = (x_min + x_max) * 0.5
         create_beveled_box(
             bm,
@@ -198,12 +203,13 @@ def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
         outer_length = length + wall_thickness * 2.0
         for opening in wall_openings.get(side, []):
             if opening.get('z_start', z_floor + 1.0) <= z_floor + trim_h_floor:
+                clr = opening.get('trim_clearance', reveal)
                 if reversed_from_wall_builder:
-                    a = outer_length - opening.get('u_end', 0.0) - wall_thickness - reveal
-                    b = outer_length - opening.get('u_start', 0.0) - wall_thickness + reveal
+                    a = outer_length - opening.get('u_end', 0.0) - wall_thickness - clr
+                    b = outer_length - opening.get('u_start', 0.0) - wall_thickness + clr
                 else:
-                    a = opening.get('u_start', 0.0) - wall_thickness - reveal
-                    b = opening.get('u_end', 0.0) - wall_thickness + reveal
+                    a = opening.get('u_start', 0.0) - wall_thickness - clr
+                    b = opening.get('u_end', 0.0) - wall_thickness + clr
                 a = max(0.0, a)
                 b = min(length, b)
                 if b > a:

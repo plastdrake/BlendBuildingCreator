@@ -389,7 +389,7 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                        tier='TIER_3', physical_siding=True,
                        plank_direction='HORIZONTAL', plank_jankiness=0.35,
                        stone_block_scale=1.0, stone_disorder=0.35,
-                       is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0):
+                       is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0, v_offset=0.0):
     """
     Constructs a single wall section between p_start and p_end:
     rounded logs (Tier 1), overlapping/batten planks (Tier 2), chunky stone blocks (Tier 3),
@@ -427,7 +427,8 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         rotation=(0.0, 0.0, angle),
         mat_index=mat_ext,
         is_wall=True,
-        u_offset=u_offset
+        u_offset=u_offset,
+        v_offset=v_offset
     )
 
 def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
@@ -504,7 +505,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                 plank_direction=plank_direction, plank_jankiness=plank_jankiness,
                 stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
                 is_corner_start=seg_is_start, is_corner_end=False, seed=seed,
-                u_offset=u_offset + last_u
+                u_offset=u_offset + last_u, v_offset=0.0
             )
             
         # Below the opening (sill portion)
@@ -515,7 +516,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                 plank_direction=plank_direction, plank_jankiness=plank_jankiness,
                 stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
                 is_corner_start=False, is_corner_end=False, seed=seed,
-                u_offset=u_offset + ou1
+                u_offset=u_offset + ou1, v_offset=0.0
             )
             
         # Above the opening (lintel/header portion)
@@ -526,7 +527,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                 plank_direction=plank_direction, plank_jankiness=plank_jankiness,
                 stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
                 is_corner_start=False, is_corner_end=False, seed=seed,
-                u_offset=u_offset + ou1
+                u_offset=u_offset + ou1, v_offset=oz2 - z_bottom
             )
         
         last_u = ou2
@@ -539,7 +540,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             plank_direction=plank_direction, plank_jankiness=plank_jankiness,
             stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
             is_corner_start=False, is_corner_end=is_corner_end, seed=seed,
-            u_offset=u_offset + last_u
+            u_offset=u_offset + last_u, v_offset=0.0
         )
 
 def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,

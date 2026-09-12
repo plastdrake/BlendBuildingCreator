@@ -107,10 +107,8 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
     v_int_bl = bm.verts.new(Vector((x_min, y_int, z_base)))
     v_int_br = bm.verts.new(Vector((x_max, y_int, z_base)))
 
-    if tier == 'TIER_2':
+    if tier in ('TIER_1', 'TIER_2'):
         gable_mat = MAT_INDEX_WOOD
-    elif tier == 'TIER_1':
-        gable_mat = MAT_INDEX_TIMBER
     else:
         gable_mat = MAT_INDEX_PLASTER_EXT
 
@@ -129,12 +127,8 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
     for f in (f_ext, f_int):
         for loop in f.loops:
             co = loop.vert.co
-            if plank_direction == 'VERTICAL':
-                u = co.z * 0.65
-                v = co.x * 0.65
-            else:
-                u = co.x * 0.65
-                v = co.z * 0.65
+            u = co.x * 0.55
+            v = (co.z - z_base) * 0.55
             loop[uv_g].uv = Vector((u, v))
 
     # Top sloping boundary seals (under roof deck)
@@ -165,38 +159,41 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             v_s_eave_ext = bm.verts.new(Vector((sx_eave, y_ext, z_base)))
             v_s_eave_int = bm.verts.new(Vector((sx_eave, y_int, z_base)))
             if g_norm < 0:
-                bm.faces.new([v_s_eave_ext, v_s_wall_ext, v_s_top_ext]).material_index = MAT_INDEX_TIMBER
-                bm.faces.new([v_s_top_int, v_s_wall_int, v_s_eave_int]).material_index = MAT_INDEX_TIMBER
+                bm.faces.new([v_s_eave_ext, v_s_wall_ext, v_s_top_ext]).material_index = gable_mat
+                bm.faces.new([v_s_top_int, v_s_wall_int, v_s_eave_int]).material_index = MAT_INDEX_PLASTER_INT
             else:
-                bm.faces.new([v_s_top_ext, v_s_wall_ext, v_s_eave_ext]).material_index = MAT_INDEX_TIMBER
-                bm.faces.new([v_s_eave_int, v_s_wall_int, v_s_top_int]).material_index = MAT_INDEX_TIMBER
+                bm.faces.new([v_s_top_ext, v_s_wall_ext, v_s_eave_ext]).material_index = gable_mat
+                bm.faces.new([v_s_eave_int, v_s_wall_int, v_s_top_int]).material_index = MAT_INDEX_PLASTER_INT
             bm.faces.new([v_s_eave_ext, v_s_eave_int, v_s_wall_int, v_s_wall_ext]).material_index = MAT_INDEX_TIMBER
 
-    # Horizontal tie beam across gable base
-    tie_t = half_wt * 2.0 + 0.08
-    tie_h = 0.18
-    tie_y = gy + g_norm * (half_wt * 0.10)
-    create_beveled_box(
-        bm,
-        size=(x_max - x_min + 0.12, tie_t, tie_h),
-        location=(cx, tie_y, z_base + tie_h * 0.5),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.012
-    )
+    # Half-timber tie beam and king post for non-log tiers
+    if tier != 'TIER_1':
+        # Horizontal tie beam across gable base
+        tie_t = half_wt * 2.0 + 0.08
+        tie_h = 0.18
+        tie_y = gy + g_norm * (half_wt * 0.10)
+        tie_span = max(0.2, (x_max - x_min) - 0.08)
+        create_beveled_box(
+            bm,
+            size=(tie_span, tie_t, tie_h),
+            location=(cx, tie_y, z_base + tie_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.012
+        )
 
-    # Vertical king post from tie beam up to apex
-    king_w = 0.16
-    king_t = tie_t
-    king_top = get_gable_deck_z_func(cx)
-    king_bot = z_base + tie_h
-    king_h = max(0.2, king_top - king_bot)
-    create_beveled_box(
-        bm,
-        size=(king_w, king_t, king_h),
-        location=(cx, tie_y, king_bot + king_h * 0.5),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.010
-    )
+        # Vertical king post from tie beam up to apex
+        king_w = 0.16
+        king_t = tie_t
+        king_top = get_gable_deck_z_func(cx)
+        king_bot = z_base + tie_h
+        king_h = max(0.2, king_top - king_bot)
+        create_beveled_box(
+            bm,
+            size=(king_w, king_t, king_h),
+            location=(cx, tie_y, king_bot + king_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.010
+        )
 
     # Physical logs siding for Tier 1
     build_gable_physical_siding(
