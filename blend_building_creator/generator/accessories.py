@@ -855,7 +855,8 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             bevel_amount=0.014
         )
         # Horizontal timber sill beam along side wall bottom (atop stone foundation)
-        loc_side_sill = Vector((depth * 0.50, (half_w - col_w * 0.5) * s_sign, z_base + 0.05))
+        # +8mm lift breaks the coplanar top with the front sill (no z-fighting).
+        loc_side_sill = Vector((depth * 0.50, (half_w - col_w * 0.5) * s_sign, z_base + 0.058))
         world_side_sill = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_side_sill.to_4d()).to_3d()
         create_beveled_box(
             bm,
@@ -926,7 +927,8 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
     )
     
     # Horizontal timber sill plate across front wall base (atop stone foundation)
-    loc_front_sill = Vector((depth - col_w * 0.5 + 0.01, 0.0, z_base + 0.05))
+    # -8mm drop breaks the coplanar top with the side sills (no z-fighting).
+    loc_front_sill = Vector((depth - col_w * 0.5 + 0.01, 0.0, z_base + 0.042))
     world_front_sill = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_front_sill.to_4d()).to_3d()
     create_beveled_box(
         bm,
@@ -947,18 +949,6 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         mat_index=MAT_INDEX_TIMBER_FRAME,
         bevel_amount=0.012
     )
-    # Front eave timber fascia under the roof overhang
-    loc_feave = Vector((depth + 0.06, 0.0, z_base + height + 0.01))
-    world_feave = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_feave.to_4d()).to_3d()
-    create_beveled_box(
-        bm,
-        size=(0.10, width + 0.32, 0.12),
-        location=world_feave,
-        rotation=(0.0, 0.0, rot_z),
-        mat_index=MAT_INDEX_TIMBER_FRAME,
-        bevel_amount=0.010
-    )
-    
     # 4. Outcrop Window Assembly with proper timber casing frame
     # Timber window sill
     loc_sill = Vector((depth + 0.04, 0.0, win_bot_z - 0.04))
@@ -1098,8 +1088,9 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
     if roof_style == 'LEAN_TO':
         roof_pitch = 0.38
         r_rise = depth * roof_pitch
-        # Shorten inside overhang to not go through wall, shift outward 4cm
-        r_len = math.sqrt(depth * depth + r_rise * r_rise) + 0.14
+        # Back edge terminates inside the wall thickness (never past the interior
+        # face) so no roof geometry shows indoors; front still covers the fascia.
+        r_len = math.sqrt(depth * depth + r_rise * r_rise) + 0.06
         r_ang = math.atan2(r_rise, depth)
         rx_vec = Vector((math.cos(-r_ang), 0.0, math.sin(-r_ang)))
         ry_vec = Vector((0.0, 1.0, 0.0))
@@ -1107,32 +1098,65 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         local_rot_mat = Matrix((rx_vec, ry_vec, rz_vec)).transposed().to_4x4()
         total_roof_mat = facade_rot_mat @ local_rot_mat
         roof_euler = total_roof_mat.to_euler()
-        loc_center = Vector((depth * 0.52, 0.0, roof_z_start + r_rise * 0.52))
-        world_center = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_center.to_4d()).to_3d()
-        create_beveled_box(
-            bm,
-            size=(r_len, width + 0.32, 0.08),
-            location=world_center,
-            rotation=roof_euler,
-            mat_index=MAT_INDEX_WOOD,
-            bevel_amount=0.010
-        )
-        loc_shingle = Vector((depth * 0.52, 0.0, roof_z_start + r_rise * 0.52 + 0.055))
+        # Single shingle roof slab only (no wooden deck duplicate underneath).
+        # Slab sits 4cm higher so its top clears the side trim cleanly.
+        loc_shingle = Vector((depth * 0.56, 0.0, roof_z_start + r_rise * 0.56 + 0.095))
         world_shingle = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_shingle.to_4d()).to_3d()
+        _slab_sx = (r_len + 0.04) * 0.5
+        _slab_sy = (width + 0.36) * 0.5
+        _slab_sz = 0.04
         create_beveled_box(
             bm,
-            size=(r_len + 0.04, width + 0.36, 0.05),
+            size=(r_len + 0.04, width + 0.36, 0.08),
             location=world_shingle,
             rotation=roof_euler,
             mat_index=MAT_INDEX_SHINGLES,
             bevel_amount=0.008
         )
+        # Main-roof shingle UVs: U along the eave (width), V down the slope
+        # from the high edge, same 0.32 world scale as sway/gable roofs.
+        # NOTE: applied by re-selecting slab faces from the mesh (the bevel op
+        # replaces the big top/bottom faces, so the creator's return list cannot
+        # be trusted to cover the visible faces).
+        try:
+            from mathutils import Matrix as _Mat, Vector as _Vec
+            _uv = bm.loops.layers.uv.verify()
+            _slab_mat = _Mat.Translation(_Vec(world_shingle)) @ roof_euler.to_matrix().to_4x4()
+            _inv = _slab_mat.inverted()
+            for _f in bm.faces:
+                if _f.material_index != MAT_INDEX_SHINGLES:
+                    continue
+                _c = _f.calc_center_median()
+                _lco = _inv @ _c
+                if abs(_lco.x) > _slab_sx + 0.05 or abs(_lco.y) > _slab_sy + 0.05 or abs(_lco.z) > _slab_sz + 0.05:
+                    continue
+                _f.tag = True
+                for _lp in _f.loops:
+                    _vco = _inv @ _lp.vert.co
+                    _lp[_uv].uv = _Vec(((_vco.y + _slab_sy) * 0.32, -(_vco.x + _slab_sx) * 0.32))
+        except Exception:
+            pass
+        # Front eave purlin beam capping the slab's front edge (same roof tilt).
+        _cos_a = math.cos(r_ang)
+        _sin_a = math.sin(r_ang)
+        _front_x = depth * 0.56 + (r_len + 0.04) * 0.5 * _cos_a - 0.02
+        _front_z = roof_z_start + r_rise * 0.56 + 0.095 - (r_len + 0.04) * 0.5 * _sin_a - 0.01
+        loc_eave = Vector((_front_x, 0.0, _front_z))
+        world_eave = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_eave.to_4d()).to_3d()
+        create_beveled_box(
+            bm,
+            size=(0.10, width + 0.40, 0.14),
+            location=world_eave,
+            rotation=roof_euler,
+            mat_index=MAT_INDEX_TIMBER_FRAME,
+            bevel_amount=0.010
+        )
         
         # Side triangular cheek closure walls & sloping timber bargeboards
         barge_w = 0.08
         for s_sign in [-1, 1]:
-            # Sloping bargeboard on side overhang edge
-            loc_barge = Vector((depth * 0.48, (half_w + 0.16) * s_sign, roof_z_start + r_rise * 0.52 + 0.02))
+            # Sloping bargeboard on side overhang edge (raised 4cm to cap the slab edge)
+            loc_barge = Vector((depth * 0.52, (half_w + 0.16) * s_sign, roof_z_start + r_rise * 0.56 + 0.10))
             world_barge = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_barge.to_4d()).to_3d()
             create_beveled_box(
                 bm,
@@ -1142,8 +1166,8 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                 mat_index=MAT_INDEX_TIMBER_FRAME,
                 bevel_amount=0.008
             )
-            # Sloping timber rafter plate directly atop the side wall
-            loc_side_rafter = Vector((depth * 0.48, (half_w - wall_thick * 0.5) * s_sign, roof_z_start + r_rise * 0.52 - 0.04))
+            # Sloping timber rafter plate directly atop the side wall (stays glued under the raised slab)
+            loc_side_rafter = Vector((depth * 0.52, (half_w - wall_thick * 0.5) * s_sign, roof_z_start + r_rise * 0.56 + 0.00))
             world_side_rafter = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_side_rafter.to_4d()).to_3d()
             create_beveled_box(
                 bm,
@@ -1409,7 +1433,8 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
         
     # 4. Authentic Multi-Plank Door with Wall-Mounted Pintle Hinges and Ring Pull Handle
     door_leaf_w = door_w - 0.06
-    door_leaf_h = door_h - 0.06
+    # Balcony leaf hangs 4cm lower like the front doors (bottom anchored).
+    door_leaf_h = door_h - 0.10
     num_planks = 4
     plank_gap = 0.004
     pw = (door_leaf_w - (num_planks - 1) * plank_gap) / num_planks
@@ -1717,12 +1742,12 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
                 mat_index=MAT_INDEX_STONE,
                 bevel_amount=0.02
             )
-            # Timber pillar post
+            # Timber pillar post (embedded 1cm into plinth: no coplanar bottom face)
             shaft_h = total_col_h - plinth_h - header_h
             create_beveled_box(
                 bm,
-                size=(pillar_col_w, pillar_col_w, shaft_h),
-                location=(px, py, z_ground + plinth_h + shaft_h * 0.5),
+                size=(pillar_col_w, pillar_col_w, shaft_h + 0.01),
+                location=(px, py, z_ground + plinth_h + shaft_h * 0.5 - 0.01),
                 rotation=(0.0, 0.0, rot_z),
                 mat_index=MAT_INDEX_TIMBER_FRAME,
                 bevel_amount=0.012
@@ -1802,12 +1827,12 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
         bevel_amount=0.012
     )
 
-    # Front Rim Beam (covering front edge face of the box)
+    # Front Rim Beam (fit between side rims so corner tops are not coplanar-overlapped)
     front_dist = half_d + 0.06 + box_d * 0.5 - rim_t * 0.5
-    w_front_rim = Vector((wx + ox * front_dist, wy + oy * front_dist, rim_z))
+    w_front_rim = Vector((wx + ox * front_dist, wy + oy * front_dist, rim_z + 0.008))
     create_beveled_box(
         bm,
-        size=(rim_t, box_w + 0.04, rim_h),
+        size=(rim_t, box_w - rim_t * 2.0 + 0.02, rim_h),
         location=w_front_rim,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER_FRAME,
@@ -1816,10 +1841,10 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
 
     # Rear Ledger Beam along building wall
     rear_dist = half_d + 0.06 - box_d * 0.5 + rim_t * 0.5
-    w_rear_rim = Vector((wx + ox * rear_dist, wy + oy * rear_dist, rim_z))
+    w_rear_rim = Vector((wx + ox * rear_dist, wy + oy * rear_dist, rim_z + 0.008))
     create_beveled_box(
         bm,
-        size=(rim_t, box_w + 0.04, rim_h),
+        size=(rim_t, box_w - rim_t * 2.0 + 0.02, rim_h),
         location=w_rear_rim,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER_FRAME,
@@ -1844,10 +1869,10 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
             bevel_amount=0.010
         )
 
-    # Wood soffit inside ceiling
+    # Wood soffit inside ceiling (inset 2cm from rim outer faces: no coplanar edges)
     create_beveled_box(
         bm,
-        size=(box_d, box_w, 0.06),
+        size=(box_d - 0.04, box_w - 0.04, 0.06),
         location=(soffit_cx, soffit_cy, z_ceiling - 0.02),
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_WOOD,
@@ -1857,7 +1882,7 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
     ext_mat = MAT_INDEX_PLASTER_EXT
     create_beveled_box(
         bm,
-        size=(box_d - 0.02, box_w - 0.02, 0.07),
+        size=(box_d - 0.06, box_w - 0.06, 0.07),
         location=(soffit_cx, soffit_cy, z_ceiling - 0.075),
         rotation=(0.0, 0.0, rot_z),
         mat_index=ext_mat,

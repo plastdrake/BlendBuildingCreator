@@ -236,7 +236,8 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
 
     if door_w >= 1.6:
         leaf_w = (door_w - 0.06) * 0.5
-        leaf_h = door_h - 0.05
+        # Leaves hang 4cm lower (bottom anchored at the sill, top gap grows).
+        leaf_h = door_h - 0.09
         ang_rad = math.radians(door_angle_deg)
         left_ang = -ang_rad
         right_ang = ang_rad
@@ -336,21 +337,22 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         else:
             for k in range(num_planks):
                 px = (k + 0.5) * pw + k * gap
-                cur_plank_h = door_h - 0.05
+                # Square leaves hang 4cm lower (bottom anchored, top gap grows).
+                cur_plank_h = door_h - 0.09
                 jank = 0.002 * math.sin(k * 2.8 + 1.2)
                 plank_loc = Vector((hinge_x, hinge_y, z_door_bot)) + (rot_mat @ Vector((px, jank, cur_plank_h * 0.5)))
                 create_beveled_box(bm, size=(pw - 0.002, door_leaf_t, cur_plank_h), location=plank_loc, rotation=(0.0, 0.0, out_ang), mat_index=MAT_INDEX_DOOR, bevel_amount=0.010, bevel_segments=3)
-            
-        bat_z_list = [z_door_bot + 0.24, min(z_spring - 0.10, z_door_bot + (door_h - 0.05) * 0.72) if is_arched else (z_door_bot + (door_h - 0.05) * 0.82)]
+
+        bat_z_list = [z_door_bot + 0.24, min(z_spring - 0.10, z_door_bot + (door_h - 0.05) * 0.72) if is_arched else (z_door_bot + (door_h - 0.09) * 0.82)]
         for bz in bat_z_list:
             bat_loc = Vector((hinge_x, hinge_y, bz)) + (rot_mat @ Vector((door_leaf_w * 0.5, -door_leaf_t*0.5 - 0.008, 0.0)))
             create_door_batten(bm, size=(door_leaf_w * 0.92, 0.022, 0.10), location=bat_loc, rotation=(0.0, 0.0, out_ang), mat_index=MAT_INDEX_DOOR, bevel_amount=0.004, bevel_segments=2)
-        
+
         strap_len = door_leaf_w * 0.82
         if is_arched:
             strap_z_list = [z_door_bot + 0.30, z_door_bot + (door_h*0.52), min(z_spring - 0.08, z_door_bot + (door_h - 0.05) * 0.72)]
         else:
-            strap_z_list = [z_door_bot + 0.28, z_door_bot + (door_h*0.50), z_door_bot + (door_h - 0.05) * 0.78]
+            strap_z_list = [z_door_bot + 0.28, z_door_bot + (door_h*0.50), z_door_bot + (door_h - 0.09) * 0.78]
         for hz in strap_z_list:
             strap_out_y = -door_leaf_t*0.5 - 0.012
             strap_world_c = Vector((hinge_x, hinge_y, hz)) + (rot_mat @ Vector((strap_len * 0.42, strap_out_y, 0.0)))

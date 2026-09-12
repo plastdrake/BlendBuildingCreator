@@ -12,7 +12,7 @@ from .materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_T
 
 def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                            openings=[], normal_vec=None, is_corner_start=False, is_corner_end=False,
-                           is_y_wall=None, seed=42):
+                           is_y_wall=None, seed=42, omit_top_row=False):
     """
     Builds authentic rustic 3D rounded logs with staggered interlocking saddle-notched
     projecting ends and organic handcrafted variation for Tier 1 architecture.
@@ -70,8 +70,22 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     
     k_start = int(math.floor((z_bottom - z_shift) / log_h))
     k_end = int(math.ceil((z_top - z_shift) / log_h))
-    
+
+    # Optional crown removal (multi-floor Tier-1 eave sides): drop the topmost
+    # row only when it rides on/above the wall top line (redundant cap crowding
+    # the eave). Recessed crowns are kept so no slit opens under the eave.
+    skip_k = None
+    if omit_top_row:
+        valid_ks = [kk for kk in range(k_start, k_end + 1)
+                    if z_bottom - 0.05 <= (kk + 0.5) * log_h + z_shift <= z_top + 0.05]
+        if len(valid_ks) >= 2:
+            top_z = (valid_ks[-1] + 0.5) * log_h + z_shift
+            if top_z > z_top - 0.02:
+                skip_k = valid_ks[-1]
+
     for k in range(k_start, k_end + 1):
+        if k == skip_k:
+            continue
         log_z = (k + 0.5) * log_h + z_shift
         # Ensure log center falls within current wall vertical slice
         if log_z < z_bottom - 0.05 or log_z > z_top + 0.05:
@@ -436,7 +450,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                             normal_vec=None, tier='TIER_3', physical_siding=True,
                             plank_direction='HORIZONTAL', plank_jankiness=0.35,
                             stone_block_scale=1.0, stone_disorder=0.35,
-                            is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0):
+                            is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0,
+                            omit_top_log_row=False):
     """
     Builds a wall along the line p_start -> p_end, cleanly cutting around
     one or more openings (e.g. door or windows) without destructive booleans.
@@ -474,7 +489,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             bm, p_start, p_end, z_bottom, z_top, thickness,
             openings=openings, normal_vec=normal_vec,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end,
-            seed=seed
+            seed=seed, omit_top_row=omit_top_log_row
         )
         # Build sealed interior core around openings in matching warm wood planks
         build_wall_with_opening(
@@ -578,6 +593,10 @@ def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
 
     # 1. Top Plate Beam (under the ceiling / floor above)
     top_z = z_top - beam_w * 0.5
+    # Top floor eave plates sit directly under the sloping roof deck: drop them
+    # 12cm so the beam top stays below the deck underside instead of poking through.
+    if is_top_floor:
+        top_z -= 0.12
     top_span = max(0.2, span - 0.32) if is_top_floor else span
     cx, cy, cz = to_world_pt(span * 0.5, top_z)
     create_beveled_box(bm, size=(top_span, beam_d, beam_w), location=(cx, cy, cz), rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)

@@ -1014,6 +1014,11 @@ def generate_building(obj, props):
 
         wall_top_z = z_ceil
 
+        # Multi-floor Tier-1: top-floor main side walls lose the redundant crown
+        # log row (gable ends and wings keep all of theirs).
+        omit_crown = (tier_val == 'TIER_1' and phys_siding and num_floors > 1
+                      and fl_idx == num_floors - 1)
+
         build_wall_with_opening(
             bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
             mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding,
@@ -1030,13 +1035,15 @@ def generate_building(obj, props):
             bm, (x_min, y_min), (x_min, y_max), z_floor, wall_top_z, wall_t, left_openings,
             mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
             plank_direction=plank_dir, plank_jankiness=plank_jank,
-            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+            omit_top_log_row=omit_crown
         )
         build_wall_with_opening(
             bm, (x_max, y_min), (x_max, y_max), z_floor, wall_top_z, wall_t, right_openings,
             mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
             plank_direction=plank_dir, plank_jankiness=plank_jank,
-            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+            omit_top_log_row=omit_crown
         )
         
         # Wing Solid Walls
@@ -1091,10 +1098,12 @@ def generate_building(obj, props):
                 else:
                     if is_top_fl:
                         ph = floor_h - 0.08
-                        pz = z_floor + ph * 0.5
+                        pz = z_floor + ph * 0.5 - 0.012
                     else:
-                        ph = floor_h
-                        pz = z_floor + ph * 0.5
+                        ph = floor_h + 0.012
+                        pz = z_floor + ph * 0.5 - 0.012
+                    # -12mm embed breaks the coplanar bottom with the wall base
+                    # on overhang/jettied corners (no z-fighting from below).
                 b_cx = (x_min + x_max) * 0.5
                 b_cy = (y_min + y_max) * 0.5
                 dx = cx - b_cx
@@ -1186,10 +1195,10 @@ def generate_building(obj, props):
                 else:
                     if is_top_fl:
                         w_post_h = floor_h - 0.08
-                        w_post_cz = z_floor + w_post_h * 0.5
+                        w_post_cz = z_floor + w_post_h * 0.5 - 0.012
                     else:
-                        w_post_h = floor_h
-                        w_post_cz = z_floor + w_post_h * 0.5
+                        w_post_h = floor_h + 0.012
+                        w_post_cz = z_floor + w_post_h * 0.5 - 0.012
                 # offset outward diagonally like main posts
                 w_cx = (wx_min + wx_max) * 0.5
                 w_cy = (wy_min + wy_max) * 0.5

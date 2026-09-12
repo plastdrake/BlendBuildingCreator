@@ -50,18 +50,20 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     def to_w(x_f, y_s, z_val):
         return Vector((cx + fx * x_f + sx * y_s, cy + fy * x_f + sy * y_s, z_val))
 
-    # Overhang and reach geometry
-    d_overhang = 0.26
-    front_reach = half_dd + 0.22
+    # Overhang and reach geometry (tight eaves: barges hug the cheeks,
+    # roof front sits close over the corner posts instead of floating past them)
+    d_overhang = 0.16
+    front_reach = half_dd + 0.12
     back_reach = max_back_reach if max_back_reach is not None else (half_dd + 1.20)
     roof_len = front_reach + back_reach
     roof_mid_xf = (front_reach - back_reach) * 0.5
 
-    # 1. Cheek Walls (Vertical Wood Planks) - extend deep into attic to eliminate gaps
+    # 1. Cheek Walls (Vertical Wood Planks) - extend deep into attic to eliminate gaps,
+    # tops tucked below the roof deck underside so corners never poke through slopes
     cheek_len = half_dd + back_reach
     cheek_mid_xf = (half_dd - back_reach) * 0.5
     cheek_bot_z = z_base - 0.85
-    cheek_top_z = z_base + dormer_h + 0.10
+    cheek_top_z = z_base + dormer_h + 0.02
     cheek_h = cheek_top_z - cheek_bot_z
     cheek_mid_z = (cheek_top_z + cheek_bot_z) * 0.5
     for s_sign in [-1, 1]:
@@ -102,11 +104,12 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
                 v = (co.z - z_base) * 0.75
                 loop[uv_layer].uv = Vector((u, v))
 
-    # 2. Front Timber Framing
+    # 2. Front Timber Framing (collar tucked under the deck; post tops die into
+    # the collar instead of poking through the slopes)
     front_xf = half_dd - col_w * 0.5
-    collar_z = z_base + dormer_h + 0.02
+    collar_z = z_base + dormer_h - 0.02
     post_bot_z = z_base - 0.85
-    post_top_z = collar_z + 0.06
+    post_top_z = collar_z - 0.02
     post_h = post_top_z - post_bot_z
     
     # Corner posts: 0.18m thick, extend down into attic, project slightly outward to eliminate coplanar fights
@@ -121,11 +124,12 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
             bevel_amount=0.014
         )
 
-    # Horizontal Collar Tie Beam across dormer front at eave level
+    # Horizontal Collar Tie Beam across dormer front at eave level (ends die
+    # into the corner posts instead of piercing the roof slopes)
     collar_pos = to_w(front_xf, 0.0, collar_z)
     create_beveled_box(
         bm,
-        size=(col_w + 0.02, dormer_w + 0.04, 0.12),
+        size=(col_w + 0.02, dormer_w - col_w, 0.12),
         location=collar_pos,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER,
@@ -140,13 +144,16 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     win_bot_z = win_top_z - win_h
     win_cz = (win_top_z + win_bot_z) * 0.5
 
-    # Window Perimeter Timber Casing
-    casing_w = 0.055
+    # Window Perimeter Timber Casing (full rectangular frame: chunky jambs lapping
+    # past the sill into the apron, with top and bottom rails between them)
+    casing_w = 0.09
     casing_t = col_w + 0.02
-    
-    # Left and Right Casing Jambs: start at win_bot_z and extend to top rail (no protrusion below window)
-    j_h = win_h + casing_w
-    j_cz = win_bot_z + j_h * 0.5
+
+    # Left and Right Casing Jambs: full height, lapping below the sill line
+    j_bot = win_bot_z - casing_w
+    j_top = win_top_z + casing_w
+    j_h = j_top - j_bot
+    j_cz = (j_top + j_bot) * 0.5
     for s_sign in [-1, 1]:
         j_pos = to_w(front_xf, s_sign * (win_w * 0.5 + casing_w * 0.5), j_cz)
         create_beveled_box(
@@ -163,6 +170,16 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
         bm,
         size=(casing_t, win_w, casing_w),
         location=r_pos,
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.008
+    )
+    # Bottom Sill Rail (was missing: glass used to sit straight on the apron)
+    b_pos = to_w(front_xf + 0.01, 0.0, win_bot_z - casing_w * 0.5)
+    create_beveled_box(
+        bm,
+        size=(casing_t + 0.02, win_w + 0.04, casing_w),
+        location=b_pos,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER,
         bevel_amount=0.008
@@ -218,9 +235,12 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     d_rz = z_base + dormer_h + d_roof_h
     d_ez = z_base + dormer_h - 0.04
     
-    # Vertical King Post Beam in Gable Triangle
-    king_h = d_roof_h - 0.06
-    king_pos = to_w(front_xf, 0.0, collar_z + 0.06 + king_h * 0.5)
+    # Vertical King Post Beam in Gable Triangle (top stopped well below the deck
+    # underside so it never pierces the roof surface at the ridge)
+    king_top_z = d_rz - 0.14
+    king_bot_z = collar_z + 0.06
+    king_h = max(0.15, king_top_z - king_bot_z)
+    king_pos = to_w(front_xf, 0.0, king_bot_z + king_h * 0.5)
     create_beveled_box(
         bm,
         size=(0.09, 0.11, king_h),
@@ -230,12 +250,13 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
         bevel_amount=0.008
     )
     
-    # Vertical Plank Siding filling triangular gable
+    # Vertical Plank Siding filling triangular gable (apex tucked below the deck
+    # underside so the gable never pokes through the roof slopes)
     tri_thick = 0.08
-    v_top_f = to_w(front_xf, 0.0, d_rz - 0.03)
+    v_top_f = to_w(front_xf, 0.0, d_rz - 0.10)
     v_left_f = to_w(front_xf, -(half_dw - 0.02), collar_z + 0.06)
     v_right_f = to_w(front_xf, (half_dw - 0.02), collar_z + 0.06)
-    v_top_b = to_w(front_xf - tri_thick, 0.0, d_rz - 0.03)
+    v_top_b = to_w(front_xf - tri_thick, 0.0, d_rz - 0.10)
     v_left_b = to_w(front_xf - tri_thick, -(half_dw - 0.02), collar_z + 0.06)
     v_right_b = to_w(front_xf - tri_thick, (half_dw - 0.02), collar_z + 0.06)
     
@@ -387,10 +408,10 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
             for loop in f_cl.loops:
                 loop[uv_layer_d].uv = Vector(((loop.vert.co.x + loop.vert.co.y) * 0.5, loop.vert.co.z * 0.5))
 
-    # 7. Curved Verge Bargeboards
+    # 7. Curved Verge Bargeboards (seated on the verge edge, not floating ahead of it)
     barge_t = 0.10
     barge_h = 0.16
-    barge_xf = front_reach + 0.05
+    barge_xf = front_reach + 0.01
     for side_sign in [-1, 1]:
         for k in range(n_slope):
             u0 = k / n_slope
@@ -399,14 +420,14 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
             ys1 = side_sign * u1 * roof_half_w
             z0 = get_flare_z(u0)
             z1 = get_flare_z(u1)
-            
+
             p0 = to_w(barge_xf, ys0, z0)
             p1 = to_w(barge_xf, ys1, z1)
             mid = (p0 + p1) * 0.5
-            
+
             dys = ys1 - ys0
             dz = z1 - z0
-            seg_len = math.sqrt(dys * dys + dz * dz) + 0.04
+            seg_len = math.sqrt(dys * dys + dz * dz) + 0.02
             
             roll_ang = math.atan2(dz, dys)
             rot_mat = Euler((0.0, 0.0, rot_z), 'XYZ').to_matrix().to_4x4() @ Euler((roll_ang, 0.0, 0.0), 'XYZ').to_matrix().to_4x4()
@@ -444,7 +465,8 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
         bevel_amount=0.012
     )
 
-    # 10. Eave Side Fascia Trims along outer slope edges
+    # 10. Eave Side Fascia Trims along outer slope edges, running full length
+    # back into the main roof so no end grain shows mid-slope
     for side_sign in [-1, 1]:
         fascia_pos = to_w(roof_mid_xf, side_sign * (roof_half_w - 0.02), d_ez + 0.01)
         create_beveled_box(

@@ -559,7 +559,7 @@ def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=7
         # Face normal in local coordinates
         local_norm = (rot_mat.to_3x3().inverted() @ f.normal).normalized()
         nx, ny, nz = abs(local_norm.x), abs(local_norm.y), abs(local_norm.z)
-        
+
         for loop in f.loops:
             lco = inv_tr @ loop.vert.co
             if is_x_long:
@@ -574,9 +574,6 @@ def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=7
                     v = lco.x
                 else:
                     # Front / back (+Y, -Y)
-                    # For door material (which has a 90 deg rotation in shader):
-                    # Setting u = lco.z and v = lco.x results in shader u_rot = -v = -lco.x
-                    # so grain flows along X (length of the board).
                     u = lco.z
                     v = lco.x
             else:
@@ -593,6 +590,9 @@ def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=7
                     # Front / back (+X, -X)
                     u = lco.z
                     v = lco.y
+            # Cross-members carry grain across their short axis: rotate the UVs
+            # 90 degrees (swap U/V) on every door batten face.
+            u, v = v, u
             loop[uv_layer].uv = Vector((u, v))
             
     return faces
