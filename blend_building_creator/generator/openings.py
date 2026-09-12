@@ -21,18 +21,19 @@ from .materials import (
 
 _create_torus_ring = create_torus_ring
 
-def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z_right, leaf_t, out_ang, rot_mat, mat_index=MAT_INDEX_DOOR):
+def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z_right, leaf_t, out_ang, rot_mat, mat_index=MAT_INDEX_DOOR, plank_k=0):
     hw = leaf_t * 0.5
-    v0 = Vector((hinge_x, hinge_y, z_bot)) + (rot_mat @ Vector((x_left, -hw, 0.0)))
-    v1 = Vector((hinge_x, hinge_y, z_bot)) + (rot_mat @ Vector((x_right, -hw, 0.0)))
-    v2 = Vector((hinge_x, hinge_y, z_bot)) + (rot_mat @ Vector((x_right, hw, 0.0)))
-    v3 = Vector((hinge_x, hinge_y, z_bot)) + (rot_mat @ Vector((x_left, hw, 0.0)))
+    origin = Vector((hinge_x, hinge_y, z_bot))
+    v0 = origin + (rot_mat @ Vector((x_left, -hw, 0.0)))
+    v1 = origin + (rot_mat @ Vector((x_right, -hw, 0.0)))
+    v2 = origin + (rot_mat @ Vector((x_right, hw, 0.0)))
+    v3 = origin + (rot_mat @ Vector((x_left, hw, 0.0)))
     hl = z_left - z_bot
     hr = z_right - z_bot
-    vt0 = Vector((hinge_x, hinge_y, z_bot)) + (rot_mat @ Vector((x_left, -hw, hl)))
-    vt1 = Vector((hinge_x, hinge_y, z_bot)) + (rot_mat @ Vector((x_right, -hw, hr)))
-    vt2 = Vector((hinge_x, hinge_y, z_bot)) + (rot_mat @ Vector((x_right, hw, hr)))
-    vt3 = Vector((hinge_x, hinge_y, z_bot)) + (rot_mat @ Vector((x_left, hw, hl)))
+    vt0 = origin + (rot_mat @ Vector((x_left, -hw, hl)))
+    vt1 = origin + (rot_mat @ Vector((x_right, -hw, hr)))
+    vt2 = origin + (rot_mat @ Vector((x_right, hw, hr)))
+    vt3 = origin + (rot_mat @ Vector((x_left, hw, hl)))
     bv0 = bm.verts.new(v0)
     bv1 = bm.verts.new(v1)
     bv2 = bm.verts.new(v2)
@@ -54,14 +55,47 @@ def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z
         f = bm.faces.new(fvs)
         f.material_index = mat_index
         faces.append(f)
-    if True:
-        try:
-            edges=list({e for f in faces for e in f.edges})
-            res=bmesh.ops.bevel(bm, geom=edges, offset=0.010, segments=2, profile=0.7, affect='EDGES')
-            for f in res.get('faces', []):
-                f.material_index=mat_index
-        except Exception:
-            pass
+    
+    res = {}
+    try:
+        edges = list({e for f in faces for e in f.edges})
+        res = bmesh.ops.bevel(bm, geom=edges, offset=0.010, segments=2, profile=0.7, affect='EDGES')
+        for f in res.get('faces', []):
+            if f.is_valid:
+                f.material_index = mat_index
+    except Exception:
+        pass
+
+    all_plank_faces = set(faces) | set(res.get('faces', []))
+    all_verts = {v for f in all_plank_faces if f.is_valid for v in f.verts}
+    final_faces = {f for v in all_verts for f in v.link_faces if f.material_index == mat_index}
+    
+    uv_layer = bm.loops.layers.uv.verify()
+    inv_rot = rot_mat.to_3x3().inverted()
+    inv_tr = rot_mat.inverted()
+    u_jitter = (plank_k * 0.29) % 1.0
+
+    for f in final_faces:
+        if not f.is_valid:
+            continue
+        f.tag = True
+        local_norm = (inv_rot @ f.normal).normalized()
+        nx, ny, nz = abs(local_norm.x), abs(local_norm.y), abs(local_norm.z)
+        for loop in f.loops:
+            lco = inv_tr @ (loop.vert.co - origin)
+            if ny >= nx and ny >= nz:
+                # Front (-Y) / Back (+Y): wood grain runs vertically along door
+                u = (lco.x - x_left + u_jitter) * 1.2
+                v = lco.z * 1.0
+            elif nx >= ny and nx >= nz:
+                # Side edges / seams
+                u = (lco.y + u_jitter) * 1.2
+                v = lco.z * 1.0
+            else:
+                # Top arched bevels or Bottom edge
+                u = (lco.x - x_left + u_jitter) * 1.2
+                v = lco.z * 1.0
+            loop[uv_layer].uv = Vector((u, v))
 
 def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_w=1.0, door_h=2.2, door_angle_deg=45.0, door_shape='AUTO', ground_floor_stone=True):
     """
@@ -341,7 +375,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 dr = x_r - door_center_local
                 zl = z_spring + math.sqrt(max(0.0, R_door*R_door - dl*dl)) if abs(dl) < R_door else z_spring
                 zr = z_spring + math.sqrt(max(0.0, R_door*R_door - dr*dr)) if abs(dr) < R_door else z_spring
-                _create_arched_plank(bm, hinge_x, hinge_y, z_door_bot, x_l, x_r, zl, zr, door_leaf_t, out_ang, rot_mat, MAT_INDEX_DOOR)
+                _create_arched_plank(bm, hinge_x, hinge_y, z_door_bot, x_l, x_r, zl, zr, door_leaf_t, out_ang, rot_mat, MAT_INDEX_DOOR, k)
         else:
             for k in range(num_planks):
                 px = (k + 0.5) * pw + k * gap
