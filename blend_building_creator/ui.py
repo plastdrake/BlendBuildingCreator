@@ -103,14 +103,17 @@ class VIEW3D_PT_fantasy_building_dimensions(bpy.types.Panel):
         
         col = layout.column(align=True)
         col.prop(props, "building_shape")
-        if props.building_shape in ('L_SHAPE', 'T_SHAPE'):
+        if props.building_shape in ('L_SHAPE', 'T_SHAPE', 'U_SHAPE'):
             box_wing = col.box()
-            box_wing.label(text="Wing Geometry", icon='MOD_BUILD')
+            box_wing.label(text="Wing & Courtyard Geometry", icon='MOD_BUILD')
             box_wing.prop(props, "wing_floors")
             box_wing.prop(props, "wing_width")
             box_wing.prop(props, "wing_depth")
+            box_wing.prop(props, "wing_placement")
             if props.building_shape == 'L_SHAPE':
                 box_wing.prop(props, "wing_side")
+            elif props.building_shape == 'U_SHAPE':
+                box_wing.prop(props, "courtyard_width")
                 
         col.prop(props, "num_floors")
         col.prop(props, "floor_height")
@@ -132,29 +135,34 @@ class VIEW3D_PT_fantasy_building_dimensions(bpy.types.Panel):
             box_found.prop(props, "has_front_steps")
 
 class VIEW3D_PT_fantasy_building_interior(bpy.types.Panel):
-    """Subpanel for walk-in interior settings"""
+    """Subpanel for walkable interior features: stairs, floors, and ceiling beams"""
     bl_label = "Walk-in Interior & Stairs"
     bl_idname = "VIEW3D_PT_fantasy_building_interior"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Fantasy Building"
     bl_parent_id = "VIEW3D_PT_fantasy_building_main"
-    
+    bl_options = {'DEFAULT_CLOSED'}
+
     def draw(self, context):
         layout = self.layout
         props = context.scene.fantasy_building_settings
-        
+
         box_stairs = layout.box()
         box_stairs.prop(props, "has_stairs")
         if props.has_stairs:
-            box_stairs.prop(props, "stair_style")
-            box_stairs.prop(props, "stair_width")
-            
-        layout.prop(props, "has_ceiling_beams")
+            col = box_stairs.column(align=True)
+            col.prop(props, "stair_style")
+            col.prop(props, "stair_width")
+
+        box_int = layout.box()
+        box_int.prop(props, "ground_floor_stone")
+        box_int.prop(props, "has_ceiling_beams")
+        box_int.prop(props, "has_attic_trusses")
 
 class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
-    """Subpanel for doors, windows, and exterior props"""
-    bl_label = "Doors & Windows"
+    """Subpanel for doors, windows, and half-timber styling"""
+    bl_label = "Openings & Framing"
     bl_idname = "VIEW3D_PT_fantasy_building_openings"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -165,10 +173,16 @@ class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
         layout = self.layout
         props = context.scene.fantasy_building_settings
         
-        # Door Box
+        # Entrances Box
         box_door = layout.box()
-        box_door.prop(props, "has_front_door")
-        if props.has_front_door:
+        box_door.label(text="Entrances & Doors", icon='MOD_BUILD')
+        row = box_door.row(align=True)
+        row.prop(props, "has_front_door", text="Front Door")
+        row.prop(props, "has_back_door", text="Rear Door")
+        row.prop(props, "has_side_door", text="Side Door")
+        if props.has_side_door:
+            box_door.prop(props, "side_door_facade")
+        if props.has_front_door or props.has_back_door or props.has_side_door:
             col = box_door.column(align=True)
             col.prop(props, "door_shape")
             col.prop(props, "door_width")
@@ -181,9 +195,16 @@ class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
         box_win.prop(props, "has_windows")
         if props.has_windows:
             col = box_win.column(align=True)
+            col.prop(props, "window_density", slider=True)
+            col.prop(props, "window_spacing")
             col.prop(props, "window_width")
             col.prop(props, "window_height")
             col.prop(props, "has_shutters")
+            if props.has_shutters:
+                sub = col.box()
+                sub.prop(props, "shutter_state")
+                if props.shutter_state == 'PARTIAL':
+                    sub.prop(props, "shutter_closed_amount", slider=True)
             col.prop(props, "has_flower_boxes")
 
         # Timber framing
@@ -210,28 +231,25 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
         col.prop(props, "roof_style")
         col.prop(props, "roof_height")
         col.prop(props, "roof_overhang")
-        col.prop(props, "roof_flare", slider=True)
         if props.roof_style == 'SWAY':
-            col.prop(props, "roof_sway", slider=True)
-            
-        box_shingles = layout.box()
-        box_shingles.prop(props, "has_roof_shingles")
-        if props.has_roof_shingles and props.roof_style in ('SWAY', 'GABLE'):
-            box_shingles.prop(props, "shingle_rows")
-            
-        col_det = layout.column(align=True)
-        col_det.prop(props, "has_dormers")
-        
-        box_turret = col_det.box()
-        box_turret.prop(props, "has_roof_turret")
-        if props.has_roof_turret:
-            box_turret.prop(props, "roof_turret_style")
-            box_turret.prop(props, "roof_turret_pos_x", slider=True)
-            box_turret.prop(props, "roof_turret_pos_y", slider=True)
-            box_turret.prop(props, "roof_turret_scale")
+            col.prop(props, "roof_sway")
+        col.prop(props, "roof_flare")
+        col.prop(props, "has_hoist_beam")
 
-        col_det.prop(props, "has_chimney")
-        col_det.prop(props, "has_hoist_beam")
+        # Shingles & Dormers
+        box_det = layout.box()
+        box_det.prop(props, "has_dormers")
+        if props.has_dormers and props.roof_style in ('SWAY', 'GABLE'):
+            col_d = box_det.column(align=True)
+            col_d.prop(props, "dormer_count")
+            col_d.prop(props, "dormer_sides")
+
+        # Turret and Chimney
+        box_acc = layout.box()
+        box_acc.prop(props, "has_roof_turret")
+        if props.has_roof_turret:
+            box_acc.prop(props, "roof_turret_style")
+        box_acc.prop(props, "has_chimney")
 
 class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
     """Subpanel for mini-wing outcrops, balconies, and pillared colonnades"""
@@ -264,7 +282,18 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
         if props.has_balcony:
             col = box_balc.column(align=True)
             col.prop(props, "balcony_side")
-            col.prop(props, "balcony_floor")
+            col.prop(props, "balcony_mode")
+            if props.balcony_mode == 'SINGLE':
+                col.prop(props, "balcony_floor")
+            elif props.balcony_mode == 'CUSTOM':
+                row = col.row(align=True)
+                row.prop(props, "balcony_fl2", text="Fl 2", toggle=True)
+                if props.num_floors >= 3:
+                    row.prop(props, "balcony_fl3", text="Fl 3", toggle=True)
+                if props.num_floors >= 4:
+                    row.prop(props, "balcony_fl4", text="Fl 4", toggle=True)
+                if props.num_floors >= 5:
+                    row.prop(props, "balcony_fl5", text="Fl 5", toggle=True)
             col.prop(props, "balcony_width")
             col.prop(props, "balcony_depth")
             

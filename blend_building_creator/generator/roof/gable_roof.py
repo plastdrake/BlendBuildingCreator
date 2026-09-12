@@ -12,15 +12,16 @@ from .features import build_curved_bargeboards
 
 def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, overhang=0.45,
                      wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6, abut_back=False,
-                     tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35, dormer_apertures=None):
+                     abut_front=False, tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35, dormer_apertures=None):
     """
     Builds a classic steep medieval gable roof with solid 0.16m thick timber decking,
     thick volumetric gable walls, and complete eave closures.
     abut_back: If True, roof deck, ridge, and shingles terminate flush at y_max with zero rear overhang.
+    abut_front: If True, roof terminates flush at y_min with zero front overhang.
     """
     rx_min = x_min - overhang
     rx_max = x_max + overhang
-    ry_min = y_min - overhang
+    ry_min = y_min if abut_front else (y_min - overhang)
     ry_max = y_max if abut_back else (y_max + overhang)
     total_w = rx_max - rx_min
     total_d = ry_max - ry_min

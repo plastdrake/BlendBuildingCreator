@@ -174,6 +174,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('RECTANGLE', "Rectangular", "Standard rectangular building footprint"),
             ('L_SHAPE', "L-Shaped", "L-shaped footprint with a perpendicular projecting wing"),
             ('T_SHAPE', "T-Shaped", "T-shaped footprint with a central projecting cross wing"),
+            ('U_SHAPE', "U-Shaped", "U-shaped courtyard footprint with dual projecting wings"),
             ('ROUND_TOWER', "Round Tower", "Cylindrical / octagonal fantasy tower footprint"),
         ],
         default='RECTANGLE',
@@ -197,20 +198,41 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     
     wing_depth: FloatProperty(
         name="Wing Projection",
-        description="Forward projection distance of the wing",
+        description="Forward or outward projection distance of the wing",
         min=2.0, max=10.0, default=3.0,
         unit='LENGTH',
+        update=on_property_updated
+    )
+
+    wing_placement: EnumProperty(
+        name="Wing Facade",
+        description="Wall facade where the wing projects from",
+        items=[
+            ('FRONT', "Front (-Y)", "Project wing from the front facade"),
+            ('BACK', "Back (+Y)", "Project wing from the rear facade"),
+            ('LEFT', "Left (-X)", "Project wing from the left facade"),
+            ('RIGHT', "Right (+X)", "Project wing from the right facade"),
+        ],
+        default='FRONT',
         update=on_property_updated
     )
     
     wing_side: EnumProperty(
         name="Wing Side",
-        description="Placement of the L-shaped wing",
+        description="Alignment of the L-shaped wing along its wall",
         items=[
-            ('RIGHT', "Right", "Project wing from right side (+X)"),
-            ('LEFT', "Left", "Project wing from left side (-X)"),
+            ('RIGHT', "Right / Positive", "Project wing on the right or positive side"),
+            ('LEFT', "Left / Negative", "Project wing on the left or negative side"),
         ],
         default='RIGHT',
+        update=on_property_updated
+    )
+
+    courtyard_width: FloatProperty(
+        name="Courtyard Width",
+        description="Width of the central open courtyard between dual wings on U-shaped buildings",
+        min=2.0, max=12.0, default=3.5,
+        unit='LENGTH',
         update=on_property_updated
     )
     
@@ -344,6 +366,31 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default=True,
         update=on_property_updated
     )
+
+    has_back_door: BoolProperty(
+        name="Rear Door",
+        description="Walkthrough rear entrance doorway on the back facade",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_side_door: BoolProperty(
+        name="Side Door",
+        description="Walkthrough secondary entrance doorway on a side facade",
+        default=False,
+        update=on_property_updated
+    )
+
+    side_door_facade: EnumProperty(
+        name="Side Door Facade",
+        description="Which side wall has the secondary entrance",
+        items=[
+            ('RIGHT', "Right (+X)", "Right side wall entrance"),
+            ('LEFT', "Left (-X)", "Left side wall entrance"),
+        ],
+        default='RIGHT',
+        update=on_property_updated
+    )
     
     door_width: FloatProperty(
         name="Door Width",
@@ -386,6 +433,21 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default=True,
         update=on_property_updated
     )
+
+    window_spacing: FloatProperty(
+        name="Window Spacing",
+        description="Horizontal spacing between windows. Lower values = more windows, higher values = fewer windows",
+        min=1.2, max=4.5, default=2.4,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    window_density: FloatProperty(
+        name="Window Density",
+        description="Density multiplier for windows (0.5 = sparse, 1.0 = normal, 1.5 = dense)",
+        min=0.4, max=2.5, default=1.0,
+        update=on_property_updated
+    )
     
     window_width: FloatProperty(
         name="Window Width",
@@ -407,6 +469,26 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Window Shutters",
         description="Wooden exterior shutters on windows",
         default=True,
+        update=on_property_updated
+    )
+
+    shutter_state: EnumProperty(
+        name="Shutter State",
+        description="Control whether window shutters are open, closed, or partially closed",
+        items=[
+            ('OPEN', "All Open", "All shutters swung wide open"),
+            ('CLOSED', "All Closed", "All shutters closed flat over windows"),
+            ('PARTIAL', "Selective / Mixed", "Randomly close a percentage of shutters"),
+        ],
+        default='OPEN',
+        update=on_property_updated
+    )
+
+    shutter_closed_amount: FloatProperty(
+        name="Closed Percentage",
+        description="Percentage of shutters that are closed when in Selective mode",
+        min=0.0, max=1.0, default=0.5,
+        subtype='FACTOR',
         update=on_property_updated
     )
     
@@ -647,10 +729,50 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    balcony_mode: EnumProperty(
+        name="Balcony Placement",
+        description="Choose which floor levels receive balconies",
+        items=[
+            ('SINGLE', "Single Floor", "Place a balcony on a single specified floor"),
+            ('ALL_UPPER', "All Upper Floors", "Place matching balconies on every upper floor"),
+            ('CUSTOM', "Custom Levels", "Select individual floor levels for balconies"),
+        ],
+        default='SINGLE',
+        update=on_property_updated
+    )
+
     balcony_floor: IntProperty(
         name="Balcony Floor",
         description="Upper floor index where the balcony is located (2 = second story)",
         min=2, max=6, default=2,
+        update=on_property_updated
+    )
+
+    balcony_fl2: BoolProperty(
+        name="Floor 2 Balcony",
+        description="Place balcony on 2nd floor",
+        default=True,
+        update=on_property_updated
+    )
+
+    balcony_fl3: BoolProperty(
+        name="Floor 3 Balcony",
+        description="Place balcony on 3rd floor",
+        default=False,
+        update=on_property_updated
+    )
+
+    balcony_fl4: BoolProperty(
+        name="Floor 4 Balcony",
+        description="Place balcony on 4th floor",
+        default=False,
+        update=on_property_updated
+    )
+
+    balcony_fl5: BoolProperty(
+        name="Floor 5 Balcony",
+        description="Place balcony on 5th floor",
+        default=False,
         update=on_property_updated
     )
 

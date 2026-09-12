@@ -820,7 +820,7 @@ def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth
         corbel_faces.append(f_p)
     bmesh.ops.recalc_face_normals(bm, faces=corbel_faces)
 
-def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, front_exclude_x=None, drop=0.10):
+def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, include_left=False, include_right=False, front_exclude_x=None, drop=0.10):
     """
     Builds chunky carved wooden support brackets (corbels) underneath
     the overhanging upper floors for that iconic European fantasy silhouette.
@@ -842,7 +842,7 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
     num_x = max(2, int(total_x / spacing))
     step_x = total_x / (num_x + 1)
     
-    # 1. Facade corbels
+    # 1. Front and Back Facade corbels
     for i in range(1, num_x + 1):
         cx = x_min_upper + i * step_x
         # Front corbel
@@ -859,6 +859,27 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
             loc_back = Vector((cx, y_max_upper - overhang_dist - embed, z_mount))
             create_curved_corbel(
                 bm, loc=loc_back, facing_dir=(0.0, 1.0, 0.0),
+                width=corbel_w, depth=corbel_d + embed, height=corbel_h,
+                mat_index=MAT_INDEX_TIMBER
+            )
+
+    # 1b. Left and Right Facade corbels
+    total_y = y_max_upper - y_min_upper
+    num_y = max(2, int(total_y / spacing))
+    step_y = total_y / (num_y + 1)
+    for j in range(1, num_y + 1):
+        cy = y_min_upper + j * step_y
+        if include_left:
+            loc_left = Vector((x_min_upper + overhang_dist + embed, cy, z_mount))
+            create_curved_corbel(
+                bm, loc=loc_left, facing_dir=(-1.0, 0.0, 0.0),
+                width=corbel_w, depth=corbel_d + embed, height=corbel_h,
+                mat_index=MAT_INDEX_TIMBER
+            )
+        if include_right:
+            loc_right = Vector((x_max_upper - overhang_dist - embed, cy, z_mount))
+            create_curved_corbel(
+                bm, loc=loc_right, facing_dir=(1.0, 0.0, 0.0),
                 width=corbel_w, depth=corbel_d + embed, height=corbel_h,
                 mat_index=MAT_INDEX_TIMBER
             )
