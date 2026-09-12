@@ -1433,8 +1433,7 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
         
     # 4. Authentic Multi-Plank Door with Wall-Mounted Pintle Hinges and Ring Pull Handle
     door_leaf_w = door_w - 0.06
-    # Balcony leaf hangs 4cm lower like the front doors (bottom anchored).
-    door_leaf_h = door_h - 0.10
+    door_leaf_h = door_h - 0.06
     num_planks = 4
     plank_gap = 0.004
     pw = (door_leaf_w - (num_planks - 1) * plank_gap) / num_planks
