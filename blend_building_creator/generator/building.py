@@ -2262,7 +2262,9 @@ def generate_building(obj, props):
                     w_notch_fb = {
                         'apex_x': w_cx, 'apex_y': w_roof_ymax,
                         'base_y': top_y_min,
-                        'half_width': (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang,
+                        # Wall half-width (no overhang) so valley feet land exactly on
+                        # the wall corners under the valley boards.
+                        'half_width': (w_top_xmax - w_top_xmin) * 0.5,
                         'keep': 'le',
                     }
                 if props.roof_style == 'SWAY':
@@ -2274,7 +2276,8 @@ def generate_building(obj, props):
                         roof_height=w_roof_h,
                         overhang=props.roof_overhang,
                         sway_amount=props.roof_sway * 0.70,
-                        segments_y=6,
+                        # Denser ridge steps so valley-notch edges run smooth.
+                        segments_y=10,
                         wall_thickness=wall_t,
                         gable_ends=w_gable_fb,
                         abut_back=abut_back,
@@ -2295,7 +2298,8 @@ def generate_building(obj, props):
                         overhang=props.roof_overhang,
                         wall_thickness=wall_t,
                         gable_ends=w_gable_fb,
-                        segments_y=6,
+                        # Denser ridge steps so valley-notch edges run smooth.
+                        segments_y=10,
                         abut_back=abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
@@ -2315,7 +2319,8 @@ def generate_building(obj, props):
                         inside_valleys.append(w_top_xmax)
 
                     for vx in inside_valleys:
-                        p_start = Vector((vx, top_y_min + 0.05, top_z + 0.02))
+                        # Foot starts just outside the wall on the eave so no corner gap.
+                        p_start = Vector((vx, top_y_min - 0.12, top_z - 0.02))
                         p_end = Vector((w_cx, top_cy, top_z + props.roof_height))
                         v_diff = p_end - p_start
                         v_len = v_diff.length
@@ -2332,7 +2337,7 @@ def generate_building(obj, props):
                             v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
                             create_beveled_box(
                                 bm,
-                                size=(0.18, v_len, 0.20),
+                                size=(0.22, v_len, 0.22),
                                 location=v_mid,
                                 rotation=v_mat.to_euler(),
                                 mat_index=MAT_INDEX_TIMBER,
@@ -2422,7 +2427,8 @@ def generate_building(obj, props):
                     w_notch_bk = {
                         'apex_x': w_cx, 'apex_y': w_roof_ymin,
                         'base_y': top_y_max,
-                        'half_width': (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang,
+                        # Wall half-width (see FRONT notch).
+                        'half_width': (w_top_xmax - w_top_xmin) * 0.5,
                         'keep': 'ge',
                     }
                 if props.roof_style == 'SWAY':
@@ -2434,7 +2440,8 @@ def generate_building(obj, props):
                         roof_height=w_roof_h,
                         overhang=props.roof_overhang,
                         sway_amount=props.roof_sway * 0.70,
-                        segments_y=6,
+                        # Denser ridge steps so valley-notch edges run smooth.
+                        segments_y=10,
                         wall_thickness=wall_t,
                         gable_ends=w_gable_bk,
                         abut_front=abut_front,
@@ -2456,7 +2463,8 @@ def generate_building(obj, props):
                         overhang=props.roof_overhang,
                         wall_thickness=wall_t,
                         gable_ends=w_gable_bk,
-                        segments_y=6,
+                        # Denser ridge steps so valley-notch edges run smooth.
+                        segments_y=10,
                         abut_front=abut_front,
                         abut_back=False,
                         tier=tier_val,
@@ -2476,7 +2484,8 @@ def generate_building(obj, props):
                         inside_valleys.append(w_top_xmax)
 
                     for vx in inside_valleys:
-                        p_start = Vector((vx, top_y_max - 0.05, top_z + 0.02))
+                        # Foot starts just outside the wall on the eave (see FRONT).
+                        p_start = Vector((vx, top_y_max + 0.12, top_z - 0.02))
                         p_end = Vector((w_cx, top_cy, top_z + props.roof_height))
                         v_diff = p_end - p_start
                         v_len = v_diff.length
@@ -2493,7 +2502,7 @@ def generate_building(obj, props):
                             v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
                             create_beveled_box(
                                 bm,
-                                size=(0.18, v_len, 0.20),
+                                size=(0.22, v_len, 0.22),
                                 location=v_mid,
                                 rotation=v_mat.to_euler(),
                                 mat_index=MAT_INDEX_TIMBER,
@@ -2619,7 +2628,8 @@ def generate_building(obj, props):
                     w_notch_lr = {
                         'apex_x': 0.0, 'apex_y': y_top_local,
                         'base_y': wall_local,
-                        'half_width': lx_half + props.roof_overhang,
+                        # Wall half-span (see FRONT notch).
+                        'half_width': lx_half,
                         'keep': 'le',
                     }
                 if props.roof_style == 'SWAY':
@@ -2631,7 +2641,8 @@ def generate_building(obj, props):
                         roof_height=w_roof_h,
                         overhang=props.roof_overhang,
                         sway_amount=props.roof_sway * 0.70,
-                        segments_y=6,
+                        # Denser ridge steps so valley-notch edges run smooth.
+                        segments_y=10,
                         wall_thickness=wall_t,
                         gable_ends=w_gable_lr,
                         abut_back=loc_abut_back,
@@ -2652,7 +2663,8 @@ def generate_building(obj, props):
                         overhang=props.roof_overhang,
                         wall_thickness=wall_t,
                         gable_ends=w_gable_lr,
-                        segments_y=6,
+                        # Denser ridge steps so valley-notch edges run smooth.
+                        segments_y=10,
                         abut_back=loc_abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
@@ -2689,13 +2701,13 @@ def generate_building(obj, props):
                     die_z = w_top_z + w_roof_h
                     if w_wall == 'LEFT':
                         corners = [
-                            (top_x_min + 0.05, w_top_ymin, w_top_z + 0.02),
-                            (top_x_min + 0.05, w_top_ymax, w_top_z + 0.02),
+                            (top_x_min - 0.12, w_top_ymin, w_top_z - 0.02),
+                            (top_x_min - 0.12, w_top_ymax, w_top_z - 0.02),
                         ]
                     else:
                         corners = [
-                            (top_x_max - 0.05, w_top_ymin, w_top_z + 0.02),
-                            (top_x_max - 0.05, w_top_ymax, w_top_z + 0.02),
+                            (top_x_max + 0.12, w_top_ymin, w_top_z - 0.02),
+                            (top_x_max + 0.12, w_top_ymax, w_top_z - 0.02),
                         ]
                     for cx0, cy0, cz0 in corners:
                         p0 = Vector((cx0, cy0, cz0))
@@ -2715,7 +2727,7 @@ def generate_building(obj, props):
                             v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
                             create_beveled_box(
                                 bm,
-                                size=(0.18, v_len, 0.20),
+                                size=(0.22, v_len, 0.22),
                                 location=v_mid,
                                 rotation=v_mat.to_euler(),
                                 mat_index=MAT_INDEX_TIMBER,
