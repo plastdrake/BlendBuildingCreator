@@ -2197,6 +2197,10 @@ def generate_building(obj, props):
                     # (1.40) so dormers never crowd corners.
                     y_start = w_top_ymin + 1.10
                     y_end = w_roof_ymax - 1.40
+                    if not is_lower_wing and is_rotated_roof:
+                        # Valley-notched deck: dormers must sit fully outside the main
+                        # wall on intact deck, never over the cut triangle.
+                        y_end = min(y_end, top_y_min - 0.25)
                     y_span = y_end - y_start
                     if y_span >= 0.60:
                         if w_cx < top_cx - 0.2:
@@ -2365,6 +2369,9 @@ def generate_building(obj, props):
                     # Main valley corner first (1.40), outer eave corner 1.10.
                     y_start = w_roof_ymin + 1.40
                     y_end = w_top_ymax - 1.10
+                    if not is_lower_wing and is_rotated_roof:
+                        # See FRONT: keep dormers outside the wall on intact deck.
+                        y_start = max(y_start, top_y_max + 0.25)
                     y_span = y_end - y_start
                     if y_span >= 0.60:
                         if w_cx < top_cx - 0.2:
@@ -2537,9 +2544,14 @@ def generate_building(obj, props):
                     if w_wall == 'LEFT':
                         x_start = w_top_xmin + 1.10
                         x_end = w_top_xmax - 1.40
+                        if not is_lower_wing and not is_rotated_roof:
+                            # Notched deck: keep dormers outside the wall line.
+                            x_end = min(x_end, top_x_min - 0.25)
                     else: # 'RIGHT'
                         x_start = w_top_xmin + 1.40
                         x_end = w_top_xmax - 1.10
+                        if not is_lower_wing and not is_rotated_roof:
+                            x_start = max(x_start, top_x_max + 0.25)
                     x_span = x_end - x_start
 
                     if x_span >= 0.60:
