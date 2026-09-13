@@ -2170,8 +2170,10 @@ def generate_building(obj, props):
                 w_cur_d_w = min(1.10, max(0.90, (w_top_xmax - w_top_xmin) * 0.28))
 
                 if do_wing_dormers:
-                    y_start = w_top_ymin + 0.85
-                    y_end = w_roof_ymax - 1.05
+                    # Pulled back from outer eave corner (1.10) and main valley corner
+                    # (1.40) so dormers never crowd corners.
+                    y_start = w_top_ymin + 1.10
+                    y_end = w_roof_ymax - 1.40
                     y_span = y_end - y_start
                     if y_span >= 0.60:
                         if w_cx < top_cx - 0.2:
@@ -2220,6 +2222,12 @@ def generate_building(obj, props):
 
                 # Open valley junction: outer gable only, wing deck runs into main roof.
                 w_gable_fb = ('FRONT',)
+                # Trim side eave fascia before it enters the main wall so no timber
+                # overlaps the main facade outside (equal wings only; lower untouched).
+                w_eave_fb = None
+                if not is_lower_wing:
+                    trim = [(w_roof_ymax - 0.90, w_roof_ymax + 0.60)]
+                    w_eave_fb = {'min': list(trim), 'max': list(trim)}
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         bm,
@@ -2236,7 +2244,8 @@ def generate_building(obj, props):
                         tier=tier_val,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
-                        dormer_apertures=w_dormer_apertures
+                        dormer_apertures=w_dormer_apertures,
+                        eave_exclusions=w_eave_fb
                     )
                 else:
                     build_gable_roof(
@@ -2253,7 +2262,8 @@ def generate_building(obj, props):
                         tier=tier_val,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
-                        dormer_apertures=w_dormer_apertures
+                        dormer_apertures=w_dormer_apertures,
+                        eave_exclusions=w_eave_fb
                     )
 
                 if not is_lower_wing and is_rotated_roof:
@@ -2307,8 +2317,9 @@ def generate_building(obj, props):
                 w_cur_d_w = min(1.10, max(0.90, (w_top_xmax - w_top_xmin) * 0.28))
 
                 if do_wing_dormers:
-                    y_start = w_roof_ymin + 1.05
-                    y_end = w_top_ymax - 0.85
+                    # Main valley corner first (1.40), outer eave corner 1.10.
+                    y_start = w_roof_ymin + 1.40
+                    y_end = w_top_ymax - 1.10
                     y_span = y_end - y_start
                     if y_span >= 0.60:
                         if w_cx < top_cx - 0.2:
@@ -2356,6 +2367,10 @@ def generate_building(obj, props):
                                 })
 
                 w_gable_bk = ('BACK',)
+                w_eave_bk = None
+                if not is_lower_wing:
+                    trim = [(w_roof_ymin - 0.60, w_roof_ymin + 0.90)]
+                    w_eave_bk = {'min': list(trim), 'max': list(trim)}
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         bm,
@@ -2373,7 +2388,8 @@ def generate_building(obj, props):
                         tier=tier_val,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
-                        dormer_apertures=w_dormer_apertures
+                        dormer_apertures=w_dormer_apertures,
+                        eave_exclusions=w_eave_bk
                     )
                 else:
                     build_gable_roof(
@@ -2391,7 +2407,8 @@ def generate_building(obj, props):
                         tier=tier_val,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
-                        dormer_apertures=w_dormer_apertures
+                        dormer_apertures=w_dormer_apertures,
+                        eave_exclusions=w_eave_bk
                     )
 
                 if not is_lower_wing and is_rotated_roof:
@@ -2447,12 +2464,14 @@ def generate_building(obj, props):
                 w_cur_d_w = min(1.10, max(0.90, w_span_y * 0.28))
 
                 if do_wing_dormers:
+                    # Outer corner 1.10, main valley corner 1.40 (main side is east
+                    # for LEFT wings, west for RIGHT wings).
                     if w_wall == 'LEFT':
-                        x_start = w_top_xmin + 0.85
-                        x_end = w_top_xmax - 1.05
+                        x_start = w_top_xmin + 1.10
+                        x_end = w_top_xmax - 1.40
                     else: # 'RIGHT'
-                        x_start = w_top_xmin + 1.05
-                        x_end = w_top_xmax - 0.85
+                        x_start = w_top_xmin + 1.40
+                        x_end = w_top_xmax - 1.10
                     x_span = x_end - x_start
 
                     if x_span >= 0.60:
@@ -2508,6 +2527,13 @@ def generate_building(obj, props):
                                 })
 
                 w_gable_lr = ('FRONT',)
+                # Same main-wall fascia trim as FRONT/BACK, in wing-local coords:
+                # clip the main-side 0.90m so timber never overlaps the main facade.
+                w_eave_lr = None
+                if not is_lower_wing:
+                    y_top_local = ly_half + y_max_adj
+                    trim = [(y_top_local - 0.90, y_top_local + 0.60)]
+                    w_eave_lr = {'min': list(trim), 'max': list(trim)}
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         wing_roof_bm,
@@ -2524,7 +2550,8 @@ def generate_building(obj, props):
                         tier=tier_val,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
-                        dormer_apertures=w_dormer_apertures
+                        dormer_apertures=w_dormer_apertures,
+                        eave_exclusions=w_eave_lr
                     )
                 else:
                     build_gable_roof(
@@ -2541,7 +2568,8 @@ def generate_building(obj, props):
                         tier=tier_val,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
-                        dormer_apertures=w_dormer_apertures
+                        dormer_apertures=w_dormer_apertures,
+                        eave_exclusions=w_eave_lr
                     )
 
                 rot_ang = -math.pi * 0.5 if w_wall == 'LEFT' else math.pi * 0.5
