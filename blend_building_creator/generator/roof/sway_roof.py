@@ -52,13 +52,14 @@ def _build_eave_fascia_segment(bm, rx_val, y_start, y_end, ez, exclusions=None):
 def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, overhang=0.45,
                     sway_amount=0.25, segments_y=6, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'),
                     abut_back=False, abut_front=False, tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35,
-                    dormer_apertures=None, eave_exclusions=None):
+                    dormer_apertures=None, eave_exclusions=None, valley_notch=None):
     """
     Builds a whimsical fairytale curved/saddle roof with flared eaves, saggy ridge,
     solid 0.16m thick timber roof decking, thick volumetric gable walls, and full eave closures.
     abut_back: If True, shingles stop flush at y_max with zero rear overhang.
     dormer_apertures is kept for API compatibility but intentionally NOT cut from the
     deck (see gable_roof): solid deck + penetrating cheeks avoids gap holes.
+    valley_notch: see build_gable_roof (wing valley cuts).
     """
     rx_min = x_min - overhang
     rx_max = x_max + overhang
@@ -115,7 +116,20 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
                 t1 = (j + 1) / segments_y
                 y0 = ry_min + t0 * total_d
                 y1 = ry_min + t1 * total_d
-                
+
+                # Valley notch (see build_gable_roof).
+                if valley_notch is not None:
+                    _vn = valley_notch
+                    _xc = cx + side * ((u0 + u1) * 0.5) * half_w
+                    _yc = (y0 + y1) * 0.5
+                    _yl = _vn['base_y'] + (_vn['apex_y'] - _vn['base_y']) * (1.0 - abs(_xc - _vn['apex_x']) / max(0.001, _vn['half_width']))
+                    if _vn.get('keep', 'le') == 'le':
+                        if _yc > _yl + 1e-6:
+                            continue
+                    else:
+                        if _yc < _yl - 1e-6:
+                            continue
+
                 v_in0_t = grid_top[k][j]
                 v_in1_t = grid_top[k][j+1]
                 v_out1_t = grid_top[k+1][j+1]

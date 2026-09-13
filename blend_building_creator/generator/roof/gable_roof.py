@@ -52,7 +52,7 @@ def _build_eave_fascia_segment(bm, rx_val, y_start, y_end, ez, exclusions=None):
 def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, overhang=0.45,
                      wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6, abut_back=False,
                      abut_front=False, tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35,
-                     dormer_apertures=None, eave_exclusions=None):
+                     dormer_apertures=None, eave_exclusions=None, valley_notch=None):
     """
     Builds a classic steep medieval gable roof with solid 0.16m thick timber decking,
     thick volumetric gable walls, and complete eave closures.
@@ -61,6 +61,9 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
     dormer_apertures is kept for API compatibility but intentionally NOT cut from the
     deck: dormer cheeks penetrate the solid slope so small roofs with 3+ dormers
     never open gap holes.
+    valley_notch: optional dict {'apex_x','apex_y','base_y','half_width','keep'} that
+    skips deck cells past valley lines (wing dies into main slope). keep='le' keeps
+    cells with y <= line (FRONT wing), keep='ge' keeps y >= line (BACK wing).
     """
     rx_min = x_min - overhang
     rx_max = x_max + overhang
@@ -113,7 +116,21 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                 t1 = (j + 1) / segments_y
                 y0 = ry_min + t0 * total_d
                 y1 = ry_min + t1 * total_d
-                
+
+                # Valley notch (wing-to-main junctions): skip deck cells past the
+                # valley lines so no full-width deck dives into rooms below.
+                if valley_notch is not None:
+                    _vn = valley_notch
+                    _xc = cx + side * ((u0 + u1) * 0.5) * half_w
+                    _yc = (y0 + y1) * 0.5
+                    _yl = _vn['base_y'] + (_vn['apex_y'] - _vn['base_y']) * (1.0 - abs(_xc - _vn['apex_x']) / max(0.001, _vn['half_width']))
+                    if _vn.get('keep', 'le') == 'le':
+                        if _yc > _yl + 1e-6:
+                            continue
+                    else:
+                        if _yc < _yl - 1e-6:
+                            continue
+
                 v_in0_t = grid_top[k][j]
                 v_in1_t = grid_top[k][j+1]
                 v_out1_t = grid_top[k+1][j+1]

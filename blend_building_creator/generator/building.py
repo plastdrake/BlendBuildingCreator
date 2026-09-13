@@ -2117,6 +2117,10 @@ def generate_building(obj, props):
             if is_lower_wing or (not is_lower_wing and has_wing):
                 # Interior ceiling slab for the wing (enclosing the wing interior from above).
                 # Equal-height wings get one too so rooms never see open roof/dark attic.
+                # Level matches the main attic slab (top at +0.05) so eave decks hide
+                # inside slab depth instead of banding across ceilings.
+                ceil_z = (w_top_z - 0.02) if is_lower_wing else (w_top_z + 0.05)
+                ceil_t = 0.10 if is_lower_wing else 0.12
                 build_floor_slab(
                     bm,
                     floor_idx=w_top_fl,
@@ -2124,8 +2128,8 @@ def generate_building(obj, props):
                     x_max=w_top_xmax - 0.02,
                     y_min=w_top_ymin + 0.02,
                     y_max=w_top_ymax - 0.02,
-                    z_level=w_top_z - 0.02,
-                    thickness=0.10,
+                    z_level=ceil_z,
+                    thickness=ceil_t,
                     stair_hole=None,
                     mat_idx=MAT_INDEX_FLOOR
                 )
@@ -2136,7 +2140,7 @@ def generate_building(obj, props):
                         x_max=w_top_xmax - wall_t,
                         y_min=w_top_ymin + wall_t,
                         y_max=w_top_ymax - wall_t,
-                        z_ceil=w_top_z - 0.02,
+                        z_ceil=ceil_z,
                         spacing=1.2
                     )
 
@@ -2170,11 +2174,16 @@ def generate_building(obj, props):
                 if is_lower_wing:
                     w_roof_ymax = up_front_y + 0.04
                     abut_back = True
+                elif is_rotated_roof:
+                    # Perpendicular junction (valley): extend into the main slope.
+                    # Deck past the valley lines is notch-cut in the builder.
+                    w_roof_ymax = top_cy
+                    abut_back = True
                 else:
-                    # Equal-floor cross-gable: extend the wing deck into the main roof
-                    # volume so slopes meet in a true valley (no gable-wall cap).
-                    w_roof_ymax = top_cy if is_rotated_roof else (-top_hy + 0.35)
-                    abut_back = True if is_rotated_roof else False
+                    # Parallel ridges (gable-to-gable): stop flush in the main gable
+                    # wall core so no tiles cross plaster outside or bands indoors.
+                    w_roof_ymax = top_y_min + 0.12
+                    abut_back = True
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
@@ -2234,14 +2243,28 @@ def generate_building(obj, props):
                                     'sway_amount': w_sway
                                 })
 
-                # Open valley junction: outer gable only, wing deck runs into main roof.
-                w_gable_fb = ('FRONT',)
-                # Trim side eave fascia before it enters the main wall so no timber
-                # overlaps the main facade outside (equal wings only; lower untouched).
+                # Perpendicular: open valley (outer gable only, deck notch-cut past
+                # valley lines). Parallel: finished gable abutting the main gable.
+                w_gable_fb = ('FRONT',) if (is_lower_wing or is_rotated_roof) else ('FRONT', 'BACK')
+                # Trim side eave fascia where it would enter main timber/walls.
                 w_eave_fb = None
-                if not is_lower_wing:
+                if is_lower_wing:
                     trim = [(w_roof_ymax - 0.90, w_roof_ymax + 0.60)]
                     w_eave_fb = {'min': list(trim), 'max': list(trim)}
+                elif is_rotated_roof:
+                    # Deep valley: no side fascia past the main wall face.
+                    trim = [(top_y_min - 0.10, w_roof_ymax + 0.60)]
+                    w_eave_fb = {'min': list(trim), 'max': list(trim)}
+                # Parallel flush case: fascia ends die inside the gable core, no trim.
+                # Valley notch only for the perpendicular (rotated) equal junction.
+                w_notch_fb = None
+                if not is_lower_wing and is_rotated_roof:
+                    w_notch_fb = {
+                        'apex_x': w_cx, 'apex_y': w_roof_ymax,
+                        'base_y': top_y_min,
+                        'half_width': (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang,
+                        'keep': 'le',
+                    }
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         bm,
@@ -2259,7 +2282,8 @@ def generate_building(obj, props):
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
-                        eave_exclusions=w_eave_fb
+                        eave_exclusions=w_eave_fb,
+                        valley_notch=w_notch_fb
                     )
                 else:
                     build_gable_roof(
@@ -2277,7 +2301,8 @@ def generate_building(obj, props):
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
-                        eave_exclusions=w_eave_fb
+                        eave_exclusions=w_eave_fb,
+                        valley_notch=w_notch_fb
                     )
 
                 if not is_lower_wing and is_rotated_roof:
@@ -2307,7 +2332,7 @@ def generate_building(obj, props):
                             v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
                             create_beveled_box(
                                 bm,
-                                size=(0.14, v_len, 0.16),
+                                size=(0.18, v_len, 0.20),
                                 location=v_mid,
                                 rotation=v_mat.to_euler(),
                                 mat_index=MAT_INDEX_TIMBER,
@@ -2318,10 +2343,14 @@ def generate_building(obj, props):
                 if is_lower_wing:
                     w_roof_ymin = up_back_y - 0.04
                     abut_front = True
+                elif is_rotated_roof:
+                    # Perpendicular junction (valley): see FRONT.
+                    w_roof_ymin = top_cy
+                    abut_front = True
                 else:
-                    # Same cross-gable extension as FRONT (see above).
-                    w_roof_ymin = top_cy if is_rotated_roof else (top_hy - 0.35)
-                    abut_front = True if is_rotated_roof else False
+                    # Parallel ridges (gable-to-gable): flush in the wall core.
+                    w_roof_ymin = top_y_max - 0.12
+                    abut_front = True
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
@@ -2380,11 +2409,22 @@ def generate_building(obj, props):
                                     'sway_amount': w_sway
                                 })
 
-                w_gable_bk = ('BACK',)
+                w_gable_bk = ('BACK',) if (is_lower_wing or is_rotated_roof) else ('FRONT', 'BACK')
                 w_eave_bk = None
-                if not is_lower_wing:
+                if is_lower_wing:
                     trim = [(w_roof_ymin - 0.60, w_roof_ymin + 0.90)]
                     w_eave_bk = {'min': list(trim), 'max': list(trim)}
+                elif is_rotated_roof:
+                    trim = [(w_roof_ymin - 0.60, top_y_max + 0.10)]
+                    w_eave_bk = {'min': list(trim), 'max': list(trim)}
+                w_notch_bk = None
+                if not is_lower_wing and is_rotated_roof:
+                    w_notch_bk = {
+                        'apex_x': w_cx, 'apex_y': w_roof_ymin,
+                        'base_y': top_y_max,
+                        'half_width': (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang,
+                        'keep': 'ge',
+                    }
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         bm,
@@ -2403,7 +2443,8 @@ def generate_building(obj, props):
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
-                        eave_exclusions=w_eave_bk
+                        eave_exclusions=w_eave_bk,
+                        valley_notch=w_notch_bk
                     )
                 else:
                     build_gable_roof(
@@ -2422,7 +2463,8 @@ def generate_building(obj, props):
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
-                        eave_exclusions=w_eave_bk
+                        eave_exclusions=w_eave_bk,
+                        valley_notch=w_notch_bk
                     )
 
                 if not is_lower_wing and is_rotated_roof:
@@ -2451,7 +2493,7 @@ def generate_building(obj, props):
                             v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
                             create_beveled_box(
                                 bm,
-                                size=(0.14, v_len, 0.16),
+                                size=(0.18, v_len, 0.20),
                                 location=v_mid,
                                 rotation=v_mat.to_euler(),
                                 mat_index=MAT_INDEX_TIMBER,
@@ -2464,12 +2506,21 @@ def generate_building(obj, props):
                 wing_roof_bm = bmesh.new()
                 lx_half = w_span_y * 0.5
                 ly_half = (w_ridge_len + 0.04) * 0.5 if is_rotated_roof else (w_ridge_len * 0.5)
-                # Main-side end extends into the main roof for a valley junction.
-                loc_abut_back = True if is_rotated_roof else is_lower_wing
-                y_max_adj = 0.04 if (is_lower_wing or is_rotated_roof) else 0.25
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_cy = (w_top_ymin + w_top_ymax) * 0.5
+                if is_lower_wing or is_rotated_roof:
+                    # Lower wings abut the facade; rotated (parallel ridges) stop flush
+                    # in the main gable wall core.
+                    loc_abut_back = True
+                    y_max_adj = 0.04
+                else:
+                    # Perpendicular equal junction: run the ridge to the main ridge so
+                    # valleys die into the slope (cross-hipped U/L, cf. FRONT rotated).
+                    # Flush open tip (no overhang past the ridge, no cap face).
+                    loc_abut_back = True
+                    serve_dist = abs(top_cx - w_cx)
+                    y_max_adj = max(0.25, serve_dist - ly_half)
                 w_roof_half_w = lx_half + props.roof_overhang
                 w_reach = (w_dormer_u - w_u_intersect) * w_roof_half_w
                 dist_to_ridge = w_dormer_u * w_roof_half_w
@@ -2539,14 +2590,38 @@ def generate_building(obj, props):
                                     'sway_amount': w_sway
                                 })
 
-                w_gable_lr = ('FRONT',)
-                # Same main-wall fascia trim as FRONT/BACK, in wing-local coords:
-                # clip the main-side 0.90m so timber never overlaps the main facade.
+                # Parallel (rotated): finished gable abuts main gable. Perpendicular
+                # (non-rotated): open valley, deck notch-cut (local coords).
+                w_gable_lr = ('FRONT',) if (is_lower_wing or not is_rotated_roof) else ('FRONT', 'BACK')
+                # Local-coord fascia trim (see FRONT/BACK above).
                 w_eave_lr = None
-                if not is_lower_wing:
+                if is_lower_wing:
                     y_top_local = ly_half + y_max_adj
                     trim = [(y_top_local - 0.90, y_top_local + 0.60)]
                     w_eave_lr = {'min': list(trim), 'max': list(trim)}
+                elif not is_rotated_roof:
+                    y_top_local = ly_half + y_max_adj
+                    if w_wall == 'LEFT':
+                        wall_local = top_x_min - w_cx
+                    else:
+                        wall_local = w_cx - top_x_max
+                    trim = [(wall_local - 0.10, y_top_local + 0.60)]
+                    w_eave_lr = {'min': list(trim), 'max': list(trim)}
+                w_notch_lr = None
+                if not is_lower_wing and not is_rotated_roof:
+                    y_top_local = ly_half + y_max_adj
+                    # Valleys start exactly at the main wall face corners (local mapping:
+                    # +Y is the main side; LEFT wall face is top_x_min, RIGHT top_x_max).
+                    if w_wall == 'LEFT':
+                        wall_local = top_x_min - w_cx
+                    else:
+                        wall_local = w_cx - top_x_max
+                    w_notch_lr = {
+                        'apex_x': 0.0, 'apex_y': y_top_local,
+                        'base_y': wall_local,
+                        'half_width': lx_half + props.roof_overhang,
+                        'keep': 'le',
+                    }
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         wing_roof_bm,
@@ -2564,7 +2639,8 @@ def generate_building(obj, props):
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
-                        eave_exclusions=w_eave_lr
+                        eave_exclusions=w_eave_lr,
+                        valley_notch=w_notch_lr
                     )
                 else:
                     build_gable_roof(
@@ -2582,7 +2658,8 @@ def generate_building(obj, props):
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
-                        eave_exclusions=w_eave_lr
+                        eave_exclusions=w_eave_lr,
+                        valley_notch=w_notch_lr
                     )
 
                 rot_ang = -math.pi * 0.5 if w_wall == 'LEFT' else math.pi * 0.5
@@ -2603,7 +2680,48 @@ def generate_building(obj, props):
                     except ValueError:
                         pass
                 wing_roof_bm.free()
-        
+
+                # Valley/hip boards for the perpendicular (non-rotated) equal junction:
+                # inside corners ride above the decks from the wall face to the die-in.
+                if not is_lower_wing and not is_rotated_roof and roof_style in ('SWAY', 'GABLE'):
+                    die_x = top_cx
+                    die_y = w_cy
+                    die_z = w_top_z + w_roof_h
+                    if w_wall == 'LEFT':
+                        corners = [
+                            (top_x_min + 0.05, w_top_ymin, w_top_z + 0.02),
+                            (top_x_min + 0.05, w_top_ymax, w_top_z + 0.02),
+                        ]
+                    else:
+                        corners = [
+                            (top_x_max - 0.05, w_top_ymin, w_top_z + 0.02),
+                            (top_x_max - 0.05, w_top_ymax, w_top_z + 0.02),
+                        ]
+                    for cx0, cy0, cz0 in corners:
+                        p0 = Vector((cx0, cy0, cz0))
+                        p1 = Vector((die_x, die_y, die_z))
+                        v_diff = p1 - p0
+                        v_len = v_diff.length
+                        if v_len > 0.4:
+                            v_mid = (p0 + p1) * 0.5
+                            v_dir = v_diff.normalized()
+                            v_up = Vector((0.0, 0.0, 1.0))
+                            v_side = v_dir.cross(v_up)
+                            if v_side.length < 1e-4:
+                                v_side = Vector((1.0, 0.0, 0.0))
+                            else:
+                                v_side = v_side.normalized()
+                            v_true_up = v_side.cross(v_dir).normalized()
+                            v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
+                            create_beveled_box(
+                                bm,
+                                size=(0.18, v_len, 0.20),
+                                location=v_mid,
+                                rotation=v_mat.to_euler(),
+                                mat_index=MAT_INDEX_TIMBER,
+                                bevel_amount=0.012
+                            )
+
     # Dormer Windows
     if props.has_dormers and roof_style in ('SWAY', 'GABLE') and effective_archetype != 'WATCHTOWER':
         tier_val = getattr(props, 'material_tier', 'TIER_3')
