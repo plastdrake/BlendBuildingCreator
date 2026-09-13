@@ -58,6 +58,9 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
     thick volumetric gable walls, and complete eave closures.
     abut_back: If True, roof deck, ridge, and shingles terminate flush at y_max with zero rear overhang.
     abut_front: If True, roof terminates flush at y_min with zero front overhang.
+    dormer_apertures is kept for API compatibility but intentionally NOT cut from the
+    deck: dormer cheeks penetrate the solid slope so small roofs with 3+ dormers
+    never open gap holes.
     """
     rx_min = x_min - overhang
     rx_max = x_max + overhang

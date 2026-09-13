@@ -940,6 +940,9 @@ def generate_building(obj, props):
                     p_w = min(max_pw, 2.2)
                     p_cx = (w_xmin + w_xmax) * 0.5
                     p_yf = y_min if w_wall == 'FRONT' else y_max
+                    # Nudge frame a hair into the main room so wood faces never sit coplanar with plaster
+                    nudge = 0.015 if w_wall == 'FRONT' else -0.015
+                    f_yf = p_yf + nudge
                     # Cutout in the wall encompasses the whole frame opening + jambs so plaster never z-fights with wood
                     p_u1 = (p_cx - p_w * 0.5 - jamb_w - 0.02) - x_min
                     p_u2 = (p_cx + p_w * 0.5 + jamb_w + 0.02) - x_min
@@ -950,18 +953,18 @@ def generate_building(obj, props):
                         back_openings.append(op_dict)
 
                     create_beveled_box(bm, size=(jamb_w, jamb_d, portal_h),
-                                       location=(p_cx - p_w * 0.5 - jamb_w * 0.5, p_yf, z_floor + portal_h * 0.5 - lower * 0.5),
+                                       location=(p_cx - p_w * 0.5 - jamb_w * 0.5, f_yf, z_floor + portal_h * 0.5 - lower * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
                     create_beveled_box(bm, size=(jamb_w, jamb_d, portal_h),
-                                       location=(p_cx + p_w * 0.5 + jamb_w * 0.5, p_yf, z_floor + portal_h * 0.5 - lower * 0.5),
+                                       location=(p_cx + p_w * 0.5 + jamb_w * 0.5, f_yf, z_floor + portal_h * 0.5 - lower * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
                     lintel_w = p_w + jamb_w * 2.0 + 0.06
                     create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
-                                       location=(p_cx, p_yf, z_floor + portal_h + lintel_h * 0.5 - lower),
+                                       location=(p_cx, f_yf, z_floor + portal_h + lintel_h * 0.5 - lower),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
                     # Beveled Wooden Floor Threshold Board bridging the floor opening
                     create_beveled_box(bm, size=(p_w + jamb_w * 2.0 + 0.06, wall_t + 0.16, 0.038),
-                                       location=(p_cx, p_yf, z_floor + 0.05 + 0.019),
+                                       location=(p_cx, f_yf, z_floor + 0.05 + 0.019),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
                 else: # LEFT or RIGHT
                     wing_span = w_ymax - w_ymin
@@ -970,6 +973,9 @@ def generate_building(obj, props):
                     p_w = min(max_pw, 2.2)
                     p_cy = (w_ymin + w_ymax) * 0.5
                     p_xf = x_min if w_wall == 'LEFT' else x_max
+                    # Same room-ward nudge as FRONT/BACK above
+                    nudge = 0.015 if w_wall == 'LEFT' else -0.015
+                    f_xf = p_xf + nudge
                     # Cutout in the wall encompasses the whole frame opening + jambs so plaster never z-fights with wood
                     p_u1 = (p_cy - p_w * 0.5 - jamb_w - 0.02) - y_min
                     p_u2 = (p_cy + p_w * 0.5 + jamb_w + 0.02) - y_min
@@ -980,18 +986,18 @@ def generate_building(obj, props):
                         right_openings.append(op_dict)
 
                     create_beveled_box(bm, size=(jamb_d, jamb_w, portal_h),
-                                       location=(p_xf, p_cy - p_w * 0.5 - jamb_w * 0.5, z_floor + portal_h * 0.5 - lower * 0.5),
+                                       location=(f_xf, p_cy - p_w * 0.5 - jamb_w * 0.5, z_floor + portal_h * 0.5 - lower * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
                     create_beveled_box(bm, size=(jamb_d, jamb_w, portal_h),
-                                       location=(p_xf, p_cy + p_w * 0.5 + jamb_w * 0.5, z_floor + portal_h * 0.5 - lower * 0.5),
+                                       location=(f_xf, p_cy + p_w * 0.5 + jamb_w * 0.5, z_floor + portal_h * 0.5 - lower * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
                     lintel_w = p_w + jamb_w * 2.0 + 0.06
                     create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
-                                       location=(p_xf, p_cy, z_floor + portal_h + lintel_h * 0.5 - lower),
+                                       location=(f_xf, p_cy, z_floor + portal_h + lintel_h * 0.5 - lower),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
                     # Beveled Wooden Floor Threshold Board bridging the floor opening
                     create_beveled_box(bm, size=(wall_t + 0.16, p_w + jamb_w * 2.0 + 0.06, 0.038),
-                                       location=(p_xf, p_cy, z_floor + 0.05 + 0.019),
+                                       location=(f_xf, p_cy, z_floor + 0.05 + 0.019),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
 
         # Walk-in portal into mini-wing outcrop
@@ -1779,6 +1785,8 @@ def generate_building(obj, props):
             
             d_count = max(1, getattr(props, 'dormer_count', 2))
             d_sides = getattr(props, 'dormer_sides', 'BOTH')
+            # Adaptive dormer width: shrinks only when crowded on small roofs (1.2m otherwise, no regression)
+            main_dormer_w = 1.2
 
             if is_rotated_roof:
                 roof_half_w = top_hy + props.roof_overhang
@@ -1798,6 +1806,14 @@ def generate_building(obj, props):
                 x_start = top_x_min + x_margin
                 x_end = top_x_max - x_margin
                 x_span = max(0.2, x_end - x_start)
+                # Clamp dormers per side so cheeks never overlap on small buildings (1.2m + 0.4m gap).
+                # Large roofs are unaffected since the fit count exceeds the request.
+                max_per_side_x = max(1, int((x_span + 0.3) / 1.6))
+                n_front = min(n_front, max_per_side_x)
+                n_back = min(n_back, max_per_side_x)
+                tight_n_x = max(n_front, n_back, 1)
+                if tight_n_x > 1:
+                    main_dormer_w = min(1.2, max(0.85, (x_span / tight_n_x) - 0.35))
 
                 if n_front == 1 and n_back == 1 and x_span >= 1.6:
                     fx = top_cx - x_span * 0.22
@@ -1812,11 +1828,14 @@ def generate_building(obj, props):
                         bx = top_cx if n_back == 1 else (x_start + ((i + 0.5) / n_back) * x_span)
                         dormer_placements.append({'pos': (bx, top_cy + roof_half_w * dormer_u), 'facing': (0, 1), 'side': -1, 'loc_y': bx - top_cx})
 
+                # Roof deck is kept solid under dormers (no cell skipping) so small roofs
+                # never open gap holes; cheeks penetrate the slope for a watertight seam.
+                ap_half = max(0.24, main_dormer_w * 0.5 - 0.18)
                 for dp in dormer_placements:
                     dormer_apertures.append({
                         'side': dp['side'],
-                        'y_min': dp['loc_y'] - 0.42,
-                        'y_max': dp['loc_y'] + 0.42,
+                        'y_min': dp['loc_y'] - ap_half,
+                        'y_max': dp['loc_y'] + ap_half,
                         'u_min': max(0.25, u_intersect + 0.04),
                         'u_max': min(0.70, dormer_u + 0.08)
                     })
@@ -1839,6 +1858,13 @@ def generate_building(obj, props):
                 y_start = top_y_min + y_margin
                 y_end = top_y_max - y_margin
                 y_span = max(0.2, y_end - y_start)
+                # Same overlap guard for the standard orientation (see rotated branch above).
+                max_per_side_y = max(1, int((y_span + 0.3) / 1.6))
+                n_left = min(n_left, max_per_side_y)
+                n_right = min(n_right, max_per_side_y)
+                tight_n_y = max(n_left, n_right, 1)
+                if tight_n_y > 1:
+                    main_dormer_w = min(1.2, max(0.85, (y_span / tight_n_y) - 0.35))
 
                 if n_left == 1 and n_right == 1 and y_span >= 1.6:
                     ly = top_cy + y_span * 0.22
@@ -1853,12 +1879,13 @@ def generate_building(obj, props):
                         ry = top_cy if n_right == 1 else (y_start + ((i + 0.5) / n_right) * y_span)
                         dormer_placements.append({'pos': (top_cx + roof_half_w * dormer_u, ry), 'facing': (1, 0), 'side': 1})
 
+                ap_half = max(0.24, main_dormer_w * 0.5 - 0.18)
                 for dp in dormer_placements:
                     d_cx, d_cy = dp['pos']
                     dormer_apertures.append({
                         'side': dp['side'],
-                        'y_min': d_cy - 0.42,
-                        'y_max': d_cy + 0.42,
+                        'y_min': d_cy - ap_half,
+                        'y_max': d_cy + ap_half,
                         'u_min': max(0.25, u_intersect + 0.04),
                         'u_max': min(0.70, dormer_u + 0.08)
                     })
@@ -2521,7 +2548,7 @@ def generate_building(obj, props):
                 center_pos=dp['pos'],
                 z_base=z_dormer_base,
                 facing_dir=dp['facing'],
-                dormer_w=1.2, dormer_d=1.35, dormer_h=cur_dormer_h,
+                dormer_w=dp.get('dormer_w', main_dormer_w), dormer_d=1.35, dormer_h=cur_dormer_h,
                 dormer_roof_h=cur_dormer_roof_h,
                 roof_flare=flare_val,
                 tier=tier_val,

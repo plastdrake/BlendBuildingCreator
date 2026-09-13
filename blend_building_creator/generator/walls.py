@@ -407,6 +407,14 @@ def _choose_plaster_mat(p1, p2, z_b, z_t, base_mat, has_brick, brick_freq, seed_
     cx = (p1[0] + p2[0]) * 0.5
     cy = (p1[1] + p2[1]) * 0.5
     cz = (z_b + z_t) * 0.5
+    # Concentrated corner/here-and-there gating: low-frequency field picks 1-2 wall
+    # zones per building so bricks cluster instead of spacing evenly on every wall.
+    # High frequency values still open more zones (no regression for max settings).
+    import math as _math
+    cluster = _math.sin(cx * 0.55 + seed_val * 1.7) * _math.cos(cy * 0.55 - cz * 0.25 + seed_val * 0.9)
+    gate = 0.55 - min(0.95, max(0.01, brick_freq)) * 0.8
+    if cluster < gate and brick_freq < 0.85:
+        return MAT_INDEX_PLASTER_EXT
     h = int(abs(math.sin(cx * 17.13 + cy * 53.71 + cz * 31.19 + seed_val * 97.43)) * 10000) % 100
     if h < int(brick_freq * 100):
         return MAT_INDEX_PLASTER_BRICK

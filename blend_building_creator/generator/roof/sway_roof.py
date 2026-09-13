@@ -56,8 +56,9 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
     """
     Builds a whimsical fairytale curved/saddle roof with flared eaves, saggy ridge,
     solid 0.16m thick timber roof decking, thick volumetric gable walls, and full eave closures.
-    abut_back: If True, roof deck, ridge, and shingles terminate flush at y_max with zero rear overhang.
-    abut_front: If True, roof terminates flush at y_min with zero front overhang.
+    abut_back: If True, shingles stop flush at y_max with zero rear overhang.
+    dormer_apertures is kept for API compatibility but intentionally NOT cut from the
+    deck (see gable_roof): solid deck + penetrating cheeks avoids gap holes.
     """
     rx_min = x_min - overhang
     rx_max = x_max + overhang

@@ -604,10 +604,11 @@ def create_stylized_plaster_brick(name="M_Building_Plaster_Brick", color=(0.93, 
         final_brick_color = brick_mod.outputs["Result"]
 
     # 3. Organic Chipped-Plaster Breakout Mask (Concentrated corner/isolated cluster in 3D Object Space)
-    # Low-frequency macro noise creates sparse broad zones (concentrated on 1-2 corners or wall flanks across the entire building)
+    # Low-frequency macro noise creates sparse broad zones (concentrated on 1-2 corners or wall flanks across the entire building).
+    # Object-space (not UV) so the mask does not repeat per wall and stays clustered like the reference.
     cluster_noise = tree.nodes.new("ShaderNodeTexNoise")
     cluster_noise.location = (-1400, -800)
-    cluster_noise.inputs["Scale"].default_value = 0.28
+    cluster_noise.inputs["Scale"].default_value = 0.24
     cluster_noise.inputs["Detail"].default_value = 1.5
     try:
         cluster_noise.inputs["Roughness"].default_value = 0.35
@@ -633,9 +634,9 @@ def create_stylized_plaster_brick(name="M_Building_Plaster_Brick", color=(0.93, 
     cluster_gate = tree.nodes.new("ShaderNodeValToRGB")
     cluster_gate.location = (-850, -650)
     cluster_gate.color_ramp.interpolation = 'LINEAR'
-    cluster_gate.color_ramp.elements[0].position = max(0.0, t_gate - 0.08)
+    cluster_gate.color_ramp.elements[0].position = max(0.0, t_gate - 0.06)
     cluster_gate.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
-    cluster_gate.color_ramp.elements[1].position = min(1.0, t_gate + 0.08)
+    cluster_gate.color_ramp.elements[1].position = min(1.0, t_gate + 0.06)
     cluster_gate.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
     tree.links.new(cluster_noise.outputs["Fac"], cluster_gate.inputs["Fac"])
 
@@ -646,13 +647,13 @@ def create_stylized_plaster_brick(name="M_Building_Plaster_Brick", color=(0.93, 
     tree.links.new(cluster_gate.outputs["Color"], mask_combine.inputs[0])
     tree.links.new(crack_noise.outputs["Fac"], mask_combine.inputs[1])
 
-    # Sharp plaster break edge
+    # Sharp plaster break edge (tight band keeps breakout patches compact, not lacy/even)
     mask_ramp = tree.nodes.new("ShaderNodeValToRGB")
     mask_ramp.location = (-350, -800)
     mask_ramp.color_ramp.interpolation = 'LINEAR'
-    mask_ramp.color_ramp.elements[0].position = 0.35
+    mask_ramp.color_ramp.elements[0].position = 0.38
     mask_ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
-    mask_ramp.color_ramp.elements[1].position = 0.48
+    mask_ramp.color_ramp.elements[1].position = 0.50
     mask_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
     tree.links.new(mask_combine.outputs["Value"], mask_ramp.inputs["Fac"])
 
@@ -662,11 +663,11 @@ def create_stylized_plaster_brick(name="M_Building_Plaster_Brick", color=(0.93, 
     rim_ramp.color_ramp.interpolation = 'LINEAR'
     rim_ramp.color_ramp.elements[0].position = 0.0
     rim_ramp.color_ramp.elements[0].color = (1.0, 1.0, 1.0, 1.0)
-    el_hl = rim_ramp.color_ramp.elements.new(0.32)
+    el_hl = rim_ramp.color_ramp.elements.new(0.35)
     el_hl.color = (1.12, 1.10, 1.05, 1.0) # Outer chalky edge
-    el_sh = rim_ramp.color_ramp.elements.new(0.38)
+    el_sh = rim_ramp.color_ramp.elements.new(0.41)
     el_sh.color = (0.28, 0.20, 0.15, 1.0) # Inner dark shadow
-    rim_ramp.color_ramp.elements[1].position = 0.48
+    rim_ramp.color_ramp.elements[1].position = 0.50
     rim_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
     tree.links.new(mask_combine.outputs["Value"], rim_ramp.inputs["Fac"])
 
