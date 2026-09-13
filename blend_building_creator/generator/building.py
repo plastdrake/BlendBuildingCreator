@@ -1912,6 +1912,13 @@ def generate_building(obj, props):
                         eave_ex['max'].append((ly1, ly2))
                     elif ww == 'BACK':
                         eave_ex['min'].append((ly1, ly2))
+                    elif ww in ('LEFT', 'RIGHT'):
+                        # Flush side wing: main eave overhang corner would cross the
+                        # wing facade, so break the eave at the wing span.
+                        if wy1 <= top_y_min + 0.35:
+                            eave_ex['max'].append((ly1, ly2))
+                        if wy2 >= top_y_max - 0.35:
+                            eave_ex['min'].append((ly1, ly2))
                 else:
                     # Non-rotated roof: rx_min is LEFT facade, rx_max is RIGHT facade
                     ly1 = (wy1 - props.roof_overhang * 0.4)
@@ -1920,6 +1927,12 @@ def generate_building(obj, props):
                         eave_ex['min'].append((ly1, ly2))
                     elif ww == 'RIGHT':
                         eave_ex['max'].append((ly1, ly2))
+                    elif ww in ('FRONT', 'BACK'):
+                        # Flush front/back wing: break the side eave at the wing span.
+                        if wx2 >= top_x_max - 0.35:
+                            eave_ex['max'].append((ly1, ly2))
+                        if wx1 <= top_x_min + 0.35:
+                            eave_ex['min'].append((ly1, ly2))
 
         if is_rotated_roof:
             roof_bm = bmesh.new()
