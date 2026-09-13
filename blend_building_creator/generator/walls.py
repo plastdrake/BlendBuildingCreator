@@ -8,7 +8,10 @@ import bmesh
 import math
 from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_horizontal_cylinder
-from .materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER, MAT_INDEX_STONE, MAT_INDEX_LOG, MAT_INDEX_LOG_END, MAT_INDEX_WOOD
+from .materials import (
+    MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER, MAT_INDEX_STONE,
+    MAT_INDEX_LOG, MAT_INDEX_LOG_END, MAT_INDEX_WOOD, MAT_INDEX_PLASTER_BRICK
+)
 
 def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                            openings=[], normal_vec=None, is_corner_start=False, is_corner_end=False,
@@ -398,16 +401,28 @@ def build_stone_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             cur_u += this_bl
             b_idx += 1
 
+def _choose_plaster_mat(p1, p2, z_b, z_t, base_mat, has_brick, brick_freq, seed_val):
+    if (not has_brick) or (base_mat != MAT_INDEX_PLASTER_EXT) or (brick_freq <= 0.001):
+        return base_mat
+    cx = (p1[0] + p2[0]) * 0.5
+    cy = (p1[1] + p2[1]) * 0.5
+    cz = (z_b + z_t) * 0.5
+    h = int(abs(math.sin(cx * 17.13 + cy * 53.71 + cz * 31.19 + seed_val * 97.43)) * 10000) % 100
+    if h < int(brick_freq * 100):
+        return MAT_INDEX_PLASTER_BRICK
+    return MAT_INDEX_PLASTER_EXT
+
 def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                        mat_ext=MAT_INDEX_PLASTER_EXT, normal_vec=None,
                        tier='TIER_3', physical_siding=True,
                        plank_direction='HORIZONTAL', plank_jankiness=0.35,
                        stone_block_scale=1.0, stone_disorder=0.35,
-                       is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0, v_offset=0.0):
+                       is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0, v_offset=0.0,
+                       has_exposed_brick=False, exposed_brick_freq=0.25):
     """
     Constructs a single wall section between p_start and p_end:
     rounded logs (Tier 1), overlapping/batten planks (Tier 2), chunky stone blocks (Tier 3),
-    or smooth plaster/stone core boxes.
+    or smooth plaster/stone core boxes with optional exposed terracotta brick accents.
     """
     if physical_siding and tier == 'TIER_1':
         build_log_wall_segment(
@@ -419,6 +434,9 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
 
     if tier in ('TIER_1', 'TIER_2') and mat_ext in (MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER):
         mat_ext = MAT_INDEX_WOOD
+
+    if mat_ext == MAT_INDEX_PLASTER_EXT and has_exposed_brick:
+        mat_ext = _choose_plaster_mat(p_start, p_end, z_bottom, z_top, mat_ext, has_exposed_brick, exposed_brick_freq, seed)
 
     x1, y1 = p_start
     x2, y2 = p_end
@@ -451,7 +469,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                             plank_direction='HORIZONTAL', plank_jankiness=0.35,
                             stone_block_scale=1.0, stone_disorder=0.35,
                             is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0,
-                            omit_top_log_row=False):
+                            omit_top_log_row=False,
+                            has_exposed_brick=False, exposed_brick_freq=0.25):
     """
     Builds a wall along the line p_start -> p_end, cleanly cutting around
     one or more openings (e.g. door or windows) without destructive booleans.
@@ -479,7 +498,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             plank_direction=plank_direction, plank_jankiness=plank_jankiness,
             stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end, seed=seed,
-            u_offset=u_offset
+            u_offset=u_offset,
+            has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq
         )
         return
 
@@ -511,7 +531,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
         oz1 = max(z_bottom, min(z_top, op['z_start']))
         oz2 = max(z_bottom, min(z_top, op['z_end']))
         
-        # Wall segment before this opening
+        # Wall segment before this opening (piers / corner walls)
         if ou1 > last_u + 0.01:
             seg_is_start = (last_u <= 0.01) and is_corner_start
             build_wall_segment(
@@ -520,10 +540,11 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                 plank_direction=plank_direction, plank_jankiness=plank_jankiness,
                 stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
                 is_corner_start=seg_is_start, is_corner_end=False, seed=seed,
-                u_offset=u_offset + last_u, v_offset=0.0
+                u_offset=u_offset + last_u, v_offset=0.0,
+                has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq
             )
             
-        # Below the opening (sill portion)
+        # Below the opening (window apron / sill portion)
         if oz1 > z_bottom + 0.01:
             build_wall_segment(
                 bm, pt_at(ou1), pt_at(ou2), z_bottom, oz1, thickness, mat_ext=mat_ext,
@@ -531,10 +552,11 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                 plank_direction=plank_direction, plank_jankiness=plank_jankiness,
                 stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
                 is_corner_start=False, is_corner_end=False, seed=seed,
-                u_offset=u_offset + ou1, v_offset=0.0
+                u_offset=u_offset + ou1, v_offset=0.0,
+                has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq
             )
             
-        # Above the opening (lintel/header portion)
+        # Above the opening (lintel/header portion - keep clean plaster)
         if oz2 < z_top - 0.01:
             build_wall_segment(
                 bm, pt_at(ou1), pt_at(ou2), oz2, z_top, thickness, mat_ext=mat_ext,
@@ -542,7 +564,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                 plank_direction=plank_direction, plank_jankiness=plank_jankiness,
                 stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
                 is_corner_start=False, is_corner_end=False, seed=seed,
-                u_offset=u_offset + ou1, v_offset=oz2 - z_bottom
+                u_offset=u_offset + ou1, v_offset=oz2 - z_bottom,
+                has_exposed_brick=False
             )
         
         last_u = ou2
@@ -555,7 +578,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             plank_direction=plank_direction, plank_jankiness=plank_jankiness,
             stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
             is_corner_start=False, is_corner_end=is_corner_end, seed=seed,
-            u_offset=u_offset + last_u, v_offset=0.0
+            u_offset=u_offset + last_u, v_offset=0.0,
+            has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq
         )
 
 def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,

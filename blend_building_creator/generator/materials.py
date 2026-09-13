@@ -80,6 +80,7 @@ MAT_INDEX_WOOD         = 7
 MAT_INDEX_CUT_STONE    = 8
 MAT_INDEX_LOG          = 9
 MAT_INDEX_LOG_END      = 10
+MAT_INDEX_PLASTER_BRICK = 11
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +499,205 @@ def create_stylized_plaster(name="M_Building_Plaster", color=(0.93, 0.88, 0.82, 
     ao_str = 0.36 if is_interior else 0.52
     _apply_ao(tree, bsdf, painted, strength=ao_str, distance=0.16)
     _setup_pbr(tree, bsdf, out, roughness=0.95)
+    return mat
+
+
+# ---------------------------------------------------------------------------
+# 1b. Plaster with Exposed Terracotta Bricks (Matching Stucco + Organic Chipped Rim)
+# ---------------------------------------------------------------------------
+
+def create_stylized_plaster_brick(name="M_Building_Plaster_Brick", color=(0.93, 0.88, 0.82, 1.0)):
+    """
+    Stylized Stucco with Exposed Terracotta Clay Bricks:
+    Matches M_Building_Plaster perfectly in color, texture, and tone, but features
+    organic jagged chipped-away stucco revealing warm terracotta bricks underneath,
+    complete with dark crevice shadow along the broken edge and subtle chalky plaster rim.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=2200)
+    c = _coord(tree, loc_x=-1700)
+
+    # 1. Base Plaster Layer (identical to M_Building_Plaster)
+    tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-1400, loc_y=300, scale=(0.85, 0.85, 1.0))
+    if tex_node is not None:
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-1100, 300)
+        tint.inputs["Factor"].default_value = 0.25
+        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = color
+        base_plaster_color = tint.outputs["Result"]
+    else:
+        brush_noise = tree.nodes.new("ShaderNodeTexNoise")
+        brush_noise.location = (-1400, 300)
+        brush_noise.inputs["Scale"].default_value = 1.8
+        brush_noise.inputs["Detail"].default_value = 2.0
+        try:
+            brush_noise.inputs["Roughness"].default_value = 0.55
+        except Exception:
+            pass
+        tree.links.new(c.outputs["UV"], brush_noise.inputs["Vector"])
+
+        c_shadow = (color[0] * 0.66, color[1] * 0.58, color[2] * 0.50, 1.0)
+        c_base   = (color[0], color[1], color[2], 1.0)
+        c_bright = (min(1.0, color[0] * 1.10), min(1.0, color[1] * 1.06), min(1.0, color[2] * 1.02), 1.0)
+
+        plaster_ramp = tree.nodes.new("ShaderNodeValToRGB")
+        plaster_ramp.location = (-1100, 300)
+        plaster_ramp.color_ramp.interpolation = 'LINEAR'
+        plaster_ramp.color_ramp.elements[0].position = 0.0
+        plaster_ramp.color_ramp.elements[0].color = c_shadow
+        el_m = plaster_ramp.color_ramp.elements.new(0.45)
+        el_m.color = c_base
+        plaster_ramp.color_ramp.elements[1].position = 1.0
+        plaster_ramp.color_ramp.elements[1].color = c_bright
+        tree.links.new(brush_noise.outputs["Fac"], plaster_ramp.inputs["Fac"])
+        base_plaster_color = plaster_ramp.outputs["Color"]
+
+    # 2. Exposed Terracotta Clay Bricks
+    brick_map = tree.nodes.new("ShaderNodeMapping")
+    brick_map.location = (-1400, -200)
+    brick_map.inputs["Scale"].default_value = (1.5, 1.5, 1.0)
+    tree.links.new(c.outputs["UV"], brick_map.inputs["Vector"])
+
+    brick = tree.nodes.new("ShaderNodeTexBrick")
+    brick.location = (-1100, -200)
+    try:
+        brick.offset = 0.50
+    except Exception:
+        pass
+    for k, v in [
+        ("Color1", (0.64, 0.26, 0.14, 1.0)),      # Rich burnt terracotta red
+        ("Color2", (0.50, 0.19, 0.10, 1.0)),      # Dark aged clay umber
+        ("Mortar", (0.54, 0.50, 0.44, 1.0)),      # Weathered dark-grey mortar
+        ("Scale", 1.8),
+        ("Mortar Size", 0.018),
+        ("Mortar Smooth", 0.20),
+        ("Bias", 0.10),
+        ("Brick Width", 0.42),
+        ("Row Height", 0.17),
+    ]:
+        if k in brick.inputs:
+            brick.inputs[k].default_value = v
+    tree.links.new(brick_map.outputs["Vector"], brick.inputs[0])
+
+    brick_noise = tree.nodes.new("ShaderNodeTexNoise")
+    brick_noise.location = (-1100, -500)
+    brick_noise.inputs["Scale"].default_value = 10.0
+    brick_noise.inputs["Detail"].default_value = 3.0
+    tree.links.new(c.outputs["UV"], brick_noise.inputs["Vector"])
+
+    brick_mod = tree.nodes.new("ShaderNodeMix")
+    brick_mod.data_type = 'RGBA'
+    brick_mod.blend_type = 'OVERLAY'
+    brick_mod.location = (-850, -250)
+    brick_mod.inputs["Factor"].default_value = 0.35
+    tree.links.new(brick.outputs["Color"], brick_mod.inputs["A"])
+    tree.links.new(brick_noise.outputs["Color"], brick_mod.inputs["B"])
+    final_brick_color = brick_mod.outputs["Result"]
+
+    # 3. Organic Chipped-Plaster Breakout Mask (Corner / localized patch)
+    macro_noise = tree.nodes.new("ShaderNodeTexNoise")
+    macro_noise.location = (-1400, -800)
+    macro_noise.inputs["Scale"].default_value = 0.85
+    macro_noise.inputs["Detail"].default_value = 2.0
+    tree.links.new(c.outputs["Object"], macro_noise.inputs["Vector"])
+
+    crack_noise = tree.nodes.new("ShaderNodeTexNoise")
+    crack_noise.location = (-1100, -800)
+    crack_noise.inputs["Scale"].default_value = 3.5
+    crack_noise.inputs["Detail"].default_value = 4.0
+    try:
+        crack_noise.inputs["Roughness"].default_value = 0.65
+    except Exception:
+        pass
+    tree.links.new(c.outputs["UV"], crack_noise.inputs["Vector"])
+
+    mask_combine = tree.nodes.new("ShaderNodeMath")
+    mask_combine.operation = 'MULTIPLY_ADD'
+    mask_combine.location = (-850, -800)
+    tree.links.new(crack_noise.outputs["Fac"], mask_combine.inputs[0])
+    mask_combine.inputs[1].default_value = 0.35
+    tree.links.new(macro_noise.outputs["Fac"], mask_combine.inputs[2])
+
+    mask_ramp = tree.nodes.new("ShaderNodeValToRGB")
+    mask_ramp.location = (-600, -800)
+    mask_ramp.color_ramp.interpolation = 'LINEAR'
+    mask_ramp.color_ramp.elements[0].position = 0.68
+    mask_ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
+    mask_ramp.color_ramp.elements[1].position = 0.74
+    mask_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+    tree.links.new(mask_combine.outputs["Value"], mask_ramp.inputs["Fac"])
+
+    # 4. Chipped Rim Shading (Dark Crevice Shadow + Chalky Plaster Highlight Rim)
+    rim_ramp = tree.nodes.new("ShaderNodeValToRGB")
+    rim_ramp.location = (-600, -500)
+    rim_ramp.color_ramp.interpolation = 'LINEAR'
+    rim_ramp.color_ramp.elements[0].position = 0.0
+    rim_ramp.color_ramp.elements[0].color = (1.0, 1.0, 1.0, 1.0)
+    el_hl = rim_ramp.color_ramp.elements.new(0.65)
+    el_hl.color = (1.12, 1.10, 1.05, 1.0) # Outer chalky edge
+    el_sh = rim_ramp.color_ramp.elements.new(0.70)
+    el_sh.color = (0.28, 0.20, 0.15, 1.0) # Inner dark shadow
+    rim_ramp.color_ramp.elements[1].position = 0.73
+    rim_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+    tree.links.new(mask_combine.outputs["Value"], rim_ramp.inputs["Fac"])
+
+    plaster_rim_mix = tree.nodes.new("ShaderNodeMix")
+    plaster_rim_mix.data_type = 'RGBA'
+    plaster_rim_mix.blend_type = 'MULTIPLY'
+    plaster_rim_mix.location = (-300, 200)
+    plaster_rim_mix.inputs["Factor"].default_value = 0.85
+    tree.links.new(base_plaster_color, plaster_rim_mix.inputs["A"])
+    tree.links.new(rim_ramp.outputs["Color"], plaster_rim_mix.inputs["B"])
+
+    # 5. Blend Plaster with Exposed Brick
+    mix_final = tree.nodes.new("ShaderNodeMix")
+    mix_final.data_type = 'RGBA'
+    mix_final.blend_type = 'MIX'
+    mix_final.location = (100, 50)
+    tree.links.new(mask_ramp.outputs["Color"], mix_final.inputs["Factor"])
+    tree.links.new(plaster_rim_mix.outputs["Result"], mix_final.inputs["A"])
+    tree.links.new(final_brick_color, mix_final.inputs["B"])
+
+    # 6. Physical Depth via Bump Mapping
+    bump = tree.nodes.new("ShaderNodeBump")
+    bump.location = (900, -350)
+    bump.inputs["Strength"].default_value = 0.32
+    bump.inputs["Distance"].default_value = 0.04
+
+    bump_inv = tree.nodes.new("ShaderNodeMath")
+    bump_inv.operation = 'SUBTRACT'
+    bump_inv.location = (200, -350)
+    bump_inv.inputs[0].default_value = 1.0
+    tree.links.new(mask_ramp.outputs["Color"], bump_inv.inputs[1])
+
+    mortar_inside = tree.nodes.new("ShaderNodeMath")
+    mortar_inside.operation = 'MULTIPLY'
+    mortar_inside.location = (400, -500)
+    tree.links.new(brick.outputs["Fac"], mortar_inside.inputs[0])
+    tree.links.new(mask_ramp.outputs["Color"], mortar_inside.inputs[1])
+
+    mortar_scaled = tree.nodes.new("ShaderNodeMath")
+    mortar_scaled.operation = 'MULTIPLY'
+    mortar_scaled.location = (550, -500)
+    mortar_scaled.inputs[1].default_value = 0.18
+    tree.links.new(mortar_inside.outputs["Value"], mortar_scaled.inputs[0])
+
+    bump_add = tree.nodes.new("ShaderNodeMath")
+    bump_add.operation = 'ADD'
+    bump_add.location = (700, -350)
+    tree.links.new(bump_inv.outputs["Value"], bump_add.inputs[0])
+    tree.links.new(mortar_scaled.outputs["Value"], bump_add.inputs[1])
+    tree.links.new(bump_add.outputs["Value"], bump.inputs["Height"])
+    tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+
+    # 7. Final Painterly Softening, AO & PBR Setup
+    painted = _warm_painterly_pass(tree, c, mix_final.outputs["Result"], loc_x=450, loc_y=50,
+                                   strength=0.16, scale=1.35)
+    _apply_ao(tree, bsdf, painted, strength=0.52, distance=0.18)
+    _setup_pbr(tree, bsdf, out, roughness=0.94)
     return mat
 
 
@@ -1396,7 +1596,11 @@ def setup_building_material_slots(obj, props):
     clr_le = getattr(props, 'color_log_end', (0.50, 0.34, 0.18, 1.0))
     mat_log_end = getattr(props, 'custom_log_end', None) or create_stylized_log_ends("M_Building_Log_End", color=clr_le)
 
-    # Assemble all 11 canonical slots in strict order
+    # 11. Plaster with Exposed Brick (plaster_wall_diffuse.jpg + procedural bricks)
+    mat_plaster_brick = (getattr(props, 'custom_wall_brick', None) or 
+                         create_stylized_plaster_brick("M_Building_Plaster_Brick", color=props.color_wall_ext))
+
+    # Assemble all 12 canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
         mat_plaster,        # 1  MAT_INDEX_PLASTER
@@ -1409,6 +1613,7 @@ def setup_building_material_slots(obj, props):
         mat_cut_stone,      # 8  MAT_INDEX_CUT_STONE
         mat_log,            # 9  MAT_INDEX_LOG
         mat_log_end,        # 10 MAT_INDEX_LOG_END
+        mat_plaster_brick,  # 11 MAT_INDEX_PLASTER_BRICK
     ]
     obj.data.materials.clear()
     for m in required_mats:

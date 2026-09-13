@@ -214,6 +214,12 @@ class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
             box_timber.prop(props, "timber_diagonals")
             box_timber.prop(props, "open_timber_frame")
 
+        # Stucco & Exposed Brick
+        box_stucco = layout.box()
+        box_stucco.prop(props, "has_exposed_brick")
+        if props.has_exposed_brick:
+            box_stucco.prop(props, "exposed_brick_frequency", slider=True)
+
 class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
     """Subpanel for roof, shingles, dormers, and chimney"""
     bl_label = "Roof & Details"
@@ -367,6 +373,7 @@ class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
         col = box_custom.column(align=True)
         col.prop(props, "custom_shingles", text="Shingles Mat")
         col.prop(props, "custom_wall_ext", text="Wall Ext Mat")
+        col.prop(props, "custom_wall_brick", text="Exposed Brick Stucco Mat")
         col.prop(props, "custom_wall_int", text="Wall Int Mat")
         col.prop(props, "custom_timber_frame", text="Timber Frame Mat")
         col.prop(props, "custom_timber", text="General Wood Mat")

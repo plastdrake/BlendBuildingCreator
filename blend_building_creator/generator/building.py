@@ -234,7 +234,9 @@ def build_round_tower(bm, props, seed):
                 mat_ext=mat_w, normal_vec=(fn_vec.x, fn_vec.y), tier=tier_val,
                 physical_siding=phys_siding, plank_direction=plank_dir,
                 plank_jankiness=plank_jank, stone_block_scale=stone_scale,
-                stone_disorder=stone_disorder, seed=seed + k * 17
+                stone_disorder=stone_disorder, seed=seed + k * 17,
+                has_exposed_brick=getattr(props, 'has_exposed_brick', True),
+                exposed_brick_freq=getattr(props, 'exposed_brick_frequency', 0.25)
             )
 
         prev_r = cur_r
@@ -1472,6 +1474,8 @@ def generate_building(obj, props):
         plank_jank = getattr(props, 'plank_jankiness', 0.35)
         stone_scale = getattr(props, 'stone_block_scale', 1.0)
         stone_disorder = getattr(props, 'stone_disorder', 0.35)
+        has_brick = getattr(props, 'has_exposed_brick', True)
+        brick_freq = getattr(props, 'exposed_brick_frequency', 0.25)
 
         # Interior joinery
         build_interior_trims(
@@ -1494,27 +1498,31 @@ def generate_building(obj, props):
             bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
             mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding,
             plank_direction=plank_dir, plank_jankiness=plank_jank,
-            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+            has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
         )
         build_wall_with_opening(
             bm, (x_min, y_max), (x_max, y_max), z_floor, wall_top_z, wall_t, back_openings,
             mat_ext=mat_w, normal_vec=(0.0, 1.0), tier=tier_val, physical_siding=phys_siding,
             plank_direction=plank_dir, plank_jankiness=plank_jank,
-            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+            has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
         )
         build_wall_with_opening(
             bm, (x_min, y_min), (x_min, y_max), z_floor, wall_top_z, wall_t, left_openings,
             mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
             plank_direction=plank_dir, plank_jankiness=plank_jank,
             stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
-            omit_top_log_row=omit_crown
+            omit_top_log_row=omit_crown,
+            has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
         )
         build_wall_with_opening(
             bm, (x_max, y_min), (x_max, y_max), z_floor, wall_top_z, wall_t, right_openings,
             mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
             plank_direction=plank_dir, plank_jankiness=plank_jank,
             stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
-            omit_top_log_row=omit_crown
+            omit_top_log_row=omit_crown,
+            has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
         )
         
         # Wing Solid Walls
@@ -1524,7 +1532,8 @@ def generate_building(obj, props):
                     bm, p1, p2, z_floor, wall_top_z, wall_t, w_ops,
                     mat_ext=mat_w, normal_vec=norm_v, tier=tier_val, physical_siding=phys_siding,
                     plank_direction=plank_dir, plank_jankiness=plank_jank,
-                    stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed
+                    stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+                    has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
                 )
 
         # Timber Framing (Tudor Half-Timbering)

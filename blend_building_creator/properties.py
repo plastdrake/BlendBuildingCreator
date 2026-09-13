@@ -888,6 +888,20 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    has_exposed_brick: BoolProperty(
+        name="Exposed Brick Accents",
+        description="Expose terracotta clay brickwork beneath chipped stucco on select wall panels and corners",
+        default=True,
+        update=on_property_updated
+    )
+
+    exposed_brick_frequency: FloatProperty(
+        name="Brick Frequency",
+        description="Chance/density of stucco wall panels showing exposed terracotta brickwork (0.0 = none, 1.0 = all)",
+        min=0.0, max=1.0, default=0.25,
+        update=on_property_updated
+    )
+
     open_timber_frame: BoolProperty(
         name="Open Timber Frame",
         description="Convert ground walls into open post-and-beam timber bays (ideal for sheds and mills)",
@@ -1034,3 +1048,4 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     custom_railing: PointerProperty(type=bpy.types.Material, name="Railing Mat", update=on_property_updated)
     custom_window_frame: PointerProperty(type=bpy.types.Material, name="Window Frame Mat", update=on_property_updated)
     custom_shutter: PointerProperty(type=bpy.types.Material, name="Shutter Mat", update=on_property_updated)
+    custom_wall_brick: PointerProperty(type=bpy.types.Material, name="Exposed Brick Stucco Mat", update=on_property_updated)

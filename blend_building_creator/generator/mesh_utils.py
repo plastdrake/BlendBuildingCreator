@@ -73,6 +73,9 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
         f.material_index = mat_index
         faces.append(f)
         
+        if is_wall and mat_index == 11 and f_idx == 4:
+            f.material_index = 1 # Keep interior room wall clean plaster
+            
         if is_wall:
             # Consistent length & height wall unwrapping for planks & stone:
             # U is ALWAYS along wall length (X, horizontal), offset by u_offset
