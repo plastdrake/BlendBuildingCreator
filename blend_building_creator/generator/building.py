@@ -2157,10 +2157,10 @@ def generate_building(obj, props):
                     w_roof_ymax = up_front_y + 0.04
                     abut_back = True
                 else:
-                    # Equal-floor: stop flush inside the main wall core (0.08 embed, no
-                    # overhang into the rooms) so the deck never shows inside or punches through outside.
-                    w_roof_ymax = top_y_min + 0.08
-                    abut_back = True
+                    # Equal-floor cross-gable: extend the wing deck into the main roof
+                    # volume so slopes meet in a true valley (no gable-wall cap).
+                    w_roof_ymax = top_cy if is_rotated_roof else (-top_hy + 0.35)
+                    abut_back = True if is_rotated_roof else False
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
@@ -2218,9 +2218,8 @@ def generate_building(obj, props):
                                     'sway_amount': w_sway
                                 })
 
-                # Equal-floor rear triangle seals the wing-to-main joint so no daylight
-                # gap shows; lower wings keep the single outer gable (unchanged).
-                w_gable_fb = ('FRONT', 'BACK') if not is_lower_wing else ('FRONT',)
+                # Open valley junction: outer gable only, wing deck runs into main roof.
+                w_gable_fb = ('FRONT',)
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         bm,
@@ -2296,9 +2295,9 @@ def generate_building(obj, props):
                     w_roof_ymin = up_back_y - 0.04
                     abut_front = True
                 else:
-                    # Same flush embed as FRONT (see above).
-                    w_roof_ymin = top_y_max - 0.08
-                    abut_front = True
+                    # Same cross-gable extension as FRONT (see above).
+                    w_roof_ymin = top_cy if is_rotated_roof else (top_hy - 0.35)
+                    abut_front = True if is_rotated_roof else False
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
@@ -2356,7 +2355,7 @@ def generate_building(obj, props):
                                     'sway_amount': w_sway
                                 })
 
-                w_gable_bk = ('FRONT', 'BACK') if not is_lower_wing else ('BACK',)
+                w_gable_bk = ('BACK',)
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         bm,
@@ -2435,10 +2434,9 @@ def generate_building(obj, props):
                 wing_roof_bm = bmesh.new()
                 lx_half = w_span_y * 0.5
                 ly_half = (w_ridge_len + 0.04) * 0.5 if is_rotated_roof else (w_ridge_len * 0.5)
-                # Main-side end always abuts flush inside the wall core: no overhang
-                # into the main rooms (fixes interior beam/deck overlap + exterior punch-through).
-                loc_abut_back = True
-                y_max_adj = 0.04 if (is_lower_wing or is_rotated_roof) else 0.08
+                # Main-side end extends into the main roof for a valley junction.
+                loc_abut_back = True if is_rotated_roof else is_lower_wing
+                y_max_adj = 0.04 if (is_lower_wing or is_rotated_roof) else 0.25
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_cy = (w_top_ymin + w_top_ymax) * 0.5
@@ -2509,7 +2507,7 @@ def generate_building(obj, props):
                                     'sway_amount': w_sway
                                 })
 
-                w_gable_lr = ('FRONT', 'BACK') if not is_lower_wing else ('FRONT',)
+                w_gable_lr = ('FRONT',)
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         wing_roof_bm,

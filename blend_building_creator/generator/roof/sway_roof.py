@@ -126,23 +126,24 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
                 v_out1_b = grid_bot[k+1][j+1]
                 v_out0_b = grid_bot[k+1][j]
                 
+                # Abutting ends stay open for valley junctions (see gable_roof).
                 if side < 0:
                     f_top = bm.faces.new([v_in0_t, v_in1_t, v_out1_t, v_out0_t])
                     f_bot = bm.faces.new([v_out0_b, v_out1_b, v_in1_b, v_in0_b])
                     if k == segments_x - 1:
                         bm.faces.new([v_out0_b, v_out0_t, v_out1_t, v_out1_b]).material_index = MAT_INDEX_TIMBER
-                    if j == 0:
+                    if j == 0 and not abut_front:
                         bm.faces.new([v_in0_t, v_out0_t, v_out0_b, v_in0_b]).material_index = MAT_INDEX_TIMBER
-                    if j == segments_y - 1:
+                    if j == segments_y - 1 and not abut_back:
                         bm.faces.new([v_out1_t, v_in1_t, v_in1_b, v_out1_b]).material_index = MAT_INDEX_TIMBER
                 else:
                     f_top = bm.faces.new([v_out0_t, v_out1_t, v_in1_t, v_in0_t])
                     f_bot = bm.faces.new([v_in0_b, v_in1_b, v_out1_b, v_out0_b])
                     if k == segments_x - 1:
                         bm.faces.new([v_out1_b, v_out1_t, v_out0_t, v_out0_b]).material_index = MAT_INDEX_TIMBER
-                    if j == 0:
+                    if j == 0 and not abut_front:
                         bm.faces.new([v_out0_t, v_in0_t, v_in0_b, v_out0_b]).material_index = MAT_INDEX_TIMBER
-                    if j == segments_y - 1:
+                    if j == segments_y - 1 and not abut_back:
                         bm.faces.new([v_in1_t, v_out1_t, v_out1_b, v_in1_b]).material_index = MAT_INDEX_TIMBER
                         
                 f_top.material_index = MAT_INDEX_SHINGLES
