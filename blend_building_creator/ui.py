@@ -251,6 +251,12 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
             col_d = box_det.column(align=True)
             col_d.prop(props, "dormer_count")
             col_d.prop(props, "dormer_sides")
+            if props.building_shape in ('L_SHAPE', 'T_SHAPE', 'U_SHAPE'):
+                col_d.separator()
+                col_d.prop(props, "has_wing_dormers")
+                if props.has_wing_dormers:
+                    col_d.prop(props, "wing_dormer_count")
+                    col_d.prop(props, "wing_dormer_sides")
 
         # Turret and Chimney
         box_acc = layout.box()

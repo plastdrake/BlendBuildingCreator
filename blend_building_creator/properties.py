@@ -597,6 +597,55 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    dormer_count: IntProperty(
+        name="Dormer Count",
+        description="Number of dormers on the main roof",
+        default=2,
+        min=1,
+        max=8,
+        update=on_property_updated
+    )
+
+    dormer_sides: EnumProperty(
+        name="Dormer Sides",
+        description="Roof slopes to place dormer windows on",
+        items=[
+            ('BOTH', "Both Slopes", "Distribute dormers across both roof slopes"),
+            ('FRONT_LEFT', "Front / Left Slope", "Place dormers only on the front or left slope"),
+            ('BACK_RIGHT', "Back / Right Slope", "Place dormers only on the back or right slope"),
+        ],
+        default='BOTH',
+        update=on_property_updated
+    )
+
+    has_wing_dormers: BoolProperty(
+        name="Wing Dormers",
+        description="Place dormer windows on building wing roofs",
+        default=True,
+        update=on_property_updated
+    )
+
+    wing_dormer_count: IntProperty(
+        name="Dormers per Wing",
+        description="Number of dormers on each wing roof",
+        default=1,
+        min=1,
+        max=4,
+        update=on_property_updated
+    )
+
+    wing_dormer_sides: EnumProperty(
+        name="Wing Dormer Sides",
+        description="Wing roof slopes to place dormers on",
+        items=[
+            ('BOTH', "Both Slopes", "Place dormers on both slopes of the wing roof"),
+            ('OUTER', "Outer Slopes Only", "Place dormers on the exterior-facing slopes of each wing"),
+            ('INNER', "Inner Slopes Only", "Place dormers on the interior/courtyard-facing slopes of each wing"),
+        ],
+        default='BOTH',
+        update=on_property_updated
+    )
+
     has_roof_turret: BoolProperty(
         name="Roof Spire Turret",
         description="Fairytale spire dormer tower perched on the roof",

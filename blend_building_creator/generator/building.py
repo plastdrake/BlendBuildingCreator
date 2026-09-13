@@ -1762,18 +1762,41 @@ def generate_building(obj, props):
             d_rz = z_dormer_base + cur_dormer_h + cur_dormer_roof_h
             u_intersect = max(0.12, (z_main_ridge - d_rz) / max(0.5, props.roof_height))
             
+            d_count = max(1, getattr(props, 'dormer_count', 2))
+            d_sides = getattr(props, 'dormer_sides', 'BOTH')
+
             if is_rotated_roof:
                 roof_half_w = top_hy + props.roof_overhang
                 reach_to_slope = (dormer_u - u_intersect) * roof_half_w
                 dist_to_ridge = dormer_u * roof_half_w
                 cur_dormer_reach = min(dist_to_ridge - 0.20, max(0.90, reach_to_slope + 0.14))
-                if top_hx * 2.0 > 4.2:
-                    fx1 = top_cx - top_hx * 0.35
-                    bx1 = top_cx + top_hx * 0.35
-                    dormer_placements.append({'pos': (fx1, top_cy - roof_half_w * dormer_u), 'facing': (0, -1), 'side': 1, 'loc_y': fx1 - top_cx})
-                    dormer_placements.append({'pos': (bx1, top_cy + roof_half_w * dormer_u), 'facing': (0, 1), 'side': -1, 'loc_y': bx1 - top_cx})
+
+                if d_sides == 'FRONT_LEFT':
+                    n_front, n_back = d_count, 0
+                elif d_sides == 'BACK_RIGHT':
+                    n_front, n_back = 0, d_count
+                else: # 'BOTH'
+                    n_front = (d_count + 1) // 2
+                    n_back = d_count // 2
+
+                x_margin = min(1.0, max(0.65, (top_hx * 2.0) * 0.16))
+                x_start = top_x_min + x_margin
+                x_end = top_x_max - x_margin
+                x_span = max(0.2, x_end - x_start)
+
+                if n_front == 1 and n_back == 1 and x_span >= 1.6:
+                    fx = top_cx - x_span * 0.22
+                    dormer_placements.append({'pos': (fx, top_cy - roof_half_w * dormer_u), 'facing': (0, -1), 'side': 1, 'loc_y': fx - top_cx})
+                    bx = top_cx + x_span * 0.22
+                    dormer_placements.append({'pos': (bx, top_cy + roof_half_w * dormer_u), 'facing': (0, 1), 'side': -1, 'loc_y': bx - top_cx})
                 else:
-                    dormer_placements.append({'pos': (top_cx, top_cy - roof_half_w * dormer_u), 'facing': (0, -1), 'side': 1, 'loc_y': 0.0})
+                    for i in range(n_front):
+                        fx = top_cx if n_front == 1 else (x_start + ((i + 0.5) / n_front) * x_span)
+                        dormer_placements.append({'pos': (fx, top_cy - roof_half_w * dormer_u), 'facing': (0, -1), 'side': 1, 'loc_y': fx - top_cx})
+                    for i in range(n_back):
+                        bx = top_cx if n_back == 1 else (x_start + ((i + 0.5) / n_back) * x_span)
+                        dormer_placements.append({'pos': (bx, top_cy + roof_half_w * dormer_u), 'facing': (0, 1), 'side': -1, 'loc_y': bx - top_cx})
+
                 for dp in dormer_placements:
                     dormer_apertures.append({
                         'side': dp['side'],
@@ -1788,17 +1811,33 @@ def generate_building(obj, props):
                 # Penetrate 14cm into slope for a watertight seam, but stop at least 20cm before the ridge
                 dist_to_ridge = dormer_u * roof_half_w
                 cur_dormer_reach = min(dist_to_ridge - 0.20, max(0.90, reach_to_slope + 0.14))
-                
-                # Determine dormer Y positions avoiding chimney collision
-                # Chimney is at +X (right slope) and +Y (top_hy * 0.45)
-                if top_hy * 2.0 > 4.2:
-                    left_y = top_cy + top_hy * 0.35
-                    right_y = top_cy - top_hy * 0.40 if props.has_chimney else top_cy + top_hy * 0.35
-                    dormer_placements.append({'pos': (top_cx - roof_half_w * dormer_u, left_y), 'facing': (-1, 0), 'side': -1})
-                    dormer_placements.append({'pos': (top_cx + roof_half_w * dormer_u, right_y), 'facing': (1, 0), 'side': 1})
+
+                if d_sides == 'FRONT_LEFT':
+                    n_left, n_right = d_count, 0
+                elif d_sides == 'BACK_RIGHT':
+                    n_left, n_right = 0, d_count
+                else: # 'BOTH'
+                    n_left = (d_count + 1) // 2
+                    n_right = d_count // 2
+
+                y_margin = min(1.0, max(0.65, (top_hy * 2.0) * 0.16))
+                y_start = top_y_min + y_margin
+                y_end = top_y_max - y_margin
+                y_span = max(0.2, y_end - y_start)
+
+                if n_left == 1 and n_right == 1 and y_span >= 1.6:
+                    ly = top_cy + y_span * 0.22
+                    dormer_placements.append({'pos': (top_cx - roof_half_w * dormer_u, ly), 'facing': (-1, 0), 'side': -1})
+                    ry = top_cy - (y_span * 0.25 if props.has_chimney else y_span * 0.22)
+                    dormer_placements.append({'pos': (top_cx + roof_half_w * dormer_u, ry), 'facing': (1, 0), 'side': 1})
                 else:
-                    dormer_placements.append({'pos': (top_cx - roof_half_w * dormer_u, top_cy), 'facing': (-1, 0), 'side': -1})
-                    
+                    for i in range(n_left):
+                        ly = top_cy if n_left == 1 else (y_start + ((i + 0.5) / n_left) * y_span)
+                        dormer_placements.append({'pos': (top_cx - roof_half_w * dormer_u, ly), 'facing': (-1, 0), 'side': -1})
+                    for i in range(n_right):
+                        ry = top_cy if n_right == 1 else (y_start + ((i + 0.5) / n_right) * y_span)
+                        dormer_placements.append({'pos': (top_cx + roof_half_w * dormer_u, ry), 'facing': (1, 0), 'side': 1})
+
                 for dp in dormer_placements:
                     d_cx, d_cy = dp['pos']
                     dormer_apertures.append({
@@ -1952,6 +1991,7 @@ def generate_building(obj, props):
             )
 
     # Compound Shape Wing Roof (Cross-Gable intersecting main roof or upper facade)
+    wing_dormer_placements = []
     if has_wing:
         w_top_fl = min(wing_floors, num_floors)
         is_lower_wing = (wing_floors < num_floors)
@@ -2009,6 +2049,30 @@ def generate_building(obj, props):
                         spacing=1.2
                     )
 
+            # Pre-compute wing roof dormer apertures and placements
+            w_dormer_apertures = []
+            do_wing_dormers = (
+                props.has_dormers and
+                getattr(props, 'has_wing_dormers', True) and
+                roof_style in ('SWAY', 'GABLE') and
+                effective_archetype != 'WATCHTOWER'
+            )
+            w_d_sides = getattr(props, 'wing_dormer_sides', 'BOTH')
+            w_d_target_count = max(1, getattr(props, 'wing_dormer_count', 1))
+            w_sway = props.roof_sway * 0.70 if roof_style == 'SWAY' else 0.0
+
+            z_w_ridge = w_top_z + w_roof_h
+            w_dormer_u = 0.58
+            w_dormer_drop = (1.0 - flare_val) * w_dormer_u + flare_val * (1.0 - (1.0 - w_dormer_u) ** 2)
+            w_slope_deck_z = z_w_ridge - w_dormer_drop * (w_roof_h + 0.10)
+            z_w_dormer_base = w_slope_deck_z - 0.20
+
+            max_w_d_total_h = max(0.95, (z_w_ridge - 0.28) - z_w_dormer_base)
+            w_cur_d_h = min(0.85, max_w_d_total_h * 0.60)
+            w_cur_d_roof_h = min(0.48, max_w_d_total_h * 0.40)
+            w_d_rz = z_w_dormer_base + w_cur_d_h + w_cur_d_roof_h
+            w_u_intersect = max(0.12, (z_w_ridge - w_d_rz) / max(0.4, w_roof_h))
+
             if w_wall == 'FRONT':
                 if is_lower_wing:
                     w_roof_ymax = up_front_y + 0.04
@@ -2016,6 +2080,57 @@ def generate_building(obj, props):
                 else:
                     w_roof_ymax = top_cy if is_rotated_roof else (-top_hy + 0.25)
                     abut_back = False
+
+                w_cx = (w_top_xmin + w_top_xmax) * 0.5
+                w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
+                w_reach = (w_dormer_u - w_u_intersect) * w_roof_half_w
+                dist_to_ridge = w_dormer_u * w_roof_half_w
+                w_cur_d_reach = min(dist_to_ridge - 0.16, max(0.75, w_reach + 0.12))
+                w_cur_d_w = min(1.10, max(0.90, (w_top_xmax - w_top_xmin) * 0.28))
+
+                if do_wing_dormers:
+                    y_start = w_top_ymin + 0.85
+                    y_end = w_roof_ymax - 1.05
+                    y_span = y_end - y_start
+                    if y_span >= 0.60:
+                        if w_cx < top_cx - 0.2:
+                            outer_s, inner_s = -1, 1
+                        elif w_cx > top_cx + 0.2:
+                            outer_s, inner_s = 1, -1
+                        else:
+                            outer_s, inner_s = None, None
+
+                        if w_d_sides == 'OUTER' and outer_s is not None:
+                            slopes = [outer_s]
+                        elif w_d_sides == 'INNER' and inner_s is not None:
+                            slopes = [inner_s]
+                        else:
+                            slopes = [-1, 1]
+
+                        for s in slopes:
+                            k = min(w_d_target_count, max(1, int(y_span / 1.35)))
+                            for i in range(k):
+                                d_y = (y_start + y_end) * 0.5 if k == 1 else (y_start + ((i + 0.5) / k) * y_span)
+                                d_x = w_cx + s * w_roof_half_w * w_dormer_u
+                                facing = (-1, 0) if s == -1 else (1, 0)
+                                w_dormer_apertures.append({
+                                    'side': s,
+                                    'y_min': d_y - 0.38,
+                                    'y_max': d_y + 0.38,
+                                    'u_min': max(0.25, w_u_intersect + 0.04),
+                                    'u_max': min(0.70, w_dormer_u + 0.08)
+                                })
+                                wing_dormer_placements.append({
+                                    'pos': (d_x, d_y),
+                                    'facing': facing,
+                                    'z_base': z_w_dormer_base,
+                                    'dormer_w': w_cur_d_w,
+                                    'dormer_d': w_cur_d_reach,
+                                    'dormer_h': w_cur_d_h,
+                                    'dormer_roof_h': w_cur_d_roof_h,
+                                    'max_back_reach': w_cur_d_reach,
+                                    'sway_amount': w_sway
+                                })
 
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
@@ -2032,7 +2147,8 @@ def generate_building(obj, props):
                         abut_back=abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
-                        roof_flare=flare_val
+                        roof_flare=flare_val,
+                        dormer_apertures=w_dormer_apertures
                     )
                 else:
                     build_gable_roof(
@@ -2048,7 +2164,8 @@ def generate_building(obj, props):
                         abut_back=abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
-                        roof_flare=flare_val
+                        roof_flare=flare_val,
+                        dormer_apertures=w_dormer_apertures
                     )
 
             elif w_wall == 'BACK':
@@ -2059,6 +2176,57 @@ def generate_building(obj, props):
                     w_roof_ymin = top_cy if is_rotated_roof else (top_hy - 0.25)
                     abut_front = False
 
+                w_cx = (w_top_xmin + w_top_xmax) * 0.5
+                w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
+                w_reach = (w_dormer_u - w_u_intersect) * w_roof_half_w
+                dist_to_ridge = w_dormer_u * w_roof_half_w
+                w_cur_d_reach = min(dist_to_ridge - 0.16, max(0.75, w_reach + 0.12))
+                w_cur_d_w = min(1.10, max(0.90, (w_top_xmax - w_top_xmin) * 0.28))
+
+                if do_wing_dormers:
+                    y_start = w_roof_ymin + 1.05
+                    y_end = w_top_ymax - 0.85
+                    y_span = y_end - y_start
+                    if y_span >= 0.60:
+                        if w_cx < top_cx - 0.2:
+                            outer_s, inner_s = -1, 1
+                        elif w_cx > top_cx + 0.2:
+                            outer_s, inner_s = 1, -1
+                        else:
+                            outer_s, inner_s = None, None
+
+                        if w_d_sides == 'OUTER' and outer_s is not None:
+                            slopes = [outer_s]
+                        elif w_d_sides == 'INNER' and inner_s is not None:
+                            slopes = [inner_s]
+                        else:
+                            slopes = [-1, 1]
+
+                        for s in slopes:
+                            k = min(w_d_target_count, max(1, int(y_span / 1.35)))
+                            for i in range(k):
+                                d_y = (y_start + y_end) * 0.5 if k == 1 else (y_start + ((i + 0.5) / k) * y_span)
+                                d_x = w_cx + s * w_roof_half_w * w_dormer_u
+                                facing = (-1, 0) if s == -1 else (1, 0)
+                                w_dormer_apertures.append({
+                                    'side': s,
+                                    'y_min': d_y - 0.38,
+                                    'y_max': d_y + 0.38,
+                                    'u_min': max(0.25, w_u_intersect + 0.04),
+                                    'u_max': min(0.70, w_dormer_u + 0.08)
+                                })
+                                wing_dormer_placements.append({
+                                    'pos': (d_x, d_y),
+                                    'facing': facing,
+                                    'z_base': z_w_dormer_base,
+                                    'dormer_w': w_cur_d_w,
+                                    'dormer_d': w_cur_d_reach,
+                                    'dormer_h': w_cur_d_h,
+                                    'dormer_roof_h': w_cur_d_roof_h,
+                                    'max_back_reach': w_cur_d_reach,
+                                    'sway_amount': w_sway
+                                })
+
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         bm,
@@ -2075,7 +2243,8 @@ def generate_building(obj, props):
                         abut_back=False,
                         tier=tier_val,
                         plank_direction=plank_dir,
-                        roof_flare=flare_val
+                        roof_flare=flare_val,
+                        dormer_apertures=w_dormer_apertures
                     )
                 else:
                     build_gable_roof(
@@ -2092,7 +2261,8 @@ def generate_building(obj, props):
                         abut_back=False,
                         tier=tier_val,
                         plank_direction=plank_dir,
-                        roof_flare=flare_val
+                        roof_flare=flare_val,
+                        dormer_apertures=w_dormer_apertures
                     )
 
             elif w_wall in ('LEFT', 'RIGHT'):
@@ -2104,6 +2274,71 @@ def generate_building(obj, props):
                 loc_abut_back = True if is_rotated_roof else is_lower_wing
                 y_max_adj = 0.04 if (is_lower_wing or is_rotated_roof) else 0.25
 
+                w_cx = (w_top_xmin + w_top_xmax) * 0.5
+                w_cy = (w_top_ymin + w_top_ymax) * 0.5
+                w_roof_half_w = lx_half + props.roof_overhang
+                w_reach = (w_dormer_u - w_u_intersect) * w_roof_half_w
+                dist_to_ridge = w_dormer_u * w_roof_half_w
+                w_cur_d_reach = min(dist_to_ridge - 0.16, max(0.75, w_reach + 0.12))
+                w_cur_d_w = min(1.10, max(0.90, w_span_y * 0.28))
+
+                if do_wing_dormers:
+                    if w_wall == 'LEFT':
+                        x_start = w_top_xmin + 0.85
+                        x_end = w_top_xmax - 1.05
+                    else: # 'RIGHT'
+                        x_start = w_top_xmin + 1.05
+                        x_end = w_top_xmax - 0.85
+                    x_span = x_end - x_start
+
+                    if x_span >= 0.60:
+                        if w_cy < top_cy - 0.2:
+                            outer_sw, inner_sw = -1, 1
+                        elif w_cy > top_cy + 0.2:
+                            outer_sw, inner_sw = 1, -1
+                        else:
+                            outer_sw, inner_sw = None, None
+
+                        if w_d_sides == 'OUTER' and outer_sw is not None:
+                            slopes_world = [outer_sw]
+                        elif w_d_sides == 'INNER' and inner_sw is not None:
+                            slopes_world = [inner_sw]
+                        else:
+                            slopes_world = [-1, 1]
+
+                        for sw in slopes_world:
+                            k = min(w_d_target_count, max(1, int(x_span / 1.35)))
+                            for i in range(k):
+                                d_x = (x_start + x_end) * 0.5 if k == 1 else (x_start + ((i + 0.5) / k) * x_span)
+                                d_y = w_cy + sw * w_roof_half_w * w_dormer_u
+                                facing = (0, -1) if sw == -1 else (0, 1)
+
+                                if w_wall == 'LEFT':
+                                    local_side = -1 if sw == -1 else 1
+                                    loc_y = d_x - w_cx
+                                else: # 'RIGHT'
+                                    local_side = 1 if sw == -1 else -1
+                                    loc_y = w_cx - d_x
+
+                                w_dormer_apertures.append({
+                                    'side': local_side,
+                                    'y_min': loc_y - 0.38,
+                                    'y_max': loc_y + 0.38,
+                                    'u_min': max(0.25, w_u_intersect + 0.04),
+                                    'u_max': min(0.70, w_dormer_u + 0.08)
+                                })
+                                wing_dormer_placements.append({
+                                    'pos': (d_x, d_y),
+                                    'facing': facing,
+                                    'z_base': z_w_dormer_base,
+                                    'dormer_w': w_cur_d_w,
+                                    'dormer_d': w_cur_d_reach,
+                                    'dormer_h': w_cur_d_h,
+                                    'dormer_roof_h': w_cur_d_roof_h,
+                                    'max_back_reach': w_cur_d_reach,
+                                    'sway_amount': w_sway
+                                })
+
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         wing_roof_bm,
@@ -2119,7 +2354,8 @@ def generate_building(obj, props):
                         abut_back=loc_abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
-                        roof_flare=flare_val
+                        roof_flare=flare_val,
+                        dormer_apertures=w_dormer_apertures
                     )
                 else:
                     build_gable_roof(
@@ -2135,13 +2371,12 @@ def generate_building(obj, props):
                         abut_back=loc_abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
-                        roof_flare=flare_val
+                        roof_flare=flare_val,
+                        dormer_apertures=w_dormer_apertures
                     )
 
                 rot_ang = -math.pi * 0.5 if w_wall == 'LEFT' else math.pi * 0.5
                 rot_m = Matrix.Rotation(rot_ang, 4, 'Z')
-                w_cx = (w_top_xmin + w_top_xmax) * 0.5
-                w_cy = (w_top_ymin + w_top_ymax) * 0.5
                 trans_m = Matrix.Translation(Vector((w_cx, w_cy, w_top_z)))
                 bmesh.ops.transform(wing_roof_bm, matrix=trans_m @ rot_m, verts=wing_roof_bm.verts)
 
@@ -2175,6 +2410,22 @@ def generate_building(obj, props):
                 max_back_reach=cur_dormer_reach,
                 roof_style=roof_style,
                 sway_amount=props.roof_sway if roof_style == 'SWAY' else 0.0
+            )
+        for wdp in wing_dormer_placements:
+            build_dormer(
+                bm,
+                center_pos=wdp['pos'],
+                z_base=wdp['z_base'],
+                facing_dir=wdp['facing'],
+                dormer_w=wdp['dormer_w'],
+                dormer_d=wdp['dormer_d'],
+                dormer_h=wdp['dormer_h'],
+                dormer_roof_h=wdp['dormer_roof_h'],
+                roof_flare=flare_val,
+                tier=tier_val,
+                max_back_reach=wdp['max_back_reach'],
+                roof_style=roof_style,
+                sway_amount=wdp['sway_amount']
             )
             
     # Fairytale Roof Spire Turret (Positionable across roof pitch with attic penetration)
@@ -2245,7 +2496,7 @@ def generate_building(obj, props):
         clearance = 1.0
         for _pass in range(4):
             moved = False
-            for dp in dormer_placements:
+            for dp in (dormer_placements + wing_dormer_placements):
                 dx = chim_x - dp['pos'][0]
                 dy = chim_y - dp['pos'][1]
                 if abs(dx) < clearance and abs(dy) < clearance:
