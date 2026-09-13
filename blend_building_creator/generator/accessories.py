@@ -726,13 +726,14 @@ def _get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max):
 
 
 def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
-                    z_base, width=2.2, depth=1.6, height=2.6, roof_style='LEAN_TO', tier='TIER_3'):
+                    z_base, width=2.2, depth=1.6, height=2.6, roof_style='LEAN_TO', tier='TIER_3', floor_h=2.8):
     """
     Builds a small outcrop bay room / annex projection:
     - GROUND: rests on grounded stone foundation plinth.
     - UPPER: cantilevered oriel bay with heavy diagonal timber corbel brackets.
     - Features timber corner posts, leaded glass window, and dedicated shingled roof.
     """
+    height = min(height, floor_h * 0.72, 2.05)
     wx, wy, ox, oy, tx, ty, rot_z = _get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
     facade_rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
     
@@ -1084,40 +1085,40 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
     
     # 5. Dedicated Roof with Sealed Side Cheek Walls (Zero Gaps)
     roof_z_start = z_base + height
+    avail_roof_h = max(0.35, floor_h - height - 0.08)
     
     if roof_style == 'LEAN_TO':
-        roof_pitch = 0.38
-        r_rise = depth * roof_pitch
-        # Back edge terminates inside the wall thickness (never past the interior
-        # face) so no roof geometry shows indoors; front still covers the fascia.
-        r_len = math.sqrt(depth * depth + r_rise * r_rise) + 0.06
-        r_ang = math.atan2(r_rise, depth)
+        roof_pitch = 0.32
+        r_rise = min(avail_roof_h, depth * roof_pitch)
+        x_back = -0.01
+        x_front = depth + 0.16
+        roof_len = x_front - x_back
+        r_len = math.sqrt(roof_len * roof_len + r_rise * r_rise)
+        r_ang = math.atan2(r_rise, roof_len)
         rx_vec = Vector((math.cos(-r_ang), 0.0, math.sin(-r_ang)))
         ry_vec = Vector((0.0, 1.0, 0.0))
         rz_vec = Vector((-math.sin(-r_ang), 0.0, math.cos(-r_ang)))
         local_rot_mat = Matrix((rx_vec, ry_vec, rz_vec)).transposed().to_4x4()
         total_roof_mat = facade_rot_mat @ local_rot_mat
         roof_euler = total_roof_mat.to_euler()
-        # Single shingle roof slab only (no wooden deck duplicate underneath).
-        # Slab sits 4cm higher so its top clears the side trim cleanly.
-        loc_shingle = Vector((depth * 0.56, 0.0, roof_z_start + r_rise * 0.56 + 0.095))
+
+        # Single shingle roof slab only; starts at x_back (-0.03) stopping cleanly before interior room
+        mid_x = (x_front + x_back) * 0.5
+        mid_z = roof_z_start + r_rise * 0.5 + 0.06
+        loc_shingle = Vector((mid_x, 0.0, mid_z))
         world_shingle = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_shingle.to_4d()).to_3d()
-        _slab_sx = (r_len + 0.04) * 0.5
-        _slab_sy = (width + 0.36) * 0.5
+        _slab_sx = r_len * 0.5
+        _slab_sy = (width + 0.34) * 0.5
         _slab_sz = 0.04
         create_beveled_box(
             bm,
-            size=(r_len + 0.04, width + 0.36, 0.08),
+            size=(r_len, width + 0.34, 0.08),
             location=world_shingle,
             rotation=roof_euler,
             mat_index=MAT_INDEX_SHINGLES,
             bevel_amount=0.008
         )
-        # Main-roof shingle UVs: U along the eave (width), V down the slope
-        # from the high edge, same 0.32 world scale as sway/gable roofs.
-        # NOTE: applied by re-selecting slab faces from the mesh (the bevel op
-        # replaces the big top/bottom faces, so the creator's return list cannot
-        # be trusted to cover the visible faces).
+        # Main-roof shingle UVs: U along the eave (width), V down the slope from ridge to eave
         try:
             from mathutils import Matrix as _Mat, Vector as _Vec
             _uv = bm.loops.layers.uv.verify()
@@ -1136,16 +1137,13 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                     _lp[_uv].uv = _Vec(((_vco.y + _slab_sy) * 0.32, -(_vco.x + _slab_sx) * 0.32))
         except Exception:
             pass
-        # Front eave purlin beam capping the slab's front edge (same roof tilt).
-        _cos_a = math.cos(r_ang)
-        _sin_a = math.sin(r_ang)
-        _front_x = depth * 0.56 + (r_len + 0.04) * 0.5 * _cos_a - 0.02
-        _front_z = roof_z_start + r_rise * 0.56 + 0.095 - (r_len + 0.04) * 0.5 * _sin_a - 0.01
-        loc_eave = Vector((_front_x, 0.0, _front_z))
+
+        # Front eave purlin beam capping the slab's front edge
+        loc_eave = Vector((x_front - 0.04, 0.0, roof_z_start + 0.04))
         world_eave = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_eave.to_4d()).to_3d()
         create_beveled_box(
             bm,
-            size=(0.10, width + 0.40, 0.14),
+            size=(0.10, width + 0.38, 0.14),
             location=world_eave,
             rotation=roof_euler,
             mat_index=MAT_INDEX_TIMBER_FRAME,
@@ -1155,19 +1153,18 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         # Side triangular cheek closure walls & sloping timber bargeboards
         barge_w = 0.08
         for s_sign in [-1, 1]:
-            # Sloping bargeboard on side overhang edge (raised 4cm to cap the slab edge)
-            loc_barge = Vector((depth * 0.52, (half_w + 0.16) * s_sign, roof_z_start + r_rise * 0.56 + 0.10))
+            loc_barge = Vector((mid_x, (half_w + 0.16) * s_sign, mid_z))
             world_barge = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_barge.to_4d()).to_3d()
             create_beveled_box(
                 bm,
-                size=(r_len + 0.06, barge_w, 0.12),
+                size=(r_len + 0.04, barge_w, 0.12),
                 location=world_barge,
                 rotation=roof_euler,
                 mat_index=MAT_INDEX_TIMBER_FRAME,
                 bevel_amount=0.008
             )
-            # Sloping timber rafter plate directly atop the side wall (stays glued under the raised slab)
-            loc_side_rafter = Vector((depth * 0.52, (half_w - wall_thick * 0.5) * s_sign, roof_z_start + r_rise * 0.56 + 0.00))
+            # Sloping timber rafter plate atop the side wall
+            loc_side_rafter = Vector((mid_x, (half_w - wall_thick * 0.5) * s_sign, mid_z - 0.06))
             world_side_rafter = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_side_rafter.to_4d()).to_3d()
             create_beveled_box(
                 bm,
@@ -1177,15 +1174,9 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                 mat_index=MAT_INDEX_TIMBER_FRAME,
                 bevel_amount=0.008
             )
-            # Solid triangular cheek prism filling the wedge between flat side wall top and sloping rafter
+            # Solid triangular cheek prism filling wedge between flat side wall top and sloping rafter
             tri_y_center = (half_w - wall_thick * 0.5) * s_sign
             half_t = wall_thick * 0.5
-            # Vertices in local space
-            p_top_back = Vector((0.0, 0.0, roof_z_start + r_rise))
-            p_bot_front = Vector((depth, 0.0, roof_z_start))
-            p_bot_back = Vector((0.0, 0.0, roof_z_start))
-            
-            # Create triangular cheek prism faces
             v_t_b1 = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((0.0, tri_y_center - half_t, roof_z_start + r_rise)).to_4d()).to_3d())
             v_b_f1 = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((depth, tri_y_center - half_t, roof_z_start)).to_4d()).to_3d())
             v_b_b1 = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((0.0, tri_y_center - half_t, roof_z_start)).to_4d()).to_3d())
@@ -1203,19 +1194,68 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             f_back = bm.faces.new([v_t_b1, v_b_b1, v_b_b2, v_t_b2])
             f_back.material_index = wall_mat
     else: # GABLE roof
-        g_roof_h = 0.85
-        # Front triangular gable wall on outer face
+        g_roof_h = min(avail_roof_h, 0.58)
+        x_back = -0.03
+        x_front = depth + 0.16
+        roof_len = x_front - x_back
+        mid_x = (x_front + x_back) * 0.5
+        roof_half_w = half_w + 0.16
+        r_pitch_len = math.sqrt(roof_half_w ** 2 + g_roof_h ** 2)
+        r_pitch_ang = math.atan2(g_roof_h, roof_half_w)
+
+        # 1. Front Triangular Gable Wall (apex tucked cleanly under roof deck; no rectangular box poking through)
+        tri_x = depth - 0.04
+        tri_half_w = half_w - 0.02
+        tri_apex_z = roof_z_start + g_roof_h - 0.06
+        tri_t = 0.08
+
+        v_apex_f = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((tri_x, 0.0, tri_apex_z)).to_4d()).to_3d())
+        v_left_f = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((tri_x, -tri_half_w, roof_z_start + 0.02)).to_4d()).to_3d())
+        v_right_f = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((tri_x, tri_half_w, roof_z_start + 0.02)).to_4d()).to_3d())
+
+        v_apex_b = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((tri_x - tri_t, 0.0, tri_apex_z)).to_4d()).to_3d())
+        v_left_b = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((tri_x - tri_t, -tri_half_w, roof_z_start + 0.02)).to_4d()).to_3d())
+        v_right_b = bm.verts.new(Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((tri_x - tri_t, tri_half_w, roof_z_start + 0.02)).to_4d()).to_3d())
+
+        f_tri_f = bm.faces.new([v_apex_f, v_right_f, v_left_f])
+        f_tri_f.material_index = wall_mat
+        f_tri_b = bm.faces.new([v_apex_b, v_left_b, v_right_b])
+        f_tri_b.material_index = wall_mat
+        f_tri_l = bm.faces.new([v_apex_f, v_left_f, v_left_b, v_apex_b])
+        f_tri_l.material_index = wall_mat
+        f_tri_r = bm.faces.new([v_apex_f, v_apex_b, v_right_b, v_right_f])
+        f_tri_r.material_index = wall_mat
+        f_tri_bot = bm.faces.new([v_left_f, v_right_f, v_right_b, v_left_b])
+        f_tri_bot.material_index = wall_mat
+
+        # 2. Horizontal Collar Tie Beam across base of front gable
+        loc_collar = Vector((tri_x + 0.02, 0.0, roof_z_start + 0.04))
+        world_collar = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_collar.to_4d()).to_3d()
         create_beveled_box(
             bm,
-            size=(0.12, width - 0.08, g_roof_h * 0.5),
-            location=(wx + ox * (depth - 0.06), wy + oy * (depth - 0.06), roof_z_start + g_roof_h * 0.25),
+            size=(0.12, width + 0.08, 0.12),
+            location=world_collar,
             rotation=(0.0, 0.0, rot_z),
-            mat_index=wall_mat,
-            bevel_amount=0.01
+            mat_index=MAT_INDEX_TIMBER_FRAME,
+            bevel_amount=0.010
         )
-        # Pitched roof slopes (left & right of projection)
-        r_pitch_len = math.sqrt((width * 0.5 + 0.18) ** 2 + g_roof_h ** 2)
-        r_pitch_ang = math.atan2(g_roof_h, width * 0.5 + 0.18)
+
+        # 3. Vertical King Post Beam in gable center
+        king_h = max(0.18, g_roof_h - 0.16)
+        loc_king = Vector((tri_x + 0.02, 0.0, roof_z_start + 0.10 + king_h * 0.5))
+        world_king = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_king.to_4d()).to_3d()
+        create_beveled_box(
+            bm,
+            size=(0.10, 0.12, king_h),
+            location=world_king,
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME,
+            bevel_amount=0.008
+        )
+
+        # 4. Pitched Roof Slopes (Left & Right) with Parametric Shingle UV Mapping
+        _uv = bm.loops.layers.uv.verify()
+        slope_thickness = 0.08
         for s_sign in [-1, 1]:
             # Local slope rotation: tilts around local X axis
             sx_vec = Vector((1.0, 0.0, 0.0))
@@ -1223,16 +1263,82 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             sz_vec = Vector((0.0, math.sin(s_sign * r_pitch_ang), math.cos(s_sign * r_pitch_ang)))
             g_rot = (facade_rot_mat @ Matrix((sx_vec, sy_vec, sz_vec)).transposed().to_4x4()).to_euler()
             
-            loc_slope = Vector((depth * 0.5, (half_w * 0.5 + 0.06) * s_sign, roof_z_start + g_roof_h * 0.5))
+            # Position slope centered along slope span
+            loc_slope = Vector((mid_x, (roof_half_w * 0.5) * s_sign, roof_z_start + g_roof_h * 0.5 + 0.02))
             world_slope = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_slope.to_4d()).to_3d()
+            
             create_beveled_box(
                 bm,
-                size=(depth + 0.35, r_pitch_len, 0.08),
+                size=(roof_len, r_pitch_len, slope_thickness),
                 location=world_slope,
                 rotation=g_rot,
                 mat_index=MAT_INDEX_SHINGLES,
                 bevel_amount=0.008
             )
+            
+            # Map shingle UVs on this slope: U along ridge (front to back), V down slope (ridge to eave)
+            try:
+                from mathutils import Matrix as _Mat, Vector as _Vec
+                _slope_mat = _Mat.Translation(_Vec(world_slope)) @ g_rot.to_matrix().to_4x4()
+                _inv = _slope_mat.inverted()
+                _sx = roof_len * 0.5
+                _sy = r_pitch_len * 0.5
+                _sz = slope_thickness * 0.5
+                for _f in bm.faces:
+                    if _f.material_index != MAT_INDEX_SHINGLES:
+                        continue
+                    _c = _f.calc_center_median()
+                    _lco = _inv @ _c
+                    if abs(_lco.x) > _sx + 0.05 or abs(_lco.y) > _sy + 0.05 or abs(_lco.z) > _sz + 0.05:
+                        continue
+                    _f.tag = True
+                    for _lp in _f.loops:
+                        _vco = _inv @ _lp.vert.co
+                        u_val = (_vco.x + _sx) * 0.32
+                        if s_sign > 0:
+                            v_val = -(_vco.y + _sy) * 0.32
+                        else:
+                            v_val = -(_sy - _vco.y) * 0.32
+                        _lp[_uv].uv = _Vec((u_val, v_val))
+            except Exception:
+                pass
+
+            # 5. Sloping timber bargeboard along front edge of this slope
+            barge_len = r_pitch_len + 0.04
+            loc_barge = Vector((x_front - 0.02, (roof_half_w * 0.5) * s_sign, roof_z_start + g_roof_h * 0.5 + 0.03))
+            world_barge = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_barge.to_4d()).to_3d()
+            create_beveled_box(
+                bm,
+                size=(0.08, barge_len, 0.14),
+                location=world_barge,
+                rotation=g_rot,
+                mat_index=MAT_INDEX_TIMBER_FRAME,
+                bevel_amount=0.008
+            )
+
+        # 6. Horizontal Timber Ridge Cap Beam along ridge line
+        loc_ridge = Vector((mid_x, 0.0, roof_z_start + g_roof_h + 0.04))
+        world_ridge = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_ridge.to_4d()).to_3d()
+        create_beveled_box(
+            bm,
+            size=(roof_len + 0.02, 0.14, 0.12),
+            location=world_ridge,
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME,
+            bevel_amount=0.010
+        )
+
+        # 7. Apex Finial Cap Block at front ridge peak
+        loc_finial = Vector((x_front + 0.01, 0.0, roof_z_start + g_roof_h + 0.05))
+        world_finial = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_finial.to_4d()).to_3d()
+        create_beveled_box(
+            bm,
+            size=(0.12, 0.16, 0.18),
+            location=world_finial,
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME,
+            bevel_amount=0.012
+        )
 
 
 def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,

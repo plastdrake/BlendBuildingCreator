@@ -1085,7 +1085,25 @@ def generate_building(obj, props):
                 right_openings.append(b_op)
 
         # Dynamic Windows - Facade Openings & Shutters
+        # Dynamic Windows - Facade Openings & Shutters
         eff_spacing = max(1.0, props.window_spacing / max(0.2, getattr(props, 'window_density', 1.0)))
+        win_w_clr = (win_w * 0.5 + 0.65) if props.has_shutters else (win_w * 0.5 + 0.45)
+        w_top_roof_z = (found_h + wing_floors * floor_h + props.roof_height * 0.88) if has_wing else 0.0
+
+        def carve_intervals(spans, excludes, min_len):
+            cur_spans = list(spans)
+            for ex1, ex2 in excludes:
+                next_spans = []
+                for s1, s2 in cur_spans:
+                    if ex2 <= s1 or ex1 >= s2:
+                        next_spans.append((s1, s2))
+                    else:
+                        if ex1 - s1 >= min_len:
+                            next_spans.append((s1, ex1))
+                        if s2 - ex2 >= min_len:
+                            next_spans.append((ex2, s2))
+                cur_spans = next_spans
+            return cur_spans
 
         def get_shutter_info(wx_val, wy_val, wz_val):
             if not props.has_shutters:
@@ -1099,75 +1117,85 @@ def generate_building(obj, props):
                 return True, (h < int(pct * 100))
             return True, False
 
+        def get_facade_wing_exclusions(facade_name):
+            excludes = []
+            if not has_wing:
+                return excludes
+            for w_e in wings:
+                # Active if floor is part of wing OR wing roof reaches this floor
+                if not (fl_has_wing or (z_floor < w_top_roof_z + 0.35)):
+                    continue
+                w_wall = w_e['wall']
+                wb = w_e.get('bounds_fl', {}).get(fl_idx, None)
+                if wb is None:
+                    wb = w_e.get('bounds_fl', {}).get(wing_floors - 1, w_e['base'])
+                
+                # 1. Direct attachment to this facade
+                if w_wall == facade_name:
+                    if facade_name in ('FRONT', 'BACK'):
+                        excludes.append((wb[0] - win_w_clr, wb[1] + win_w_clr))
+                    else: # LEFT or RIGHT
+                        excludes.append((wb[2] - win_w_clr, wb[3] + win_w_clr))
+                
+                # 2. Adjacent corner attachment flush with this facade
+                if facade_name == 'LEFT':
+                    if w_wall in ('FRONT', 'BACK') and (wb[0] <= x_min + 0.35):
+                        if w_wall == 'FRONT':
+                            excludes.append((y_min - 0.50, y_min + win_w_clr + 0.40))
+                        else: # BACK
+                            excludes.append((y_max - (win_w_clr + 0.40), y_max + 0.50))
+                elif facade_name == 'RIGHT':
+                    if w_wall in ('FRONT', 'BACK') and (wb[1] >= x_max - 0.35):
+                        if w_wall == 'FRONT':
+                            excludes.append((y_min - 0.50, y_min + win_w_clr + 0.40))
+                        else: # BACK
+                            excludes.append((y_max - (win_w_clr + 0.40), y_max + 0.50))
+                elif facade_name == 'FRONT':
+                    if w_wall in ('LEFT', 'RIGHT') and (wb[2] <= y_min + 0.35):
+                        if w_wall == 'LEFT':
+                            excludes.append((x_min - 0.50, x_min + win_w_clr + 0.40))
+                        else: # RIGHT
+                            excludes.append((x_max - (win_w_clr + 0.40), x_max + 0.50))
+                elif facade_name == 'BACK':
+                    if w_wall in ('LEFT', 'RIGHT') and (wb[3] >= y_max - 0.35):
+                        if w_wall == 'LEFT':
+                            excludes.append((x_min - 0.50, x_min + win_w_clr + 0.40))
+                        else: # RIGHT
+                            excludes.append((x_max - (win_w_clr + 0.40), x_max + 0.50))
+            return excludes
+
         # Dynamic Windows - Front Wall
         if props.has_windows:
-            front_win_xs = []
-            w_top_roof_z = (found_h + wing_floors * floor_h + props.roof_height * 0.88) if has_wing else 0.0
-            wing_roof_occludes = has_wing and (z_floor < w_top_roof_z + 0.3)
+            front_excludes = list(get_facade_wing_exclusions('FRONT'))
             balcony_overhead = (fl_idx + 1 in active_balc_floors and b_side == 'FRONT')
             
             # Door exclusion zone calculation on floor 0
-            has_door_here = (fl_idx == 0 and props.has_front_door)
-            if has_door_here:
+            if fl_idx == 0 and props.has_front_door:
                 door_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
-                door_clr_left = door_clr
-                door_clr_right = door_clr + (0.35 if props.has_lanterns else 0.0)
-                d_ex1 = door_cx - door_clr_left
-                d_ex2 = door_cx + door_clr_right
-            else:
-                d_ex1, d_ex2 = 999.0, -999.0
-
-            def get_cleared_spans(s_min, s_max):
-                """Subdivides a facade interval to strictly exclude the front door envelope."""
-                if not has_door_here or s_max <= d_ex1 or s_min >= d_ex2:
-                    return [(s_min, s_max)]
-                spans = []
-                if d_ex1 - s_min >= win_w + 0.35:
-                    spans.append((s_min, d_ex1))
-                if s_max - d_ex2 >= win_w + 0.35:
-                    spans.append((d_ex2, s_max))
-                return spans
-
-            if not fl_has_wing and not wing_roof_occludes:
-                if fl_idx > 0:
-                    front_win_xs = get_facade_window_positions(x_min, x_max, target_spacing=eff_spacing, min_margin=0.9)
-                else:
-                    for s1, s2 in get_cleared_spans(x_min, x_max):
-                        if props.has_stairs and cur_w < 6.0 and s1 < 0.0:
-                            continue
-                        front_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing * 0.92, min_margin=0.7))
-            else:
-                # Place windows along exposed main wall spans outside any front wing
-                front_wings = [w_b for w_e, w_b in zip(wings, fl_wings_bounds) if w_e['wall'] == 'FRONT']
-                if front_wings:
-                    exp_spans = [(x_min, x_max)]
-                    for fw in front_wings:
-                        new_spans = []
-                        for sp1, sp2 in exp_spans:
-                            fw1, fw2 = fw[0] - 0.35, fw[1] + 0.35
-                            if fw2 <= sp1 or fw1 >= sp2:
-                                new_spans.append((sp1, sp2))
-                            else:
-                                if fw1 - sp1 > 1.0:
-                                    new_spans.append((sp1, fw1))
-                                if sp2 - fw2 > 1.0:
-                                    new_spans.append((fw2, sp2))
-                        exp_spans = new_spans
-                    for sp1, sp2 in exp_spans:
-                        for s1, s2 in get_cleared_spans(sp1, sp2):
-                            front_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=0.75))
-                else:
-                    front_win_xs = get_facade_window_positions(x_min, x_max, target_spacing=eff_spacing, min_margin=0.9)
-
-            # Strict safety filters
-            if has_door_here:
-                front_win_xs = [wx for wx in front_win_xs if (wx < d_ex1 or wx > d_ex2)]
-            if has_mw and fl_idx == mw_fl and mw_side == 'FRONT':
-                front_win_xs = [wx for wx in front_win_xs if abs(wx - (x_min + x_max) * 0.5) > (mw_w * 0.5 + 0.35)]
+                d_ex1 = door_cx - door_clr
+                d_ex2 = door_cx + door_clr + (0.35 if props.has_lanterns else 0.0)
+                front_excludes.append((d_ex1, d_ex2))
+                
+            if has_mw and mw_side == 'FRONT' and fl_idx in (mw_fl, mw_fl + 1):
+                mw_cx = (x_min + x_max) * 0.5
+                front_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
+                
             if fl_idx in active_balc_floors and b_side == 'FRONT':
-                front_win_xs = [wx for wx in front_win_xs if abs(wx - (x_min + x_max) * 0.5) > (b_width * 0.5 + 0.85)]
-            if balcony_overhead and b_side == 'FRONT':
-                front_win_xs = [wx for wx in front_win_xs if abs(wx - (x_min + x_max) * 0.5) > (b_width * 0.5 + 0.35)]
+                b_cx = (x_min + x_max) * 0.5
+                front_excludes.append((b_cx - (b_width * 0.5 + 0.85), b_cx + (b_width * 0.5 + 0.85)))
+            elif balcony_overhead and b_side == 'FRONT':
+                b_cx = (x_min + x_max) * 0.5
+                front_excludes.append((b_cx - (b_width * 0.5 + 0.45), b_cx + (b_width * 0.5 + 0.45)))
+
+            front_spans = carve_intervals([(x_min, x_max)], front_excludes, min_len=win_w + 0.35)
+            front_win_xs = []
+            for s1, s2 in front_spans:
+                if fl_idx == 0 and props.has_stairs and cur_w < 6.0 and s2 <= 0.0:
+                    continue
+                front_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=0.75))
+
+            # Strict safety filter
+            front_win_xs = [wx for wx in front_win_xs if not any(ex1 <= wx <= ex2 for ex1, ex2 in front_excludes)]
 
             for wx in front_win_xs:
                 wu = (wx - x_min)
@@ -1181,21 +1209,27 @@ def generate_building(obj, props):
 
         # Dynamic Windows - Back Wall
         if props.has_windows:
-            back_win_xs = get_facade_window_positions(x_min, x_max, target_spacing=eff_spacing, min_margin=0.9)
-            # Rear door exclusion
+            back_excludes = list(get_facade_wing_exclusions('BACK'))
             if fl_idx == 0 and getattr(props, 'has_back_door', False):
                 bd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 bd_ex1 = b_cx - bd_clr
                 bd_ex2 = b_cx + bd_clr + (0.35 if props.has_lanterns else 0.0)
-                back_win_xs = [wx for wx in back_win_xs if (wx < bd_ex1 or wx > bd_ex2)]
-            # Exclude back wings
-            back_wings = [w_b for w_e, w_b in zip(wings, fl_wings_bounds) if w_e['wall'] == 'BACK']
-            for bw in back_wings:
-                back_win_xs = [wx for wx in back_win_xs if (wx < bw[0] - 0.35 or wx > bw[1] + 0.35)]
-            if has_mw and fl_idx == mw_fl and mw_side == 'BACK':
-                back_win_xs = [wx for wx in back_win_xs if abs(wx - (x_min + x_max) * 0.5) > (mw_w * 0.5 + 0.35)]
+                back_excludes.append((bd_ex1, bd_ex2))
+                
+            if has_mw and mw_side == 'BACK' and fl_idx in (mw_fl, mw_fl + 1):
+                mw_cx = (x_min + x_max) * 0.5
+                back_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
+                
             if fl_idx in active_balc_floors and b_side == 'BACK':
-                back_win_xs = [wx for wx in back_win_xs if abs(wx - (x_min + x_max) * 0.5) > (b_width * 0.5 + 0.85)]
+                b_cx = (x_min + x_max) * 0.5
+                back_excludes.append((b_cx - (b_width * 0.5 + 0.85), b_cx + (b_width * 0.5 + 0.85)))
+
+            back_spans = carve_intervals([(x_min, x_max)], back_excludes, min_len=win_w + 0.35)
+            back_win_xs = []
+            for s1, s2 in back_spans:
+                back_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=0.75))
+            back_win_xs = [wx for wx in back_win_xs if not any(ex1 <= wx <= ex2 for ex1, ex2 in back_excludes)]
+
             for wx in back_win_xs:
                 wu = (wx - x_min)
                 back_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1208,21 +1242,27 @@ def generate_building(obj, props):
 
         # Dynamic Windows - Side Walls (Left and Right)
         if props.has_windows and cur_d > 2.8:
-            side_win_ys = get_facade_window_positions(y_min, y_max, target_spacing=eff_spacing, min_margin=0.9)
             # Left side
-            left_wings = [w_b for w_e, w_b in zip(wings, fl_wings_bounds) if w_e['wall'] == 'LEFT']
-            for wy in side_win_ys:
-                if fl_idx == 0 and props.has_stairs and (wy > stair_y_bot - 0.2 and wy < stair_y_top + 0.2):
-                    continue
-                if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'LEFT':
-                    if abs(wy - s_cy) < (props.door_width * 0.5 + win_w * 0.5 + 0.4):
-                        continue
-                if any((wy >= lw[2] - 0.35 and wy <= lw[3] + 0.35) for lw in left_wings):
-                    continue
-                if has_mw and fl_idx == mw_fl and mw_side == 'LEFT' and abs(wy - (y_min + y_max) * 0.5) < (mw_w * 0.5 + 0.35):
-                    continue
-                if fl_idx in active_balc_floors and b_side == 'LEFT' and abs(wy - (y_min + y_max) * 0.5) < (b_width * 0.5 + 0.85):
-                    continue
+            left_excludes = list(get_facade_wing_exclusions('LEFT'))
+            if fl_idx == 0 and props.has_stairs:
+                left_excludes.append((stair_y_bot - 0.25, stair_y_top + 0.25))
+            if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'LEFT':
+                sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
+                left_excludes.append((s_cy - sd_clr, s_cy + sd_clr + (0.35 if props.has_lanterns else 0.0)))
+            if has_mw and mw_side == 'LEFT' and fl_idx in (mw_fl, mw_fl + 1):
+                mw_cy = (y_min + y_max) * 0.5
+                left_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
+            if fl_idx in active_balc_floors and b_side == 'LEFT':
+                b_cy = (y_min + y_max) * 0.5
+                left_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
+
+            left_spans = carve_intervals([(y_min, y_max)], left_excludes, min_len=win_w + 0.35)
+            left_win_ys = []
+            for s1, s2 in left_spans:
+                left_win_ys.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=0.75))
+            left_win_ys = [wy for wy in left_win_ys if not any(ex1 <= wy <= ex2 for ex1, ex2 in left_excludes)]
+
+            for wy in left_win_ys:
                 wu = (wy - y_min)
                 left_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
                 sh_act, sh_cl = get_shutter_info(x_min, wy, win_cz)
@@ -1231,18 +1271,26 @@ def generate_building(obj, props):
                     wall_thickness=wall_t, normal_axis='-X',
                     has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes
                 )
+
             # Right side
-            right_wings = [w_b for w_e, w_b in zip(wings, fl_wings_bounds) if w_e['wall'] == 'RIGHT']
-            for wy in side_win_ys:
-                if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT':
-                    if abs(wy - s_cy) < (props.door_width * 0.5 + win_w * 0.5 + 0.4):
-                        continue
-                if any((wy >= rw[2] - 0.35 and wy <= rw[3] + 0.35) for rw in right_wings):
-                    continue
-                if has_mw and fl_idx == mw_fl and mw_side == 'RIGHT' and abs(wy - (y_min + y_max) * 0.5) < (mw_w * 0.5 + 0.35):
-                    continue
-                if fl_idx in active_balc_floors and b_side == 'RIGHT' and abs(wy - (y_min + y_max) * 0.5) < (b_width * 0.5 + 0.85):
-                    continue
+            right_excludes = list(get_facade_wing_exclusions('RIGHT'))
+            if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT':
+                sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
+                right_excludes.append((s_cy - sd_clr, s_cy + sd_clr + (0.35 if props.has_lanterns else 0.0)))
+            if has_mw and mw_side == 'RIGHT' and fl_idx in (mw_fl, mw_fl + 1):
+                mw_cy = (y_min + y_max) * 0.5
+                right_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
+            if fl_idx in active_balc_floors and b_side == 'RIGHT':
+                b_cy = (y_min + y_max) * 0.5
+                right_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
+
+            right_spans = carve_intervals([(y_min, y_max)], right_excludes, min_len=win_w + 0.35)
+            right_win_ys = []
+            for s1, s2 in right_spans:
+                right_win_ys.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=0.75))
+            right_win_ys = [wy for wy in right_win_ys if not any(ex1 <= wy <= ex2 for ex1, ex2 in right_excludes)]
+
+            for wy in right_win_ys:
                 wu = (wy - y_min)
                 right_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
                 sh_act, sh_cl = get_shutter_info(x_max, wy, win_cz)
@@ -1272,8 +1320,9 @@ def generate_building(obj, props):
                                                   wall_thickness=wall_t, normal_axis='-Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
-                    if props.has_windows and (wy2 - wy1 > 2.0):
-                        w_win_ys = get_facade_window_positions(wy1 + 0.75, wy2 - 0.75, target_spacing=eff_spacing, min_margin=0.5)
+                    # Buffered inside corner at wy2 (main building junction) by 1.25m
+                    if props.has_windows and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
+                        w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_2.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1282,8 +1331,9 @@ def generate_building(obj, props):
                                                   wall_thickness=wall_t, normal_axis='-X',
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 3: Right (wx2, wy1) -> (wx2, wy2) normal (1, 0)
-                    if props.has_windows and (wy2 - wy1 > 2.0):
-                        w_win_ys = get_facade_window_positions(wy1 + 0.75, wy2 - 0.75, target_spacing=eff_spacing, min_margin=0.5)
+                    # Buffered inside corner at wy2 (main building junction) by 1.25m
+                    if props.has_windows and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
+                        w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_3.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1308,8 +1358,9 @@ def generate_building(obj, props):
                                                   wall_thickness=wall_t, normal_axis='+Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=False)
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
-                    if props.has_windows and (wy2 - wy1 > 2.0):
-                        w_win_ys = get_facade_window_positions(wy1 + 0.75, wy2 - 0.75, target_spacing=eff_spacing, min_margin=0.5)
+                    # Buffered inside corner at wy1 (main building junction) by 1.25m
+                    if props.has_windows and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
+                        w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_2.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1318,8 +1369,9 @@ def generate_building(obj, props):
                                                   wall_thickness=wall_t, normal_axis='-X',
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 3: Right (wx2, wy1) -> (wx2, wy2) normal (1, 0)
-                    if props.has_windows and (wy2 - wy1 > 2.0):
-                        w_win_ys = get_facade_window_positions(wy1 + 0.75, wy2 - 0.75, target_spacing=eff_spacing, min_margin=0.5)
+                    # Buffered inside corner at wy1 (main building junction) by 1.25m
+                    if props.has_windows and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
+                        w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_3.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1344,8 +1396,9 @@ def generate_building(obj, props):
                                                   wall_thickness=wall_t, normal_axis='-X',
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
-                    if props.has_windows and (wx2 - wx1 > 2.0):
-                        w_win_xs = get_facade_window_positions(wx1 + 0.75, wx2 - 0.75, target_spacing=eff_spacing, min_margin=0.5)
+                    # Buffered inside corner at wx2 (main building junction) by 1.25m
+                    if props.has_windows and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
+                        w_win_xs = get_facade_window_positions(wx1 + 0.85, wx2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_2.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1354,8 +1407,9 @@ def generate_building(obj, props):
                                                   wall_thickness=wall_t, normal_axis='-Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
-                    if props.has_windows and (wx2 - wx1 > 2.0):
-                        w_win_xs = get_facade_window_positions(wx1 + 0.75, wx2 - 0.75, target_spacing=eff_spacing, min_margin=0.5)
+                    # Buffered inside corner at wx2 (main building junction) by 1.25m
+                    if props.has_windows and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
+                        w_win_xs = get_facade_window_positions(wx1 + 0.85, wx2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_3.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1380,8 +1434,9 @@ def generate_building(obj, props):
                                                   wall_thickness=wall_t, normal_axis='+X',
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
-                    if props.has_windows and (wx2 - wx1 > 2.0):
-                        w_win_xs = get_facade_window_positions(wx1 + 0.75, wx2 - 0.75, target_spacing=eff_spacing, min_margin=0.5)
+                    # Buffered inside corner at wx1 (main building junction) by 1.25m
+                    if props.has_windows and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
+                        w_win_xs = get_facade_window_positions(wx1 + 1.25, wx2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_2.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1390,8 +1445,9 @@ def generate_building(obj, props):
                                                   wall_thickness=wall_t, normal_axis='-Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
-                    if props.has_windows and (wx2 - wx1 > 2.0):
-                        w_win_xs = get_facade_window_positions(wx1 + 0.75, wx2 - 0.75, target_spacing=eff_spacing, min_margin=0.5)
+                    # Buffered inside corner at wx1 (main building junction) by 1.25m
+                    if props.has_windows and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
+                        w_win_xs = get_facade_window_positions(wx1 + 1.25, wx2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_3.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -2128,8 +2184,8 @@ def generate_building(obj, props):
         build_mini_wing(
             bm, side=w_side, floor_mode=w_floor,
             wall_x_min=mw_bounds[0], wall_x_max=mw_bounds[1], wall_y_min=mw_bounds[2], wall_y_max=mw_bounds[3],
-            z_base=z_wing_base, width=w_width, depth=w_depth, height=floor_h * 0.86,
-            roof_style=w_roof, tier=tier_val
+            z_base=z_wing_base, width=w_width, depth=w_depth, height=min(2.05, floor_h * 0.72),
+            roof_style=w_roof, tier=tier_val, floor_h=floor_h
         )
         
     # Timber Balcony
