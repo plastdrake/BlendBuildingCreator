@@ -1946,43 +1946,136 @@ def generate_building(obj, props):
                         if wx1 <= top_x_min + 0.35:
                             eave_ex['min'].append((ly1, ly2))
 
-        if is_rotated_roof:
+        if roof_style in ('SWAY', 'GABLE'):
             roof_bm = bmesh.new()
-            if roof_style == 'SWAY':
-                build_sway_roof(
-                    roof_bm,
-                    x_min=-top_hy, x_max=top_hy,
-                    y_min=-top_hx, y_max=top_hx,
-                    z_base=0.0,
-                    roof_height=props.roof_height,
-                    overhang=props.roof_overhang,
-                    sway_amount=props.roof_sway,
-                    wall_thickness=wall_t,
-                    tier=tier_val,
-                    plank_direction=plank_dir,
-                    roof_flare=flare_val,
-                    dormer_apertures=dormer_apertures,
-                    eave_exclusions=eave_ex
-                )
-            else: # 'GABLE'
-                build_gable_roof(
-                    roof_bm,
-                    x_min=-top_hy, x_max=top_hy,
-                    y_min=-top_hx, y_max=top_hx,
-                    z_base=0.0,
-                    roof_height=props.roof_height,
-                    overhang=props.roof_overhang,
-                    wall_thickness=wall_t,
-                    segments_y=6,
-                    tier=tier_val,
-                    plank_direction=plank_dir,
-                    roof_flare=flare_val,
-                    dormer_apertures=dormer_apertures,
-                    eave_exclusions=eave_ex
-                )
-            rot_m = Matrix.Rotation(-math.pi * 0.5, 4, 'Z')
-            trans_m = Matrix.Translation(Vector((top_cx, top_cy, top_z)))
-            bmesh.ops.transform(roof_bm, matrix=trans_m @ rot_m, verts=roof_bm.verts)
+            if is_rotated_roof:
+                if roof_style == 'SWAY':
+                    build_sway_roof(
+                        roof_bm,
+                        x_min=-top_hy, x_max=top_hy,
+                        y_min=-top_hx, y_max=top_hx,
+                        z_base=0.0,
+                        roof_height=props.roof_height,
+                        overhang=props.roof_overhang,
+                        sway_amount=props.roof_sway,
+                        wall_thickness=wall_t,
+                        tier=tier_val,
+                        plank_direction=plank_dir,
+                        roof_flare=flare_val,
+                        dormer_apertures=dormer_apertures,
+                        eave_exclusions=eave_ex
+                    )
+                else: # 'GABLE'
+                    build_gable_roof(
+                        roof_bm,
+                        x_min=-top_hy, x_max=top_hy,
+                        y_min=-top_hx, y_max=top_hx,
+                        z_base=0.0,
+                        roof_height=props.roof_height,
+                        overhang=props.roof_overhang,
+                        wall_thickness=wall_t,
+                        segments_y=6,
+                        tier=tier_val,
+                        plank_direction=plank_dir,
+                        roof_flare=flare_val,
+                        dormer_apertures=dormer_apertures,
+                        eave_exclusions=eave_ex
+                    )
+                rot_m = Matrix.Rotation(-math.pi * 0.5, 4, 'Z')
+                trans_m = Matrix.Translation(Vector((top_cx, top_cy, top_z)))
+                bmesh.ops.transform(roof_bm, matrix=trans_m @ rot_m, verts=roof_bm.verts)
+            else:
+                if roof_style == 'SWAY':
+                    build_sway_roof(
+                        roof_bm,
+                        x_min=top_x_min, x_max=top_x_max,
+                        y_min=top_y_min, y_max=top_y_max,
+                        z_base=top_z,
+                        roof_height=props.roof_height,
+                        overhang=props.roof_overhang,
+                        sway_amount=props.roof_sway,
+                        wall_thickness=wall_t,
+                        tier=tier_val,
+                        plank_direction=plank_dir,
+                        roof_flare=flare_val,
+                        dormer_apertures=dormer_apertures,
+                        eave_exclusions=eave_ex
+                    )
+                else:
+                    build_gable_roof(
+                        roof_bm,
+                        x_min=top_x_min, x_max=top_x_max,
+                        y_min=top_y_min, y_max=top_y_max,
+                        z_base=top_z,
+                        roof_height=props.roof_height,
+                        overhang=props.roof_overhang,
+                        wall_thickness=wall_t,
+                        segments_y=6,
+                        tier=tier_val,
+                        plank_direction=plank_dir,
+                        roof_flare=flare_val,
+                        dormer_apertures=dormer_apertures,
+                        eave_exclusions=eave_ex
+                    )
+
+            # Eliminate main roof protrusion through wing slopes at outside corners
+            if has_wing and wing_floors == num_floors:
+                del_main_faces = []
+                for w_elem in wings:
+                    ww = w_elem['wall']
+                    w_idx = min(wing_floors, num_floors) - 1
+                    wb = w_elem['bounds_fl'][w_idx] if ('bounds_fl' in w_elem and w_idx in w_elem['bounds_fl']) else (w_elem.get('x_min', 0.0), w_elem.get('x_max', 0.0), w_elem.get('y_min', 0.0), w_elem.get('y_max', 0.0))
+                    wx1, wx2, wy1, wy2 = wb
+                    w_cx = (wx1 + wx2) * 0.5
+                    w_cy = (wy1 + wy2) * 0.5
+                    if is_rotated_roof:
+                        if ww == 'FRONT':
+                            if wx2 >= top_x_max - 0.35: # Outside corner on right
+                                for f in roof_bm.faces:
+                                    fc = f.calc_center_median()
+                                    if fc.x >= w_cx - 0.05 and fc.y < top_cy - 0.05:
+                                        del_main_faces.append(f)
+                            if wx1 <= top_x_min + 0.35: # Outside corner on left
+                                for f in roof_bm.faces:
+                                    fc = f.calc_center_median()
+                                    if fc.x <= w_cx + 0.05 and fc.y < top_cy - 0.05:
+                                        del_main_faces.append(f)
+                        elif ww == 'BACK':
+                            if wx2 >= top_x_max - 0.35:
+                                for f in roof_bm.faces:
+                                    fc = f.calc_center_median()
+                                    if fc.x >= w_cx - 0.05 and fc.y > top_cy + 0.05:
+                                        del_main_faces.append(f)
+                            if wx1 <= top_x_min + 0.35:
+                                for f in roof_bm.faces:
+                                    fc = f.calc_center_median()
+                                    if fc.x <= w_cx + 0.05 and fc.y > top_cy + 0.05:
+                                        del_main_faces.append(f)
+                    else:
+                        if ww == 'LEFT':
+                            if wy1 <= top_y_min + 0.35:
+                                for f in roof_bm.faces:
+                                    fc = f.calc_center_median()
+                                    if fc.y <= w_cy + 0.05 and fc.x < top_cx - 0.05:
+                                        del_main_faces.append(f)
+                            if wy2 >= top_y_max - 0.35:
+                                for f in roof_bm.faces:
+                                    fc = f.calc_center_median()
+                                    if fc.y >= w_cy - 0.05 and fc.x < top_cx - 0.05:
+                                        del_main_faces.append(f)
+                        elif ww == 'RIGHT':
+                            if wy1 <= top_y_min + 0.35:
+                                for f in roof_bm.faces:
+                                    fc = f.calc_center_median()
+                                    if fc.y <= w_cy + 0.05 and fc.x > top_cx + 0.05:
+                                        del_main_faces.append(f)
+                            if wy2 >= top_y_max - 0.35:
+                                for f in roof_bm.faces:
+                                    fc = f.calc_center_median()
+                                    if fc.y >= w_cy - 0.05 and fc.x > top_cx + 0.05:
+                                        del_main_faces.append(f)
+                if del_main_faces:
+                    bmesh.ops.delete(roof_bm, geom=list(set(del_main_faces)), context='FACES')
 
             uv_src = roof_bm.loops.layers.uv.verify()
             uv_dst = bm.loops.layers.uv.verify()
@@ -1997,22 +2090,6 @@ def generate_building(obj, props):
                 except ValueError:
                     pass
             roof_bm.free()
-        elif roof_style == 'SWAY':
-            build_sway_roof(
-                bm,
-                x_min=top_x_min, x_max=top_x_max,
-                y_min=top_y_min, y_max=top_y_max,
-                z_base=top_z,
-                roof_height=props.roof_height,
-                overhang=props.roof_overhang,
-                sway_amount=props.roof_sway,
-                wall_thickness=wall_t,
-                tier=tier_val,
-                plank_direction=plank_dir,
-                roof_flare=flare_val,
-                dormer_apertures=dormer_apertures,
-                eave_exclusions=eave_ex
-            )
         elif roof_style == 'TURRET':
             radius = max(top_hx, top_hy) * 1.05
             build_conical_turret_roof(
@@ -2021,24 +2098,6 @@ def generate_building(obj, props):
                 radius=radius,
                 height=props.roof_height * 1.3
             )
-        else: # 'GABLE'
-            build_gable_roof(
-                bm,
-                x_min=top_x_min, x_max=top_x_max,
-                y_min=top_y_min, y_max=top_y_max,
-                z_base=top_z,
-                roof_height=props.roof_height,
-                overhang=props.roof_overhang,
-                wall_thickness=wall_t,
-                segments_y=6,
-                tier=tier_val,
-                plank_direction=plank_dir,
-                roof_flare=flare_val,
-                dormer_apertures=dormer_apertures,
-                eave_exclusions=eave_ex
-            )
-
-        # Roof Hoist Beam with Cargo Hook (Warehouse / freight feature)
         if getattr(props, 'has_hoist_beam', False) and roof_style in ('SWAY', 'GABLE'):
             from .roof import build_hoist_beam
             if is_rotated_roof:
@@ -2265,12 +2324,16 @@ def generate_building(obj, props):
                 # Trim side eave fascia where it would enter main timber/walls.
                 w_eave_fb = None
                 if is_lower_wing:
-                    trim = [(w_roof_ymax - 0.90, w_roof_ymax + 0.60)]
-                    w_eave_fb = {'min': list(trim), 'max': list(trim)}
+                    w_eave_fb = None
                 elif is_rotated_roof:
                     # Deep valley: no side fascia past the main wall face.
                     trim = [(top_y_min - 0.10, w_roof_ymax + 0.60)]
                     w_eave_fb = {'min': list(trim), 'max': list(trim)}
+
+                has_left = (w_top_xmin > top_x_min + 0.35)
+                has_right = (w_top_xmax < top_x_max - 0.35)
+                w_notch_side = 'BOTH' if (has_left and has_right) else ('LEFT' if has_left else 'RIGHT')
+
                 # Parallel flush case: fascia ends die inside the gable core, no trim.
                 w_notch_fb = None
                 if not is_lower_wing and is_rotated_roof:
@@ -2280,7 +2343,8 @@ def generate_building(obj, props):
                         'half_width': w_roof_half_w,
                         'base_y': top_y_min - props.roof_overhang,
                         'keep': 'le',
-                        'overlap': 0.08
+                        'overlap': 0.02,
+                        'side': w_notch_side
                     }
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
@@ -2346,11 +2410,11 @@ def generate_building(obj, props):
                         return deck_top_z(px, py, _wx, _wh, _wz, _wr,
                                           flare_val, _sw, _wy0, _wy1, _ez,
                                           top_off=0.05)
-                    # Both intersecting slopes (left and right) form valleys where wing meets main roof
+                    # Only true inside corner valleys (not outside walls) form valleys
                     valley_feet = []
-                    if w_top_xmin >= top_x_min - 0.15 and w_cx > top_x_min:
+                    if has_left:
                         valley_feet.append(w_top_xmin - _ov)
-                    if w_top_xmax <= top_x_max + 0.15 and w_cx < top_x_max:
+                    if has_right:
                         valley_feet.append(w_top_xmax + _ov)
                     for vx in valley_feet:
                         build_valley_rafters(bm, (vx, top_y_min - _ov), (w_cx, top_cy),
@@ -2432,11 +2496,15 @@ def generate_building(obj, props):
                 w_gable_bk = ('BACK',) if (is_lower_wing or is_rotated_roof) else ('FRONT', 'BACK')
                 w_eave_bk = None
                 if is_lower_wing:
-                    trim = [(w_roof_ymin - 0.60, w_roof_ymin + 0.90)]
-                    w_eave_bk = {'min': list(trim), 'max': list(trim)}
+                    w_eave_bk = None
                 elif is_rotated_roof:
                     trim = [(w_roof_ymin - 0.60, top_y_max + 0.10)]
                     w_eave_bk = {'min': list(trim), 'max': list(trim)}
+
+                has_left = (w_top_xmin > top_x_min + 0.35)
+                has_right = (w_top_xmax < top_x_max - 0.35)
+                w_notch_side = 'BOTH' if (has_left and has_right) else ('LEFT' if has_left else 'RIGHT')
+
                 w_notch_bk = None
                 if not is_lower_wing and is_rotated_roof:
                     w_notch_bk = {
@@ -2445,7 +2513,8 @@ def generate_building(obj, props):
                         'half_width': w_roof_half_w,
                         'base_y': top_y_max + props.roof_overhang,
                         'keep': 'ge',
-                        'overlap': 0.08
+                        'overlap': 0.02,
+                        'side': w_notch_side
                     }
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
@@ -2513,9 +2582,9 @@ def generate_building(obj, props):
                                           flare_val, _sw, _wy0, _wy1, _ez,
                                           top_off=0.05)
                     valley_feet = []
-                    if w_top_xmin >= top_x_min - 0.15 and w_cx > top_x_min:
+                    if has_left:
                         valley_feet.append(w_top_xmin - _ov)
-                    if w_top_xmax <= top_x_max + 0.15 and w_cx < top_x_max:
+                    if has_right:
                         valley_feet.append(w_top_xmax + _ov)
 
                     for vx in valley_feet:
@@ -2623,9 +2692,7 @@ def generate_building(obj, props):
                 # Local-coord fascia trim (see FRONT/BACK above).
                 w_eave_lr = None
                 if is_lower_wing:
-                    y_top_local = ly_half + y_max_adj
-                    trim = [(y_top_local - 0.90, y_top_local + 0.60)]
-                    w_eave_lr = {'min': list(trim), 'max': list(trim)}
+                    w_eave_lr = None
                 elif not is_rotated_roof:
                     y_top_local = ly_half + y_max_adj
                     if w_wall == 'LEFT':
@@ -2634,6 +2701,14 @@ def generate_building(obj, props):
                         wall_local = w_cx - top_x_max
                     trim = [(wall_local - 0.10, y_top_local + 0.60)]
                     w_eave_lr = {'min': list(trim), 'max': list(trim)}
+
+                has_front = (w_top_ymin > top_y_min + 0.35)
+                has_back = (w_top_ymax < top_y_max - 0.35)
+                if w_wall == 'LEFT':
+                    w_notch_side_lr = 'BOTH' if (has_front and has_back) else ('RIGHT' if has_front else 'LEFT')
+                else:
+                    w_notch_side_lr = 'BOTH' if (has_front and has_back) else ('LEFT' if has_front else 'RIGHT')
+
                 w_notch_lr = None
                 if not is_lower_wing and not is_rotated_roof:
                     w_notch_lr = {
@@ -2642,7 +2717,8 @@ def generate_building(obj, props):
                         'half_width': lx_half + props.roof_overhang,
                         'base_y': ((top_x_min - w_cx) if w_wall == 'LEFT' else (w_cx - top_x_max)) - props.roof_overhang,
                         'keep': 'le',
-                        'overlap': 0.08
+                        'overlap': 0.02,
+                        'side': w_notch_side_lr
                     }
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
@@ -2728,8 +2804,6 @@ def generate_building(obj, props):
                                               0.0, _wr, flare_val, _sw, _ry0, _ry1,
                                               _ez, top_off=0.05) + _wz
                         die = (w_cx + _ly1, w_cy)
-                        corners = [(top_x_min - _ov, w_top_ymin - _ov),
-                                   (top_x_min - _ov, w_top_ymax + _ov)]
                     else:
                         def _wing_fn(px, py, _wc=(w_cx, w_cy), _hw=lx_half + _ov,
                                      _wz=w_top_z, _wr=w_roof_h, _ry0=-ly_half - _ov,
@@ -2738,8 +2812,17 @@ def generate_building(obj, props):
                                               0.0, _wr, flare_val, _sw, _ry0, _ry1,
                                               _ez, top_off=0.05) + _wz
                         die = (w_cx - _ly1, w_cy)
-                        corners = [(top_x_max + _ov, w_top_ymin - _ov),
-                                   (top_x_max + _ov, w_top_ymax + _ov)]
+                    corners = []
+                    if w_wall == 'LEFT':
+                        if has_front:
+                            corners.append((top_x_min - _ov, w_top_ymin - _ov))
+                        if has_back:
+                            corners.append((top_x_min - _ov, w_top_ymax + _ov))
+                    else:
+                        if has_front:
+                            corners.append((top_x_max + _ov, w_top_ymin - _ov))
+                        if has_back:
+                            corners.append((top_x_max + _ov, w_top_ymax + _ov))
                     for cx0, cy0 in corners:
                         build_valley_rafters(bm, (cx0, cy0), die,
                                              _main_fn, _wing_fn)

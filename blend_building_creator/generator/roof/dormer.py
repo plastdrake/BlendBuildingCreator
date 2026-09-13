@@ -388,23 +388,35 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
 
         # Front verge edge closure
         for k in range(n_slope):
+            vt0, vt1 = grid_top[k][0], grid_top[k+1][0]
+            vb0, vb1 = grid_bot[k][0], grid_bot[k+1][0]
             if side_sign > 0:
-                f_cl = bm.faces.new([grid_top[k+1][0], grid_top[k][0], grid_bot[k][0], grid_bot[k+1][0]])
+                f_cl = bm.faces.new([vt1, vt0, vb0, vb1])
             else:
-                f_cl = bm.faces.new([grid_top[k][0], grid_top[k+1][0], grid_bot[k+1][0], grid_bot[k][0]])
+                f_cl = bm.faces.new([vt0, vt1, vb1, vb0])
             f_cl.material_index = MAT_INDEX_TIMBER
+            v0 = (k / float(n_slope)) * dormer_slope_len * 0.40
+            v1 = ((k + 1) / float(n_slope)) * dormer_slope_len * 0.40
             for loop in f_cl.loops:
-                loop[uv_layer_d].uv = Vector(((loop.vert.co.x + loop.vert.co.y) * 0.5, loop.vert.co.z * 0.5))
+                is_top = loop.vert in (vt0, vt1)
+                is_v0 = loop.vert in (vt0, vb0)
+                loop[uv_layer_d].uv = Vector((0.0 if is_top else 0.12, v0 if is_v0 else v1))
 
         # Side eave outer edge closure
         for j in range(n_len):
+            vt0, vt1 = grid_top[-1][j], grid_top[-1][j+1]
+            vb0, vb1 = grid_bot[-1][j], grid_bot[-1][j+1]
             if side_sign > 0:
-                f_cl = bm.faces.new([grid_top[-1][j], grid_bot[-1][j], grid_bot[-1][j+1], grid_top[-1][j+1]])
+                f_cl = bm.faces.new([vt0, vb0, vb1, vt1])
             else:
-                f_cl = bm.faces.new([grid_top[-1][j], grid_top[-1][j+1], grid_bot[-1][j+1], grid_bot[-1][j]])
+                f_cl = bm.faces.new([vt0, vt1, vb1, vb0])
             f_cl.material_index = MAT_INDEX_TIMBER
+            v0 = (j / float(n_len)) * roof_len * 0.40
+            v1 = ((j + 1) / float(n_len)) * roof_len * 0.40
             for loop in f_cl.loops:
-                loop[uv_layer_d].uv = Vector(((loop.vert.co.x + loop.vert.co.y) * 0.5, loop.vert.co.z * 0.5))
+                is_top = loop.vert in (vt0, vt1)
+                is_v0 = loop.vert in (vt0, vb0)
+                loop[uv_layer_d].uv = Vector((0.0 if is_top else 0.12, v0 if is_v0 else v1))
 
     # 7. Curved Verge Bargeboards (seated on the verge edge, not floating ahead of it)
     barge_t = 0.10
