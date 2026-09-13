@@ -182,30 +182,45 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             loop[uv_g].uv = Vector((u, v))
 
     # Top sloping boundary seals (under roof deck)
+    seal_faces = []
     for k in range(len(top_xs) - 1):
         if g_norm < 0:
-            bm.faces.new([top_verts_ext[k], top_verts_ext[k+1], top_verts_int[k+1], top_verts_int[k]]).material_index = MAT_INDEX_TIMBER
+            f = bm.faces.new([top_verts_ext[k], top_verts_ext[k+1], top_verts_int[k+1], top_verts_int[k]])
         else:
-            bm.faces.new([top_verts_int[k], top_verts_int[k+1], top_verts_ext[k+1], top_verts_ext[k]]).material_index = MAT_INDEX_TIMBER
+            f = bm.faces.new([top_verts_int[k], top_verts_int[k+1], top_verts_ext[k+1], top_verts_ext[k]])
+        f.material_index = MAT_INDEX_TIMBER
+        seal_faces.append(f)
 
     # Vertical side boundary seals (only if vertical jamb exists)
     if has_left_jamb:
         if g_norm < 0:
-            bm.faces.new([v_ext_bl, top_verts_ext[0], top_verts_int[0], v_int_bl]).material_index = MAT_INDEX_TIMBER
+            f = bm.faces.new([v_ext_bl, top_verts_ext[0], top_verts_int[0], v_int_bl])
         else:
-            bm.faces.new([v_ext_bl, v_int_bl, top_verts_int[0], top_verts_ext[0]]).material_index = MAT_INDEX_TIMBER
+            f = bm.faces.new([v_ext_bl, v_int_bl, top_verts_int[0], top_verts_ext[0]])
+        f.material_index = MAT_INDEX_TIMBER
+        seal_faces.append(f)
 
     if has_right_jamb:
         if g_norm < 0:
-            bm.faces.new([v_ext_br, v_int_br, top_verts_int[-1], top_verts_ext[-1]]).material_index = MAT_INDEX_TIMBER
+            f = bm.faces.new([v_ext_br, v_int_br, top_verts_int[-1], top_verts_ext[-1]])
         else:
-            bm.faces.new([v_ext_br, top_verts_ext[-1], top_verts_int[-1], v_int_br]).material_index = MAT_INDEX_TIMBER
+            f = bm.faces.new([v_ext_br, top_verts_ext[-1], top_verts_int[-1], v_int_br])
+        f.material_index = MAT_INDEX_TIMBER
+        seal_faces.append(f)
 
     # Bottom sealing face closing the bottom of the gable wall against attic floor
     if g_norm < 0:
-        bm.faces.new([v_ext_bl, v_int_bl, v_int_br, v_ext_br]).material_index = MAT_INDEX_TIMBER
+        f = bm.faces.new([v_ext_bl, v_int_bl, v_int_br, v_ext_br])
     else:
-        bm.faces.new([v_int_bl, v_ext_bl, v_ext_br, v_int_br]).material_index = MAT_INDEX_TIMBER
+        f = bm.faces.new([v_int_bl, v_ext_bl, v_ext_br, v_int_br])
+    f.material_index = MAT_INDEX_TIMBER
+    seal_faces.append(f)
+
+    for sf in seal_faces:
+        for loop in sf.loops:
+            co = loop.vert.co
+            s_dist = math.sqrt((co.x - cx) ** 2 + (rz - co.z) ** 2)
+            loop[uv_g].uv = Vector(((co.y - gy) * 0.45, s_dist * 0.40))
 
     # Half-timber tie beam and king post for non-log tiers
     if tier != 'TIER_1':

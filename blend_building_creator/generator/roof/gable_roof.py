@@ -92,11 +92,25 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
             drop = (1.0 - roof_flare) * u + roof_flare * (1.0 - (1.0 - u) ** 2)
             x_val = cx + side * u * half_w
             
+            # Column-adaptive parametric extent for valley junctions
+            col_ry_min = ry_min
+            col_ry_max = ry_max
+            if valley_notch is not None:
+                _vn = valley_notch
+                _u_val = min(1.0, max(0.0, abs(x_val - _vn['apex_x']) / max(0.001, _vn['half_width'])))
+                _yl = _vn['base_y'] + (_vn['apex_y'] - _vn['base_y']) * (1.0 - _u_val)
+                _overlap = _vn.get('overlap', 0.08)
+                if _vn.get('keep', 'le') == 'le':
+                    col_ry_max = min(ry_max, _yl + _overlap)
+                else:
+                    col_ry_min = max(ry_min, _yl - _overlap)
+            col_total_d = max(0.01, col_ry_max - col_ry_min)
+            
             row_top = []
             row_bot = []
             for j in range(segments_y + 1):
                 t_y = j / segments_y
-                y_val = ry_min + t_y * total_d
+                y_val = col_ry_min + t_y * col_total_d
                 z_val = rz - drop * (rz - ez)
                 
                 d_drop = (1.0 - roof_flare) + 2.0 * roof_flare * (1.0 - u)
@@ -109,32 +123,9 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
             grid_top.append(row_top)
             grid_bot.append(row_bot)
             
-        kept = [[True] * segments_y for _ in range(segments_x)]
+        # Create continuous quad faces across the grid (all quads retained, 100% manifold)
         for k in range(segments_x):
             for j in range(segments_y):
-                u0 = k / segments_x
-                u1 = (k + 1) / segments_x
-                t0 = j / segments_y
-                t1 = (j + 1) / segments_y
-                y0 = ry_min + t0 * total_d
-                y1 = ry_min + t1 * total_d
-
-                # Valley notch (wing-to-main junctions): skip deck cells past the
-                # valley lines so no full-width deck dives into rooms below.
-                if valley_notch is not None:
-                    _vn = valley_notch
-                    _xc = cx + side * ((u0 + u1) * 0.5) * half_w
-                    _yc = (y0 + y1) * 0.5
-                    _yl = _vn['base_y'] + (_vn['apex_y'] - _vn['base_y']) * (1.0 - abs(_xc - _vn['apex_x']) / max(0.001, _vn['half_width']))
-                    if _vn.get('keep', 'le') == 'le':
-                        if _yc > _yl + 1e-6:
-                            kept[k][j] = False
-                            continue
-                    else:
-                        if _yc < _yl - 1e-6:
-                            kept[k][j] = False
-                            continue
-
                 v_in0_t = grid_top[k][j]
                 v_in1_t = grid_top[k][j+1]
                 v_out1_t = grid_top[k+1][j+1]
@@ -145,26 +136,37 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                 v_out1_b = grid_bot[k+1][j+1]
                 v_out0_b = grid_bot[k+1][j]
                 
-                # Abutting ends stay open so wing decks run into the main roof valley
-                # instead of capping a timber face inside rooms/attic.
+                edge_faces = []
                 if side < 0:
                     f_top = bm.faces.new([v_in0_t, v_in1_t, v_out1_t, v_out0_t])
                     f_bot = bm.faces.new([v_out0_b, v_out1_b, v_in1_b, v_in0_b])
                     if k == segments_x - 1:
-                        bm.faces.new([v_out0_b, v_out0_t, v_out1_t, v_out1_b]).material_index = MAT_INDEX_TIMBER
+                        f_e = bm.faces.new([v_out0_b, v_out0_t, v_out1_t, v_out1_b])
+                        f_e.material_index = MAT_INDEX_TIMBER
+                        edge_faces.append((f_e, 'Y'))
                     if j == 0 and not abut_front:
-                        bm.faces.new([v_in0_t, v_out0_t, v_out0_b, v_in0_b]).material_index = MAT_INDEX_TIMBER
-                    if j == segments_y - 1 and not abut_back:
-                        bm.faces.new([v_out1_t, v_in1_t, v_in1_b, v_out1_b]).material_index = MAT_INDEX_TIMBER
+                        f_f = bm.faces.new([v_in0_t, v_out0_t, v_out0_b, v_in0_b])
+                        f_f.material_index = MAT_INDEX_TIMBER
+                        edge_faces.append((f_f, 'X'))
+                    if j == segments_y - 1 and (not abut_back or valley_notch is not None):
+                        f_b = bm.faces.new([v_out1_t, v_in1_t, v_in1_b, v_out1_b])
+                        f_b.material_index = MAT_INDEX_TIMBER
+                        edge_faces.append((f_b, 'X'))
                 else:
                     f_top = bm.faces.new([v_out0_t, v_out1_t, v_in1_t, v_in0_t])
                     f_bot = bm.faces.new([v_in0_b, v_in1_b, v_out1_b, v_out0_b])
                     if k == segments_x - 1:
-                        bm.faces.new([v_out1_b, v_out1_t, v_out0_t, v_out0_b]).material_index = MAT_INDEX_TIMBER
+                        f_e = bm.faces.new([v_out1_b, v_out1_t, v_out0_t, v_out0_b])
+                        f_e.material_index = MAT_INDEX_TIMBER
+                        edge_faces.append((f_e, 'Y'))
                     if j == 0 and not abut_front:
-                        bm.faces.new([v_out0_t, v_in0_t, v_in0_b, v_out0_b]).material_index = MAT_INDEX_TIMBER
-                    if j == segments_y - 1 and not abut_back:
-                        bm.faces.new([v_in1_t, v_out1_t, v_out1_b, v_in1_b]).material_index = MAT_INDEX_TIMBER
+                        f_f = bm.faces.new([v_out0_t, v_in0_t, v_in0_b, v_out0_b])
+                        f_f.material_index = MAT_INDEX_TIMBER
+                        edge_faces.append((f_f, 'X'))
+                    if j == segments_y - 1 and (not abut_back or valley_notch is not None):
+                        f_b = bm.faces.new([v_in1_t, v_out1_t, v_out1_b, v_in1_b])
+                        f_b.material_index = MAT_INDEX_TIMBER
+                        edge_faces.append((f_b, 'X'))
                         
                 f_top.material_index = MAT_INDEX_SHINGLES
                 f_bot.material_index = MAT_INDEX_TIMBER
@@ -174,45 +176,22 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                     s_dist = math.sqrt((co.x - cx) ** 2 + (rz - co.z) ** 2)
                     v_uv = -s_dist * 0.32
                     loop[uv_layer].uv = Vector((u_uv, v_uv))
-
-        # 1b. Timber caps on valley-cut edges: closes the deck sandwich with the
-        # timber material so no dark slits show along valleys (main decks keep all
-        # cells, so this pass is a no-op for them).
-        if valley_notch is not None:
-            for k in range(segments_x):
-                for j in range(segments_y):
-                    if not kept[k][j]:
-                        continue
-                    for dk, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                        nk, nj = k + dk, j + dj
-                        if not (0 <= nk < segments_x and 0 <= nj < segments_y):
-                            continue
-                        if kept[nk][nj]:
-                            continue
-                        if dk == 1:
-                            vt = (grid_top[k + 1][j], grid_top[k + 1][j + 1])
-                            vb = (grid_bot[k + 1][j], grid_bot[k + 1][j + 1])
-                        elif dk == -1:
-                            vt = (grid_top[k][j + 1], grid_top[k][j])
-                            vb = (grid_bot[k][j + 1], grid_bot[k][j])
-                        elif dj == 1:
-                            vt = (grid_top[k][j + 1], grid_top[k + 1][j + 1])
-                            vb = (grid_bot[k][j + 1], grid_bot[k + 1][j + 1])
+                for loop in f_bot.loops:
+                    co = loop.vert.co
+                    u_uv = (co.y - ry_min) * 0.32
+                    s_dist = math.sqrt((co.x - cx) ** 2 + (rz - co.z) ** 2)
+                    v_uv = -s_dist * 0.32
+                    loop[uv_layer].uv = Vector((u_uv, v_uv))
+                for ef, axis in edge_faces:
+                    for loop in ef.loops:
+                        co = loop.vert.co
+                        if axis == 'Y':
+                            loop[uv_layer].uv = Vector(((co.z - ez) * 0.45, (co.y - ry_min) * 0.40))
                         else:
-                            vt = (grid_top[k + 1][j], grid_top[k][j])
-                            vb = (grid_bot[k + 1][j], grid_bot[k][j])
-                        try:
-                            f_cap = bm.faces.new([vt[0], vt[1], vb[1], vb[0]])
-                        except ValueError:
-                            continue
-                        f_cap.material_index = MAT_INDEX_TIMBER
-                        out = ((vt[0].co + vt[1].co) * 0.5 - (grid_top[k][j].co + grid_top[k + 1][j + 1].co) * 0.25 - (grid_top[k][j + 1].co + grid_top[k + 1][j].co) * 0.25)
-                        bm.normal_update()
-                        if f_cap.normal.dot(out) < 0.0:
-                            bmesh.ops.reverse_faces(bm, faces=[f_cap])
-                        for loop in f_cap.loops:
-                            co = loop.vert.co
-                            loop[uv_layer].uv = Vector(((co.x + co.y) * 0.5, co.z * 0.5))
+                            # Longitudinal mapping along the sloping rake:
+                            # Distance along rafter slope gives length V, board depth gives U.
+                            s_dist = math.sqrt((co.x - cx) ** 2 + (rz - co.z) ** 2)
+                            loop[uv_layer].uv = Vector(((co.y - ry_min) * 0.45, s_dist * 0.40))
 
     # 2. Volumetric Gable End Walls
     half_wt = wall_thickness * 0.5

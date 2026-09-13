@@ -852,6 +852,17 @@ def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth
         corbel_faces.append(f_p)
     bmesh.ops.recalc_face_normals(bm, faces=corbel_faces)
 
+    uv_layer = bm.loops.layers.uv.verify()
+    inv_rot = rot_m.to_3x3().transposed()
+    for f in corbel_faces:
+        is_side = (f in (f_l, f_r))
+        for loop in f.loops:
+            lv = inv_rot @ (loop.vert.co - loc)
+            if is_side:
+                loop[uv_layer].uv = Vector((lv.y * 0.85, lv.z * 0.85))
+            else:
+                loop[uv_layer].uv = Vector((lv.x * 0.85, (lv.y + lv.z) * 0.85))
+
 def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, include_left=False, include_right=False, front_exclude_x=None, drop=0.10):
     """
     Builds chunky carved wooden support brackets (corbels) underneath

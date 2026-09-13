@@ -167,10 +167,35 @@ def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotat
         edges = list({e for f in faces for e in f.edges})
         try:
             res = bmesh.ops.bevel(bm, geom=edges, offset=bevel_amount, segments=bevel_segments, profile=0.7, affect='EDGES')
-            for f in res.get('faces', []):
-                if f.is_valid:
+            new_faces = [f for f in res.get('faces', []) if f.is_valid]
+            if new_faces:
+                uv_layer = bm.loops.layers.uv.verify()
+                rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+                loc_mat = Matrix.Translation(Vector(location))
+                inv_tr = (loc_mat @ rot_mat).inverted()
+                dx, dy, dz = size
+                sx, sy, sz = dx * 0.5, dy * 0.5, dz * 0.5
+                scale = 1.0
+                su = scale * 1.2
+                sv = scale * 0.40
+                for f in new_faces:
                     f.material_index = mat_index
-            faces = [f for f in faces if f.is_valid] + [f for f in res.get('faces', []) if f.is_valid]
+                    for loop in f.loops:
+                        lv = inv_tr @ loop.vert.co
+                        if is_wall:
+                            u = (lv.x + sx) * 0.55
+                            v = (lv.z + sz) * 0.55
+                        elif dz >= dx and dz >= dy:
+                            u = (lv.x + sx) * scale
+                            v = (lv.z + sz) * scale
+                        elif dx >= dy and dx >= dz:
+                            u = (lv.z + sz) * su
+                            v = (lv.x + sx) * sv
+                        else:
+                            u = (lv.x + sx) * su
+                            v = (lv.y + sy) * sv
+                        loop[uv_layer].uv = Vector((u, v))
+            faces = [f for f in faces if f.is_valid] + new_faces
         except Exception:
             pass
     return [f for f in faces if f.is_valid]

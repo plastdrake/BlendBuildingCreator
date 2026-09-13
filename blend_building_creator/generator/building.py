@@ -391,7 +391,7 @@ def compute_fl_wing_bounds(wing, fl_idx, fl_overhang, x_min, x_max, y_min, y_max
         else: # CENTER
             hw = (w_w + fl_overhang * 2.0) * 0.5
             wx1, wx2 = -hw, hw
-        wy1 = y_min - (w_d + fl_overhang)
+        wy1 = y_min - w_d
         wy2 = y_min
         return (wx1, wx2, wy1, wy2)
     elif wall == 'BACK':
@@ -403,7 +403,7 @@ def compute_fl_wing_bounds(wing, fl_idx, fl_overhang, x_min, x_max, y_min, y_max
             hw = (w_w + fl_overhang * 2.0) * 0.5
             wx1, wx2 = -hw, hw
         wy1 = y_max
-        wy2 = y_max + (w_d + fl_overhang)
+        wy2 = y_max + w_d
         return (wx1, wx2, wy1, wy2)
     elif wall == 'LEFT':
         if align == 'FRONT':
@@ -413,7 +413,7 @@ def compute_fl_wing_bounds(wing, fl_idx, fl_overhang, x_min, x_max, y_min, y_max
         else:
             hd = (w_w + fl_overhang * 2.0) * 0.5
             wy1, wy2 = -hd, hd
-        wx1 = x_min - (w_d + fl_overhang)
+        wx1 = x_min - w_d
         wx2 = x_min
         return (wx1, wx2, wy1, wy2)
     elif wall == 'RIGHT':
@@ -425,7 +425,7 @@ def compute_fl_wing_bounds(wing, fl_idx, fl_overhang, x_min, x_max, y_min, y_max
             hd = (w_w + fl_overhang * 2.0) * 0.5
             wy1, wy2 = -hd, hd
         wx1 = x_max
-        wx2 = x_max + (w_d + fl_overhang)
+        wx2 = x_max + w_d
         return (wx1, wx2, wy1, wy2)
     return (0.0, 0.0, 0.0, 0.0)
 
@@ -718,6 +718,18 @@ def generate_building(obj, props):
                 )
                 if fl_idx > 0 and fl_overhang > prev_fl_overhang:
                     overhang_step = fl_overhang - prev_fl_overhang
+                    prev_wb = w_elem.get('bounds_fl', {}).get(fl_idx - 1, None)
+                    if prev_wb:
+                        build_cantilever_soffit(
+                            bm,
+                            prev_wb,
+                            (w_xmin, w_xmax, w_ymin, w_ymax),
+                            z_floor,
+                            include_back=(w_wall != 'FRONT'),
+                            include_front=(w_wall != 'BACK'),
+                            include_left=(w_wall != 'RIGHT'),
+                            include_right=(w_wall != 'LEFT')
+                        )
                     build_cantilever_corbels(bm, w_xmin, w_xmax, w_ymin, w_ymax, z_floor,
                                             overhang_dist=overhang_step,
                                             include_back=(w_wall != 'FRONT'),
@@ -2260,16 +2272,15 @@ def generate_building(obj, props):
                     trim = [(top_y_min - 0.10, w_roof_ymax + 0.60)]
                     w_eave_fb = {'min': list(trim), 'max': list(trim)}
                 # Parallel flush case: fascia ends die inside the gable core, no trim.
-                # Valley notch only for the perpendicular (rotated) equal junction.
                 w_notch_fb = None
                 if not is_lower_wing and is_rotated_roof:
                     w_notch_fb = {
-                        'apex_x': w_cx, 'apex_y': w_roof_ymax,
-                        'base_y': top_y_min,
-                        # Wall half-width (no overhang) so valley feet land exactly on
-                        # the wall corners under the valley boards.
-                        'half_width': (w_top_xmax - w_top_xmin) * 0.5,
+                        'apex_x': w_cx,
+                        'apex_y': top_cy,
+                        'half_width': w_roof_half_w,
+                        'base_y': top_y_min - props.roof_overhang,
                         'keep': 'le',
+                        'overlap': 0.08
                     }
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
@@ -2335,13 +2346,14 @@ def generate_building(obj, props):
                         return deck_top_z(px, py, _wx, _wh, _wz, _wr,
                                           flare_val, _sw, _wy0, _wy1, _ez,
                                           top_off=0.05)
-                    inside_valleys = []
-                    if w_top_xmin > top_x_min + 0.35:
-                        inside_valleys.append(w_top_xmin)
-                    if w_top_xmax < top_x_max - 0.35:
-                        inside_valleys.append(w_top_xmax)
-                    for vx in inside_valleys:
-                        build_valley_rafters(bm, (vx, top_y_min - 0.12), (w_cx, top_cy),
+                    # Both intersecting slopes (left and right) form valleys where wing meets main roof
+                    valley_feet = []
+                    if w_top_xmin >= top_x_min - 0.15 and w_cx > top_x_min:
+                        valley_feet.append(w_top_xmin - _ov)
+                    if w_top_xmax <= top_x_max + 0.15 and w_cx < top_x_max:
+                        valley_feet.append(w_top_xmax + _ov)
+                    for vx in valley_feet:
+                        build_valley_rafters(bm, (vx, top_y_min - _ov), (w_cx, top_cy),
                                              _main_fn, _wing_fn)
 
             elif w_wall == 'BACK':
@@ -2428,11 +2440,12 @@ def generate_building(obj, props):
                 w_notch_bk = None
                 if not is_lower_wing and is_rotated_roof:
                     w_notch_bk = {
-                        'apex_x': w_cx, 'apex_y': w_roof_ymin,
-                        'base_y': top_y_max,
-                        # Wall half-width (see FRONT notch).
-                        'half_width': (w_top_xmax - w_top_xmin) * 0.5,
+                        'apex_x': w_cx,
+                        'apex_y': top_cy,
+                        'half_width': w_roof_half_w,
+                        'base_y': top_y_max + props.roof_overhang,
                         'keep': 'ge',
+                        'overlap': 0.08
                     }
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
@@ -2499,14 +2512,14 @@ def generate_building(obj, props):
                         return deck_top_z(px, py, _wx, _wh, _wz, _wr,
                                           flare_val, _sw, _wy0, _wy1, _ez,
                                           top_off=0.05)
-                    inside_valleys = []
-                    if w_top_xmin > top_x_min + 0.35:
-                        inside_valleys.append(w_top_xmin)
-                    if w_top_xmax < top_x_max - 0.35:
-                        inside_valleys.append(w_top_xmax)
+                    valley_feet = []
+                    if w_top_xmin >= top_x_min - 0.15 and w_cx > top_x_min:
+                        valley_feet.append(w_top_xmin - _ov)
+                    if w_top_xmax <= top_x_max + 0.15 and w_cx < top_x_max:
+                        valley_feet.append(w_top_xmax + _ov)
 
-                    for vx in inside_valleys:
-                        build_valley_rafters(bm, (vx, top_y_max + 0.12), (w_cx, top_cy),
+                    for vx in valley_feet:
+                        build_valley_rafters(bm, (vx, top_y_max + _ov), (w_cx, top_cy),
                                              _main_fn, _wing_fn)
 
             elif w_wall in ('LEFT', 'RIGHT'):
@@ -2623,19 +2636,13 @@ def generate_building(obj, props):
                     w_eave_lr = {'min': list(trim), 'max': list(trim)}
                 w_notch_lr = None
                 if not is_lower_wing and not is_rotated_roof:
-                    y_top_local = ly_half + y_max_adj
-                    # Valleys start exactly at the main wall face corners (local mapping:
-                    # +Y is the main side; LEFT wall face is top_x_min, RIGHT top_x_max).
-                    if w_wall == 'LEFT':
-                        wall_local = top_x_min - w_cx
-                    else:
-                        wall_local = w_cx - top_x_max
                     w_notch_lr = {
-                        'apex_x': 0.0, 'apex_y': y_top_local,
-                        'base_y': wall_local,
-                        # Wall half-span (see FRONT notch).
-                        'half_width': lx_half,
+                        'apex_x': 0.0,
+                        'apex_y': ly_half + y_max_adj,
+                        'half_width': lx_half + props.roof_overhang,
+                        'base_y': ((top_x_min - w_cx) if w_wall == 'LEFT' else (w_cx - top_x_max)) - props.roof_overhang,
                         'keep': 'le',
+                        'overlap': 0.08
                     }
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
@@ -2721,8 +2728,8 @@ def generate_building(obj, props):
                                               0.0, _wr, flare_val, _sw, _ry0, _ry1,
                                               _ez, top_off=0.05) + _wz
                         die = (w_cx + _ly1, w_cy)
-                        corners = [(top_x_min - 0.12, w_top_ymin),
-                                   (top_x_min - 0.12, w_top_ymax)]
+                        corners = [(top_x_min - _ov, w_top_ymin - _ov),
+                                   (top_x_min - _ov, w_top_ymax + _ov)]
                     else:
                         def _wing_fn(px, py, _wc=(w_cx, w_cy), _hw=lx_half + _ov,
                                      _wz=w_top_z, _wr=w_roof_h, _ry0=-ly_half - _ov,
@@ -2731,8 +2738,8 @@ def generate_building(obj, props):
                                               0.0, _wr, flare_val, _sw, _ry0, _ry1,
                                               _ez, top_off=0.05) + _wz
                         die = (w_cx - _ly1, w_cy)
-                        corners = [(top_x_max + 0.12, w_top_ymin),
-                                   (top_x_max + 0.12, w_top_ymax)]
+                        corners = [(top_x_max + _ov, w_top_ymin - _ov),
+                                   (top_x_max + _ov, w_top_ymax + _ov)]
                     for cx0, cy0 in corners:
                         build_valley_rafters(bm, (cx0, cy0), die,
                                              _main_fn, _wing_fn)

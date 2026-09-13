@@ -907,7 +907,7 @@ def create_stylized_timber(name="M_Building_Timber", color=(0.30, 0.16, 0.08, 1.
         tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
         tint.inputs["B"].default_value = color
         painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260, strength=0.10, scale=1.35)
-        _apply_ao(tree, bsdf, painted, strength=0.52, distance=0.14)
+        _apply_ao(tree, bsdf, painted, strength=0.30, distance=0.14)
         _setup_pbr(tree, bsdf, out, roughness=0.78)
         return mat
 
@@ -934,7 +934,7 @@ def create_stylized_timber(name="M_Building_Timber", color=(0.30, 0.16, 0.08, 1.
     tree.links.new(anti.outputs["Color"], anti_mix.inputs["B"])
 
     painted = _warm_painterly_pass(tree, c, anti_mix.outputs["Result"], loc_x=380, loc_y=-260, strength=0.16, scale=1.35)
-    _apply_ao(tree, bsdf, painted, strength=0.52, distance=0.14)
+    _apply_ao(tree, bsdf, painted, strength=0.30, distance=0.14)
     _setup_pbr(tree, bsdf, out, roughness=0.78)
     return mat
 
