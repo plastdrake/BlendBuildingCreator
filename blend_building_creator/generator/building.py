@@ -2018,64 +2018,7 @@ def generate_building(obj, props):
                         eave_exclusions=eave_ex
                     )
 
-            # Eliminate main roof protrusion through wing slopes at outside corners
-            if has_wing and wing_floors == num_floors:
-                del_main_faces = []
-                for w_elem in wings:
-                    ww = w_elem['wall']
-                    w_idx = min(wing_floors, num_floors) - 1
-                    wb = w_elem['bounds_fl'][w_idx] if ('bounds_fl' in w_elem and w_idx in w_elem['bounds_fl']) else (w_elem.get('x_min', 0.0), w_elem.get('x_max', 0.0), w_elem.get('y_min', 0.0), w_elem.get('y_max', 0.0))
-                    wx1, wx2, wy1, wy2 = wb
-                    w_cx = (wx1 + wx2) * 0.5
-                    w_cy = (wy1 + wy2) * 0.5
-                    if is_rotated_roof:
-                        if ww == 'FRONT':
-                            if wx2 >= top_x_max - 0.35: # Outside corner on right
-                                for f in roof_bm.faces:
-                                    fc = f.calc_center_median()
-                                    if fc.x >= w_cx - 0.05 and fc.y < top_cy - 0.05:
-                                        del_main_faces.append(f)
-                            if wx1 <= top_x_min + 0.35: # Outside corner on left
-                                for f in roof_bm.faces:
-                                    fc = f.calc_center_median()
-                                    if fc.x <= w_cx + 0.05 and fc.y < top_cy - 0.05:
-                                        del_main_faces.append(f)
-                        elif ww == 'BACK':
-                            if wx2 >= top_x_max - 0.35:
-                                for f in roof_bm.faces:
-                                    fc = f.calc_center_median()
-                                    if fc.x >= w_cx - 0.05 and fc.y > top_cy + 0.05:
-                                        del_main_faces.append(f)
-                            if wx1 <= top_x_min + 0.35:
-                                for f in roof_bm.faces:
-                                    fc = f.calc_center_median()
-                                    if fc.x <= w_cx + 0.05 and fc.y > top_cy + 0.05:
-                                        del_main_faces.append(f)
-                    else:
-                        if ww == 'LEFT':
-                            if wy1 <= top_y_min + 0.35:
-                                for f in roof_bm.faces:
-                                    fc = f.calc_center_median()
-                                    if fc.y <= w_cy + 0.05 and fc.x < top_cx - 0.05:
-                                        del_main_faces.append(f)
-                            if wy2 >= top_y_max - 0.35:
-                                for f in roof_bm.faces:
-                                    fc = f.calc_center_median()
-                                    if fc.y >= w_cy - 0.05 and fc.x < top_cx - 0.05:
-                                        del_main_faces.append(f)
-                        elif ww == 'RIGHT':
-                            if wy1 <= top_y_min + 0.35:
-                                for f in roof_bm.faces:
-                                    fc = f.calc_center_median()
-                                    if fc.y <= w_cy + 0.05 and fc.x > top_cx + 0.05:
-                                        del_main_faces.append(f)
-                            if wy2 >= top_y_max - 0.35:
-                                for f in roof_bm.faces:
-                                    fc = f.calc_center_median()
-                                    if fc.y >= w_cy - 0.05 and fc.x > top_cx + 0.05:
-                                        del_main_faces.append(f)
-                if del_main_faces:
-                    bmesh.ops.delete(roof_bm, geom=list(set(del_main_faces)), context='FACES')
+
 
             uv_src = roof_bm.loops.layers.uv.verify()
             uv_dst = bm.loops.layers.uv.verify()
