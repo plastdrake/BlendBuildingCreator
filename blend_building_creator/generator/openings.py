@@ -650,99 +650,7 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
     irj_loc, irj_rot = to_world((win_w * 0.5 + in_casing_w * 0.5 - 0.015, in_casing_y, in_jamb_cz))
     create_beveled_box(bm, size=(in_casing_w, in_casing_t, in_jamb_h), location=irj_loc, rotation=irj_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
     
-    create_box(
-        bm,
-        size=(win_w - 0.01, lining_depth, win_h - 0.01),
-        location=to_world((0.0, 0.0, 0.0))[0],
-        rotation=to_world((0.0, 0.0, 0.0))[1],
-        mat_index=MAT_INDEX_TIMBER
-    )
-    
-    # 2. Exterior Heavy Timber Casing Architrave Frame
-    casing_t = 0.045
-    casing_w = 0.095
-    casing_y = -wall_thickness * 0.5 - casing_t * 0.5
-    
-    # Left & right casing jambs
-    for side in [-1, 1]:
-        jamb_x = side * (win_w * 0.5 + casing_w * 0.5 - 0.01)
-        jamb_loc, jamb_rot = to_world((jamb_x, casing_y, 0.0))
-        create_beveled_box(
-            bm,
-            size=(casing_w, casing_t, win_h + casing_w * 2.0),
-            location=jamb_loc,
-            rotation=jamb_rot,
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.008
-        )
-        
-    # Top casing head lintel
-    head_z = win_h * 0.5 + casing_w * 0.5
-    head_loc, head_rot = to_world((0.0, casing_y, head_z))
-    create_beveled_box(
-        bm,
-        size=(win_w + casing_w * 2.0 + 0.06, casing_t + 0.02, casing_w + 0.02),
-        location=head_loc,
-        rotation=head_rot,
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.010
-    )
-    
-    # 3. Projecting Stylized Cut-Stone Sill Plinth
-    sill_w = win_w + casing_w * 2.0 + 0.16
-    sill_d = 0.22
-    sill_thick = 0.09
-    sill_z = -win_h * 0.5 - sill_thick * 0.5
-    sill_y = -wall_thickness * 0.5 - sill_d * 0.45
-    sill_loc, sill_rot = to_world((0.0, sill_y, sill_z))
-    create_beveled_box(
-        bm,
-        size=(sill_w, sill_d, sill_thick),
-        location=sill_loc,
-        rotation=sill_rot,
-        mat_index=MAT_INDEX_CUT_STONE,
-        bevel_amount=0.014
-    )
-    
-    # 4. Interior Architrave Casing & Wood Stool Sill
-    in_casing_y = wall_thickness * 0.5 + 0.025
-    in_casing_w = 0.075
-    in_casing_t = 0.035
-    for side in [-1, 1]:
-        in_jx = side * (win_w * 0.5 + in_casing_w * 0.5 - 0.01)
-        in_jloc, in_jrot = to_world((in_jx, in_casing_y, 0.0))
-        create_beveled_box(
-            bm,
-            size=(in_casing_w, in_casing_t, win_h + in_casing_w * 2.0),
-            location=in_jloc,
-            rotation=in_jrot,
-            mat_index=MAT_INDEX_WOOD,
-            bevel_amount=0.006
-        )
-    in_head_z = win_h * 0.5 + in_casing_w * 0.5
-    in_hloc, in_hrot = to_world((0.0, in_casing_y, in_head_z))
-    create_beveled_box(
-        bm,
-        size=(win_w + in_casing_w * 2.0 + 0.04, in_casing_t, in_casing_w),
-        location=in_hloc,
-        rotation=in_hrot,
-        mat_index=MAT_INDEX_WOOD,
-        bevel_amount=0.008
-    )
-    in_sill_w = win_w + in_casing_w * 2.0 + 0.08
-    in_sill_d = 0.16
-    in_sill_thick = 0.04
-    in_sill_z = -win_h * 0.5 - in_sill_thick * 0.5
-    in_sill_y = wall_thickness * 0.5 + in_sill_d * 0.4
-    in_sloc, in_srot = to_world((0.0, in_sill_y, in_sill_z))
-    create_beveled_box(
-        bm,
-        size=(in_sill_w, in_sill_d, in_sill_thick),
-        location=in_sloc,
-        rotation=in_srot,
-        mat_index=MAT_INDEX_WOOD,
-        bevel_amount=0.007
-    )
+
     
     # 5. Window Glazing & Muntins
     glass_loc, glass_rot = to_world((0.0, -0.01, 0.0))
@@ -827,8 +735,11 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
                     bevel_amount=0.007
                 )
                 
+                offset_dist = shutter_t * 0.5 + 0.006
+                strap_ox = dy * offset_dist
+                strap_oy = -dx * offset_dist
                 for hz in [-shutter_h * 0.32, shutter_h * 0.32]:
-                    strap_loc, strap_rot = to_world((sx, sy - 0.012, jamb_cz + hz), rot=(0.0, 0.0, rot_z))
+                    strap_loc, strap_rot = to_world((sx + strap_ox, sy + strap_oy, jamb_cz + hz), rot=(0.0, 0.0, rot_z))
                     create_box(
                         bm,
                         size=(shutter_w * 0.75, 0.012, 0.038),

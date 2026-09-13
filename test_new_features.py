@@ -1,6 +1,10 @@
 import bpy
 import sys
 import os
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
 
 print("=" * 60)
 print("RUNNING TARGETED TESTS FOR EXPANDED FEATURES")
@@ -116,3 +120,5 @@ print("\n" + "=" * 60)
 print("ALL TARGETED FEATURE TESTS PASSED WITH 100% SUCCESS!")
 print("=" * 60)
 blend_building_creator.unregister()
+sys.exit(0)
+
