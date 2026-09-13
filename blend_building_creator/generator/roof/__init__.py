@@ -28,7 +28,8 @@ from .gable_wall import (
 )
 from .valley import (
     deck_top_z,
-    build_valley_strip
+    build_valley_strip,
+    build_valley_rafters
 )
 
 __all__ = [
@@ -45,4 +46,5 @@ __all__ = [
     'build_gable_physical_siding',
     'deck_top_z',
     'build_valley_strip',
+    'build_valley_rafters',
 ]

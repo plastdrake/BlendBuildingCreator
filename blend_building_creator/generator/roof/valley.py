@@ -88,3 +88,61 @@ def build_valley_strip(bm, foot_xy, apex_xy, main_fn, wing_fn, width=0.45,
             mat_index=mat_index,
             bevel_amount=0.008
         )
+
+
+def build_valley_rafters(bm, foot_xy, apex_xy, main_fn, wing_fn, beam_w=0.14,
+                         beam_h=0.18, gap=0.34, segs=8, foot_extend=0.35,
+                         embed=0.06, mat_index=MAT_INDEX_TIMBER):
+    """Paired structural valley rafters flanking the seam (one per roof plane).
+
+    Each beam samples max(main, wing) deck height along its own offset line, so
+    both beams run foot-to-apex hugging the visible tile surfaces instead of
+    floating on a straight chord. Section matches the other rafter timbers.
+    """
+    fx, fy = foot_xy
+    ax, ay = apex_xy
+    dx, dy = ax - fx, ay - fy
+    plan_len = math.hypot(dx, dy)
+    if plan_len < 0.3:
+        return
+    ux, uy = dx / plan_len, dy / plan_len
+    nx, ny = -uy, ux
+
+    for sign in (-1.0, 1.0):
+        ox, oy = nx * sign * gap * 0.5, ny * sign * gap * 0.5
+        pts = []
+        total = plan_len + foot_extend
+        for i in range(segs + 1):
+            s = -foot_extend + (total * i / segs)
+            px = fx + ux * s + ox
+            py = fy + uy * s + oy
+            try:
+                mz = main_fn(px, py)
+            except Exception:
+                mz = -1e9
+            try:
+                wz = wing_fn(px, py)
+            except Exception:
+                wz = -1e9
+            pz = max(mz, wz) + beam_h * 0.5 - embed
+            pts.append(Vector((px, py, pz)))
+        for i in range(segs):
+            p0 = pts[i]
+            p1 = pts[i + 1]
+            seg = p1 - p0
+            seg_len = seg.length
+            if seg_len < 0.05:
+                continue
+            mid = (p0 + p1) * 0.5
+            rot_z = math.atan2(seg.y, seg.x)
+            horiz = math.hypot(seg.x, seg.y)
+            pitch = -math.atan2(seg.z, max(1e-5, horiz))
+            rot_mat = Matrix.Rotation(rot_z, 4, 'Z') @ Matrix.Rotation(pitch, 4, 'Y')
+            create_beveled_box(
+                bm,
+                size=(seg_len + 0.05, beam_w, beam_h),
+                location=mid,
+                rotation=rot_mat.to_euler(),
+                mat_index=mat_index,
+                bevel_amount=0.012
+            )

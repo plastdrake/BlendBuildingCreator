@@ -27,7 +27,7 @@ from .interior import (
     build_spiral_staircase, build_attic_trusses, build_stair_guardrail
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly, build_iron_lantern
-from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_dormer, build_roof_turret, build_fantasy_chimney, build_valley_strip, deck_top_z
+from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_dormer, build_roof_turret, build_fantasy_chimney, build_valley_rafters, deck_top_z
 from .accessories import (
     build_blacksmith_forge, build_windmill_sails, build_watchtower_lookout,
     build_tavern_porch_and_sign, build_fisherman_stilts, build_bakery_oven,
@@ -2341,9 +2341,8 @@ def generate_building(obj, props):
                     if w_top_xmax < top_x_max - 0.35:
                         inside_valleys.append(w_top_xmax)
                     for vx in inside_valleys:
-                        build_valley_strip(bm, (vx, top_y_min - 0.12), (w_cx, top_cy),
-                                           _main_fn, _wing_fn,
-                                           width=0.50, thickness=0.05, lift=0.03, segs=7)
+                        build_valley_rafters(bm, (vx, top_y_min - 0.12), (w_cx, top_cy),
+                                             _main_fn, _wing_fn)
 
             elif w_wall == 'BACK':
                 if is_lower_wing:
@@ -2507,9 +2506,8 @@ def generate_building(obj, props):
                         inside_valleys.append(w_top_xmax)
 
                     for vx in inside_valleys:
-                        build_valley_strip(bm, (vx, top_y_max + 0.12), (w_cx, top_cy),
-                                           _main_fn, _wing_fn,
-                                           width=0.50, thickness=0.05, lift=0.03, segs=7)
+                        build_valley_rafters(bm, (vx, top_y_max + 0.12), (w_cx, top_cy),
+                                             _main_fn, _wing_fn)
 
             elif w_wall in ('LEFT', 'RIGHT'):
                 w_ridge_len = w_top_xmax - w_top_xmin
@@ -2736,9 +2734,8 @@ def generate_building(obj, props):
                         corners = [(top_x_max + 0.12, w_top_ymin),
                                    (top_x_max + 0.12, w_top_ymax)]
                     for cx0, cy0 in corners:
-                        build_valley_strip(bm, (cx0, cy0), die,
-                                           _main_fn, _wing_fn,
-                                           width=0.50, thickness=0.05, lift=0.03, segs=7)
+                        build_valley_rafters(bm, (cx0, cy0), die,
+                                             _main_fn, _wing_fn)
 
     # Dormer Windows
     if props.has_dormers and roof_style in ('SWAY', 'GABLE') and effective_archetype != 'WATCHTOWER':

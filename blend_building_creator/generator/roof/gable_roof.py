@@ -3,6 +3,7 @@ Classic Medieval Gable Roof Generator with flared eaves and segmented ridge.
 Follows Single Responsibility, Open/Closed, and DRY principles.
 """
 
+import bmesh
 import math
 from mathutils import Vector
 from ..mesh_utils import create_beveled_box
@@ -108,6 +109,7 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
             grid_top.append(row_top)
             grid_bot.append(row_bot)
             
+        kept = [[True] * segments_y for _ in range(segments_x)]
         for k in range(segments_x):
             for j in range(segments_y):
                 u0 = k / segments_x
@@ -126,9 +128,11 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                     _yl = _vn['base_y'] + (_vn['apex_y'] - _vn['base_y']) * (1.0 - abs(_xc - _vn['apex_x']) / max(0.001, _vn['half_width']))
                     if _vn.get('keep', 'le') == 'le':
                         if _yc > _yl + 1e-6:
+                            kept[k][j] = False
                             continue
                     else:
                         if _yc < _yl - 1e-6:
+                            kept[k][j] = False
                             continue
 
                 v_in0_t = grid_top[k][j]
@@ -170,7 +174,46 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                     s_dist = math.sqrt((co.x - cx) ** 2 + (rz - co.z) ** 2)
                     v_uv = -s_dist * 0.32
                     loop[uv_layer].uv = Vector((u_uv, v_uv))
-    
+
+        # 1b. Timber caps on valley-cut edges: closes the deck sandwich with the
+        # timber material so no dark slits show along valleys (main decks keep all
+        # cells, so this pass is a no-op for them).
+        if valley_notch is not None:
+            for k in range(segments_x):
+                for j in range(segments_y):
+                    if not kept[k][j]:
+                        continue
+                    for dk, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        nk, nj = k + dk, j + dj
+                        if not (0 <= nk < segments_x and 0 <= nj < segments_y):
+                            continue
+                        if kept[nk][nj]:
+                            continue
+                        if dk == 1:
+                            vt = (grid_top[k + 1][j], grid_top[k + 1][j + 1])
+                            vb = (grid_bot[k + 1][j], grid_bot[k + 1][j + 1])
+                        elif dk == -1:
+                            vt = (grid_top[k][j + 1], grid_top[k][j])
+                            vb = (grid_bot[k][j + 1], grid_bot[k][j])
+                        elif dj == 1:
+                            vt = (grid_top[k][j + 1], grid_top[k + 1][j + 1])
+                            vb = (grid_bot[k][j + 1], grid_bot[k + 1][j + 1])
+                        else:
+                            vt = (grid_top[k + 1][j], grid_top[k][j])
+                            vb = (grid_bot[k + 1][j], grid_bot[k][j])
+                        try:
+                            f_cap = bm.faces.new([vt[0], vt[1], vb[1], vb[0]])
+                        except ValueError:
+                            continue
+                        f_cap.material_index = MAT_INDEX_TIMBER
+                        out = ((vt[0].co + vt[1].co) * 0.5 - (grid_top[k][j].co + grid_top[k + 1][j + 1].co) * 0.25 - (grid_top[k][j + 1].co + grid_top[k + 1][j].co) * 0.25)
+                        bm.normal_update()
+                        if f_cap.normal.dot(out) < 0.0:
+                            bmesh.ops.reverse_faces(bm, faces=[f_cap])
+                        for loop in f_cap.loops:
+                            co = loop.vert.co
+                            loop[uv_layer].uv = Vector(((co.x + co.y) * 0.5, co.z * 0.5))
+
     # 2. Volumetric Gable End Walls
     half_wt = wall_thickness * 0.5
     
