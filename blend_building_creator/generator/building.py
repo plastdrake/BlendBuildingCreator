@@ -2142,7 +2142,9 @@ def generate_building(obj, props):
             w_dormer_u = 0.58
             w_dormer_drop = (1.0 - flare_val) * w_dormer_u + flare_val * (1.0 - (1.0 - w_dormer_u) ** 2)
             w_slope_deck_z = z_w_ridge - w_dormer_drop * (w_roof_h + 0.10)
-            z_w_dormer_base = w_slope_deck_z - 0.20
+            # Raised 0.16 above the main-roof formula so cheeks/floor stay above the
+            # wing ceiling line and never hang into the rooms below.
+            z_w_dormer_base = w_slope_deck_z - 0.04
 
             max_w_d_total_h = max(0.95, (z_w_ridge - 0.28) - z_w_dormer_base)
             w_cur_d_h = min(0.85, max_w_d_total_h * 0.60)
@@ -2216,6 +2218,9 @@ def generate_building(obj, props):
                                     'sway_amount': w_sway
                                 })
 
+                # Equal-floor rear triangle seals the wing-to-main joint so no daylight
+                # gap shows; lower wings keep the single outer gable (unchanged).
+                w_gable_fb = ('FRONT', 'BACK') if not is_lower_wing else ('FRONT',)
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         bm,
@@ -2227,7 +2232,7 @@ def generate_building(obj, props):
                         sway_amount=props.roof_sway * 0.70,
                         segments_y=6,
                         wall_thickness=wall_t,
-                        gable_ends=('FRONT',),
+                        gable_ends=w_gable_fb,
                         abut_back=abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
@@ -2243,7 +2248,7 @@ def generate_building(obj, props):
                         roof_height=w_roof_h,
                         overhang=props.roof_overhang,
                         wall_thickness=wall_t,
-                        gable_ends=('FRONT',),
+                        gable_ends=w_gable_fb,
                         segments_y=6,
                         abut_back=abut_back,
                         tier=tier_val,
@@ -2351,6 +2356,7 @@ def generate_building(obj, props):
                                     'sway_amount': w_sway
                                 })
 
+                w_gable_bk = ('FRONT', 'BACK') if not is_lower_wing else ('BACK',)
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         bm,
@@ -2362,7 +2368,7 @@ def generate_building(obj, props):
                         sway_amount=props.roof_sway * 0.70,
                         segments_y=6,
                         wall_thickness=wall_t,
-                        gable_ends=('BACK',),
+                        gable_ends=w_gable_bk,
                         abut_front=abut_front,
                         abut_back=False,
                         tier=tier_val,
@@ -2379,7 +2385,7 @@ def generate_building(obj, props):
                         roof_height=w_roof_h,
                         overhang=props.roof_overhang,
                         wall_thickness=wall_t,
-                        gable_ends=('BACK',),
+                        gable_ends=w_gable_bk,
                         segments_y=6,
                         abut_front=abut_front,
                         abut_back=False,
@@ -2503,6 +2509,7 @@ def generate_building(obj, props):
                                     'sway_amount': w_sway
                                 })
 
+                w_gable_lr = ('FRONT', 'BACK') if not is_lower_wing else ('FRONT',)
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         wing_roof_bm,
@@ -2514,7 +2521,7 @@ def generate_building(obj, props):
                         sway_amount=props.roof_sway * 0.70,
                         segments_y=6,
                         wall_thickness=wall_t,
-                        gable_ends=('FRONT',),
+                        gable_ends=w_gable_lr,
                         abut_back=loc_abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
@@ -2530,7 +2537,7 @@ def generate_building(obj, props):
                         roof_height=w_roof_h,
                         overhang=props.roof_overhang,
                         wall_thickness=wall_t,
-                        gable_ends=('FRONT',),
+                        gable_ends=w_gable_lr,
                         segments_y=6,
                         abut_back=loc_abut_back,
                         tier=tier_val,
