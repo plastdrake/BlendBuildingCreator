@@ -2155,8 +2155,10 @@ def generate_building(obj, props):
                     w_roof_ymax = up_front_y + 0.04
                     abut_back = True
                 else:
-                    w_roof_ymax = top_cy if is_rotated_roof else (-top_hy + 0.35)
-                    abut_back = True if is_rotated_roof else False
+                    # Equal-floor: stop flush inside the main wall core (0.08 embed, no
+                    # overhang into the rooms) so the deck never shows inside or punches through outside.
+                    w_roof_ymax = top_y_min + 0.08
+                    abut_back = True
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
@@ -2185,15 +2187,20 @@ def generate_building(obj, props):
                             slopes = [-1, 1]
 
                         for s in slopes:
-                            k = min(w_d_target_count, max(1, int(y_span / 1.35)))
+                            # 1.6m pitch + width shrink so neighbouring cheeks never overlap.
+                            k = min(w_d_target_count, max(1, int((y_span + 0.3) / 1.6)))
+                            eff_w = w_cur_d_w
+                            if k > 1:
+                                eff_w = min(w_cur_d_w, max(0.85, (y_span / k) - 0.40))
+                            ap_half = max(0.24, eff_w * 0.5 - 0.18)
                             for i in range(k):
                                 d_y = (y_start + y_end) * 0.5 if k == 1 else (y_start + ((i + 0.5) / k) * y_span)
                                 d_x = w_cx + s * w_roof_half_w * w_dormer_u
                                 facing = (-1, 0) if s == -1 else (1, 0)
                                 w_dormer_apertures.append({
                                     'side': s,
-                                    'y_min': d_y - 0.38,
-                                    'y_max': d_y + 0.38,
+                                    'y_min': d_y - ap_half,
+                                    'y_max': d_y + ap_half,
                                     'u_min': max(0.25, w_u_intersect + 0.04),
                                     'u_max': min(0.70, w_dormer_u + 0.08)
                                 })
@@ -2201,7 +2208,7 @@ def generate_building(obj, props):
                                     'pos': (d_x, d_y),
                                     'facing': facing,
                                     'z_base': z_w_dormer_base,
-                                    'dormer_w': w_cur_d_w,
+                                    'dormer_w': eff_w,
                                     'dormer_d': w_cur_d_reach,
                                     'dormer_h': w_cur_d_h,
                                     'dormer_roof_h': w_cur_d_roof_h,
@@ -2284,8 +2291,9 @@ def generate_building(obj, props):
                     w_roof_ymin = up_back_y - 0.04
                     abut_front = True
                 else:
-                    w_roof_ymin = top_cy if is_rotated_roof else (top_hy - 0.35)
-                    abut_front = True if is_rotated_roof else False
+                    # Same flush embed as FRONT (see above).
+                    w_roof_ymin = top_y_max - 0.08
+                    abut_front = True
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
@@ -2314,15 +2322,20 @@ def generate_building(obj, props):
                             slopes = [-1, 1]
 
                         for s in slopes:
-                            k = min(w_d_target_count, max(1, int(y_span / 1.35)))
+                            # Same 1.6m anti-overlap pitch as FRONT (see above).
+                            k = min(w_d_target_count, max(1, int((y_span + 0.3) / 1.6)))
+                            eff_w = w_cur_d_w
+                            if k > 1:
+                                eff_w = min(w_cur_d_w, max(0.85, (y_span / k) - 0.40))
+                            ap_half = max(0.24, eff_w * 0.5 - 0.18)
                             for i in range(k):
                                 d_y = (y_start + y_end) * 0.5 if k == 1 else (y_start + ((i + 0.5) / k) * y_span)
                                 d_x = w_cx + s * w_roof_half_w * w_dormer_u
                                 facing = (-1, 0) if s == -1 else (1, 0)
                                 w_dormer_apertures.append({
                                     'side': s,
-                                    'y_min': d_y - 0.38,
-                                    'y_max': d_y + 0.38,
+                                    'y_min': d_y - ap_half,
+                                    'y_max': d_y + ap_half,
                                     'u_min': max(0.25, w_u_intersect + 0.04),
                                     'u_max': min(0.70, w_dormer_u + 0.08)
                                 })
@@ -2330,7 +2343,7 @@ def generate_building(obj, props):
                                     'pos': (d_x, d_y),
                                     'facing': facing,
                                     'z_base': z_w_dormer_base,
-                                    'dormer_w': w_cur_d_w,
+                                    'dormer_w': eff_w,
                                     'dormer_d': w_cur_d_reach,
                                     'dormer_h': w_cur_d_h,
                                     'dormer_roof_h': w_cur_d_roof_h,
@@ -2416,8 +2429,10 @@ def generate_building(obj, props):
                 wing_roof_bm = bmesh.new()
                 lx_half = w_span_y * 0.5
                 ly_half = (w_ridge_len + 0.04) * 0.5 if is_rotated_roof else (w_ridge_len * 0.5)
-                loc_abut_back = True if is_rotated_roof else is_lower_wing
-                y_max_adj = 0.04 if (is_lower_wing or is_rotated_roof) else 0.25
+                # Main-side end always abuts flush inside the wall core: no overhang
+                # into the main rooms (fixes interior beam/deck overlap + exterior punch-through).
+                loc_abut_back = True
+                y_max_adj = 0.04 if (is_lower_wing or is_rotated_roof) else 0.08
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_cy = (w_top_ymin + w_top_ymax) * 0.5
@@ -2452,7 +2467,11 @@ def generate_building(obj, props):
                             slopes_world = [-1, 1]
 
                         for sw in slopes_world:
-                            k = min(w_d_target_count, max(1, int(x_span / 1.35)))
+                            k = min(w_d_target_count, max(1, int((x_span + 0.3) / 1.6)))
+                            eff_w = w_cur_d_w
+                            if k > 1:
+                                eff_w = min(w_cur_d_w, max(0.85, (x_span / k) - 0.40))
+                            ap_half = max(0.24, eff_w * 0.5 - 0.18)
                             for i in range(k):
                                 d_x = (x_start + x_end) * 0.5 if k == 1 else (x_start + ((i + 0.5) / k) * x_span)
                                 d_y = w_cy + sw * w_roof_half_w * w_dormer_u
@@ -2467,8 +2486,8 @@ def generate_building(obj, props):
 
                                 w_dormer_apertures.append({
                                     'side': local_side,
-                                    'y_min': loc_y - 0.38,
-                                    'y_max': loc_y + 0.38,
+                                    'y_min': loc_y - ap_half,
+                                    'y_max': loc_y + ap_half,
                                     'u_min': max(0.25, w_u_intersect + 0.04),
                                     'u_max': min(0.70, w_dormer_u + 0.08)
                                 })
@@ -2476,7 +2495,7 @@ def generate_building(obj, props):
                                     'pos': (d_x, d_y),
                                     'facing': facing,
                                     'z_base': z_w_dormer_base,
-                                    'dormer_w': w_cur_d_w,
+                                    'dormer_w': eff_w,
                                     'dormer_d': w_cur_d_reach,
                                     'dormer_h': w_cur_d_h,
                                     'dormer_roof_h': w_cur_d_roof_h,
