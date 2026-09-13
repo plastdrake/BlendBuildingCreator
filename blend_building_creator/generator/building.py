@@ -2114,8 +2114,9 @@ def generate_building(obj, props):
                     top_b[0], top_b[1], top_b[2], top_b[3]
                 )
 
-            if is_lower_wing:
-                # Interior ceiling slab for the wing (enclosing the wing interior from above)
+            if is_lower_wing or (not is_lower_wing and has_wing):
+                # Interior ceiling slab for the wing (enclosing the wing interior from above).
+                # Equal-height wings get one too so rooms never see open roof/dark attic.
                 build_floor_slab(
                     bm,
                     floor_idx=w_top_fl,
@@ -2280,16 +2281,16 @@ def generate_building(obj, props):
                     )
 
                 if not is_lower_wing and is_rotated_roof:
-                    # Diagonal timber valley rafter beams along inside corner roof seams
+                    # Diagonal timber valley rafter beams along inside corner roof seams.
+                    # Both ends ride above the decks (never below ceilings/inside rooms).
                     inside_valleys = []
                     if w_top_xmin > top_x_min + 0.35:
                         inside_valleys.append(w_top_xmin)
                     if w_top_xmax < top_x_max - 0.35:
                         inside_valleys.append(w_top_xmax)
 
-                    ez_val = top_z - 0.12
                     for vx in inside_valleys:
-                        p_start = Vector((vx, top_y_min - props.roof_overhang * 0.45, ez_val))
+                        p_start = Vector((vx, top_y_min + 0.05, top_z + 0.02))
                         p_end = Vector((w_cx, top_cy, top_z + props.roof_height))
                         v_diff = p_end - p_start
                         v_len = v_diff.length
@@ -2425,16 +2426,15 @@ def generate_building(obj, props):
                     )
 
                 if not is_lower_wing and is_rotated_roof:
-                    # Diagonal timber valley rafter beams along inside corner roof seams
+                    # Same above-deck valley beams as FRONT (see above).
                     inside_valleys = []
                     if w_top_xmin > top_x_min + 0.35:
                         inside_valleys.append(w_top_xmin)
                     if w_top_xmax < top_x_max - 0.35:
                         inside_valleys.append(w_top_xmax)
 
-                    ez_val = top_z - 0.12
                     for vx in inside_valleys:
-                        p_start = Vector((vx, top_y_max + props.roof_overhang * 0.45, ez_val))
+                        p_start = Vector((vx, top_y_max - 0.05, top_z + 0.02))
                         p_end = Vector((w_cx, top_cy, top_z + props.roof_height))
                         v_diff = p_end - p_start
                         v_len = v_diff.length
