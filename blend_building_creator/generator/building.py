@@ -928,20 +928,22 @@ def generate_building(obj, props):
             for w_elem, (w_xmin, w_xmax, w_ymin, w_ymax) in zip(wings, fl_wings_bounds):
                 w_wall = w_elem['wall']
                 jamb_w = 0.18
-                jamb_d = wall_t + 0.04
+                jamb_d = wall_t + 0.10  # Proud of wall into both rooms by 0.05m
                 lower = 0.018
                 portal_h = floor_h * 0.82
                 lintel_h = 0.20
 
                 if w_wall in ('FRONT', 'BACK'):
                     wing_span = w_xmax - w_xmin
-                    max_pw = max(1.4, wing_span - wall_t * 2.0 - jamb_w * 2.0 - 0.08)
-                    p_w = min(max_pw, max(1.6, wing_span - 0.80))
+                    clear_margin = wall_t + jamb_w + 0.22
+                    max_pw = max(1.2, wing_span - clear_margin * 2.0)
+                    p_w = min(max_pw, 2.2)
                     p_cx = (w_xmin + w_xmax) * 0.5
-                    p_u1 = (p_cx - p_w * 0.5) - x_min
-                    p_u2 = (p_cx + p_w * 0.5) - x_min
                     p_yf = y_min if w_wall == 'FRONT' else y_max
-                    op_dict = {'u_start': p_u1, 'u_end': p_u2, 'z_start': z_floor, 'z_end': z_floor + portal_h}
+                    # Cutout in the wall encompasses the whole frame opening + jambs so plaster never z-fights with wood
+                    p_u1 = (p_cx - p_w * 0.5 - jamb_w - 0.02) - x_min
+                    p_u2 = (p_cx + p_w * 0.5 + jamb_w + 0.02) - x_min
+                    op_dict = {'u_start': p_u1, 'u_end': p_u2, 'z_start': z_floor, 'z_end': z_floor + portal_h + lintel_h + 0.02}
                     if w_wall == 'FRONT':
                         front_openings.append(op_dict)
                     else:
@@ -958,18 +960,20 @@ def generate_building(obj, props):
                                        location=(p_cx, p_yf, z_floor + portal_h + lintel_h * 0.5 - lower),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
                     # Beveled Wooden Floor Threshold Board bridging the floor opening
-                    create_beveled_box(bm, size=(p_w + jamb_w * 2.0, wall_t + 0.12, 0.038),
+                    create_beveled_box(bm, size=(p_w + jamb_w * 2.0 + 0.06, wall_t + 0.16, 0.038),
                                        location=(p_cx, p_yf, z_floor + 0.05 + 0.019),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
                 else: # LEFT or RIGHT
                     wing_span = w_ymax - w_ymin
-                    max_pw = max(1.4, wing_span - wall_t * 2.0 - jamb_w * 2.0 - 0.08)
-                    p_w = min(max_pw, max(1.6, wing_span - 0.80))
+                    clear_margin = wall_t + jamb_w + 0.22
+                    max_pw = max(1.2, wing_span - clear_margin * 2.0)
+                    p_w = min(max_pw, 2.2)
                     p_cy = (w_ymin + w_ymax) * 0.5
-                    p_u1 = (p_cy - p_w * 0.5) - y_min
-                    p_u2 = (p_cy + p_w * 0.5) - y_min
                     p_xf = x_min if w_wall == 'LEFT' else x_max
-                    op_dict = {'u_start': p_u1, 'u_end': p_u2, 'z_start': z_floor, 'z_end': z_floor + portal_h}
+                    # Cutout in the wall encompasses the whole frame opening + jambs so plaster never z-fights with wood
+                    p_u1 = (p_cy - p_w * 0.5 - jamb_w - 0.02) - y_min
+                    p_u2 = (p_cy + p_w * 0.5 + jamb_w + 0.02) - y_min
+                    op_dict = {'u_start': p_u1, 'u_end': p_u2, 'z_start': z_floor, 'z_end': z_floor + portal_h + lintel_h + 0.02}
                     if w_wall == 'LEFT':
                         left_openings.append(op_dict)
                     else:
@@ -986,7 +990,7 @@ def generate_building(obj, props):
                                        location=(p_xf, p_cy, z_floor + portal_h + lintel_h * 0.5 - lower),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
                     # Beveled Wooden Floor Threshold Board bridging the floor opening
-                    create_beveled_box(bm, size=(wall_t + 0.12, p_w + jamb_w * 2.0, 0.038),
+                    create_beveled_box(bm, size=(wall_t + 0.16, p_w + jamb_w * 2.0 + 0.06, 0.038),
                                        location=(p_xf, p_cy, z_floor + 0.05 + 0.019),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
 

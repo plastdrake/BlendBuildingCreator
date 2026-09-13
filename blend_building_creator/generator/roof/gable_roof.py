@@ -111,18 +111,6 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                 y0 = ry_min + t0 * total_d
                 y1 = ry_min + t1 * total_d
                 
-                if dormer_apertures:
-                    mid_y = (y0 + y1) * 0.5
-                    mid_u = (u0 + u1) * 0.5
-                    skip_cell = False
-                    for ap in dormer_apertures:
-                        if ap.get('side') == side:
-                            if ap['y_min'] <= mid_y <= ap['y_max'] and ap['u_min'] <= mid_u <= ap['u_max']:
-                                skip_cell = True
-                                break
-                    if skip_cell:
-                        continue
-                
                 v_in0_t = grid_top[k][j]
                 v_in1_t = grid_top[k][j+1]
                 v_out1_t = grid_top[k+1][j+1]

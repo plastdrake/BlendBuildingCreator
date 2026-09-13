@@ -603,55 +603,70 @@ def create_stylized_plaster_brick(name="M_Building_Plaster_Brick", color=(0.93, 
         tree.links.new(brick_noise.outputs["Color"], brick_mod.inputs["B"])
         final_brick_color = brick_mod.outputs["Result"]
 
-    # 3. Organic Chipped-Plaster Breakout Mask (UV & Object based for universal wall coverage)
-    macro_noise = tree.nodes.new("ShaderNodeTexNoise")
-    macro_noise.location = (-1400, -800)
-    macro_noise.inputs["Scale"].default_value = 1.6
-    macro_noise.inputs["Detail"].default_value = 2.0
-    tree.links.new(c.outputs["UV"], macro_noise.inputs["Vector"])
+    # 3. Organic Chipped-Plaster Breakout Mask (Concentrated corner/isolated cluster in 3D Object Space)
+    # Low-frequency macro noise creates sparse broad zones (concentrated on 1-2 corners or wall flanks across the entire building)
+    cluster_noise = tree.nodes.new("ShaderNodeTexNoise")
+    cluster_noise.location = (-1400, -800)
+    cluster_noise.inputs["Scale"].default_value = 0.28
+    cluster_noise.inputs["Detail"].default_value = 1.5
+    try:
+        cluster_noise.inputs["Roughness"].default_value = 0.35
+    except Exception:
+        pass
+    tree.links.new(c.outputs["Object"], cluster_noise.inputs["Vector"])
 
+    # High-frequency jagged crack noise for authentic organic chipped plaster boundary edges
     crack_noise = tree.nodes.new("ShaderNodeTexNoise")
     crack_noise.location = (-1100, -800)
-    crack_noise.inputs["Scale"].default_value = 4.2
-    crack_noise.inputs["Detail"].default_value = 4.0
+    crack_noise.inputs["Scale"].default_value = 3.2
+    crack_noise.inputs["Detail"].default_value = 3.5
     try:
         crack_noise.inputs["Roughness"].default_value = 0.65
     except Exception:
         pass
-    tree.links.new(c.outputs["UV"], crack_noise.inputs["Vector"])
+    tree.links.new(c.outputs["Object"], crack_noise.inputs["Vector"])
 
-    mask_combine = tree.nodes.new("ShaderNodeMath")
-    mask_combine.operation = 'MULTIPLY_ADD'
-    mask_combine.location = (-850, -800)
-    tree.links.new(crack_noise.outputs["Fac"], mask_combine.inputs[0])
-    mask_combine.inputs[1].default_value = 0.35
-    tree.links.new(macro_noise.outputs["Fac"], mask_combine.inputs[2])
-
-    # Threshold driven by frequency (clamped safe range)
+    # Threshold on macro cluster driven by frequency: lower frequency = only 1-2 corners, higher = more clusters
     freq_clamped = max(0.01, min(0.95, frequency))
-    t_start = max(0.10, min(0.88, 0.82 - freq_clamped * 0.42))
-    t_end = min(0.95, t_start + 0.05)
+    t_gate = max(0.42, min(0.75, 0.70 - freq_clamped * 0.30))
 
+    cluster_gate = tree.nodes.new("ShaderNodeValToRGB")
+    cluster_gate.location = (-850, -650)
+    cluster_gate.color_ramp.interpolation = 'LINEAR'
+    cluster_gate.color_ramp.elements[0].position = max(0.0, t_gate - 0.08)
+    cluster_gate.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
+    cluster_gate.color_ramp.elements[1].position = min(1.0, t_gate + 0.08)
+    cluster_gate.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+    tree.links.new(cluster_noise.outputs["Fac"], cluster_gate.inputs["Fac"])
+
+    # Multiply gated cluster by crack noise so breakout is strictly concentrated within the active zones
+    mask_combine = tree.nodes.new("ShaderNodeMath")
+    mask_combine.operation = 'MULTIPLY'
+    mask_combine.location = (-600, -800)
+    tree.links.new(cluster_gate.outputs["Color"], mask_combine.inputs[0])
+    tree.links.new(crack_noise.outputs["Fac"], mask_combine.inputs[1])
+
+    # Sharp plaster break edge
     mask_ramp = tree.nodes.new("ShaderNodeValToRGB")
-    mask_ramp.location = (-600, -800)
+    mask_ramp.location = (-350, -800)
     mask_ramp.color_ramp.interpolation = 'LINEAR'
-    mask_ramp.color_ramp.elements[0].position = t_start
+    mask_ramp.color_ramp.elements[0].position = 0.35
     mask_ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
-    mask_ramp.color_ramp.elements[1].position = t_end
+    mask_ramp.color_ramp.elements[1].position = 0.48
     mask_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
     tree.links.new(mask_combine.outputs["Value"], mask_ramp.inputs["Fac"])
 
     # 4. Chipped Rim Shading (Dark Crevice Shadow + Chalky Plaster Highlight Rim)
     rim_ramp = tree.nodes.new("ShaderNodeValToRGB")
-    rim_ramp.location = (-600, -500)
+    rim_ramp.location = (-350, -500)
     rim_ramp.color_ramp.interpolation = 'LINEAR'
     rim_ramp.color_ramp.elements[0].position = 0.0
     rim_ramp.color_ramp.elements[0].color = (1.0, 1.0, 1.0, 1.0)
-    el_hl = rim_ramp.color_ramp.elements.new(max(0.01, t_start - 0.03))
+    el_hl = rim_ramp.color_ramp.elements.new(0.32)
     el_hl.color = (1.12, 1.10, 1.05, 1.0) # Outer chalky edge
-    el_sh = rim_ramp.color_ramp.elements.new(max(0.02, t_start + 0.02))
+    el_sh = rim_ramp.color_ramp.elements.new(0.38)
     el_sh.color = (0.28, 0.20, 0.15, 1.0) # Inner dark shadow
-    rim_ramp.color_ramp.elements[1].position = t_end
+    rim_ramp.color_ramp.elements[1].position = 0.48
     rim_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
     tree.links.new(mask_combine.outputs["Value"], rim_ramp.inputs["Fac"])
 
