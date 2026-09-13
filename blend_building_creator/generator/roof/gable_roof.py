@@ -10,9 +10,49 @@ from ..materials import MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER
 from .gable_wall import build_gable_end_wall
 from .features import build_curved_bargeboards
 
+def _build_eave_fascia_segment(bm, rx_val, y_start, y_end, ez, exclusions=None):
+    if not exclusions:
+        fascia_d = max(0.2, y_end - y_start)
+        fascia_mid_y = (y_start + y_end) * 0.5
+        create_beveled_box(
+            bm,
+            size=(0.14, fascia_d, 0.18),
+            location=(rx_val, fascia_mid_y, ez),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.012
+        )
+        return
+
+    clean_ex = sorted([(max(y_start, e[0]), min(y_end, e[1])) for e in exclusions if e[1] > y_start and e[0] < y_end])
+    cur_y = y_start
+    for es, ee in clean_ex:
+        if es > cur_y + 0.25:
+            d = es - cur_y
+            my = (cur_y + es) * 0.5
+            create_beveled_box(
+                bm,
+                size=(0.14, d, 0.18),
+                location=(rx_val, my, ez),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.012
+            )
+        cur_y = max(cur_y, ee)
+    if y_end > cur_y + 0.25:
+        d = y_end - cur_y
+        my = (cur_y + y_end) * 0.5
+        create_beveled_box(
+            bm,
+            size=(0.14, d, 0.18),
+            location=(rx_val, my, ez),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.012
+        )
+
+
 def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, overhang=0.45,
                      wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6, abut_back=False,
-                     abut_front=False, tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35, dormer_apertures=None):
+                     abut_front=False, tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35,
+                     dormer_apertures=None, eave_exclusions=None):
     """
     Builds a classic steep medieval gable roof with solid 0.16m thick timber decking,
     thick volumetric gable walls, and complete eave closures.
@@ -148,22 +188,10 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
     # 3. Eaves Fascia & Ridge Beams
     y_f_start = ry_min + 0.06
     y_f_end = (ry_max - 0.06) if not abut_back else ry_max
-    fascia_d = max(0.2, y_f_end - y_f_start)
-    fascia_mid_y = (y_f_start + y_f_end) * 0.5
-    create_beveled_box(
-        bm,
-        size=(0.14, fascia_d, 0.18),
-        location=(rx_min, fascia_mid_y, ez),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.012
-    )
-    create_beveled_box(
-        bm,
-        size=(0.14, fascia_d, 0.18),
-        location=(rx_max, fascia_mid_y, ez),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.012
-    )
+    ex_min = eave_exclusions.get('min', []) if eave_exclusions else []
+    ex_max = eave_exclusions.get('max', []) if eave_exclusions else []
+    _build_eave_fascia_segment(bm, rx_min, y_f_start, y_f_end, ez, ex_min)
+    _build_eave_fascia_segment(bm, rx_max, y_f_start, y_f_end, ez, ex_max)
     # Segmented Ridge Beam along Y
     for j in range(segments_y):
         t0 = j / segments_y

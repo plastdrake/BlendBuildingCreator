@@ -689,19 +689,19 @@ def generate_building(obj, props):
                     w_slab_xmin = w_xmin + wall_t * 0.50 + 0.02
                     w_slab_xmax = w_xmax - wall_t * 0.50 - 0.02
                     w_slab_ymin = w_ymin + wall_t * 0.50 + 0.02
-                    w_slab_ymax = y_min - 0.02
+                    w_slab_ymax = slab_ymin + 0.01
                 elif w_wall == 'BACK':
                     w_slab_xmin = w_xmin + wall_t * 0.50 + 0.02
                     w_slab_xmax = w_xmax - wall_t * 0.50 - 0.02
-                    w_slab_ymin = y_max + 0.02
+                    w_slab_ymin = slab_ymax - 0.01
                     w_slab_ymax = w_ymax - wall_t * 0.50 - 0.02
                 elif w_wall == 'LEFT':
                     w_slab_xmin = w_xmin + wall_t * 0.50 + 0.02
-                    w_slab_xmax = x_min - 0.02
+                    w_slab_xmax = slab_xmin + 0.01
                     w_slab_ymin = w_ymin + wall_t * 0.50 + 0.02
                     w_slab_ymax = w_ymax - wall_t * 0.50 - 0.02
                 else: # RIGHT
-                    w_slab_xmin = x_max + 0.02
+                    w_slab_xmin = slab_xmax - 0.01
                     w_slab_xmax = w_xmax - wall_t * 0.50 - 0.02
                     w_slab_ymin = w_ymin + wall_t * 0.50 + 0.02
                     w_slab_ymax = w_ymax - wall_t * 0.50 - 0.02
@@ -927,15 +927,16 @@ def generate_building(obj, props):
         if fl_has_wing:
             for w_elem, (w_xmin, w_xmax, w_ymin, w_ymax) in zip(wings, fl_wings_bounds):
                 w_wall = w_elem['wall']
-                jamb_w = 0.22
-                jamb_d = wall_t + 0.12
-                inset = 0.035
+                jamb_w = 0.18
+                jamb_d = wall_t + 0.04
                 lower = 0.018
                 portal_h = floor_h * 0.82
-                lintel_h = 0.22
+                lintel_h = 0.20
 
                 if w_wall in ('FRONT', 'BACK'):
-                    p_w = max(1.8, (w_xmax - w_xmin) - 0.45)
+                    wing_span = w_xmax - w_xmin
+                    max_pw = max(1.4, wing_span - wall_t * 2.0 - jamb_w * 2.0 - 0.08)
+                    p_w = min(max_pw, max(1.6, wing_span - 0.80))
                     p_cx = (w_xmin + w_xmax) * 0.5
                     p_u1 = (p_cx - p_w * 0.5) - x_min
                     p_u2 = (p_cx + p_w * 0.5) - x_min
@@ -947,17 +948,23 @@ def generate_building(obj, props):
                         back_openings.append(op_dict)
 
                     create_beveled_box(bm, size=(jamb_w, jamb_d, portal_h),
-                                       location=(p_cx - p_w * 0.5 - jamb_w * 0.5, p_yf + inset, z_floor + portal_h * 0.5 - lower * 0.5),
+                                       location=(p_cx - p_w * 0.5 - jamb_w * 0.5, p_yf, z_floor + portal_h * 0.5 - lower * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
                     create_beveled_box(bm, size=(jamb_w, jamb_d, portal_h),
-                                       location=(p_cx + p_w * 0.5 + jamb_w * 0.5, p_yf + inset, z_floor + portal_h * 0.5 - lower * 0.5),
+                                       location=(p_cx + p_w * 0.5 + jamb_w * 0.5, p_yf, z_floor + portal_h * 0.5 - lower * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
-                    lintel_w = p_w + jamb_w * 2.0 + 0.12
+                    lintel_w = p_w + jamb_w * 2.0 + 0.06
                     create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
-                                       location=(p_cx, p_yf + inset, z_floor + portal_h + lintel_h * 0.5 - lower),
+                                       location=(p_cx, p_yf, z_floor + portal_h + lintel_h * 0.5 - lower),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
+                    # Beveled Wooden Floor Threshold Board bridging the floor opening
+                    create_beveled_box(bm, size=(p_w + jamb_w * 2.0, wall_t + 0.12, 0.038),
+                                       location=(p_cx, p_yf, z_floor + 0.05 + 0.019),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
                 else: # LEFT or RIGHT
-                    p_w = max(1.8, (w_ymax - w_ymin) - 0.45)
+                    wing_span = w_ymax - w_ymin
+                    max_pw = max(1.4, wing_span - wall_t * 2.0 - jamb_w * 2.0 - 0.08)
+                    p_w = min(max_pw, max(1.6, wing_span - 0.80))
                     p_cy = (w_ymin + w_ymax) * 0.5
                     p_u1 = (p_cy - p_w * 0.5) - y_min
                     p_u2 = (p_cy + p_w * 0.5) - y_min
@@ -974,10 +981,14 @@ def generate_building(obj, props):
                     create_beveled_box(bm, size=(jamb_d, jamb_w, portal_h),
                                        location=(p_xf, p_cy + p_w * 0.5 + jamb_w * 0.5, z_floor + portal_h * 0.5 - lower * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
-                    lintel_w = p_w + jamb_w * 2.0 + 0.12
+                    lintel_w = p_w + jamb_w * 2.0 + 0.06
                     create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
                                        location=(p_xf, p_cy, z_floor + portal_h + lintel_h * 0.5 - lower),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
+                    # Beveled Wooden Floor Threshold Board bridging the floor opening
+                    create_beveled_box(bm, size=(wall_t + 0.12, p_w + jamb_w * 2.0, 0.038),
+                                       location=(p_xf, p_cy, z_floor + 0.05 + 0.019),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
 
         # Walk-in portal into mini-wing outcrop
         has_mw = getattr(props, 'has_mini_wing', False)
@@ -988,16 +999,16 @@ def generate_building(obj, props):
 
         if has_mw and fl_idx == mw_fl:
             mw_portal_w = min(1.30, mw_w - 0.45)
-            mw_portal_h = min(2.20, floor_h * 0.80)
+            mw_portal_h = min(2.15, floor_h * 0.78)
             if mw_side in ('FRONT', 'BACK'):
                 mw_u_mid = (x_max - x_min) * 0.5
             else:
                 mw_u_mid = (y_max - y_min) * 0.5
             
             shift_in = 0.05
-            shift_down = 0.04
+            shift_down = 0.0
             jamb_w = 0.16
-            jamb_d = wall_t + 0.10
+            jamb_d = wall_t + 0.06
             lintel_h = 0.18
             lintel_w = mw_portal_w + jamb_w * 2.0 - shift_in * 2.0 + 0.08
             trim_clr = jamb_w - shift_in + 0.015
@@ -1848,6 +1859,37 @@ def generate_building(obj, props):
                         'u_max': min(0.70, dormer_u + 0.08)
                     })
 
+        # Eave exclusions for equal-floor wings so eave fascia beams don't slice through wing roofs
+        eave_ex = {'min': [], 'max': []}
+        if has_wing and wing_floors == num_floors:
+            for w_elem in wings:
+                ww = w_elem['wall']
+                w_idx = min(wing_floors, num_floors) - 1
+                if 'bounds_fl' in w_elem and w_idx in w_elem['bounds_fl']:
+                    wb = w_elem['bounds_fl'][w_idx]
+                else:
+                    wb = (w_elem.get('x_min', 0.0), w_elem.get('x_max', 0.0), w_elem.get('y_min', 0.0), w_elem.get('y_max', 0.0))
+                wx1, wx2, wy1, wy2 = wb
+                if is_rotated_roof:
+                    # Rotated roof: local X is (-top_hy to top_hy), local Y is (-top_hx to top_hx)
+                    # rx_max (+X local) rotates to -Y (FRONT facade in world space)
+                    # rx_min (-X local) rotates to +Y (BACK facade in world space)
+                    # local Y is (world_x - top_cx)
+                    ly1 = (wx1 - props.roof_overhang * 0.4) - top_cx
+                    ly2 = (wx2 + props.roof_overhang * 0.4) - top_cx
+                    if ww == 'FRONT':
+                        eave_ex['max'].append((ly1, ly2))
+                    elif ww == 'BACK':
+                        eave_ex['min'].append((ly1, ly2))
+                else:
+                    # Non-rotated roof: rx_min is LEFT facade, rx_max is RIGHT facade
+                    ly1 = (wy1 - props.roof_overhang * 0.4)
+                    ly2 = (wy2 + props.roof_overhang * 0.4)
+                    if ww == 'LEFT':
+                        eave_ex['min'].append((ly1, ly2))
+                    elif ww == 'RIGHT':
+                        eave_ex['max'].append((ly1, ly2))
+
         if is_rotated_roof:
             roof_bm = bmesh.new()
             if roof_style == 'SWAY':
@@ -1863,7 +1905,8 @@ def generate_building(obj, props):
                     tier=tier_val,
                     plank_direction=plank_dir,
                     roof_flare=flare_val,
-                    dormer_apertures=dormer_apertures
+                    dormer_apertures=dormer_apertures,
+                    eave_exclusions=eave_ex
                 )
             else: # 'GABLE'
                 build_gable_roof(
@@ -1878,7 +1921,8 @@ def generate_building(obj, props):
                     tier=tier_val,
                     plank_direction=plank_dir,
                     roof_flare=flare_val,
-                    dormer_apertures=dormer_apertures
+                    dormer_apertures=dormer_apertures,
+                    eave_exclusions=eave_ex
                 )
             rot_m = Matrix.Rotation(-math.pi * 0.5, 4, 'Z')
             trans_m = Matrix.Translation(Vector((top_cx, top_cy, top_z)))
@@ -1910,7 +1954,8 @@ def generate_building(obj, props):
                 tier=tier_val,
                 plank_direction=plank_dir,
                 roof_flare=flare_val,
-                dormer_apertures=dormer_apertures
+                dormer_apertures=dormer_apertures,
+                eave_exclusions=eave_ex
             )
         elif roof_style == 'TURRET':
             radius = max(top_hx, top_hy) * 1.05
@@ -1933,7 +1978,8 @@ def generate_building(obj, props):
                 tier=tier_val,
                 plank_direction=plank_dir,
                 roof_flare=flare_val,
-                dormer_apertures=dormer_apertures
+                dormer_apertures=dormer_apertures,
+                eave_exclusions=eave_ex
             )
 
         # Roof Hoist Beam with Cargo Hook (Warehouse / freight feature)
@@ -1997,7 +2043,7 @@ def generate_building(obj, props):
         is_lower_wing = (wing_floors < num_floors)
         w_fl_idx = w_top_fl - 1
         w_top_z = found_h + w_top_fl * floor_h
-        w_roof_h = props.roof_height * 0.88
+        w_roof_h = props.roof_height if (wing_floors == num_floors) else (props.roof_height * 0.88)
 
         if is_lower_wing:
             if props.has_cantilever:
@@ -2078,8 +2124,8 @@ def generate_building(obj, props):
                     w_roof_ymax = up_front_y + 0.04
                     abut_back = True
                 else:
-                    w_roof_ymax = top_cy if is_rotated_roof else (-top_hy + 0.25)
-                    abut_back = False
+                    w_roof_ymax = top_cy if is_rotated_roof else (-top_hy + 0.35)
+                    abut_back = True if is_rotated_roof else False
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
@@ -2168,13 +2214,47 @@ def generate_building(obj, props):
                         dormer_apertures=w_dormer_apertures
                     )
 
+                if not is_lower_wing and is_rotated_roof:
+                    # Diagonal timber valley rafter beams along inside corner roof seams
+                    inside_valleys = []
+                    if w_top_xmin > top_x_min + 0.35:
+                        inside_valleys.append(w_top_xmin)
+                    if w_top_xmax < top_x_max - 0.35:
+                        inside_valleys.append(w_top_xmax)
+
+                    ez_val = top_z - 0.12
+                    for vx in inside_valleys:
+                        p_start = Vector((vx, top_y_min - props.roof_overhang * 0.45, ez_val))
+                        p_end = Vector((w_cx, top_cy, top_z + props.roof_height))
+                        v_diff = p_end - p_start
+                        v_len = v_diff.length
+                        if v_len > 0.4:
+                            v_mid = (p_start + p_end) * 0.5
+                            v_dir = v_diff.normalized()
+                            v_up = Vector((0.0, 0.0, 1.0))
+                            v_side = v_dir.cross(v_up)
+                            if v_side.length < 1e-4:
+                                v_side = Vector((1.0, 0.0, 0.0))
+                            else:
+                                v_side = v_side.normalized()
+                            v_true_up = v_side.cross(v_dir).normalized()
+                            v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
+                            create_beveled_box(
+                                bm,
+                                size=(0.14, v_len, 0.16),
+                                location=v_mid,
+                                rotation=v_mat.to_euler(),
+                                mat_index=MAT_INDEX_TIMBER,
+                                bevel_amount=0.012
+                            )
+
             elif w_wall == 'BACK':
                 if is_lower_wing:
                     w_roof_ymin = up_back_y - 0.04
                     abut_front = True
                 else:
-                    w_roof_ymin = top_cy if is_rotated_roof else (top_hy - 0.25)
-                    abut_front = False
+                    w_roof_ymin = top_cy if is_rotated_roof else (top_hy - 0.35)
+                    abut_front = True if is_rotated_roof else False
 
                 w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
@@ -2264,6 +2344,40 @@ def generate_building(obj, props):
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures
                     )
+
+                if not is_lower_wing and is_rotated_roof:
+                    # Diagonal timber valley rafter beams along inside corner roof seams
+                    inside_valleys = []
+                    if w_top_xmin > top_x_min + 0.35:
+                        inside_valleys.append(w_top_xmin)
+                    if w_top_xmax < top_x_max - 0.35:
+                        inside_valleys.append(w_top_xmax)
+
+                    ez_val = top_z - 0.12
+                    for vx in inside_valleys:
+                        p_start = Vector((vx, top_y_max + props.roof_overhang * 0.45, ez_val))
+                        p_end = Vector((w_cx, top_cy, top_z + props.roof_height))
+                        v_diff = p_end - p_start
+                        v_len = v_diff.length
+                        if v_len > 0.4:
+                            v_mid = (p_start + p_end) * 0.5
+                            v_dir = v_diff.normalized()
+                            v_up = Vector((0.0, 0.0, 1.0))
+                            v_side = v_dir.cross(v_up)
+                            if v_side.length < 1e-4:
+                                v_side = Vector((1.0, 0.0, 0.0))
+                            else:
+                                v_side = v_side.normalized()
+                            v_true_up = v_side.cross(v_dir).normalized()
+                            v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
+                            create_beveled_box(
+                                bm,
+                                size=(0.14, v_len, 0.16),
+                                location=v_mid,
+                                rotation=v_mat.to_euler(),
+                                mat_index=MAT_INDEX_TIMBER,
+                                bevel_amount=0.012
+                            )
 
             elif w_wall in ('LEFT', 'RIGHT'):
                 w_ridge_len = w_top_xmax - w_top_xmin

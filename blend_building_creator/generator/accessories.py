@@ -733,7 +733,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
     - UPPER: cantilevered oriel bay with heavy diagonal timber corbel brackets.
     - Features timber corner posts, leaded glass window, and dedicated shingled roof.
     """
-    height = min(height, floor_h * 0.72, 2.05)
+    height = max(2.20, min(height, floor_h * 0.82))
     wx, wy, ox, oy, tx, ty, rot_z = _get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
     facade_rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
     
@@ -855,17 +855,16 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.014
         )
-        # Horizontal timber sill beam along side wall bottom (atop stone foundation)
-        # +8mm lift breaks the coplanar top with the front sill (no z-fighting).
-        loc_side_sill = Vector((depth * 0.50, (half_w - col_w * 0.5) * s_sign, z_base + 0.058))
+        # Heavy horizontal timber sill beam along side wall base (solid skirt hiding interior floor)
+        loc_side_sill = Vector((depth * 0.50, (half_w - col_w * 0.5) * s_sign, z_base + 0.04))
         world_side_sill = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_side_sill.to_4d()).to_3d()
         create_beveled_box(
             bm,
-            size=(depth + 0.04, col_w, 0.12),
+            size=(depth + 0.06, col_w + 0.02, 0.18),
             location=world_side_sill,
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER_FRAME,
-            bevel_amount=0.010
+            bevel_amount=0.012
         )
         # Horizontal timber top plate beam along side wall top (under roof rafter / cheek)
         loc_side_top = Vector((depth * 0.50, (half_w - col_w * 0.5) * s_sign, z_base + height - 0.04))
@@ -927,17 +926,16 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         bevel_amount=0.008
     )
     
-    # Horizontal timber sill plate across front wall base (atop stone foundation)
-    # -8mm drop breaks the coplanar top with the side sills (no z-fighting).
-    loc_front_sill = Vector((depth - col_w * 0.5 + 0.01, 0.0, z_base + 0.042))
+    # Heavy horizontal timber sill plate across front wall base (solid skirt hiding interior floor)
+    loc_front_sill = Vector((depth - col_w * 0.5 + 0.015, 0.0, z_base + 0.04))
     world_front_sill = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_front_sill.to_4d()).to_3d()
     create_beveled_box(
         bm,
-        size=(col_w + 0.02, width + 0.04, 0.12),
+        size=(col_w + 0.04, width + 0.08, 0.18),
         location=world_front_sill,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER_FRAME,
-        bevel_amount=0.010
+        bevel_amount=0.012
     )
     # Outer top horizontal header beam across front wall top
     loc_fhead = Vector((depth - col_w * 0.5 + 0.01, 0.0, z_base + height - 0.04))
@@ -1314,6 +1312,18 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                 rotation=g_rot,
                 mat_index=MAT_INDEX_TIMBER_FRAME,
                 bevel_amount=0.008
+            )
+
+            # 5b. Horizontal timber eave fascia beam capping the low edge of this slope
+            loc_low_eave = Vector((mid_x, s_sign * (roof_half_w - 0.02), roof_z_start + 0.04))
+            world_low_eave = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_low_eave.to_4d()).to_3d()
+            create_beveled_box(
+                bm,
+                size=(roof_len + 0.04, 0.10, 0.14),
+                location=world_low_eave,
+                rotation=(0.0, 0.0, rot_z),
+                mat_index=MAT_INDEX_TIMBER_FRAME,
+                bevel_amount=0.010
             )
 
         # 6. Horizontal Timber Ridge Cap Beam along ridge line
