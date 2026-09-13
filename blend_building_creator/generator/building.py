@@ -27,7 +27,7 @@ from .interior import (
     build_spiral_staircase, build_attic_trusses, build_stair_guardrail
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly, build_iron_lantern
-from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_dormer, build_roof_turret, build_fantasy_chimney
+from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_dormer, build_roof_turret, build_fantasy_chimney, build_valley_strip, deck_top_z
 from .accessories import (
     build_blacksmith_forge, build_windmill_sails, build_watchtower_lookout,
     build_tavern_porch_and_sign, build_fisherman_stilts, build_bakery_oven,
@@ -2310,39 +2310,36 @@ def generate_building(obj, props):
                     )
 
                 if not is_lower_wing and is_rotated_roof:
-                    # Diagonal timber valley rafter beams along inside corner roof seams.
-                    # Both ends ride above the decks (never below ceilings/inside rooms).
+                    # Segmented valley flashing: samples both deck profiles along the
+                    # plan line so every notch step is covered (no slits/holes).
+                    _ov = props.roof_overhang
+                    _ezm = (top_z - 0.12) if roof_style == 'SWAY' else (top_z - 0.10)
+                    _swm = props.roof_sway if roof_style == 'SWAY' else 0.0
+                    def _main_fn(px, py, _tc=(top_cx, top_cy), _th=top_hy, _ov=_ov,
+                                 _ez=_ezm, _sw=_swm):
+                        _lx = _tc[1] - py
+                        _ly = px - _tc[0]
+                        return deck_top_z(_lx, _ly, 0.0, _th + _ov, 0.0,
+                                          props.roof_height, flare_val, _sw,
+                                          -top_hx - _ov, top_hx + _ov, _ez - top_z,
+                                          top_off=0.05) + top_z
+                    _ezw = (w_top_z - 0.12) if roof_style == 'SWAY' else (w_top_z - 0.10)
+                    _sww = props.roof_sway * 0.70 if roof_style == 'SWAY' else 0.0
+                    def _wing_fn(px, py, _wx=w_cx, _wh=w_roof_half_w, _wz=w_top_z,
+                                 _wr=w_roof_h, _wy0=w_top_ymin - _ov, _wy1=w_roof_ymax,
+                                 _ez=_ezw, _sw=_sww):
+                        return deck_top_z(px, py, _wx, _wh, _wz, _wr,
+                                          flare_val, _sw, _wy0, _wy1, _ez,
+                                          top_off=0.05)
                     inside_valleys = []
                     if w_top_xmin > top_x_min + 0.35:
                         inside_valleys.append(w_top_xmin)
                     if w_top_xmax < top_x_max - 0.35:
                         inside_valleys.append(w_top_xmax)
-
                     for vx in inside_valleys:
-                        # Foot starts just outside the wall on the eave so no corner gap.
-                        p_start = Vector((vx, top_y_min - 0.12, top_z - 0.02))
-                        p_end = Vector((w_cx, top_cy, top_z + props.roof_height))
-                        v_diff = p_end - p_start
-                        v_len = v_diff.length
-                        if v_len > 0.4:
-                            v_mid = (p_start + p_end) * 0.5
-                            v_dir = v_diff.normalized()
-                            v_up = Vector((0.0, 0.0, 1.0))
-                            v_side = v_dir.cross(v_up)
-                            if v_side.length < 1e-4:
-                                v_side = Vector((1.0, 0.0, 0.0))
-                            else:
-                                v_side = v_side.normalized()
-                            v_true_up = v_side.cross(v_dir).normalized()
-                            v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
-                            create_beveled_box(
-                                bm,
-                                size=(0.22, v_len, 0.22),
-                                location=v_mid,
-                                rotation=v_mat.to_euler(),
-                                mat_index=MAT_INDEX_TIMBER,
-                                bevel_amount=0.012
-                            )
+                        build_valley_strip(bm, (vx, top_y_min - 0.12), (w_cx, top_cy),
+                                           _main_fn, _wing_fn,
+                                           width=0.50, thickness=0.05, lift=0.03, segs=7)
 
             elif w_wall == 'BACK':
                 if is_lower_wing:
@@ -2476,7 +2473,26 @@ def generate_building(obj, props):
                     )
 
                 if not is_lower_wing and is_rotated_roof:
-                    # Same above-deck valley beams as FRONT (see above).
+                    # Segmented valley flashing (see FRONT).
+                    _ov = props.roof_overhang
+                    _ezm = (top_z - 0.12) if roof_style == 'SWAY' else (top_z - 0.10)
+                    _swm = props.roof_sway if roof_style == 'SWAY' else 0.0
+                    def _main_fn(px, py, _tc=(top_cx, top_cy), _th=top_hy, _ov=_ov,
+                                 _ez=_ezm, _sw=_swm):
+                        _lx = _tc[1] - py
+                        _ly = px - _tc[0]
+                        return deck_top_z(_lx, _ly, 0.0, _th + _ov, 0.0,
+                                          props.roof_height, flare_val, _sw,
+                                          -top_hx - _ov, top_hx + _ov, _ez - top_z,
+                                          top_off=0.05) + top_z
+                    _ezw = (w_top_z - 0.12) if roof_style == 'SWAY' else (w_top_z - 0.10)
+                    _sww = props.roof_sway * 0.70 if roof_style == 'SWAY' else 0.0
+                    def _wing_fn(px, py, _wx=w_cx, _wh=w_roof_half_w, _wz=w_top_z,
+                                 _wr=w_roof_h, _wy0=w_roof_ymin, _wy1=w_top_ymax + _ov,
+                                 _ez=_ezw, _sw=_sww):
+                        return deck_top_z(px, py, _wx, _wh, _wz, _wr,
+                                          flare_val, _sw, _wy0, _wy1, _ez,
+                                          top_off=0.05)
                     inside_valleys = []
                     if w_top_xmin > top_x_min + 0.35:
                         inside_valleys.append(w_top_xmin)
@@ -2484,30 +2500,9 @@ def generate_building(obj, props):
                         inside_valleys.append(w_top_xmax)
 
                     for vx in inside_valleys:
-                        # Foot starts just outside the wall on the eave (see FRONT).
-                        p_start = Vector((vx, top_y_max + 0.12, top_z - 0.02))
-                        p_end = Vector((w_cx, top_cy, top_z + props.roof_height))
-                        v_diff = p_end - p_start
-                        v_len = v_diff.length
-                        if v_len > 0.4:
-                            v_mid = (p_start + p_end) * 0.5
-                            v_dir = v_diff.normalized()
-                            v_up = Vector((0.0, 0.0, 1.0))
-                            v_side = v_dir.cross(v_up)
-                            if v_side.length < 1e-4:
-                                v_side = Vector((1.0, 0.0, 0.0))
-                            else:
-                                v_side = v_side.normalized()
-                            v_true_up = v_side.cross(v_dir).normalized()
-                            v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
-                            create_beveled_box(
-                                bm,
-                                size=(0.22, v_len, 0.22),
-                                location=v_mid,
-                                rotation=v_mat.to_euler(),
-                                mat_index=MAT_INDEX_TIMBER,
-                                bevel_amount=0.012
-                            )
+                        build_valley_strip(bm, (vx, top_y_max + 0.12), (w_cx, top_cy),
+                                           _main_fn, _wing_fn,
+                                           width=0.50, thickness=0.05, lift=0.03, segs=7)
 
             elif w_wall in ('LEFT', 'RIGHT'):
                 w_ridge_len = w_top_xmax - w_top_xmin
@@ -2693,46 +2688,45 @@ def generate_building(obj, props):
                         pass
                 wing_roof_bm.free()
 
-                # Valley/hip boards for the perpendicular (non-rotated) equal junction:
-                # inside corners ride above the decks from the wall face to the die-in.
+                # Segmented valley flashing for the perpendicular (non-rotated) equal
+                # junction (see FRONT): samples both deck profiles, no slits/holes.
                 if not is_lower_wing and not is_rotated_roof and roof_style in ('SWAY', 'GABLE'):
-                    die_x = top_cx
-                    die_y = w_cy
-                    die_z = w_top_z + w_roof_h
+                    _ov = props.roof_overhang
+                    _ezm = (top_z - 0.12) if roof_style == 'SWAY' else (top_z - 0.10)
+                    _swm = props.roof_sway if roof_style == 'SWAY' else 0.0
+                    def _main_fn(px, py, _cx=top_cx, _hw=top_hx + _ov, _zb=top_z,
+                                 _wr=props.roof_height, _ry0=top_y_min - _ov,
+                                 _ry1=top_y_max + _ov, _ez=_ezm, _sw=_swm):
+                        return deck_top_z(px, py, _cx, _hw, _zb, _wr,
+                                          flare_val, _sw, _ry0, _ry1, _ez,
+                                          top_off=0.05)
+                    _ezw = -0.12 if roof_style == 'SWAY' else -0.10
+                    _sww = props.roof_sway * 0.70 if roof_style == 'SWAY' else 0.0
+                    _ly1 = ly_half + y_max_adj
                     if w_wall == 'LEFT':
-                        corners = [
-                            (top_x_min - 0.12, w_top_ymin, w_top_z - 0.02),
-                            (top_x_min - 0.12, w_top_ymax, w_top_z - 0.02),
-                        ]
+                        def _wing_fn(px, py, _wc=(w_cx, w_cy), _hw=lx_half + _ov,
+                                     _wz=w_top_z, _wr=w_roof_h, _ry0=-ly_half - _ov,
+                                     _ry1=_ly1, _ez=_ezw, _sw=_sww):
+                            return deck_top_z(-(py - _wc[1]), (px - _wc[0]), 0.0, _hw,
+                                              0.0, _wr, flare_val, _sw, _ry0, _ry1,
+                                              _ez, top_off=0.05) + _wz
+                        die = (w_cx + _ly1, w_cy)
+                        corners = [(top_x_min - 0.12, w_top_ymin),
+                                   (top_x_min - 0.12, w_top_ymax)]
                     else:
-                        corners = [
-                            (top_x_max + 0.12, w_top_ymin, w_top_z - 0.02),
-                            (top_x_max + 0.12, w_top_ymax, w_top_z - 0.02),
-                        ]
-                    for cx0, cy0, cz0 in corners:
-                        p0 = Vector((cx0, cy0, cz0))
-                        p1 = Vector((die_x, die_y, die_z))
-                        v_diff = p1 - p0
-                        v_len = v_diff.length
-                        if v_len > 0.4:
-                            v_mid = (p0 + p1) * 0.5
-                            v_dir = v_diff.normalized()
-                            v_up = Vector((0.0, 0.0, 1.0))
-                            v_side = v_dir.cross(v_up)
-                            if v_side.length < 1e-4:
-                                v_side = Vector((1.0, 0.0, 0.0))
-                            else:
-                                v_side = v_side.normalized()
-                            v_true_up = v_side.cross(v_dir).normalized()
-                            v_mat = Matrix((v_side, v_dir, v_true_up)).transposed().to_4x4()
-                            create_beveled_box(
-                                bm,
-                                size=(0.22, v_len, 0.22),
-                                location=v_mid,
-                                rotation=v_mat.to_euler(),
-                                mat_index=MAT_INDEX_TIMBER,
-                                bevel_amount=0.012
-                            )
+                        def _wing_fn(px, py, _wc=(w_cx, w_cy), _hw=lx_half + _ov,
+                                     _wz=w_top_z, _wr=w_roof_h, _ry0=-ly_half - _ov,
+                                     _ry1=_ly1, _ez=_ezw, _sw=_sww):
+                            return deck_top_z((py - _wc[1]), -(px - _wc[0]), 0.0, _hw,
+                                              0.0, _wr, flare_val, _sw, _ry0, _ry1,
+                                              _ez, top_off=0.05) + _wz
+                        die = (w_cx - _ly1, w_cy)
+                        corners = [(top_x_max + 0.12, w_top_ymin),
+                                   (top_x_max + 0.12, w_top_ymax)]
+                    for cx0, cy0 in corners:
+                        build_valley_strip(bm, (cx0, cy0), die,
+                                           _main_fn, _wing_fn,
+                                           width=0.50, thickness=0.05, lift=0.03, segs=7)
 
     # Dormer Windows
     if props.has_dormers and roof_style in ('SWAY', 'GABLE') and effective_archetype != 'WATCHTOWER':

@@ -8,6 +8,7 @@ Modularized following SOLID, GRASP, and DRY principles:
 - dormer: Bell-cast flared dormer windows
 - features: Bargeboards, roof turrets, chimneys, hoist beams
 - gable_wall: Shared DRY gable end wall and log siding builders
+- valley: Segmented valley flashing following deck profiles
 """
 
 from .sway_roof import build_sway_roof
@@ -25,6 +26,10 @@ from .gable_wall import (
     build_gable_end_wall,
     build_gable_physical_siding
 )
+from .valley import (
+    deck_top_z,
+    build_valley_strip
+)
 
 __all__ = [
     'build_sway_roof',
@@ -38,4 +43,6 @@ __all__ = [
     'build_curved_bargeboards',
     'build_gable_end_wall',
     'build_gable_physical_siding',
+    'deck_top_z',
+    'build_valley_strip',
 ]
