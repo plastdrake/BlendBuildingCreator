@@ -235,6 +235,8 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
         
         col = layout.column(align=True)
         col.prop(props, "roof_style")
+        if props.roof_style in ('SWAY', 'GABLE'):
+            col.prop(props, "roof_orientation")
         col.prop(props, "roof_height")
         col.prop(props, "roof_overhang")
         if props.roof_style == 'SWAY':

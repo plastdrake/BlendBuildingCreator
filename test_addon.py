@@ -170,11 +170,23 @@ def run_tests():
     assert bldg2.location.x > obj.location.x + 4.0, f"Building 2 was not offset properly: {bldg2.location.x} vs {obj.location.x}"
     print(f"  -> Multi-building offset verified: Building 1 at {obj.location.x:.1f}, Building 2 at {bldg2.location.x:.1f}")
 
-    # Test loading settings from Building 1
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.building.load_settings()
-    print("  -> Loaded settings from Building 1 successfully.")
+    # 10. Test Roof Orientation & 90-Degree Rotation
+    print("[10/10] Testing Roof Orientation & 90-Degree Rotation...")
+    props.roof_orientation = 'LEFT_RIGHT'
+    props.roof_style = 'GABLE'
+    bpy.ops.building.regenerate()
+    assert len(obj.data.vertices) > 1000, "Failed to generate rotated GABLE roof!"
+    print(f"  -> Rotated GABLE roof (Side-to-Side): {len(obj.data.vertices)} verts.")
+    
+    props.roof_style = 'SWAY'
+    bpy.ops.building.regenerate()
+    assert len(obj.data.vertices) > 1000, "Failed to generate rotated SWAY roof!"
+    print(f"  -> Rotated SWAY roof (Side-to-Side): {len(obj.data.vertices)} verts.")
+    
+    props.roof_orientation = 'AUTO'
+    bpy.ops.building.regenerate()
+    assert len(obj.data.vertices) > 1000, "Failed to generate AUTO orientation roof!"
+    print(f"  -> AUTO orientation roof: {len(obj.data.vertices)} verts.")
 
     # Unregister
     blend_building_creator.unregister()

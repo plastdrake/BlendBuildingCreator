@@ -1740,15 +1740,16 @@ def generate_building(obj, props):
     if effective_archetype != 'WATCHTOWER':
         # Exterior Roof Construction
         flare_val = getattr(props, 'roof_flare', 0.35)
+        roof_orient = getattr(props, 'roof_orientation', 'FRONT_BACK')
+        if roof_orient == 'AUTO':
+            roof_orient = 'LEFT_RIGHT' if top_w > top_d * 1.15 else 'FRONT_BACK'
+        is_rotated_roof = (roof_orient == 'LEFT_RIGHT' and roof_style in ('SWAY', 'GABLE'))
         
         # Pre-compute dormer apertures to open attic holes in the roof deck and shingles
         dormer_apertures = []
         dormer_placements = []
         if props.has_dormers and roof_style in ('SWAY', 'GABLE') and effective_archetype != 'WATCHTOWER':
-            roof_half_w = top_hx + props.roof_overhang
             z_main_ridge = top_z + props.roof_height
-            
-            # Position dormer midway down the slope
             dormer_u = 0.58
             dormer_drop = (1.0 - flare_val) * dormer_u + flare_val * (1.0 - (1.0 - dormer_u) ** 2)
             slope_deck_z = z_main_ridge - dormer_drop * (props.roof_height + 0.10)
@@ -1759,35 +1760,105 @@ def generate_building(obj, props):
             cur_dormer_h = min(1.00, max_dormer_total_h * 0.62)
             cur_dormer_roof_h = min(0.55, max_dormer_total_h * 0.38)
             d_rz = z_dormer_base + cur_dormer_h + cur_dormer_roof_h
-            
-            # Calculate intersection with main roof slope:
             u_intersect = max(0.12, (z_main_ridge - d_rz) / max(0.5, props.roof_height))
-            reach_to_slope = (dormer_u - u_intersect) * roof_half_w
-            # Penetrate 14cm into slope for a watertight seam, but stop at least 20cm before the ridge
-            dist_to_ridge = dormer_u * roof_half_w
-            cur_dormer_reach = min(dist_to_ridge - 0.20, max(0.90, reach_to_slope + 0.14))
             
-            # Determine dormer Y positions avoiding chimney collision
-            # Chimney is at +X (right slope) and +Y (top_hy * 0.45)
-            if top_hy * 2.0 > 4.2:
-                left_y = top_cy + top_hy * 0.35
-                right_y = top_cy - top_hy * 0.40 if props.has_chimney else top_cy + top_hy * 0.35
-                dormer_placements.append({'pos': (top_cx - roof_half_w * dormer_u, left_y), 'facing': (-1, 0), 'side': -1})
-                dormer_placements.append({'pos': (top_cx + roof_half_w * dormer_u, right_y), 'facing': (1, 0), 'side': 1})
+            if is_rotated_roof:
+                roof_half_w = top_hy + props.roof_overhang
+                reach_to_slope = (dormer_u - u_intersect) * roof_half_w
+                dist_to_ridge = dormer_u * roof_half_w
+                cur_dormer_reach = min(dist_to_ridge - 0.20, max(0.90, reach_to_slope + 0.14))
+                if top_hx * 2.0 > 4.2:
+                    fx1 = top_cx - top_hx * 0.35
+                    bx1 = top_cx + top_hx * 0.35
+                    dormer_placements.append({'pos': (fx1, top_cy - roof_half_w * dormer_u), 'facing': (0, -1), 'side': 1, 'loc_y': fx1 - top_cx})
+                    dormer_placements.append({'pos': (bx1, top_cy + roof_half_w * dormer_u), 'facing': (0, 1), 'side': -1, 'loc_y': bx1 - top_cx})
+                else:
+                    dormer_placements.append({'pos': (top_cx, top_cy - roof_half_w * dormer_u), 'facing': (0, -1), 'side': 1, 'loc_y': 0.0})
+                for dp in dormer_placements:
+                    dormer_apertures.append({
+                        'side': dp['side'],
+                        'y_min': dp['loc_y'] - 0.42,
+                        'y_max': dp['loc_y'] + 0.42,
+                        'u_min': max(0.25, u_intersect + 0.04),
+                        'u_max': min(0.70, dormer_u + 0.08)
+                    })
             else:
-                dormer_placements.append({'pos': (top_cx - roof_half_w * dormer_u, top_cy), 'facing': (-1, 0), 'side': -1})
+                roof_half_w = top_hx + props.roof_overhang
+                reach_to_slope = (dormer_u - u_intersect) * roof_half_w
+                # Penetrate 14cm into slope for a watertight seam, but stop at least 20cm before the ridge
+                dist_to_ridge = dormer_u * roof_half_w
+                cur_dormer_reach = min(dist_to_ridge - 0.20, max(0.90, reach_to_slope + 0.14))
                 
-            for dp in dormer_placements:
-                d_cx, d_cy = dp['pos']
-                dormer_apertures.append({
-                    'side': dp['side'],
-                    'y_min': d_cy - 0.42,
-                    'y_max': d_cy + 0.42,
-                    'u_min': max(0.25, u_intersect + 0.04),
-                    'u_max': min(0.70, dormer_u + 0.08)
-                })
+                # Determine dormer Y positions avoiding chimney collision
+                # Chimney is at +X (right slope) and +Y (top_hy * 0.45)
+                if top_hy * 2.0 > 4.2:
+                    left_y = top_cy + top_hy * 0.35
+                    right_y = top_cy - top_hy * 0.40 if props.has_chimney else top_cy + top_hy * 0.35
+                    dormer_placements.append({'pos': (top_cx - roof_half_w * dormer_u, left_y), 'facing': (-1, 0), 'side': -1})
+                    dormer_placements.append({'pos': (top_cx + roof_half_w * dormer_u, right_y), 'facing': (1, 0), 'side': 1})
+                else:
+                    dormer_placements.append({'pos': (top_cx - roof_half_w * dormer_u, top_cy), 'facing': (-1, 0), 'side': -1})
+                    
+                for dp in dormer_placements:
+                    d_cx, d_cy = dp['pos']
+                    dormer_apertures.append({
+                        'side': dp['side'],
+                        'y_min': d_cy - 0.42,
+                        'y_max': d_cy + 0.42,
+                        'u_min': max(0.25, u_intersect + 0.04),
+                        'u_max': min(0.70, dormer_u + 0.08)
+                    })
 
-        if roof_style == 'SWAY':
+        if is_rotated_roof:
+            roof_bm = bmesh.new()
+            if roof_style == 'SWAY':
+                build_sway_roof(
+                    roof_bm,
+                    x_min=-top_hy, x_max=top_hy,
+                    y_min=-top_hx, y_max=top_hx,
+                    z_base=0.0,
+                    roof_height=props.roof_height,
+                    overhang=props.roof_overhang,
+                    sway_amount=props.roof_sway,
+                    wall_thickness=wall_t,
+                    tier=tier_val,
+                    plank_direction=plank_dir,
+                    roof_flare=flare_val,
+                    dormer_apertures=dormer_apertures
+                )
+            else: # 'GABLE'
+                build_gable_roof(
+                    roof_bm,
+                    x_min=-top_hy, x_max=top_hy,
+                    y_min=-top_hx, y_max=top_hx,
+                    z_base=0.0,
+                    roof_height=props.roof_height,
+                    overhang=props.roof_overhang,
+                    wall_thickness=wall_t,
+                    segments_y=6,
+                    tier=tier_val,
+                    plank_direction=plank_dir,
+                    roof_flare=flare_val,
+                    dormer_apertures=dormer_apertures
+                )
+            rot_m = Matrix.Rotation(-math.pi * 0.5, 4, 'Z')
+            trans_m = Matrix.Translation(Vector((top_cx, top_cy, top_z)))
+            bmesh.ops.transform(roof_bm, matrix=trans_m @ rot_m, verts=roof_bm.verts)
+
+            uv_src = roof_bm.loops.layers.uv.verify()
+            uv_dst = bm.loops.layers.uv.verify()
+            vert_map = {v: bm.verts.new(v.co) for v in roof_bm.verts}
+            for f in roof_bm.faces:
+                try:
+                    new_f = bm.faces.new([vert_map[v] for v in f.verts])
+                    new_f.material_index = f.material_index
+                    new_f.smooth = f.smooth
+                    for l_src, l_dst in zip(f.loops, new_f.loops):
+                        l_dst[uv_dst].uv = l_src[uv_src].uv
+                except ValueError:
+                    pass
+            roof_bm.free()
+        elif roof_style == 'SWAY':
             build_sway_roof(
                 bm,
                 x_min=top_x_min, x_max=top_x_max,
@@ -1829,13 +1900,39 @@ def generate_building(obj, props):
         # Roof Hoist Beam with Cargo Hook (Warehouse / freight feature)
         if getattr(props, 'has_hoist_beam', False) and roof_style in ('SWAY', 'GABLE'):
             from .roof import build_hoist_beam
-            build_hoist_beam(
-                bm,
-                front_x=top_cx,
-                front_y=top_y_min - props.roof_overhang,
-                z_ridge=top_z + props.roof_height,
-                length=1.4
-            )
+            if is_rotated_roof:
+                hoist_bm = bmesh.new()
+                build_hoist_beam(
+                    hoist_bm,
+                    front_x=0.0,
+                    front_y=0.0,
+                    z_ridge=0.0,
+                    length=1.4
+                )
+                rot_m = Matrix.Rotation(-math.pi * 0.5, 4, 'Z')
+                trans_m = Matrix.Translation(Vector((top_x_min - props.roof_overhang, top_cy, top_z + props.roof_height)))
+                bmesh.ops.transform(hoist_bm, matrix=trans_m @ rot_m, verts=hoist_bm.verts)
+                uv_src = hoist_bm.loops.layers.uv.verify()
+                uv_dst = bm.loops.layers.uv.verify()
+                vmap = {v: bm.verts.new(v.co) for v in hoist_bm.verts}
+                for f in hoist_bm.faces:
+                    try:
+                        nf = bm.faces.new([vmap[v] for v in f.verts])
+                        nf.material_index = f.material_index
+                        nf.smooth = f.smooth
+                        for ls, ld in zip(f.loops, nf.loops):
+                            ld[uv_dst].uv = ls[uv_src].uv
+                    except ValueError:
+                        pass
+                hoist_bm.free()
+            else:
+                build_hoist_beam(
+                    bm,
+                    front_x=top_cx,
+                    front_y=top_y_min - props.roof_overhang,
+                    z_ridge=top_z + props.roof_height,
+                    length=1.4
+                )
             
         # Physical shingle layers disabled: textured roof deck provides stylized clay tiles cleanly without micro-geometry
         if False and props.has_roof_shingles and roof_style in ('SWAY', 'GABLE'):
@@ -1917,7 +2014,7 @@ def generate_building(obj, props):
                     w_roof_ymax = up_front_y + 0.04
                     abut_back = True
                 else:
-                    w_roof_ymax = -top_hy + 0.25
+                    w_roof_ymax = top_cy if is_rotated_roof else (-top_hy + 0.25)
                     abut_back = False
 
                 if props.roof_style == 'SWAY':
@@ -1959,7 +2056,7 @@ def generate_building(obj, props):
                     w_roof_ymin = up_back_y - 0.04
                     abut_front = True
                 else:
-                    w_roof_ymin = top_hy - 0.25
+                    w_roof_ymin = top_cy if is_rotated_roof else (top_hy - 0.25)
                     abut_front = False
 
                 if props.roof_style == 'SWAY':
@@ -2003,14 +2100,15 @@ def generate_building(obj, props):
                 w_span_y = w_top_ymax - w_top_ymin
                 wing_roof_bm = bmesh.new()
                 lx_half = w_span_y * 0.5
-                ly_half = w_ridge_len * 0.5
-                loc_abut_back = is_lower_wing
+                ly_half = (w_ridge_len + 0.04) * 0.5 if is_rotated_roof else (w_ridge_len * 0.5)
+                loc_abut_back = True if is_rotated_roof else is_lower_wing
+                y_max_adj = 0.04 if (is_lower_wing or is_rotated_roof) else 0.25
 
                 if props.roof_style == 'SWAY':
                     build_sway_roof(
                         wing_roof_bm,
                         x_min=-lx_half, x_max=lx_half,
-                        y_min=-ly_half, y_max=ly_half + (0.04 if is_lower_wing else 0.25),
+                        y_min=-ly_half, y_max=ly_half + y_max_adj,
                         z_base=0.0,
                         roof_height=w_roof_h,
                         overhang=props.roof_overhang,
@@ -2027,7 +2125,7 @@ def generate_building(obj, props):
                     build_gable_roof(
                         wing_roof_bm,
                         x_min=-lx_half, x_max=lx_half,
-                        y_min=-ly_half, y_max=ly_half + (0.04 if is_lower_wing else 0.25),
+                        y_min=-ly_half, y_max=ly_half + y_max_adj,
                         z_base=0.0,
                         roof_height=w_roof_h,
                         overhang=props.roof_overhang,
@@ -2085,20 +2183,32 @@ def generate_building(obj, props):
         t_py = getattr(props, 'roof_turret_pos_y', -0.25)
         t_scale = getattr(props, 'roof_turret_scale', 1.0)
         
-        roof_half_w = top_hx + props.roof_overhang
-        turret_cx = top_cx + t_px * roof_half_w * 0.65
-        turret_cy = top_cy + t_py * top_hy * 0.75
-        
-        # Calculate surface contact height at turret position considering sway sag and flare drop
-        u_turret = min(1.0, max(0.0, abs(turret_cx - top_cx) / max(0.01, roof_half_w)))
-        drop_turret = (1.0 - flare_val) * u_turret + flare_val * (1.0 - (1.0 - u_turret) ** 2)
-        if roof_style == 'SWAY':
-            t_y = max(0.0, min(1.0, (turret_cy - top_y_min) / max(0.01, 2.0 * top_hy)))
-            sway_val = getattr(props, 'roof_sway', 0.25)
-            sag_turret = math.sin(t_y * math.pi) * sway_val
+        if is_rotated_roof:
+            roof_half_w = top_hy + props.roof_overhang
+            turret_cx = top_cx + t_px * top_hx * 0.75
+            turret_cy = top_cy + t_py * roof_half_w * 0.65
+            u_turret = min(1.0, max(0.0, abs(turret_cy - top_cy) / max(0.01, roof_half_w)))
+            drop_turret = (1.0 - flare_val) * u_turret + flare_val * (1.0 - (1.0 - u_turret) ** 2)
+            if roof_style == 'SWAY':
+                t_x = max(0.0, min(1.0, (turret_cx - top_x_min) / max(0.01, 2.0 * top_hx)))
+                sway_val = getattr(props, 'roof_sway', 0.25)
+                sag_turret = math.sin(t_x * math.pi) * sway_val
+            else:
+                sag_turret = 0.0
+            z_turret_surf = (top_z + props.roof_height - sag_turret) - drop_turret * (props.roof_height + 0.10)
         else:
-            sag_turret = 0.0
-        z_turret_surf = (top_z + props.roof_height - sag_turret) - drop_turret * (props.roof_height + 0.10)
+            roof_half_w = top_hx + props.roof_overhang
+            turret_cx = top_cx + t_px * roof_half_w * 0.65
+            turret_cy = top_cy + t_py * top_hy * 0.75
+            u_turret = min(1.0, max(0.0, abs(turret_cx - top_cx) / max(0.01, roof_half_w)))
+            drop_turret = (1.0 - flare_val) * u_turret + flare_val * (1.0 - (1.0 - u_turret) ** 2)
+            if roof_style == 'SWAY':
+                t_y = max(0.0, min(1.0, (turret_cy - top_y_min) / max(0.01, 2.0 * top_hy)))
+                sway_val = getattr(props, 'roof_sway', 0.25)
+                sag_turret = math.sin(t_y * math.pi) * sway_val
+            else:
+                sag_turret = 0.0
+            z_turret_surf = (top_z + props.roof_height - sag_turret) - drop_turret * (props.roof_height + 0.10)
         
         turret_style = getattr(props, 'roof_turret_style', 'OCTAGONAL')
         build_roof_turret(

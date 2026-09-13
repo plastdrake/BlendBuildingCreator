@@ -534,6 +534,18 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
     
+    roof_orientation: EnumProperty(
+        name="Roof Orientation",
+        description="Orientation of the main roof ridge and gables",
+        items=[
+            ('FRONT_BACK', 'Front-to-Back (0°)', 'Roof ridge runs front to back with gables facing front and rear'),
+            ('LEFT_RIGHT', 'Side-to-Side (90°)', 'Roof ridge runs side to side with gables facing left and right'),
+            ('AUTO', 'Auto (Aspect Ratio)', 'Automatically align roof ridge along the building long axis'),
+        ],
+        default='FRONT_BACK',
+        update=on_property_updated
+    )
+    
     roof_height: FloatProperty(
         name="Roof Height",
         description="Height from top floor to roof ridge",
