@@ -1517,7 +1517,8 @@ def generate_building(obj, props):
                         _sgn = -1.0 if cargo_port['face'] == 2 else 1.0
                         build_cargo_port_frame(bm, _fx, _sgn, cargo_port['cy'],
                                                cargo_port['w'], cargo_port['h'],
-                                               z_floor, wall_t)
+                                               z_floor, wall_t,
+                                               dock_y1=wy1 + 0.30, dock_y2=wy2 - 0.30)
 
                 elif w_wall == 'BACK':
                     # Face 1: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
@@ -1566,7 +1567,8 @@ def generate_building(obj, props):
                         _sgn = -1.0 if cargo_port['face'] == 2 else 1.0
                         build_cargo_port_frame(bm, _fx, _sgn, cargo_port['cy'],
                                                cargo_port['w'], cargo_port['h'],
-                                               z_floor, wall_t)
+                                               z_floor, wall_t,
+                                               dock_y1=wy1 + 0.30, dock_y2=wy2 - 0.30)
 
                 elif w_wall == 'LEFT':
                     # Face 1: Left End (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
