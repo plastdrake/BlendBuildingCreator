@@ -32,7 +32,8 @@ from .accessories import (
     build_blacksmith_forge, build_windmill_sails, build_watchtower_lookout,
     build_tavern_porch_and_sign, build_fisherman_stilts, build_bakery_oven,
     build_warehouse_cargo, build_courtyard_crane, build_lumbermill_yard,
-    build_mini_wing, build_balcony, build_pillared_overhang
+    build_mini_wing, build_balcony, build_pillared_overhang,
+    build_cargo_port_frame
 )
 
 def get_facade_window_positions(span_min, span_max, target_spacing=2.4, min_margin=0.85):
@@ -1450,6 +1451,21 @@ def generate_building(obj, props):
                 w_wall = w_elem['wall']
                 # Create opening lists for each of the 3 exposed faces
                 w_ops_1, w_ops_2, w_ops_3 = [], [], []
+                # Warehouse cargo port (enclosed ground floor only): open freight portal
+                # on the courtyard side face (Face 2 = left, Face 3 = right) for crane
+                # loading. Timber framing auto-avoids it via the openings list.
+                cargo_port = None
+                if (effective_archetype == 'WAREHOUSE' and not open_timber and fl_idx == 0
+                        and w_wall in ('FRONT', 'BACK')):
+                    _face = 2 if w_elem.get('align', 'RIGHT') == 'RIGHT' else 3
+                    _pw = 2.3
+                    _ph = min(getattr(props, 'door_height', 2.5), floor_h - 0.35)
+                    _pc = wy1 + (wy2 - wy1) * 0.38
+                    cargo_port = {'face': _face, 'cy': _pc, 'w': _pw, 'h': _ph}
+                    (w_ops_2 if _face == 2 else w_ops_3).append({
+                        'u_start': _pc - _pw * 0.5 - wy1,
+                        'u_end': _pc + _pw * 0.5 - wy1,
+                        'z_start': z_floor, 'z_end': z_floor + _ph})
                 
                 if w_wall == 'FRONT':
                     # Face 1: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
@@ -1464,7 +1480,9 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
                     # Buffered inside corner at wy2 (main building junction) by 1.25m
-                    if props.has_windows and not open_timber and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
+                    # (skipped when the cargo port occupies this face)
+                    _port_here_2 = cargo_port is not None and cargo_port['face'] == 2
+                    if props.has_windows and not open_timber and not _port_here_2 and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
                         w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1475,7 +1493,9 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 3: Right (wx2, wy1) -> (wx2, wy2) normal (1, 0)
                     # Buffered inside corner at wy2 (main building junction) by 1.25m
-                    if props.has_windows and not open_timber and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
+                    # (skipped when the cargo port occupies this face)
+                    _port_here_3 = cargo_port is not None and cargo_port['face'] == 3
+                    if props.has_windows and not open_timber and not _port_here_3 and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
                         w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1492,6 +1512,13 @@ def generate_building(obj, props):
                     wing_wall_openings.append(((wx1, wy1), (wx1, wy2), w_ops_2, (-1.0, 0.0)))
                     wing_wall_openings.append(((wx2, wy1), (wx2, wy2), w_ops_3, (1.0, 0.0)))
 
+                    if cargo_port is not None:
+                        _fx = wx1 if cargo_port['face'] == 2 else wx2
+                        _sgn = -1.0 if cargo_port['face'] == 2 else 1.0
+                        build_cargo_port_frame(bm, _fx, _sgn, cargo_port['cy'],
+                                               cargo_port['w'], cargo_port['h'],
+                                               z_floor, wall_t)
+
                 elif w_wall == 'BACK':
                     # Face 1: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     if props.has_windows and not open_timber:
@@ -1505,7 +1532,9 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
                     # Buffered inside corner at wy1 (main building junction) by 1.25m
-                    if props.has_windows and not open_timber and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
+                    # (skipped when the cargo port occupies this face)
+                    _port_here_2 = cargo_port is not None and cargo_port['face'] == 2
+                    if props.has_windows and not open_timber and not _port_here_2 and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
                         w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1516,7 +1545,9 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 3: Right (wx2, wy1) -> (wx2, wy2) normal (1, 0)
                     # Buffered inside corner at wy1 (main building junction) by 1.25m
-                    if props.has_windows and not open_timber and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
+                    # (skipped when the cargo port occupies this face)
+                    _port_here_3 = cargo_port is not None and cargo_port['face'] == 3
+                    if props.has_windows and not open_timber and not _port_here_3 and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
                         w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1529,6 +1560,13 @@ def generate_building(obj, props):
                     wing_wall_openings.append(((wx1, wy2), (wx2, wy2), w_ops_1, (0.0, 1.0)))
                     wing_wall_openings.append(((wx1, wy1), (wx1, wy2), w_ops_2, (-1.0, 0.0)))
                     wing_wall_openings.append(((wx2, wy1), (wx2, wy2), w_ops_3, (1.0, 0.0)))
+
+                    if cargo_port is not None:
+                        _fx = wx1 if cargo_port['face'] == 2 else wx2
+                        _sgn = -1.0 if cargo_port['face'] == 2 else 1.0
+                        build_cargo_port_frame(bm, _fx, _sgn, cargo_port['cy'],
+                                               cargo_port['w'], cargo_port['h'],
+                                               z_floor, wall_t)
 
                 elif w_wall == 'LEFT':
                     # Face 1: Left End (wx1, wy1) -> (wx1, wy2) normal (-1, 0)

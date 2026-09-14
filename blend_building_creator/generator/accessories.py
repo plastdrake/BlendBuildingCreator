@@ -20,7 +20,8 @@ from .walls import create_curved_corbel
 from .materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
     MAT_INDEX_PLASTER_EXT, MAT_INDEX_SHINGLES, MAT_INDEX_GLASS,
-    MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_DOOR
+    MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_DOOR,
+    MAT_INDEX_CUT_STONE
 )
 
 def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickness, seed=42):
@@ -2018,6 +2019,44 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
     )
 
 
+def build_cargo_port_frame(bm, face_x, outward_sgn, cy, portal_w, portal_h, z_floor, wall_t):
+    """
+    Builds an open freight portal frame (no door leaf) in a wing side wall so the
+    courtyard crane can lift cargo straight in:
+    - Chunky timber jamb posts proud of the facade with iron binding straps.
+    - Heavy timber lintel beam spanning the opening.
+    - Cut-stone threshold sill flush with the interior floor.
+    Callers must also cut a matching wall opening (u-span portal_w at cy,
+    z_floor to z_floor + portal_h) and keep windows/timber clear of it.
+    """
+    jamb_w = 0.24
+    jamb_d = wall_t + 0.26
+    jx = face_x + outward_sgn * 0.06
+    for s in (-1.0, 1.0):
+        jy = cy + s * (portal_w * 0.5 + jamb_w * 0.5)
+        create_beveled_box(
+            bm, size=(jamb_d, jamb_w, portal_h),
+            location=(jx, jy, z_floor + portal_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014, bevel_segments=2
+        )
+        for sz in (0.55, portal_h - 0.55):
+            create_beveled_box(
+                bm, size=(jamb_d + 0.03, jamb_w + 0.03, 0.09),
+                location=(jx, jy, z_floor + sz),
+                mat_index=MAT_INDEX_IRON, bevel_amount=0.005
+            )
+    create_beveled_box(
+        bm, size=(jamb_d, portal_w + jamb_w * 2.0 + 0.12, 0.30),
+        location=(jx, cy, z_floor + portal_h + 0.15),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014, bevel_segments=2
+    )
+    create_beveled_box(
+        bm, size=(wall_t + 0.34, portal_w + 0.30, 0.12),
+        location=(face_x, cy, z_floor + 0.06),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01
+    )
+
+
 def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib_length=3.4, rot_angle=0.45):
     """
     Builds a compact fantasy dockside-style courtyard crane:
@@ -2062,28 +2101,18 @@ def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib
     pad_h = 0.16
     pad_r = 1.30
     create_cylinder(
-        bm, radius=pad_r, height=pad_h, segments=8,
+        bm, radius=pad_r, height=pad_h, segments=24,
         location=(yard_x, yard_y, z_ground + pad_h * 0.5),
-        mat_index=MAT_INDEX_STONE
+        mat_index=MAT_INDEX_CUT_STONE
     )
     # Fixed iron slew ring seated on the pad (static race the top rotates on)
     ring_h = 0.07
     ring_z = z_ground + pad_h + ring_h * 0.5
     create_cylinder(
-        bm, radius=1.02, height=ring_h, segments=16,
+        bm, radius=1.02, height=ring_h, segments=24,
         location=(yard_x, yard_y, ring_z),
         mat_index=MAT_INDEX_IRON
     )
-    # 4 bolt heads pinning the slew ring to the pad (fixed hardware)
-    for i in range(4):
-        ang = rot_angle + math.pi * 0.25 + i * (math.pi * 0.5)
-        bx = yard_x + math.cos(ang) * 1.14
-        by = yard_y + math.sin(ang) * 1.14
-        create_cylinder(
-            bm, radius=0.035, height=0.05, segments=6,
-            location=(bx, by, z_ground + pad_h + 0.025),
-            mat_index=MAT_INDEX_IRON
-        )
     # Round rotating timber turntable disc on top of the ring (visible seam = slew joint)
     disc_h = 0.15
     disc_r = 0.95
@@ -2157,12 +2186,28 @@ def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib
     # Counterweight tail behind mast
     tail_end = root - Vector((cos_r, sin_r, -0.06)).normalized() * 1.0
     _beam(root - boom_d * 0.2, tail_end, 0.26, MAT_INDEX_TIMBER_FRAME, bevel=0.015)
-    # Tail end cap weight block
+    # Heavy iron-bound stone counterweight block hung on the tail end
+    cw_c = (tail_end.x, tail_end.y, tail_end.z - 0.12)
     create_beveled_box(
-        bm, size=(0.34, 0.34, 0.40),
-        location=(tail_end.x, tail_end.y, tail_end.z - 0.05),
+        bm, size=(0.50, 0.42, 0.58),
+        location=cw_c,
         rotation=(0.0, 0.0, rot_angle),
-        mat_index=MAT_INDEX_STONE, bevel_amount=0.015
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+    )
+    # Two horizontal iron binding bands around the block
+    for dz in (-0.16, 0.14):
+        create_beveled_box(
+            bm, size=(0.53, 0.45, 0.09),
+            location=(cw_c[0], cw_c[1], cw_c[2] + dz),
+            rotation=(0.0, 0.0, rot_angle),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.006
+        )
+    # One vertical iron band strapping it to the tail beam
+    create_beveled_box(
+        bm, size=(0.10, 0.45, 0.61),
+        location=cw_c,
+        rotation=(0.0, 0.0, rot_angle),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.006
     )
     # Iron strap collars along boom
     for t in (0.35, 0.62, 0.88):
@@ -2173,11 +2218,27 @@ def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib
             location=(pos.x, pos.y, pos.z),
             rotation=rot_q, mat_index=MAT_INDEX_IRON, bevel_amount=0.006
         )
-    # Large side pivot discs at mast/boom joint
+    # Layered iron pivot fittings at mast/boom joint (rim + hub + dome catch the light)
     for s in (-1.0, 1.0):
+        out_axis = side_dir * s
+        out_rot = out_axis.to_track_quat('Z', 'Y').to_euler()
         hub = root + side_dir * (s * (mast_w * 0.5 + 0.045))
-        _cyl_axis((hub.x, hub.y, hub.z), 0.23, 0.07, side_dir, MAT_INDEX_IRON, segments=14)
-        _cyl_axis((hub.x, hub.y, hub.z), 0.09, 0.10, side_dir, MAT_INDEX_TIMBER, segments=10)
+        _cyl_axis((hub.x, hub.y, hub.z), 0.23, 0.07, side_dir, MAT_INDEX_IRON, segments=16)
+        # Raised rim ring on the outer face
+        rim_c = hub + out_axis * 0.035
+        create_torus_ring(
+            bm, location=(rim_c.x, rim_c.y, rim_c.z), rotation=out_rot,
+            major_radius=0.185, minor_radius=0.024, major_segments=16, minor_segments=8,
+            mat_index=MAT_INDEX_IRON
+        )
+        # Iron hub boss with small dome cap
+        _cyl_axis((hub.x, hub.y, hub.z), 0.085, 0.13, side_dir, MAT_INDEX_IRON, segments=12)
+        dome_c = hub + out_axis * (0.065 + 0.03)
+        create_cone(
+            bm, radius1=0.055, radius2=0.012, height=0.06, segments=10,
+            location=(dome_c.x, dome_c.y, dome_c.z), rotation=out_rot,
+            mat_index=MAT_INDEX_IRON
+        )
 
     # Diagonal support strut: lower mast -> mid-boom (triangle)
     low_pt = Vector((yard_x + cos_r * (mast_w * 0.4), yard_y + sin_r * (mast_w * 0.4), attach_z - 1.55))
