@@ -2021,12 +2021,13 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
 def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib_length=3.4, rot_angle=0.45):
     """
     Builds a compact fantasy dockside-style courtyard crane:
-    - Octagonal flagstone pad with square timber platform deck.
+    - Turntable base: fixed octagonal flagstone pad with bolted iron slew ring,
+      topped by a round rotating timber disc carrying mast and braces.
     - Stout central mast with square iron strap bands and cap.
-    - 4 short knee braces from deck corners to mast (no floating sticks).
+    - 4 short knee braces from the rotating disc up to the mast.
     - Near-horizontal chunky jib boom with counterweight tail, iron straps,
       side pivot discs and a diagonal support strut forming a triangle.
-    - Side-mounted windlass drum with one large spoked hand wheel.
+    - Side-mounted windlass drum with one large spoked IRON hand wheel.
     - Tip pulley, hanging rope and forged iron cargo hook.
     - NOTE: no grounded crates/barrels (user supplies better props).
     """
@@ -2057,7 +2058,7 @@ def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib
             location=(p[0], p[1], p[2]), rotation=rot, mat_index=mat
         )
 
-    # 1. Ground flagstone pad + timber platform deck
+    # 1. Turntable base: fixed pad + slew ring (static) / timber disc (rotating)
     pad_h = 0.16
     pad_r = 1.30
     create_cylinder(
@@ -2065,28 +2066,47 @@ def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib
         location=(yard_x, yard_y, z_ground + pad_h * 0.5),
         mat_index=MAT_INDEX_STONE
     )
-    deck_w = 2.0
-    deck_h = 0.16
-    deck_z = z_ground + pad_h + deck_h * 0.5
-    create_beveled_box(
-        bm, size=(deck_w, deck_w, deck_h),
-        location=(yard_x, yard_y, deck_z),
-        rotation=(0.0, 0.0, rot_angle),
-        mat_index=MAT_INDEX_WOOD, bevel_amount=0.015
+    # Fixed iron slew ring seated on the pad (static race the top rotates on)
+    ring_h = 0.07
+    ring_z = z_ground + pad_h + ring_h * 0.5
+    create_cylinder(
+        bm, radius=1.02, height=ring_h, segments=16,
+        location=(yard_x, yard_y, ring_z),
+        mat_index=MAT_INDEX_IRON
     )
-    # 4 small stone feet under deck corners
-    for sx in (-0.82, 0.82):
-        for sy in (-0.82, 0.82):
-            lx = sx * math.cos(rot_angle) - sy * math.sin(rot_angle)
-            ly = sx * math.sin(rot_angle) + sy * math.cos(rot_angle)
-            create_beveled_box(
-                bm, size=(0.30, 0.30, pad_h),
-                location=(yard_x + lx, yard_y + ly, z_ground + pad_h * 0.5),
-                rotation=(0.0, 0.0, rot_angle),
-                mat_index=MAT_INDEX_STONE, bevel_amount=0.02
-            )
+    # 4 bolt heads pinning the slew ring to the pad (fixed hardware)
+    for i in range(4):
+        ang = rot_angle + math.pi * 0.25 + i * (math.pi * 0.5)
+        bx = yard_x + math.cos(ang) * 1.14
+        by = yard_y + math.sin(ang) * 1.14
+        create_cylinder(
+            bm, radius=0.035, height=0.05, segments=6,
+            location=(bx, by, z_ground + pad_h + 0.025),
+            mat_index=MAT_INDEX_IRON
+        )
+    # Round rotating timber turntable disc on top of the ring (visible seam = slew joint)
+    disc_h = 0.15
+    disc_r = 0.95
+    disc_z = z_ground + pad_h + ring_h + disc_h * 0.5
+    create_cylinder(
+        bm, radius=disc_r, height=disc_h, segments=16,
+        location=(yard_x, yard_y, disc_z),
+        mat_index=MAT_INDEX_TIMBER
+    )
+    # Iron tyre band around the disc edge (slew gear hint)
+    create_cylinder(
+        bm, radius=disc_r + 0.015, height=0.07, segments=16,
+        location=(yard_x, yard_y, z_ground + pad_h + ring_h + 0.035),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Central iron pivot pin rising into the mast foot
+    create_cylinder(
+        bm, radius=0.07, height=0.30, segments=8,
+        location=(yard_x, yard_y, z_ground + pad_h + ring_h + 0.10),
+        mat_index=MAT_INDEX_IRON
+    )
 
-    mast_z0 = z_ground + pad_h + deck_h
+    mast_z0 = z_ground + pad_h + ring_h + disc_h
     mast_w = 0.38
     mast_mid_z = mast_z0 + mast_height * 0.5
     create_beveled_box(
@@ -2116,9 +2136,9 @@ def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib
         mat_index=MAT_INDEX_IRON
     )
 
-    # 2. 4 short knee braces: deck corners -> mast faces (all ends grounded/touching)
+    # 2. 4 short knee braces: turntable disc top -> mast faces (rotate with the disc)
     brace_h = 1.15
-    brace_dist = 0.88
+    brace_dist = 0.78
     for i in range(4):
         ang = rot_angle + math.pi * 0.25 + i * (math.pi * 0.5)
         ca = math.cos(ang)
@@ -2176,26 +2196,25 @@ def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib
     _cyl_axis((jib_tip_x, jib_tip_y, jib_tip_z - 0.10), 0.16, 0.07, side_dir, MAT_INDEX_WOOD, segments=12)
     _cyl_axis((jib_tip_x, jib_tip_y, jib_tip_z - 0.10), 0.035, 0.24, side_dir, MAT_INDEX_IRON, segments=8)
 
-    # 5. Side windlass: drum across mast + one large hand wheel
-    winch_z = mast_z0 + 1.30
+    # 5. Side windlass: drum across mast + one large spoked IRON hand wheel.
+    # The axle runs all the way through the wheel hub so the wheel reads connected.
+    winch_z = mast_z0 + 1.05
+    wheel_off = 0.58
     _cyl_axis((yard_x, yard_y, winch_z), 0.16, 0.62, side_dir, MAT_INDEX_TIMBER, segments=12)
-    _cyl_axis((yard_x, yard_y, winch_z), 0.185, 0.40, side_dir, MAT_INDEX_WOOD, segments=12)
-    _cyl_axis((yard_x, yard_y, winch_z), 0.045, 0.95, side_dir, MAT_INDEX_IRON, segments=8)
-    wheel_c = Vector((yard_x, yard_y, winch_z)) + side_dir * 0.62
+    _cyl_axis((yard_x, yard_y, winch_z), 0.185, 0.40, side_dir, MAT_INDEX_TIMBER, segments=12)
+    _cyl_axis((yard_x, yard_y, winch_z), 0.045, wheel_off * 2.0 + 0.16, side_dir, MAT_INDEX_IRON, segments=8)
+    wheel_c = Vector((yard_x, yard_y, winch_z)) + side_dir * wheel_off
     wheel_rot = side_dir.to_track_quat('Z', 'Y').to_euler()
     create_torus_ring(
         bm, location=(wheel_c.x, wheel_c.y, wheel_c.z), rotation=wheel_rot,
-        major_radius=0.48, minor_radius=0.05, major_segments=18, minor_segments=8,
-        mat_index=MAT_INDEX_TIMBER
+        major_radius=0.46, minor_radius=0.05, major_segments=18, minor_segments=8,
+        mat_index=MAT_INDEX_IRON
     )
     for k in range(4):
         a = k * math.pi * 0.5 + math.pi * 0.25
-        off = boom_dir * math.cos(a) * 0.44 + Vector((0.0, 0.0, 1.0)) * math.sin(a) * 0.44
-        _beam(wheel_c - off, wheel_c + off, 0.06, MAT_INDEX_TIMBER, bevel=0.005)
-    _cyl_axis((wheel_c.x, wheel_c.y, wheel_c.z), 0.08, 0.12, side_dir, MAT_INDEX_IRON, segments=10)
-    # Crank peg on wheel rim
-    peg_p = wheel_c + boom_dir * 0.44
-    _cyl_axis((peg_p.x, peg_p.y, peg_p.z), 0.025, 0.16, side_dir, MAT_INDEX_WOOD, segments=6)
+        off = boom_dir * math.cos(a) * 0.42 + Vector((0.0, 0.0, 1.0)) * math.sin(a) * 0.42
+        _beam(wheel_c - off, wheel_c + off, 0.055, MAT_INDEX_IRON, bevel=0.004)
+    _cyl_axis((wheel_c.x, wheel_c.y, wheel_c.z), 0.085, 0.14, side_dir, MAT_INDEX_IRON, segments=10)
 
     # 6. Hanging rope + forged hook (fixed drop, no cargo)
     cable_h = 2.0

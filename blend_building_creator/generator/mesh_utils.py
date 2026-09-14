@@ -302,6 +302,11 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
         bottom_verts.append(bm.verts.new(tr_mat @ Vector((x, y, -half_h))))
         top_verts.append(bm.verts.new(tr_mat @ Vector((x, y, half_h))))
         
+    # Cylindrical UV unwrap so textured materials (wood grain, iron) map correctly
+    # instead of sampling a single texel. World-scale: U spans the circumference.
+    uv_layer = bm.loops.layers.uv.verify()
+    circumference = 2.0 * math.pi * radius
+
     faces = []
     # Side faces
     for i in range(segments):
@@ -309,16 +314,27 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
         f = bm.faces.new([bottom_verts[i], bottom_verts[nxt], top_verts[nxt], top_verts[i]])
         f.material_index = mat_index
         faces.append(f)
-        
-    # Caps
+        u0 = circumference * i / segments
+        u1 = circumference * (i + 1) / segments
+        f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+        f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+        f.loops[2][uv_layer].uv = Vector((u1, height))
+        f.loops[3][uv_layer].uv = Vector((u0, height))
+
+    # Caps (planar projection in world space; apply_box_uvs refreshes stone etc. later)
     f_bot = bm.faces.new(list(reversed(bottom_verts)))
     f_bot.material_index = mat_index
     faces.append(f_bot)
-    
+
     f_top = bm.faces.new(top_verts)
     f_top.material_index = mat_index
     faces.append(f_top)
-    
+
+    for cap in (f_bot, f_top):
+        for loop in cap.loops:
+            co = loop.vert.co
+            loop[uv_layer].uv = Vector((co.x, co.y))
+
     return faces
 
 def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, segments=16,
@@ -559,15 +575,26 @@ def create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055
             v = bm.verts.new(tr_mat @ (center + off))
             ring.append(v)
         verts.append(ring)
+    # Ring UV unwrap: U follows the major circumference (world-scale), V the tube.
+    uv_layer = bm.loops.layers.uv.verify()
+    major_circ = 2.0 * math.pi * major_radius
     faces = []
     for i in range(major_segments):
         ni = (i + 1) % major_segments
+        u0 = major_circ * i / major_segments
+        u1 = major_circ * (i + 1) / major_segments
         for j in range(minor_segments):
             nj = (j + 1) % minor_segments
             f = bm.faces.new([verts[i][j], verts[ni][j], verts[ni][nj], verts[i][nj]])
             f.material_index = mat_index
             f.smooth = True
             faces.append(f)
+            v0 = j / minor_segments
+            v1 = (j + 1) / minor_segments
+            f.loops[0][uv_layer].uv = Vector((u0, v0))
+            f.loops[1][uv_layer].uv = Vector((u1, v0))
+            f.loops[2][uv_layer].uv = Vector((u1, v1))
+            f.loops[3][uv_layer].uv = Vector((u0, v1))
     return faces
 
 def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=2, bevel_amount=0.004, bevel_segments=2):

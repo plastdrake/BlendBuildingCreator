@@ -3051,28 +3051,30 @@ def generate_building(obj, props):
     elif effective_archetype == 'WAREHOUSE':
         yard_x = 0.0
         yard_y = -hy - 1.8
-        rot_crane = 0.45
+        rot_crane = -1.57
         if shape == 'L_SHAPE' and wings:
             w_elem = wings[0]
             wx1, wx2, wy1, wy2 = w_elem['base']
+            # The crane sits toward the courtyard mouth (away from both roofs) with
+            # the jib pointing out of the courtyard so the boom/rope clears the eaves.
             if w_elem['wall'] == 'FRONT':
                 if w_elem.get('align') == 'RIGHT':
-                    yard_x = (-hx + wx1) * 0.5
-                    yard_y = (wy1 - hy) * 0.5
-                    rot_crane = 0.55
+                    yard_x = (-hx + wx1) * 0.5 - 0.6
+                    yard_y = (wy1 - hy) * 0.5 - 1.2
+                    rot_crane = -1.40
                 else:
-                    yard_x = (wx2 + hx) * 0.5
-                    yard_y = (wy1 - hy) * 0.5
-                    rot_crane = 2.60
+                    yard_x = (wx2 + hx) * 0.5 + 0.6
+                    yard_y = (wy1 - hy) * 0.5 - 1.2
+                    rot_crane = -1.75
             elif w_elem['wall'] == 'BACK':
                 if w_elem.get('align') == 'RIGHT':
-                    yard_x = (-hx + wx1) * 0.5
-                    yard_y = (hy + wy2) * 0.5
-                    rot_crane = -0.55
+                    yard_x = (-hx + wx1) * 0.5 - 0.6
+                    yard_y = (hy + wy2) * 0.5 + 1.2
+                    rot_crane = 1.40
                 else:
-                    yard_x = (wx2 + hx) * 0.5
-                    yard_y = (hy + wy2) * 0.5
-                    rot_crane = -2.60
+                    yard_x = (wx2 + hx) * 0.5 + 0.6
+                    yard_y = (hy + wy2) * 0.5 + 1.2
+                    rot_crane = 1.75
         build_courtyard_crane(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_crane)
     elif effective_archetype == 'LUMBERMILL':
         yard_x = 0.0
