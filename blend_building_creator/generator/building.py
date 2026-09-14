@@ -2273,9 +2273,7 @@ def generate_building(obj, props):
                     trim = [(top_y_min - 0.10, w_roof_ymax + 0.60)]
                     w_eave_fb = {'min': list(trim), 'max': list(trim)}
 
-                has_left = (w_top_xmin > top_x_min + 0.35)
-                has_right = (w_top_xmax < top_x_max - 0.35)
-                w_notch_side = 'BOTH' if (has_left and has_right) else ('LEFT' if has_left else 'RIGHT')
+                w_notch_side = 'BOTH'
 
                 # Parallel flush case: fascia ends die inside the gable core, no trim.
                 w_notch_fb = None
@@ -2353,12 +2351,7 @@ def generate_building(obj, props):
                         return deck_top_z(px, py, _wx, _wh, _wz, _wr,
                                           flare_val, _sw, _wy0, _wy1, _ez,
                                           top_off=0.05)
-                    # Only true inside corner valleys (not outside walls) form valleys
-                    valley_feet = []
-                    if has_left:
-                        valley_feet.append(w_top_xmin - _ov)
-                    if has_right:
-                        valley_feet.append(w_top_xmax + _ov)
+                    valley_feet = [w_top_xmin - _ov, w_top_xmax + _ov]
                     for vx in valley_feet:
                         build_valley_rafters(bm, (vx, top_y_min - _ov), (w_cx, top_cy),
                                              _main_fn, _wing_fn)
@@ -2444,9 +2437,7 @@ def generate_building(obj, props):
                     trim = [(w_roof_ymin - 0.60, top_y_max + 0.10)]
                     w_eave_bk = {'min': list(trim), 'max': list(trim)}
 
-                has_left = (w_top_xmin > top_x_min + 0.35)
-                has_right = (w_top_xmax < top_x_max - 0.35)
-                w_notch_side = 'BOTH' if (has_left and has_right) else ('LEFT' if has_left else 'RIGHT')
+                w_notch_side = 'BOTH'
 
                 w_notch_bk = None
                 if not is_lower_wing and is_rotated_roof:
@@ -2524,11 +2515,7 @@ def generate_building(obj, props):
                         return deck_top_z(px, py, _wx, _wh, _wz, _wr,
                                           flare_val, _sw, _wy0, _wy1, _ez,
                                           top_off=0.05)
-                    valley_feet = []
-                    if has_left:
-                        valley_feet.append(w_top_xmin - _ov)
-                    if has_right:
-                        valley_feet.append(w_top_xmax + _ov)
+                    valley_feet = [w_top_xmin - _ov, w_top_xmax + _ov]
 
                     for vx in valley_feet:
                         build_valley_rafters(bm, (vx, top_y_max + _ov), (w_cx, top_cy),
@@ -2645,12 +2632,7 @@ def generate_building(obj, props):
                     trim = [(wall_local - 0.10, y_top_local + 0.60)]
                     w_eave_lr = {'min': list(trim), 'max': list(trim)}
 
-                has_front = (w_top_ymin > top_y_min + 0.35)
-                has_back = (w_top_ymax < top_y_max - 0.35)
-                if w_wall == 'LEFT':
-                    w_notch_side_lr = 'BOTH' if (has_front and has_back) else ('RIGHT' if has_front else 'LEFT')
-                else:
-                    w_notch_side_lr = 'BOTH' if (has_front and has_back) else ('LEFT' if has_front else 'RIGHT')
+                w_notch_side_lr = 'BOTH'
 
                 w_notch_lr = None
                 if not is_lower_wing and not is_rotated_roof:
@@ -2755,17 +2737,10 @@ def generate_building(obj, props):
                                               0.0, _wr, flare_val, _sw, _ry0, _ry1,
                                               _ez, top_off=0.05) + _wz
                         die = (w_cx - _ly1, w_cy)
-                    corners = []
                     if w_wall == 'LEFT':
-                        if has_front:
-                            corners.append((top_x_min - _ov, w_top_ymin - _ov))
-                        if has_back:
-                            corners.append((top_x_min - _ov, w_top_ymax + _ov))
+                        corners = [(top_x_min - _ov, w_top_ymin - _ov), (top_x_min - _ov, w_top_ymax + _ov)]
                     else:
-                        if has_front:
-                            corners.append((top_x_max + _ov, w_top_ymin - _ov))
-                        if has_back:
-                            corners.append((top_x_max + _ov, w_top_ymax + _ov))
+                        corners = [(top_x_max + _ov, w_top_ymin - _ov), (top_x_max + _ov, w_top_ymax + _ov)]
                     for cx0, cy0 in corners:
                         build_valley_rafters(bm, (cx0, cy0), die,
                                              _main_fn, _wing_fn)
