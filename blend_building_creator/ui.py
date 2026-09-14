@@ -47,6 +47,8 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         box_arch = layout.box()
         box_arch.label(text="Architectural Purpose & Archetype", icon='ASSET_MANAGER')
         box_arch.prop(props, "building_archetype", text="")
+        if props.building_archetype == 'LUMBERMILL':
+            box_arch.prop(props, "mill_grade", text="Mill Grade")
         
         box_tier = layout.box()
         box_tier.label(text="Building Material Tier", icon='MATERIAL')

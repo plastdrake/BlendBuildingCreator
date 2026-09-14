@@ -283,7 +283,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('AUTO', "Auto (From Preset)", "Use specialized features defined by the selected preset"),
             ('NONE', "None (Standard)", "Standard fantasy building without archetype additions"),
             ('WAREHOUSE', "Warehouse Crane & Cargo", "L-shaped courtyard timber swivel crane and loading bays"),
-            ('LUMBERMILL', "Lumbermill Workframe", "Open timber work pavilion, log skids, and timber framing"),
+            ('LUMBERMILL', "Lumbermill Workframe", "Open timber sawmill pavilion with creature treadwheel, saw bench, and log yard"),
             ('BLACKSMITH', "Blacksmith Forge", "Outdoor forge lean-to canopy, stone furnace with chimney, and metal anvil"),
             ('WINDMILL', "Windmill Sails", "4-blade rotating lattice timber windmill rotor on upper facade"),
             ('WATCHTOWER', "Watchtower Parapet", "Machicolated defensive timber hoarding, corbel brackets, and arrow slits"),
@@ -294,7 +294,19 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default='AUTO',
         update=on_property_updated
     )
-    
+
+    mill_grade: EnumProperty(
+        name="Mill Machinery Grade",
+        description="Capability grade of the lumbermill treadwheel sawmill (higher grades add machinery, not footprint)",
+        items=[
+            ('GRADE_1', "Grade 1: Wheel + Saw Bench", "Compact creature treadwheel driving a single circular saw bench"),
+            ('GRADE_2', "Grade 2: Geared + Carriage", "Geared treadwheel with chain drive, rail log carriage, and mini indoor crane"),
+            ('GRADE_3', "Grade 3: Line-Shaft Mill", "Great treadwheel with roller infeed table, indoor crane, and full outfeed stacks"),
+        ],
+        default='GRADE_1',
+        update=on_property_updated
+    )
+
     # --- Foundation ---
     has_foundation: BoolProperty(
         name="Stone Foundation",

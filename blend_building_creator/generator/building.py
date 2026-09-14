@@ -28,13 +28,17 @@ from .interior import (
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly
 from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_dormer, build_roof_turret, build_fantasy_chimney, build_valley_rafters, deck_top_z
-from .accessories import (
-    build_blacksmith_forge, build_windmill_sails, build_watchtower_lookout,
-    build_tavern_porch_and_sign, build_fisherman_stilts, build_bakery_oven,
-    build_warehouse_cargo, build_courtyard_crane, build_lumbermill_yard,
-    build_mini_wing, build_balcony, build_pillared_overhang,
-    build_cargo_port_frame
-)
+from .accessories.blacksmith import build_blacksmith_forge
+from .accessories.windmill import build_windmill_sails
+from .accessories.watchtower import build_watchtower_lookout
+from .accessories.tavern import build_tavern_porch_and_sign, build_balcony
+from .accessories.fisherman import build_fisherman_stilts
+from .accessories.bakery import build_bakery_oven
+from .accessories.warehouse import build_warehouse_cargo
+from .accessories.crane import build_courtyard_crane
+from .accessories.mill import build_lumbermill_yard, build_treadwheel_sawmill
+from .accessories.common import build_mini_wing, build_pillared_overhang, build_cargo_port_frame
+
 
 def get_facade_window_positions(span_min, span_max, target_spacing=2.4, min_margin=0.85):
     """
@@ -3118,7 +3122,7 @@ def generate_building(obj, props):
         build_courtyard_crane(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_crane)
     elif effective_archetype == 'LUMBERMILL':
         yard_x = 0.0
-        yard_y = -hy - 1.8
+        yard_y = -hy - 2.2
         rot_yard = 0.0
         if shape == 'L_SHAPE' and wings:
             w_elem = wings[0]
@@ -3137,7 +3141,49 @@ def generate_building(obj, props):
                 else:
                     yard_x = (wx2 + hx) * 0.5
                     yard_y = (hy + wy2) * 0.5
-        build_lumbermill_yard(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_yard)
+        mill_grade = getattr(props, 'mill_grade', 'GRADE_1')
+        build_lumbermill_yard(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_yard, grade=mill_grade)
+        build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=found_h, grade=mill_grade)
+        # Mill worker steps: grounded cut-stone steps.
+        # We use the T2-style bay selection (weighted against crane/wheel)
+        # for all tiers to ensure a consistent, clear entrance.
+        mill_n = max(1, int(round(base_w / 3.2)))
+        mill_bays = [-hx + (i + 0.5) * (base_w / mill_n) for i in range(mill_n)]
+        _crane_in_x = 0.4 + (4.60 if mill_grade == 'GRADE_2' else 5.10)
+        _wheel_rx = {'GRADE_1': 1.05, 'GRADE_2': 1.45, 'GRADE_3': 1.75}.get(mill_grade, 1.45)
+        _bench_lx = {'GRADE_1': 3.2, 'GRADE_2': 4.0, 'GRADE_3': 4.8}.get(mill_grade, 4.0)
+        _wheel_xx = 0.4 - (_bench_lx * 0.5 + _wheel_rx + 1.60)
+        _yard_crane_x = yard_x + 3.6 if mill_grade in ('GRADE_2', 'GRADE_3') else None
+        def _bay_score(_bx):
+            _s = 0.0
+            if mill_grade in ('GRADE_2', 'GRADE_3'):
+                _s += max(0.0, 2.3 - abs(_bx - _crane_in_x)) * 100.0
+                if _yard_crane_x is not None:
+                    _s += max(0.0, 2.2 - abs(_bx - _yard_crane_x)) * 40.0
+            _s += max(0.0, 1.6 - abs(_bx - _wheel_xx)) * 8.0
+            _s += max(0.0, 1.9 - abs(_bx - yard_x)) * 30.0
+            _s += max(0.0, 1.4 - abs(_bx - (yard_x - 1.8))) * 30.0
+            return _s
+        # Standardize: Always pick the bay that works best for T2 (the middle-ground)
+        # by simulating T2 parameters for the score if not in T2.
+        test_grade = 'GRADE_2'
+        _tg_crane_x = 0.4 + 4.60
+        _tg_wheel_rx = 1.45
+        _tg_bench_lx = 4.0
+        _tg_wheel_xx = 0.4 - (4.0 * 0.5 + 1.45 + 1.60)
+        _tg_yard_crane_x = yard_x + 3.6
+        def _standard_score(_bx):
+            _s = 0.0
+            _s += max(0.0, 2.3 - abs(_bx - _tg_crane_x)) * 100.0
+            _s += max(0.0, 2.2 - abs(_bx - _tg_yard_crane_x)) * 40.0
+            _s += max(0.0, 1.6 - abs(_bx - _tg_wheel_xx)) * 8.0
+            _s += max(0.0, 1.9 - abs(_bx - yard_x)) * 30.0
+            _s += max(0.0, 1.4 - abs(_bx - (yard_x - 1.8))) * 30.0
+            return _s
+        mill_sx = min(mill_bays, key=lambda c: (_standard_score(c), abs(c - 3.5)))
+        if props.has_front_steps and props.has_foundation:
+            build_front_steps(bm, center_x=mill_sx, y_front=-hy, z_base=found_h,
+                              num_steps=max(2, int(found_h / 0.18)), normal_axis='-Y')
 
     # 4.6. Architectural Outcrops, Balconies & Pillared Overhangs
     tier_val = getattr(props, 'material_tier', 'TIER_3')

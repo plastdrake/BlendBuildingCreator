@@ -145,7 +145,7 @@ def run_tests():
     # 8. Test Archetypes & Accessories
     print("[8/10] Testing Specialized Architectural Archetypes...")
     obj["is_fantasy_building"] = True
-    for arch in ['BLACKSMITH', 'WINDMILL', 'WATCHTOWER', 'TAVERN', 'FISHERMAN', 'BAKERY', 'WAREHOUSE']:
+    for arch in ['BLACKSMITH', 'WINDMILL', 'WATCHTOWER', 'TAVERN', 'FISHERMAN', 'BAKERY', 'WAREHOUSE', 'LUMBERMILL']:
         props.building_archetype = arch
         bpy.ops.building.regenerate()
         print(f"  -> Archetype '{arch}': {len(obj.data.vertices)} verts, {len(obj.data.polygons)} polys.")
