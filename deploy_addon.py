@@ -8,8 +8,11 @@ src_dir = r"d:\BlendBuildingCreator\blend_building_creator"
 
 targets = [
     os.path.join(blender_root, "5.2", "extensions", "user_default", "blend_building_creator"),
+    os.path.join(blender_root, "5.2", "scripts", "addons", "blend_building_creator"),
     os.path.join(blender_root, "5.1", "extensions", "user_default", "blend_building_creator"),
+    os.path.join(blender_root, "5.1", "scripts", "addons", "blend_building_creator"),
     os.path.join(blender_root, "5.0", "extensions", "user_default", "blend_building_creator"),
+    os.path.join(blender_root, "5.0", "scripts", "addons", "blend_building_creator"),
     os.path.join(blender_root, "4.4", "extensions", "user_default", "blend_building_creator"),
     os.path.join(blender_root, "4.4", "scripts", "addons", "blend_building_creator"),
 ]
