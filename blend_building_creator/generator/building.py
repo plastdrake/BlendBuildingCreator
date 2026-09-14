@@ -26,7 +26,7 @@ from .interior import (
     build_floor_slab, build_ceiling_beams, build_interior_trims, build_straight_staircase,
     build_spiral_staircase, build_attic_trusses, build_stair_guardrail
 )
-from .openings import build_door_assembly, build_front_steps, build_window_assembly, build_iron_lantern
+from .openings import build_door_assembly, build_front_steps, build_window_assembly
 from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_dormer, build_roof_turret, build_fantasy_chimney, build_valley_rafters, deck_top_z
 from .accessories import (
     build_blacksmith_forge, build_windmill_sails, build_watchtower_lookout,
@@ -228,7 +228,7 @@ def build_round_tower(bm, props, seed):
                     facing_angle = math.atan2(fn_vec.x, -fn_vec.y)
                     build_window_assembly(bm, center=(mid_pt[0], mid_pt[1], win_cz), size=(win_w, win_h),
                                           wall_thickness=wall_t, normal_axis=facing_angle,
-                                          has_shutters=props.has_shutters, has_flower_box=props.has_flower_boxes)
+                                          has_shutters=props.has_shutters)
 
             build_wall_with_opening(
                 bm, p1, p2, z_floor, z_ceil, wall_t, openings,
@@ -960,12 +960,22 @@ def generate_building(obj, props):
                         door_u1 = (door_cx - dw * 0.5 - frame_margin) - wings[0]['base'][0]
                         door_u2 = (door_cx + dw * 0.5 + frame_margin) - wings[0]['base'][0]
                         w_front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': door_top_z})
+                        # Interior walkthrough portal from wing into main hall
+                        pass_w = min((wings[0]['base'][1] - wings[0]['base'][0]) - 0.8, max(2.4, dw + 0.8))
+                        pass_u1 = (door_cx - pass_w * 0.5) - x_min
+                        pass_u2 = (door_cx + pass_w * 0.5) - x_min
+                        front_openings.append({'u_start': pass_u1, 'u_end': pass_u2, 'z_start': z_floor, 'z_end': door_top_z})
                     else:
                         door_cx = 0.0
                         door_yf = y_min
                         door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
                         door_u2 = (door_cx + dw * 0.5 + frame_margin) - x_min
                         front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': door_top_z})
+                        if len(wings) > 0:
+                            pass_w = min((wings[0]['base'][1] - wings[0]['base'][0]) - 0.8, max(2.4, dw + 0.8))
+                            pass_u1 = (wings[0]['base'][0] + wings[0]['base'][1]) * 0.5 - pass_w * 0.5 - x_min
+                            pass_u2 = (wings[0]['base'][0] + wings[0]['base'][1]) * 0.5 + pass_w * 0.5 - x_min
+                            back_openings.append({'u_start': pass_u1, 'u_end': pass_u2, 'z_start': z_floor, 'z_end': door_top_z})
 
                 main_door_cx = door_cx
                 main_door_yf = door_yf
@@ -978,8 +988,6 @@ def generate_building(obj, props):
                 )
                 if props.has_front_steps and props.has_foundation:
                     build_front_steps(bm, center_x=door_cx, y_front=door_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='-Y')
-                if props.has_lanterns:
-                    build_iron_lantern(bm, location=(door_cx + dw * 0.5 + 0.45, door_yf - 0.05, z_floor + dh * 0.8))
 
             # 2. Rear / Back Door
             if getattr(props, 'has_back_door', False) and not open_timber:
@@ -999,8 +1007,6 @@ def generate_building(obj, props):
                 )
                 if props.has_front_steps and props.has_foundation:
                     build_front_steps(bm, center_x=b_cx, y_front=b_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+Y')
-                if props.has_lanterns:
-                    build_iron_lantern(bm, location=(b_cx + dw * 0.5 + 0.45, b_yf + 0.05, z_floor + dh * 0.8))
 
             # 3. Side Door
             if getattr(props, 'has_side_door', False) and not open_timber:
@@ -1019,8 +1025,6 @@ def generate_building(obj, props):
                     )
                     if props.has_front_steps and props.has_foundation:
                         build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='-X')
-                    if props.has_lanterns:
-                        build_iron_lantern(bm, location=(s_xf - 0.05, s_cy + dw * 0.5 + 0.45, z_floor + dh * 0.8))
                 else: # RIGHT
                     s_cy = (y_min + y_max) * 0.5
                     s_xf = x_max
@@ -1035,8 +1039,6 @@ def generate_building(obj, props):
                     )
                     if props.has_front_steps and props.has_foundation:
                         build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+X')
-                    if props.has_lanterns:
-                        build_iron_lantern(bm, location=(s_xf + 0.05, s_cy + dw * 0.5 + 0.45, z_floor + dh * 0.8))
 
         # Interior walk-through portals between main building and wings
         if fl_has_wing:
@@ -1311,7 +1313,7 @@ def generate_building(obj, props):
             if fl_idx == 0 and props.has_front_door:
                 door_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 d_ex1 = door_cx - door_clr
-                d_ex2 = door_cx + door_clr + (0.35 if props.has_lanterns else 0.0)
+                d_ex2 = door_cx + door_clr
                 front_excludes.append((d_ex1, d_ex2))
                 
             if has_mw and mw_side == 'FRONT' and fl_idx in (mw_fl, mw_fl + 1):
@@ -1342,7 +1344,7 @@ def generate_building(obj, props):
                 build_window_assembly(
                     bm, center=(wx, y_min, win_cz), size=(win_w, win_h),
                     wall_thickness=wall_t, normal_axis='-Y',
-                    has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes
+                    has_shutters=sh_act, shutters_closed=sh_cl
                 )
 
         # Dynamic Windows - Back Wall
@@ -1351,7 +1353,7 @@ def generate_building(obj, props):
             if fl_idx == 0 and getattr(props, 'has_back_door', False):
                 bd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 bd_ex1 = b_cx - bd_clr
-                bd_ex2 = b_cx + bd_clr + (0.35 if props.has_lanterns else 0.0)
+                bd_ex2 = b_cx + bd_clr
                 back_excludes.append((bd_ex1, bd_ex2))
                 
             if has_mw and mw_side == 'BACK' and fl_idx in (mw_fl, mw_fl + 1):
@@ -1375,7 +1377,7 @@ def generate_building(obj, props):
                 build_window_assembly(
                     bm, center=(wx, y_max, win_cz), size=(win_w, win_h),
                     wall_thickness=wall_t, normal_axis='+Y',
-                    has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=False
+                    has_shutters=sh_act, shutters_closed=sh_cl
                 )
 
         # Dynamic Windows - Side Walls (Left and Right)
@@ -1386,7 +1388,7 @@ def generate_building(obj, props):
                 left_excludes.append((stair_y_bot - 0.25, stair_y_top + 0.25))
             if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'LEFT':
                 sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
-                left_excludes.append((s_cy - sd_clr, s_cy + sd_clr + (0.35 if props.has_lanterns else 0.0)))
+                left_excludes.append((s_cy - sd_clr, s_cy + sd_clr))
             if has_mw and mw_side == 'LEFT' and fl_idx in (mw_fl, mw_fl + 1):
                 mw_cy = (y_min + y_max) * 0.5
                 left_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
@@ -1407,14 +1409,14 @@ def generate_building(obj, props):
                 build_window_assembly(
                     bm, center=(x_min, wy, win_cz), size=(win_w, win_h),
                     wall_thickness=wall_t, normal_axis='-X',
-                    has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes
+                    has_shutters=sh_act, shutters_closed=sh_cl
                 )
 
             # Right side
             right_excludes = list(get_facade_wing_exclusions('RIGHT'))
             if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT':
                 sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
-                right_excludes.append((s_cy - sd_clr, s_cy + sd_clr + (0.35 if props.has_lanterns else 0.0)))
+                right_excludes.append((s_cy - sd_clr, s_cy + sd_clr))
             if has_mw and mw_side == 'RIGHT' and fl_idx in (mw_fl, mw_fl + 1):
                 mw_cy = (y_min + y_max) * 0.5
                 right_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
@@ -1435,7 +1437,7 @@ def generate_building(obj, props):
                 build_window_assembly(
                     bm, center=(x_max, wy, win_cz), size=(win_w, win_h),
                     wall_thickness=wall_t, normal_axis='+X',
-                    has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes
+                    has_shutters=sh_act, shutters_closed=sh_cl
                 )
 
         # Dynamic Windows - Wing Walls
@@ -1456,7 +1458,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wwx, wy1, win_cz)
                             build_window_assembly(bm, center=(wwx, wy1, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-Y',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
                     # Buffered inside corner at wy2 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
@@ -1467,7 +1469,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wx1, wwy, win_cz)
                             build_window_assembly(bm, center=(wx1, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-X',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 3: Right (wx2, wy1) -> (wx2, wy2) normal (1, 0)
                     # Buffered inside corner at wy2 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
@@ -1478,7 +1480,10 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wx2, wwy, win_cz)
                             build_window_assembly(bm, center=(wx2, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+X',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
+
+                    if w_elem.get('id', 0) == 0 and w_front_openings:
+                        w_ops_1.extend(w_front_openings)
 
                     wing_wall_openings.append(((wx1, wy1), (wx2, wy1), w_ops_1, (0.0, -1.0)))
                     wing_wall_openings.append(((wx1, wy1), (wx1, wy2), w_ops_2, (-1.0, 0.0)))
@@ -1494,7 +1499,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wwx, wy2, win_cz)
                             build_window_assembly(bm, center=(wwx, wy2, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+Y',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=False)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
                     # Buffered inside corner at wy1 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
@@ -1505,7 +1510,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wx1, wwy, win_cz)
                             build_window_assembly(bm, center=(wx1, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-X',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 3: Right (wx2, wy1) -> (wx2, wy2) normal (1, 0)
                     # Buffered inside corner at wy1 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
@@ -1516,7 +1521,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wx2, wwy, win_cz)
                             build_window_assembly(bm, center=(wx2, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+X',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
 
                     wing_wall_openings.append(((wx1, wy2), (wx2, wy2), w_ops_1, (0.0, 1.0)))
                     wing_wall_openings.append(((wx1, wy1), (wx1, wy2), w_ops_2, (-1.0, 0.0)))
@@ -1532,7 +1537,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wx1, wwy, win_cz)
                             build_window_assembly(bm, center=(wx1, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-X',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     # Buffered inside corner at wx2 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
@@ -1543,7 +1548,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wwx, wy1, win_cz)
                             build_window_assembly(bm, center=(wwx, wy1, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-Y',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     # Buffered inside corner at wx2 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
@@ -1554,7 +1559,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wwx, wy2, win_cz)
                             build_window_assembly(bm, center=(wwx, wy2, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+Y',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=False)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
 
                     wing_wall_openings.append(((wx1, wy1), (wx1, wy2), w_ops_1, (-1.0, 0.0)))
                     wing_wall_openings.append(((wx1, wy1), (wx2, wy1), w_ops_2, (0.0, -1.0)))
@@ -1570,7 +1575,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wx2, wwy, win_cz)
                             build_window_assembly(bm, center=(wx2, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+X',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     # Buffered inside corner at wx1 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
@@ -1581,7 +1586,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wwx, wy1, win_cz)
                             build_window_assembly(bm, center=(wwx, wy1, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-Y',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     # Buffered inside corner at wx1 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
@@ -1592,7 +1597,7 @@ def generate_building(obj, props):
                             sh_act, sh_cl = get_shutter_info(wwx, wy2, win_cz)
                             build_window_assembly(bm, center=(wwx, wy2, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+Y',
-                                                  has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=False)
+                                                  has_shutters=sh_act, shutters_closed=sh_cl)
 
                     wing_wall_openings.append(((wx2, wy1), (wx2, wy2), w_ops_1, (1.0, 0.0)))
                     wing_wall_openings.append(((wx1, wy1), (wx2, wy1), w_ops_2, (0.0, -1.0)))

@@ -1,7 +1,7 @@
 """
 Doorways, windows, and decorative opening accessories for stylized fantasy buildings.
 Produces walkthrough-ready doorways with adjustable door leaf angles, deep reveals,
-sills, shutters, flower boxes, and iron lanterns.
+sills and shutters.
 """
 
 import bpy
@@ -549,12 +549,12 @@ def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, st
                 loop[uv_layer].uv = Vector((u, v))
 
 def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thickness=0.25,
-                          normal_axis='-Y', has_shutters=True, has_flower_box=False, center_pos=None,
+                          normal_axis='-Y', has_shutters=True, center_pos=None,
                           shutters_closed=False):
     """
     Builds a complete fantasy window opening fixture:
     full wall-depth jamb liner sleeve, exterior casing & stone sill,
-    interior casing frame & sill stool, framed louvered shutters, and flower box.
+    interior casing frame & sill stool and framed louvered shutters.
     Frames straddle the cutout hole edges cleanly to eliminate coplanar fighting.
     """
     if center_pos is not None:
@@ -750,100 +750,7 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
                     pintle_loc, pintle_rot = to_world((hx, hy - 0.008, jamb_cz + hz))
                     create_cylinder(bm, radius=0.014, height=0.06, segments=6, location=pintle_loc, mat_index=MAT_INDEX_IRON)
             
-    if has_flower_box:
-        box_w = win_w + 0.08
-        box_d = 0.22
-        box_h = 0.18
-        sy = -wall_thickness * 0.5 - box_d * 0.5 - 0.04
-        sz = -win_h * 0.5 - box_h * 0.5 + sill_thick * 0.3
-        w_loc, w_rot = to_world((0.0, sy, sz))
-        create_beveled_box(bm, size=(box_w, box_d, box_h), location=w_loc, rotation=w_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-        w_loc_g, w_rot_g = to_world((0.0, sy, sz + box_h * 0.38))
-        create_beveled_box(bm, size=(box_w - 0.04, box_d - 0.04, 0.09), location=w_loc_g, rotation=w_rot_g, mat_index=MAT_INDEX_SHINGLES, bevel_amount=0.015)
 
-def build_iron_lantern(bm, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0)):
-    """
-    Creates an ornate stylized medieval fantasy carriage lantern:
-    - Heavy forged iron wall mounting backplate embedded flush in wall plaster.
-    - Graceful curved wrought-iron scrollwork bracket arm.
-    - Hexagonal carriage lamp cage with vertical ribs, top/bottom collar rings, and glowing core.
-    - Pyramidal iron roof cap with top suspension ring and bottom droplet finial.
-    """
-    cx, cy, cz = location
-    
-    create_beveled_box(
-        bm, size=(0.14, 0.035, 0.38),
-        location=(cx, cy + 0.010, cz),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.006
-    )
-    for bz_off in [-0.14, 0.14]:
-        create_cylinder(
-            bm, radius=0.014, height=0.015, segments=6,
-            location=(cx, cy - 0.010, cz + bz_off),
-            rotation=(1.57, 0.0, 0.0), mat_index=MAT_INDEX_IRON
-        )
-    
-    arm_len = 0.38
-    arm_y = cy - arm_len * 0.5
-    create_beveled_box(
-        bm, size=(0.032, arm_len, 0.032),
-        location=(cx, arm_y, cz + 0.08),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.004
-    )
-    create_beveled_box(
-        bm, size=(0.024, 0.26, 0.024),
-        location=(cx, cy - 0.13, cz - 0.01),
-        rotation=(-0.785, 0.0, 0.0),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.003
-    )
-    create_cylinder(
-        bm, radius=0.035, height=0.024, segments=10,
-        location=(cx, cy - arm_len + 0.02, cz + 0.12),
-        rotation=(0.0, 1.57, 0.0), mat_index=MAT_INDEX_IRON
-    )
-    
-    ly = cy - arm_len + 0.06
-    lz = cz - 0.08
-    
-    create_cylinder(
-        bm, radius=0.035, height=0.016, segments=10,
-        location=(cx, ly, lz + 0.19),
-        rotation=(1.57, 0.0, 0.0), mat_index=MAT_INDEX_IRON
-    )
-    
-    from .mesh_utils import create_cone
-    create_cone(
-        bm, radius1=0.13, radius2=0.03, height=0.09, segments=6,
-        location=(cx, ly, lz + 0.12), mat_index=MAT_INDEX_IRON
-    )
-    
-    create_cylinder(
-        bm, radius=0.092, height=0.20, segments=6,
-        location=(cx, ly, lz), mat_index=MAT_INDEX_GLASS
-    )
-    
-    for i in range(6):
-        ang = (2.0 * math.pi * i) / 6.0
-        rx = cx + 0.095 * math.cos(ang)
-        ry = ly + 0.095 * math.sin(ang)
-        create_box(
-            bm, size=(0.016, 0.016, 0.20),
-            location=(rx, ry, lz), mat_index=MAT_INDEX_IRON
-        )
-    for rz_off in [-0.095, 0.095]:
-        create_cylinder(
-            bm, radius=0.105, height=0.020, segments=6,
-            location=(cx, ly, lz + rz_off), mat_index=MAT_INDEX_IRON
-        )
-        
-    create_cone(
-        bm, radius1=0.04, radius2=0.12, height=0.06, segments=6,
-        location=(cx, ly, lz - 0.12), mat_index=MAT_INDEX_IRON
-    )
-    create_cone(
-        bm, radius1=0.028, radius2=0.005, height=0.06, segments=6,
-        location=(cx, ly, lz - 0.17), mat_index=MAT_INDEX_IRON
-    )
 
 
 

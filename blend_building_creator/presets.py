@@ -62,8 +62,8 @@ PRESETS = {
             'door_angle': 25.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': False,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -118,8 +118,8 @@ PRESETS = {
             'door_angle': 20.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'SWAY',
@@ -143,7 +143,7 @@ PRESETS = {
         'tier': 3,
         'name': "Town Hall (Tier 3)",
         'plot': "40m x 40m",
-        'description': "Grand 3-storey municipal town hall with massive T-cross wing, ashlar stone ground floor, dormers, and ornate lanterns",
+        'description': "Grand 3-storey municipal town hall with massive T-cross wing, ashlar stone ground floor and dormers",
         'settings': {
             'building_shape': 'T_SHAPE',
             'wing_placement': 'FRONT',
@@ -175,8 +175,8 @@ PRESETS = {
             'door_angle': 20.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -281,8 +281,8 @@ PRESETS = {
             'door_angle': 25.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': False,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -338,8 +338,8 @@ PRESETS = {
             'door_angle': 20.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': False,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -539,8 +539,8 @@ PRESETS = {
             'door_angle': 20.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': False,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -593,8 +593,8 @@ PRESETS = {
             'door_angle': 20.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': False,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -649,8 +649,8 @@ PRESETS = {
             'door_angle': 20.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': False,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -701,8 +701,8 @@ PRESETS = {
             'door_angle': 25.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': False,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -725,7 +725,7 @@ PRESETS = {
         'tier': 2,
         'name': "House 1 Small (Tier 2)",
         'plot': "12m x 12m",
-        'description': "Two-storey square half-timbered town cottage with upper overhang, dormers, flowerboxes, and stone plinth",
+        'description': "Two-storey square half-timbered town cottage with upper overhang, dormers and stone plinth",
         'settings': {
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_2',
@@ -753,8 +753,8 @@ PRESETS = {
             'door_angle': 30.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -805,8 +805,8 @@ PRESETS = {
             'door_angle': 25.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -857,8 +857,8 @@ PRESETS = {
             'door_angle': 35.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'SWAY',
@@ -882,7 +882,7 @@ PRESETS = {
         'tier': 2,
         'name': "House 2 Small (Tier 2)",
         'plot': "12m x 12m",
-        'description': "Whimsical 2-storey sway-roof home variant with warm terracotta tones, flowerboxes, dormers, and stone base",
+        'description': "Whimsical 2-storey sway-roof home variant with warm terracotta tones, dormers and stone base",
         'settings': {
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_2',
@@ -910,8 +910,8 @@ PRESETS = {
             'door_angle': 30.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'SWAY',
@@ -935,7 +935,7 @@ PRESETS = {
         'tier': 3,
         'name': "House 2 Small (Tier 3)",
         'plot': "12m x 12m",
-        'description': "Picturesque 2-storey fantasy villa variant with steep swayed slate roof, stone ground floor, dormers, and lanterns",
+        'description': "Picturesque 2-storey fantasy villa variant with steep swayed slate roof, stone ground floor and dormers",
         'settings': {
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_3',
@@ -963,8 +963,8 @@ PRESETS = {
             'door_angle': 25.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'SWAY',
@@ -1016,8 +1016,8 @@ PRESETS = {
             'door_angle': 30.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': False,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -1068,8 +1068,8 @@ PRESETS = {
             'door_angle': 25.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'SWAY',
@@ -1093,7 +1093,7 @@ PRESETS = {
         'tier': 3,
         'name': "House 1 Medium (Tier 3)",
         'plot': "20m x 20m",
-        'description': "Grand 3-storey noble square estate with ashlar stone ground storey, dual dormers, lanterns, and flowerboxes",
+        'description': "Grand 3-storey noble square estate with ashlar stone ground storey and dual dormers",
         'settings': {
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_3',
@@ -1121,8 +1121,8 @@ PRESETS = {
             'door_angle': 20.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -1173,8 +1173,8 @@ PRESETS = {
             'door_angle': 25.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': False,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -1225,8 +1225,8 @@ PRESETS = {
             'door_angle': 30.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'SWAY',
@@ -1278,8 +1278,8 @@ PRESETS = {
             'door_angle': 25.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -1335,8 +1335,8 @@ PRESETS = {
             'door_angle': 30.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',
@@ -1392,8 +1392,8 @@ PRESETS = {
             'door_angle': 25.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'SWAY',
@@ -1450,8 +1450,8 @@ PRESETS = {
             'door_angle': 20.0,
             'has_windows': True,
             'has_shutters': True,
-            'has_flower_boxes': True,
-            'has_lanterns': True,
+
+
             'has_timber_framing': True,
             'timber_diagonals': True,
             'roof_style': 'GABLE',

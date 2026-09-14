@@ -178,7 +178,6 @@ class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
             col.prop(props, "door_width")
             col.prop(props, "door_height")
             col.prop(props, "door_angle", slider=True)
-            col.prop(props, "has_lanterns")
             
         # Windows Box
         box_win = layout.box()
@@ -195,7 +194,6 @@ class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
                 sub.prop(props, "shutter_state")
                 if props.shutter_state == 'PARTIAL':
                     sub.prop(props, "shutter_closed_amount", slider=True)
-            col.prop(props, "has_flower_boxes")
 
         # Timber framing
         box_timber = layout.box()

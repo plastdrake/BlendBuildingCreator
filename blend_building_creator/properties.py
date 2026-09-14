@@ -272,7 +272,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     wonkiness: FloatProperty(
         name="Fantasy Wonkiness",
         description="Whimsical leaning, curvature, and organic asymmetry",
-        min=0.0, max=0.40, default=0.08,
+        min=0.0, max=0.40, default=0.0,
         update=on_property_updated
     )
     
@@ -489,20 +489,6 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         description="Percentage of shutters that are closed when in Selective mode",
         min=0.0, max=1.0, default=0.5,
         subtype='FACTOR',
-        update=on_property_updated
-    )
-    
-    has_flower_boxes: BoolProperty(
-        name="Flower Boxes",
-        description="Flower planter boxes underneath exterior window sills",
-        default=False,
-        update=on_property_updated
-    )
-    
-    has_lanterns: BoolProperty(
-        name="Iron Lanterns",
-        description="Stylized glowing iron lanterns mounted beside entrance",
-        default=False,
         update=on_property_updated
     )
     
