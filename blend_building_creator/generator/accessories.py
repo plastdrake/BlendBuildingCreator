@@ -2418,9 +2418,9 @@ def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0):
             )
         # Heavy timber runner
         create_horizontal_cylinder(
-            bm, radius=0.14, length=skid_l, segments=10,
+            bm, radius_y=0.14, radius_z=0.14, length=skid_l, segments=10,
             location=(sx, sy, z_ground + 0.22),
-            mat_index=MAT_INDEX_TIMBER_FRAME, axis='X'
+            mat_index=MAT_INDEX_TIMBER_FRAME
         )
 
     # 2. Pyramid Stack of 5 Peeled Round Timber Logs on the Skidway
@@ -2432,9 +2432,9 @@ def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0):
         ly = yard_y + (cos_r * off_s)
         lz = z_ground + 0.28 + log_r
         create_horizontal_cylinder(
-            bm, radius=log_r, length=log_l, segments=12,
+            bm, radius_y=log_r, radius_z=log_r, length=log_l, segments=12,
             location=(lx, ly, lz),
-            mat_index=MAT_INDEX_WOOD, axis='X'
+            mat_index=MAT_INDEX_WOOD
         )
     # Middle row of 2 logs
     for off_s in [-0.225, 0.225]:
@@ -2442,15 +2442,15 @@ def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0):
         ly = yard_y + (cos_r * off_s)
         lz = z_ground + 0.28 + log_r * 2.6
         create_horizontal_cylinder(
-            bm, radius=log_r * 0.95, length=log_l * 0.98, segments=12,
+            bm, radius_y=log_r * 0.95, radius_z=log_r * 0.95, length=log_l * 0.98, segments=12,
             location=(lx, ly, lz),
-            mat_index=MAT_INDEX_WOOD, axis='X'
+            mat_index=MAT_INDEX_WOOD
         )
     # Top log
     create_horizontal_cylinder(
-        bm, radius=log_r * 0.90, length=log_l * 0.95, segments=12,
+        bm, radius_y=log_r * 0.90, radius_z=log_r * 0.90, length=log_l * 0.95, segments=12,
         location=(yard_x, yard_y, z_ground + 0.28 + log_r * 4.2),
-        mat_index=MAT_INDEX_WOOD, axis='X'
+        mat_index=MAT_INDEX_WOOD
     )
     # Iron chock wedges at bottom row outer ends
     for chock_s in [-0.72, 0.72]:
@@ -2486,9 +2486,9 @@ def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0):
         )
     # Cut log mounted in the sawbuck cradle
     create_horizontal_cylinder(
-        bm, radius=0.18, length=1.9, segments=10,
+        bm, radius_y=0.18, radius_z=0.18, length=1.9, segments=10,
         location=(sb_x, sb_y, z_ground + 0.72),
-        mat_index=MAT_INDEX_WOOD, axis='X'
+        mat_index=MAT_INDEX_WOOD
     )
 
     # 4. Neatly Stickered Stacks of Cut Lumber Planks

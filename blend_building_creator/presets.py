@@ -1522,7 +1522,7 @@ BUILDING_FAMILIES = [
         'category': 'MILITARY',
         'plot': "40m x 40m",
         'shape': "U-Shaped",
-        'icon': 'SHIELD',
+        'icon': 'GROUP',
         'tiers': [
             ('T1', 'INFANTRY_BARRACKS_T1', "Tier 1: Garrison Camp & Courtyard"),
             ('T2', 'INFANTRY_BARRACKS_T2', "Tier 2: 2-Storey Garrison Base"),
