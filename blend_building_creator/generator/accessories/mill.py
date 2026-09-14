@@ -113,11 +113,13 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
     # Chain drive runs outboard of the treadwheel A-frame legs
     # Pulley system height is now anchored to lowered_arbor_z
     pulley_y = mill_cy + wheel_w * 0.5 + 0.68
-    pulley_z = lowered_arbor_z
 
     num_benches = 2 if grade == 'GRADE_3' else 1
     bench_spacing_y = 1.2 if grade == 'GRADE_3' else 0.0
+    # Deep clearance: shaft sits well below table so logs pass cleanly
     lowered_arbor_z = bench_top - 0.20
+    pulley_z = lowered_arbor_z
+
     for b_idx in range(num_benches):
         y_off = (b_idx - 0.5) * bench_spacing_y
         b_mill_cy = mill_cy + y_off
@@ -204,6 +206,7 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
         rotation=(0.0, 0.0, 1.5708),
         mat_index=MAT_INDEX_IRON
     )
+    # Vertical supports for the shaft (now adjusted for lowered height)
     for by in (mill_cy - 0.38, mill_cy + 0.38):
         bh = abs(lowered_arbor_z - bench_top) + 0.20
         create_beveled_box(
@@ -211,7 +214,23 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
             location=(blade_x, by, bench_top - 0.10 + bh * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
-    create_cylinder(
+    # Support pillar for the shaft next to the pulley
+    create_beveled_box(
+        bm, size=(0.20, 0.20, abs(lowered_arbor_z - z_floor)),
+        location=(blade_x, pulley_y, (lowered_arbor_z + z_floor) * 0.5),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01
+    )
+
+    # Grooved pulley helper: creates a rim + inner core to form a chain groove
+    def create_grooved_pulley(bm, radius, height, location, rotation, mat_index):
+        # Outer rim
+        create_cylinder(bm, radius=radius, height=height, segments=16,
+                        location=location, rotation=rotation, mat_index=mat_index)
+        # Inner core (creates the groove)
+        create_cylinder(bm, radius=radius * 0.7, height=height + 0.02, segments=16,
+                        location=location, rotation=rotation, mat_index=mat_index)
+
+    create_grooved_pulley(
         bm, radius=0.16, height=0.10, segments=12,
         location=(blade_x, pulley_y, pulley_z),
         rotation=(1.5708, 0.0, 0.0),
@@ -271,7 +290,8 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
         rotation=(0.0, 0.0, 1.5708),
         mat_index=MAT_INDEX_TIMBER
     )
-    create_cylinder(
+    # Large drive pulley on wheel axle (also grooved)
+    create_grooved_pulley(
         bm, radius=0.30, height=0.10, segments=14,
         location=(wheel_x, pulley_y, axle_z),
         rotation=(1.5708, 0.0, 0.0),
