@@ -1041,7 +1041,10 @@ def generate_building(obj, props):
                         build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+X')
 
         # Interior walk-through portals between main building and wings
-        if fl_has_wing:
+        # Open-timber pavilions (Warehouse/Lumbermill T1) have no walls, so the
+        # arcade posts already leave the junction fully open - skip the floating
+        # jamb/lintel/threshold frame that otherwise hovers mid-room.
+        if fl_has_wing and not open_timber:
             for w_elem, (w_xmin, w_xmax, w_ymin, w_ymax) in zip(wings, fl_wings_bounds):
                 w_wall = w_elem['wall']
                 jamb_w = 0.18

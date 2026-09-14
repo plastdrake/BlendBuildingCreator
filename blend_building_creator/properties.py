@@ -282,7 +282,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('AUTO', "Auto (From Preset)", "Use specialized features defined by the selected preset"),
             ('NONE', "None (Standard)", "Standard fantasy building without archetype additions"),
-            ('WAREHOUSE', "Warehouse Crane & Cargo", "L-shaped courtyard timber swivel crane, cargo crates, and loading bays"),
+            ('WAREHOUSE', "Warehouse Crane & Cargo", "L-shaped courtyard timber swivel crane and loading bays"),
             ('LUMBERMILL', "Lumbermill Workframe", "Open timber work pavilion, log skids, and timber framing"),
             ('BLACKSMITH', "Blacksmith Forge", "Outdoor forge lean-to canopy, stone furnace with chimney, and metal anvil"),
             ('WINDMILL', "Windmill Sails", "4-blade rotating lattice timber windmill rotor on upper facade"),
