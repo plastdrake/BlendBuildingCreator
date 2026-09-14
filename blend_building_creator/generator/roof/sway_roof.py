@@ -120,14 +120,19 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
                 rz = z_base + roof_height - sag
                 z_val = rz - drop * (rz - ez)
                 
-                # Inward normal for deck thickness
-                d_drop = (1.0 - roof_flare) + 2.0 * roof_flare * (1.0 - u)
-                dz_du = -d_drop * (rz - ez)
-                dx_du = side * half_w
-                inward = Vector((dz_du * side, 0.0, -abs(dx_du))).normalized() * deck_thick if (dx_du**2 + dz_du**2) > 1e-6 else Vector((0, 0, -deck_thick))
+                # Inward normal for deck thickness (plumb cut at ridge so slopes never overlap)
+                if k == 0:
+                    bot_pos = Vector((cx, y_val, z_val - deck_thick))
+                else:
+                    d_drop = (1.0 - roof_flare) + 2.0 * roof_flare * (1.0 - u)
+                    dz_du = -d_drop * (rz - ez)
+                    dx_du = side * half_w
+                    inward = Vector((dz_du * side, 0.0, -abs(dx_du))).normalized() * deck_thick if (dx_du**2 + dz_du**2) > 1e-6 else Vector((0, 0, -deck_thick))
+                    bot_x = min(cx, x_val + inward.x) if side < 0 else max(cx, x_val + inward.x)
+                    bot_pos = Vector((bot_x, y_val + inward.y, z_val + inward.z))
                 
                 row_top.append(bm.verts.new(Vector((x_val, y_val, z_val + 0.05))))
-                row_bot.append(bm.verts.new(Vector((x_val, y_val, z_val)) + inward))
+                row_bot.append(bm.verts.new(bot_pos))
             grid_top.append(row_top)
             grid_bot.append(row_bot)
             

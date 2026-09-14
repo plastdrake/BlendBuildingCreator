@@ -137,86 +137,62 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     )
 
     # 3. Front Window & Flush Vertical Siding (Apron)
-    clear_w = dormer_w - col_w * 2.0
-    win_w = max(0.48, clear_w - 0.04)
-    win_h = max(0.38, dormer_h * 0.44)
+    # Window spans directly between structural corner posts and collar tie beam (no redundant inner casing)
+    post_clear_w = max(0.48, dormer_w - col_w * 2.0 + 0.02)
+    win_h = max(0.40, dormer_h * 0.46)
     win_top_z = collar_z - 0.06
     win_bot_z = win_top_z - win_h
     win_cz = (win_top_z + win_bot_z) * 0.5
 
-    # Window Perimeter Timber Casing (full rectangular frame: chunky jambs lapping
-    # past the sill into the apron, with top and bottom rails between them)
-    casing_w = 0.09
-    casing_t = col_w + 0.02
-
-    # Left and Right Casing Jambs: full height, lapping below the sill line
-    j_bot = win_bot_z - casing_w
-    j_top = win_top_z + casing_w
-    j_h = j_top - j_bot
-    j_cz = (j_top + j_bot) * 0.5
-    for s_sign in [-1, 1]:
-        j_pos = to_w(front_xf, s_sign * (win_w * 0.5 + casing_w * 0.5), j_cz)
-        create_beveled_box(
-            bm,
-            size=(casing_t, casing_w, j_h),
-            location=j_pos,
-            rotation=(0.0, 0.0, rot_z),
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.008
-        )
-    # Top Casing Rail
-    r_pos = to_w(front_xf, 0.0, win_top_z + casing_w * 0.5)
+    # Heavy Timber Sill Bar below the window (straddles corner posts and apron)
+    sill_h = 0.09
+    sill_w = post_clear_w + 0.06
+    sill_d = col_w + 0.03
+    sill_pos = to_w(front_xf + 0.015, 0.0, win_bot_z - sill_h * 0.5)
     create_beveled_box(
         bm,
-        size=(casing_t, win_w, casing_w),
-        location=r_pos,
+        size=(sill_d, sill_w, sill_h),
+        location=sill_pos,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.008
-    )
-    # Bottom Sill Rail (was missing: glass used to sit straight on the apron)
-    b_pos = to_w(front_xf + 0.01, 0.0, win_bot_z - casing_w * 0.5)
-    create_beveled_box(
-        bm,
-        size=(casing_t + 0.02, win_w + 0.04, casing_w),
-        location=b_pos,
-        rotation=(0.0, 0.0, rot_z),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.008
+        bevel_amount=0.010
     )
 
-    # Window Glass Pane
+    # Window Glass Pane (generously embedded 2cm into collar beam, posts, and sill: zero gaps!)
+    glass_w = post_clear_w + 0.04
+    glass_h = win_h + 0.04
     create_box(
         bm,
-        size=(0.04, win_w - 0.02, win_h - 0.02),
-        location=to_w(front_xf, 0.0, win_cz),
+        size=(0.025, glass_w, glass_h),
+        location=to_w(front_xf - 0.015, 0.0, win_cz),
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_GLASS
     )
-    # 4-Pane Muntins (2x2 Grid)
+
+    # 4-Pane Muntins (2x2 Grid, recessed with glass and embedded into frame)
     create_box(
         bm,
-        size=(0.055, 0.032, win_h - 0.02),
-        location=to_w(front_xf, 0.0, win_cz),
+        size=(0.035, 0.032, glass_h),
+        location=to_w(front_xf - 0.010, 0.0, win_cz),
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER
     )
     create_box(
         bm,
-        size=(0.055, win_w - 0.02, 0.032),
-        location=to_w(front_xf, 0.0, win_cz),
+        size=(0.035, glass_w, 0.032),
+        location=to_w(front_xf - 0.010, 0.0, win_cz),
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER
     )
 
-    # Solid Flush Vertical Board Apron below Window (extends into attic, uninterrupted by extra sills)
-    apron_top_z = win_bot_z
+    # Solid Flush Vertical Board Apron below Sill (embedded into corner posts, recessed to prevent z-fighting)
+    apron_top_z = win_bot_z - sill_h
     apron_bot_z = z_base - 0.85
     apron_h = apron_top_z - apron_bot_z
     apron_pos = to_w(front_xf - 0.02, 0.0, apron_bot_z + apron_h * 0.5)
     apron_faces = create_beveled_box(
         bm,
-        size=(col_w - 0.04, clear_w + 0.02, apron_h),
+        size=(col_w - 0.04, post_clear_w + 0.04, apron_h),
         location=apron_pos,
         rotation=(0.0, 0.0, rot_z),
         mat_index=dormer_wall_mat,
@@ -328,8 +304,12 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
             dy_du = side_sign * roof_half_w
             dz_du = (get_flare_z(u_plus) - get_flare_z(u_minus)) / (u_plus - u_minus)
             n_len_2d = math.sqrt(dy_du * dy_du + dz_du * dz_du)
-            if n_len_2d > 1e-5:
-                in_ys = (dz_du / n_len_2d) * side_sign * deck_thick
+            if k == 0:
+                in_ys = 0.0
+                in_z = -deck_thick
+            elif n_len_2d > 1e-5:
+                raw_in_ys = (dz_du / n_len_2d) * side_sign * deck_thick
+                in_ys = max(-y_s, raw_in_ys) if side_sign > 0 else min(-y_s, raw_in_ys)
                 in_z = (-abs(dy_du) / n_len_2d) * deck_thick
             else:
                 in_ys = 0.0
