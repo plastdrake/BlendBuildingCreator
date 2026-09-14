@@ -2055,6 +2055,42 @@ def build_cargo_port_frame(bm, face_x, outward_sgn, cy, portal_w, portal_h, z_fl
         location=(face_x, cy, z_floor + 0.06),
         mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01
     )
+    # Loading platform outside the portal: wooden deck on posts for crane
+    # drop-off, top flush with the stone sill.
+    deck_top = z_floor + 0.12
+    deck_t = 0.14
+    deck_w = portal_w + 0.6
+    deck_d = 1.5
+    deck_inner = face_x + outward_sgn * (wall_t * 0.5)
+    deck_cx = deck_inner + outward_sgn * (deck_d * 0.5)
+    create_beveled_box(
+        bm, size=(deck_d, deck_w, deck_t),
+        location=(deck_cx, cy, deck_top - deck_t * 0.5),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.01
+    )
+    # Rim beams under the deck edges
+    rim_z = deck_top - deck_t - 0.06
+    create_beveled_box(
+        bm, size=(0.12, deck_w - 0.10, 0.12),
+        location=(deck_inner + outward_sgn * (deck_d - 0.14), cy, rim_z),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+    )
+    for rs in (-1.0, 1.0):
+        create_beveled_box(
+            bm, size=(deck_d - 0.10, 0.12, 0.12),
+            location=(deck_cx, cy + rs * (deck_w * 0.5 - 0.12), rim_z),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+    # Support posts down to the ground
+    post_h = deck_top - deck_t
+    if post_h > 0.15:
+        for px in (0.20, deck_d - 0.20):
+            for py in (-(deck_w * 0.5 - 0.20), deck_w * 0.5 - 0.20):
+                create_beveled_box(
+                    bm, size=(0.15, 0.15, post_h),
+                    location=(deck_inner + outward_sgn * px, cy + py, post_h * 0.5),
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+                )
 
 
 def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib_length=3.4, rot_angle=0.45):
