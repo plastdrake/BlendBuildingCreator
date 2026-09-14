@@ -7,10 +7,11 @@ import sys
 import os
 import bpy
 
-# Ensure current directory is in sys.path
-addon_dir = os.path.dirname(os.path.abspath(__file__))
-if addon_dir not in sys.path:
-    sys.path.insert(0, addon_dir)
+# Ensure repo root is in sys.path (script lives in tools/)
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+addon_dir = repo_root
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
 
 import blend_building_creator
 

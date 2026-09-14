@@ -2,9 +2,10 @@ import os
 import shutil
 import zipfile
 
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 appdata = os.environ.get("APPDATA", "")
 blender_root = os.path.join(appdata, "Blender Foundation", "Blender")
-src_dir = r"d:\BlendBuildingCreator\blend_building_creator"
+src_dir = os.path.join(repo_root, "blend_building_creator")
 
 targets = [
     os.path.join(blender_root, "5.2", "extensions", "user_default", "blend_building_creator"),
@@ -25,7 +26,7 @@ for t in targets:
         shutil.copytree(src_dir, t)
         print(f"Successfully updated: {t}")
 
-zip_path = r"d:\BlendBuildingCreator\blend_building_creator.zip"
+zip_path = os.path.join(repo_root, "blend_building_creator.zip")
 if os.path.exists(zip_path):
     os.remove(zip_path)
 

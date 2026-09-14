@@ -11,9 +11,9 @@ for obj in list(bpy.context.scene.objects):
     bpy.data.objects.remove(obj, do_unlink=True)
 
 import sys
-script_dir = os.path.dirname(os.path.abspath(__file__))
-if script_dir not in sys.path:
-    sys.path.insert(0, script_dir)
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
 
 import blend_building_creator
 try:
@@ -65,7 +65,7 @@ cam_obj.location = (15.0, -18.0, 10.0)
 cam_obj.rotation_euler = (math.radians(63), 0, math.radians(40))
 bpy.context.scene.camera = cam_obj
 
-out_ext = os.path.join(os.path.dirname(__file__), "preview_exterior.png")
+out_ext = os.path.join(repo_root, "preview_exterior.png")
 bpy.context.scene.render.filepath = out_ext
 bpy.ops.render.render(write_still=True)
 print("EXTERIOR RENDER COMPLETE:", out_ext)
@@ -88,7 +88,7 @@ warm_light_obj = bpy.data.objects.new(name="InteriorLight", object_data=warm_lig
 bpy.context.scene.collection.objects.link(warm_light_obj)
 warm_light_obj.location = (0.0, 0.0, 2.3)
 
-out_int = os.path.join(os.path.dirname(__file__), "preview_interior.png")
+out_int = os.path.join(repo_root, "preview_interior.png")
 bpy.context.scene.render.filepath = out_int
 bpy.ops.render.render(write_still=True)
 print("INTERIOR RENDER COMPLETE:", out_int)
