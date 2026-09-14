@@ -209,7 +209,7 @@ class BUILDING_OT_apply_preset(bpy.types.Operator):
     bl_label = "Apply Preset"
     bl_options = {'REGISTER', 'UNDO'}
     
-    preset_key: bpy.props.StringProperty(name="Preset Key", default="TAVERN")
+    preset_key: bpy.props.StringProperty(name="Preset Key", default="TOWN_HALL_T1")
     
     def execute(self, context):
         props = context.scene.fantasy_building_settings

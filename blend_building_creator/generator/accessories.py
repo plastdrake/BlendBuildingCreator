@@ -2018,3 +2018,461 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
     )
 
 
+def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=5.2, jib_length=4.2, rot_angle=0.45):
+    """
+    Builds an authentic fantasy medieval courtyard swivel crane in the open loading yard:
+    - Ground flagstone plinth pad and heavy cross-timber ground sleepers.
+    - Central vertical kingpost mast with forged iron pivot bands.
+    - 4 diagonal timber struts bracing the mast to the sleeper ends.
+    - Diagonal timber jib boom extending over the courtyard with support strut.
+    - Pulley sheave at jib tip with iron housing.
+    - Winch windlass drum with crank spoke wheel and coiled rope.
+    - Hanging rope and forged iron cargo hook.
+    - Grounded cargo crates and storage barrels at the base.
+    """
+    cos_r = math.cos(rot_angle)
+    sin_r = math.sin(rot_angle)
+    
+    # 1. Ground Flagstone Octagonal Base
+    pad_h = 0.18
+    pad_r = 1.45
+    create_cylinder(
+        bm, radius=pad_r, height=pad_h, segments=12,
+        location=(yard_x, yard_y, z_ground + pad_h * 0.5),
+        mat_index=MAT_INDEX_STONE
+    )
+    # Beveled edge rim
+    create_beveled_box(
+        bm, size=(pad_r * 1.8, pad_r * 1.8, 0.08),
+        location=(yard_x, yard_y, z_ground + pad_h + 0.04),
+        mat_index=MAT_INDEX_STONE, bevel_amount=0.02
+    )
+
+    base_z = z_ground + pad_h + 0.08
+
+    # 2. Heavy Cross-Timber Ground Sleepers (cruciform foundation beams)
+    beam_w = 0.28
+    beam_h = 0.24
+    beam_l = 2.40
+    # Beam 1 (along rot_angle)
+    create_beveled_box(
+        bm, size=(beam_l, beam_w, beam_h),
+        location=(yard_x, yard_y, base_z + beam_h * 0.5),
+        rotation=(0.0, 0.0, rot_angle),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+    )
+    # Beam 2 (perpendicular)
+    create_beveled_box(
+        bm, size=(beam_w, beam_l, beam_h),
+        location=(yard_x, yard_y, base_z + beam_h * 0.5),
+        rotation=(0.0, 0.0, rot_angle),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+    )
+    # Iron central cross plate
+    create_beveled_box(
+        bm, size=(0.48, 0.48, 0.04),
+        location=(yard_x, yard_y, base_z + beam_h + 0.02),
+        rotation=(0.0, 0.0, rot_angle),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.005
+    )
+
+    # 3. Heavy Central Mast (Kingpost)
+    mast_z0 = base_z + beam_h
+    mast_mid_z = mast_z0 + mast_height * 0.5
+    mast_w = 0.32
+    create_beveled_box(
+        bm, size=(mast_w, mast_w, mast_height),
+        location=(yard_x, yard_y, mast_mid_z),
+        rotation=(0.0, 0.0, rot_angle),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.02
+    )
+    # Iron reinforcing collar rings on mast
+    for ring_z in [mast_z0 + 0.9, mast_z0 + 2.6, mast_z0 + mast_height - 0.25]:
+        create_cylinder(
+            bm, radius=mast_w * 0.72, height=0.08, segments=12,
+            location=(yard_x, yard_y, ring_z),
+            mat_index=MAT_INDEX_IRON
+        )
+    # Mast top iron cap and finial pin
+    create_cylinder(
+        bm, radius=0.06, height=0.35, segments=8,
+        location=(yard_x, yard_y, mast_z0 + mast_height + 0.175),
+        mat_index=MAT_INDEX_IRON
+    )
+
+    # 4. 4 Diagonal Timber Base Struts (bracing sleepers to mast)
+    strut_dist = beam_l * 0.42
+    strut_h = 1.45
+    strut_len = math.sqrt(strut_dist * strut_dist + strut_h * strut_h)
+    strut_pitch = math.atan2(strut_h, strut_dist)
+
+    for i in range(4):
+        ang = rot_angle + i * (math.pi * 0.5)
+        ca = math.cos(ang)
+        sa = math.sin(ang)
+        mx = yard_x + ca * (strut_dist * 0.5)
+        my = yard_y + sa * (strut_dist * 0.5)
+        mz = mast_z0 + strut_h * 0.5
+        
+        # Orient strut along the angle
+        create_beveled_box(
+            bm, size=(0.16, 0.16, strut_len),
+            location=(mx, my, mz),
+            rotation=(0.0, (math.pi * 0.5 - strut_pitch), ang),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+        )
+
+    # 5. Projecting Diagonal Timber Jib Boom
+    jib_elev = math.radians(48.0) # ~48 degrees elevation
+    jib_attach_z = mast_z0 + 2.55
+    jib_dx = math.cos(jib_elev) * jib_length
+    jib_dz = math.sin(jib_elev) * jib_length
+    
+    jib_tip_x = yard_x + cos_r * jib_dx
+    jib_tip_y = yard_y + sin_r * jib_dx
+    jib_tip_z = jib_attach_z + jib_dz
+    
+    jib_mid_x = (yard_x + jib_tip_x) * 0.5
+    jib_mid_y = (yard_y + jib_tip_y) * 0.5
+    jib_mid_z = (jib_attach_z + jib_tip_z) * 0.5
+    
+    create_beveled_box(
+        bm, size=(0.22, 0.22, jib_length),
+        location=(jib_mid_x, jib_mid_y, jib_mid_z),
+        rotation=(0.0, (math.pi * 0.5 - jib_elev), rot_angle),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.015
+    )
+
+    # Jib timber strut brace (supporting boom from lower knuckle)
+    brace_len = jib_length * 0.55
+    brace_mid_x = yard_x + cos_r * (jib_dx * 0.35)
+    brace_mid_y = yard_y + sin_r * (jib_dx * 0.35)
+    brace_mid_z = mast_z0 + 1.6 + (jib_dz * 0.28)
+    create_beveled_box(
+        bm, size=(0.15, 0.15, brace_len),
+        location=(brace_mid_x, brace_mid_y, brace_mid_z),
+        rotation=(0.0, (math.pi * 0.5 - jib_elev * 1.15), rot_angle),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+    )
+
+    # 6. Pulley Wheel Assembly at Jib Tip
+    # Iron side mounting plates
+    for side_sign in [-1, 1]:
+        px_off = -sin_r * (side_sign * 0.12)
+        py_off = cos_r * (side_sign * 0.12)
+        create_beveled_box(
+            bm, size=(0.015, 0.14, 0.28),
+            location=(jib_tip_x + px_off, jib_tip_y + py_off, jib_tip_z - 0.05),
+            rotation=(0.0, 0.0, rot_angle),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.003
+        )
+    # Pulley axle pin
+    create_cylinder(
+        bm, radius=0.035, height=0.28, segments=8,
+        location=(jib_tip_x, jib_tip_y, jib_tip_z - 0.05),
+        rotation=(0.0, math.pi * 0.5, rot_angle),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Pulley sheave wheel
+    create_cylinder(
+        bm, radius=0.18, height=0.06, segments=12,
+        location=(jib_tip_x, jib_tip_y, jib_tip_z - 0.05),
+        rotation=(0.0, math.pi * 0.5, rot_angle),
+        mat_index=MAT_INDEX_WOOD
+    )
+
+    # 7. Winch Windlass Drum on Central Mast
+    winch_z = mast_z0 + 1.25
+    # Drum axle extending through mast
+    create_cylinder(
+        bm, radius=0.045, height=mast_w + 0.65, segments=8,
+        location=(yard_x, yard_y, winch_z),
+        rotation=(0.0, math.pi * 0.5, rot_angle + math.pi * 0.5),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Wooden rope spool drum
+    create_cylinder(
+        bm, radius=0.18, height=0.38, segments=12,
+        location=(yard_x - cos_r * 0.28, yard_y - sin_r * 0.28, winch_z),
+        rotation=(0.0, math.pi * 0.5, rot_angle),
+        mat_index=MAT_INDEX_TIMBER
+    )
+    # Coiled hemp rope on drum
+    create_cylinder(
+        bm, radius=0.20, height=0.30, segments=12,
+        location=(yard_x - cos_r * 0.28, yard_y - sin_r * 0.28, winch_z),
+        rotation=(0.0, math.pi * 0.5, rot_angle),
+        mat_index=MAT_INDEX_WOOD
+    )
+    # Spoke wheel crank handles on sides of winch
+    for side_s in [-1, 1]:
+        hx = yard_x + (-sin_r * side_s * (mast_w * 0.5 + 0.32))
+        hy = yard_y + (cos_r * side_s * (mast_w * 0.5 + 0.32))
+        # Hub
+        create_cylinder(
+            bm, radius=0.07, height=0.04, segments=8,
+            location=(hx, hy, winch_z),
+            rotation=(0.0, math.pi * 0.5, rot_angle + math.pi * 0.5),
+            mat_index=MAT_INDEX_IRON
+        )
+        # 4 spokes
+        for sp_i in range(4):
+            sp_a = rot_angle + sp_i * (math.pi * 0.5)
+            sp_x = hx + math.cos(sp_a) * 0.24
+            sp_z = winch_z + math.sin(sp_a) * 0.24
+            create_beveled_box(
+                bm, size=(0.48, 0.04, 0.04),
+                location=(hx, hy, winch_z),
+                rotation=(sp_i * (math.pi * 0.5), 0.0, rot_angle),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+            )
+            # Peg handles
+            create_cylinder(
+                bm, radius=0.022, height=0.12, segments=6,
+                location=(sp_x, hy - sin_r * side_s * 0.06, sp_z),
+                rotation=(0.0, math.pi * 0.5, rot_angle + math.pi * 0.5),
+                mat_index=MAT_INDEX_WOOD
+            )
+
+    # 8. Suspended Cable & Iron Cargo Hook
+    hook_drop = jib_dz * 0.75
+    cable_h = hook_drop
+    cable_mid_z = jib_tip_z - 0.15 - cable_h * 0.5
+    create_cylinder(
+        bm, radius=0.016, height=cable_h, segments=8,
+        location=(jib_tip_x, jib_tip_y, cable_mid_z),
+        mat_index=MAT_INDEX_IRON
+    )
+    
+    # Curved Forged Iron Cargo J-Hook
+    hook_top_z = cable_mid_z - cable_h * 0.5
+    # Eyelet ring
+    create_cylinder(
+        bm, radius=0.055, height=0.03, segments=12,
+        location=(jib_tip_x, jib_tip_y, hook_top_z),
+        rotation=(math.pi * 0.5, 0.0, rot_angle),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Shank
+    shank_h = 0.20
+    create_cylinder(
+        bm, radius=0.032, height=shank_h, segments=8,
+        location=(jib_tip_x, jib_tip_y, hook_top_z - shank_h * 0.5),
+        mat_index=MAT_INDEX_IRON
+    )
+    # J-curve belly
+    throat_r = 0.12
+    center_y = jib_tip_y + cos_r * throat_r
+    center_x = jib_tip_x - sin_r * throat_r
+    center_z = hook_top_z - shank_h
+    
+    arc_segs = 10
+    for step in range(arc_segs):
+        t1 = step / float(arc_segs)
+        t2 = (step + 1) / float(arc_segs)
+        phi1 = -math.pi + t1 * math.pi
+        phi2 = -math.pi + t2 * math.pi
+        
+        c1x = center_x - sin_r * throat_r * math.cos(phi1)
+        c1y = center_y + cos_r * throat_r * math.cos(phi1)
+        c1z = center_z + throat_r * math.sin(phi1)
+        
+        c2x = center_x - sin_r * throat_r * math.cos(phi2)
+        c2y = center_y + cos_r * throat_r * math.cos(phi2)
+        c2z = center_z + throat_r * math.sin(phi2)
+        
+        seg_len = math.sqrt((c2x-c1x)**2 + (c2y-c1y)**2 + (c2z-c1z)**2)
+        create_cylinder(
+            bm, radius=0.030 * (1.0 - t1 * 0.35), height=seg_len + 0.01, segments=6,
+            location=((c1x+c2x)*0.5, (c1y+c2y)*0.5, (c1z+c2z)*0.5),
+            rotation=(math.atan2(c2z-c1z, math.sqrt((c2x-c1x)**2+(c2y-c1y)**2)), 0.0, rot_angle),
+            mat_index=MAT_INDEX_IRON
+        )
+
+    # 9. Grounded Cargo Stacks at Crane Footing
+    # Slatted loading pallet
+    pallet_x = yard_x + cos_r * 1.1 - sin_r * 0.7
+    pallet_y = yard_y + sin_r * 1.1 + cos_r * 0.7
+    create_beveled_box(
+        bm, size=(1.25, 0.95, 0.14),
+        location=(pallet_x, pallet_y, z_ground + 0.07),
+        rotation=(0.0, 0.0, rot_angle + 0.15),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.01
+    )
+    # Heavy wooden shipping crate on pallet
+    create_beveled_box(
+        bm, size=(0.85, 0.85, 0.85),
+        location=(pallet_x, pallet_y, z_ground + 0.14 + 0.425),
+        rotation=(0.0, 0.0, rot_angle + 0.15),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+    )
+    # Iron strapping on crate
+    create_box(
+        bm, size=(0.87, 0.08, 0.87),
+        location=(pallet_x, pallet_y, z_ground + 0.14 + 0.425),
+        rotation=(0.0, 0.0, rot_angle + 0.15),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Second smaller stacked crate
+    create_beveled_box(
+        bm, size=(0.55, 0.55, 0.55),
+        location=(pallet_x + 0.05, pallet_y + 0.05, z_ground + 0.14 + 0.85 + 0.275),
+        rotation=(0.0, 0.0, rot_angle - 0.20),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+    )
+    # Wooden storage barrels
+    for bx_off, by_off in [(0.9, -1.0), (1.4, -0.7)]:
+        bx = yard_x + cos_r * bx_off - sin_r * by_off
+        by = yard_y + sin_r * bx_off + cos_r * by_off
+        create_cylinder(
+            bm, radius=0.32, height=0.80, segments=12,
+            location=(bx, by, z_ground + 0.40),
+            mat_index=MAT_INDEX_TIMBER
+        )
+        create_cylinder(
+            bm, radius=0.326, height=0.05, segments=12,
+            location=(bx, by, z_ground + 0.20),
+            mat_index=MAT_INDEX_IRON
+        )
+        create_cylinder(
+            bm, radius=0.326, height=0.05, segments=12,
+            location=(bx, by, z_ground + 0.60),
+            mat_index=MAT_INDEX_IRON
+        )
+
+
+def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0):
+    """
+    Builds an authentic fantasy timber lumbermill yard in the open courtyard:
+    - Heavy log skidway rails resting on stone sleepers.
+    - Pyramid stack of peeled timber round logs with wedge chocks.
+    - Heavy timber sawing trestle / sawbuck with a log segment mounted.
+    - Neatly stickered stacks of milled lumber planks.
+    """
+    cos_r = math.cos(rot_angle)
+    sin_r = math.sin(rot_angle)
+
+    # 1. Timber Log Skidway (two angled log runners on ground stone pads)
+    skid_l = 3.6
+    skid_w = 1.6
+    for side_s in [-0.5, 0.5]:
+        sx = yard_x + (-sin_r * side_s * skid_w)
+        sy = yard_y + (cos_r * side_s * skid_w)
+        # Ground stone pads
+        for t_pad in [-0.4, 0.4]:
+            px = sx + cos_r * (skid_l * t_pad)
+            py = sy + sin_r * (skid_l * t_pad)
+            create_beveled_box(
+                bm, size=(0.42, 0.42, 0.16),
+                location=(px, py, z_ground + 0.08),
+                rotation=(0.0, 0.0, rot_angle),
+                mat_index=MAT_INDEX_STONE, bevel_amount=0.02
+            )
+        # Heavy timber runner
+        create_horizontal_cylinder(
+            bm, radius=0.14, length=skid_l, segments=10,
+            location=(sx, sy, z_ground + 0.22),
+            mat_index=MAT_INDEX_TIMBER_FRAME, axis='X'
+        )
+
+    # 2. Pyramid Stack of 5 Peeled Round Timber Logs on the Skidway
+    log_r = 0.22
+    log_l = 3.2
+    # Bottom row of 3 logs
+    for idx, off_s in enumerate([-0.45, 0.0, 0.45]):
+        lx = yard_x + (-sin_r * off_s)
+        ly = yard_y + (cos_r * off_s)
+        lz = z_ground + 0.28 + log_r
+        create_horizontal_cylinder(
+            bm, radius=log_r, length=log_l, segments=12,
+            location=(lx, ly, lz),
+            mat_index=MAT_INDEX_WOOD, axis='X'
+        )
+    # Middle row of 2 logs
+    for off_s in [-0.225, 0.225]:
+        lx = yard_x + (-sin_r * off_s)
+        ly = yard_y + (cos_r * off_s)
+        lz = z_ground + 0.28 + log_r * 2.6
+        create_horizontal_cylinder(
+            bm, radius=log_r * 0.95, length=log_l * 0.98, segments=12,
+            location=(lx, ly, lz),
+            mat_index=MAT_INDEX_WOOD, axis='X'
+        )
+    # Top log
+    create_horizontal_cylinder(
+        bm, radius=log_r * 0.90, length=log_l * 0.95, segments=12,
+        location=(yard_x, yard_y, z_ground + 0.28 + log_r * 4.2),
+        mat_index=MAT_INDEX_WOOD, axis='X'
+    )
+    # Iron chock wedges at bottom row outer ends
+    for chock_s in [-0.72, 0.72]:
+        cx = yard_x + (-sin_r * chock_s)
+        cy = yard_y + (cos_r * chock_s)
+        create_beveled_box(
+            bm, size=(0.35, 0.20, 0.22),
+            location=(cx, cy, z_ground + 0.24),
+            rotation=(0.0, 0.0, rot_angle),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.01
+        )
+
+    # 3. Timber Sawbuck / Sawing Trestles
+    sb_x = yard_x + cos_r * 2.2 - sin_r * 1.5
+    sb_y = yard_y + sin_r * 2.2 + cos_r * 1.5
+    for trestle_off in [-0.65, 0.65]:
+        tx = sb_x + cos_r * trestle_off
+        ty = sb_y + sin_r * trestle_off
+        # X-frame cross legs
+        for leg_rot in [-0.55, 0.55]:
+            create_beveled_box(
+                bm, size=(0.12, 0.12, 1.10),
+                location=(tx, ty, z_ground + 0.50),
+                rotation=(leg_rot, 0.0, rot_angle + math.pi * 0.5),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+            )
+        # Iron pivot pin bolt
+        create_cylinder(
+            bm, radius=0.025, height=0.28, segments=8,
+            location=(tx, ty, z_ground + 0.55),
+            rotation=(0.0, math.pi * 0.5, rot_angle),
+            mat_index=MAT_INDEX_IRON
+        )
+    # Cut log mounted in the sawbuck cradle
+    create_horizontal_cylinder(
+        bm, radius=0.18, length=1.9, segments=10,
+        location=(sb_x, sb_y, z_ground + 0.72),
+        mat_index=MAT_INDEX_WOOD, axis='X'
+    )
+
+    # 4. Neatly Stickered Stacks of Cut Lumber Planks
+    plank_x = yard_x - cos_r * 1.8 - sin_r * 1.4
+    plank_y = yard_y - sin_r * 1.8 + cos_r * 1.4
+    # Ground timber bearers
+    for b_off in [-0.6, 0.6]:
+        create_beveled_box(
+            bm, size=(0.14, 1.10, 0.12),
+            location=(plank_x + cos_r * b_off, plank_y + sin_r * b_off, z_ground + 0.06),
+            rotation=(0.0, 0.0, rot_angle),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+    # 4 layered rows of milled lumber boards
+    for row_i in range(5):
+        rz = z_ground + 0.12 + row_i * 0.14
+        create_beveled_box(
+            bm, size=(1.85, 0.95, 0.09),
+            location=(plank_x, plank_y, rz),
+            rotation=(0.0, 0.0, rot_angle + 0.02),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
+        )
+        # Separator stickers between rows
+        if row_i < 4:
+            for s_off in [-0.65, 0.0, 0.65]:
+                create_box(
+                    bm, size=(0.04, 0.95, 0.035),
+                    location=(plank_x + cos_r * s_off, plank_y + sin_r * s_off, rz + 0.06),
+                    rotation=(0.0, 0.0, rot_angle),
+                    mat_index=MAT_INDEX_TIMBER
+                )
+
+
+
+

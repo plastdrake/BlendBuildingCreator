@@ -126,11 +126,10 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         description="Filter architectural presets by category",
         items=[
             ('ALL', "All Presets", "Show all building style presets"),
-            ('CIVIC', "Civic & Manor", "Town halls, manors, chapels, and grand inns"),
-            ('MILITARY', "Military", "Barracks, archery ranges, and watchtowers"),
-            ('ARTISAN', "Artisan Guilds", "Specialized craft shops, bakeries, breweries, and workshops"),
-            ('INDUSTRIAL', "Industrial & Craft", "Heavy production, smelteries, mills, and factories"),
-            ('COMMERCIAL', "Commercial & Living", "Stores, markets, houses, cottages, and towers"),
+            ('CIVIC', "Civic", "Town halls and civic estates"),
+            ('MILITARY', "Military", "Barracks and military quarters"),
+            ('INDUSTRIAL', "Industrial", "Warehouses, storage, and lumbermills"),
+            ('RESIDENTIAL', "Residential", "Houses, cottages, and town residences"),
         ],
         default='ALL'
     )
@@ -154,7 +153,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     width: FloatProperty(
         name="Width",
         description="Building width (X axis) in meters",
-        min=3.5, max=16.0, default=6.0,
+        min=3.5, max=50.0, default=6.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -162,7 +161,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     depth: FloatProperty(
         name="Depth",
         description="Building depth (Y axis) in meters",
-        min=3.5, max=16.0, default=5.0,
+        min=3.5, max=50.0, default=5.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -191,7 +190,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     wing_width: FloatProperty(
         name="Wing Width",
         description="Width of the projecting wing",
-        min=2.5, max=10.0, default=3.5,
+        min=2.5, max=30.0, default=3.5,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -199,7 +198,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     wing_depth: FloatProperty(
         name="Wing Projection",
         description="Forward or outward projection distance of the wing",
-        min=2.0, max=10.0, default=3.0,
+        min=2.0, max=30.0, default=3.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -231,7 +230,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     courtyard_width: FloatProperty(
         name="Courtyard Width",
         description="Width of the central open courtyard between dual wings on U-shaped buildings",
-        min=2.0, max=12.0, default=3.5,
+        min=2.0, max=30.0, default=3.5,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -283,13 +282,14 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('AUTO', "Auto (From Preset)", "Use specialized features defined by the selected preset"),
             ('NONE', "None (Standard)", "Standard fantasy building without archetype additions"),
+            ('WAREHOUSE', "Warehouse Crane & Cargo", "L-shaped courtyard timber swivel crane, cargo crates, and loading bays"),
+            ('LUMBERMILL', "Lumbermill Workframe", "Open timber work pavilion, log skids, and timber framing"),
             ('BLACKSMITH', "Blacksmith Forge", "Outdoor forge lean-to canopy, stone furnace with chimney, and metal anvil"),
             ('WINDMILL', "Windmill Sails", "4-blade rotating lattice timber windmill rotor on upper facade"),
             ('WATCHTOWER', "Watchtower Parapet", "Machicolated defensive timber hoarding, corbel brackets, and arrow slits"),
             ('TAVERN', "Tavern Porch & Sign", "Covered entrance veranda porch and hanging ornate tavern sign"),
             ('FISHERMAN', "Fisherman Pier & Nets", "Raised timber piling pier stilts and outdoor fish drying net frame"),
             ('BAKERY', "Bakery Bread Oven", "Protruding outdoor curved brick bread oven with chimney flue"),
-            ('WAREHOUSE', "Warehouse Hoist & Crates", "Front roof hoist beam, cargo hook, double doors, and stacked crates"),
         ],
         default='AUTO',
         update=on_property_updated

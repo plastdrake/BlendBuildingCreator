@@ -31,7 +31,8 @@ from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, 
 from .accessories import (
     build_blacksmith_forge, build_windmill_sails, build_watchtower_lookout,
     build_tavern_porch_and_sign, build_fisherman_stilts, build_bakery_oven,
-    build_warehouse_cargo, build_mini_wing, build_balcony, build_pillared_overhang
+    build_warehouse_cargo, build_courtyard_crane, build_lumbermill_yard,
+    build_mini_wing, build_balcony, build_pillared_overhang
 )
 
 def get_facade_window_positions(span_min, span_max, target_spacing=2.4, min_margin=0.85):
@@ -268,6 +269,107 @@ def build_round_tower(bm, props, seed):
         build_watchtower_lookout(bm, -top_r, top_r, -top_r, top_r, z_platform=top_z)
 
 
+def build_open_timber_arcade(bm, p_start, p_end, z_floor, z_top, wall_t=0.28,
+                             has_foundation=True, found_h=0.45, bay_spacing=3.2,
+                             post_w=0.24, mat_post=MAT_INDEX_TIMBER_FRAME, mat_brace=MAT_INDEX_TIMBER):
+    """
+    Builds an authentic open timber post-and-beam arcade along a perimeter wall line:
+    - Ground stone plinth pedestals under each post (if at ground level with foundation).
+    - Chunky vertical timber posts spaced evenly across the span.
+    - Continuous horizontal header beam across the top.
+    - 45-degree knee braces bracing posts to the header beam.
+    """
+    x1, y1 = p_start
+    x2, y2 = p_end
+    dx = x2 - x1
+    dy = y2 - y1
+    seg_len = math.sqrt(dx * dx + dy * dy)
+    if seg_len < 0.5:
+        return
+        
+    ux = dx / seg_len
+    uy = dy / seg_len
+    ang_z = math.atan2(dy, dx)
+    
+    # 1. Continuous Top Header Beam
+    beam_h = 0.22
+    beam_w = post_w
+    beam_mid_z = z_top - beam_h * 0.5
+    mid_x = (x1 + x2) * 0.5
+    mid_y = (y1 + y2) * 0.5
+    
+    create_beveled_box(
+        bm,
+        size=(seg_len + post_w * 0.5, beam_w, beam_h),
+        location=(mid_x, mid_y, beam_mid_z),
+        rotation=(0.0, 0.0, ang_z),
+        mat_index=mat_post,
+        bevel_amount=0.012
+    )
+    
+    # 2. Evenly spaced posts along segment
+    n_bays = max(1, int(round(seg_len / bay_spacing)))
+    post_h = z_top - z_floor
+    post_mid_z = z_floor + post_h * 0.5
+    
+    for b_i in range(n_bays + 1):
+        t = b_i / float(n_bays)
+        px = x1 + dx * t
+        py = y1 + dy * t
+        
+        # Ground stone plinth
+        if has_foundation and z_floor <= found_h + 0.15:
+            plinth_h = min(0.35, found_h * 0.6)
+            create_beveled_box(
+                bm,
+                size=(post_w + 0.16, post_w + 0.16, plinth_h),
+                location=(px, py, z_floor - plinth_h * 0.5),
+                rotation=(0.0, 0.0, ang_z),
+                mat_index=MAT_INDEX_STONE,
+                bevel_amount=0.02
+            )
+            
+        # Vertical Timber Post
+        create_beveled_box(
+            bm,
+            size=(post_w, post_w, post_h),
+            location=(px, py, post_mid_z),
+            rotation=(0.0, 0.0, ang_z),
+            mat_index=mat_post,
+            bevel_amount=0.014
+        )
+        
+        # 45-degree Knee Braces to header beam
+        brace_len = 0.65
+        brace_off = 0.26
+        # Forward brace (+ direction along segment)
+        if b_i < n_bays and (seg_len / n_bays) >= 1.4:
+            bx = px + ux * brace_off
+            by = py + uy * brace_off
+            bz = z_top - beam_h - brace_off * 0.5
+            create_beveled_box(
+                bm,
+                size=(brace_len, 0.12, 0.12),
+                location=(bx, by, bz),
+                rotation=(0.0, -0.785, ang_z),
+                mat_index=mat_brace,
+                bevel_amount=0.008
+            )
+        # Backward brace (- direction along segment)
+        if b_i > 0 and (seg_len / n_bays) >= 1.4:
+            bx = px - ux * brace_off
+            by = py - uy * brace_off
+            bz = z_top - beam_h - brace_off * 0.5
+            create_beveled_box(
+                bm,
+                size=(brace_len, 0.12, 0.12),
+                location=(bx, by, bz),
+                rotation=(0.0, 0.785, ang_z),
+                mat_index=mat_brace,
+                bevel_amount=0.008
+            )
+
+
 def get_wings_setup(shape, wing_placement, wing_side, base_w, base_d, raw_wing_w, raw_wing_d, courtyard_w):
     """
     Computes base boundary coordinates and alignment descriptors for compound building shapes:
@@ -446,6 +548,7 @@ def generate_building(obj, props):
     wall_t = props.wall_thickness
     cantilever = props.cantilever_overhang if props.has_cantilever else 0.0
     found_h = props.foundation_height if props.has_foundation else 0.2
+    open_timber = getattr(props, 'open_timber_frame', False)
     
     # Archetype resolution
     archetype = getattr(props, 'building_archetype', 'AUTO')
@@ -828,7 +931,7 @@ def generate_building(obj, props):
                 door_top_z = z_floor + dh + frame_margin
 
             # 1. Front Entrance
-            if props.has_front_door:
+            if props.has_front_door and not open_timber:
                 if shape == 'RECTANGLE':
                     door_cx = 0.0
                     door_yf = y_min
@@ -879,7 +982,7 @@ def generate_building(obj, props):
                     build_iron_lantern(bm, location=(door_cx + dw * 0.5 + 0.45, door_yf - 0.05, z_floor + dh * 0.8))
 
             # 2. Rear / Back Door
-            if getattr(props, 'has_back_door', False):
+            if getattr(props, 'has_back_door', False) and not open_timber:
                 b_cx = 0.0
                 if shape == 'L_SHAPE' and wing_placement == 'BACK':
                     b_cx = (x_min + wings[0]['base'][0]) * 0.5 if wing_side == 'RIGHT' else (wings[0]['base'][1] + x_max) * 0.5
@@ -900,7 +1003,7 @@ def generate_building(obj, props):
                     build_iron_lantern(bm, location=(b_cx + dw * 0.5 + 0.45, b_yf + 0.05, z_floor + dh * 0.8))
 
             # 3. Side Door
-            if getattr(props, 'has_side_door', False):
+            if getattr(props, 'has_side_door', False) and not open_timber:
                 s_facade = getattr(props, 'side_door_facade', 'LEFT')
                 if s_facade == 'LEFT':
                     s_cy = (y_min + stair_y_bot) * 0.5 if (props.has_stairs and (stair_y_bot - y_min) > 2.0) else (y_min + y_max) * 0.5
@@ -1200,7 +1303,7 @@ def generate_building(obj, props):
             return excludes
 
         # Dynamic Windows - Front Wall
-        if props.has_windows:
+        if props.has_windows and not open_timber:
             front_excludes = list(get_facade_wing_exclusions('FRONT'))
             balcony_overhead = (fl_idx + 1 in active_balc_floors and b_side == 'FRONT')
             
@@ -1243,7 +1346,7 @@ def generate_building(obj, props):
                 )
 
         # Dynamic Windows - Back Wall
-        if props.has_windows:
+        if props.has_windows and not open_timber:
             back_excludes = list(get_facade_wing_exclusions('BACK'))
             if fl_idx == 0 and getattr(props, 'has_back_door', False):
                 bd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
@@ -1276,7 +1379,7 @@ def generate_building(obj, props):
                 )
 
         # Dynamic Windows - Side Walls (Left and Right)
-        if props.has_windows and cur_d > 2.8:
+        if props.has_windows and not open_timber and cur_d > 2.8:
             # Left side
             left_excludes = list(get_facade_wing_exclusions('LEFT'))
             if fl_idx == 0 and props.has_stairs:
@@ -1345,7 +1448,7 @@ def generate_building(obj, props):
                 
                 if w_wall == 'FRONT':
                     # Face 1: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
-                    if props.has_windows and not (fl_idx == 0 and shape == 'T_SHAPE' and wing_placement == 'FRONT'):
+                    if props.has_windows and not open_timber and not (fl_idx == 0 and shape == 'T_SHAPE' and wing_placement == 'FRONT'):
                         w_win_xs = get_facade_window_positions(wx1, wx2, target_spacing=eff_spacing, min_margin=0.75)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -1356,7 +1459,7 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
                     # Buffered inside corner at wy2 (main building junction) by 1.25m
-                    if props.has_windows and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
+                    if props.has_windows and not open_timber and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
                         w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1367,7 +1470,7 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 3: Right (wx2, wy1) -> (wx2, wy2) normal (1, 0)
                     # Buffered inside corner at wy2 (main building junction) by 1.25m
-                    if props.has_windows and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
+                    if props.has_windows and not open_timber and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
                         w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1383,7 +1486,7 @@ def generate_building(obj, props):
 
                 elif w_wall == 'BACK':
                     # Face 1: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
-                    if props.has_windows:
+                    if props.has_windows and not open_timber:
                         w_win_xs = get_facade_window_positions(wx1, wx2, target_spacing=eff_spacing, min_margin=0.75)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -1394,7 +1497,7 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=False)
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
                     # Buffered inside corner at wy1 (main building junction) by 1.25m
-                    if props.has_windows and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
+                    if props.has_windows and not open_timber and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
                         w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1405,7 +1508,7 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 3: Right (wx2, wy1) -> (wx2, wy2) normal (1, 0)
                     # Buffered inside corner at wy1 (main building junction) by 1.25m
-                    if props.has_windows and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
+                    if props.has_windows and not open_timber and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
                         w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1421,7 +1524,7 @@ def generate_building(obj, props):
 
                 elif w_wall == 'LEFT':
                     # Face 1: Left End (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
-                    if props.has_windows:
+                    if props.has_windows and not open_timber:
                         w_win_ys = get_facade_window_positions(wy1, wy2, target_spacing=eff_spacing, min_margin=0.75)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1432,7 +1535,7 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     # Buffered inside corner at wx2 (main building junction) by 1.25m
-                    if props.has_windows and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
+                    if props.has_windows and not open_timber and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
                         w_win_xs = get_facade_window_positions(wx1 + 0.85, wx2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -1443,7 +1546,7 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     # Buffered inside corner at wx2 (main building junction) by 1.25m
-                    if props.has_windows and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
+                    if props.has_windows and not open_timber and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
                         w_win_xs = get_facade_window_positions(wx1 + 0.85, wx2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -1459,7 +1562,7 @@ def generate_building(obj, props):
 
                 elif w_wall == 'RIGHT':
                     # Face 1: Right End (wx2, wy1) -> (wx2, wy2) normal (1, 0)
-                    if props.has_windows:
+                    if props.has_windows and not open_timber:
                         w_win_ys = get_facade_window_positions(wy1, wy2, target_spacing=eff_spacing, min_margin=0.75)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1470,7 +1573,7 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     # Buffered inside corner at wx1 (main building junction) by 1.25m
-                    if props.has_windows and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
+                    if props.has_windows and not open_timber and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
                         w_win_xs = get_facade_window_positions(wx1 + 1.25, wx2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -1481,7 +1584,7 @@ def generate_building(obj, props):
                                                   has_shutters=sh_act, shutters_closed=sh_cl, has_flower_box=props.has_flower_boxes)
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     # Buffered inside corner at wx1 (main building junction) by 1.25m
-                    if props.has_windows and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
+                    if props.has_windows and not open_timber and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
                         w_win_xs = get_facade_window_positions(wx1 + 1.25, wx2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -1511,67 +1614,120 @@ def generate_building(obj, props):
         brick_freq = getattr(props, 'exposed_brick_frequency', 0.25)
 
         # Interior joinery
-        build_interior_trims(
-            bm, ix_min, ix_max, iy_min, iy_max, z_floor, z_ceil,
-            wall_thickness=wall_t, stair_hole=cur_stair_hole,
-            wall_openings={
-                'front': front_openings,
-                'back': back_openings,
-                'left': left_openings,
-                'right': right_openings,
-            },
-        )
+        if not open_timber:
+            build_interior_trims(
+                bm, ix_min, ix_max, iy_min, iy_max, z_floor, z_ceil,
+                wall_thickness=wall_t, stair_hole=cur_stair_hole,
+                wall_openings={
+                    'front': front_openings,
+                    'back': back_openings,
+                    'left': left_openings,
+                    'right': right_openings,
+                },
+            )
 
         wall_top_z = z_ceil
 
-        omit_crown = (tier_val == 'TIER_1' and phys_siding and num_floors > 1
-                      and fl_idx == num_floors - 1)
-
-        build_wall_with_opening(
-            bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
-            mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding,
-            plank_direction=plank_dir, plank_jankiness=plank_jank,
-            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
-            has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
-        )
-        build_wall_with_opening(
-            bm, (x_min, y_max), (x_max, y_max), z_floor, wall_top_z, wall_t, back_openings,
-            mat_ext=mat_w, normal_vec=(0.0, 1.0), tier=tier_val, physical_siding=phys_siding,
-            plank_direction=plank_dir, plank_jankiness=plank_jank,
-            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
-            has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
-        )
-        build_wall_with_opening(
-            bm, (x_min, y_min), (x_min, y_max), z_floor, wall_top_z, wall_t, left_openings,
-            mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
-            plank_direction=plank_dir, plank_jankiness=plank_jank,
-            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
-            omit_top_log_row=omit_crown,
-            has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
-        )
-        build_wall_with_opening(
-            bm, (x_max, y_min), (x_max, y_max), z_floor, wall_top_z, wall_t, right_openings,
-            mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
-            plank_direction=plank_dir, plank_jankiness=plank_jank,
-            stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
-            omit_top_log_row=omit_crown,
-            has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
-        )
-        
-        # Wing Solid Walls
-        if fl_has_wing:
-            for p1, p2, w_ops, norm_v in wing_wall_openings:
-                build_wall_with_opening(
-                    bm, p1, p2, z_floor, wall_top_z, wall_t, w_ops,
-                    mat_ext=mat_w, normal_vec=norm_v, tier=tier_val, physical_siding=phys_siding,
-                    plank_direction=plank_dir, plank_jankiness=plank_jank,
-                    stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
-                    has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
+        if open_timber:
+            arcade_segs = []
+            if fl_has_wing:
+                for p1, p2, w_ops, norm_v in wing_wall_openings:
+                    arcade_segs.append((p1, p2))
+                w_elem = wings[0]
+                wx1, wx2, wy1, wy2 = fl_wings_bounds[0]
+                if w_elem['wall'] == 'FRONT':
+                    if wx1 > x_min + 0.4:
+                        arcade_segs.append(((x_min, y_min), (wx1, y_min)))
+                    if wx2 < x_max - 0.4:
+                        arcade_segs.append(((wx2, y_min), (x_max, y_min)))
+                    arcade_segs.append(((x_min, y_max), (x_max, y_max)))
+                    arcade_segs.append(((x_min, y_min), (x_min, y_max)))
+                    arcade_segs.append(((x_max, y_min), (x_max, y_max)))
+                elif w_elem['wall'] == 'BACK':
+                    arcade_segs.append(((x_min, y_min), (x_max, y_min)))
+                    if wx1 > x_min + 0.4:
+                        arcade_segs.append(((x_min, y_max), (wx1, y_max)))
+                    if wx2 < x_max - 0.4:
+                        arcade_segs.append(((wx2, y_max), (x_max, y_max)))
+                    arcade_segs.append(((x_min, y_min), (x_min, y_max)))
+                    arcade_segs.append(((x_max, y_min), (x_max, y_max)))
+                elif w_elem['wall'] == 'LEFT':
+                    arcade_segs.append(((x_min, y_min), (x_max, y_min)))
+                    arcade_segs.append(((x_min, y_max), (x_max, y_max)))
+                    if wy1 > y_min + 0.4:
+                        arcade_segs.append(((x_min, y_min), (x_min, wy1)))
+                    if wy2 < y_max - 0.4:
+                        arcade_segs.append(((x_min, wy2), (x_min, y_max)))
+                    arcade_segs.append(((x_max, y_min), (x_max, y_max)))
+                elif w_elem['wall'] == 'RIGHT':
+                    arcade_segs.append(((x_min, y_min), (x_max, y_min)))
+                    arcade_segs.append(((x_min, y_max), (x_max, y_max)))
+                    arcade_segs.append(((x_min, y_min), (x_min, y_max)))
+                    if wy1 > y_min + 0.4:
+                        arcade_segs.append(((x_max, y_min), (x_max, wy1)))
+                    if wy2 < y_max - 0.4:
+                        arcade_segs.append(((x_max, wy2), (x_max, y_max)))
+            else:
+                arcade_segs = [
+                    ((x_min, y_min), (x_max, y_min)),
+                    ((x_min, y_max), (x_max, y_max)),
+                    ((x_min, y_min), (x_min, y_max)),
+                    ((x_max, y_min), (x_max, y_max)),
+                ]
+            for p_start, p_end in arcade_segs:
+                build_open_timber_arcade(
+                    bm, p_start, p_end, z_floor, wall_top_z, wall_t,
+                    has_foundation=props.has_foundation, found_h=found_h
                 )
+        else:
+            omit_crown = (tier_val == 'TIER_1' and phys_siding and num_floors > 1
+                          and fl_idx == num_floors - 1)
+
+            build_wall_with_opening(
+                bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
+                mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding,
+                plank_direction=plank_dir, plank_jankiness=plank_jank,
+                stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+                has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
+            )
+            build_wall_with_opening(
+                bm, (x_min, y_max), (x_max, y_max), z_floor, wall_top_z, wall_t, back_openings,
+                mat_ext=mat_w, normal_vec=(0.0, 1.0), tier=tier_val, physical_siding=phys_siding,
+                plank_direction=plank_dir, plank_jankiness=plank_jank,
+                stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+                has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
+            )
+            build_wall_with_opening(
+                bm, (x_min, y_min), (x_min, y_max), z_floor, wall_top_z, wall_t, left_openings,
+                mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
+                plank_direction=plank_dir, plank_jankiness=plank_jank,
+                stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+                omit_top_log_row=omit_crown,
+                has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
+            )
+            build_wall_with_opening(
+                bm, (x_max, y_min), (x_max, y_max), z_floor, wall_top_z, wall_t, right_openings,
+                mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
+                plank_direction=plank_dir, plank_jankiness=plank_jank,
+                stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+                omit_top_log_row=omit_crown,
+                has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
+            )
+            
+            # Wing Solid Walls
+            if fl_has_wing:
+                for p1, p2, w_ops, norm_v in wing_wall_openings:
+                    build_wall_with_opening(
+                        bm, p1, p2, z_floor, wall_top_z, wall_t, w_ops,
+                        mat_ext=mat_w, normal_vec=norm_v, tier=tier_val, physical_siding=phys_siding,
+                        plank_direction=plank_dir, plank_jankiness=plank_jank,
+                        stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+                        has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
+                    )
 
         # Timber Framing (Tudor Half-Timbering)
         # In Tier 1 (Log Cabin), authentic interlocking logs already provide all structural aesthetics
-        if props.has_timber_framing and effective_archetype != 'WATCHTOWER' and tier_val != 'TIER_1':
+        if not open_timber and props.has_timber_framing and effective_archetype != 'WATCHTOWER' and tier_val != 'TIER_1':
             post_w = 0.22
             timber_jank = props.wonkiness * 0.5
             is_top_fl = (fl_idx == num_floors - 1)
@@ -2885,7 +3041,53 @@ def generate_building(obj, props):
     elif effective_archetype == 'BAKERY':
         build_bakery_oven(bm, -hx, hx, -hy, hy, z_ground=0.0)
     elif effective_archetype == 'WAREHOUSE':
-        build_warehouse_cargo(bm, front_x=0.0, front_y=-hy, z_ground=0.0)
+        yard_x = 0.0
+        yard_y = -hy - 1.8
+        rot_crane = 0.45
+        if shape == 'L_SHAPE' and wings:
+            w_elem = wings[0]
+            wx1, wx2, wy1, wy2 = w_elem['base']
+            if w_elem['wall'] == 'FRONT':
+                if w_elem.get('align') == 'RIGHT':
+                    yard_x = (-hx + wx1) * 0.5
+                    yard_y = (wy1 - hy) * 0.5
+                    rot_crane = 0.55
+                else:
+                    yard_x = (wx2 + hx) * 0.5
+                    yard_y = (wy1 - hy) * 0.5
+                    rot_crane = 2.60
+            elif w_elem['wall'] == 'BACK':
+                if w_elem.get('align') == 'RIGHT':
+                    yard_x = (-hx + wx1) * 0.5
+                    yard_y = (hy + wy2) * 0.5
+                    rot_crane = -0.55
+                else:
+                    yard_x = (wx2 + hx) * 0.5
+                    yard_y = (hy + wy2) * 0.5
+                    rot_crane = -2.60
+        build_courtyard_crane(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_crane)
+    elif effective_archetype == 'LUMBERMILL':
+        yard_x = 0.0
+        yard_y = -hy - 1.8
+        rot_yard = 0.0
+        if shape == 'L_SHAPE' and wings:
+            w_elem = wings[0]
+            wx1, wx2, wy1, wy2 = w_elem['base']
+            if w_elem['wall'] == 'FRONT':
+                if w_elem.get('align') == 'RIGHT':
+                    yard_x = (-hx + wx1) * 0.5
+                    yard_y = (wy1 - hy) * 0.5
+                else:
+                    yard_x = (wx2 + hx) * 0.5
+                    yard_y = (wy1 - hy) * 0.5
+            elif w_elem['wall'] == 'BACK':
+                if w_elem.get('align') == 'RIGHT':
+                    yard_x = (-hx + wx1) * 0.5
+                    yard_y = (hy + wy2) * 0.5
+                else:
+                    yard_x = (wx2 + hx) * 0.5
+                    yard_y = (hy + wy2) * 0.5
+        build_lumbermill_yard(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_yard)
 
     # 4.6. Architectural Outcrops, Balconies & Pillared Overhangs
     tier_val = getattr(props, 'material_tier', 'TIER_3')

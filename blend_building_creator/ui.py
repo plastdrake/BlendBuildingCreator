@@ -5,7 +5,7 @@ Features clean layout, collapsible sections, style presets, and live parameter s
 
 import bpy
 
-from .presets import PRESETS
+from .presets import PRESETS, BUILDING_FAMILIES
 
 class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
     """Main panel for Stylized Fantasy Building Generator"""
@@ -53,34 +53,24 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         box_tier.prop(props, "material_tier", expand=True)
         box_tier.prop(props, "physical_siding")
 
-        # Style Presets Box with Category Filter
+        # Style Presets Box with Category Filter & Tier Selectors
         box_presets = layout.box()
-        box_presets.label(text="Architectural Presets", icon='ASSET_MANAGER')
+        box_presets.label(text="Purpose-Built Plot Presets", icon='ASSET_MANAGER')
         box_presets.prop(props, "preset_category", text="")
         
-        grid = box_presets.grid_flow(row_major=True, columns=2, even_columns=True, even_rows=True, align=True)
         cat_filter = props.preset_category
-        for key, p_data in PRESETS.items():
-            if cat_filter == 'ALL' or p_data.get('category') == cat_filter:
-                icon_name = 'ASSET_MANAGER'
-                cat = p_data.get('category')
-                if cat == 'CIVIC':
-                    icon_name = 'HOME'
-                elif cat == 'MILITARY':
-                    icon_name = 'HIDE_OFF'
-                elif cat == 'ARTISAN':
-                    icon_name = 'TOOL_SETTINGS'
-                elif cat == 'INDUSTRIAL':
-                    icon_name = 'MOD_BUILD'
-                elif key == 'WIZARD_TOWER':
-                    icon_name = 'CONE'
-                elif key == 'COTTAGE':
-                    icon_name = 'SNAP_VOLUME'
-                else:
-                    icon_name = 'COMMUNITY'
-                    
-                op = grid.operator("building.apply_preset", text=p_data['name'], icon=icon_name)
-                op.preset_key = key
+        for family in BUILDING_FAMILIES:
+            if cat_filter == 'ALL' or family.get('category') == cat_filter:
+                card = box_presets.box()
+                row_head = card.row(align=True)
+                row_head.label(text=f"{family['name']} ({family['shape']})", icon=family['icon'])
+                row_head.label(text=family['plot'])
+                
+                row_tiers = card.row(align=True)
+                row_tiers.scale_y = 1.15
+                for tier_label, preset_key, _desc in family['tiers']:
+                    op = row_tiers.operator("building.apply_preset", text=tier_label)
+                    op.preset_key = preset_key
 
         # Global parameters
         box_global = layout.box()
