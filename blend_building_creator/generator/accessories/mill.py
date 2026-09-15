@@ -140,13 +140,13 @@ def _build_chain_loop(bm, x0, z0, r0, x1, z1, r1, y_plane):
     nx0 = -uz * ca + ux * sa
     nz0 = ux * ca + uz * sa
     pts = []
-    steps_straight = max(6, int(d / 0.13))
+    steps_straight = max(8, int(d / 0.075))
     for k in range(steps_straight + 1):
         t = k / float(steps_straight)
         px = (x0 + nx0 * r0) * (1.0 - t) + (x1 + nx0 * r1) * t
         pz = (z0 + nz0 * r0) * (1.0 - t) + (z1 + nz0 * r1) * t
         pts.append((px, pz, ux, uz))
-    arc1 = max(6, int(math.pi * r1 / 0.13))
+    arc1 = max(8, int(math.pi * r1 / 0.075))
     a_start = math.atan2(nz0, nx0)
     for k in range(1, arc1):
         a = a_start + math.pi * (k / float(arc1))
@@ -160,7 +160,7 @@ def _build_chain_loop(bm, x0, z0, r0, x1, z1, r1, y_plane):
         px = (x1 - nx0 * r1) * (1.0 - t) + (x0 - nx0 * r0) * t
         pz = (z1 - nz0 * r1) * (1.0 - t) + (z0 - nz0 * r0) * t
         pts.append((px, pz, -ux, -uz))
-    arc0 = max(6, int(math.pi * r0 / 0.13))
+    arc0 = max(8, int(math.pi * r0 / 0.075))
     for k in range(1, arc0):
         a = a_start + math.pi + math.pi * (k / float(arc0))
         px = x0 + math.cos(a) * r0
@@ -173,10 +173,10 @@ def _build_chain_loop(bm, x0, z0, r0, x1, z1, r1, y_plane):
         if i % 2 == 0:
             rot = (1.5708, 0.0, 0.0)
         else:
-            rot = (0.0, -yaw + 1.5708, 0.0)
+            rot = (0.0, -yaw, 0.0)
         create_torus_ring(
             bm, location=(px, y_plane, pz), rotation=rot,
-            major_radius=0.055, minor_radius=0.014,
+            major_radius=0.05, minor_radius=0.013,
             major_segments=8, minor_segments=6,
             mat_index=MAT_INDEX_IRON
         )
