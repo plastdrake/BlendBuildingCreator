@@ -166,7 +166,8 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             co = loop.vert.co
             loop[uv_g].uv = Vector((co.x * 0.55, (co.z - z_base) * 0.55))
 
-    # Optional loft hatch opening (validated against the real wall bounds).
+    # Optional loft hatch opening (validated against the real wall bounds,
+    # edges snapped to the seal contour samples so no duplicate verts exist).
     _hx0 = None
     if hatch:
         try:
@@ -176,6 +177,12 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             _hz1 = float(hatch['z1'])
             _hcx = (_hx0 + _hx1) * 0.5
             _hz1 = min(_hz1, get_gable_deck_z_func(_hcx) - 0.22)
+            for _sx in top_xs:
+                if abs(_sx - _hx0) < 0.02:
+                    _hx0 = _sx
+                if abs(_sx - _hx1) < 0.02:
+                    _hx1 = _sx
+            _hcx = (_hx0 + _hx1) * 0.5
         except Exception:
             _hx0 = None
         if _hx0 is None or _hx1 - _hx0 < 0.50 or _hz1 - _hz0 < 0.60:
@@ -226,10 +233,13 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             return max(z_base, get_gable_deck_z_func(x))
 
         if _hx0 > base_x_left + 0.03:
-            _le = [v for x, v in zip(top_xs, top_verts_ext) if x <= _hx0 + 1e-6]
-            _li = [v for x, v in zip(top_xs, top_verts_int) if x <= _hx0 + 1e-6]
-            _le.append(bm.verts.new(Vector((_hx0, y_ext, _deck(_hx0)))))
-            _li.append(bm.verts.new(Vector((_hx0, y_int, _deck(_hx0)))))
+            _le_xv = [(x, v) for x, v in zip(top_xs, top_verts_ext) if x <= _hx0 + 1e-6]
+            _li_xv = [(x, v) for x, v in zip(top_xs, top_verts_int) if x <= _hx0 + 1e-6]
+            if not _le_xv or abs(_le_xv[-1][0] - _hx0) > 1e-6:
+                _le_xv.append((_hx0, bm.verts.new(Vector((_hx0, y_ext, _deck(_hx0))))))
+                _li_xv.append((_hx0, bm.verts.new(Vector((_hx0, y_int, _deck(_hx0))))))
+            _le = [v for _, v in _le_xv]
+            _li = [v for _, v in _li_xv]
             _bl_e = bm.verts.new(Vector((base_x_left, y_ext, z_base)))
             _bl_i = bm.verts.new(Vector((base_x_left, y_int, z_base)))
             _br_e = bm.verts.new(Vector((_hx0, y_ext, z_base)))
@@ -237,10 +247,13 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             _mkface([_bl_e, _br_e] + list(reversed(_le)),
                     [_bl_i] + _li + [_br_i])
         if _hx1 < base_x_right - 0.03:
-            _re = [v for x, v in zip(top_xs, top_verts_ext) if x >= _hx1 - 1e-6]
-            _ri = [v for x, v in zip(top_xs, top_verts_int) if x >= _hx1 - 1e-6]
-            _re.insert(0, bm.verts.new(Vector((_hx1, y_ext, _deck(_hx1)))))
-            _ri.insert(0, bm.verts.new(Vector((_hx1, y_int, _deck(_hx1)))))
+            _re_xv = [(x, v) for x, v in zip(top_xs, top_verts_ext) if x >= _hx1 - 1e-6]
+            _ri_xv = [(x, v) for x, v in zip(top_xs, top_verts_int) if x >= _hx1 - 1e-6]
+            if not _re_xv or abs(_re_xv[0][0] - _hx1) > 1e-6:
+                _re_xv.insert(0, (_hx1, bm.verts.new(Vector((_hx1, y_ext, _deck(_hx1))))))
+                _ri_xv.insert(0, (_hx1, bm.verts.new(Vector((_hx1, y_int, _deck(_hx1))))))
+            _re = [v for _, v in _re_xv]
+            _ri = [v for _, v in _ri_xv]
             _bl_e = bm.verts.new(Vector((_hx1, y_ext, z_base)))
             _bl_i = bm.verts.new(Vector((_hx1, y_int, z_base)))
             _br_e = bm.verts.new(Vector((base_x_right, y_ext, z_base)))
@@ -257,12 +270,16 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             _i2 = bm.verts.new(Vector((_hx1, y_int, _hz0)))
             _i3 = bm.verts.new(Vector((_hx0, y_int, _hz0)))
             _mkface([_e0, _e1, _e2, _e3], [_i0, _i3, _i2, _i1])
-        _te = [v for x, v in zip(top_xs, top_verts_ext) if _hx0 - 1e-6 <= x <= _hx1 + 1e-6]
-        _ti = [v for x, v in zip(top_xs, top_verts_int) if _hx0 - 1e-6 <= x <= _hx1 + 1e-6]
-        _te.insert(0, bm.verts.new(Vector((_hx0, y_ext, _deck(_hx0)))))
-        _te.append(bm.verts.new(Vector((_hx1, y_ext, _deck(_hx1)))))
-        _ti.insert(0, bm.verts.new(Vector((_hx0, y_int, _deck(_hx0)))))
-        _ti.append(bm.verts.new(Vector((_hx1, y_int, _deck(_hx1)))))
+        _te_xv = [(x, v) for x, v in zip(top_xs, top_verts_ext) if _hx0 - 1e-6 <= x <= _hx1 + 1e-6]
+        _ti_xv = [(x, v) for x, v in zip(top_xs, top_verts_int) if _hx0 - 1e-6 <= x <= _hx1 + 1e-6]
+        if not _te_xv or abs(_te_xv[0][0] - _hx0) > 1e-6:
+            _te_xv.insert(0, (_hx0, bm.verts.new(Vector((_hx0, y_ext, _deck(_hx0))))))
+            _ti_xv.insert(0, (_hx0, bm.verts.new(Vector((_hx0, y_int, _deck(_hx0))))))
+        if abs(_te_xv[-1][0] - _hx1) > 1e-6:
+            _te_xv.append((_hx1, bm.verts.new(Vector((_hx1, y_ext, _deck(_hx1))))))
+            _ti_xv.append((_hx1, bm.verts.new(Vector((_hx1, y_int, _deck(_hx1))))))
+        _te = [v for _, v in _te_xv]
+        _ti = [v for _, v in _ti_xv]
         _b0e = bm.verts.new(Vector((_hx0, y_ext, _hz1)))
         _b1e = bm.verts.new(Vector((_hx1, y_ext, _hz1)))
         _b0i = bm.verts.new(Vector((_hx0, y_int, _hz1)))

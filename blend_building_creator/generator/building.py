@@ -2002,11 +2002,17 @@ def generate_building(obj, props):
                     return s
                 _lside = 'BACK' if _lscore('BACK') <= _lscore('FRONT') else 'FRONT'
                 _lspan = top_x_max - top_x_min
-                if _lspan >= 2.6 and _sill + 1.20 < top_z + _rh - 0.25:
-                    _lc = top_cx + 0.90
-                    _lc = min(top_x_max - 1.05, max(top_x_min + 1.05, _lc))
-                    if _balc_side == _lside or _mini_side == _lside:
-                        _lc = min(top_x_max - 1.1, max(top_x_min + 1.1, _lc + min(1.8, _lspan * 0.2)))
+                _lc = top_cx
+                if _balc_side == _lside or _mini_side == _lside:
+                    _lc = _lc + min(1.2, _lspan * 0.15)
+                _lc = min(top_x_max - 1.05, max(top_x_min + 1.05, _lc))
+                _ov = getattr(props, 'roof_overhang', 0.6)
+                _fl = getattr(props, 'roof_flare', 0.35)
+                _hw = _lspan * 0.5 + _ov
+                _u = min(1.0, abs(_lc + 0.50 - top_cx) / max(0.01, _hw))
+                _dd = (1.0 - _fl) * _u + _fl * (1.0 - (1.0 - _u) ** 2)
+                _deck_edge = top_z + _rh - _dd * (_rh + 0.10)
+                if _lspan >= 2.6 and _sill + 1.20 <= _deck_edge - 0.30:
                     _lface = top_y_max + _loff if _lside == 'BACK' else top_y_min - _loff
                     _loft_spec = {'axis': 'Y', 'side': _lside, 'face': _lface, 'center': _lc, 'sill': _sill}
                     _loft_arg = {'side': _lside, 'x0': _lc - _hh2, 'x1': _lc + _hh2,
@@ -2025,11 +2031,17 @@ def generate_building(obj, props):
                     return s
                 _lside = 'RIGHT' if _lscore('RIGHT') <= _lscore('LEFT') else 'LEFT'
                 _lspan = top_y_max - top_y_min
-                if _lspan >= 2.6 and _sill + 1.20 < top_z + _rh - 0.25:
-                    _lc = top_cy + 0.90
-                    _lc = min(top_y_max - 1.05, max(top_y_min + 1.05, _lc))
-                    if _balc_side == _lside or _mini_side == _lside:
-                        _lc = min(top_y_max - 1.1, max(top_y_min + 1.1, _lc + min(1.8, _lspan * 0.2)))
+                _lc = top_cy
+                if _balc_side == _lside or _mini_side == _lside:
+                    _lc = _lc + min(1.2, _lspan * 0.15)
+                _lc = min(top_y_max - 1.05, max(top_y_min + 1.05, _lc))
+                _ov = getattr(props, 'roof_overhang', 0.6)
+                _fl = getattr(props, 'roof_flare', 0.35)
+                _hw = _lspan * 0.5 + _ov
+                _u = min(1.0, abs(_lc + 0.50 - top_cy) / max(0.01, _hw))
+                _dd = (1.0 - _fl) * _u + _fl * (1.0 - (1.0 - _u) ** 2)
+                _deck_edge = top_z + _rh - _dd * (_rh + 0.10)
+                if _lspan >= 2.6 and _sill + 1.20 <= _deck_edge - 0.30:
                     _lface = top_x_max + _loff if _lside == 'RIGHT' else top_x_min - _loff
                     _loft_spec = {'axis': 'X', 'side': _lside, 'face': _lface, 'center': _lc, 'sill': _sill}
                     _ls = 'BACK' if _lside == 'RIGHT' else 'FRONT'
