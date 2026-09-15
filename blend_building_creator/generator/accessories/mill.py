@@ -232,16 +232,25 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
                 location=(mill_cx, ry, bench_top - 0.06),
                 mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01
             )
-        deck_l = (blade_x - 0.24) - (mill_cx - bench_l * 0.5)
+        slot_l = 1.15
+        slot_w = 0.09
+        strip_w = (0.72 - slot_w) * 0.5
+        for _ss in (-1.0, 1.0):
+            create_beveled_box(
+                bm, size=(bench_l, strip_w, 0.07),
+                location=(mill_cx, b_mill_cy + _ss * (slot_w * 0.5 + strip_w * 0.5), bench_top - 0.023),
+                mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
+            )
+        fill_l = (blade_x - slot_l * 0.5) - (mill_cx - bench_l * 0.5)
         create_beveled_box(
-            bm, size=(deck_l, 0.72, 0.07),
-            location=(mill_cx - bench_l * 0.5 + deck_l * 0.5, b_mill_cy, bench_top - 0.023),
+            bm, size=(fill_l, slot_w, 0.07),
+            location=(mill_cx - bench_l * 0.5 + fill_l * 0.5, b_mill_cy, bench_top - 0.023),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
         )
-        deck_r = (mill_cx + bench_l * 0.5) - (blade_x + 0.24)
+        fill_r = (mill_cx + bench_l * 0.5) - (blade_x + slot_l * 0.5)
         create_beveled_box(
-            bm, size=(deck_r, 0.72, 0.07),
-            location=(blade_x + 0.24 + deck_r * 0.5, b_mill_cy, bench_top - 0.023),
+            bm, size=(fill_r, slot_w, 0.07),
+            location=(blade_x + slot_l * 0.5 + fill_r * 0.5, b_mill_cy, bench_top - 0.023),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
         )
 
@@ -253,6 +262,7 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
         curr_mill_cy = mill_cy + y_off
         _fring = []
         _bring = []
+        _mring = []
         for bi in range(_teeth * 2):
             _br = blade_r if bi % 2 == 0 else _root
             _ba = (2.0 * math.pi * bi) / (_teeth * 2.0)
@@ -260,6 +270,9 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
             _bz = lowered_arbor_z + math.sin(_ba) * _br
             _fring.append(bm.verts.new(Vector((_bx, curr_mill_cy + _bt * 0.5, _bz))))
             _bring.append(bm.verts.new(Vector((_bx, curr_mill_cy - _bt * 0.5, _bz))))
+            _mx = blade_x + math.cos(_ba) * (_br + 0.02)
+            _mz = lowered_arbor_z + math.sin(_ba) * (_br + 0.02)
+            _mring.append(bm.verts.new(Vector((_mx, curr_mill_cy, _mz))))
         _cf = bm.verts.new(Vector((blade_x, curr_mill_cy + _bt * 0.5, lowered_arbor_z)))
         _cb = bm.verts.new(Vector((blade_x, curr_mill_cy - _bt * 0.5, lowered_arbor_z)))
         _bfaces = []
@@ -267,7 +280,8 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
             _bj = (bi + 1) % (_teeth * 2)
             _bfaces.append(bm.faces.new([_cf, _fring[_bj], _fring[bi]]))
             _bfaces.append(bm.faces.new([_cb, _bring[bi], _bring[_bj]]))
-            _bfaces.append(bm.faces.new([_fring[_bj], _bring[_bj], _bring[bi], _fring[bi]]))
+            _bfaces.append(bm.faces.new([_fring[_bj], _mring[_bj], _mring[bi], _fring[bi]]))
+            _bfaces.append(bm.faces.new([_mring[_bj], _bring[_bj], _bring[bi], _mring[bi]]))
         for _bf in _bfaces:
             _bf.material_index = MAT_INDEX_IRON
             _bf.smooth = False
