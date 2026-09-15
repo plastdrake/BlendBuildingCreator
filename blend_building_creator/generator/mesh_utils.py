@@ -420,7 +420,7 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
     for i in range(segments):
         nxt = (i + 1) % segments
         # Start end bark ring
-        f = bm.faces.new([start_verts[i], start_verts[nxt], start_inner[nxt], start_inner[i]])
+        f = bm.faces.new([start_verts[i], start_inner[i], start_inner[nxt], start_verts[nxt]])
         f.material_index = mat_index
         f.smooth = True
         u0 = i / float(segments)
@@ -431,7 +431,7 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
         f.loops[3][uv_layer].uv = Vector((u0, 0.05))
         
         # End bark ring
-        f2 = bm.faces.new([end_inner[i], end_inner[nxt], end_verts[nxt], end_verts[i]])
+        f2 = bm.faces.new([end_inner[i], end_verts[i], end_verts[nxt], end_inner[nxt]])
         f2.material_index = mat_index
         f2.smooth = True
         f2.loops[0][uv_layer].uv = Vector((u0, 0.0))

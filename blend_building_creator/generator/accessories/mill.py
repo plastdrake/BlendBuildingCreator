@@ -61,7 +61,7 @@ def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0, grade
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
     for row_i in range(5):
-        rz = z_ground + 0.12 + row_i * 0.14
+        rz = z_ground + 0.165 + row_i * 0.125
         create_beveled_box(
             bm, size=(1.85, 0.95, 0.09),
             location=(plank_x, plank_y, rz),
@@ -72,7 +72,7 @@ def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0, grade
             for s_off in [-0.65, 0.0, 0.65]:
                 create_box(
                     bm, size=(0.04, 0.95, 0.035),
-                    location=(plank_x + cos_r * s_off, plank_y + sin_r * s_off, rz + 0.06),
+                    location=(plank_x + cos_r * s_off, plank_y + sin_r * s_off, rz + 0.0625),
                     rotation=(0.0, 0.0, rot_angle),
                     mat_index=MAT_INDEX_TIMBER
                 )

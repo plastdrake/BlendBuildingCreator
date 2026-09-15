@@ -322,17 +322,6 @@ def build_open_timber_arcade(bm, p_start, p_end, z_floor, z_top, wall_t=0.28,
         px = x1 + dx * t
         py = y1 + dy * t
         
-        # Ground stone plinth
-        if has_foundation and z_floor <= found_h + 0.15:
-            plinth_h = min(0.35, found_h * 0.6)
-            create_beveled_box(
-                bm,
-                size=(post_w + 0.16, post_w + 0.16, plinth_h),
-                location=(px, py, z_floor - plinth_h * 0.5),
-                rotation=(0.0, 0.0, ang_z),
-                mat_index=MAT_INDEX_STONE,
-                bevel_amount=0.02
-            )
             
         # Vertical Timber Post
         create_beveled_box(
