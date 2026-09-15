@@ -3174,6 +3174,61 @@ def generate_building(obj, props):
             build_front_steps(bm, center_x=mill_sx, y_front=-hy, z_base=found_h,
                               num_steps=max(2, int(found_h / 0.18)), normal_axis='-Y')
 
+
+    # 4.5b Optional gable loft hatch with exterior ladder (any building;
+    # defaults ON for lumbermill G2/G3 and warehouse T2/T3 via presets).
+    # Uses the top-floor bounds so it tracks every building height, picks the
+    # gable end with the fewest conflicts (wings, balcony, doors), and skips
+    # towers / non-gabled roofs.
+    if getattr(props, 'has_loft_hatch', False) and effective_archetype != 'WATCHTOWER' \
+            and getattr(props, 'roof_style', 'GABLE') in ('GABLE', 'SWAY'):
+        from .accessories.loft import build_gable_loft_hatch
+        _lz = found_h + num_floors * floor_h
+        _rh = max(1.6, getattr(props, 'roof_height', 3.0))
+        _sill = _lz + min(_rh * 0.30, max(0.35, _rh - 1.60))
+        _rot = (top_w > top_d * 1.15) if 'top_w' in dir() else (base_w > base_d * 1.15)
+        _wing_walls = [w.get('wall') for w in wings] if 'wings' in dir() else []
+        _balc_side = getattr(props, 'balcony_side', None) if getattr(props, 'has_balcony', False) else None
+        _mini_side = getattr(props, 'mini_wing_side', None) if getattr(props, 'has_mini_wing', False) else None
+        if not _rot:
+            def _score(side):
+                s = 0.0
+                if side in _wing_walls:
+                    s += 10.0
+                if _mini_side == side:
+                    s += 10.0
+                if _balc_side == side:
+                    s += 6.0
+                if side == 'FRONT' and getattr(props, 'has_front_door', False):
+                    s += 3.0
+                return s
+            _side = 'BACK' if _score('BACK') <= _score('FRONT') else 'FRONT'
+            _face = top_y_max if _side == 'BACK' else top_y_min
+            _c = (top_x_min + top_x_max) * 0.5
+            _span = top_x_max - top_x_min
+            if _balc_side == _side or _mini_side == _side:
+                _c = min(top_x_max - 1.1, max(top_x_min + 1.1, _c + min(1.8, _span * 0.2)))
+            build_gable_loft_hatch(bm, wall_axis='Y', wall_face=_face, center=_c, sill_z=_sill)
+        else:
+            def _score(side):
+                s = 0.0
+                if side in _wing_walls:
+                    s += 10.0
+                if _mini_side == side:
+                    s += 10.0
+                if _balc_side == side:
+                    s += 6.0
+                if side == getattr(props, 'side_door_facade', None) and getattr(props, 'has_side_door', False):
+                    s += 3.0
+                return s
+            _side = 'RIGHT' if _score('RIGHT') <= _score('LEFT') else 'LEFT'
+            _face = top_x_max if _side == 'RIGHT' else top_x_min
+            _c = (top_y_min + top_y_max) * 0.5
+            _span = top_y_max - top_y_min
+            if _balc_side == _side or _mini_side == _side:
+                _c = min(top_y_max - 1.1, max(top_y_min + 1.1, _c + min(1.8, _span * 0.2)))
+            build_gable_loft_hatch(bm, wall_axis='X', wall_face=_face, center=_c, sill_z=_sill)
+
     # 4.6. Architectural Outcrops, Balconies & Pillared Overhangs
     tier_val = getattr(props, 'material_tier', 'TIER_3')
     

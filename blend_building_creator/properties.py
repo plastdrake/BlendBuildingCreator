@@ -711,6 +711,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    has_loft_hatch: BoolProperty(
+        name="Gable Loft Hatch",
+        description="Timber attic hatch door on the gable end with an exterior ladder from the ground (auto picks the clearest gable)",
+        default=False,
+        update=on_property_updated
+    )
+
     # --- Architectural Outcrops, Balconies & Overhangs ---
     has_mini_wing: BoolProperty(
         name="Mini-Wing Outcrop",

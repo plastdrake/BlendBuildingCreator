@@ -301,6 +301,10 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             col.prop(props, "balcony_width")
             col.prop(props, "balcony_depth")
             
+        # Gable Loft Hatch and Ladder
+        box_loft = layout.box()
+        box_loft.prop(props, "has_loft_hatch")
+
         # Pillared Overhang / Colonnade
         box_over = layout.box()
         box_over.prop(props, "has_pillared_overhang")

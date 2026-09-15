@@ -253,6 +253,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': "Enclosed two-storey L-shaped cargo warehouse with solid walls, wide freight portals, dormers, and courtyard swivel crane",
         'settings': {
+            'has_loft_hatch': True,
             'building_shape': 'L_SHAPE',
             'wing_placement': 'FRONT',
             'wing_side': 'RIGHT',
@@ -309,6 +310,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': "Expansive two-storey L-shaped trade depot with dual full-height wings, stone base, upper overhang, and heavy courtyard crane",
         'settings': {
+            'has_loft_hatch': True,
             'building_shape': 'L_SHAPE',
             'wing_placement': 'FRONT',
             'wing_side': 'RIGHT',
@@ -415,6 +417,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': "Plank-clad open mill with geared treadwheel, chain drive, rail carriage, mini indoor crane and yard crane, NO walls",
         'settings': {
+            'has_loft_hatch': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_2',
             'mill_grade': 'GRADE_2',
@@ -459,6 +462,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': "Stone-dressed milling hall with great treadwheel, roller infeed, indoor crane and full courtyard crane, NO walls",
         'settings': {
+            'has_loft_hatch': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_3',
             'mill_grade': 'GRADE_3',
