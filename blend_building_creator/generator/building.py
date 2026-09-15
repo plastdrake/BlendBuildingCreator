@@ -1982,7 +1982,8 @@ def generate_building(obj, props):
         if getattr(props, 'has_loft_hatch', False) and effective_archetype != 'WATCHTOWER' \
                 and roof_style in ('GABLE', 'SWAY'):
             _rh = max(1.6, getattr(props, 'roof_height', 3.0))
-            _sill = top_z + min(_rh * 0.30, max(0.35, _rh - 1.60))
+            _sill = top_z + min(_rh * 0.22, max(0.30, _rh - 1.90))
+            _loff = 0.30 if tier_val == 'TIER_1' else (wall_t * 0.5 + 0.03)
             _hh2 = 0.45
             _wing_walls = [w.get('wall') for w in wings]
             _balc_side = getattr(props, 'balcony_side', None) if getattr(props, 'has_balcony', False) else None
@@ -2006,7 +2007,7 @@ def generate_building(obj, props):
                     _lc = min(top_x_max - 1.05, max(top_x_min + 1.05, _lc))
                     if _balc_side == _lside or _mini_side == _lside:
                         _lc = min(top_x_max - 1.1, max(top_x_min + 1.1, _lc + min(1.8, _lspan * 0.2)))
-                    _lface = top_y_max if _lside == 'BACK' else top_y_min
+                    _lface = top_y_max + _loff if _lside == 'BACK' else top_y_min - _loff
                     _loft_spec = {'axis': 'Y', 'side': _lside, 'face': _lface, 'center': _lc, 'sill': _sill}
                     _loft_arg = {'side': _lside, 'x0': _lc - _hh2, 'x1': _lc + _hh2,
                                  'z0': _sill, 'z1': _sill + 1.20}
@@ -2029,7 +2030,7 @@ def generate_building(obj, props):
                     _lc = min(top_y_max - 1.05, max(top_y_min + 1.05, _lc))
                     if _balc_side == _lside or _mini_side == _lside:
                         _lc = min(top_y_max - 1.1, max(top_y_min + 1.1, _lc + min(1.8, _lspan * 0.2)))
-                    _lface = top_x_max if _lside == 'RIGHT' else top_x_min
+                    _lface = top_x_max + _loff if _lside == 'RIGHT' else top_x_min - _loff
                     _loft_spec = {'axis': 'X', 'side': _lside, 'face': _lface, 'center': _lc, 'sill': _sill}
                     _ls = 'BACK' if _lside == 'RIGHT' else 'FRONT'
                     _loft_arg = {'side': _ls, 'x0': top_cy - (_lc + _hh2), 'x1': top_cy - (_lc - _hh2),

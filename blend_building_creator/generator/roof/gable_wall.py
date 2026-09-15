@@ -225,11 +225,11 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
         def _deck(x):
             return max(z_base, get_gable_deck_z_func(x))
 
-        _yn = 4
         if _hx0 > base_x_left + 0.03:
-            _lxs = [base_x_left + (_hx0 - base_x_left) * (i / _yn) for i in range(_yn + 1)]
-            _le = [bm.verts.new(Vector((x, y_ext, _deck(x)))) for x in _lxs]
-            _li = [bm.verts.new(Vector((x, y_int, _deck(x)))) for x in _lxs]
+            _le = [v for x, v in zip(top_xs, top_verts_ext) if x <= _hx0 + 1e-6]
+            _li = [v for x, v in zip(top_xs, top_verts_int) if x <= _hx0 + 1e-6]
+            _le.append(bm.verts.new(Vector((_hx0, y_ext, _deck(_hx0)))))
+            _li.append(bm.verts.new(Vector((_hx0, y_int, _deck(_hx0)))))
             _bl_e = bm.verts.new(Vector((base_x_left, y_ext, z_base)))
             _bl_i = bm.verts.new(Vector((base_x_left, y_int, z_base)))
             _br_e = bm.verts.new(Vector((_hx0, y_ext, z_base)))
@@ -237,9 +237,10 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             _mkface([_bl_e, _br_e] + list(reversed(_le)),
                     [_bl_i] + _li + [_br_i])
         if _hx1 < base_x_right - 0.03:
-            _rxs = [_hx1 + (base_x_right - _hx1) * (i / _yn) for i in range(_yn + 1)]
-            _re = [bm.verts.new(Vector((x, y_ext, _deck(x)))) for x in _rxs]
-            _ri = [bm.verts.new(Vector((x, y_int, _deck(x)))) for x in _rxs]
+            _re = [v for x, v in zip(top_xs, top_verts_ext) if x >= _hx1 - 1e-6]
+            _ri = [v for x, v in zip(top_xs, top_verts_int) if x >= _hx1 - 1e-6]
+            _re.insert(0, bm.verts.new(Vector((_hx1, y_ext, _deck(_hx1)))))
+            _ri.insert(0, bm.verts.new(Vector((_hx1, y_int, _deck(_hx1)))))
             _bl_e = bm.verts.new(Vector((_hx1, y_ext, z_base)))
             _bl_i = bm.verts.new(Vector((_hx1, y_int, z_base)))
             _br_e = bm.verts.new(Vector((base_x_right, y_ext, z_base)))
@@ -256,9 +257,12 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             _i2 = bm.verts.new(Vector((_hx1, y_int, _hz0)))
             _i3 = bm.verts.new(Vector((_hx0, y_int, _hz0)))
             _mkface([_e0, _e1, _e2, _e3], [_i0, _i3, _i2, _i1])
-        _mxs = [_hx0 + (_hx1 - _hx0) * (i / 3) for i in range(4)]
-        _te = [bm.verts.new(Vector((x, y_ext, _deck(x)))) for x in _mxs]
-        _ti = [bm.verts.new(Vector((x, y_int, _deck(x)))) for x in _mxs]
+        _te = [v for x, v in zip(top_xs, top_verts_ext) if _hx0 - 1e-6 <= x <= _hx1 + 1e-6]
+        _ti = [v for x, v in zip(top_xs, top_verts_int) if _hx0 - 1e-6 <= x <= _hx1 + 1e-6]
+        _te.insert(0, bm.verts.new(Vector((_hx0, y_ext, _deck(_hx0)))))
+        _te.append(bm.verts.new(Vector((_hx1, y_ext, _deck(_hx1)))))
+        _ti.insert(0, bm.verts.new(Vector((_hx0, y_int, _deck(_hx0)))))
+        _ti.append(bm.verts.new(Vector((_hx1, y_int, _deck(_hx1)))))
         _b0e = bm.verts.new(Vector((_hx0, y_ext, _hz1)))
         _b1e = bm.verts.new(Vector((_hx1, y_ext, _hz1)))
         _b0i = bm.verts.new(Vector((_hx0, y_int, _hz1)))
