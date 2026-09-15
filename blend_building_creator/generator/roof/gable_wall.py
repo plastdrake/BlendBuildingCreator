@@ -15,7 +15,7 @@ from ..materials import (
 
 def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
                                z_base, ez, rz, deck_thick, slope, tier='TIER_3', plank_direction='HORIZONTAL',
-                               roof_flare=0.35):
+                               roof_flare=0.35, hatch=None):
     """
     Populates the triangular gable wall under the roof pitch with physical 3D
     horizontal rounded logs (Tier 1) sliced to match the sloping bell-cast rafters.
@@ -63,28 +63,40 @@ def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm
         if cur_z >= z_deck_top - 0.05:
             break
         x_l, x_r = get_width_at_z(cur_z)
-        span = x_r - x_l
-        if span < 0.28:
+        _spans = [(x_l, x_r)]
+        if hatch is not None:
+            try:
+                _shx0, _shx1 = float(hatch['x0']), float(hatch['x1'])
+                _shz0, _shz1 = float(hatch['z0']), float(hatch['z1'])
+            except Exception:
+                _shx0 = None
+            if _shx0 is not None and _shz0 <= cur_z <= _shz1:
+                _spans = [(x_l, min(x_r, _shx0 - 0.03)), (max(x_l, _shx1 + 0.03), x_r)]
+        for (_sx0, _sx1) in _spans:
+            _sspan = _sx1 - _sx0
+            if _sspan < 0.28:
+                continue
+            _smid = (_sx0 + _sx1) * 0.5
+            uv_off = (k - k_start) * (_sspan * 0.12)
+            create_horizontal_cylinder(
+                bm,
+                radius_y=log_ry,
+                radius_z=log_rz,
+                length=_sspan + 0.06,
+                segments=16,
+                location=(_smid, y_log_siding, cur_z),
+                rotation=(0.0, 0.0, 0.0),
+                mat_index=MAT_INDEX_LOG,
+                smooth=True,
+                uv_offset=uv_off
+            )
+        if x_r - x_l < 0.28:
             break
-        mid_x = (x_l + x_r) * 0.5
-        uv_off = (k - k_start) * (span * 0.12)
-        create_horizontal_cylinder(
-            bm,
-            radius_y=log_ry,
-            radius_z=log_rz,
-            length=span + 0.06,
-            segments=16,
-            location=(mid_x, y_log_siding, cur_z),
-            rotation=(0.0, 0.0, 0.0),
-            mat_index=MAT_INDEX_LOG,
-            smooth=True,
-            uv_offset=uv_off
-        )
 
 
 def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
                          deck_thick, z_base, roof_height, roof_flare, tier, plank_direction,
-                         get_gable_deck_z_func, ez, rz, slope=None):
+                         get_gable_deck_z_func, ez, rz, slope=None, hatch=None):
     """
     Constructs a solid double-walled volumetric gable end wall matching the roof deck contour,
     with timber boundary trims and bargeboard fascia.
@@ -147,39 +159,120 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
     else:
         gable_mat = MAT_INDEX_PLASTER_EXT
 
-    # Construct clean, non-self-intersecting exterior & interior faces
-    ext_loop = [v_ext_bl, v_ext_br]
-    if has_right_jamb:
-        ext_loop.append(top_verts_ext[-1])
-    ext_loop.extend(reversed(top_verts_ext[1:-1]))
-    if has_left_jamb:
-        ext_loop.append(top_verts_ext[0])
-
-    int_loop = [v_int_bl]
-    if has_left_jamb:
-        int_loop.append(top_verts_int[0])
-    int_loop.extend(top_verts_int[1:-1])
-    if has_right_jamb:
-        int_loop.append(top_verts_int[-1])
-    int_loop.append(v_int_br)
-
-    if g_norm < 0:
-        f_ext = bm.faces.new(ext_loop)
-        f_int = bm.faces.new(int_loop)
-    else:
-        f_ext = bm.faces.new(list(reversed(ext_loop)))
-        f_int = bm.faces.new(list(reversed(int_loop)))
-
-    f_ext.material_index = gable_mat
-    f_int.material_index = MAT_INDEX_PLASTER_INT
-
     uv_g = bm.loops.layers.uv.verify()
-    for f in (f_ext, f_int):
+
+    def _uv_wall(f):
         for loop in f.loops:
             co = loop.vert.co
-            u = co.x * 0.55
-            v = (co.z - z_base) * 0.55
-            loop[uv_g].uv = Vector((u, v))
+            loop[uv_g].uv = Vector((co.x * 0.55, (co.z - z_base) * 0.55))
+
+    # Optional loft hatch opening (validated against the real wall bounds).
+    _hx0 = None
+    if hatch:
+        try:
+            _hx0 = max(float(hatch['x0']), base_x_left + 0.12)
+            _hx1 = min(float(hatch['x1']), base_x_right - 0.12)
+            _hz0 = max(float(hatch['z0']), z_base + 0.12)
+            _hz1 = float(hatch['z1'])
+            _hcx = (_hx0 + _hx1) * 0.5
+            _hz1 = min(_hz1, get_gable_deck_z_func(_hcx) - 0.22)
+        except Exception:
+            _hx0 = None
+        if _hx0 is None or _hx1 - _hx0 < 0.50 or _hz1 - _hz0 < 0.60:
+            _hx0 = None
+
+    def _mkface(pts_ext, pts_int):
+        if g_norm < 0:
+            fe = bm.faces.new(pts_ext)
+            fi = bm.faces.new(pts_int)
+        else:
+            fe = bm.faces.new(list(reversed(pts_ext)))
+            fi = bm.faces.new(list(reversed(pts_int)))
+        fe.material_index = gable_mat
+        fi.material_index = MAT_INDEX_PLASTER_INT
+        _uv_wall(fe)
+        _uv_wall(fi)
+
+    if _hx0 is None:
+        # Construct clean, non-self-intersecting exterior & interior faces
+        ext_loop = [v_ext_bl, v_ext_br]
+        if has_right_jamb:
+            ext_loop.append(top_verts_ext[-1])
+        ext_loop.extend(reversed(top_verts_ext[1:-1]))
+        if has_left_jamb:
+            ext_loop.append(top_verts_ext[0])
+
+        int_loop = [v_int_bl]
+        if has_left_jamb:
+            int_loop.append(top_verts_int[0])
+        int_loop.extend(top_verts_int[1:-1])
+        if has_right_jamb:
+            int_loop.append(top_verts_int[-1])
+        int_loop.append(v_int_br)
+
+        if g_norm < 0:
+            f_ext = bm.faces.new(ext_loop)
+            f_int = bm.faces.new(int_loop)
+        else:
+            f_ext = bm.faces.new(list(reversed(ext_loop)))
+            f_int = bm.faces.new(list(reversed(int_loop)))
+
+        f_ext.material_index = gable_mat
+        f_int.material_index = MAT_INDEX_PLASTER_INT
+        _uv_wall(f_ext)
+        _uv_wall(f_int)
+    else:
+        def _deck(x):
+            return max(z_base, get_gable_deck_z_func(x))
+
+        _yn = 4
+        if _hx0 > base_x_left + 0.03:
+            _lxs = [base_x_left + (_hx0 - base_x_left) * (i / _yn) for i in range(_yn + 1)]
+            _le = [bm.verts.new(Vector((x, y_ext, _deck(x)))) for x in _lxs]
+            _li = [bm.verts.new(Vector((x, y_int, _deck(x)))) for x in _lxs]
+            _bl_e = bm.verts.new(Vector((base_x_left, y_ext, z_base)))
+            _bl_i = bm.verts.new(Vector((base_x_left, y_int, z_base)))
+            _br_e = bm.verts.new(Vector((_hx0, y_ext, z_base)))
+            _br_i = bm.verts.new(Vector((_hx0, y_int, z_base)))
+            _mkface([_bl_e, _br_e] + list(reversed(_le)),
+                    [_bl_i] + _li + [_br_i])
+        if _hx1 < base_x_right - 0.03:
+            _rxs = [_hx1 + (base_x_right - _hx1) * (i / _yn) for i in range(_yn + 1)]
+            _re = [bm.verts.new(Vector((x, y_ext, _deck(x)))) for x in _rxs]
+            _ri = [bm.verts.new(Vector((x, y_int, _deck(x)))) for x in _rxs]
+            _bl_e = bm.verts.new(Vector((_hx1, y_ext, z_base)))
+            _bl_i = bm.verts.new(Vector((_hx1, y_int, z_base)))
+            _br_e = bm.verts.new(Vector((base_x_right, y_ext, z_base)))
+            _br_i = bm.verts.new(Vector((base_x_right, y_int, z_base)))
+            _mkface([_bl_e, _br_e] + list(reversed(_re)),
+                    [_bl_i] + _ri + [_br_i])
+        if _hz0 > z_base + 0.03:
+            _e0 = bm.verts.new(Vector((_hx0, y_ext, z_base)))
+            _e1 = bm.verts.new(Vector((_hx1, y_ext, z_base)))
+            _e2 = bm.verts.new(Vector((_hx1, y_ext, _hz0)))
+            _e3 = bm.verts.new(Vector((_hx0, y_ext, _hz0)))
+            _i0 = bm.verts.new(Vector((_hx0, y_int, z_base)))
+            _i1 = bm.verts.new(Vector((_hx1, y_int, z_base)))
+            _i2 = bm.verts.new(Vector((_hx1, y_int, _hz0)))
+            _i3 = bm.verts.new(Vector((_hx0, y_int, _hz0)))
+            _mkface([_e0, _e1, _e2, _e3], [_i0, _i3, _i2, _i1])
+        _mxs = [_hx0 + (_hx1 - _hx0) * (i / 3) for i in range(4)]
+        _te = [bm.verts.new(Vector((x, y_ext, _deck(x)))) for x in _mxs]
+        _ti = [bm.verts.new(Vector((x, y_int, _deck(x)))) for x in _mxs]
+        _b0e = bm.verts.new(Vector((_hx0, y_ext, _hz1)))
+        _b1e = bm.verts.new(Vector((_hx1, y_ext, _hz1)))
+        _b0i = bm.verts.new(Vector((_hx0, y_int, _hz1)))
+        _b1i = bm.verts.new(Vector((_hx1, y_int, _hz1)))
+        _mkface([_b0e, _b1e] + list(reversed(_te)),
+                [_b0i] + _ti + [_b1i])
+        _core = abs(y_ext - y_int) + 0.06
+        _yc = (y_ext + y_int) * 0.5
+        _midz = (_hz0 + _hz1) * 0.5
+        _hh = _hz1 - _hz0
+        create_beveled_box(bm, size=(0.10, _core, _hh), location=(_hx0, _yc, _midz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+        create_beveled_box(bm, size=(0.10, _core, _hh), location=(_hx1, _yc, _midz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+        create_beveled_box(bm, size=(_hx1 - _hx0 + 0.10, _core, 0.10), location=(_hcx, _yc, _hz1), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+        create_beveled_box(bm, size=(_hx1 - _hx0 + 0.10, _core, 0.10), location=(_hcx, _yc, _hz0), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
     # Top sloping boundary seals (under roof deck)
     seal_faces = []
@@ -237,23 +330,32 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             bevel_amount=0.012
         )
 
-        # Vertical king post from tie beam up to apex
+        # Vertical king post from tie beam up to apex (shifted clear of loft hatch)
         king_w = 0.16
         king_t = tie_t
-        king_top = get_gable_deck_z_func(cx)
+        king_x = cx
+        if _hx0 is not None and abs(cx - _hcx) < 0.80:
+            _kx = _hx1 + 0.30
+            if _kx + 0.15 > base_x_right:
+                _kx = _hx0 - 0.30
+            king_x = max(base_x_left + 0.15, min(base_x_right - 0.15, _kx))
+        king_top = get_gable_deck_z_func(king_x)
         king_bot = z_base + tie_h
         king_h = max(0.2, king_top - king_bot)
         create_beveled_box(
             bm,
             size=(king_w, king_t, king_h),
-            location=(cx, tie_y, king_bot + king_h * 0.5),
+            location=(king_x, tie_y, king_bot + king_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.010
         )
 
-    # Physical logs siding for Tier 1
+    # Physical logs siding for Tier 1 (split around a validated hatch opening)
+    _siding_hatch = None
+    if _hx0 is not None:
+        _siding_hatch = {'x0': _hx0, 'x1': _hx1, 'z0': _hz0, 'z1': _hz1}
     build_gable_physical_siding(
         bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
         z_base, ez, rz, deck_thick, slope, tier=tier,
-        plank_direction=plank_direction, roof_flare=roof_flare
+        plank_direction=plank_direction, roof_flare=roof_flare, hatch=_siding_hatch
     )

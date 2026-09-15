@@ -53,7 +53,7 @@ def _build_eave_fascia_segment(bm, rx_val, y_start, y_end, ez, exclusions=None):
 def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, overhang=0.45,
                     sway_amount=0.25, segments_y=6, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'),
                     abut_back=False, abut_front=False, tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35,
-                    dormer_apertures=None, eave_exclusions=None, valley_notch=None):
+                    dormer_apertures=None, eave_exclusions=None, valley_notch=None, loft_hatch=None):
     """
     Builds a whimsical fairytale curved/saddle roof with flared eaves, saggy ridge,
     solid 0.16m thick timber roof decking, thick volumetric gable walls, and full eave closures.
@@ -224,10 +224,14 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
         gable_configs.append((y_max, 1))
 
     for gy, g_norm in gable_configs:
+        _h = None
+        if loft_hatch and ((gy == y_min and loft_hatch.get('side') == 'FRONT')
+                           or (gy == y_max and loft_hatch.get('side') == 'BACK')):
+            _h = loft_hatch
         build_gable_end_wall(
             bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
             deck_thick, z_base, roof_height, roof_flare, tier, plank_direction,
-            get_sway_deck_z, ez, rz_ridge
+            get_sway_deck_z, ez, rz_ridge, hatch=_h
         )
         # Verge Bargeboards along gable rafter slopes
         y_verge = ry_min + 0.04 if g_norm < 0 else ry_max - 0.04
