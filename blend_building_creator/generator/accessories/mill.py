@@ -149,11 +149,11 @@ def _build_chain_loop(bm, x0, z0, r0, x1, z1, r1, y_plane):
     arc1 = max(8, int(math.pi * r1 / 0.075))
     a_start = math.atan2(nz0, nx0)
     for k in range(1, arc1):
-        a = a_start + math.pi * (k / float(arc1))
+        a = a_start - math.pi * (k / float(arc1))
         px = x1 + math.cos(a) * r1
         pz = z1 + math.sin(a) * r1
-        tx = -math.sin(a)
-        tz = math.cos(a)
+        tx = math.sin(a)
+        tz = -math.cos(a)
         pts.append((px, pz, tx, tz))
     for k in range(steps_straight + 1):
         t = k / float(steps_straight)
@@ -162,11 +162,11 @@ def _build_chain_loop(bm, x0, z0, r0, x1, z1, r1, y_plane):
         pts.append((px, pz, -ux, -uz))
     arc0 = max(8, int(math.pi * r0 / 0.075))
     for k in range(1, arc0):
-        a = a_start + math.pi + math.pi * (k / float(arc0))
+        a = a_start + math.pi - math.pi * (k / float(arc0))
         px = x0 + math.cos(a) * r0
         pz = z0 + math.sin(a) * r0
-        tx = -math.sin(a)
-        tz = math.cos(a)
+        tx = math.sin(a)
+        tz = -math.cos(a)
         pts.append((px, pz, tx, tz))
     for i, (px, pz, tx, tz) in enumerate(pts):
         yaw = math.atan2(tz, tx)
