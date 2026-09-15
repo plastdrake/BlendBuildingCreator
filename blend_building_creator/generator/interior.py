@@ -52,11 +52,24 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
     def add_floor_region(rx_min, rx_max, ry_min, ry_max, region_seed):
         if rx_max - rx_min < 0.04 or ry_max - ry_min < 0.04:
             return
-        create_box(
+        faces = create_box(
             bm, size=(rx_max - rx_min, ry_max - ry_min, thickness),
             location=((rx_min + rx_max) * 0.5, (ry_min + ry_max) * 0.5,
                       (z_bottom + z_top) * 0.5), mat_index=mat_idx
         )
+        # Planks run along the LONGEST span (beams cross the shortest).
+        # Swap top/bottom UVs when Y is longest and tag faces so the final
+        # cubic UV pass preserves this orientation.
+        if (rx_max - rx_min) < (ry_max - ry_min):
+            uv_layer = bm.loops.layers.uv.verify()
+            for f in faces:
+                zs = [loop.vert.co.z for loop in f.loops]
+                if max(zs) - min(zs) > 1e-6:
+                    continue
+                for loop in f.loops:
+                    co = loop.vert.co
+                    loop[uv_layer].uv = Vector((co.y, co.x))
+                f.tag = True
     
     if stair_hole is None or floor_idx == 0:
         # Timber floors are the planks themselvesâ€”no duplicate hidden slab below.
@@ -90,69 +103,134 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
 def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, beam_w=0.14, beam_d=0.18, stair_hole=None):
     """
     Builds rustic timber cross-beams under the ceiling for that classic fantasy tavern interior.
+    Beams always span the SHORTEST room distance (floorboards run along the longest).
     Automatically clips and trims beams around stairwells so beams never block stairs or head clearance.
     """
-    total_y = y_max - y_min
-    num_beams = max(2, int(total_y / spacing))
-    actual_step = total_y / (num_beams + 1)
-    
     beam_cz = z_ceil - (beam_d * 0.5)
-    
-    # 1. Framing trimmer beam along the stairwell opening edge
+
+    if (x_max - x_min) <= (y_max - y_min):
+        total_y = y_max - y_min
+        num_beams = max(2, int(total_y / spacing))
+        actual_step = total_y / (num_beams + 1)
+
+        # 1. Framing trimmer beam along the stairwell opening edge
+        if stair_hole is not None:
+            sh_xmin, sh_xmax, sh_ymin, sh_ymax = stair_hole
+            trimmer_len = (sh_ymax - sh_ymin) + 0.3
+            trimmer_cy = (sh_ymin + sh_ymax) * 0.5
+            create_beveled_box(
+                bm,
+                size=(beam_w, trimmer_len, beam_d),
+                location=(sh_xmax, trimmer_cy, beam_cz),
+                mat_index=MAT_INDEX_WOOD,
+                bevel_amount=0.015
+            )
+
+        # 2. Cross beams spanning X
+        for i in range(1, num_beams + 1):
+            by = y_min + i * actual_step
+
+            # Check if this beam crosses the stairwell cutout
+            if stair_hole is not None:
+                sh_xmin, sh_xmax, sh_ymin, sh_ymax = stair_hole
+                if (sh_ymin - 0.25) <= by <= (sh_ymax + 0.25):
+                    # Trim the beam so it only spans from sh_xmax to x_max
+                    if sh_xmax < x_max - 0.3:
+                        w = (x_max + 0.02) - sh_xmax
+                        cx = sh_xmax + w * 0.5
+                        create_beveled_box(
+                            bm,
+                            size=(w, beam_w, beam_d),
+                            location=(cx, by, beam_cz),
+                            mat_index=MAT_INDEX_WOOD,
+                            bevel_amount=0.015
+                        )
+                    # Also span beam on the left if there is floor on the left
+                    if sh_xmin > x_min + 0.4:
+                        w_left = sh_xmin - (x_min - 0.02)
+                        cx_left = (x_min - 0.02) + w_left * 0.5
+                        create_beveled_box(
+                            bm,
+                            size=(w_left, beam_w, beam_d),
+                            location=(cx_left, by, beam_cz),
+                            mat_index=MAT_INDEX_WOOD,
+                            bevel_amount=0.015
+                        )
+                    continue
+
+            # Full width beam — embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
+            beam_length = (x_max - x_min) + 0.04
+            beam_cx = (x_min + x_max) * 0.5
+            create_beveled_box(
+                bm,
+                size=(beam_length, beam_w, beam_d),
+                location=(beam_cx, by, beam_cz),
+                mat_index=MAT_INDEX_WOOD,
+                bevel_amount=0.015
+            )
+        return
+
+    total_x = x_max - x_min
+    num_beams = max(2, int(total_x / spacing))
+    actual_step = total_x / (num_beams + 1)
+
+    # 1. Framing trimmer beam along the stairwell opening edge (room side)
     if stair_hole is not None:
         sh_xmin, sh_xmax, sh_ymin, sh_ymax = stair_hole
-        trimmer_len = (sh_ymax - sh_ymin) + 0.3
-        trimmer_cy = (sh_ymin + sh_ymax) * 0.5
+        trimmer_len = (sh_xmax - sh_xmin) + 0.3
+        trimmer_cx = (sh_xmin + sh_xmax) * 0.5
+        trim_edge = sh_ymax if (y_max - sh_ymax) >= (sh_ymin - y_min) else sh_ymin
         create_beveled_box(
             bm,
-            size=(beam_w, trimmer_len, beam_d),
-            location=(sh_xmax, trimmer_cy, beam_cz),
+            size=(trimmer_len, beam_w, beam_d),
+            location=(trimmer_cx, trim_edge, beam_cz),
             mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.015
         )
 
-    # 2. Cross beams
+    # 2. Cross beams spanning Y (the shorter distance)
     for i in range(1, num_beams + 1):
-        by = y_min + i * actual_step
-        
+        bx = x_min + i * actual_step
+
         # Check if this beam crosses the stairwell cutout
         if stair_hole is not None:
             sh_xmin, sh_xmax, sh_ymin, sh_ymax = stair_hole
-            if (sh_ymin - 0.25) <= by <= (sh_ymax + 0.25):
-                # Trim the beam so it only spans from sh_xmax to x_max
-                if sh_xmax < x_max - 0.3:
-                    w = (x_max + 0.02) - sh_xmax
-                    cx = sh_xmax + w * 0.5
+            if (sh_xmin - 0.25) <= bx <= (sh_xmax + 0.25):
+                # Trim the beam so it only spans from sh_ymax to y_max
+                if sh_ymax < y_max - 0.3:
+                    h = (y_max + 0.02) - sh_ymax
+                    cy = sh_ymax + h * 0.5
                     create_beveled_box(
                         bm,
-                        size=(w, beam_w, beam_d),
-                        location=(cx, by, beam_cz),
+                        size=(beam_w, h, beam_d),
+                        location=(bx, cy, beam_cz),
                         mat_index=MAT_INDEX_WOOD,
                         bevel_amount=0.015
                     )
-                # Also span beam on the left if there is floor on the left
-                if sh_xmin > x_min + 0.4:
-                    w_left = sh_xmin - (x_min - 0.02)
-                    cx_left = (x_min - 0.02) + w_left * 0.5
+                # Also span beam on the near side if there is floor there
+                if sh_ymin > y_min + 0.4:
+                    h_far = sh_ymin - (y_min - 0.02)
+                    cy_far = (y_min - 0.02) + h_far * 0.5
                     create_beveled_box(
                         bm,
-                        size=(w_left, beam_w, beam_d),
-                        location=(cx_left, by, beam_cz),
+                        size=(beam_w, h_far, beam_d),
+                        location=(bx, cy_far, beam_cz),
                         mat_index=MAT_INDEX_WOOD,
                         bevel_amount=0.015
                     )
                 continue
-                
-        # Full width beam â€” embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
-        beam_length = (x_max - x_min) + 0.04
-        beam_cx = (x_min + x_max) * 0.5
+
+        # Full depth beam — embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
+        beam_length = (y_max - y_min) + 0.04
+        beam_cy = (y_min + y_max) * 0.5
         create_beveled_box(
             bm,
-            size=(beam_length, beam_w, beam_d),
-            location=(beam_cx, by, beam_cz),
+            size=(beam_w, beam_length, beam_d),
+            location=(bx, beam_cy, beam_cz),
             mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.015
         )
+
 
 def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
                          wall_thickness=0.28, stair_hole=None, wall_openings=None):
