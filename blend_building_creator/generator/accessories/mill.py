@@ -88,6 +88,99 @@ def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0, grade
             build_courtyard_crane(bm, yard_x=crane_x, yard_y=crane_y, z_ground=z_ground,
                                    mast_height=3.6, jib_length=3.0, rot_angle=rot_angle - 0.35)
 
+def _build_shaft_pillar(bm, x, y, z_floor, z_shaft):
+    h = max(0.15, z_shaft - z_floor)
+    cz = z_floor + h * 0.5
+    create_beveled_box(
+        bm, size=(0.34, 0.34, 0.14),
+        location=(x, y, z_floor + 0.07),
+        mat_index=MAT_INDEX_STONE, bevel_amount=0.02
+    )
+    create_beveled_box(
+        bm, size=(0.18, 0.18, h),
+        location=(x, y, cz),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01
+    )
+    create_box(
+        bm, size=(0.20, 0.20, 0.10),
+        location=(x, y, z_shaft),
+        mat_index=MAT_INDEX_IRON
+    )
+
+def _build_grooved_pulley(bm, radius, width, location, mat_index):
+    rot = (1.5708, 0.0, 0.0)
+    flange_t = 0.028
+    hub_r = radius * 0.62
+    create_cylinder(
+        bm, radius=radius, height=flange_t, segments=16,
+        location=(location[0], location[1] - width * 0.5 + flange_t * 0.5, location[2]),
+        rotation=rot, mat_index=mat_index
+    )
+    create_cylinder(
+        bm, radius=radius, height=flange_t, segments=16,
+        location=(location[0], location[1] + width * 0.5 - flange_t * 0.5, location[2]),
+        rotation=rot, mat_index=mat_index
+    )
+    create_cylinder(
+        bm, radius=hub_r, height=width, segments=16,
+        location=(location[0], location[1], location[2]),
+        rotation=rot, mat_index=mat_index
+    )
+
+def _build_chain_loop(bm, x0, z0, r0, x1, z1, r1, y_plane):
+    dx = x1 - x0
+    dz = z1 - z0
+    d = max(0.001, math.sqrt(dx * dx + dz * dz))
+    ux = dx / d
+    uz = dz / d
+    dr = max(-0.9, min(0.9, (r0 - r1) / d))
+    alpha = math.asin(dr)
+    ca = math.cos(alpha)
+    sa = math.sin(alpha)
+    nx0 = -uz * ca + ux * sa
+    nz0 = ux * ca + uz * sa
+    pts = []
+    steps_straight = max(6, int(d / 0.13))
+    for k in range(steps_straight + 1):
+        t = k / float(steps_straight)
+        px = (x0 + nx0 * r0) * (1.0 - t) + (x1 + nx0 * r1) * t
+        pz = (z0 + nz0 * r0) * (1.0 - t) + (z1 + nz0 * r1) * t
+        pts.append((px, pz, ux, uz))
+    arc1 = max(6, int(math.pi * r1 / 0.13))
+    a_start = math.atan2(nz0, nx0)
+    for k in range(1, arc1):
+        a = a_start + math.pi * (k / float(arc1))
+        px = x1 + math.cos(a) * r1
+        pz = z1 + math.sin(a) * r1
+        tx = -math.sin(a)
+        tz = math.cos(a)
+        pts.append((px, pz, tx, tz))
+    for k in range(steps_straight + 1):
+        t = k / float(steps_straight)
+        px = (x1 - nx0 * r1) * (1.0 - t) + (x0 - nx0 * r0) * t
+        pz = (z1 - nz0 * r1) * (1.0 - t) + (z0 - nz0 * r0) * t
+        pts.append((px, pz, -ux, -uz))
+    arc0 = max(6, int(math.pi * r0 / 0.13))
+    for k in range(1, arc0):
+        a = a_start + math.pi + math.pi * (k / float(arc0))
+        px = x0 + math.cos(a) * r0
+        pz = z0 + math.sin(a) * r0
+        tx = -math.sin(a)
+        tz = math.cos(a)
+        pts.append((px, pz, tx, tz))
+    for i, (px, pz, tx, tz) in enumerate(pts):
+        yaw = math.atan2(tz, tx)
+        if i % 2 == 0:
+            rot = (1.5708, 0.0, 0.0)
+        else:
+            rot = (0.0, -yaw + 1.5708, 0.0)
+        create_torus_ring(
+            bm, location=(px, y_plane, pz), rotation=rot,
+            major_radius=0.055, minor_radius=0.014,
+            major_segments=8, minor_segments=6,
+            mat_index=MAT_INDEX_IRON
+        )
+
 def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='GRADE_1'):
     specs = {
         'GRADE_1': {'wheel_r': 1.05, 'wheel_w': 1.00, 'blade_r': 0.42, 'bench_l': 3.2,
@@ -110,20 +203,17 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
     blade_x = mill_cx + bench_l * 0.12
     wheel_x = mill_cx - (bench_l * 0.5 + wheel_r + 1.60)
     axle_z = z_floor + wheel_r + 0.12
-    # Chain drive runs outboard of the treadwheel A-frame legs
-    # Pulley system height is now anchored to lowered_arbor_z
-    pulley_y = mill_cy + wheel_w * 0.5 + 0.68
-
     num_benches = 2 if grade == 'GRADE_3' else 1
     bench_spacing_y = 1.2 if grade == 'GRADE_3' else 0.0
-    # Deep clearance: shaft sits well below table so logs pass cleanly
     lowered_arbor_z = bench_top - 0.20
+    pulley_y = mill_cy + wheel_w * 0.5 + 0.68
     pulley_z = lowered_arbor_z
+    small_pulley_r = 0.16
+    big_pulley_r = 0.30
 
     for b_idx in range(num_benches):
         y_off = (b_idx - 0.5) * bench_spacing_y
         b_mill_cy = mill_cy + y_off
-        
         for tx in (mill_cx - bench_l * 0.32, mill_cx, mill_cx + bench_l * 0.32):
             for ly in (b_mill_cy - 0.33, b_mill_cy + 0.33):
                 create_beveled_box(
@@ -161,7 +251,6 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
     for b_idx in range(num_benches):
         y_off = (b_idx - 0.5) * (1.2 if grade == 'GRADE_3' else 0.0)
         curr_mill_cy = mill_cy + y_off
-        
         _fring = []
         _bring = []
         for bi in range(_teeth * 2):
@@ -199,6 +288,8 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
         _planar_uv_faces(bm, bolt_faces[-2:], scale=2.0, axis=1)
 
     arb_y0 = mill_cy - 0.40
+    if grade == 'GRADE_3':
+        arb_y0 = mill_cy - 1.0
     arb_y1 = pulley_y + 0.10
     create_horizontal_cylinder(
         bm, radius_y=0.055, radius_z=0.055, length=arb_y1 - arb_y0, segments=10,
@@ -206,34 +297,16 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
         rotation=(0.0, 0.0, 1.5708),
         mat_index=MAT_INDEX_IRON
     )
-    # Vertical supports for the shaft (now adjusted for lowered height)
-    for by in (mill_cy - 0.38, mill_cy + 0.38):
-        bh = abs(lowered_arbor_z - bench_top) + 0.20
-        create_beveled_box(
-            bm, size=(0.16, 0.14, bh),
-            location=(blade_x, by, bench_top - 0.10 + bh * 0.5),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
-        )
-    # Support pillar for the shaft next to the pulley
-    create_beveled_box(
-        bm, size=(0.20, 0.20, abs(lowered_arbor_z - z_floor)),
-        location=(blade_x, pulley_y, (lowered_arbor_z + z_floor) * 0.5),
-        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01
-    )
+    for b_idx in range(num_benches):
+        y_off = (b_idx - 0.5) * (1.2 if grade == 'GRADE_3' else 0.0)
+        curr_mill_cy = mill_cy + y_off
+        for by in (curr_mill_cy - 0.38, curr_mill_cy + 0.38):
+            _build_shaft_pillar(bm, blade_x, by, z_floor, lowered_arbor_z)
+    _build_shaft_pillar(bm, blade_x, pulley_y - 0.28, z_floor, lowered_arbor_z)
 
-    # Grooved pulley helper: creates a rim + inner core to form a chain groove
-    def create_grooved_pulley(bm, radius, height, location, rotation, mat_index):
-        # Outer rim
-        create_cylinder(bm, radius=radius, height=height, segments=16,
-                        location=location, rotation=rotation, mat_index=mat_index)
-        # Inner core (creates the groove)
-        create_cylinder(bm, radius=radius * 0.7, height=height + 0.02, segments=16,
-                        location=location, rotation=rotation, mat_index=mat_index)
-
-    create_grooved_pulley(
-        bm, radius=0.16, height=0.10, segments=12,
+    _build_grooved_pulley(
+        bm, radius=small_pulley_r, width=0.12,
         location=(blade_x, pulley_y, pulley_z),
-        rotation=(1.5708, 0.0, 0.0),
         mat_index=MAT_INDEX_TIMBER
     )
 
@@ -290,13 +363,12 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
         rotation=(0.0, 0.0, 1.5708),
         mat_index=MAT_INDEX_TIMBER
     )
-    # Large drive pulley on wheel axle (also grooved)
-    create_grooved_pulley(
-        bm, radius=0.30, height=0.10, segments=14,
+    _build_grooved_pulley(
+        bm, radius=big_pulley_r, width=0.12,
         location=(wheel_x, pulley_y, axle_z),
-        rotation=(1.5708, 0.0, 0.0),
         mat_index=MAT_INDEX_TIMBER
     )
+    _build_chain_loop(bm, wheel_x, axle_z, big_pulley_r * 0.62, blade_x, pulley_z, small_pulley_r * 0.62, pulley_y)
 
     for sy in (mill_cy - wheel_w * 0.5 - 0.42, mill_cy + wheel_w * 0.5 + 0.42):
         create_beveled_box(
