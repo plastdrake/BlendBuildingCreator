@@ -1,8 +1,7 @@
 import math
 from mathutils import Vector
-from .common import (
-    _get_facade_frame, _planar_uv_faces
-)
+from ..facade import get_facade_frame
+from ..uv_utils import map_planar_faces
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, create_horizontal_cylinder,
     create_torus_ring, create_door_batten
@@ -285,21 +284,21 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
         for _bf in _bfaces:
             _bf.material_index = MAT_INDEX_IRON
             _bf.smooth = False
-        _planar_uv_faces(bm, _bfaces, scale=0.35, axis=1)
+        map_planar_faces(bm, _bfaces, scale=0.35, axis=1)
         hub_faces = create_cylinder(
             bm, radius=0.09, height=0.14, segments=10,
             location=(blade_x, curr_mill_cy, lowered_arbor_z),
             rotation=(1.5708, 0.0, 0.0),
             mat_index=MAT_INDEX_IRON
         )
-        _planar_uv_faces(bm, hub_faces[-2:], scale=2.0, axis=1)
+        map_planar_faces(bm, hub_faces[-2:], scale=2.0, axis=1)
         bolt_faces = create_cylinder(
             bm, radius=0.045, height=0.20, segments=8,
             location=(blade_x, curr_mill_cy, lowered_arbor_z),
             rotation=(1.5708, 0.0, 0.0),
             mat_index=MAT_INDEX_IRON
         )
-        _planar_uv_faces(bm, bolt_faces[-2:], scale=2.0, axis=1)
+        map_planar_faces(bm, bolt_faces[-2:], scale=2.0, axis=1)
 
     arb_y0 = mill_cy - 0.40
     if grade == 'GRADE_3':
@@ -426,7 +425,7 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
             rotation=(1.5708, 0.0, 0.0),
             mat_index=MAT_INDEX_TIMBER
         )
-        _planar_uv_faces(bm, gear_faces[-2:], scale=0.8, axis=1)
+        map_planar_faces(bm, gear_faces[-2:], scale=0.8, axis=1)
         for gi in range(12):
             ga = (2.0 * math.pi * gi) / 12.0
             create_box(

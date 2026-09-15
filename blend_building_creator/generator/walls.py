@@ -45,25 +45,27 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     if is_y_wall is None:
         is_y_wall = abs(dy) > abs(dx)
     
-    # 1. Solid Interior Core (sealed flat interior surface)
+    # Consistent global log height grid (0.36m) matching roof gable logs
+    log_h = 0.36
+
+    # 1. Solid Interior Core (sealed flat interior surface). Extended one log row
+    # below the floor line so the lowest exterior log - whose global grid dips
+    # slightly under z_bottom - is fully hidden from inside the room.
     if not openings:
         core_thick = thickness * 0.40
         core_cx = (x1 + x2) * 0.5 - nx * (thickness * 0.28)
         core_cy = (y1 + y2) * 0.5 - ny * (thickness * 0.28)
-        core_cz = (z_bottom + z_top) * 0.5
+        core_z_bottom = max(0.0, z_bottom - log_h)
+        core_cz = (core_z_bottom + z_top) * 0.5
         create_box(
             bm,
-            size=(seg_len, core_thick, height),
+            size=(seg_len, core_thick, z_top - core_z_bottom),
             location=(core_cx, core_cy, core_cz),
             rotation=(0.0, 0.0, angle),
             mat_index=MAT_INDEX_PLASTER_INT
         )
     
     # 2. Stacked Physical 3D Rounded Cylindrical Logs on Exterior
-    # Use consistent global log height grid (0.36m) matching roof gable logs
-    target_diam = 0.36
-    log_h = target_diam
-    
     ext_offset = thickness * 0.32
     ux = dx / seg_len
     uy = dy / seg_len
@@ -519,9 +521,11 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end,
             seed=seed, omit_top_row=omit_top_log_row
         )
-        # Build sealed interior core around openings in matching warm wood planks
+        # Build sealed interior core around openings in matching warm wood planks.
+        # Extended one log row below the floor line so the lowest exterior log is
+        # hidden from inside the room (same reason as build_log_wall_segment).
         build_wall_with_opening(
-            bm, p_start, p_end, z_bottom, z_top, thickness,
+            bm, p_start, p_end, max(0.0, z_bottom - 0.36), z_top, thickness,
             openings=openings, mat_ext=MAT_INDEX_WOOD, normal_vec=normal_vec,
             tier='TIER_3', physical_siding=False,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end,
@@ -927,24 +931,28 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
                 mat_index=MAT_INDEX_TIMBER
             )
             
-    # 2. 45-degree diagonal corner corbels for structural fantasy silhouette
+    # 2. 45-degree diagonal corner corbels for structural fantasy silhouette.
+    # Each corner respects BOTH facades it touches, so suppressing one facade
+    # (e.g. a pillared overhang) also removes the corner brackets on that side.
     corner_d = corbel_d * 1.15
-    if include_front:
+    if include_front and include_left:
         # Front-Left corner
         if not (front_exclude_x and front_exclude_x[0] <= x_min_upper <= front_exclude_x[1]):
             loc_fl = Vector((x_min_upper + overhang_dist + embed * 0.707, y_min_upper + overhang_dist + embed * 0.707, z_mount))
             create_curved_corbel(bm, loc=loc_fl, facing_dir=(-0.707, -0.707, 0.0),
                                 width=corbel_w, depth=corner_d + embed, height=corbel_h)
+    if include_front and include_right:
         # Front-Right corner
         if not (front_exclude_x and front_exclude_x[0] <= x_max_upper <= front_exclude_x[1]):
             loc_fr = Vector((x_max_upper - overhang_dist - embed * 0.707, y_min_upper + overhang_dist + embed * 0.707, z_mount))
             create_curved_corbel(bm, loc=loc_fr, facing_dir=(0.707, -0.707, 0.0),
                                 width=corbel_w, depth=corner_d + embed, height=corbel_h)
-    if include_back:
+    if include_back and include_left:
         # Back-Left corner
         loc_bl = Vector((x_min_upper + overhang_dist + embed * 0.707, y_max_upper - overhang_dist - embed * 0.707, z_mount))
         create_curved_corbel(bm, loc=loc_bl, facing_dir=(-0.707, 0.707, 0.0),
                             width=corbel_w, depth=corner_d + embed, height=corbel_h)
+    if include_back and include_right:
         # Back-Right corner
         loc_br = Vector((x_max_upper - overhang_dist - embed * 0.707, y_max_upper - overhang_dist - embed * 0.707, z_mount))
         create_curved_corbel(bm, loc=loc_br, facing_dir=(0.707, 0.707, 0.0),

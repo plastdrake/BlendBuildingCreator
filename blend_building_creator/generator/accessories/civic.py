@@ -1,0 +1,556 @@
+"""Civic landmark accessories for Town Halls: clock tower, corner turrets, rampart terrace, gabled porch."""
+
+import math
+from mathutils import Vector
+from ..mesh_utils import (
+    create_box, create_beveled_box, create_cylinder, create_cone,
+)
+from ..uv_utils import apply_roof_shingle_uvs
+from ..materials import (
+    MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
+    MAT_INDEX_PLASTER_EXT, MAT_INDEX_SHINGLES, MAT_INDEX_GLASS,
+    MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_DOOR,
+    MAT_INDEX_CUT_STONE, MAT_INDEX_CLOCK_FACE,
+)
+from ..roof.gable_roof import build_gable_roof
+from ..roof.turret_roof import build_conical_turret_roof
+
+
+def _tier_wall_mat(tier):
+    """Match the engine's wall logic: planks/wood for Tier 1-2, stucco for Tier 3."""
+    return MAT_INDEX_PLASTER_EXT if tier == 'TIER_3' else MAT_INDEX_WOOD
+
+
+def _shed_roof(bm, x_min, x_max, y_wall, y_edge, z_wall, z_edge, thickness=0.10):
+    """Single shingled lean-to slope running from (y_wall, z_wall) down to
+    (y_edge, z_edge), width across X, with correct shingle UVs."""
+    width = x_max - x_min
+    dy = y_wall - y_edge
+    dz = z_wall - z_edge
+    slope_len = math.sqrt(dy * dy + dz * dz)
+    if slope_len < 0.05 or width < 0.05:
+        return
+    ang = math.atan2(dz, dy)
+    loc = ((x_min + x_max) * 0.5, (y_wall + y_edge) * 0.5, (z_wall + z_edge) * 0.5)
+    rot = (ang, 0.0, 0.0)
+    faces = create_beveled_box(
+        bm, size=(width, slope_len, thickness), location=loc, rotation=rot,
+        mat_index=MAT_INDEX_SHINGLES, bevel_amount=0.008,
+    )
+    apply_roof_shingle_uvs(bm, faces, mat_index=MAT_INDEX_SHINGLES, scale=0.32)
+
+
+def _square_spire_roof(bm, cx, cy, z_base, half, height, eave=0.20):
+    """Axis-aligned 4-facet square spire roof (a regular pyramid, no cylinder),
+    with per-face shingle UVs, a square timber eave board and an iron finial."""
+    # Lift the roof 10cm off the plate below so no faces end up coplanar.
+    z_roof = z_base + 0.10
+    apex_z = z_roof + height
+    R = max(0.12, half) * math.sqrt(2.0)
+    faces = create_cone(
+        bm, radius1=R, radius2=0.06, height=height, segments=4,
+        location=(cx, cy, z_roof + height * 0.5),
+        rotation=(0.0, 0.0, math.pi * 0.25),
+        mat_index=MAT_INDEX_SHINGLES,
+    )
+    # World-aligned shingle UVs (axis-aligned + correctly oriented + engine size).
+    apply_roof_shingle_uvs(bm, faces)
+    # Square eave board under the spire
+    create_beveled_box(bm, size=(half * 2.0 + eave, half * 2.0 + eave, 0.14),
+                       location=(cx, cy, z_base + 0.05),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+    # Iron finial needle + ball
+    create_cylinder(bm, radius=0.035, height=0.9, segments=6,
+                    location=(cx, cy, apex_z + 0.45), mat_index=MAT_INDEX_IRON)
+    create_cylinder(bm, radius=0.085, height=0.12, segments=8,
+                    location=(cx, cy, apex_z + 0.62), mat_index=MAT_INDEX_IRON)
+
+
+def _clock_face(bm, center, facing, radius=0.85, frame=True):
+    """Recessed dial with optional timber surround, tick ring, hands and boss.
+
+    Facing: 'front' (-Y), 'back' (+Y), 'left' (-X), 'right' (+X).
+    """
+    cx, cy, cz = center
+    # Cylinder axis must point along the face normal:
+    # front/back -> axis Y (rotate 90 deg about X), sides -> axis X (rotate about Y).
+    rot = (1.5707963, 0.0, 0.0) if facing in ('front', 'back') else (0.0, 1.5707963, 0.0)
+
+    if facing == 'front':
+        off = (0.0, -1.0)
+    elif facing == 'back':
+        off = (0.0, 1.0)
+    elif facing == 'left':
+        off = (-1.0, 0.0)
+    else:
+        off = (1.0, 0.0)
+    ox, oy = off
+    front_dial = facing in ('front', 'back')
+    # Surround backboard (square, slightly larger than dial) - flush plaque on the wall
+    fw = radius * 2.0 + 0.30
+    if frame:
+        if front_dial:
+            create_beveled_box(bm, size=(fw, 0.10, fw), location=(cx, cy, cz),
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.015)
+        else:
+            create_beveled_box(bm, size=(0.10, fw, fw), location=(cx, cy, cz),
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.015)
+    # Iron rim + white dial disc, stacked proud of the wall
+    create_cylinder(bm, radius=radius + 0.14, height=0.10, segments=24,
+                    location=(cx, cy, cz), rotation=rot, mat_index=MAT_INDEX_IRON)
+    create_cylinder(bm, radius=radius, height=0.13, segments=24,
+                    location=(cx + ox * 0.03, cy + oy * 0.03, cz),
+                    rotation=rot, mat_index=MAT_INDEX_CLOCK_FACE)
+    if front_dial:
+        dial_o = (cx, cy + oy * 0.11, cz)
+    else:
+        dial_o = (cx + ox * 0.11, cy, cz)
+    dx, dy, dz = dial_o
+
+    # 12 tick marks around the dial face.
+    # Front/back dials lie in the XZ plane and must rotate about Y;
+    # side dials lie in the YZ plane and must rotate about X.
+    k = radius / 0.85
+    for h in range(12):
+        ang = h * math.pi / 6.0
+        radial = radius * 0.80
+        big = (h % 3 == 0)
+        tw, th = (0.075 * k, 0.21 * k) if big else (0.045 * k, 0.12 * k)
+        if front_dial:
+            create_box(bm, size=(tw, 0.035 * k, th),
+                       location=(dx + math.sin(ang) * radial, dy, dz + math.cos(ang) * radial),
+                       rotation=(0.0, ang, 0.0),
+                       mat_index=MAT_INDEX_IRON)
+        else:
+            create_box(bm, size=(0.035 * k, tw, th),
+                       location=(dx, dy + math.sin(ang) * radial, dz + math.cos(ang) * radial),
+                       rotation=(-ang, 0.0, 0.0),
+                       mat_index=MAT_INDEX_IRON)
+    # Hands (10:09 read): hour + minute offset radially + center boss
+    hour_ang = math.radians(60.0)
+    min_ang = math.radians(305.0)
+    if front_dial:
+        for (ha, hl, hw) in ((hour_ang, 0.46, 0.10), (min_ang, 0.66, 0.075)):
+            orad = hl * 0.5
+            create_beveled_box(bm, size=(hw * k, 0.04 * k, hl * k),
+                               location=(dx + math.sin(ha) * orad * k, dy,
+                                         dz + math.cos(ha) * orad * k),
+                               rotation=(0.0, ha, 0.0),
+                               mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
+        create_cylinder(bm, radius=0.085 * k, height=0.07 * k, segments=10,
+                        location=(dx, dy - 0.02 * k, dz), rotation=rot,
+                        mat_index=MAT_INDEX_IRON)
+    else:
+        for (ha, hl, hw) in ((hour_ang, 0.46, 0.10), (min_ang, 0.66, 0.075)):
+            orad = hl * 0.5
+            create_beveled_box(bm, size=(0.04 * k, hw * k, hl * k),
+                               location=(dx, dy + math.sin(ha) * orad * k,
+                                         dz + math.cos(ha) * orad * k),
+                               rotation=(-ha, 0.0, 0.0),
+                               mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
+        create_cylinder(bm, radius=0.085 * k, height=0.07 * k, segments=10,
+                        location=(dx + 0.02 * k, dy, dz), rotation=rot,
+                        mat_index=MAT_INDEX_IRON)
+
+
+def build_clock_tower(bm, cx, cy, z_ground=0.0, size=3.0, shaft_top_z=10.0,
+                      tier='TIER_3', roof_flare=0.38, floor_levels=None,
+                      front_y=None, arch_passage=False):
+    """Attached civic clock/belfry tower integrated into the front corner.
+
+    floor_levels: list of deck heights so string courses line up with the
+    main building storeys. front_y: wing front plane to flush the tower to.
+    arch_passage: open a walk-through gate tunnel (front-back) through the base.
+    """
+    s = max(2.4, min(4.2, size))
+    half = s * 0.5
+    wall_mat = MAT_INDEX_STONE
+    # Stone stage (index 0) receives the engine's clean world-space masonry UVs,
+    # instead of the streaky default box UVs wood/plaster would get.
+    stage_mat = MAT_INDEX_STONE
+
+    if arch_passage:
+        # Gate base: corner piers + open tunnel along Y, arch trims front/back
+        tunnel_w = min(2.2, s - 1.0)
+        arch_top = z_ground + 3.1
+        strip_w = (s + 0.9 - tunnel_w) * 0.5
+        for px in (-1.0, 1.0):
+            create_beveled_box(bm, size=(strip_w, s + 0.9, 0.30),
+                               location=(cx + px * (tunnel_w * 0.5 + strip_w * 0.5), cy, z_ground + 0.15),
+                               mat_index=MAT_INDEX_STONE, bevel_amount=0.03)
+        for px in (-1.0, 1.0):
+            for py in (-1.0, 1.0):
+                create_beveled_box(bm, size=(0.62, 0.62, arch_top - z_ground),
+                                   location=(cx + px * (half - 0.25), cy + py * (half - 0.25),
+                                             z_ground + (arch_top - z_ground) * 0.5),
+                                   mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+        # Side walls between piers (tunnel stays open front-back)
+        for px in (-1.0, 1.0):
+            create_beveled_box(bm, size=(0.24, s - 0.9, arch_top - z_ground - 0.3),
+                               location=(cx + px * (half - 0.12), cy, z_ground + (arch_top - z_ground) * 0.5),
+                               mat_index=wall_mat, bevel_amount=0.015)
+        # Pointed arch trim on both faces + keystone + panel above
+        for py in (-1.0, 1.0):
+            fy = cy + py * (half + 0.02)
+            for ax in (-1.0, 1.0):
+                create_beveled_box(bm, size=(0.22, 0.14, 1.5),
+                                   location=(cx + ax * tunnel_w * 0.28, fy, arch_top - 0.75),
+                                   rotation=(0.0, ax * -0.5, 0.0),
+                                   mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
+            create_box(bm, size=(0.24, 0.16, 0.5), location=(cx, fy, arch_top - 0.15),
+                       mat_index=MAT_INDEX_TIMBER_FRAME)
+            create_beveled_box(bm, size=(s, 0.2, shaft_top_z - arch_top if (shaft_top_z - arch_top) < 1.2 else 1.0),
+                               location=(cx, fy, arch_top + 0.45),
+                               mat_index=wall_mat, bevel_amount=0.015)
+        base_z = arch_top
+    else:
+        # Two-step stepped plinth grounding the tower
+        create_beveled_box(bm, size=(s + 0.9, s + 0.9, 0.30), location=(cx, cy, z_ground + 0.15),
+                           mat_index=MAT_INDEX_STONE, bevel_amount=0.03)
+        create_beveled_box(bm, size=(s + 0.5, s + 0.5, 0.45), location=(cx, cy, z_ground + 0.45),
+                           mat_index=MAT_INDEX_STONE, bevel_amount=0.025)
+        base_z = z_ground + 0.60
+
+    # Shaft
+    shaft_h = max(2.0, shaft_top_z - base_z)
+    create_beveled_box(bm, size=(s, s, shaft_h), location=(cx, cy, base_z + shaft_h * 0.5),
+                       mat_index=wall_mat, bevel_amount=0.02)
+    # Corner quoins full height
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            create_beveled_box(bm, size=(0.24, 0.24, shaft_h),
+                               location=(cx + sx * (half - 0.06), cy + sy * (half - 0.06),
+                                         base_z + shaft_h * 0.5),
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+    # String courses aligned to real floor decks
+    levels = list(floor_levels) if floor_levels else [shaft_top_z * 0.4, shaft_top_z * 0.68]
+    for fz in levels:
+        if base_z + 0.8 < fz < shaft_top_z - 0.4:
+            create_beveled_box(bm, size=(s + 0.26, s + 0.26, 0.20), location=(cx, cy, fz),
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+    # Slit windows with sills between courses
+    for i, fz in enumerate(levels):
+        wz = fz + 0.85
+        if wz > shaft_top_z - 0.6:
+            continue
+        if i % 2 == 0:
+            create_box(bm, size=(0.42, 0.10, 0.95), location=(cx, cy - half - 0.01, wz),
+                       mat_index=MAT_INDEX_GLASS)
+            create_beveled_box(bm, size=(0.62, 0.14, 0.10), location=(cx, cy - half - 0.03, wz - 0.53),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+        else:
+            create_box(bm, size=(0.10, 0.42, 0.95), location=(cx + half + 0.01, cy, wz),
+                       mat_index=MAT_INDEX_GLASS)
+            create_beveled_box(bm, size=(0.14, 0.62, 0.10), location=(cx + half + 0.03, cy, wz - 0.53),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    # Base doorway facing front (skipped when the arch tunnel passes through)
+    if not arch_passage:
+        door_fy = cy - half
+        create_box(bm, size=(1.0, 0.14, 2.1), location=(cx, door_fy - 0.02, base_z + 1.05),
+                   mat_index=MAT_INDEX_DOOR)
+        create_beveled_box(bm, size=(1.24, 0.12, 0.16), location=(cx, door_fy - 0.02, base_z + 2.18),
+                           mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
+        for dsx in (-1.0, 1.0):
+            create_beveled_box(bm, size=(0.14, 0.12, 2.2), location=(cx + dsx * 0.60, door_fy - 0.02, base_z + 1.10),
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
+
+    # Clock stage: same footprint as shaft (no floating slab) + corner pilasters
+    stage_h = 1.9
+    stage_z = shaft_top_z + stage_h * 0.5
+    create_beveled_box(bm, size=(s + 0.15, s + 0.15, stage_h), location=(cx, cy, stage_z),
+                       mat_index=stage_mat, bevel_amount=0.02)
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            create_beveled_box(bm, size=(0.26, 0.26, stage_h),
+                               location=(cx + sx * (half - 0.02), cy + sy * (half - 0.02), stage_z),
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+    half_stage = (s + 0.15) * 0.5
+    r = min(0.80 * (s / 3.0), half_stage - 0.24)
+    _clock_face(bm, (cx, cy - half_stage, stage_z), 'front', radius=r)
+    _clock_face(bm, (cx, cy + half_stage, stage_z), 'back', radius=r)
+    _clock_face(bm, (cx - half_stage, cy, stage_z), 'left', radius=r)
+    _clock_face(bm, (cx + half_stage, cy, stage_z), 'right', radius=r)
+
+    # Dentil cornice above dials
+    corn_z = shaft_top_z + stage_h
+    create_beveled_box(bm, size=(s + 0.55, s + 0.55, 0.20), location=(cx, cy, corn_z + 0.10),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+    dent_n = 5
+    for i in range(dent_n):
+        t = -half + (i + 0.5) * (s / dent_n)
+        for sy in (-1.0, 1.0):
+            create_box(bm, size=(0.14, 0.14, 0.16),
+                       location=(cx + t, cy + sy * (half + 0.22), corn_z - 0.05),
+                       mat_index=MAT_INDEX_TIMBER_FRAME)
+        for sx in (-1.0, 1.0):
+            create_box(bm, size=(0.14, 0.14, 0.16),
+                       location=(cx + sx * (half + 0.22), cy + t, corn_z - 0.05),
+                       mat_index=MAT_INDEX_TIMBER_FRAME)
+
+    # Open belfry: corner posts, sill rails, top plate, bell, cross braces
+    post_h = 1.6
+    belf_z = corn_z + 0.20
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            create_beveled_box(bm, size=(0.20, 0.20, post_h),
+                               location=(cx + sx * half, cy + sy * half, belf_z + post_h * 0.5),
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+    for sy in (-1.0, 1.0):
+        create_beveled_box(bm, size=(s + 0.15, 0.14, 0.16),
+                           location=(cx, cy + sy * half, belf_z + 0.35),
+                           mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
+    for sx in (-1.0, 1.0):
+        create_beveled_box(bm, size=(0.14, s + 0.15, 0.16),
+                           location=(cx + sx * half, cy, belf_z + 0.35),
+                           mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
+    create_beveled_box(bm, size=(0.12, 0.12, 1.1),
+                       location=(cx, cy, belf_z + post_h - 0.35),
+                       rotation=(0.0, 0.0, 0.785),
+                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008)
+    # Hung bell reaching up to the belfry plate (not a floating lump)
+    create_cone(bm, radius1=0.34, radius2=0.13, height=0.60, segments=10,
+                location=(cx, cy, belf_z + 1.0), mat_index=MAT_INDEX_IRON)
+    create_cylinder(bm, radius=0.05, height=0.42, segments=8,
+                    location=(cx, cy, belf_z + 1.48), mat_index=MAT_INDEX_TIMBER)
+    create_beveled_box(bm, size=(s + 0.55, s + 0.55, 0.18),
+                       location=(cx, cy, belf_z + post_h + 0.09),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+
+    # Square 4-facet spire roof (regular pyramid, no cylinder)
+    spire_base = belf_z + post_h + 0.18
+    _square_spire_roof(bm, cx, cy, spire_base, half + 0.50, 3.1)
+
+
+def build_roof_clock_spire(bm, cx, cy, z_base, scale=0.85, tier='TIER_3'):
+    """Small roof-mounted spire turret with a clock stage (Tier 1/2 halls).
+
+    Timber curb rooted deep into the roof, 4 small dials, open mini-belfry
+    with bell, tall bell-cast spire and needle.
+    """
+    sc = max(0.6, min(1.6, scale))
+    w = 1.05 * sc
+    half = w * 0.5
+    # Stone stage (index 0) gets the engine's clean world-space UVs.
+    stage_mat = MAT_INDEX_STONE
+    # Raise the clock stage clear of the roof surface so no dial is half-buried.
+    lift = 0.85 * sc + 0.10
+    z_stage0 = z_base + lift
+    # Timber curb/skirt rooted down into the roof slope up to the clock stage
+    curb_bot = z_base - 1.2 * sc
+    curb_h = z_stage0 - curb_bot
+    create_beveled_box(bm, size=(w + 0.30 * sc, w + 0.30 * sc, curb_h),
+                       location=(cx, cy, (curb_bot + z_stage0) * 0.5),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02 * sc)
+    # Clock stage with corner boards
+    stage_h = 0.95 * sc
+    stage_z = z_stage0 + stage_h * 0.5
+    create_beveled_box(bm, size=(w, w, stage_h), location=(cx, cy, stage_z),
+                       mat_index=stage_mat, bevel_amount=0.015 * sc)
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            create_beveled_box(bm, size=(0.13 * sc, 0.13 * sc, stage_h),
+                               location=(cx + sx * (half - 0.03 * sc), cy + sy * (half - 0.03 * sc), stage_z),
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008 * sc)
+    r = 0.30 * sc
+    _clock_face(bm, (cx, cy - half, stage_z), 'front', radius=r, frame=False)
+    _clock_face(bm, (cx, cy + half, stage_z), 'back', radius=r, frame=False)
+    _clock_face(bm, (cx - half, cy, stage_z), 'left', radius=r, frame=False)
+    _clock_face(bm, (cx + half, cy, stage_z), 'right', radius=r, frame=False)
+    # Cornice + mini belfry with bell
+    corn_z = z_stage0 + stage_h
+    create_beveled_box(bm, size=(w + 0.30 * sc, w + 0.30 * sc, 0.12 * sc),
+                       location=(cx, cy, corn_z + 0.06 * sc),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010 * sc)
+    post_h = 1.05 * sc
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            create_beveled_box(bm, size=(0.10 * sc, 0.10 * sc, post_h),
+                               location=(cx + sx * half * 0.85, cy + sy * half * 0.85,
+                                         corn_z + 0.12 * sc + post_h * 0.5),
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008 * sc)
+    plate_z = corn_z + 0.12 * sc + post_h
+    create_beveled_box(bm, size=(w + 0.24 * sc, w + 0.24 * sc, 0.10 * sc),
+                       location=(cx, cy, plate_z + 0.05 * sc),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010 * sc)
+    # Hung bell: a long iron yoke drops from the top plate so the bell and clapper
+    # swing clear of the belfry floor instead of standing on it.
+    bell_top = plate_z - 0.06 * sc
+    hanger_h = 0.48 * sc
+    create_cylinder(bm, radius=0.03 * sc, height=hanger_h, segments=6,
+                    location=(cx, cy, bell_top - hanger_h * 0.5), mat_index=MAT_INDEX_IRON)
+    create_beveled_box(bm, size=(0.36 * sc, 0.11 * sc, 0.11 * sc),
+                       location=(cx, cy, bell_top - hanger_h * 0.5),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008 * sc)
+    bell_h = 0.34 * sc
+    bell_shoulder = bell_top - hanger_h
+    create_cone(bm, radius1=0.20 * sc, radius2=0.09 * sc, height=bell_h, segments=10,
+                location=(cx, cy, bell_shoulder - bell_h * 0.5), mat_index=MAT_INDEX_IRON)
+    create_cylinder(bm, radius=0.045 * sc, height=0.10 * sc, segments=8,
+                    location=(cx, cy, bell_shoulder - bell_h - 0.02 * sc), mat_index=MAT_INDEX_IRON)
+    # Square 4-facet spire roof (regular pyramid, no cylinder)
+    _square_spire_roof(bm, cx, cy, plate_z + 0.10 * sc, half + 0.28 * sc, 2.5 * sc)
+
+
+def build_corner_turret(bm, cx, cy, z_ground=0.0, radius=1.35, wall_top_z=6.0,
+                        tier='TIER_3'):
+    """Octagonal corner turret rooted in the building corner, capped above the eaves."""
+    wall_mat = _tier_wall_mat(tier)
+    # Stepped stone root shared with the foundation
+    create_cylinder(bm, radius=radius + 0.45, height=0.35, segments=8,
+                    location=(cx, cy, z_ground + 0.17), mat_index=MAT_INDEX_STONE)
+    create_cylinder(bm, radius=radius + 0.22, height=1.1, segments=8,
+                    location=(cx, cy, z_ground + 0.85), mat_index=MAT_INDEX_STONE)
+    shaft_base = z_ground + 1.30
+    shaft_h = max(1.5, wall_top_z - shaft_base)
+    create_cylinder(bm, radius=radius, height=shaft_h, segments=8,
+                    location=(cx, cy, shaft_base + shaft_h * 0.5),
+                    mat_index=wall_mat)
+    # Timber band at eave line ties turret to the main walls
+    create_cylinder(bm, radius=radius + 0.14, height=0.22, segments=8,
+                    location=(cx, cy, wall_top_z - 0.11),
+                    mat_index=MAT_INDEX_TIMBER_FRAME)
+    # High slit + mid window clear of the main facade windows
+    create_box(bm, size=(0.34, 0.10, 0.85),
+               location=(cx, cy - radius - 0.01, wall_top_z - 1.35),
+               mat_index=MAT_INDEX_GLASS)
+    # Cornice ring + bell-cast cap + ball finial
+    create_cylinder(bm, radius=radius + 0.30, height=0.18, segments=8,
+                    location=(cx, cy, wall_top_z + 0.09),
+                    mat_index=MAT_INDEX_TIMBER)
+    build_conical_turret_roof(
+        bm, center_pos=(cx, cy, wall_top_z + 0.18),
+        radius=radius + 0.42, height=2.6, segments=8,
+    )
+    create_cylinder(bm, radius=0.03, height=0.7, segments=8,
+                    location=(cx, cy, wall_top_z + 0.18 + 2.6 + 1.0 + 0.3), mat_index=MAT_INDEX_IRON)
+
+
+def build_entry_ramp(bm, door_x, front_y, z_floor=0.6, width=1.6, length=None,
+                     side_offset=2.2):
+    """Raised stone entrance rampart: terrace at door level with parapets + side ramp.
+
+    The terrace wraps the front steps; the ramp descends from its right end to
+    grade. Parapet rampart walls (with coping) replace thin rails on the terrace,
+    timber handrails run along the sloped ramp only.
+    """
+    rise = max(0.2, z_floor)
+    ramp_len = length if length else rise * 5.0 + 2.5
+    deck_t = 0.22
+    deck_top = z_floor
+
+    # Terrace platform wrapping the entrance (steps land on it)
+    terr_w = 5.6
+    terr_d = 2.4
+    terr_cx = door_x + 0.9
+    terr_cy = front_y - terr_d * 0.5 + 0.35
+    create_beveled_box(bm, size=(terr_w, terr_d, deck_t + 0.35),
+                       location=(terr_cx, terr_cy, deck_top - (deck_t + 0.35) * 0.5 + 0.06),
+                       mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+
+    # Rampart parapets with coping around the terrace (gap left for the ramp)
+    parap_h = 0.62
+    parap_t = 0.26
+    pz = deck_top + parap_h * 0.5
+    # Left cheek
+    create_beveled_box(bm, size=(parap_t, terr_d, parap_h),
+                       location=(terr_cx - terr_w * 0.5 + parap_t * 0.5, terr_cy, pz),
+                       mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
+    # Front wall with opening where the ramp joins (ramp on right half)
+    ramp_mouth_w = width + 0.3
+    mouth_cx = terr_cx + terr_w * 0.5 - ramp_mouth_w * 0.5 - 0.3
+    left_seg_w = (mouth_cx - ramp_mouth_w * 0.5) - (terr_cx - terr_w * 0.5)
+    if left_seg_w > 0.3:
+        create_beveled_box(bm, size=(left_seg_w, parap_t, parap_h),
+                           location=(terr_cx - terr_w * 0.5 + left_seg_w * 0.5,
+                                     terr_cy - terr_d * 0.5 + parap_t * 0.5, pz),
+                           mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
+    # Coping stones on terrace parapets
+    for (cw, cd, cpx, cpy) in (
+        (parap_t + 0.12, terr_d + 0.06, terr_cx - terr_w * 0.5 + parap_t * 0.5, terr_cy),
+    ):
+        create_beveled_box(bm, size=(cw, cd, 0.10), location=(cpx, cpy, deck_top + parap_h + 0.05),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
+    if left_seg_w > 0.3:
+        create_beveled_box(bm, size=(left_seg_w + 0.06, parap_t + 0.12, 0.10),
+                           location=(terr_cx - terr_w * 0.5 + left_seg_w * 0.5,
+                                     terr_cy - terr_d * 0.5 + parap_t * 0.5,
+                                     deck_top + parap_h + 0.05),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
+
+    # Sloped ramp descending from the terrace mouth to grade
+    rcx = mouth_cx
+    mid_y = (terr_cy - terr_d * 0.5) - ramp_len * 0.5
+    mid_z = deck_top - rise * 0.5
+    ang = math.atan2(rise, ramp_len)
+    ramp_diag = math.sqrt(rise * rise + ramp_len * ramp_len)
+    create_beveled_box(bm, size=(width, ramp_diag, 0.14),
+                       location=(rcx, mid_y, mid_z - 0.07),
+                       rotation=(ang, 0.0, 0.0), mat_index=MAT_INDEX_CUT_STONE,
+                       bevel_amount=0.015)
+    # Sloped stone cheeks + timber handrails on the ramp
+    for s in (-1.0, 1.0):
+        px = rcx + s * (width * 0.5 + 0.02)
+        create_beveled_box(bm, size=(0.16, ramp_diag, 0.34),
+                           location=(px, mid_y, mid_z + 0.10),
+                           rotation=(ang, 0.0, 0.0), mat_index=MAT_INDEX_STONE,
+                           bevel_amount=0.01)
+        for t in (0.12, 0.5, 0.88):
+            py = (terr_cy - terr_d * 0.5) - ramp_len * t
+            pz2 = deck_top - rise * t
+            create_beveled_box(bm, size=(0.09, 0.09, 0.80),
+                               location=(px, py, pz2 + 0.55),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+        create_beveled_box(bm, size=(0.08, ramp_diag, 0.08),
+                           location=(px, mid_y, mid_z + 1.0),
+                           rotation=(ang, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER,
+                           bevel_amount=0.008)
+
+
+def build_arched_porch(bm, door_x, front_y, z_ground=0.0, z_floor=0.6,
+                       half_span=1.5, height=2.9, tier='TIER_3',
+                       plank_direction='HORIZONTAL'):
+    """Stone entry porch with an angled two-slope roof and NO gable wall.
+
+    Twin stone piers carry an outer beam; above them the real gable-roof builder
+    raises two shingled slopes (correct UVs, bell-cast flare, bargeboards and ridge)
+    with the gable end walls suppressed so it reads as a porch hood, not a mini house.
+    """
+    pier_w = 0.28
+    outer_y = front_y - 2.05
+    pier_y = outer_y + 0.30
+    for s in (-1.0, 1.0):
+        px = door_x + s * half_span
+        # Slim timber entrance posts (no stone piers).
+        create_beveled_box(bm, size=(pier_w + 0.12, pier_w + 0.12, 0.30),
+                           location=(px, pier_y, z_ground + 0.15),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
+        create_beveled_box(bm, size=(pier_w, pier_w, height),
+                           location=(px, pier_y, z_ground + 0.30 + (height - 0.30) * 0.5),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
+        create_beveled_box(bm, size=(pier_w + 0.16, pier_w + 0.16, 0.18),
+                           location=(px, pier_y, z_ground + height + 0.09),
+                           mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+    # Outer beam carried by the piers (roof rests on it)
+    eave_z = z_ground + height + 0.22
+    create_beveled_box(bm, size=(half_span * 2.0 + 0.70, 0.20, 0.22),
+                       location=(door_x, pier_y, eave_z),
+                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+    # Angled two-slope roof, gable end walls suppressed, ridge runs front-to-back
+    build_gable_roof(
+        bm,
+        x_min=door_x - half_span - 0.12,
+        x_max=door_x + half_span + 0.12,
+        y_min=front_y - 2.30,
+        y_max=front_y,
+        z_base=eave_z + 0.10,
+        roof_height=1.15,
+        overhang=0.30,
+        wall_thickness=0.16,
+        gable_ends=('FRONT', 'BACK'),
+        segments_y=3,
+        abut_back=True,
+        tier=tier,
+        plank_direction=plank_direction,
+        roof_flare=0.35,
+        gable_walls=False,
+    )

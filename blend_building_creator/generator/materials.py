@@ -81,6 +81,7 @@ MAT_INDEX_CUT_STONE    = 8
 MAT_INDEX_LOG          = 9
 MAT_INDEX_LOG_END      = 10
 MAT_INDEX_PLASTER_BRICK = 11
+MAT_INDEX_CLOCK_FACE    = 12
 
 
 # ---------------------------------------------------------------------------
@@ -1374,10 +1375,29 @@ def create_stylized_iron(name="M_Building_Iron"):
     return mat
 
 
+def create_stylized_clock_face(name="M_Building_Clock_Face", color=(0.95, 0.95, 0.92, 1.0),
+                               glow=0.0):
+    """Clean painted-white enamel clock dial.
+
+    A plain, untextured white face so the clock reads clearly against the dark
+    iron rim, with an optional soft warm glow used as an emission strength.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    _set_bsdf_input(bsdf, "Base Color", color)
+    if glow > 0.001:
+        try:
+            _set_bsdf_input(bsdf, "Emission Color", (1.0, 0.97, 0.88, 1.0))
+            _set_bsdf_input(bsdf, "Emission Strength", glow)
+        except Exception:
+            pass
+    _setup_pbr(tree, bsdf, out, roughness=0.42, metallic=0.0)
+    return mat
+
+
 # ---------------------------------------------------------------------------
 # 10. Log Ends — Concentric tree rings with warm core & swirl
 # ---------------------------------------------------------------------------
-
 def create_stylized_log_ends(name="M_Building_Log_End", color=(0.50, 0.34, 0.18, 1.0)):
     """
     Authentic stylized log cross-section:
@@ -1635,7 +1655,13 @@ def setup_building_material_slots(obj, props):
     mat_plaster_brick = (getattr(props, 'custom_wall_brick', None) or 
                          create_stylized_plaster_brick("M_Building_Plaster_Brick", color=props.color_wall_ext, frequency=freq))
 
-    # Assemble all 12 canonical slots in strict order
+    # 12. Clock Face (plain painted-white enamel dial)
+    mat_clock_face = getattr(props, 'custom_clock_face', None) or create_stylized_clock_face(
+        "M_Building_Clock_Face",
+        glow=min(1.2, getattr(props, 'window_glow_strength', 0.0) * 0.25),
+    )
+
+    # Assemble all 13 canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
         mat_plaster,        # 1  MAT_INDEX_PLASTER
@@ -1649,6 +1675,7 @@ def setup_building_material_slots(obj, props):
         mat_log,            # 9  MAT_INDEX_LOG
         mat_log_end,        # 10 MAT_INDEX_LOG_END
         mat_plaster_brick,  # 11 MAT_INDEX_PLASTER_BRICK
+        mat_clock_face,     # 12 MAT_INDEX_CLOCK_FACE
     ]
     obj.data.materials.clear()
     for m in required_mats:

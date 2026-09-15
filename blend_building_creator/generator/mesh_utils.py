@@ -196,6 +196,16 @@ def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotat
                             v = (lv.y + sy) * sv
                         loop[uv_layer].uv = Vector((u, v))
             faces = [f for f in faces if f.is_valid] + new_faces
+            # bmesh.ops.bevel deletes the original flat faces and rebuilds them,
+            # but does not list the rebuilt faces in res['faces']. Recover them
+            # from the bevel faces' linked geometry so callers receive the whole
+            # box - the large flat faces are exactly what roof UV mappers need.
+            linked = {id(f): f for f in faces}
+            for v in {v for f in new_faces for v in f.verts}:
+                for lf in v.link_faces:
+                    if lf.is_valid and id(lf) not in linked:
+                        linked[id(lf)] = lf
+            faces = list(linked.values())
         except Exception:
             pass
     return [f for f in faces if f.is_valid]
@@ -321,7 +331,8 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
         f.loops[2][uv_layer].uv = Vector((u1, height))
         f.loops[3][uv_layer].uv = Vector((u0, height))
 
-    # Caps (planar projection in world space; apply_box_uvs refreshes stone etc. later)
+    # Caps (planar projection oriented to the cylinder axis, so a disc facing
+    # any direction gets a real 2D unwrap instead of a collapsed line).
     f_bot = bm.faces.new(list(reversed(bottom_verts)))
     f_bot.material_index = mat_index
     faces.append(f_bot)
@@ -330,10 +341,18 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
     f_top.material_index = mat_index
     faces.append(f_top)
 
+    axis = rot_mat @ Vector((0.0, 0.0, 1.0))
+    ax, ay, az = abs(axis.x), abs(axis.y), abs(axis.z)
     for cap in (f_bot, f_top):
         for loop in cap.loops:
             co = loop.vert.co
-            loop[uv_layer].uv = Vector((co.x, co.y))
+            if az >= ax and az >= ay:
+                uv = (co.x, co.y)
+            elif ax >= ay:
+                uv = (co.y, co.z)
+            else:
+                uv = (co.x, co.z)
+            loop[uv_layer].uv = Vector(uv)
 
     return faces
 

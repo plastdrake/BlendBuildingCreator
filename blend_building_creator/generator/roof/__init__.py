@@ -9,6 +9,7 @@ Modularized following SOLID, GRASP, and DRY principles:
 - features: Bargeboards, roof turrets, chimneys, hoist beams
 - gable_wall: Shared DRY gable end wall and log siding builders
 - valley: Segmented valley flashing following deck profiles
+- outcrop_roof: Lean-to and mini-gable roofs for facade projections
 """
 
 from .sway_roof import build_sway_roof
@@ -31,6 +32,11 @@ from .valley import (
     build_valley_strip,
     build_valley_rafters
 )
+from .outcrop_roof import (
+    build_lean_to_roof,
+    build_outcrop_gable_roof,
+    build_outcrop_roof,
+)
 
 __all__ = [
     'build_sway_roof',
@@ -47,4 +53,7 @@ __all__ = [
     'deck_top_z',
     'build_valley_strip',
     'build_valley_rafters',
+    'build_lean_to_roof',
+    'build_outcrop_gable_roof',
+    'build_outcrop_roof',
 ]

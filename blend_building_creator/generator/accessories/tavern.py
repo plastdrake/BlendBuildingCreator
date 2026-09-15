@@ -1,8 +1,7 @@
 import math
 from mathutils import Vector, Matrix
-from .common import (
-    _get_facade_frame, _planar_uv_faces
-)
+from ..facade import get_facade_frame
+from ..uv_utils import map_planar_faces
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, create_horizontal_cylinder,
     create_torus_ring, create_door_batten
@@ -136,11 +135,11 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
                   z_floor, width=2.4, depth=1.3, tier='TIER_3',
                   lower_wall_x_min=None, lower_wall_x_max=None,
                   lower_wall_y_min=None, lower_wall_y_max=None):
-    wx, wy, ox, oy, tx, ty, rot_z = _get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
+    wx, wy, ox, oy, tx, ty, rot_z = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
     facade_rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
     
     if lower_wall_x_min is not None and lower_wall_x_max is not None and lower_wall_y_min is not None and lower_wall_y_max is not None:
-        lwx, lwy, lox, loy, ltx, lty, lrot_z = _get_facade_frame(side, lower_wall_x_min, lower_wall_x_max, lower_wall_y_min, lower_wall_y_max)
+        lwx, lwy, lox, loy, ltx, lty, lrot_z = get_facade_frame(side, lower_wall_x_min, lower_wall_x_max, lower_wall_y_min, lower_wall_y_max)
         overhang_dist = max(0.0, (wx - lwx) * ox + (wy - lwy) * oy)
     else:
         overhang_dist = 0.0

@@ -196,7 +196,9 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             fe = bm.faces.new(list(reversed(pts_ext)))
             fi = bm.faces.new(list(reversed(pts_int)))
         fe.material_index = gable_mat
-        fi.material_index = MAT_INDEX_PLASTER_INT
+        # Interior gable face follows the same tier as the exterior (planks for
+        # Tier 1-2, plaster for Tier 3) so log/plank halls do not show stucco inside.
+        fi.material_index = gable_mat
         _uv_wall(fe)
         _uv_wall(fi)
 
@@ -225,7 +227,7 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             f_int = bm.faces.new(list(reversed(int_loop)))
 
         f_ext.material_index = gable_mat
-        f_int.material_index = MAT_INDEX_PLASTER_INT
+        f_int.material_index = gable_mat
         _uv_wall(f_ext)
         _uv_wall(f_int)
     else:

@@ -4,8 +4,27 @@ Features clean layout, collapsible sections, style presets, and live parameter s
 """
 
 import bpy
+import os as _os
 
 from .presets import PRESETS, BUILDING_FAMILIES
+
+
+def _read_addon_version(default="1.7.10"):
+    """Read the version straight from blender_manifest.toml so it stays in sync
+    (extensions don't expose bl_info, which broke the panel before)."""
+    try:
+        with open(_os.path.join(_os.path.dirname(__file__), "blender_manifest.toml"),
+                  "r", encoding="utf-8") as fh:
+            for line in fh:
+                s = line.strip()
+                if s.startswith("version"):
+                    return s.split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return default
+
+
+ADDON_VERSION = _read_addon_version()
 
 class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
     """Main panel for Stylized Fantasy Building Generator"""
@@ -20,6 +39,7 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         props = context.scene.fantasy_building_settings
         obj = context.active_object
         is_bldg = obj and obj.get("is_fantasy_building", False)
+        layout.label(text=f"Version {ADDON_VERSION}", icon='INFO')
         
         # Primary Action Buttons
         col = layout.column(align=True)
@@ -102,6 +122,7 @@ class VIEW3D_PT_fantasy_building_dimensions(bpy.types.Panel):
             box_wing.prop(props, "wing_width")
             box_wing.prop(props, "wing_depth")
             box_wing.prop(props, "wing_placement")
+            box_wing.prop(props, "wing_roof_scale")
             if props.building_shape == 'L_SHAPE':
                 box_wing.prop(props, "wing_side")
             elif props.building_shape == 'U_SHAPE':
@@ -253,6 +274,12 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
         box_acc.prop(props, "has_roof_turret")
         if props.has_roof_turret:
             box_acc.prop(props, "roof_turret_style")
+        box_acc.prop(props, "has_roof_clock_spire")
+        if props.has_roof_clock_spire:
+            col = box_acc.column(align=True)
+            col.prop(props, "roof_clock_scale")
+            col.prop(props, "roof_clock_pos_x")
+            col.prop(props, "roof_clock_pos_y")
         box_acc.prop(props, "has_chimney")
 
 class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
@@ -279,6 +306,8 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             col.prop(props, "mini_wing_roof")
             col.prop(props, "mini_wing_width")
             col.prop(props, "mini_wing_depth")
+            col.prop(props, "mini_wing_shingle_rot")
+            col.prop(props, "mini_wing_shingle_scale")
             
         # Balcony
         box_balc = layout.box()
@@ -314,6 +343,30 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             col.prop(props, "pillared_overhang_depth")
             col.prop(props, "pillared_overhang_pillars")
             col.prop(props, "pillared_overhang_style")
+
+        # Civic Landmarks
+        box_civic = layout.box()
+        box_civic.label(text="Civic Landmarks", icon='COMMUNITY')
+        box_civic.prop(props, "has_clock_tower")
+        if props.has_clock_tower:
+            col = box_civic.column(align=True)
+            col.prop(props, "clock_tower_side")
+            col.prop(props, "clock_tower_size")
+        box_civic.prop(props, "has_corner_turrets")
+        if props.has_corner_turrets:
+            box_civic.prop(props, "corner_turret_size")
+        box_civic.prop(props, "has_side_rampart")
+        if props.has_side_rampart:
+            box_civic.prop(props, "rampart_side")
+        box_civic.prop(props, "has_arched_porch")
+        box_civic.prop(props, "has_entry_ramp")
+        box_civic.separator()
+        box_civic.prop(props, "town_hall_composer")
+        if props.town_hall_composer:
+            col = box_civic.column(align=True)
+            col.prop(props, "has_side_annex")
+            if props.has_side_annex:
+                col.prop(props, "annex_floors")
 
 class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
     """Subpanel for procedural stylized colors and custom material overrides"""

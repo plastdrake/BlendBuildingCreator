@@ -559,6 +559,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         unit='LENGTH',
         update=on_property_updated
     )
+
+    wing_roof_scale: FloatProperty(
+        name="Wing Roof Height",
+        description="Height of a projecting wing's roof as a fraction of the main roof height. Lower values tuck the wing roof under the main roof",
+        min=0.4, max=1.4, default=0.88,
+        update=on_property_updated
+    )
     
     roof_sway: FloatProperty(
         name="Sway Curvature",
@@ -775,6 +782,26 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    mini_wing_shingle_rot: EnumProperty(
+        name="Outcrop Shingle Rotation",
+        description="Rotate the outcrop roof shingle UVs by 0/90/180/270 degrees",
+        items=[
+            ('0', "0 deg", "No rotation"),
+            ('90', "90 deg", "Rotate 90 degrees"),
+            ('180', "180 deg", "Rotate 180 degrees"),
+            ('270', "270 deg", "Rotate 270 degrees"),
+        ],
+        default='0',
+        update=on_property_updated
+    )
+
+    mini_wing_shingle_scale: FloatProperty(
+        name="Outcrop Shingle Size",
+        description="UV scale for the outcrop roof shingles (matches the main roofs at 0.32; smaller value = bigger tiles)",
+        min=0.05, max=0.60, default=0.32,
+        update=on_property_updated
+    )
+
     has_balcony: BoolProperty(
         name="Timber Balcony",
         description="Cantilevered wooden balcony on an upper floor with heavy timber brackets and balustrade",
@@ -901,7 +928,131 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default='TIMBER_STONE',
         update=on_property_updated
     )
-    
+
+    # --- Civic Landmarks: Clock Tower, Turrets, Ramp & Porch ---
+    has_clock_tower: BoolProperty(
+        name="Clock Tower",
+        description="Attached civic clock/belfry tower with 4 dials, belfry and spire",
+        default=False,
+        update=on_property_updated
+    )
+
+    clock_tower_side: EnumProperty(
+        name="Tower Side",
+        description="Which front corner the clock tower anchors to",
+        items=[
+            ('RIGHT', "Right (+X)", "Front-right corner tower"),
+            ('LEFT', "Left (-X)", "Front-left corner tower"),
+        ],
+        default='RIGHT',
+        update=on_property_updated
+    )
+
+    clock_tower_size: FloatProperty(
+        name="Tower Size",
+        description="Footprint width of the clock tower shaft",
+        min=2.4, max=4.0, default=3.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    has_corner_turrets: BoolProperty(
+        name="Corner Turrets",
+        description="Pair of small octagonal turrets on the rear corners",
+        default=False,
+        update=on_property_updated
+    )
+
+    corner_turret_size: FloatProperty(
+        name="Turret Size",
+        description="Radius of the rear corner turrets",
+        min=1.0, max=2.0, default=1.35,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    has_roof_clock_spire: BoolProperty(
+        name="Roof Clock Spire",
+        description="Small roof-mounted spire turret with clock dials (Tier 1/2 halls)",
+        default=False,
+        update=on_property_updated
+    )
+
+    roof_clock_scale: FloatProperty(
+        name="Clock Spire Scale",
+        description="Overall scale of the roof clock spire",
+        min=0.6, max=1.6, default=0.85,
+        update=on_property_updated
+    )
+
+    roof_clock_pos_x: FloatProperty(
+        name="Clock Slope Position",
+        description="Position across roof slope (-1.0 to 1.0)",
+        min=-1.0, max=1.0, default=0.0,
+        update=on_property_updated
+    )
+
+    roof_clock_pos_y: FloatProperty(
+        name="Clock Length Position",
+        description="Position along roof length (-1.0 to 1.0)",
+        min=-1.0, max=1.0, default=-0.20,
+        update=on_property_updated
+    )
+
+    has_side_rampart: BoolProperty(
+        name="Side Rampart",
+        description="Elevated side rampart walk with parapets, upper door and descent ramp (Tier 3)",
+        default=False,
+        update=on_property_updated
+    )
+
+    rampart_side: EnumProperty(
+        name="Rampart Side",
+        description="Building side carrying the elevated rampart walk",
+        items=[
+            ('RIGHT', "Right (+X)", "Rampart along the right wall"),
+            ('LEFT', "Left (-X)", "Rampart along the left wall"),
+        ],
+        default='RIGHT',
+        update=on_property_updated
+    )
+
+    has_entry_ramp: BoolProperty(
+        name="Entry Ramp",
+        description="Gentle sloped accessibility ramp with railings beside the entrance",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_arched_porch: BoolProperty(
+        name="Arched Entry Porch",
+        description="Stone pier porch with mini gable roof over the main door",
+        default=False,
+        update=on_property_updated
+    )
+
+    # --- Town Hall Composer: multi-volume sprawling civic composition ---
+    town_hall_composer: BoolProperty(
+        name="Town Hall Composer",
+        description="Layer side annex, forecourt walls and tower arch around the main hall for a sprawling storybook mass",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_side_annex: BoolProperty(
+        name="Side Annex",
+        description="Half-timbered side volume with its own perpendicular gable roof and oriel",
+        default=False,
+        update=on_property_updated
+    )
+
+    annex_floors: IntProperty(
+        name="Annex Floors",
+        description="Storeys of the side annex volume",
+        min=1, max=2, default=2,
+        update=on_property_updated
+    )
+
     # --- Material Tier & Stylized Procedural Shaders ---
     material_tier: EnumProperty(
         name="Material Tier",

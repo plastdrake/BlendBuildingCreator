@@ -31,13 +31,15 @@ from .roof import build_sway_roof, build_gable_roof, build_conical_turret_roof, 
 from .accessories.blacksmith import build_blacksmith_forge
 from .accessories.windmill import build_windmill_sails
 from .accessories.watchtower import build_watchtower_lookout
-from .accessories.tavern import build_tavern_porch_and_sign, build_balcony
+from .accessories.tavern import build_tavern_porch_and_sign
 from .accessories.fisherman import build_fisherman_stilts
 from .accessories.bakery import build_bakery_oven
-from .accessories.warehouse import build_warehouse_cargo
 from .accessories.crane import build_courtyard_crane
 from .accessories.mill import build_lumbermill_yard, build_treadwheel_sawmill
-from .accessories.common import build_mini_wing, build_pillared_overhang, build_cargo_port_frame
+from .accessories.cargo_port import build_cargo_port_frame
+from .accessories.civic import build_roof_clock_spire
+from .accessories.dispatch import build_architectural_accessories
+from .config import BuildingContext
 
 
 def get_facade_window_positions(span_min, span_max, target_spacing=2.4, min_margin=0.85):
@@ -530,10 +532,57 @@ def generate_building(obj, props):
     """
     Main generator function called when properties change or generate button is clicked.
     Constructs the building inside obj.data.
+
+    The work is split into phases that share a single mutable :class:`BuildingContext`:
+    setup, foundation, per-floor construction, roof/attic, archetype accessories,
+    optional outcrops/balconies, then finalization.
     """
     bm = bmesh.new()
-    
-    # 1. Dimensions setup
+
+    if getattr(props, 'building_shape', 'RECTANGLE') == 'ROUND_TOWER':
+        _build_round_tower_building(obj, bm, props)
+        return
+
+    ctx = _create_building_context(props)
+    _build_foundation(bm, props, ctx)
+    _build_floors(bm, props, ctx)
+    loft_spec = build_roof_and_attic(bm, props, ctx)
+    build_archetype_accessories(bm, props, ctx, loft_spec)
+    build_architectural_accessories(bm, props, ctx)
+    _finalize_building(obj, bm, props, ctx)
+
+
+def _store_building_settings(obj, props):
+    """Persist the settings dict on the object for independent multi-building recall."""
+    try:
+        from ..operators import get_props_dict
+        import json
+        obj["building_settings"] = json.dumps(get_props_dict(props))
+    except Exception:
+        pass
+
+
+def _build_round_tower_building(obj, bm, props):
+    """Complete build path for the faceted cylindrical round-tower footprint."""
+    seed = props.seed
+    num_floors = max(1, props.num_floors)
+    floor_h = props.floor_height
+    found_h = props.foundation_height if props.has_foundation else 0.2
+    build_round_tower(bm, props, seed)
+    if props.wonkiness > 0.001:
+        total_h = found_h + num_floors * floor_h + props.roof_height
+        add_wonkiness(bm, z_min=0.0, z_max=total_h, amount=props.wonkiness, seed=seed)
+    apply_box_uvs(bm, scale=1.0)
+    setup_building_material_slots(obj, props)
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+    apply_organic_shading(obj)
+    _store_building_settings(obj, props)
+
+
+def _create_building_context(props):
+    """Resolve every top-level dimension, wing and balcony decision into a context."""
     seed = props.seed
     num_floors = max(1, props.num_floors)
     floor_h = props.floor_height
@@ -543,7 +592,7 @@ def generate_building(obj, props):
     cantilever = props.cantilever_overhang if props.has_cantilever else 0.0
     found_h = props.foundation_height if props.has_foundation else 0.2
     open_timber = getattr(props, 'open_timber_frame', False)
-    
+
     # Archetype resolution
     archetype = getattr(props, 'building_archetype', 'AUTO')
     if archetype == 'AUTO':
@@ -553,26 +602,7 @@ def generate_building(obj, props):
             archetype = 'NONE'
     effective_archetype = archetype
 
-    # Compound building shape setup (L-Shape, T-Shape, Round Tower)
     shape = getattr(props, 'building_shape', 'RECTANGLE')
-    if shape == 'ROUND_TOWER':
-        build_round_tower(bm, props, seed)
-        if props.wonkiness > 0.001:
-            total_h = found_h + num_floors * floor_h + props.roof_height
-            add_wonkiness(bm, z_min=0.0, z_max=total_h, amount=props.wonkiness, seed=seed)
-        apply_box_uvs(bm, scale=1.0)
-        setup_building_material_slots(obj, props)
-        bm.to_mesh(obj.data)
-        bm.free()
-        obj.data.update()
-        apply_organic_shading(obj)
-        try:
-            from ..operators import get_props_dict
-            import json
-            obj["building_settings"] = json.dumps(get_props_dict(props))
-        except Exception:
-            pass
-        return
 
     raw_wing_w = getattr(props, 'wing_width', 3.5)
     raw_wing_d = getattr(props, 'wing_depth', 3.0)
@@ -591,61 +621,11 @@ def generate_building(obj, props):
     else:
         wx_base_min, wx_base_max = 0.0, 0.0
         wy_base_min, wy_base_max = 0.0, 0.0
-    
+
     # Track overall bounding box for wonkiness
     total_height = found_h + num_floors * floor_h + props.roof_height
     main_door_cx = 0.0
     main_door_yf = -base_d * 0.5
-    
-    # 2. Foundation Base
-    if props.has_foundation:
-        fw = base_w + 0.35
-        fd = base_d + 0.35
-        create_beveled_box(
-            bm,
-            size=(fw, fd, found_h),
-            location=(0.0, 0.0, found_h * 0.5),
-            mat_index=MAT_INDEX_STONE,
-            bevel_amount=0.04
-        )
-        # Foundation for Wings
-        for w_elem in wings:
-            wb = w_elem['base']
-            w_fw = (wb[1] - wb[0]) + 0.35
-            w_fd = (wb[3] - wb[2]) + 0.35
-            w_fcx = (wb[0] + wb[1]) * 0.5
-            w_fcy = (wb[2] + wb[3]) * 0.5
-            create_beveled_box(
-                bm,
-                size=(w_fw, w_fd, found_h),
-                location=(w_fcx, w_fcy, found_h * 0.5),
-                mat_index=MAT_INDEX_STONE,
-                bevel_amount=0.04
-            )
-        
-    # 3. Multi-Floor Loop
-    prev_fl_overhang = 0.0
-    prev_x_min, prev_x_max = -base_w * 0.5, base_w * 0.5
-    prev_y_min, prev_y_max = -base_d * 0.5, base_d * 0.5
-
-    # Ground floor master interior reference for staircase
-    fl0_ix_min = -base_w * 0.5 + wall_t
-    fl0_ix_max =  base_w * 0.5 - wall_t
-    fl0_iy_min = -base_d * 0.5 + wall_t
-    fl0_iy_max =  base_d * 0.5 - wall_t
-
-    stair_w = props.stair_width
-    landing_depth = 0.85
-    stair_cx_0 = fl0_ix_min + 0.06 + stair_w * 0.5
-    stair_cx_1 = stair_cx_0 + stair_w + 0.20
-    
-    stair_y_top = fl0_iy_max - landing_depth
-    stair_len = min(2.4, max(1.8, (fl0_iy_max - fl0_iy_min) - landing_depth - 1.0))
-    stair_y_bot = stair_y_top - stair_len
-
-    # Track stair holes and wall bounds per floor
-    floor_stair_holes = {}
-    floor_wall_bounds = {}
 
     # Active balcony floor levels
     active_balc_floors = []
@@ -661,6 +641,149 @@ def generate_building(obj, props):
             for fl_i, toggle_p in [(1, 'balcony_fl2'), (2, 'balcony_fl3'), (3, 'balcony_fl4'), (4, 'balcony_fl5')]:
                 if fl_i < num_floors and getattr(props, toggle_p, False):
                     active_balc_floors.append(fl_i)
+
+    # Effective balcony facade per floor: never mount a balcony on a facade
+    # occupied at that height by a projecting volume (the wing and its roof, the
+    # side annex, the mini-wing outcrop). Resolve every active floor
+    # independently so a free upper facade can still take a balcony, and skip a
+    # floor entirely when nothing is free.
+    balc_side_eff = getattr(props, 'balcony_side', 'FRONT')
+    floor_balc_side = {}
+    if has_balc:
+        _annex_on = (getattr(props, 'town_hall_composer', False)
+                     and getattr(props, 'has_side_annex', False) and shape == 'T_SHAPE')
+        _annex_side = None
+        _annex_floors = 0
+        if _annex_on:
+            _annex_side = 'LEFT' if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else 'RIGHT'
+            _annex_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
+        _wing_walls = {w.get('wall') for w in wings} if has_wing else set()
+        _mw_on = getattr(props, 'has_mini_wing', False)
+        _mw_side_name = getattr(props, 'mini_wing_side', 'LEFT') if _mw_on else None
+        _mw_tfl = (0 if getattr(props, 'mini_wing_floor', 'GROUND') == 'GROUND'
+                   else min(num_floors - 1, 1))
+        _rampart_side = (getattr(props, 'rampart_side', 'RIGHT')
+                         if getattr(props, 'has_side_rampart', False) else None)
+        _order = (balc_side_eff, 'LEFT', 'RIGHT', 'BACK', 'FRONT')
+        for _bf in active_balc_floors:
+            _blocked_f = set()
+            if _bf <= wing_floors:
+                _blocked_f |= _wing_walls
+            if _annex_on and _bf <= _annex_floors:
+                _blocked_f.add(_annex_side)
+            if _mw_side_name is not None and _bf in (_mw_tfl, _mw_tfl + 1):
+                _blocked_f.add(_mw_side_name)
+            if _rampart_side is not None and _bf <= 1:
+                _blocked_f.add(_rampart_side)
+            floor_balc_side[_bf] = next((_s for _s in _order if _s not in _blocked_f), None)
+
+    return BuildingContext(
+        num_floors=num_floors, floor_h=floor_h, found_h=found_h,
+        floor_wall_bounds={}, hx=0.0, hy=0.0,
+        base_w=base_w, base_d=base_d, raw_wing_d=raw_wing_d,
+        main_door_cx=main_door_cx, main_door_yf=main_door_yf,
+        shape=shape, seed=seed, plank_dir=getattr(props, 'plank_direction', 'HORIZONTAL'),
+        floor_balc_side=floor_balc_side, active_balc_floors=active_balc_floors,
+        wall_t=wall_t, cantilever=cantilever, open_timber=open_timber,
+        effective_archetype=effective_archetype, wings=wings, has_wing=has_wing,
+        wing_floors=wing_floors, raw_wing_w=raw_wing_w,
+        wing_placement=wing_placement, wing_side=wing_side,
+        total_height=total_height, floor_stair_holes={},
+        wx_base_min=wx_base_min, wx_base_max=wx_base_max,
+        wy_base_min=wy_base_min, wy_base_max=wy_base_max,
+    )
+
+
+def _build_foundation(bm, props, ctx):
+    """Stone foundation plinth under the main footprint and every wing."""
+    if not props.has_foundation:
+        return
+    found_h = ctx.found_h
+    fw = ctx.base_w + 0.35
+    fd = ctx.base_d + 0.35
+    create_beveled_box(
+        bm,
+        size=(fw, fd, found_h),
+        location=(0.0, 0.0, found_h * 0.5),
+        mat_index=MAT_INDEX_STONE,
+        bevel_amount=0.04
+    )
+    for w_elem in ctx.wings:
+        wb = w_elem['base']
+        w_fw = (wb[1] - wb[0]) + 0.35
+        w_fd = (wb[3] - wb[2]) + 0.35
+        w_fcx = (wb[0] + wb[1]) * 0.5
+        w_fcy = (wb[2] + wb[3]) * 0.5
+        create_beveled_box(
+            bm,
+            size=(w_fw, w_fd, found_h),
+            location=(w_fcx, w_fcy, found_h * 0.5),
+            mat_index=MAT_INDEX_STONE,
+            bevel_amount=0.04
+        )
+
+
+def _build_floors(bm, props, ctx):
+    """Per-floor construction: slabs, stairs, beams, walls, openings, doors, windows."""
+    num_floors = ctx.num_floors
+    floor_h = ctx.floor_h
+    base_w = ctx.base_w
+    base_d = ctx.base_d
+    wall_t = ctx.wall_t
+    cantilever = ctx.cantilever
+    found_h = ctx.found_h
+    open_timber = ctx.open_timber
+    effective_archetype = ctx.effective_archetype
+    shape = ctx.shape
+    wing_floors = ctx.wing_floors
+    wing_placement = ctx.wing_placement
+    wing_side = ctx.wing_side
+    wings = ctx.wings
+    has_wing = ctx.has_wing
+    seed = ctx.seed
+    plank_dir = ctx.plank_dir
+    floor_balc_side = ctx.floor_balc_side
+    main_door_cx = ctx.main_door_cx
+    main_door_yf = ctx.main_door_yf
+
+    # Ground floor master interior reference for staircase
+    fl0_ix_min = -base_w * 0.5 + wall_t
+    fl0_ix_max = base_w * 0.5 - wall_t
+    fl0_iy_min = -base_d * 0.5 + wall_t
+    fl0_iy_max = base_d * 0.5 - wall_t
+
+    stair_w = props.stair_width
+    landing_depth = 0.85
+    stair_cx_0 = fl0_ix_min + 0.06 + stair_w * 0.5
+    stair_cx_1 = stair_cx_0 + stair_w + 0.20
+
+    stair_y_top = fl0_iy_max - landing_depth
+    stair_len = min(2.4, max(1.8, (fl0_iy_max - fl0_iy_min) - landing_depth - 1.0))
+    stair_y_bot = stair_y_top - stair_len
+
+    prev_fl_overhang = 0.0
+    prev_x_min, prev_x_max = -base_w * 0.5, base_w * 0.5
+    prev_y_min, prev_y_max = -base_d * 0.5, base_d * 0.5
+
+    # Track stair holes and wall bounds per floor
+    floor_stair_holes = {}
+    floor_wall_bounds = {}
+
+    # Town-Hall side annex: it hugs the main side wall (opposite the clock tower)
+    # for its whole height. Windows on the main wall behind it are interior and
+    # must be suppressed, and its portal opens on every floor it spans so the
+    # upper storey is reachable from inside the hall.
+    _annex_on = (getattr(props, 'town_hall_composer', False)
+                 and getattr(props, 'has_side_annex', False) and shape == 'T_SHAPE')
+    _annex_floors = 0
+    _annex_side = None
+    _annex_y_span = None
+    if _annex_on:
+        _annex_side = 'LEFT' if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else 'RIGHT'
+        _annex_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
+        _a_w = 5.2 if getattr(props, 'material_tier', 'TIER_3') != 'TIER_1' else 4.4
+        _annex_y_span = (-_a_w * 0.5 - 0.5, _a_w * 0.5 + 0.5)
+
 
     for fl_idx in range(num_floors):
         z_floor = found_h + fl_idx * floor_h
@@ -727,11 +850,18 @@ def generate_building(obj, props):
             front_ex = (wx_min - 0.05, wx_max + 0.05) if fl_has_wing else None
             has_po = getattr(props, 'has_pillared_overhang', False)
             po_s = getattr(props, 'pillared_overhang_side', 'FRONT')
+            # The pillared overhang supplies its own pillars/soffit on its facade,
+            # so suppress the soffit there. The decorative jetty corbels are dropped
+            # entirely whenever a pillared overhang exists, otherwise brackets are
+            # left hanging inside the colonnade.
             inc_f = not (has_po and po_s == 'FRONT')
             inc_b = not (has_po and po_s == 'BACK')
+            inc_l = not (has_po and po_s == 'LEFT')
+            inc_r = not (has_po and po_s == 'RIGHT')
             build_cantilever_corbels(bm, x_min, x_max, y_min, y_max, z_floor,
                                     overhang_dist=overhang_step, front_exclude_x=front_ex,
-                                    include_front=inc_f, include_back=inc_b)
+                                    include_front=inc_f, include_back=inc_b,
+                                    include_left=inc_l, include_right=inc_r)
             build_cantilever_soffit(
                 bm,
                 (prev_x_min, prev_x_max, prev_y_min, prev_y_max),
@@ -739,7 +869,9 @@ def generate_building(obj, props):
                 z_floor,
                 front_exclude_x=front_ex,
                 include_front=inc_f,
-                include_back=inc_b
+                include_back=inc_b,
+                include_left=inc_l,
+                include_right=inc_r
             )
 
         # Determine staircase cutout for this floor (if coming from below)
@@ -822,17 +954,17 @@ def generate_building(obj, props):
                             prev_wb,
                             (w_xmin, w_xmax, w_ymin, w_ymax),
                             z_floor,
-                            include_back=(w_wall != 'FRONT'),
-                            include_front=(w_wall != 'BACK'),
-                            include_left=(w_wall != 'RIGHT'),
-                            include_right=(w_wall != 'LEFT')
+                            include_back=(w_wall != 'FRONT') and inc_b,
+                            include_front=(w_wall != 'BACK') and inc_f,
+                            include_left=(w_wall != 'RIGHT') and inc_l,
+                            include_right=(w_wall != 'LEFT') and inc_r
                         )
                     build_cantilever_corbels(bm, w_xmin, w_xmax, w_ymin, w_ymax, z_floor,
                                             overhang_dist=overhang_step,
-                                            include_back=(w_wall != 'FRONT'),
-                                            include_front=(w_wall != 'BACK'),
-                                            include_left=(w_wall != 'RIGHT'),
-                                            include_right=(w_wall != 'LEFT'))
+                                            include_back=(w_wall != 'FRONT') and inc_b,
+                                            include_front=(w_wall != 'BACK') and inc_f,
+                                            include_left=(w_wall != 'RIGHT') and inc_l,
+                                            include_right=(w_wall != 'LEFT') and inc_r)
 
         # Determine next flight of stairs leading up to fl_idx + 1
         next_stair_hole = None
@@ -1034,6 +1166,69 @@ def generate_building(obj, props):
                     if props.has_front_steps and props.has_foundation:
                         build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+X')
 
+        # Upper side door onto the side rampart deck (Tier 3 town halls)
+        if fl_idx == 1 and getattr(props, 'has_side_rampart', False) and not open_timber:
+            r_side = getattr(props, 'rampart_side', 'RIGHT')
+            rdw = min(props.door_width, 1.30)
+            rdh = min(props.door_height, 2.30)
+            r_margin = 0.12
+            r_top_z = z_floor + rdh + r_margin
+            if r_side == 'LEFT':
+                r_cy = (y_min + y_max) * 0.5
+                left_openings.append({'u_start': (r_cy - rdw * 0.5 - r_margin) - y_min,
+                                      'u_end': (r_cy + rdw * 0.5 + r_margin) - y_min,
+                                      'z_start': z_floor, 'z_end': r_top_z})
+                build_door_assembly(
+                    bm, center_x=x_min, y_front=r_cy, z_base=z_floor,
+                    wall_thickness=wall_t, door_w=rdw, door_h=rdh, door_angle_deg=props.door_angle,
+                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
+                    normal_axis='-X'
+                )
+            else:
+                r_cy = (y_min + y_max) * 0.5
+                right_openings.append({'u_start': (r_cy - rdw * 0.5 - r_margin) - y_min,
+                                       'u_end': (r_cy + rdw * 0.5 + r_margin) - y_min,
+                                       'z_start': z_floor, 'z_end': r_top_z})
+                build_door_assembly(
+                    bm, center_x=x_max, y_front=r_cy, z_base=z_floor,
+                    wall_thickness=wall_t, door_w=rdw, door_h=rdh, door_angle_deg=props.door_angle,
+                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
+                    normal_axis='+X'
+                )
+
+        # Town-Hall annex portal: a plain walk-through opening into the side annex
+        # (opposite the clock tower) on every floor the annex spans, so its upper
+        # storey is reachable from inside the hall and no door leaf blocks it.
+        if (fl_idx < _annex_floors and _annex_side is not None and not open_timber):
+            _ap_w = 1.30
+            _ap_h = min(2.30, floor_h * 0.78)
+            _ap_m = 0.12
+            _ap_top = z_floor + _ap_h + _ap_m
+            _ap_cy = (y_min + y_max) * 0.5
+            _jamb_w = 0.16
+            _jamb_d = wall_t + 0.10
+            if _annex_side == 'LEFT':
+                left_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _ap_m) - y_min,
+                                      'u_end': (_ap_cy + _ap_w * 0.5 + _ap_m) - y_min,
+                                      'z_start': z_floor, 'z_end': _ap_top})
+                _ap_fx = x_min
+            else:
+                right_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _ap_m) - y_min,
+                                       'u_end': (_ap_cy + _ap_w * 0.5 + _ap_m) - y_min,
+                                       'z_start': z_floor, 'z_end': _ap_top})
+                _ap_fx = x_max
+            # Timber jamb + lintel frame around the opening (no door leaf).
+            for _s in (-1.0, 1.0):
+                create_beveled_box(
+                    bm, size=(_jamb_d, _jamb_w, _ap_h + _ap_m),
+                    location=(_ap_fx, _ap_cy + _s * (_ap_w * 0.5 + _jamb_w * 0.5),
+                              z_floor + (_ap_h + _ap_m) * 0.5),
+                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
+            create_beveled_box(
+                bm, size=(_jamb_d, _ap_w + _jamb_w * 2.0, _ap_m),
+                location=(_ap_fx, _ap_cy, _ap_top - _ap_m * 0.5),
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
+
         # Interior walk-through portals between main building and wings
         # Open-timber pavilions (Warehouse/Lumbermill T1) have no walls, so the
         # arcade posts already leave the junction fully open - skip the floating
@@ -1044,7 +1239,7 @@ def generate_building(obj, props):
                 jamb_w = 0.18
                 jamb_d = wall_t + 0.10  # Proud of wall into both rooms by 0.05m
                 lower = 0.018
-                portal_h = floor_h * 0.82
+                portal_h = min(2.15, floor_h * 0.72)
                 lintel_h = 0.20
 
                 if w_wall in ('FRONT', 'BACK'):
@@ -1194,11 +1389,12 @@ def generate_building(obj, props):
                                    location=(x_max, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
 
-        # Balcony Doorway Cutout
-        b_side = getattr(props, 'balcony_side', 'FRONT')
+        # Balcony Doorway Cutout (per-floor facade resolved above)
+        b_side = floor_balc_side.get(fl_idx)
+        b_side_next = floor_balc_side.get(fl_idx + 1)
         b_width = getattr(props, 'balcony_width', 2.4)
 
-        if fl_idx in active_balc_floors:
+        if b_side is not None:
             balc_door_w = 0.95
             balc_door_h = min(2.15, floor_h * 0.76)
             if b_side in ('FRONT', 'BACK'):
@@ -1304,7 +1500,7 @@ def generate_building(obj, props):
         # Dynamic Windows - Front Wall
         if props.has_windows and not open_timber:
             front_excludes = list(get_facade_wing_exclusions('FRONT'))
-            balcony_overhead = (fl_idx + 1 in active_balc_floors and b_side == 'FRONT')
+            balcony_overhead = (b_side_next == 'FRONT')
             
             # Door exclusion zone calculation on floor 0
             if fl_idx == 0 and props.has_front_door:
@@ -1317,10 +1513,10 @@ def generate_building(obj, props):
                 mw_cx = (x_min + x_max) * 0.5
                 front_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
                 
-            if fl_idx in active_balc_floors and b_side == 'FRONT':
+            if b_side == 'FRONT':
                 b_cx = (x_min + x_max) * 0.5
                 front_excludes.append((b_cx - (b_width * 0.5 + 0.85), b_cx + (b_width * 0.5 + 0.85)))
-            elif balcony_overhead and b_side == 'FRONT':
+            elif b_side_next == 'FRONT':
                 b_cx = (x_min + x_max) * 0.5
                 front_excludes.append((b_cx - (b_width * 0.5 + 0.45), b_cx + (b_width * 0.5 + 0.45)))
 
@@ -1357,7 +1553,7 @@ def generate_building(obj, props):
                 mw_cx = (x_min + x_max) * 0.5
                 back_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
                 
-            if fl_idx in active_balc_floors and b_side == 'BACK':
+            if b_side == 'BACK':
                 b_cx = (x_min + x_max) * 0.5
                 back_excludes.append((b_cx - (b_width * 0.5 + 0.85), b_cx + (b_width * 0.5 + 0.85)))
 
@@ -1389,7 +1585,9 @@ def generate_building(obj, props):
             if has_mw and mw_side == 'LEFT' and fl_idx in (mw_fl, mw_fl + 1):
                 mw_cy = (y_min + y_max) * 0.5
                 left_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
-            if fl_idx in active_balc_floors and b_side == 'LEFT':
+            if _annex_side == 'LEFT' and fl_idx < _annex_floors:
+                left_excludes.append(_annex_y_span)
+            if b_side == 'LEFT':
                 b_cy = (y_min + y_max) * 0.5
                 left_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
 
@@ -1417,7 +1615,9 @@ def generate_building(obj, props):
             if has_mw and mw_side == 'RIGHT' and fl_idx in (mw_fl, mw_fl + 1):
                 mw_cy = (y_min + y_max) * 0.5
                 right_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
-            if fl_idx in active_balc_floors and b_side == 'RIGHT':
+            if _annex_side == 'RIGHT' and fl_idx < _annex_floors:
+                right_excludes.append(_annex_y_span)
+            if b_side == 'RIGHT':
                 b_cy = (y_min + y_max) * 0.5
                 right_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
 
@@ -1755,14 +1955,21 @@ def generate_building(obj, props):
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
             )
             
-            # Wing Solid Walls
+            # Wing Solid Walls.
+            # Logs must NOT over-run at an end that dies into a main-hall wall,
+            # otherwise their cut log ends poke through into the interior rooms.
             if fl_has_wing:
+                def _on_main_plane(pt):
+                    return (abs(pt[0] - x_min) < 0.03 or abs(pt[0] - x_max) < 0.03 or
+                            abs(pt[1] - y_min) < 0.03 or abs(pt[1] - y_max) < 0.03)
                 for p1, p2, w_ops, norm_v in wing_wall_openings:
                     build_wall_with_opening(
                         bm, p1, p2, z_floor, wall_top_z, wall_t, w_ops,
                         mat_ext=mat_w, normal_vec=norm_v, tier=tier_val, physical_siding=phys_siding,
                         plank_direction=plank_dir, plank_jankiness=plank_jank,
                         stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+                        is_corner_start=not _on_main_plane(p1),
+                        is_corner_end=not _on_main_plane(p2),
                         has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
                     )
 
@@ -1940,6 +2147,34 @@ def generate_building(obj, props):
         prev_x_min, prev_x_max = x_min, x_max
         prev_y_min, prev_y_max = y_min, y_max
 
+
+    ctx.floor_wall_bounds = floor_wall_bounds
+    ctx.floor_stair_holes = floor_stair_holes
+    ctx.hx = hx
+    ctx.hy = hy
+    ctx.main_door_cx = main_door_cx
+    ctx.main_door_yf = main_door_yf
+
+
+def build_roof_and_attic(bm, props, ctx):
+    """Attic deck, exterior roof, dormers, chimneys, turrets and the roof hoist."""
+    base_d = ctx.base_d
+    base_w = ctx.base_w
+    cantilever = ctx.cantilever
+    effective_archetype = ctx.effective_archetype
+    floor_h = ctx.floor_h
+    floor_stair_holes = ctx.floor_stair_holes
+    floor_wall_bounds = ctx.floor_wall_bounds
+    found_h = ctx.found_h
+    has_wing = ctx.has_wing
+    num_floors = ctx.num_floors
+    seed = ctx.seed
+    total_height = ctx.total_height
+    wall_t = ctx.wall_t
+    wing_floors = ctx.wing_floors
+    wings = ctx.wings
+
+
     # 4. Roof & Attic Level
     top_fl_idx = num_floors - 1
     top_x_min, top_x_max, top_y_min, top_y_max = floor_wall_bounds[top_fl_idx]
@@ -1967,6 +2202,12 @@ def generate_building(obj, props):
     tier_val = getattr(props, 'material_tier', 'TIER_3')
     plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
 
+    # Loft hatch resolved below by the roof builder. Initialised here so builds
+    # that raise no gable/sway roof (watchtower, turret, round tower) leave them
+    # defined for the later frame/ladder pass.
+    _loft_spec = None
+    _loft_arg = None
+
     if effective_archetype != 'WATCHTOWER':
         # Exterior Roof Construction
         flare_val = getattr(props, 'roof_flare', 0.35)
@@ -1977,8 +2218,6 @@ def generate_building(obj, props):
         # Loft hatch spec (world frame) plus the builder-local arg for the
         # main roof. Decided BEFORE the roof is built so the gable wall can
         # leave a real opening; the frame/leaf/ladder are added later at 4.5b.
-        _loft_spec = None
-        _loft_arg = None
         if getattr(props, 'has_loft_hatch', False) and effective_archetype != 'WATCHTOWER' \
                 and roof_style in ('GABLE', 'SWAY'):
             _rh = max(1.6, getattr(props, 'roof_height', 3.0))
@@ -2375,7 +2614,8 @@ def generate_building(obj, props):
         is_lower_wing = (wing_floors < num_floors)
         w_fl_idx = w_top_fl - 1
         w_top_z = found_h + w_top_fl * floor_h
-        w_roof_h = props.roof_height if (wing_floors == num_floors) else (props.roof_height * 0.88)
+        _wr_scale = getattr(props, 'wing_roof_scale', 0.88)
+        w_roof_h = props.roof_height if (wing_floors == num_floors) else (props.roof_height * _wr_scale)
 
         if is_lower_wing:
             if props.has_cantilever:
@@ -3098,7 +3338,38 @@ def generate_building(obj, props):
             roof_flare=flare_val,
             scale=t_scale
         )
-        
+
+    # Roof-mounted clock spire (Tier 1 small / Tier 2 bigger town hall clocks).
+    # Seated exactly on the roof surface at the chosen point (same math as the
+    # roof-turret placement) so the spire rises from the roof instead of drowning in it.
+    if getattr(props, 'has_roof_clock_spire', False) and effective_archetype != 'WATCHTOWER':
+        _cpx = getattr(props, 'roof_clock_pos_x', 0.0)
+        _cpy = getattr(props, 'roof_clock_pos_y', -0.20)
+        _csc = getattr(props, 'roof_clock_scale', 0.85)
+        if is_rotated_roof:
+            _rhw = top_hy + props.roof_overhang
+            _ccx = top_cx + _cpx * top_hx * 0.75
+            _ccy = top_cy + _cpy * _rhw * 0.65
+            _u = min(1.0, max(0.0, abs(_ccy - top_cy) / max(0.01, _rhw)))
+        else:
+            _rhw = top_hx + props.roof_overhang
+            _ccx = top_cx + _cpx * _rhw * 0.65
+            _ccy = top_cy + _cpy * top_hy * 0.75
+            _u = min(1.0, max(0.0, abs(_ccx - top_cx) / max(0.01, _rhw)))
+        _drop = (1.0 - flare_val) * _u + flare_val * (1.0 - (1.0 - _u) ** 2)
+        if roof_style == 'SWAY':
+            _sw = getattr(props, 'roof_sway', 0.25)
+            if is_rotated_roof:
+                _t = max(0.0, min(1.0, (_ccx - top_x_min) / max(0.01, 2.0 * top_hx)))
+            else:
+                _t = max(0.0, min(1.0, (_ccy - top_y_min) / max(0.01, 2.0 * top_hy)))
+            _sag = math.sin(_t * math.pi) * _sw
+        else:
+            _sag = 0.0
+        _cz = (top_z + props.roof_height - _sag) - _drop * (props.roof_height + 0.10)
+        build_roof_clock_spire(bm, cx=_ccx, cy=_ccy, z_base=_cz, scale=_csc,
+                               tier=tier_val)
+
     # Stylized Crooked Chimney — user-controlled, avoids pillared outdoors & dormers
     if props.has_chimney and effective_archetype != 'WATCHTOWER':
         cpx = getattr(props, 'chimney_pos_x', 0.55)
@@ -3143,6 +3414,30 @@ def generate_building(obj, props):
             width=0.75, depth=0.75,
             crooked_angle=0.03
         )
+
+    ctx.top_z = top_z
+    ctx.top_hx = top_hx
+    ctx.top_hy = top_hy
+    return _loft_spec
+
+
+def build_archetype_accessories(bm, props, ctx, _loft_spec):
+    """Archetype-specific structures (forge, sails, crane, mill, ...) and loft hatch."""
+    effective_archetype = ctx.effective_archetype
+    base_w = ctx.base_w
+    found_h = ctx.found_h
+    hx = ctx.hx
+    hy = ctx.hy
+    main_door_cx = ctx.main_door_cx
+    main_door_yf = ctx.main_door_yf
+    seed = ctx.seed
+    shape = ctx.shape
+    top_hx = ctx.top_hx
+    top_hy = ctx.top_hy
+    top_z = ctx.top_z
+    wall_t = ctx.wall_t
+    wings = ctx.wings
+
 
     # 4.5. Specialized Architectural Archetype Accessories
     if effective_archetype == 'BLACKSMITH':
@@ -3262,59 +3557,12 @@ def generate_building(obj, props):
             center=_loft_spec['center'], sill_z=_loft_spec['sill'], outward=_lout,
         )
 
-    # 4.6. Architectural Outcrops, Balconies & Pillared Overhangs
-    tier_val = getattr(props, 'material_tier', 'TIER_3')
-    
-    # Mini-Wing Outcrop
-    if getattr(props, 'has_mini_wing', False):
-        w_side = getattr(props, 'mini_wing_side', 'LEFT')
-        w_floor = getattr(props, 'mini_wing_floor', 'GROUND')
-        w_width = getattr(props, 'mini_wing_width', 2.2)
-        w_depth = getattr(props, 'mini_wing_depth', 1.6)
-        w_roof = getattr(props, 'mini_wing_roof', 'LEAN_TO')
-        
-        target_fl = 0 if w_floor == 'GROUND' else min(num_floors - 1, 1)
-        z_wing_base = found_h + target_fl * floor_h
-        mw_bounds = floor_wall_bounds.get(target_fl, (-hx, hx, -hy, hy))
-            
-        build_mini_wing(
-            bm, side=w_side, floor_mode=w_floor,
-            wall_x_min=mw_bounds[0], wall_x_max=mw_bounds[1], wall_y_min=mw_bounds[2], wall_y_max=mw_bounds[3],
-            z_base=z_wing_base, width=w_width, depth=w_depth, height=min(2.05, floor_h * 0.72),
-            roof_style=w_roof, tier=tier_val, floor_h=floor_h
-        )
-        
-    # Timber Balcony
-    if getattr(props, 'has_balcony', False) and num_floors >= 2 and active_balc_floors:
-        b_side = getattr(props, 'balcony_side', 'FRONT')
-        b_width = getattr(props, 'balcony_width', 2.4)
-        b_depth = getattr(props, 'balcony_depth', 1.3)
-        for balc_fl_idx in active_balc_floors:
-            z_balc = found_h + balc_fl_idx * floor_h
-            b_bounds = floor_wall_bounds.get(balc_fl_idx, (-hx, hx, -hy, hy))
-            lower_bounds = floor_wall_bounds.get(max(0, balc_fl_idx - 1), b_bounds)
-            build_balcony(
-                bm, side=b_side,
-                wall_x_min=b_bounds[0], wall_x_max=b_bounds[1], wall_y_min=b_bounds[2], wall_y_max=b_bounds[3],
-                lower_wall_x_min=lower_bounds[0], lower_wall_x_max=lower_bounds[1],
-                lower_wall_y_min=lower_bounds[2], lower_wall_y_max=lower_bounds[3],
-                z_floor=z_balc, width=b_width, depth=b_depth, tier=tier_val
-            )
-        
-    # Pillared Overhang / Colonnade
-    if getattr(props, 'has_pillared_overhang', False):
-        p_side = getattr(props, 'pillared_overhang_side', 'FRONT')
-        p_depth = getattr(props, 'pillared_overhang_depth', 1.6)
-        p_count = getattr(props, 'pillared_overhang_pillars', 3)
-        p_style = getattr(props, 'pillared_overhang_style', 'TIMBER_STONE')
-        z_overhang_ceil = found_h + floor_h
-        po_bounds = floor_wall_bounds.get(0, (-hx, hx, -hy, hy))
-        build_pillared_overhang(
-            bm, side=p_side,
-            wall_x_min=po_bounds[0], wall_x_max=po_bounds[1], wall_y_min=po_bounds[2], wall_y_max=po_bounds[3],
-            z_ground=0.0, z_ceiling=z_overhang_ceil, depth=p_depth,
-            pillar_count=p_count, pillar_style=p_style, tier=tier_val
-        )
+
+def _finalize_building(obj, bm, props, ctx):
+    """Wonkiness, UVs, material slots, mesh commit and optional per-material split."""
+    total_height = ctx.total_height
+    seed = ctx.seed
+
 
     # 5. Whimsical Curvature / Wonkiness Deformation
     if props.wonkiness > 0.001:
@@ -3322,7 +3570,7 @@ def generate_building(obj, props):
         
     # 6. Apply UVs
     apply_box_uvs(bm, scale=1.0)
-    
+
     # 7. Setup Material Slots and procedural node shaders BEFORE transferring bmesh
     setup_building_material_slots(obj, props)
     

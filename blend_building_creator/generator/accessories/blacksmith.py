@@ -1,8 +1,7 @@
 import math
 from mathutils import Vector
-from .common import (
-    _get_facade_frame, _planar_uv_faces
-)
+from ..facade import get_facade_frame
+from ..uv_utils import map_planar_faces
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, create_horizontal_cylinder,
     create_torus_ring, create_door_batten
