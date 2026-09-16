@@ -15,6 +15,7 @@ from ..materials import (
 from ..roof.gable_roof import build_gable_roof
 from ..roof.turret_roof import build_conical_turret_roof
 from ..openings import build_window_assembly
+from ..railing import build_railing
 from ..walls import build_wall_with_opening
 
 
@@ -324,27 +325,20 @@ def build_clock_tower(bm, cx, cy, z_ground=0.0, size=3.0, shaft_top_z=10.0,
             create_beveled_box(bm, size=(2.02, 0.30, 0.20),
                                location=(cx, _fy, _ft + 0.10),
                                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
-    # Interior floor decks so the shaft is not a bottomless well.
+    # Interior floor decks so the shaft is not a bottomless well. (The old
+    # cut-stone string-course boxes read as stone interior floors, so they are
+    # gone; only the vertical quoins remain as exterior dressing.)
     for fz in levels:
         if base_z + 0.4 < fz < shaft_top_z - 0.2:
             create_box(bm, size=(s - shaft_t * 2.0, s - shaft_t * 2.0, 0.12),
                        location=(cx, cy, fz + 0.07), mat_index=MAT_INDEX_FLOOR)
 
-    # Cut-stone band capping the stone stage
-    create_beveled_box(bm, size=(s + 0.30, s + 0.30, 0.22),
-                       location=(cx, cy, base_z + stone_h),
-                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
     # Cut-stone corner quoins full height
     for sx in (-1.0, 1.0):
         for sy in (-1.0, 1.0):
             create_beveled_box(bm, size=(0.26, 0.26, shaft_h),
                                location=(cx + sx * (half - 0.05), cy + sy * (half - 0.05),
                                          base_z + shaft_h * 0.5),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
-    # Cut-stone string courses aligned to real floor decks
-    for fz in levels:
-        if base_z + 0.8 < fz < shaft_top_z - 0.4:
-            create_beveled_box(bm, size=(s + 0.24, s + 0.24, 0.20), location=(cx, cy, fz),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
 
     # Base doorway facing front (skipped when the arch tunnel passes through)
@@ -497,20 +491,25 @@ def build_roof_clock_spire(bm, cx, cy, z_base, scale=0.85, tier='TIER_3'):
 
 
 def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
-                        tier='TIER_3', out_sx=1.0, out_sy=1.0,
+                        tier='TIER_3', out_dir=(1.0, 0.0),
                         floor_levels=None, floor_h=3.0, main_wall_top=None,
                         attach_tuck=0.32, plank_direction='HORIZONTAL', seed=42):
     """Square corner tower bolted onto the outside of the hall, annex-style.
 
-    The tower sits entirely outside the wall planes (like the side annex) so it
-    never clashes with the interior, its floor slabs or the stairs. Its inner
-    side is left open; the hall wall behind it carries a doorway per storey. The
-    tower is hollow with real window cut-outs on its three exposed faces and a
-    floor slab per main level, and is capped with a square shingled spire.
+    out_dir is the axis the tower projects along; the opposite side (toward the
+    hall wall) is left open and gets a doorway per storey cut into that wall.
+    The tower is hollow with real window cut-outs on its three exposed faces and
+    a floor slab per main level, capped with a square shingled spire. Works for
+    both side-wall and back-wall mounts.
     """
     wall_mat = _tier_wall_mat(tier)
     t = 0.34
     levels = list(floor_levels) if floor_levels else [z_ground + floor_h, z_ground + 2.0 * floor_h]
+    ox, oy = out_dir
+    px, py = -oy, ox                       # width (perpendicular) direction
+
+    def pt(d_out, d_perp):
+        return (cx + ox * d_out + px * d_perp, cy + oy * d_out + py * d_perp)
 
     # Stepped stone root flush with the ground floor.
     plinth_top = max(z_ground + 0.55, min(z_ground + 1.30, (levels[0] if levels else z_ground + 0.9)))
@@ -523,52 +522,54 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
         create_beveled_box(bm, size=(half * 2.0 + 0.40, half * 2.0 + 0.40, h1),
                            location=(cx, cy, z_ground + step0 + h1 * 0.5),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.025)
-    create_beveled_box(bm, size=(half * 2.0 + 0.30, half * 2.0 + 0.30, 0.14),
-                       location=(cx, cy, plinth_top - 0.07),
-                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+    # No cut-stone cap slab here: it sat coplanar with the ground storey floor
+    # and read as an extra stone floor inside the tower.
     shaft_base = plinth_top
     shaft_h = max(1.5, wall_top_z - shaft_base)
 
-    xo = cx + out_sx * (half - t * 0.5)      # outer side
-    yo = cy + out_sy * (half - t * 0.5)      # back side
-    yi = cy - out_sy * (half - t * 0.5)      # front side
-    xi = cx - out_sx * (half - t * 0.5)      # inner side (against the hall)
-    lox, hix = cx - half, cx + half
-    loy, hiy = cy - half, cy + half
-    # Reach the wall's inner face so no slot opens at the ground storey; the
-    # jettied upper wall just passes through the overlap.
-    reach = cx - half - attach_tuck
+    o_line = half - t * 0.5
+    i_line = -(half - t * 0.5)
+    reach = -half - attach_tuck
 
-    # (p_start, p_end, normal, z_from) - the inner side only exists above the
-    # eave, where the hall wall/gable no longer backs the tower.
+    # (p_start, p_end, normal, z_from). The open (inner) side only gets a wall
+    # above the eave, where the hall wall/gable no longer backs the tower.
     face_defs = [
-        ((xo, loy), (xo, hiy), (out_sx, 0.0), shaft_base),
-        ((reach, yo), (hix, yo), (0.0, out_sy), shaft_base),
-        ((reach, yi), (hix, yi), (0.0, -out_sy), shaft_base),
+        (pt(o_line, -half), pt(o_line, half), (ox, oy), shaft_base),
+        (pt(reach, o_line), pt(half, o_line), (px, py), shaft_base),
+        (pt(reach, -o_line), pt(half, -o_line), (-px, -py), shaft_base),
     ]
     if main_wall_top is not None:
-        face_defs.append(((xi, loy), (xi, hiy), (-out_sx, 0.0), main_wall_top))
+        face_defs.append((pt(i_line, -half), pt(i_line, half), (-ox, -oy), main_wall_top))
 
     ww = 0.72
     wh = min(1.15, floor_h * 0.46)
     stone_top = min(wall_top_z - 0.50, (levels[1] if len(levels) > 1 else shaft_base + floor_h) + 0.90)
+    # Extra high windows above the eave - the tall shaft would otherwise be
+    # blank up top. They need no interior decks, just openings and glazing.
+    win_levels = list(levels)
+    _wz = (levels[-1] if levels else shaft_base) + floor_h
+    while _wz + wh * 0.5 < wall_top_z - 0.35:
+        win_levels.append(_wz)
+        _wz += floor_h
 
     for (p0, p1, nv, z_from) in face_defs:
         f_len = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
         if f_len < 0.30:
             continue
         z_lo = max(shaft_base, z_from)
+        ux = (p1[0] - p0[0]) / f_len
+        uy = (p1[1] - p0[1]) / f_len
+        # Centre windows over the tower axis (not the tucked-in wall end).
+        u_win = (cx - p0[0]) * ux + (cy - p0[1]) * uy
         ops, wins = [], []
         if z_from <= shaft_base + 0.01 and f_len >= ww + 0.60:
-            for fz in levels:
+            for fz in win_levels:
                 wz = fz + floor_h * 0.50
                 if wz + wh * 0.5 > wall_top_z - 0.10 or wz - wh * 0.5 < shaft_base - 0.05:
                     continue
-                ops.append({'u_start': f_len * 0.5 - ww * 0.5, 'u_end': f_len * 0.5 + ww * 0.5,
+                ops.append({'u_start': u_win - ww * 0.5, 'u_end': u_win + ww * 0.5,
                             'z_start': wz - wh * 0.5, 'z_end': wz + wh * 0.5})
-                ux = (p1[0] - p0[0]) / f_len
-                uy = (p1[1] - p0[1]) / f_len
-                wins.append((p0[0] + ux * f_len * 0.5, p0[1] + uy * f_len * 0.5, wz))
+                wins.append((p0[0] + ux * u_win, p0[1] + uy * u_win, wz))
         bands = []
         if stone_top > z_lo + 0.06:
             bands.append((z_lo, min(stone_top, wall_top_z), MAT_INDEX_STONE))
@@ -584,43 +585,36 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
             build_window_assembly(bm, center=(wx, wy, wz), size=(ww, wh),
                                   wall_thickness=t, normal_axis=nv, has_shutters=True)
 
-    # Floor decks on every storey so the tower rooms are usable.
-    span = half * 2.0 + 0.24
+    # Floor decks on every storey (ground included), sized to sit inside the
+    # shell so they never poke out through the tower walls.
+    span = half * 2.0 - t + 0.04
+    _sz = pt(-t * 0.5, 0.0)
     for fz in levels:
-        if shaft_base + 0.05 < fz < wall_top_z - 0.10:
-            create_box(bm, size=(span, span, 0.12), location=(cx, cy, fz + 0.07),
+        if shaft_base - 0.01 <= fz < wall_top_z - 0.10:
+            create_box(bm, size=(span, span, 0.12), location=(_sz[0], _sz[1], fz + 0.07),
                        mat_index=MAT_INDEX_FLOOR)
 
-    # Roof collar where the tower punches through the main roof (timber skirt),
-    # plus a timber band at the eave line.
+    # Roof collar where the tower punches through the main roof (timber skirt).
+    # No timber frame rings at the tower head any more - the user wants the
+    # clean shaft to run straight into the roof.
     if main_wall_top is not None and shaft_base + 0.2 < main_wall_top < wall_top_z - 0.2:
         create_beveled_box(bm, size=(half * 2.0 + 0.62, half * 2.0 + 0.62, 0.26),
                            location=(cx, cy, main_wall_top),
                            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014)
-    create_beveled_box(bm, size=(half * 2.0 + 0.30, half * 2.0 + 0.30, 0.22),
-                       location=(cx, cy, wall_top_z - 0.11),
-                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
     for sx in (-1.0, 1.0):
         for sy in (-1.0, 1.0):
             create_beveled_box(bm, size=(0.24, 0.24, shaft_h),
                                location=(cx + sx * (half - 0.05), cy + sy * (half - 0.05),
                                          shaft_base + shaft_h * 0.5),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
-    # Cut-stone string course where the stone storey meets the upper lifts
-    if shaft_base + 0.3 < stone_top < wall_top_z - 0.3:
-        create_beveled_box(bm, size=(half * 2.0 + 0.24, half * 2.0 + 0.24, 0.20),
-                           location=(cx, cy, stone_top),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
-    # Timber cornice under the spire
-    create_beveled_box(bm, size=(half * 2.0 + 0.52, half * 2.0 + 0.52, 0.20),
-                       location=(cx, cy, wall_top_z + 0.10),
-                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-    # Square shingled spire (uses the shared roof material + UVs)
-    _square_spire_roof(bm, cx, cy, wall_top_z + 0.20, half + 0.40,
-                       max(2.6, half * 1.9))
+    # Square shingled spire (uses the shared roof material + UVs). Seated just
+    # above the shaft head so the roof never floats.
+    _spire_base = wall_top_z + 0.02
+    _spire_h = max(2.6, half * 1.9)
+    _square_spire_roof(bm, cx, cy, _spire_base, half + 0.40, _spire_h)
     # Iron finial needle above the spire
     create_cylinder(bm, radius=0.035, height=0.9, segments=6,
-                    location=(cx, cy, wall_top_z + 0.20 + max(2.6, half * 1.9) + 1.30),
+                    location=(cx, cy, _spire_base + _spire_h + 1.30),
                     mat_index=MAT_INDEX_IRON)
 
 
@@ -686,23 +680,18 @@ def build_entry_ramp(bm, door_x, front_y, z_floor=0.6, width=1.6, length=None,
                        location=(rcx, mid_y, mid_z - 0.07),
                        rotation=(ang, 0.0, 0.0), mat_index=MAT_INDEX_CUT_STONE,
                        bevel_amount=0.015)
-    # Sloped stone cheeks + timber handrails on the ramp
+    # Sloped stone cheeks + detailed timber guard railings on the ramp
+    ramp_top_y = terr_cy - terr_d * 0.5
+    ramp_bot_y = ramp_top_y - ramp_len
     for s in (-1.0, 1.0):
         px = rcx + s * (width * 0.5 + 0.02)
         create_beveled_box(bm, size=(0.16, ramp_diag, 0.34),
                            location=(px, mid_y, mid_z + 0.10),
                            rotation=(ang, 0.0, 0.0), mat_index=MAT_INDEX_STONE,
                            bevel_amount=0.01)
-        for t in (0.12, 0.5, 0.88):
-            py = (terr_cy - terr_d * 0.5) - ramp_len * t
-            pz2 = deck_top - rise * t
-            create_beveled_box(bm, size=(0.09, 0.09, 0.80),
-                               location=(px, py, pz2 + 0.55),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-        create_beveled_box(bm, size=(0.08, ramp_diag, 0.08),
-                           location=(px, mid_y, mid_z + 1.0),
-                           rotation=(ang, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER,
-                           bevel_amount=0.008)
+        build_railing(bm, (px, ramp_top_y), (px, ramp_bot_y),
+                      deck_top, height=0.95, base_z_end=0.0,
+                      baluster_spacing=0.24, braces=False)
 
 
 def build_arched_porch(bm, door_x, front_y, z_ground=0.0, z_floor=0.6,

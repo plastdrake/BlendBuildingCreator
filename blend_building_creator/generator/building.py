@@ -828,15 +828,13 @@ def _build_floors(bm, props, ctx):
         _a_w = 5.2 if getattr(props, 'material_tier', 'TIER_3') != 'TIER_1' else 4.4
         _annex_y_span = (-_a_w * 0.5 - 0.5, _a_w * 0.5 + 0.5)
 
-    # Square corner turrets bolt onto the outside of the hall (annex-style), so
-    # each one connects through a doorway cut in the side wall rather than
-    # through the floor plan.
+    # Square corner turrets bolt onto the outside of the BACK wall, so each one
+    # connects through a doorway cut in the back wall (clear of the stairs).
     _turrets = []
     if getattr(props, 'has_corner_turrets', False) and not open_timber:
         _thalf = max(1.0, min(2.0, getattr(props, 'corner_turret_size', 1.35)))
-        _t_cy = base_d * 0.5 + wall_t * 0.5 - _thalf
-        _turrets = [{'sx': -1.0, 'cy': _t_cy, 'half': _thalf},
-                    {'sx': 1.0, 'cy': _t_cy, 'half': _thalf}]
+        _t_cx = base_w * 0.5 - _thalf
+        _turrets = [{'cx': -_t_cx, 'half': _thalf}, {'cx': _t_cx, 'half': _thalf}]
 
 
     for fl_idx in range(num_floors):
@@ -1086,32 +1084,25 @@ def _build_floors(bm, props, ctx):
         w_left_openings = []
         w_right_openings = []
 
-        # Corner turret doorways: a walk-through portal in the hall side wall so
-        # each tower room opens straight into the hall (annex-style connection).
+        # Corner turret doorways: a walk-through portal in the back wall so each
+        # tower room opens straight into the hall (annex-style connection).
         for _tr in _turrets:
-            _tsx = _tr['sx']
-            _tcy = _tr['cy']
+            _tcx = _tr['cx']
             _pw = 1.30
             _ph = min(2.15, floor_h * 0.78)
             _pm = 0.12
             _pz1 = z_floor + _ph
-            _op = {'u_start': (_tcy - _pw * 0.5 - _pm) - y_min,
-                   'u_end': (_tcy + _pw * 0.5 + _pm) - y_min,
-                   'z_start': z_floor, 'z_end': _pz1}
-            if _tsx > 0:
-                right_openings.append(_op)
-                _pfx = x_max
-            else:
-                left_openings.append(_op)
-                _pfx = x_min
+            back_openings.append({'u_start': (_tcx - _pw * 0.5 - _pm) - x_min,
+                                  'u_end': (_tcx + _pw * 0.5 + _pm) - x_min,
+                                  'z_start': z_floor, 'z_end': _pz1})
             _jw, _jd = 0.16, wall_t + 0.10
             for _s in (-1.0, 1.0):
-                create_beveled_box(bm, size=(_jd, _jw, _ph + _pm),
-                                   location=(_pfx, _tcy + _s * (_pw * 0.5 + _jw * 0.5),
+                create_beveled_box(bm, size=(_jw, _jd, _ph + _pm),
+                                   location=(_tcx + _s * (_pw * 0.5 + _jw * 0.5), y_max,
                                              z_floor + (_ph + _pm) * 0.5),
                                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
-            create_beveled_box(bm, size=(_jd, _pw + _jw * 2.0, _pm),
-                               location=(_pfx, _tcy, _pz1 + _pm * 0.5),
+            create_beveled_box(bm, size=(_pw + _jw * 2.0, _jd, _pm),
+                               location=(_tcx, y_max, _pz1 + _pm * 0.5),
                                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
 
         win_w = props.window_width
@@ -1599,15 +1590,11 @@ def _build_floors(bm, props, ctx):
             """Keep facade windows clear of the square corner turrets."""
             ex = []
             for _tr in _turrets:
-                _tsx, _th = _tr['sx'], _tr['half']
-                _tcy = _tr['cy']
-                if facade_name == ('RIGHT' if _tsx > 0 else 'LEFT'):
-                    ex.append((_tcy - _th - win_w_clr, _tcy + _th + win_w_clr))
+                _tcx, _th = _tr['cx'], _tr['half']
                 if facade_name == 'BACK':
-                    if _tsx > 0:
-                        ex.append((x_max - 1.0, x_max + 1.0))
-                    else:
-                        ex.append((x_min - 1.0, x_min + 1.0))
+                    ex.append((_tcx - _th - win_w_clr, _tcx + _th + win_w_clr))
+                if facade_name == ('RIGHT' if _tcx > 0 else 'LEFT'):
+                    ex.append((y_max - 0.9, y_max + 1.2))
             return ex
 
         # Dynamic Windows - Front Wall
@@ -2121,7 +2108,7 @@ def _build_floors(bm, props, ctx):
         # Timber Framing (Tudor Half-Timbering)
         # In Tier 1 (Log Cabin), authentic interlocking logs already provide all structural aesthetics
         if not open_timber and props.has_timber_framing and effective_archetype != 'WATCHTOWER' and tier_val != 'TIER_1':
-            post_w = 0.22
+            post_w = 0.30
             timber_jank = props.wonkiness * 0.5
             is_top_fl = (fl_idx == num_floors - 1)
 
@@ -2152,13 +2139,13 @@ def _build_floors(bm, props, ctx):
                     ny = dy / dlen
                 else:
                     nx, ny = 0.0, 0.0
-                off = wall_t * 0.42
+                off = wall_t * 0.46
                 ocx = cx + nx * off
                 ocy = cy + ny * off
                 create_flared_post(
                     bm, size=(post_w, post_w, ph),
                     location=(ocx, ocy, pz),
-                    mat_index=MAT_INDEX_TIMBER, flare=0.35, jankiness=timber_jank,
+                    mat_index=MAT_INDEX_TIMBER, flare=0.42, jankiness=timber_jank,
                     chamfer_top=is_top_fl
                 )
 
@@ -2280,12 +2267,12 @@ def _build_floors(bm, props, ctx):
                             ny_w = dy_w / dlen_w
                         else:
                             nx_w, ny_w = 0.0, -1.0
-                        off_w = wall_t * 0.42
+                        off_w = wall_t * 0.46
                         ocx_w = wpx + nx_w * off_w
                         ocy_w = wpy + ny_w * off_w
                         create_flared_post(bm, size=(post_w, post_w, w_post_h),
                                            location=(ocx_w, ocy_w, w_post_cz),
-                                           mat_index=MAT_INDEX_TIMBER, flare=0.35, jankiness=timber_jank,
+                                           mat_index=MAT_INDEX_TIMBER, flare=0.42, jankiness=timber_jank,
                                            chamfer_top=is_top_fl)
 
                 for p1, p2, w_ops, norm_v in wing_wall_openings:

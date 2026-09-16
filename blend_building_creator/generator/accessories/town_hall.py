@@ -15,6 +15,7 @@ from mathutils import Vector, Matrix
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone,
 )
+from ..railing import build_railing
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
     MAT_INDEX_PLASTER_EXT, MAT_INDEX_SHINGLES, MAT_INDEX_GLASS,
@@ -198,7 +199,7 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
     # Corner boards on the outer corners
     for sy in (y0 + 0.08, y1 - 0.08):
-        create_beveled_box(bm, size=(0.20, 0.20, wall_h),
+        create_beveled_box(bm, size=(0.28, 0.28, wall_h),
                            location=(outer_x, sy, found_h + wall_h * 0.5),
                            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
 
@@ -308,48 +309,43 @@ def build_forecourt_walls(bm, x_left, x_right, y_wall, z_ground=0.0,
 def build_side_rampart(bm, side_sgn, wall_face_x, deck_cy, deck_len=7.0,
                        deck_top_z=3.7, width=2.3, tier='TIER_3', ramp_at_back=False,
                        ramp_outer=False, ramp_cx=None):
-    """Elevated side rampart walk: stone deck at upper-floor level on pillars,
-    outer + end parapets with coping, and a sloped ramp descending to grade.
-    The ramp is placed at the back end by default so it never runs into a
-    front-corner clock tower.
+    """Elevated timber rampart walk: plank deck at upper-floor level on wooden
+    posts, outer + end timber parapets, and a sloped plank ramp descending to
+    grade. The ramp is placed at the front end when the walk starts at the
+    clock tower.
     """
     outer_x = wall_face_x + side_sgn * width
     cx = (wall_face_x + outer_x) * 0.5
     y0, y1 = deck_cy - deck_len * 0.5, deck_cy + deck_len * 0.5
     deck_t = 0.20
-    # Deck slab + support pillars down to grade with wall corbels
+    # Plank deck slab + wooden support posts down to grade with wall corbels
     create_beveled_box(bm, size=(width, deck_len, deck_t),
                        location=(cx, deck_cy, deck_top_z - deck_t * 0.5),
-                       mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.02)
     n_piers = max(2, int(deck_len / 2.2) + 1)
     for i in range(n_piers):
         py = y0 + 0.4 + (deck_len - 0.8) * (i / max(1, n_piers - 1))
-        create_beveled_box(bm, size=(0.42, 0.42, deck_top_z - deck_t),
-                           location=(outer_x - side_sgn * 0.1, py, (deck_top_z - deck_t) * 0.5),
+        create_beveled_box(bm, size=(0.34, 0.34, deck_top_z - deck_t - 0.30),
+                           location=(outer_x - side_sgn * 0.1, py, 0.30 + (deck_top_z - deck_t - 0.30) * 0.5),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.018)
+        create_beveled_box(bm, size=(0.50, 0.50, 0.30),
+                           location=(outer_x - side_sgn * 0.1, py, 0.15),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
         create_beveled_box(bm, size=(0.16, 0.5, 0.5),
                            location=(wall_face_x + side_sgn * 0.05, py, deck_top_z - deck_t - 0.25),
                            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
-    # Parapets (outer + both ends) with coping. The ramp end is left open.
-    parap_h, parap_t = 1.0, 0.26
-    pz = deck_top_z + parap_h * 0.5
-    create_beveled_box(bm, size=(parap_t, deck_len, parap_h),
-                       location=(outer_x - side_sgn * parap_t * 0.5 + side_sgn * 0.05, deck_cy, pz),
-                       mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
-    create_beveled_box(bm, size=(parap_t + 0.12, deck_len + 0.06, 0.10),
-                       location=(outer_x - side_sgn * parap_t * 0.5 + side_sgn * 0.05, deck_cy,
-                                 deck_top_z + parap_h + 0.05),
-                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
-    for ey, is_ramp_end in ((y0 + parap_t * 0.5, not ramp_at_back),
-                            (y1 - parap_t * 0.5, ramp_at_back)):
+    # Detailed timber guard railings (outer edge + both ends) instead of a
+    # solid plank wall. The ramp end is left open so the ramp meets the deck.
+    rail_x = outer_x - side_sgn * 0.12
+    build_railing(bm, (rail_x, y0), (rail_x, y1), deck_top_z, height=1.05)
+    for ey, is_ramp_end in ((y0 + 0.12, not ramp_at_back),
+                            (y1 - 0.12, ramp_at_back)):
         if is_ramp_end:
             continue
-        create_beveled_box(bm, size=(width, parap_t, parap_h),
-                           location=(cx, ey, pz),
-                           mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
-    # Sloped ramp from one deck end down to grade. It descends away from the
-    # front when the tower sits on the front corner. When ramp_outer is set the
-    # ramp hugs the deck's outer edge so it clears a corner turret at the deck end.
+        build_railing(bm, (wall_face_x + side_sgn * 0.12, ey),
+                      (rail_x, ey), deck_top_z, height=1.05, braces=False)
+    # Sloped plank ramp from one deck end down to grade. It descends away from
+    # the front toward the clock tower so you climb it onto the walk.
     rise = deck_top_z
     ramp_len = rise * 1.9 + 1.3
     ramp_w = 1.5
@@ -367,35 +363,15 @@ def build_side_rampart(bm, side_sgn, wall_face_x, deck_cy, deck_len=7.0,
     diag = math.sqrt(rise * rise + ramp_len * ramp_len)
     create_beveled_box(bm, size=(ramp_w, diag, 0.14),
                        location=(rcx, mid_y, mid_z - 0.07),
-                       rotation=(tilt, 0.0, 0.0), mat_index=MAT_INDEX_CUT_STONE,
+                       rotation=(tilt, 0.0, 0.0), mat_index=MAT_INDEX_WOOD,
                        bevel_amount=0.015)
-    # Sloped stone cheeks + a clean handrail that follows the slope.
-    rail_h = 0.95
-    rail_samples = [0.10, 0.40, 0.70, 1.0]
+    # Matching detailed guard railings down both sides of the sloped ramp.
+    foot_y = start_y + dir_sgn * ramp_len
     for s in (-1.0, 1.0):
-        px = rcx + s * (ramp_w * 0.5 + 0.03)
-        create_beveled_box(bm, size=(0.15, diag, 0.5),
-                           location=(px, mid_y, mid_z + 0.15),
-                           rotation=(tilt, 0.0, 0.0), mat_index=MAT_INDEX_STONE,
-                           bevel_amount=0.01)
-        tops = []
-        for t in rail_samples:
-            py = start_y + dir_sgn * ramp_len * t
-            base_z = deck_top_z - rise * t
-            create_beveled_box(bm, size=(0.09, 0.09, rail_h),
-                               location=(px, py, base_z + rail_h * 0.5),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-            tops.append((py, base_z + rail_h))
-        # Rail segments bridging consecutive balusters (follows the slope exactly)
-        for (ay, az), (by, bz) in zip(tops[:-1], tops[1:]):
-            dy = by - ay
-            dz = bz - az
-            seg_len = math.hypot(dy, dz)
-            seg_ang = math.atan2(dz, dy)
-            create_beveled_box(bm, size=(0.09, seg_len + 0.05, 0.10),
-                               location=(px, (ay + by) * 0.5, (az + bz) * 0.5),
-                               rotation=(seg_ang, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER,
-                               bevel_amount=0.008)
+        px = rcx + s * (ramp_w * 0.5 + 0.02)
+        build_railing(bm, (px, start_y), (px, foot_y),
+                      deck_top_z, height=0.95, base_z_end=0.0,
+                      baluster_spacing=0.24, braces=False)
 
 
 def build_town_hall_composer(bm, props, ctx):
@@ -469,14 +445,17 @@ def build_town_hall_composer(bm, props, ctx):
         ramp_len = deck_top * 1.9 + 1.3
         if has_tower and t_sgn == r_sgn:
             t_cy = wing_front + t_size * 0.5 - 0.25
-            # The ramp's foot sits just behind the tower's back face: you run
-            # through the tower gate and straight up the ramp onto the walk.
-            deck_y0 = (t_cy + t_size * 0.5) + 0.12 + (ramp_len - 0.30)
+            # The ramp's foot sits just behind the tower's stepped plinth so it
+            # never pokes through the tower wall: you run through the tower gate
+            # and straight up the ramp onto the walk.
+            t_plinth = t_size * 0.5 + 0.45
+            deck_y0 = (t_cy + t_plinth) + 0.10 + ramp_len
         else:
             deck_y0 = -3.0
         if has_turrets:
-            # Stop the walk just short of the corner tower's front face.
-            deck_y1 = (base_hy + ctx.get('wall_t', 0.30) * 0.5 - tr_half * 2.0) - 0.10
+            # The corner towers sit on the back wall now, so the walk can run
+            # all the way to the back corner.
+            deck_y1 = base_hy + 0.45
         else:
             deck_y1 = deck_y0 + 7.0
         if deck_y1 - deck_y0 < 5.5:

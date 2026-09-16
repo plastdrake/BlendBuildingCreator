@@ -100,9 +100,20 @@ def _build_civic_landmarks(bm, props, ctx, tier):
     if _prop(props, 'has_clock_tower', False):
         t_size = _prop(props, 'clock_tower_size', 3.0)
         t_sgn = 1.0 if _prop(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else -1.0
+        # When a rampart shares the tower's side, nudge the tower out so it lines
+        # up with the middle of the ramp / walk.
+        _ramp_same = (_prop(props, 'has_side_rampart', False)
+                      and _prop(props, 'rampart_side', 'RIGHT')
+                      == _prop(props, 'clock_tower_side', 'RIGHT'))
+        if _ramp_same:
+            _fl1 = ctx.floor_wall_bounds.get(1, None)
+            _r_face = ((_fl1[1] if t_sgn > 0 else _fl1[0]) if _fl1 else t_sgn * base_hx)
+            t_cx = _r_face + t_sgn * 1.30           # half the 2.6 m walk width
+        else:
+            t_cx = t_sgn * (base_hx + t_size * 0.5 - 0.7)
         build_clock_tower(
             bm,
-            cx=t_sgn * (base_hx + t_size * 0.5 - 0.7),
+            cx=t_cx,
             cy=wing_front + t_size * 0.5 - 0.25,
             z_ground=0.0, size=t_size,
             shaft_top_z=ctx.found_h + ctx.num_floors * ctx.floor_h + props.roof_height * 1.15,
@@ -112,22 +123,21 @@ def _build_civic_landmarks(bm, props, ctx, tier):
             arch_passage=bool(_prop(props, 'town_hall_composer', False)),
         )
     if _prop(props, 'has_corner_turrets', False):
-        # Square corner towers, one full storey taller than the eaves. They sit
-        # fully outside the wall planes (annex-style) so they never clash with
-        # the interior, floor slabs or stairs, and connect via a doorway per
-        # storey cut into the hall side wall.
+        # Square corner towers, ~30% taller than before, mounted on the BACK
+        # wall (so the hall stairs never block their doorway). They sit just
+        # outside the back wall plane and connect via a doorway per storey.
         _eave = ctx.found_h + ctx.num_floors * ctx.floor_h
-        tur_top = _eave + ctx.floor_h * 0.95
+        tur_top = (_eave + ctx.floor_h * 0.95) * 1.30
         tur_half = max(1.0, min(2.0, _prop(props, 'corner_turret_size', 1.35)))
         _levels = [ctx.found_h + i * ctx.floor_h for i in range(ctx.num_floors)]
         _wt = ctx.wall_t
-        _t_cy = base_hy + _wt * 0.5 - tur_half
+        _t_cx = base_hx - tur_half
         for _sx in (-1.0, 1.0):
             build_corner_turret(
                 bm,
-                cx=_sx * (base_hx + _wt * 0.5 + tur_half), cy=_t_cy,
+                cx=_sx * _t_cx, cy=base_hy + _wt * 0.5 + tur_half,
                 z_ground=0.0, half=tur_half, wall_top_z=tur_top, tier=tier,
-                out_sx=_sx, out_sy=1.0, floor_levels=_levels,
+                out_dir=(0.0, 1.0), floor_levels=_levels,
                 floor_h=ctx.floor_h, main_wall_top=_eave,
                 attach_tuck=max(0.30, _wt),
                 plank_direction=ctx.plank_dir, seed=ctx.seed)

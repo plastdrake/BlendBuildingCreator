@@ -1,6 +1,7 @@
 import math
 from mathutils import Vector, Matrix
 from ..facade import get_facade_frame
+from ..railing import build_railing
 from ..uv_utils import map_planar_faces
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, create_horizontal_cylinder,
@@ -184,89 +185,24 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
     )
     
     rail_h = 0.95
-    post_w = 0.10
     outer_d = depth + 0.02
     wall_clearance = 0.48
-    side_rail_len = depth - wall_clearance - 0.08
-    side_rail_center = wall_clearance * 0.5 + depth * 0.5
-    
+
+    def _w(lx, ly):
+        p = Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((lx, ly, 0.0)).to_4d()).to_3d()
+        return (p.x, p.y)
+
+    # Detailed guard railings around the deck (front run + both returns),
+    # built with the shared railing generator so all rails match the rest of
+    # the building's joinery.
+    build_railing(bm, _w(outer_d, -half_w), _w(outer_d, half_w),
+                  z_floor + 0.06, height=rail_h)
     for s_sign in [-1, 1]:
-        loc_cp = Vector((outer_d, half_w * s_sign, z_floor + 0.06 + rail_h * 0.5))
-        world_cp = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_cp.to_4d()).to_3d()
-        create_beveled_box(
-            bm, size=(post_w, post_w, rail_h),
-            location=world_cp,
-            rotation=(0.0, 0.0, rot_z),
-            mat_index=MAT_INDEX_TIMBER_FRAME,
-            bevel_amount=0.010
-        )
-        loc_wp = Vector((wall_clearance, half_w * s_sign, z_floor + 0.06 + rail_h * 0.5))
-        world_wp = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_wp.to_4d()).to_3d()
-        create_beveled_box(
-            bm, size=(post_w, post_w, rail_h),
-            location=world_wp,
-            rotation=(0.0, 0.0, rot_z),
-            mat_index=MAT_INDEX_TIMBER_FRAME,
-            bevel_amount=0.010
-        )
-        loc_rosette = Vector((wall_clearance * 0.5, half_w * s_sign, z_floor + 0.06 + rail_h * 0.72))
-        world_rosette = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_rosette.to_4d()).to_3d()
-        create_beveled_box(
-            bm, size=(wall_clearance, 0.14, 0.14),
-            location=world_rosette,
-            rotation=(0.0, 0.0, rot_z),
-            mat_index=MAT_INDEX_TIMBER_FRAME,
-            bevel_amount=0.012
-        )
-        loc_sr = Vector((side_rail_center, half_w * s_sign, z_floor + 0.06 + rail_h))
-        world_sr = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_sr.to_4d()).to_3d()
-        create_beveled_box(
-            bm, size=(side_rail_len, 0.08, 0.08),
-            location=world_sr,
-            rotation=(0.0, 0.0, rot_z),
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.008
-        )
-        loc_sm = Vector((side_rail_center, half_w * s_sign, z_floor + 0.06 + rail_h * 0.45))
-        world_sm = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_sm.to_4d()).to_3d()
-        create_beveled_box(
-            bm, size=(side_rail_len, 0.06, 0.06),
-            location=world_sm,
-            rotation=(0.0, 0.0, rot_z),
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.006
-        )
-        
-    loc_fr = Vector((outer_d, 0.0, z_floor + 0.06 + rail_h))
-    world_fr = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_fr.to_4d()).to_3d()
-    create_beveled_box(
-        bm, size=(0.08, width + 0.04, 0.08),
-        location=world_fr,
-        rotation=(0.0, 0.0, rot_z),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.008
-    )
-    loc_fm = Vector((outer_d, 0.0, z_floor + 0.06 + rail_h * 0.45))
-    world_fm = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_fm.to_4d()).to_3d()
-    create_beveled_box(
-        bm, size=(0.06, width - 0.04, 0.06),
-        location=world_fm,
-        rotation=(0.0, 0.0, rot_z),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.006
-    )
-    baluster_count = 5
-    for b_idx in range(baluster_count):
-        t_pos = -half_w * 0.8 + (b_idx / (baluster_count - 1)) * (width * 0.8)
-        loc_b = Vector((outer_d, t_pos, z_floor + 0.06 + rail_h * 0.48))
-        world_b = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_b.to_4d()).to_3d()
-        create_beveled_box(
-            bm, size=(0.04, 0.04, rail_h * 0.85),
-            location=world_b,
-            rotation=(0.0, 0.0, rot_z),
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.004
-        )
+        build_railing(bm, _w(wall_clearance, half_w * s_sign),
+                      _w(outer_d, half_w * s_sign),
+                      z_floor + 0.06, height=rail_h, braces=False,
+                      post_spacing=1.0)
+
         
     door_w = 0.92
     door_h = 2.02

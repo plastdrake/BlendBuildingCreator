@@ -176,11 +176,11 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.010
         )
-        # Outer corner post - thickened + outset 1.8cm to break coplanar
+        # Outer corner post - thickened + outset to break coplanar
         create_beveled_box(
             bm,
-            size=(0.18, 0.18, height + 0.06),
-            location=frame.to_world(Vector((depth - col_w * 0.5 + 0.018, (half_w - col_w * 0.5) * s_sign, z_base + height * 0.5))),
+            size=(0.24, 0.24, height + 0.06),
+            location=frame.to_world(Vector((depth - col_w * 0.5 + 0.022, (half_w - col_w * 0.5) * s_sign, z_base + height * 0.5))),
             rotation=(0.0, 0.0, frame.rot_z),
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.014

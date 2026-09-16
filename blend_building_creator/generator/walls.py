@@ -65,7 +65,8 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             size=(seg_len, core_thick, z_top - core_z_bottom),
             location=(core_cx, core_cy, core_cz),
             rotation=(0.0, 0.0, angle),
-            mat_index=MAT_INDEX_WOOD
+            mat_index=MAT_INDEX_WOOD,
+            is_wall=True
         )
     
     # 2. Stacked Physical 3D Rounded Cylindrical Logs on Exterior
@@ -536,66 +537,61 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
         )
         return
 
-    # Sort openings by u_start
-    sorted_ops = sorted(openings, key=lambda op: op['u_start'])
-    
-    last_u = 0.0
-    for op in sorted_ops:
+    # Cut the openings column by column instead of one opening at a time.
+    # Towers and shafts stack several windows at the SAME u, and a one-at-a-time
+    # pass would let the "above opening" filler of a lower window seal the
+    # window above it. Splitting the wall at every opening edge and building the
+    # complementary z spans per column keeps every window open.
+    u_edges = {0.0, seg_len}
+    for op in openings:
         ou1 = max(0.0, min(seg_len, op['u_start']))
         ou2 = max(0.0, min(seg_len, op['u_end']))
-        oz1 = max(z_bottom, min(z_top, op['z_start']))
-        oz2 = max(z_bottom, min(z_top, op['z_end']))
-        
-        # Wall segment before this opening (piers / corner walls)
-        if ou1 > last_u + 0.01:
-            seg_is_start = (last_u <= 0.01) and is_corner_start
-            build_wall_segment(
-                bm, pt_at(last_u), pt_at(ou1), z_bottom, z_top, thickness, mat_ext=mat_ext,
-                normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                is_corner_start=seg_is_start, is_corner_end=False, seed=seed,
-                u_offset=u_offset + last_u, v_offset=0.0,
-                has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq
-            )
-            
-        # Below the opening (window apron / sill portion)
-        if oz1 > z_bottom + 0.01:
-            build_wall_segment(
-                bm, pt_at(ou1), pt_at(ou2), z_bottom, oz1, thickness, mat_ext=mat_ext,
-                normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                is_corner_start=False, is_corner_end=False, seed=seed,
-                u_offset=u_offset + ou1, v_offset=0.0,
-                has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq
-            )
-            
-        # Above the opening (lintel/header portion - keep clean plaster)
-        if oz2 < z_top - 0.01:
-            build_wall_segment(
-                bm, pt_at(ou1), pt_at(ou2), oz2, z_top, thickness, mat_ext=mat_ext,
-                normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
-                plank_direction=plank_direction, plank_jankiness=plank_jankiness,
-                stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-                is_corner_start=False, is_corner_end=False, seed=seed,
-                u_offset=u_offset + ou1, v_offset=oz2 - z_bottom,
-                has_exposed_brick=False
-            )
-        
-        last_u = ou2
-        
-    # Final wall segment after last opening
-    if last_u < seg_len - 0.01:
+        if ou2 - ou1 > 0.01:
+            u_edges.add(ou1)
+            u_edges.add(ou2)
+    edges = sorted(u_edges)
+
+    def _emit(ua, ub, za, zb, seg_is_start, seg_is_end):
         build_wall_segment(
-            bm, pt_at(last_u), pt_at(seg_len), z_bottom, z_top, thickness, mat_ext=mat_ext,
+            bm, pt_at(ua), pt_at(ub), za, zb, thickness, mat_ext=mat_ext,
             normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
             plank_direction=plank_direction, plank_jankiness=plank_jankiness,
             stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
-            is_corner_start=False, is_corner_end=is_corner_end, seed=seed,
-            u_offset=u_offset + last_u, v_offset=0.0,
+            is_corner_start=seg_is_start, is_corner_end=seg_is_end, seed=seed,
+            u_offset=u_offset + ua, v_offset=za - z_bottom,
             has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq
         )
+
+    for i in range(len(edges) - 1):
+        ua, ub = edges[i], edges[i + 1]
+        if ub - ua <= 0.001:
+            continue
+        spans = []
+        for op in openings:
+            ou1 = max(0.0, min(seg_len, op['u_start']))
+            ou2 = max(0.0, min(seg_len, op['u_end']))
+            if ou1 <= ua + 0.005 and ou2 >= ub - 0.005:
+                oz1 = max(z_bottom, min(z_top, op['z_start']))
+                oz2 = max(z_bottom, min(z_top, op['z_end']))
+                if oz2 - oz1 > 0.01:
+                    spans.append((oz1, oz2))
+        pieces = []
+        if spans:
+            spans.sort()
+            cur = z_bottom
+            for (za, zb) in spans:
+                if za > cur + 0.005:
+                    pieces.append((cur, za))
+                cur = max(cur, zb)
+            if cur < z_top - 0.005:
+                pieces.append((cur, z_top))
+        else:
+            pieces.append((z_bottom, z_top))
+        last_col = (i == len(edges) - 2)
+        for pi, (za, zb) in enumerate(pieces):
+            _emit(ua, ub, za, zb,
+                  seg_is_start=(i == 0 and pi == 0 and is_corner_start),
+                  seg_is_end=(last_col and pi == len(pieces) - 1 and is_corner_end))
 
 def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
                          normal_vec, openings=[], has_diagonals=True, is_top_floor=False):

@@ -9,6 +9,7 @@ import bmesh
 import math
 from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_cylinder
+from .railing import build_railing, build_railing_post
 from .materials import MAT_INDEX_FLOOR, MAT_INDEX_STONE, MAT_INDEX_WOOD, MAT_INDEX_TIMBER, MAT_INDEX_STAIRS, MAT_INDEX_RAILING
 
 
@@ -158,7 +159,7 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
                         )
                     continue
 
-            # Full width beam — embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
+            # Full width beam ï¿½ embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
             beam_length = (x_max - x_min) + 0.04
             beam_cx = (x_min + x_max) * 0.5
             create_beveled_box(
@@ -220,7 +221,7 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
                     )
                 continue
 
-        # Full depth beam — embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
+        # Full depth beam ï¿½ embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
         beam_length = (y_max - y_min) + 0.04
         beam_cy = (y_min + y_max) * 0.5
         create_beveled_box(
@@ -315,67 +316,14 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, retu
     Builds a safety guardrail on the upper floor along the open edge of the stairwell
     (at X = rail_x, from y_start to y_end).
     If return_y and x_start are given, also adds the short return rail along the open end.
+    Uses the shared detailed railing builder.
     """
-    span_y = y_end - y_start
-    if span_y < 0.3:
+    if y_end - y_start < 0.3:
         return
-        
-    post_w = 0.09
-    rail_w = 0.08
-    sill_h = 0.05
-    
-    # 0. Solid Grounded Base Sill (long side)
-    create_box(
-        bm,
-        size=(rail_w, span_y + post_w * 0.5, sill_h),
-        location=(rail_x, (y_start + y_end) * 0.5, floor_z + sill_h * 0.5),
-        mat_index=MAT_INDEX_WOOD
-    )
-    
-    # 1. Corner Posts at start and end of open edge
-    create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(rail_x, y_start, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_WOOD, bevel_amount=0.01)
-    create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(rail_x, y_end, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_WOOD, bevel_amount=0.01)
-    
-    # 2. Top Handrail
-    create_box(bm, size=(rail_w, span_y + post_w * 0.5, 0.06), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h - 0.03), mat_index=MAT_INDEX_WOOD)
-    
-    # 3. Mid Rail
-    create_box(bm, size=(rail_w * 0.75, span_y, 0.04), location=(rail_x, (y_start + y_end) * 0.5, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_WOOD)
-    
-    # 4. Spindles/Balusters (long side)
-    num_spindles = max(1, int(span_y / 0.28))
-    step = span_y / (num_spindles + 1)
-    spindle_h = rail_h - sill_h - 0.06
-    for i in range(1, num_spindles + 1):
-        sy = y_start + i * step
-        create_cylinder(
-            bm,
-            radius=0.022,
-            height=spindle_h,
-            segments=6,
-            location=(rail_x, sy, floor_z + sill_h + spindle_h * 0.5),
-            mat_index=MAT_INDEX_WOOD
-        )
-        
-    # 5. Short Return Guardrail (protecting the open end of the floor hole)
+    build_railing(bm, (rail_x, y_start), (rail_x, y_end), floor_z, height=rail_h)
     if return_y is not None and x_start is not None and abs(rail_x - x_start) > 0.3:
-        span_x = abs(rail_x - x_start)
-        cx = (x_start + rail_x) * 0.5
-        # Return base sill
-        create_box(bm, size=(span_x, rail_w, sill_h), location=(cx, return_y, floor_z + sill_h * 0.5), mat_index=MAT_INDEX_WOOD)
-        # End post at x_start
-        create_beveled_box(bm, size=(post_w, post_w, rail_h), location=(x_start, return_y, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_WOOD, bevel_amount=0.01)
-        # Return top rail
-        create_box(bm, size=(span_x, rail_w, 0.06), location=(cx, return_y, floor_z + rail_h - 0.03), mat_index=MAT_INDEX_WOOD)
-        # Return mid rail
-        create_box(bm, size=(span_x, rail_w * 0.75, 0.04), location=(cx, return_y, floor_z + rail_h * 0.5), mat_index=MAT_INDEX_WOOD)
-        # Return spindles
-        num_sp_x = max(1, int(span_x / 0.28))
-        step_x = span_x / (num_sp_x + 1)
-        min_x = min(x_start, rail_x)
-        for i in range(1, num_sp_x + 1):
-            sx = min_x + i * step_x
-            create_cylinder(bm, radius=0.022, height=spindle_h, segments=6, location=(sx, return_y, floor_z + sill_h + spindle_h * 0.5), mat_index=MAT_INDEX_WOOD)
+        build_railing(bm, (x_start, return_y), (rail_x, return_y), floor_z,
+                      height=rail_h, braces=False, post_spacing=1.0)
 
 def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_depth=2.2, num_steps=14, direction_y=1):
     """
@@ -464,11 +412,12 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
             mat_index=MAT_INDEX_STAIRS
         )
         
-    # 4. Top Landing Anchor Timber (anchors stringers solidly to the upper floor)
+    # 4. Top Landing Anchor Timber (anchors stringers solidly to the upper floor).
+    # Dropped a touch below the floor so its top face never z-fights the slab.
     top_faces = create_beveled_box(
         bm,
         size=(stair_width + 0.18, 0.22, 0.10),
-        location=(x0, y0 + stair_depth * direction_y, target_z - 0.05),
+        location=(x0, y0 + stair_depth * direction_y, target_z - 0.09),
         mat_index=MAT_INDEX_STAIRS,
         bevel_amount=0.012
     )
@@ -478,58 +427,16 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
                 co = loop.vert.co
                 loop[uv_layer].uv = Vector(((co.x - x0) * 1.5, (co.y - (y0 + stair_depth * direction_y)) * 0.65 + (co.z - target_z) * 1.2))
 
-    # 5. Stylized Newel Posts & Handrails on BOTH SIDES
-    post_h = 0.95
-    post_w = 0.09
-    rail_thick = 0.07
-    
-    # Handrail spans precisely between the inner faces of bottom and top newel posts
-    post_span_y = stair_depth - 0.10
-    rail_span_y = max(0.2, post_span_y - post_w + 0.02)
-    rail_diag_len = rail_span_y / cos_pitch
-    rail_cy = y0 + (stair_depth * 0.5) * direction_y
-    rail_cz = z0 + dz * 0.5 + post_h * 0.88
-    
+    # 5. Detailed guard railings on BOTH sides, following the flight's pitch
     for side in [-1, 1]:
         rail_x = x0 + side * (stair_width * 0.5 + stringer_thick * 0.5)
-        # Bottom post with chamfered cap
-        create_beveled_box(bm, size=(post_w, post_w, post_h),
-                           location=(rail_x, y0 + 0.05 * direction_y, z0 + post_h * 0.5),
-                           mat_index=MAT_INDEX_RAILING, bevel_amount=0.012)
-        # Top post with chamfered cap
-        create_beveled_box(bm, size=(post_w, post_w, post_h),
-                           location=(rail_x, y0 + (stair_depth - 0.05) * direction_y, target_z + post_h * 0.5),
-                           mat_index=MAT_INDEX_RAILING, bevel_amount=0.012)
-        # Handrail bar (terminated flush inside posts, zero external poke; V unwrapped along length)
-        create_box(
+        build_railing(
             bm,
-            size=(rail_thick, rail_diag_len, rail_thick),
-            location=(rail_x, rail_cy, rail_cz),
-            rotation=(pitch_angle, 0.0, 0.0),
-            mat_index=MAT_INDEX_RAILING
+            (rail_x, y0 + 0.06 * direction_y),
+            (rail_x, y0 + (stair_depth - 0.06) * direction_y),
+            z0 + 0.06, height=0.92, base_z_end=target_z + 0.06,
+            post_spacing=1.1, baluster_spacing=0.20, braces=False,
         )
-        # Vertical spindles along run (seated flush on top of stringer, inserting into handrail underside)
-        for i in range(1, num_steps):
-            by = y0 + (i + 0.5) * step_d
-            t_y = ((by - y0) * direction_y) / stair_depth
-            
-            # Exact top surface of the diagonal stringer beam at this Y position
-            z_str_center = z0 + t_y * dz
-            z_str_top = z_str_center + (stringer_h * 0.5) / cos_pitch
-            
-            # Exact underside of the handrail beam at this Y position
-            z_rail_center = z0 + t_y * dz + post_h * 0.88
-            z_rail_bot = z_rail_center - (rail_thick * 0.5) / cos_pitch
-            
-            spindle_len = z_rail_bot - z_str_top
-            if spindle_len > 0.05:
-                spindle_cz = (z_str_top + z_rail_bot) * 0.5
-                create_box(
-                    bm,
-                    size=(0.034, 0.034, spindle_len),
-                    location=(rail_x, by, spindle_cz),
-                    mat_index=MAT_INDEX_RAILING
-                )
 
 def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, start_ang_deg=-90.0, total_angle_deg=360.0):
     """
@@ -580,19 +487,10 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
             bevel_amount=0.01
         )
         
-        # Outer banister post on every step
+        # Outer banister point on every step (post added after the loop)
         px = cx + (radius - 0.04) * math.cos(mid_ang)
         py = cy + (radius - 0.04) * math.sin(mid_ang)
-        pz = cur_z + 0.42
-        posts.append(Vector((px, py, cur_z + 0.85)))
-        create_cylinder(
-            bm,
-            radius=0.026,
-            height=0.88,
-            segments=6,
-            location=(px, py, pz),
-            mat_index=MAT_INDEX_WOOD
-        )
+        posts.append(Vector((px, py, cur_z)))
         
     # 3. Dedicated Top Landing Platform (flushes perfectly with upper floor level at target_z)
     land_len = step_len + 0.35
@@ -610,38 +508,22 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
         bevel_amount=0.012
     )
     
-    # Top landing post
+    # Top landing banister point
     top_px = cx + (radius + 0.15) * math.cos(land_ang)
     top_py = cy + (radius + 0.15) * math.sin(land_ang)
-    posts.append(Vector((top_px, top_py, target_z + 0.85)))
-    create_cylinder(
-        bm,
-        radius=0.035,
-        height=0.90,
-        segments=8,
-        location=(top_px, top_py, target_z + 0.42),
-        mat_index=MAT_INDEX_WOOD
-    )
-    
-    # 4. Continuous outer handrail segments connecting posts
+    posts.append(Vector((top_px, top_py, target_z)))
+
+    # 4. Detailed banister around the helix: a capped newel per step plus the
+    # shared railing joinery (sill, rails, balusters) between them.
+    rail_h = 0.92
+    for _i, p in enumerate(posts):
+        build_railing_post(bm, p.x, p.y, p.z, rail_h, index=_i, seed=3)
     for idx in range(len(posts) - 1):
         p1 = posts[idx]
         p2 = posts[idx + 1]
-        seg_vec = p2 - p1
-        seg_len = seg_vec.length
-        if seg_len > 0.01:
-            seg_mid = (p1 + p2) * 0.5
-            rot_z = math.atan2(seg_vec.y, seg_vec.x)
-            rot_pitch = -math.atan2(seg_vec.z, math.sqrt(seg_vec.x**2 + seg_vec.y**2))
-            # Handrail bar
-            rot_mat = Matrix.Rotation(rot_z, 4, 'Z') @ Matrix.Rotation(rot_pitch, 4, 'Y')
-            create_box(
-                bm,
-                size=(seg_len, 0.05, 0.06),
-                location=seg_mid,
-                rotation=rot_mat.to_euler(),
-                mat_index=MAT_INDEX_WOOD
-            )
+        build_railing(bm, (p1.x, p1.y), (p2.x, p2.y), p1.z, height=rail_h,
+                      base_z_end=p2.z, posts=False, braces=False,
+                      end_overhang=0.0, baluster_spacing=0.16, seed=idx + 5)
 
 def build_attic_trusses(bm, x_min, x_max, y_min, y_max, z_base, ridge_z, spacing=1.5, sway_amount=0.0):
     """
