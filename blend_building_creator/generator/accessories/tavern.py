@@ -135,7 +135,8 @@ def build_tavern_porch_and_sign(bm, x_min, x_max, front_y, z_ground, door_x=None
 def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
                   z_floor, width=2.4, depth=1.3, tier='TIER_3',
                   lower_wall_x_min=None, lower_wall_x_max=None,
-                  lower_wall_y_min=None, lower_wall_y_max=None):
+                  lower_wall_y_min=None, lower_wall_y_max=None,
+                  door_angle_deg=0.0):
     wx, wy, ox, oy, tx, ty, rot_z = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
     facade_rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
     
@@ -232,7 +233,8 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
     num_planks = 4
     plank_gap = 0.004
     pw = (door_leaf_w - (num_planks - 1) * plank_gap) / num_planks
-    ajar_ang = -0.30
+    # Balcony door leaf swing follows the main Door Open Angle (0 = shut).
+    ajar_ang = -math.radians(max(0.0, min(110.0, door_angle_deg)))
     hinge_facade_pos = Vector((0.03, -door_w * 0.5 + 0.03, z_floor + 0.03))
     door_leaf_mat = (
         Matrix.Translation(Vector((wx, wy, 0.0))) @

@@ -25,24 +25,76 @@ from ..uv_utils import map_local_wall_uv
 from ..roof.outcrop_roof import build_outcrop_roof
 
 
-def mini_wing_offsets(bounds, side, count, wing_w):
-    """Centres (relative to the facade centre, along the wall) for 1-3 outcrops.
+def mini_wing_offsets(bounds, side, count, wing_w, randomize=False, seed=0):
+    """Centres (relative to the facade centre, along the wall) for 1-6 outcrops.
 
     ``bounds`` is (x_min, x_max, y_min, y_max) of the facade box. Offsets run
     along X for FRONT/BACK facades and along Y for LEFT/RIGHT facades. The
     requested count is automatically reduced so the outcrops never overlap.
+    When ``randomize`` is set the outcrops are scattered across the free slots
+    (a single outcrop stays centred) for a less regimented, hand-built look.
     """
     x_min, x_max, y_min, y_max = bounds
     span = (x_max - x_min) if side in ('FRONT', 'BACK') else (y_max - y_min)
-    count = max(1, min(3, int(count)))
+    count = max(1, min(6, int(count)))
     # Largest number of this-width outcrops that actually fit with a gap.
     max_fit = max(1, int((span - 0.9) // (wing_w + 0.5)))
     count = min(count, max_fit)
-    if count == 1:
-        return [0.0]
+    flat = [0.0] if count == 1 else _even_offsets(count, wing_w)
+
+    if not randomize or count < 2:
+        return flat
+
+    # Scatter: use the evenly spaced centres as the slots and pick a random
+    # subset, keeping the original order so they never overlap.
+    slot_pitch = wing_w + 0.5
+    n_slots = max(count, int((span - 0.6) // slot_pitch))
+    n_slots = min(n_slots, 12)
+    total = (n_slots - 1) * slot_pitch
+    slots = [(-total * 0.5) + i * slot_pitch for i in range(n_slots)]
+    rng = _seed_rng(seed, bounds, count)
+    picks = sorted(rng.sample(range(n_slots), min(count, n_slots)))
+    return [slots[i] for i in picks]
+
+
+def _even_offsets(count, wing_w):
     pitch = wing_w + 0.5
     total = (count - 1) * pitch
     return [(-total * 0.5) + i * pitch for i in range(count)]
+
+
+def _seed_rng(seed, bounds, count):
+    import random
+    key = int(abs((bounds[0] + bounds[1] + bounds[2] + bounds[3]) * 100.0)) + int(seed) * 7 + count * 13
+    return random.Random(key)
+
+
+_MW_SIDES = ('FRONT', 'BACK', 'LEFT', 'RIGHT')
+
+
+def mini_wing_placements(bounds, side_mode, count, wing_w, randomize=True, seed=0):
+    """[(side, offset), ...] for one floor.
+
+    ``side_mode`` is one facade, or 'RANDOM' to scatter the outcrops around the
+    building - each outcrop then picks its own facade. Positions on any single
+    facade are still spread (or scattered) so outcrops never overlap.
+    """
+    import random
+    count = max(1, int(count))
+    if side_mode != 'RANDOM':
+        return [(side_mode, off) for off in mini_wing_offsets(
+            bounds, side_mode, count, wing_w, randomize=randomize, seed=seed)]
+    rng = random.Random(int(seed) * 977 + 41)
+    picks = [rng.choice(_MW_SIDES) for _ in range(count)]
+    out = []
+    for si, side in enumerate(_MW_SIDES):
+        n = picks.count(side)
+        if not n:
+            continue
+        offsets = mini_wing_offsets(bounds, side, n, wing_w,
+                                    randomize=randomize, seed=seed * 31 + si)
+        out.extend((side, off) for off in offsets)
+    return out
 
 
 def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wall_y_max,

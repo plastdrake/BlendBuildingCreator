@@ -16,6 +16,7 @@ from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone,
 )
 from ..railing import build_railing
+from ..walls import build_facade_timber
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
     MAT_INDEX_PLASTER_EXT, MAT_INDEX_SHINGLES, MAT_INDEX_GLASS,
@@ -86,7 +87,7 @@ def _surface_window(bm, x, y, z, w=0.9, h=1.2, facing='front', shutters=True):
 def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                      found_h=0.6, floors=2, floor_h=3.0, tier='TIER_3',
                      width=5.2, depth=4.0, roof_h=3.0, plank_direction='HORIZONTAL',
-                     main_bounds_by_floor=None):
+                     main_bounds_by_floor=None, timber_framing=True, diagonals=True):
     """Half-timbered side volume embedded into the main side wall.
 
     side_sgn: +1 attaches on +X, -1 on -X. width runs along Y, depth along X.
@@ -155,10 +156,11 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
         # interior space connected to the annex room (like every other outcrop).
         if not (floors >= 2 and f == floors - 1):
             uc = width * 0.5
+            outer_ops = [{'u_start': uc - win_w * 0.5 - 0.12, 'u_end': uc + win_w * 0.5 + 0.12,
+                          'z_start': sill, 'z_end': sill + win_h}]
             build_wall_with_opening(
                 bm, (outer_wall_x, y0), (outer_wall_x, y1), fz0, fz1, wall_t,
-                [{'u_start': uc - win_w * 0.5 - 0.12, 'u_end': uc + win_w * 0.5 + 0.12,
-                  'z_start': sill, 'z_end': sill + win_h}],
+                list(outer_ops),
                 mat_ext=f_mat, normal_vec=out_normal, tier=tier, physical_siding=True,
                 plank_direction=plank_direction, seed=42)
             build_window_assembly(
@@ -168,34 +170,71 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             oriel_w = min(2.2, width * 0.55)
             oriel_h = min(2.0, floor_h * 0.72)
             uc = width * 0.5
+            _oz0 = fz0 + 0.10
+            _oz1 = fz0 + oriel_h - 0.05
+            outer_ops = [{'u_start': uc - oriel_w * 0.5 + 0.10, 'u_end': uc + oriel_w * 0.5 - 0.10,
+                          'z_start': _oz0, 'z_end': _oz1}]
             build_wall_with_opening(
                 bm, (outer_wall_x, y0), (outer_wall_x, y1), fz0, fz1, wall_t,
-                [{'u_start': uc - oriel_w * 0.5 + 0.10, 'u_end': uc + oriel_w * 0.5 - 0.10,
-                  'z_start': fz0 + 0.10, 'z_end': fz0 + oriel_h - 0.05}],
+                list(outer_ops),
                 mat_ext=f_mat, normal_vec=out_normal, tier=tier, physical_siding=True,
                 plank_direction=plank_direction, seed=42)
+            # Timber jambs + lintel so the bay portal gets the same framed look
+            # as the outcrop portals cut into the main hall walls. The liner is
+            # centred on the wall and just a hair deeper than it, so it lines the
+            # reveal top to bottom instead of poking out of the outer face.
+            _jw, _lh = 0.16, 0.18
+            _jd = wall_t + 0.02
+            _wc = outer_wall_x
+            _p_lo = y0 + uc - oriel_w * 0.5 + 0.10
+            _p_hi = y0 + uc + oriel_w * 0.5 - 0.10
+            for _py in (_p_lo - _jw * 0.5 + 0.05, _p_hi + _jw * 0.5 - 0.05):
+                create_beveled_box(bm, size=(_jd, _jw, _oz1 - _oz0),
+                                   location=(_wc, _py, (_oz0 + _oz1) * 0.5),
+                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+            create_beveled_box(bm,
+                               size=(_jd, (_p_hi - _p_lo) + _jw * 2.0 - 0.10, _lh),
+                               location=(_wc, (_p_lo + _p_hi) * 0.5, _oz1 + _lh * 0.5 - 0.02),
+                               mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+        if timber_framing:
+            build_facade_timber(bm, (outer_wall_x, y0), (outer_wall_x, y1), fz0, fz1, wall_t,
+                                out_normal, list(outer_ops), diagonals,
+                                is_top_floor=(f == floors - 1))
         # Front + back walls (run along X)
         ucx = abs(outer_x - inner_x) * 0.5
         for wy, nvec, shutters in ((front_wall_y, (0.0, -1.0), True),
                                    (back_wall_y, (0.0, 1.0), False)):
+            _fb_ops = [{'u_start': ucx - win_w * 0.5 - 0.12, 'u_end': ucx + win_w * 0.5 + 0.12,
+                        'z_start': sill, 'z_end': sill + win_h}]
             build_wall_with_opening(
                 bm, (inner_x, wy), (outer_x, wy), fz0, fz1, wall_t,
-                [{'u_start': ucx - win_w * 0.5 - 0.12, 'u_end': ucx + win_w * 0.5 + 0.12,
-                  'z_start': sill, 'z_end': sill + win_h}],
+                list(_fb_ops),
                 mat_ext=f_mat, normal_vec=nvec, tier=tier, physical_siding=True,
                 plank_direction=plank_direction, seed=42)
             build_window_assembly(
                 bm, center=(cxf, wy, sill + win_h * 0.5), size=(win_w, win_h),
                 wall_thickness=wall_t, normal_axis=nvec, has_shutters=shutters)
+            if timber_framing:
+                build_facade_timber(bm, (inner_x, wy), (outer_x, wy), fz0, fz1, wall_t,
+                                    nvec, list(_fb_ops), diagonals,
+                                    is_top_floor=(f == floors - 1))
     top_inner = floor_inner[floors - 1]
-    # Timber belt course between ground and upper lifts. Kept below the upper
-    # floor boards so it never covers the interior floor, and measured from the
-    # jettied wall face so it cannot poke into the main hall.
+    # Timber belt course between ground and upper lifts, built as a ring of
+    # boards rather than one solid slab: it dresses the outside without filling
+    # the annex room (the storey above already gives it a floor/ceiling).
     if floors >= 2:
         b_span = abs(outer_x - jetted_inner)
         b_cx = (jetted_inner + outer_x) * 0.5
-        create_beveled_box(bm, size=(b_span + 0.14, width + 0.14, 0.18),
-                           location=(b_cx, cy, found_h + floor_h - 0.20),
+        _bz = found_h + floor_h - 0.20
+        _bh, _bt = 0.18, 0.14
+        create_beveled_box(bm, size=(b_span + 0.14, _bt, _bh),
+                           location=(b_cx, y0 - _bt * 0.5 + 0.06, _bz),
+                           mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+        create_beveled_box(bm, size=(b_span + 0.14, _bt, _bh),
+                           location=(b_cx, y1 + _bt * 0.5 - 0.06, _bz),
+                           mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+        create_beveled_box(bm, size=(_bt, width + 0.14, _bh),
+                           location=(outer_x + side_sgn * (_bt * 0.5 - 0.06), cy, _bz),
                            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
     # Corner boards on the outer corners
     for sy in (y0 + 0.08, y1 - 0.08):
@@ -407,6 +446,8 @@ def build_town_hall_composer(bm, props, ctx):
             tier=tier, width=a_w, depth=a_d, roof_h=a_roof,
             plank_direction=getattr(props, 'plank_direction', 'HORIZONTAL'),
             main_bounds_by_floor=ctx.get('floor_wall_bounds', None),
+            timber_framing=bool(getattr(props, 'has_timber_framing', True)),
+            diagonals=bool(getattr(props, 'timber_diagonals', True)),
         )
 
     # Forecourt wall stitched between tower and annex (or main corners as fallback)

@@ -39,7 +39,7 @@ from .accessories.mill import build_lumbermill_yard, build_treadwheel_sawmill
 from .accessories.cargo_port import build_cargo_port_frame
 from .accessories.civic import build_roof_clock_spire
 from .accessories.dispatch import build_architectural_accessories
-from .accessories.mini_wing import mini_wing_offsets
+from .accessories.mini_wing import mini_wing_offsets, mini_wing_placements
 from .config import BuildingContext
 
 
@@ -679,6 +679,9 @@ def _create_building_context(props):
         _mw_side_name = getattr(props, 'mini_wing_side', 'LEFT') if _mw_on else None
         _mw_tfl = (0 if getattr(props, 'mini_wing_floor', 'GROUND') == 'GROUND'
                    else min(num_floors - 1, 1))
+        _mw_every = bool(getattr(props, 'mini_wing_every_floor', False))
+        _mw_floors_ctx = (list(range(_mw_tfl, num_floors)) if _mw_every
+                          else [_mw_tfl, _mw_tfl + 1])
         _rampart_side = (getattr(props, 'rampart_side', 'RIGHT')
                          if getattr(props, 'has_side_rampart', False) else None)
         _order = (balc_side_eff, 'LEFT', 'RIGHT', 'BACK', 'FRONT')
@@ -688,8 +691,13 @@ def _create_building_context(props):
                 _blocked_f |= _wing_walls
             if _annex_on and _bf <= _annex_floors:
                 _blocked_f.add(_annex_side)
-            if _mw_side_name is not None and _bf in (_mw_tfl, _mw_tfl + 1):
-                _blocked_f.add(_mw_side_name)
+            if _mw_side_name is not None and _bf in _mw_floors_ctx:
+                if _mw_side_name == 'RANDOM':
+                    # Outcrops can land on any facade, so keep balconies off the
+                    # storeys that carry them.
+                    _blocked_f |= {'LEFT', 'RIGHT', 'BACK', 'FRONT'}
+                else:
+                    _blocked_f.add(_mw_side_name)
             if _rampart_side is not None and _bf <= 1:
                 _blocked_f.add(_rampart_side)
             floor_balc_side[_bf] = next((_s for _s in _order if _s not in _blocked_f), None)
@@ -835,6 +843,10 @@ def _build_floors(bm, props, ctx):
         _thalf = max(1.0, min(2.0, getattr(props, 'corner_turret_size', 1.35)))
         _t_cx = base_w * 0.5 - _thalf
         _turrets = [{'cx': -_t_cx, 'half': _thalf}, {'cx': _t_cx, 'half': _thalf}]
+
+    # Mini-wing outcrop placements per floor, cached so the exclusion pass on a
+    # floor can see exactly what the floor below built.
+    _mw_cache = {}
 
 
     for fl_idx in range(num_floors):
@@ -1397,26 +1409,56 @@ def _build_floors(bm, props, ctx):
         mw_floor_mode = getattr(props, 'mini_wing_floor', 'GROUND')
         mw_fl = 0 if mw_floor_mode == 'GROUND' else min(num_floors - 1, 1)
         mw_w = getattr(props, 'mini_wing_width', 2.2)
+        mw_count = int(getattr(props, 'mini_wing_count', 1))
+        mw_random = bool(getattr(props, 'mini_wing_random', True))
 
         if has_mw:
-            mw_offs = mini_wing_offsets((x_min, x_max, y_min, y_max), mw_side,
-                                        int(getattr(props, 'mini_wing_count', 1)), mw_w)
+            if bool(getattr(props, 'mini_wing_every_floor', False)):
+                mw_floors = list(range(mw_fl, num_floors))
+            else:
+                mw_floors = [mw_fl]
         else:
-            mw_offs = []
+            mw_floors = []
 
-        if has_mw and fl_idx == mw_fl:
+        def _mw_place(f):
+            """(side, offset) placements for floor f, cached across the loop."""
+            if f < 0 or not has_mw or f not in mw_floors:
+                return []
+            if f not in _mw_cache:
+                _mw_cache[f] = mini_wing_placements(
+                    (x_min, x_max, y_min, y_max), mw_side, mw_count, mw_w,
+                    randomize=mw_random, seed=f * 5 + 11)
+            return _mw_cache[f]
+
+        def _mw_offs_for(facade):
+            """Offsets of every outcrop touching `facade` on this floor or the one
+            below (their roofs rise into the floor above)."""
+            return [off for _s, off in (_mw_place(fl_idx) + _mw_place(fl_idx - 1))
+                    if _s == facade]
+
+        if has_mw and fl_idx in mw_floors:
+            mw_place = _mw_place(fl_idx)
             mw_portal_w = min(1.30, mw_w - 0.45)
             mw_portal_h = min(2.15, floor_h * 0.78)
             shift_in = 0.05
             shift_down = 0.0
             jamb_w = 0.16
-            jamb_d = wall_t + 0.06
+            # Reveal liner: centred on the wall and just a hair deeper, so it
+            # lines the whole reveal instead of poking out of the outer face.
+            jamb_d = wall_t + 0.02
             lintel_h = 0.18
             lintel_w = mw_portal_w + jamb_w * 2.0 - shift_in * 2.0 + 0.08
             trim_clr = jamb_w - shift_in + 0.015
+            _wall_c = {
+                'FRONT': (None, y_min + wall_t * 0.5),
+                'BACK': (None, y_max - wall_t * 0.5),
+                'LEFT': (x_min + wall_t * 0.5, None),
+                'RIGHT': (x_max - wall_t * 0.5, None),
+            }
 
-            for _off in mw_offs:
-                if mw_side in ('FRONT', 'BACK'):
+            for mw_side_i, _off in mw_place:
+                _wc_x, _wc_y = _wall_c.get(mw_side_i, (None, None))
+                if mw_side_i in ('FRONT', 'BACK'):
                     mw_u_mid = (x_max - x_min) * 0.5 + _off
                 else:
                     mw_u_mid = (y_max - y_min) * 0.5 + _off
@@ -1429,53 +1471,53 @@ def _build_floors(bm, props, ctx):
                     'trim_clearance': trim_clr
                 }
 
-                if mw_side == 'FRONT':
+                if mw_side_i == 'FRONT':
                     front_openings.append(mw_op)
                     p_cx = (x_min + x_max) * 0.5 + _off
                     create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                       location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, y_min, z_floor + mw_portal_h * 0.5),
+                                       location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, _wc_y, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                       location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, y_min, z_floor + mw_portal_h * 0.5),
+                                       location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, _wc_y, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                     create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
-                                       location=(p_cx, y_min, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
+                                       location=(p_cx, _wc_y, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                elif mw_side == 'BACK':
+                elif mw_side_i == 'BACK':
                     back_openings.append(mw_op)
                     p_cx = (x_min + x_max) * 0.5 + _off
                     create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                       location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, y_max, z_floor + mw_portal_h * 0.5),
+                                       location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, _wc_y, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                       location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, y_max, z_floor + mw_portal_h * 0.5),
+                                       location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, _wc_y, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                     create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
-                                       location=(p_cx, y_max, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
+                                       location=(p_cx, _wc_y, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                elif mw_side == 'LEFT':
+                elif mw_side_i == 'LEFT':
                     left_openings.append(mw_op)
                     p_cy = (y_min + y_max) * 0.5 + _off
                     create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                       location=(x_min, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
+                                       location=(_wc_x, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                       location=(x_min, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
+                                       location=(_wc_x, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
-                                       location=(x_min, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
+                                       location=(_wc_x, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                elif mw_side == 'RIGHT':
+                elif mw_side_i == 'RIGHT':
                     right_openings.append(mw_op)
                     p_cy = (y_min + y_max) * 0.5 + _off
                     create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                       location=(x_max, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
+                                       location=(_wc_x, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                       location=(x_max, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
+                                       location=(_wc_x, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
-                                       location=(x_max, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
+                                       location=(_wc_x, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
 
         # Balcony Doorway Cutout (per-floor facade resolved above)
@@ -1609,8 +1651,8 @@ def _build_floors(bm, props, ctx):
                 d_ex2 = door_cx + door_clr
                 front_excludes.append((d_ex1, d_ex2))
                 
-            if has_mw and mw_side == 'FRONT' and fl_idx in (mw_fl, mw_fl + 1):
-                for _off in mw_offs:
+            if has_mw:
+                for _off in _mw_offs_for('FRONT'):
                     mw_cx = (x_min + x_max) * 0.5 + _off
                     front_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
                 
@@ -1650,8 +1692,8 @@ def _build_floors(bm, props, ctx):
                 bd_ex2 = b_cx + bd_clr
                 back_excludes.append((bd_ex1, bd_ex2))
                 
-            if has_mw and mw_side == 'BACK' and fl_idx in (mw_fl, mw_fl + 1):
-                for _off in mw_offs:
+            if has_mw:
+                for _off in _mw_offs_for('BACK'):
                     mw_cx = (x_min + x_max) * 0.5 + _off
                     back_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
                 
@@ -1684,8 +1726,8 @@ def _build_floors(bm, props, ctx):
             if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'LEFT':
                 sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 left_excludes.append((s_cy - sd_clr, s_cy + sd_clr))
-            if has_mw and mw_side == 'LEFT' and fl_idx in (mw_fl, mw_fl + 1):
-                for _off in mw_offs:
+            if has_mw:
+                for _off in _mw_offs_for('LEFT'):
                     mw_cy = (y_min + y_max) * 0.5 + _off
                     left_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
             if _annex_side == 'LEFT' and fl_idx <= _annex_floors:
@@ -1720,8 +1762,8 @@ def _build_floors(bm, props, ctx):
             if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT':
                 sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 right_excludes.append((s_cy - sd_clr, s_cy + sd_clr))
-            if has_mw and mw_side == 'RIGHT' and fl_idx in (mw_fl, mw_fl + 1):
-                for _off in mw_offs:
+            if has_mw:
+                for _off in _mw_offs_for('RIGHT'):
                     mw_cy = (y_min + y_max) * 0.5 + _off
                     right_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
             if _annex_side == 'RIGHT' and fl_idx <= _annex_floors:
@@ -2154,26 +2196,21 @@ def _build_floors(bm, props, ctx):
             l_timber_ops = list(left_openings)
             r_timber_ops = list(right_openings)
             f_timber_ops = list(front_openings)
-            if has_mw and fl_idx == mw_fl:
-                for _off in mw_offs:
-                    if mw_side in ('FRONT', 'BACK'):
-                        _u_mid = (x_max - x_min) * 0.5 + _off
-                    else:
-                        _u_mid = (y_max - y_min) * 0.5 + _off
-                    mw_mask = {
+            def _mw_mask_ops(ops_list, facade, span):
+                for _off in _mw_offs_for(facade):
+                    _u_mid = span * 0.5 + _off
+                    ops_list.append({
                         'u_start': _u_mid - mw_w * 0.5 - 0.05,
                         'u_end': _u_mid + mw_w * 0.5 + 0.05,
                         'z_start': z_floor,
                         'z_end': z_floor + floor_h
-                    }
-                    if mw_side == 'LEFT':
-                        l_timber_ops.append(mw_mask)
-                    elif mw_side == 'RIGHT':
-                        r_timber_ops.append(mw_mask)
-                    elif mw_side == 'BACK':
-                        b_timber_ops.append(mw_mask)
-                    elif mw_side == 'FRONT':
-                        f_timber_ops.append(mw_mask)
+                    })
+
+            if has_mw and fl_idx in mw_floors:
+                _mw_mask_ops(l_timber_ops, 'LEFT', (y_max - y_min))
+                _mw_mask_ops(r_timber_ops, 'RIGHT', (y_max - y_min))
+                _mw_mask_ops(b_timber_ops, 'BACK', (x_max - x_min))
+                _mw_mask_ops(f_timber_ops, 'FRONT', (x_max - x_min))
 
             def build_exposed_wall_timber(p1, p2, norm_v, ops, occlusions):
                 total_len = math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)

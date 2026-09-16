@@ -594,13 +594,8 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
             create_box(bm, size=(span, span, 0.12), location=(_sz[0], _sz[1], fz + 0.07),
                        mat_index=MAT_INDEX_FLOOR)
 
-    # Roof collar where the tower punches through the main roof (timber skirt).
-    # No timber frame rings at the tower head any more - the user wants the
-    # clean shaft to run straight into the roof.
-    if main_wall_top is not None and shaft_base + 0.2 < main_wall_top < wall_top_z - 0.2:
-        create_beveled_box(bm, size=(half * 2.0 + 0.62, half * 2.0 + 0.62, 0.26),
-                           location=(cx, cy, main_wall_top),
-                           mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014)
+    # No timber collar at the eave: the tall shaft now runs straight through the
+    # main roof, and the old skirt ring read as a stray slab mid-tower.
     for sx in (-1.0, 1.0):
         for sy in (-1.0, 1.0):
             create_beveled_box(bm, size=(0.24, 0.24, shaft_h),

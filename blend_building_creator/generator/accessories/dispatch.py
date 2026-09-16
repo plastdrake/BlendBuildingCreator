@@ -8,7 +8,7 @@ orchestrator focused on the building itself and gives each accessory a single
 named entry point.
 """
 
-from .mini_wing import build_mini_wing, mini_wing_offsets
+from .mini_wing import build_mini_wing, mini_wing_placements
 from .pillared_overhang import build_pillared_overhang
 from .tavern import build_balcony
 from .civic import (
@@ -26,30 +26,38 @@ def _build_mini_wing(bm, props, ctx, tier):
         return
     floor_mode = _prop(props, 'mini_wing_floor', 'GROUND')
     target_fl = 0 if floor_mode == 'GROUND' else min(ctx.num_floors - 1, 1)
-    bounds = ctx.bounds_for(target_fl)
-    lower = ctx.bounds_for(max(0, target_fl - 1))
     side = _prop(props, 'mini_wing_side', 'LEFT')
     width = _prop(props, 'mini_wing_width', 2.2)
     count = int(_prop(props, 'mini_wing_count', 1))
-    for off in mini_wing_offsets(bounds, side, count, width):
-        build_mini_wing(
-            bm,
-            side=side,
-            floor_mode=floor_mode,
-            wall_x_min=bounds[0], wall_x_max=bounds[1],
-            wall_y_min=bounds[2], wall_y_max=bounds[3],
-            z_base=ctx.found_h + target_fl * ctx.floor_h,
-            width=width,
-            depth=_prop(props, 'mini_wing_depth', 1.6),
-            height=min(2.05, ctx.floor_h * 0.72),
-            roof_style=_prop(props, 'mini_wing_roof', 'LEAN_TO'),
-            tier=tier, floor_h=ctx.floor_h, lower_bounds=lower,
-            win_w=_prop(props, 'window_width', 0.85),
-            win_h=_prop(props, 'window_height', 1.2),
-            shingle_scale=_prop(props, 'mini_wing_shingle_scale', 0.32),
-            shingle_rot=int(_prop(props, 'mini_wing_shingle_rot', '0')),
-            off_along=off,
-        )
+    randomize = bool(_prop(props, 'mini_wing_random', True))
+    if bool(_prop(props, 'mini_wing_every_floor', False)):
+        target_floors = list(range(target_fl, ctx.num_floors))
+    else:
+        target_floors = [target_fl]
+    for fl in target_floors:
+        bounds = ctx.bounds_for(fl)
+        lower = ctx.bounds_for(max(0, fl - 1))
+        mode = 'GROUND' if fl == 0 else 'UPPER'
+        for side_i, off in mini_wing_placements(bounds, side, count, width,
+                                                randomize=randomize, seed=fl * 5 + 11):
+            build_mini_wing(
+                bm,
+                side=side_i,
+                floor_mode=mode,
+                wall_x_min=bounds[0], wall_x_max=bounds[1],
+                wall_y_min=bounds[2], wall_y_max=bounds[3],
+                z_base=ctx.found_h + fl * ctx.floor_h,
+                width=width,
+                depth=_prop(props, 'mini_wing_depth', 1.6),
+                height=min(2.05, ctx.floor_h * 0.72),
+                roof_style=_prop(props, 'mini_wing_roof', 'LEAN_TO'),
+                tier=tier, floor_h=ctx.floor_h, lower_bounds=lower,
+                win_w=_prop(props, 'window_width', 0.85),
+                win_h=_prop(props, 'window_height', 1.2),
+                shingle_scale=_prop(props, 'mini_wing_shingle_scale', 0.32),
+                shingle_rot=int(_prop(props, 'mini_wing_shingle_rot', '0')),
+                off_along=off,
+            )
 
 
 def _build_balconies(bm, props, ctx, tier):
@@ -71,6 +79,7 @@ def _build_balconies(bm, props, ctx, tier):
             lower_wall_y_min=lower[2], lower_wall_y_max=lower[3],
             z_floor=ctx.found_h + fl_idx * ctx.floor_h,
             width=width, depth=depth, tier=tier,
+            door_angle_deg=_prop(props, 'door_angle', 0.0),
         )
 
 

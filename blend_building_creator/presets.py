@@ -61,7 +61,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.70,
             'door_height': 2.50,
-            'door_angle': 25.0,
+            'door_angle': 0.0,
             'roof_orientation': 'AUTO',
             'door_shape': 'SQUARE',
             'has_back_door': False,
@@ -170,7 +170,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.80,
             'door_height': 2.60,
-            'door_angle': 20.0,
+            'door_angle': 0.0,
             'roof_orientation': 'AUTO',
             'door_shape': 'ARCHED',
             'has_back_door': False,
@@ -280,7 +280,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 2.00,
             'door_height': 2.80,
-            'door_angle': 20.0,
+            'door_angle': 0.0,
             'roof_orientation': 'AUTO',
             'door_shape': 'ARCHED',
             'has_back_door': False,
@@ -442,7 +442,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 2.20,
             'door_height': 2.50,
-            'door_angle': 25.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -501,7 +501,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 2.40,
             'door_height': 2.70,
-            'door_angle': 20.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -696,7 +696,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.50,
             'door_height': 2.30,
-            'door_angle': 20.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -750,7 +750,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.80,
             'door_height': 2.50,
-            'door_angle': 20.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -806,7 +806,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 2.00,
             'door_height': 2.60,
-            'door_angle': 20.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -858,7 +858,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.05,
             'door_height': 2.20,
-            'door_angle': 25.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -910,7 +910,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.10,
             'door_height': 2.25,
-            'door_angle': 30.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -962,7 +962,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.15,
             'door_height': 2.30,
-            'door_angle': 25.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1014,7 +1014,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.05,
             'door_height': 2.20,
-            'door_angle': 35.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1067,7 +1067,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.10,
             'door_height': 2.25,
-            'door_angle': 30.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1120,7 +1120,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.15,
             'door_height': 2.30,
-            'door_angle': 25.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1173,7 +1173,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.30,
             'door_height': 2.40,
-            'door_angle': 30.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1225,7 +1225,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.40,
             'door_height': 2.50,
-            'door_angle': 25.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1278,7 +1278,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.50,
             'door_height': 2.60,
-            'door_angle': 20.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1330,7 +1330,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.15,
             'door_height': 2.25,
-            'door_angle': 25.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1382,7 +1382,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.20,
             'door_height': 2.30,
-            'door_angle': 30.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1435,7 +1435,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.30,
             'door_height': 2.45,
-            'door_angle': 25.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1492,7 +1492,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.15,
             'door_height': 2.25,
-            'door_angle': 30.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1549,7 +1549,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.25,
             'door_height': 2.35,
-            'door_angle': 25.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
@@ -1607,7 +1607,7 @@ PRESETS = {
             'has_front_door': True,
             'door_width': 1.35,
             'door_height': 2.50,
-            'door_angle': 20.0,
+            'door_angle': 0.0,
             'has_windows': True,
             'has_shutters': True,
 
