@@ -48,21 +48,24 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     # Consistent global log height grid (0.36m) matching roof gable logs
     log_h = 0.36
 
-    # 1. Solid Interior Core (sealed flat interior surface). Extended one log row
-    # below the floor line so the lowest exterior log - whose global grid dips
-    # slightly under z_bottom - is fully hidden from inside the room.
+    # 1. Solid Interior Core (sealed flat interior surface). Only a hair below
+    # the floor line - enough to meet the floor slab, but not so low that the
+    # skirt hangs out under a jettied storey and buries the cantilever corbels.
+    # Interior planks (wood), matching the core the opening path builds, so a
+    # wall that happens to get no windows/doors still reads as a log-cabin room
+    # instead of exposing the shared plaster material on the inside.
     if not openings:
         core_thick = thickness * 0.40
         core_cx = (x1 + x2) * 0.5 - nx * (thickness * 0.28)
         core_cy = (y1 + y2) * 0.5 - ny * (thickness * 0.28)
-        core_z_bottom = max(0.0, z_bottom - log_h)
+        core_z_bottom = max(0.0, z_bottom - 0.06)
         core_cz = (core_z_bottom + z_top) * 0.5
         create_box(
             bm,
             size=(seg_len, core_thick, z_top - core_z_bottom),
             location=(core_cx, core_cy, core_cz),
             rotation=(0.0, 0.0, angle),
-            mat_index=MAT_INDEX_PLASTER_INT
+            mat_index=MAT_INDEX_WOOD
         )
     
     # 2. Stacked Physical 3D Rounded Cylindrical Logs on Exterior
@@ -522,10 +525,10 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             seed=seed, omit_top_row=omit_top_log_row
         )
         # Build sealed interior core around openings in matching warm wood planks.
-        # Extended one log row below the floor line so the lowest exterior log is
-        # hidden from inside the room (same reason as build_log_wall_segment).
+        # Kept just below the floor line so it meets the floor slab without
+        # hanging out under the jetty and covering the corbels.
         build_wall_with_opening(
-            bm, p_start, p_end, max(0.0, z_bottom - 0.36), z_top, thickness,
+            bm, p_start, p_end, max(0.0, z_bottom - 0.06), z_top, thickness,
             openings=openings, mat_ext=MAT_INDEX_WOOD, normal_vec=normal_vec,
             tier='TIER_3', physical_siding=False,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end,
@@ -875,9 +878,9 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
     if overhang_dist < 0.05:
         return
         
-    corbel_w = 0.18
-    corbel_h = 0.44
-    corbel_d = overhang_dist + 0.10
+    corbel_w = 0.20
+    corbel_h = 0.52
+    corbel_d = overhang_dist + 0.16
     # Drop the corbel's mounting point below the upper floor's timber top-plate beam
     # so the bracket sits under it instead of poking up through it.
     z_mount = z_level - drop

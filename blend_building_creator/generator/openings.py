@@ -21,6 +21,18 @@ from .materials import (
 
 _create_torus_ring = create_torus_ring
 
+
+def _shift_face_uvs(bm, faces, du, dv):
+    """Offset the UVs of freshly built faces so identical door planks sample
+    different parts of the grain instead of tiling as an exact copy."""
+    uv = bm.loops.layers.uv.verify()
+    for f in faces:
+        if not f.is_valid:
+            continue
+        for loop in f.loops:
+            c = loop[uv].uv
+            loop[uv].uv = Vector((c.x + du, c.y + dv))
+
 def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z_right, leaf_t, out_ang, rot_mat, mat_index=MAT_INDEX_DOOR, plank_k=0):
     hw = leaf_t * 0.5
     origin = Vector((hinge_x, hinge_y, z_bot))
@@ -74,6 +86,8 @@ def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z
     inv_rot = rot_mat.to_3x3().inverted()
     inv_tr = rot_mat.inverted()
     u_jitter = (plank_k * 0.29) % 1.0
+    v_jitter = (plank_k * 0.53 + 0.17) % 1.0
+    scale_k = 0.90 + ((plank_k * 37) % 5) * 0.05
 
     for f in final_faces:
         if not f.is_valid:
@@ -85,16 +99,16 @@ def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z
             lco = inv_tr @ (loop.vert.co - origin)
             if ny >= nx and ny >= nz:
                 # Front (-Y) / Back (+Y): wood grain runs vertically along door
-                u = (lco.x - x_left + u_jitter) * 1.2
-                v = lco.z * 1.0
+                u = (lco.x - x_left + u_jitter) * 1.2 * scale_k
+                v = lco.z * scale_k + v_jitter
             elif nx >= ny and nx >= nz:
                 # Side edges / seams
-                u = (lco.y + u_jitter) * 1.2
-                v = lco.z * 1.0
+                u = (lco.y + u_jitter) * 1.2 * scale_k
+                v = lco.z * scale_k + v_jitter
             else:
                 # Top arched bevels or Bottom edge
-                u = (lco.x - x_left + u_jitter) * 1.2
-                v = lco.z * 1.0
+                u = (lco.x - x_left + u_jitter) * 1.2 * scale_k
+                v = lco.z * scale_k + v_jitter
             loop[uv_layer].uv = Vector((u, v))
 
 def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_w=1.0, door_h=2.2,
@@ -344,7 +358,8 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             px = (k + 0.5) * pw + k * gap
             jank = 0.003 * math.sin(k * 2.5 + 1.0)
             pl_loc = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((px, jank, leaf_h * 0.5)))
-            create_beveled_box(bm, size=(pw - 0.003, leaf_t, leaf_h), location=pl_loc, rotation=(0.0, 0.0, left_ang), mat_index=MAT_INDEX_DOOR, bevel_amount=0.007, bevel_segments=2)
+            _pf = create_beveled_box(bm, size=(pw - 0.003, leaf_t, leaf_h), location=pl_loc, rotation=(0.0, 0.0, left_ang), mat_index=MAT_INDEX_DOOR, bevel_amount=0.007, bevel_segments=2)
+            _shift_face_uvs(bm, _pf, (k * 0.613) % 1.0, (k * 0.271) % 1.0)
         
         for bf in [0.14, 0.85]:
             bat_loc = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.5, leaf_t * 0.5 + 0.012, leaf_h * bf)))
@@ -358,7 +373,8 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             px = -((k + 0.5) * pw + k * gap)
             jank = 0.003 * math.sin(k * 2.5 + 2.0)
             pr_loc = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((px, jank, leaf_h * 0.5)))
-            create_beveled_box(bm, size=(pw - 0.003, leaf_t, leaf_h), location=pr_loc, rotation=(0.0, 0.0, right_ang), mat_index=MAT_INDEX_DOOR, bevel_amount=0.007, bevel_segments=2)
+            _pf = create_beveled_box(bm, size=(pw - 0.003, leaf_t, leaf_h), location=pr_loc, rotation=(0.0, 0.0, right_ang), mat_index=MAT_INDEX_DOOR, bevel_amount=0.007, bevel_segments=2)
+            _shift_face_uvs(bm, _pf, (k * 0.613 + 0.37) % 1.0, (k * 0.271 + 0.11) % 1.0)
             
         for bf in [0.14, 0.85]:
             bat_loc = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.5, leaf_t * 0.5 + 0.012, leaf_h * bf)))
@@ -432,7 +448,8 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 cur_plank_h = door_h - 0.09
                 jank = 0.002 * math.sin(k * 2.8 + 1.2)
                 plank_loc = Vector((hinge_x, hinge_y, z_door_bot)) + (rot_mat @ Vector((px, jank, cur_plank_h * 0.5)))
-                create_beveled_box(bm, size=(pw - 0.002, door_leaf_t, cur_plank_h), location=plank_loc, rotation=(0.0, 0.0, out_ang), mat_index=MAT_INDEX_DOOR, bevel_amount=0.010, bevel_segments=3)
+                _pf = create_beveled_box(bm, size=(pw - 0.002, door_leaf_t, cur_plank_h), location=plank_loc, rotation=(0.0, 0.0, out_ang), mat_index=MAT_INDEX_DOOR, bevel_amount=0.010, bevel_segments=3)
+                _shift_face_uvs(bm, _pf, (k * 0.613) % 1.0, (k * 0.271) % 1.0)
 
         bat_z_list = [z_door_bot + 0.24, min(z_spring - 0.10, z_door_bot + (door_h - 0.05) * 0.72) if is_arched else (z_door_bot + (door_h - 0.09) * 0.82)]
         for bz in bat_z_list:

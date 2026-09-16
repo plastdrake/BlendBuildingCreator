@@ -57,6 +57,7 @@ class BuildingContext:
     top_z: float = 0.0
     top_hx: float = 0.0
     top_hy: float = 0.0
+    is_rotated_roof: bool = False
 
     def bounds_for(self, floor_idx: int) -> Bounds:
         """Wall bounds for a floor, falling back to the base footprint."""

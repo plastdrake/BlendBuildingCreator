@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.7.7-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.7.17-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 **BlendBuildingCreator** is a procedural 3D building generator add-on for **Blender 5.2 LTS** (compatible with 4.2+). Designed for concept artists, level designers, and game developers creating stylized modern fantasy, medieval, and rustic architecture in seconds.
@@ -10,24 +10,16 @@ Unlike simple facade generators, **BlendBuildingCreator generates full, walkable
 
 ---
 
-## ✨ What's New in v1.7.7
+## ✨ What's New in v1.7.17
 
-- 🪵 **Horizontal OR Vertical Plank Siding with Plank Jankiness (Tier 2)**:
-  - **Plank Direction**: Toggle between `HORIZONTAL` (classic overlapping weatherboard lap planks) and `VERTICAL` (stylized Scandinavian / fantasy board-and-batten siding with raised battens over seams).
-  - **Plank Jankiness**: Control handcrafted board wobble, depth variations, and subtle angular tilts with a dedicated slider.
-- 🧱 **Chunky 3D Stylized Stone Blocks with Size & Disorder Controls (Tier 3)**:
-  - Generates actual chunky volumetric stone blocks / bricks with staggered running-bond courses, soft stylized bevels, and recessed mortar seams.
-  - **Stone Block Size** (`stone_block_scale`): Scales the course height and nominal block dimensions from tight bricks to massive castle ashlar blocks.
-  - **Stone Disorder** (`stone_disorder`): Controls random depth protrusion pop, irregular seam lengths, and 3D face tilts for heavy, stylized fantasy masonry.
-- 🌲 **Authentic Rounded Logs with Staggered Interlocking Saddle-Notch Corners (Tier 1)**:
-  - 12-sided rounded horizontal cylindrical logs with authentic circular end-grain caps.
-  - **Saddle-Notch Vertical Staggering**: Perpendicular X and Y walls are automatically vertically staggered by half a log height ($0.5 \times \Delta z$), allowing projecting corner ends to cleanly alternate without intersecting collisions.
-- 🏔️ **Gable Wall Material Matching**:
-  - Triangular attic walls under gable and sway roof pitches now match the facade material (logs in Tier 1, planks in Tier 2, stone/stucco in Tier 3).
-- 🧙 **Wizard Tower Faceted Siding**:
-  - Angled facet walls on round towers now receive the selected tier material (logs or planks) with flush-rotated faceted window assemblies.
-- 🏚️ **Solid Freight Warehouse with Hoist Beam & Double Cargo Doors**:
-  - Solid full-height walls (no open gaps), massive double freight cargo doors (2.2m wide) with dual hinged leaves, and a projecting roof hoist beam with suspended chain and curved iron cargo hook.
+- 🕰️ **Civic Landmarks for Town Halls**:
+  - **Clock Tower**: ashlar stone lower stage + tier-material upper stage, real cut-out framed windows on a hollow shaft, proud stacked clock faces, and a framed gate opening with timber jambs, lintel and embedded knee braces.
+  - **Square Corner Turrets**: tall square towers that rise a full storey above the eaves, sit outside the wall planes (annex-style), connect to the hall through a framed doorway on every storey, and carry cut-out windows plus a square shingled spire.
+  - **Rampart Walk**: an elevated stone wall-walk on support pillars that starts at the clock tower and runs along the side; the entrance ramp climbs from behind the tower's gate up onto the deck.
+- 🪵 **Tier 1 Interior Planks**: the log-wall interior core now uses planks on every wall, so a wall that happens to receive no windows or doors no longer exposes the shared plaster material on the inside.
+- 🏠 **Multi-Outcrop Mini-Wings**: place **1-3** mini-wing outcrops (`Outcrop Count`) spread fit-aware along the chosen facade, with wider outcrops (up to 8 m) split into multiple windows.
+- 🪟 **Calmer Facades**: default **Window Density** lowered to `0.8`, wider facade edge margins, corner clearances around turrets, and shorter outcrop corbels so brackets, windows and shutters never collide.
+- 🧱 **Consistent Civic Detailing**: the annex and clock tower suppress main-wall windows behind their roofs, and gable crowns follow the resolved roof orientation so rotated-roof gables keep their top log.
 
 ---
 
@@ -54,6 +46,12 @@ Unlike simple facade generators, **BlendBuildingCreator generates full, walkable
 - **Inner Wood Ceiling Decking**: Continuous solid 0.12m timber sheathing beneath shingles, eliminating light leaks.
 - **Attic Trusses**: Exposed interior king-post truss assemblies with tie beams and king posts.
 - **Crooked Chimneys**: Cobblestone chimney stacks with beveled stone caps, flue liners, and terracotta smoke pots.
+
+### Civic Landmarks (Town Halls)
+- **Attached Clock Tower**: Hollow shaft with real cut-out windows, stacked proud clock faces, an open belfry with bell and a square shingled spire.
+- **Square Corner Turrets**: Annex-style tall towers tied into the hall with a doorway per storey, cut-out windows and a square shingled cap.
+- **Elevated Rampart Walk**: Pillared stone wall-walk with parapets and a descending entrance ramp that starts behind the clock tower's gate.
+- **Side Annex & Oriels**: A half-timbered side volume with a cross-gable roof, walk-in portal and a matching mini-wing oriel.
 
 ### Full Walkable Interiors
 - **Multi-Story Staircases**:

@@ -8,7 +8,7 @@ orchestrator focused on the building itself and gives each accessory a single
 named entry point.
 """
 
-from .mini_wing import build_mini_wing
+from .mini_wing import build_mini_wing, mini_wing_offsets
 from .pillared_overhang import build_pillared_overhang
 from .tavern import build_balcony
 from .civic import (
@@ -28,23 +28,28 @@ def _build_mini_wing(bm, props, ctx, tier):
     target_fl = 0 if floor_mode == 'GROUND' else min(ctx.num_floors - 1, 1)
     bounds = ctx.bounds_for(target_fl)
     lower = ctx.bounds_for(max(0, target_fl - 1))
-    build_mini_wing(
-        bm,
-        side=_prop(props, 'mini_wing_side', 'LEFT'),
-        floor_mode=floor_mode,
-        wall_x_min=bounds[0], wall_x_max=bounds[1],
-        wall_y_min=bounds[2], wall_y_max=bounds[3],
-        z_base=ctx.found_h + target_fl * ctx.floor_h,
-        width=_prop(props, 'mini_wing_width', 2.2),
-        depth=_prop(props, 'mini_wing_depth', 1.6),
-        height=min(2.05, ctx.floor_h * 0.72),
-        roof_style=_prop(props, 'mini_wing_roof', 'LEAN_TO'),
-        tier=tier, floor_h=ctx.floor_h, lower_bounds=lower,
-        win_w=_prop(props, 'window_width', 0.85),
-        win_h=_prop(props, 'window_height', 1.2),
-        shingle_scale=_prop(props, 'mini_wing_shingle_scale', 0.32),
-        shingle_rot=int(_prop(props, 'mini_wing_shingle_rot', '0')),
-    )
+    side = _prop(props, 'mini_wing_side', 'LEFT')
+    width = _prop(props, 'mini_wing_width', 2.2)
+    count = int(_prop(props, 'mini_wing_count', 1))
+    for off in mini_wing_offsets(bounds, side, count, width):
+        build_mini_wing(
+            bm,
+            side=side,
+            floor_mode=floor_mode,
+            wall_x_min=bounds[0], wall_x_max=bounds[1],
+            wall_y_min=bounds[2], wall_y_max=bounds[3],
+            z_base=ctx.found_h + target_fl * ctx.floor_h,
+            width=width,
+            depth=_prop(props, 'mini_wing_depth', 1.6),
+            height=min(2.05, ctx.floor_h * 0.72),
+            roof_style=_prop(props, 'mini_wing_roof', 'LEAN_TO'),
+            tier=tier, floor_h=ctx.floor_h, lower_bounds=lower,
+            win_w=_prop(props, 'window_width', 0.85),
+            win_h=_prop(props, 'window_height', 1.2),
+            shingle_scale=_prop(props, 'mini_wing_shingle_scale', 0.32),
+            shingle_rot=int(_prop(props, 'mini_wing_shingle_rot', '0')),
+            off_along=off,
+        )
 
 
 def _build_balconies(bm, props, ctx, tier):
@@ -95,8 +100,6 @@ def _build_civic_landmarks(bm, props, ctx, tier):
     if _prop(props, 'has_clock_tower', False):
         t_size = _prop(props, 'clock_tower_size', 3.0)
         t_sgn = 1.0 if _prop(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else -1.0
-        # Deeply embedded (0.7) front corner; front face flush with the wing front
-        # and the clock stage seated above the main roof so no dial is buried.
         build_clock_tower(
             bm,
             cx=t_sgn * (base_hx + t_size * 0.5 - 0.7),
@@ -109,12 +112,25 @@ def _build_civic_landmarks(bm, props, ctx, tier):
             arch_passage=bool(_prop(props, 'town_hall_composer', False)),
         )
     if _prop(props, 'has_corner_turrets', False):
-        tur_top = ctx.found_h + min(2, ctx.num_floors) * ctx.floor_h + 0.4
-        tur_r = max(1.0, min(2.0, _prop(props, 'corner_turret_size', 1.35)))
-        build_corner_turret(bm, cx=-base_hx, cy=base_hy, z_ground=0.0,
-                            radius=tur_r, wall_top_z=tur_top, tier=tier)
-        build_corner_turret(bm, cx=base_hx, cy=base_hy, z_ground=0.0,
-                            radius=tur_r, wall_top_z=tur_top, tier=tier)
+        # Square corner towers, one full storey taller than the eaves. They sit
+        # fully outside the wall planes (annex-style) so they never clash with
+        # the interior, floor slabs or stairs, and connect via a doorway per
+        # storey cut into the hall side wall.
+        _eave = ctx.found_h + ctx.num_floors * ctx.floor_h
+        tur_top = _eave + ctx.floor_h * 0.95
+        tur_half = max(1.0, min(2.0, _prop(props, 'corner_turret_size', 1.35)))
+        _levels = [ctx.found_h + i * ctx.floor_h for i in range(ctx.num_floors)]
+        _wt = ctx.wall_t
+        _t_cy = base_hy + _wt * 0.5 - tur_half
+        for _sx in (-1.0, 1.0):
+            build_corner_turret(
+                bm,
+                cx=_sx * (base_hx + _wt * 0.5 + tur_half), cy=_t_cy,
+                z_ground=0.0, half=tur_half, wall_top_z=tur_top, tier=tier,
+                out_sx=_sx, out_sy=1.0, floor_levels=_levels,
+                floor_h=ctx.floor_h, main_wall_top=_eave,
+                attach_tuck=max(0.30, _wt),
+                plank_direction=ctx.plank_dir, seed=ctx.seed)
     if _prop(props, 'has_arched_porch', False):
         build_arched_porch(bm, door_x=ctx.main_door_cx, front_y=ctx.main_door_yf,
                            z_ground=0.0, z_floor=ctx.found_h,
@@ -129,6 +145,7 @@ def _build_civic_landmarks(bm, props, ctx, tier):
             'found_h': ctx.found_h, 'floor_h': ctx.floor_h, 'num_floors': ctx.num_floors,
             'wing_front': wing_front, 'door_x': ctx.main_door_cx,
             'seed': ctx.seed, 'fl1_bounds': ctx.floor_wall_bounds.get(1, None),
+            'floor_wall_bounds': ctx.floor_wall_bounds, 'wall_t': ctx.wall_t,
         })
 
 

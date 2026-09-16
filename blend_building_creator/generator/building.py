@@ -39,6 +39,7 @@ from .accessories.mill import build_lumbermill_yard, build_treadwheel_sawmill
 from .accessories.cargo_port import build_cargo_port_frame
 from .accessories.civic import build_roof_clock_spire
 from .accessories.dispatch import build_architectural_accessories
+from .accessories.mini_wing import mini_wing_offsets
 from .config import BuildingContext
 
 
@@ -622,6 +623,22 @@ def _create_building_context(props):
         wx_base_min, wx_base_max = 0.0, 0.0
         wy_base_min, wy_base_max = 0.0, 0.0
 
+    # Resolve the roof orientation here (same rule the roof builder uses) so the
+    # wall phase knows which facades are eaves and which are gables.
+    roof_style = getattr(props, 'roof_style', 'SWAY')
+    top_cant = 0.0
+    if getattr(props, 'has_cantilever', False):
+        if getattr(props, 'overhang_mode', 'SECOND_FLOOR_ONLY') == 'SECOND_FLOOR_ONLY':
+            top_cant = props.cantilever_overhang if num_floors >= 2 else 0.0
+        else:
+            top_cant = (num_floors - 1) * props.cantilever_overhang
+    _top_w = base_w + top_cant * 2.0
+    _top_d = base_d + top_cant * 2.0
+    _roof_orient = getattr(props, 'roof_orientation', 'FRONT_BACK')
+    if _roof_orient == 'AUTO':
+        _roof_orient = 'LEFT_RIGHT' if _top_w > _top_d * 1.15 else 'FRONT_BACK'
+    is_rotated_roof = (_roof_orient == 'LEFT_RIGHT' and roof_style in ('SWAY', 'GABLE'))
+
     # Track overall bounding box for wonkiness
     total_height = found_h + num_floors * floor_h + props.roof_height
     main_door_cx = 0.0
@@ -685,12 +702,13 @@ def _create_building_context(props):
         shape=shape, seed=seed, plank_dir=getattr(props, 'plank_direction', 'HORIZONTAL'),
         floor_balc_side=floor_balc_side, active_balc_floors=active_balc_floors,
         wall_t=wall_t, cantilever=cantilever, open_timber=open_timber,
-        effective_archetype=effective_archetype, wings=wings, has_wing=has_wing,
+        effective_archetype=effective_archetype,         wings=wings, has_wing=has_wing,
         wing_floors=wing_floors, raw_wing_w=raw_wing_w,
         wing_placement=wing_placement, wing_side=wing_side,
         total_height=total_height, floor_stair_holes={},
         wx_base_min=wx_base_min, wx_base_max=wx_base_max,
         wy_base_min=wy_base_min, wy_base_max=wy_base_max,
+        is_rotated_roof=is_rotated_roof,
     )
 
 
@@ -745,6 +763,32 @@ def _build_floors(bm, props, ctx):
     floor_balc_side = ctx.floor_balc_side
     main_door_cx = ctx.main_door_cx
     main_door_yf = ctx.main_door_yf
+    is_rotated_roof = ctx.is_rotated_roof
+
+    def _floor_xy_bounds(fi):
+        """Wall bounds a given floor will have (overhang + pillared expansion)."""
+        if props.has_cantilever:
+            if props.overhang_mode == 'SECOND_FLOOR_ONLY':
+                fov = cantilever if fi >= 1 else 0.0
+            else:
+                fov = fi * cantilever
+        else:
+            fov = 0.0
+        hxx = (base_w + fov * 2.0) * 0.5
+        hyy = (base_d + fov * 2.0) * 0.5
+        bx0, bx1, by0, by1 = -hxx, hxx, -hyy, hyy
+        if getattr(props, 'has_pillared_overhang', False) and fi >= 1:
+            p_side = getattr(props, 'pillared_overhang_side', 'FRONT')
+            p_depth = getattr(props, 'pillared_overhang_depth', 1.6)
+            if p_side == 'FRONT':
+                by0 -= p_depth
+            elif p_side == 'BACK':
+                by1 += p_depth
+            elif p_side == 'LEFT':
+                bx0 -= p_depth
+            elif p_side == 'RIGHT':
+                bx1 += p_depth
+        return bx0, bx1, by0, by1
 
     # Ground floor master interior reference for staircase
     fl0_ix_min = -base_w * 0.5 + wall_t
@@ -783,6 +827,16 @@ def _build_floors(bm, props, ctx):
         _annex_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
         _a_w = 5.2 if getattr(props, 'material_tier', 'TIER_3') != 'TIER_1' else 4.4
         _annex_y_span = (-_a_w * 0.5 - 0.5, _a_w * 0.5 + 0.5)
+
+    # Square corner turrets bolt onto the outside of the hall (annex-style), so
+    # each one connects through a doorway cut in the side wall rather than
+    # through the floor plan.
+    _turrets = []
+    if getattr(props, 'has_corner_turrets', False) and not open_timber:
+        _thalf = max(1.0, min(2.0, getattr(props, 'corner_turret_size', 1.35)))
+        _t_cy = base_d * 0.5 + wall_t * 0.5 - _thalf
+        _turrets = [{'sx': -1.0, 'cy': _t_cy, 'half': _thalf},
+                    {'sx': 1.0, 'cy': _t_cy, 'half': _thalf}]
 
 
     for fl_idx in range(num_floors):
@@ -858,10 +912,19 @@ def _build_floors(bm, props, ctx):
             inc_b = not (has_po and po_s == 'BACK')
             inc_l = not (has_po and po_s == 'LEFT')
             inc_r = not (has_po and po_s == 'RIGHT')
+            # The side annex swallows the jetty pocket on its side, so the
+            # decorative brackets would hang inside the annex room - drop them
+            # there. The soffit board is kept: it closes the jetty underside and
+            # becomes the annex ceiling edge.
+            cor_l, cor_r = inc_l, inc_r
+            if _annex_side == 'LEFT' and _annex_floors > 0:
+                cor_l = False
+            elif _annex_side == 'RIGHT' and _annex_floors > 0:
+                cor_r = False
             build_cantilever_corbels(bm, x_min, x_max, y_min, y_max, z_floor,
                                     overhang_dist=overhang_step, front_exclude_x=front_ex,
                                     include_front=inc_f, include_back=inc_b,
-                                    include_left=inc_l, include_right=inc_r)
+                                    include_left=cor_l, include_right=cor_r)
             build_cantilever_soffit(
                 bm,
                 (prev_x_min, prev_x_max, prev_y_min, prev_y_max),
@@ -1022,6 +1085,34 @@ def _build_floors(bm, props, ctx):
         w_front_openings = []
         w_left_openings = []
         w_right_openings = []
+
+        # Corner turret doorways: a walk-through portal in the hall side wall so
+        # each tower room opens straight into the hall (annex-style connection).
+        for _tr in _turrets:
+            _tsx = _tr['sx']
+            _tcy = _tr['cy']
+            _pw = 1.30
+            _ph = min(2.15, floor_h * 0.78)
+            _pm = 0.12
+            _pz1 = z_floor + _ph
+            _op = {'u_start': (_tcy - _pw * 0.5 - _pm) - y_min,
+                   'u_end': (_tcy + _pw * 0.5 + _pm) - y_min,
+                   'z_start': z_floor, 'z_end': _pz1}
+            if _tsx > 0:
+                right_openings.append(_op)
+                _pfx = x_max
+            else:
+                left_openings.append(_op)
+                _pfx = x_min
+            _jw, _jd = 0.16, wall_t + 0.10
+            for _s in (-1.0, 1.0):
+                create_beveled_box(bm, size=(_jd, _jw, _ph + _pm),
+                                   location=(_pfx, _tcy + _s * (_pw * 0.5 + _jw * 0.5),
+                                             z_floor + (_ph + _pm) * 0.5),
+                                   mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
+            create_beveled_box(bm, size=(_jd, _pw + _jw * 2.0, _pm),
+                               location=(_pfx, _tcy, _pz1 + _pm * 0.5),
+                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
 
         win_w = props.window_width
         win_h = props.window_height
@@ -1316,14 +1407,15 @@ def _build_floors(bm, props, ctx):
         mw_fl = 0 if mw_floor_mode == 'GROUND' else min(num_floors - 1, 1)
         mw_w = getattr(props, 'mini_wing_width', 2.2)
 
+        if has_mw:
+            mw_offs = mini_wing_offsets((x_min, x_max, y_min, y_max), mw_side,
+                                        int(getattr(props, 'mini_wing_count', 1)), mw_w)
+        else:
+            mw_offs = []
+
         if has_mw and fl_idx == mw_fl:
             mw_portal_w = min(1.30, mw_w - 0.45)
             mw_portal_h = min(2.15, floor_h * 0.78)
-            if mw_side in ('FRONT', 'BACK'):
-                mw_u_mid = (x_max - x_min) * 0.5
-            else:
-                mw_u_mid = (y_max - y_min) * 0.5
-            
             shift_in = 0.05
             shift_down = 0.0
             jamb_w = 0.16
@@ -1332,62 +1424,68 @@ def _build_floors(bm, props, ctx):
             lintel_w = mw_portal_w + jamb_w * 2.0 - shift_in * 2.0 + 0.08
             trim_clr = jamb_w - shift_in + 0.015
 
-            mw_op = {
-                'u_start': mw_u_mid - mw_portal_w * 0.5,
-                'u_end': mw_u_mid + mw_portal_w * 0.5,
-                'z_start': z_floor,
-                'z_end': z_floor + mw_portal_h,
-                'trim_clearance': trim_clr
-            }
+            for _off in mw_offs:
+                if mw_side in ('FRONT', 'BACK'):
+                    mw_u_mid = (x_max - x_min) * 0.5 + _off
+                else:
+                    mw_u_mid = (y_max - y_min) * 0.5 + _off
 
-            if mw_side == 'FRONT':
-                front_openings.append(mw_op)
-                p_cx = (x_min + x_max) * 0.5
-                create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                   location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, y_min, z_floor + mw_portal_h * 0.5),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                   location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, y_min, z_floor + mw_portal_h * 0.5),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
-                                   location=(p_cx, y_min, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-            elif mw_side == 'BACK':
-                back_openings.append(mw_op)
-                p_cx = (x_min + x_max) * 0.5
-                create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                   location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, y_max, z_floor + mw_portal_h * 0.5),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
-                                   location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, y_max, z_floor + mw_portal_h * 0.5),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
-                                   location=(p_cx, y_max, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-            elif mw_side == 'LEFT':
-                left_openings.append(mw_op)
-                p_cy = (y_min + y_max) * 0.5
-                create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                   location=(x_min, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                   location=(x_min, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
-                                   location=(x_min, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-            elif mw_side == 'RIGHT':
-                right_openings.append(mw_op)
-                p_cy = (y_min + y_max) * 0.5
-                create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                   location=(x_max, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
-                                   location=(x_max, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-                create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
-                                   location=(x_max, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                mw_op = {
+                    'u_start': mw_u_mid - mw_portal_w * 0.5,
+                    'u_end': mw_u_mid + mw_portal_w * 0.5,
+                    'z_start': z_floor,
+                    'z_end': z_floor + mw_portal_h,
+                    'trim_clearance': trim_clr
+                }
+
+                if mw_side == 'FRONT':
+                    front_openings.append(mw_op)
+                    p_cx = (x_min + x_max) * 0.5 + _off
+                    create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
+                                       location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, y_min, z_floor + mw_portal_h * 0.5),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                    create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
+                                       location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, y_min, z_floor + mw_portal_h * 0.5),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                    create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
+                                       location=(p_cx, y_min, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                elif mw_side == 'BACK':
+                    back_openings.append(mw_op)
+                    p_cx = (x_min + x_max) * 0.5 + _off
+                    create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
+                                       location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, y_max, z_floor + mw_portal_h * 0.5),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                    create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
+                                       location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, y_max, z_floor + mw_portal_h * 0.5),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                    create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
+                                       location=(p_cx, y_max, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                elif mw_side == 'LEFT':
+                    left_openings.append(mw_op)
+                    p_cy = (y_min + y_max) * 0.5 + _off
+                    create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
+                                       location=(x_min, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                    create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
+                                       location=(x_min, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                    create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
+                                       location=(x_min, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                elif mw_side == 'RIGHT':
+                    right_openings.append(mw_op)
+                    p_cy = (y_min + y_max) * 0.5 + _off
+                    create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
+                                       location=(x_max, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                    create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
+                                       location=(x_max, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                    create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
+                                       location=(x_max, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
+                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
 
         # Balcony Doorway Cutout (per-floor facade resolved above)
         b_side = floor_balc_side.get(fl_idx)
@@ -1497,9 +1595,24 @@ def _build_floors(bm, props, ctx):
                             excludes.append((x_max - (win_w_clr + 0.40), x_max + 0.50))
             return excludes
 
+        def get_turret_exclusions(facade_name):
+            """Keep facade windows clear of the square corner turrets."""
+            ex = []
+            for _tr in _turrets:
+                _tsx, _th = _tr['sx'], _tr['half']
+                _tcy = _tr['cy']
+                if facade_name == ('RIGHT' if _tsx > 0 else 'LEFT'):
+                    ex.append((_tcy - _th - win_w_clr, _tcy + _th + win_w_clr))
+                if facade_name == 'BACK':
+                    if _tsx > 0:
+                        ex.append((x_max - 1.0, x_max + 1.0))
+                    else:
+                        ex.append((x_min - 1.0, x_min + 1.0))
+            return ex
+
         # Dynamic Windows - Front Wall
         if props.has_windows and not open_timber:
-            front_excludes = list(get_facade_wing_exclusions('FRONT'))
+            front_excludes = list(get_facade_wing_exclusions('FRONT')) + get_turret_exclusions('FRONT')
             balcony_overhead = (b_side_next == 'FRONT')
             
             # Door exclusion zone calculation on floor 0
@@ -1510,8 +1623,9 @@ def _build_floors(bm, props, ctx):
                 front_excludes.append((d_ex1, d_ex2))
                 
             if has_mw and mw_side == 'FRONT' and fl_idx in (mw_fl, mw_fl + 1):
-                mw_cx = (x_min + x_max) * 0.5
-                front_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
+                for _off in mw_offs:
+                    mw_cx = (x_min + x_max) * 0.5 + _off
+                    front_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
                 
             if b_side == 'FRONT':
                 b_cx = (x_min + x_max) * 0.5
@@ -1525,7 +1639,7 @@ def _build_floors(bm, props, ctx):
             for s1, s2 in front_spans:
                 if fl_idx == 0 and props.has_stairs and cur_w < 6.0 and s2 <= 0.0:
                     continue
-                front_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=0.75))
+                front_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=1.0))
 
             # Strict safety filter
             front_win_xs = [wx for wx in front_win_xs if not any(ex1 <= wx <= ex2 for ex1, ex2 in front_excludes)]
@@ -1542,7 +1656,7 @@ def _build_floors(bm, props, ctx):
 
         # Dynamic Windows - Back Wall
         if props.has_windows and not open_timber:
-            back_excludes = list(get_facade_wing_exclusions('BACK'))
+            back_excludes = list(get_facade_wing_exclusions('BACK')) + get_turret_exclusions('BACK')
             if fl_idx == 0 and getattr(props, 'has_back_door', False):
                 bd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 bd_ex1 = b_cx - bd_clr
@@ -1550,8 +1664,9 @@ def _build_floors(bm, props, ctx):
                 back_excludes.append((bd_ex1, bd_ex2))
                 
             if has_mw and mw_side == 'BACK' and fl_idx in (mw_fl, mw_fl + 1):
-                mw_cx = (x_min + x_max) * 0.5
-                back_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
+                for _off in mw_offs:
+                    mw_cx = (x_min + x_max) * 0.5 + _off
+                    back_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
                 
             if b_side == 'BACK':
                 b_cx = (x_min + x_max) * 0.5
@@ -1560,7 +1675,7 @@ def _build_floors(bm, props, ctx):
             back_spans = carve_intervals([(x_min, x_max)], back_excludes, min_len=win_w + 0.35)
             back_win_xs = []
             for s1, s2 in back_spans:
-                back_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=0.75))
+                back_win_xs.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=1.0))
             back_win_xs = [wx for wx in back_win_xs if not any(ex1 <= wx <= ex2 for ex1, ex2 in back_excludes)]
 
             for wx in back_win_xs:
@@ -1576,17 +1691,23 @@ def _build_floors(bm, props, ctx):
         # Dynamic Windows - Side Walls (Left and Right)
         if props.has_windows and not open_timber and cur_d > 2.8:
             # Left side
-            left_excludes = list(get_facade_wing_exclusions('LEFT'))
+            left_excludes = list(get_facade_wing_exclusions('LEFT')) + get_turret_exclusions('LEFT')
             if fl_idx == 0 and props.has_stairs:
                 left_excludes.append((stair_y_bot - 0.25, stair_y_top + 0.25))
             if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'LEFT':
                 sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 left_excludes.append((s_cy - sd_clr, s_cy + sd_clr))
             if has_mw and mw_side == 'LEFT' and fl_idx in (mw_fl, mw_fl + 1):
-                mw_cy = (y_min + y_max) * 0.5
-                left_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
-            if _annex_side == 'LEFT' and fl_idx < _annex_floors:
+                for _off in mw_offs:
+                    mw_cy = (y_min + y_max) * 0.5 + _off
+                    left_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
+            if _annex_side == 'LEFT' and fl_idx <= _annex_floors:
                 left_excludes.append(_annex_y_span)
+            if (fl_idx == 1 and getattr(props, 'has_side_rampart', False)
+                    and getattr(props, 'rampart_side', 'RIGHT') == 'LEFT'):
+                _rc = (y_min + y_max) * 0.5
+                _rclr = min(props.door_width, 1.30) * 0.5 + win_w * 0.5 + 0.35
+                left_excludes.append((_rc - _rclr, _rc + _rclr))
             if b_side == 'LEFT':
                 b_cy = (y_min + y_max) * 0.5
                 left_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
@@ -1594,7 +1715,7 @@ def _build_floors(bm, props, ctx):
             left_spans = carve_intervals([(y_min, y_max)], left_excludes, min_len=win_w + 0.35)
             left_win_ys = []
             for s1, s2 in left_spans:
-                left_win_ys.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=0.75))
+                left_win_ys.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=1.0))
             left_win_ys = [wy for wy in left_win_ys if not any(ex1 <= wy <= ex2 for ex1, ex2 in left_excludes)]
 
             for wy in left_win_ys:
@@ -1608,15 +1729,21 @@ def _build_floors(bm, props, ctx):
                 )
 
             # Right side
-            right_excludes = list(get_facade_wing_exclusions('RIGHT'))
+            right_excludes = list(get_facade_wing_exclusions('RIGHT')) + get_turret_exclusions('RIGHT')
             if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT':
                 sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 right_excludes.append((s_cy - sd_clr, s_cy + sd_clr))
             if has_mw and mw_side == 'RIGHT' and fl_idx in (mw_fl, mw_fl + 1):
-                mw_cy = (y_min + y_max) * 0.5
-                right_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
-            if _annex_side == 'RIGHT' and fl_idx < _annex_floors:
+                for _off in mw_offs:
+                    mw_cy = (y_min + y_max) * 0.5 + _off
+                    right_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
+            if _annex_side == 'RIGHT' and fl_idx <= _annex_floors:
                 right_excludes.append(_annex_y_span)
+            if (fl_idx == 1 and getattr(props, 'has_side_rampart', False)
+                    and getattr(props, 'rampart_side', 'RIGHT') == 'RIGHT'):
+                _rc = (y_min + y_max) * 0.5
+                _rclr = min(props.door_width, 1.30) * 0.5 + win_w * 0.5 + 0.35
+                right_excludes.append((_rc - _rclr, _rc + _rclr))
             if b_side == 'RIGHT':
                 b_cy = (y_min + y_max) * 0.5
                 right_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
@@ -1624,7 +1751,7 @@ def _build_floors(bm, props, ctx):
             right_spans = carve_intervals([(y_min, y_max)], right_excludes, min_len=win_w + 0.35)
             right_win_ys = []
             for s1, s2 in right_spans:
-                right_win_ys.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=0.75))
+                right_win_ys.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=1.0))
             right_win_ys = [wy for wy in right_win_ys if not any(ex1 <= wy <= ex2 for ex1, ex2 in right_excludes)]
 
             for wy in right_win_ys:
@@ -1663,7 +1790,7 @@ def _build_floors(bm, props, ctx):
                 if w_wall == 'FRONT':
                     # Face 1: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     if props.has_windows and not open_timber and not (fl_idx == 0 and shape == 'T_SHAPE' and wing_placement == 'FRONT'):
-                        w_win_xs = get_facade_window_positions(wx1, wx2, target_spacing=eff_spacing, min_margin=0.75)
+                        w_win_xs = get_facade_window_positions(wx1, wx2, target_spacing=eff_spacing, min_margin=1.0)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_1.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1676,7 +1803,7 @@ def _build_floors(bm, props, ctx):
                     # (skipped when the cargo port occupies this face)
                     _port_here_2 = cargo_port is not None and cargo_port['face'] == 2
                     if props.has_windows and not open_timber and not _port_here_2 and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
-                        w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
+                        w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.85)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_2.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1689,7 +1816,7 @@ def _build_floors(bm, props, ctx):
                     # (skipped when the cargo port occupies this face)
                     _port_here_3 = cargo_port is not None and cargo_port['face'] == 3
                     if props.has_windows and not open_timber and not _port_here_3 and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
-                        w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
+                        w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.85)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_3.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1716,7 +1843,7 @@ def _build_floors(bm, props, ctx):
                 elif w_wall == 'BACK':
                     # Face 1: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     if props.has_windows and not open_timber:
-                        w_win_xs = get_facade_window_positions(wx1, wx2, target_spacing=eff_spacing, min_margin=0.75)
+                        w_win_xs = get_facade_window_positions(wx1, wx2, target_spacing=eff_spacing, min_margin=1.0)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_1.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1729,7 +1856,7 @@ def _build_floors(bm, props, ctx):
                     # (skipped when the cargo port occupies this face)
                     _port_here_2 = cargo_port is not None and cargo_port['face'] == 2
                     if props.has_windows and not open_timber and not _port_here_2 and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
-                        w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
+                        w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.85)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_2.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1742,7 +1869,7 @@ def _build_floors(bm, props, ctx):
                     # (skipped when the cargo port occupies this face)
                     _port_here_3 = cargo_port is not None and cargo_port['face'] == 3
                     if props.has_windows and not open_timber and not _port_here_3 and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
-                        w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
+                        w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.85)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_3.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1766,7 +1893,7 @@ def _build_floors(bm, props, ctx):
                 elif w_wall == 'LEFT':
                     # Face 1: Left End (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
                     if props.has_windows and not open_timber:
-                        w_win_ys = get_facade_window_positions(wy1, wy2, target_spacing=eff_spacing, min_margin=0.75)
+                        w_win_ys = get_facade_window_positions(wy1, wy2, target_spacing=eff_spacing, min_margin=1.0)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_1.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1777,7 +1904,7 @@ def _build_floors(bm, props, ctx):
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     # Buffered inside corner at wx2 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
-                        w_win_xs = get_facade_window_positions(wx1 + 0.85, wx2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
+                        w_win_xs = get_facade_window_positions(wx1 + 0.85, wx2 - 1.25, target_spacing=eff_spacing, min_margin=0.85)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_2.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1788,7 +1915,7 @@ def _build_floors(bm, props, ctx):
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     # Buffered inside corner at wx2 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
-                        w_win_xs = get_facade_window_positions(wx1 + 0.85, wx2 - 1.25, target_spacing=eff_spacing, min_margin=0.6)
+                        w_win_xs = get_facade_window_positions(wx1 + 0.85, wx2 - 1.25, target_spacing=eff_spacing, min_margin=0.85)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_3.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1804,7 +1931,7 @@ def _build_floors(bm, props, ctx):
                 elif w_wall == 'RIGHT':
                     # Face 1: Right End (wx2, wy1) -> (wx2, wy2) normal (1, 0)
                     if props.has_windows and not open_timber:
-                        w_win_ys = get_facade_window_positions(wy1, wy2, target_spacing=eff_spacing, min_margin=0.75)
+                        w_win_ys = get_facade_window_positions(wy1, wy2, target_spacing=eff_spacing, min_margin=1.0)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_1.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1815,7 +1942,7 @@ def _build_floors(bm, props, ctx):
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     # Buffered inside corner at wx1 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
-                        w_win_xs = get_facade_window_positions(wx1 + 1.25, wx2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
+                        w_win_xs = get_facade_window_positions(wx1 + 1.25, wx2 - 0.85, target_spacing=eff_spacing, min_margin=0.85)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_2.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1826,7 +1953,7 @@ def _build_floors(bm, props, ctx):
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     # Buffered inside corner at wx1 (main building junction) by 1.25m
                     if props.has_windows and not open_timber and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
-                        w_win_xs = get_facade_window_positions(wx1 + 1.25, wx2 - 0.85, target_spacing=eff_spacing, min_margin=0.6)
+                        w_win_xs = get_facade_window_positions(wx1 + 1.25, wx2 - 0.85, target_spacing=eff_spacing, min_margin=0.85)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_3.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1921,14 +2048,31 @@ def _build_floors(bm, props, ctx):
                     has_foundation=props.has_foundation, found_h=found_h
                 )
         else:
+            # A Tier-1 log crown may only be dropped on the walls that sit under
+            # an eave (which is where the roof deck overlaps). Gable-end walls
+            # must keep their top log so the gable siding meets it with no gap.
             omit_crown = (tier_val == 'TIER_1' and phys_siding and num_floors > 1
                           and fl_idx == num_floors - 1)
+            omit_front = omit_crown and is_rotated_roof
+            omit_back = omit_crown and is_rotated_roof
+            omit_left = omit_crown and not is_rotated_roof
+            omit_right = omit_crown and not is_rotated_roof
+
+            # When the floor above jetties outward, this wall's top partial log
+            # would poke up through the upper floor and stand inside the room.
+            # Drop it just like a crown; the soffit/core above closes the seam.
+            jetty_next = False
+            if fl_idx < num_floors - 1:
+                _nb = _floor_xy_bounds(fl_idx + 1)
+                jetty_next = (_nb[0] < x_min - 0.01 or _nb[1] > x_max + 0.01 or
+                              _nb[2] < y_min - 0.01 or _nb[3] > y_max + 0.01)
 
             build_wall_with_opening(
                 bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
                 mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding,
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+                omit_top_log_row=omit_front or jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
             )
             build_wall_with_opening(
@@ -1936,6 +2080,7 @@ def _build_floors(bm, props, ctx):
                 mat_ext=mat_w, normal_vec=(0.0, 1.0), tier=tier_val, physical_siding=phys_siding,
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
+                omit_top_log_row=omit_back or jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
             )
             build_wall_with_opening(
@@ -1943,7 +2088,7 @@ def _build_floors(bm, props, ctx):
                 mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
-                omit_top_log_row=omit_crown,
+                omit_top_log_row=omit_left or jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
             )
             build_wall_with_opening(
@@ -1951,7 +2096,7 @@ def _build_floors(bm, props, ctx):
                 mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
-                omit_top_log_row=omit_crown,
+                omit_top_log_row=omit_right or jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
             )
             
@@ -2023,20 +2168,25 @@ def _build_floors(bm, props, ctx):
             r_timber_ops = list(right_openings)
             f_timber_ops = list(front_openings)
             if has_mw and fl_idx == mw_fl:
-                mw_mask = {
-                    'u_start': mw_u_mid - mw_w * 0.5 - 0.05,
-                    'u_end': mw_u_mid + mw_w * 0.5 + 0.05,
-                    'z_start': z_floor,
-                    'z_end': z_floor + floor_h
-                }
-                if mw_side == 'LEFT':
-                    l_timber_ops.append(mw_mask)
-                elif mw_side == 'RIGHT':
-                    r_timber_ops.append(mw_mask)
-                elif mw_side == 'BACK':
-                    b_timber_ops.append(mw_mask)
-                elif mw_side == 'FRONT':
-                    f_timber_ops.append(mw_mask)
+                for _off in mw_offs:
+                    if mw_side in ('FRONT', 'BACK'):
+                        _u_mid = (x_max - x_min) * 0.5 + _off
+                    else:
+                        _u_mid = (y_max - y_min) * 0.5 + _off
+                    mw_mask = {
+                        'u_start': _u_mid - mw_w * 0.5 - 0.05,
+                        'u_end': _u_mid + mw_w * 0.5 + 0.05,
+                        'z_start': z_floor,
+                        'z_end': z_floor + floor_h
+                    }
+                    if mw_side == 'LEFT':
+                        l_timber_ops.append(mw_mask)
+                    elif mw_side == 'RIGHT':
+                        r_timber_ops.append(mw_mask)
+                    elif mw_side == 'BACK':
+                        b_timber_ops.append(mw_mask)
+                    elif mw_side == 'FRONT':
+                        f_timber_ops.append(mw_mask)
 
             def build_exposed_wall_timber(p1, p2, norm_v, ops, occlusions):
                 total_len = math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)

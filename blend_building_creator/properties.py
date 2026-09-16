@@ -407,7 +407,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     door_width: FloatProperty(
         name="Door Width",
         description="Width of door opening in meters",
-        min=0.8, max=1.6, default=1.05,
+        min=0.8, max=2.4, default=1.05,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -457,7 +457,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     window_density: FloatProperty(
         name="Window Density",
         description="Density multiplier for windows (0.5 = sparse, 1.0 = normal, 1.5 = dense)",
-        min=0.4, max=2.5, default=1.0,
+        min=0.4, max=2.5, default=0.8,
         update=on_property_updated
     )
     
@@ -760,7 +760,14 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     mini_wing_width: FloatProperty(
         name="Outcrop Width",
         description="Width of the mini wing along the facade wall",
-        min=1.4, max=4.5, default=2.2,
+        min=1.4, max=8.0, default=2.2,
+        update=on_property_updated
+    )
+
+    mini_wing_count: IntProperty(
+        name="Outcrop Count",
+        description="Number of mini-wing outcrops spread along the chosen facade",
+        min=1, max=3, default=1,
         update=on_property_updated
     )
 

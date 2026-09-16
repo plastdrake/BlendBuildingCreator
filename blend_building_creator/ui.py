@@ -304,6 +304,7 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             col.prop(props, "mini_wing_side")
             col.prop(props, "mini_wing_floor")
             col.prop(props, "mini_wing_roof")
+            col.prop(props, "mini_wing_count")
             col.prop(props, "mini_wing_width")
             col.prop(props, "mini_wing_depth")
             col.prop(props, "mini_wing_shingle_rot")

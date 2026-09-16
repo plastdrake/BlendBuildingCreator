@@ -12,28 +12,68 @@ main hall:
 """
 
 import math
-from mathutils import Matrix, Vector
+from mathutils import Vector
 
 from ..mesh_utils import create_beveled_box
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER_FRAME,
     MAT_INDEX_WOOD,
 )
+from ..walls import create_curved_corbel
 from ..facade import get_facade_frame
 from ..uv_utils import map_local_wall_uv
 from ..roof.outcrop_roof import build_outcrop_roof
 
 
+def mini_wing_offsets(bounds, side, count, wing_w):
+    """Centres (relative to the facade centre, along the wall) for 1-3 outcrops.
+
+    ``bounds`` is (x_min, x_max, y_min, y_max) of the facade box. Offsets run
+    along X for FRONT/BACK facades and along Y for LEFT/RIGHT facades. The
+    requested count is automatically reduced so the outcrops never overlap.
+    """
+    x_min, x_max, y_min, y_max = bounds
+    span = (x_max - x_min) if side in ('FRONT', 'BACK') else (y_max - y_min)
+    count = max(1, min(3, int(count)))
+    # Largest number of this-width outcrops that actually fit with a gap.
+    max_fit = max(1, int((span - 0.9) // (wing_w + 0.5)))
+    count = min(count, max_fit)
+    if count == 1:
+        return [0.0]
+    pitch = wing_w + 0.5
+    total = (count - 1) * pitch
+    return [(-total * 0.5) + i * pitch for i in range(count)]
+
+
 def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
                     z_base, width=2.2, depth=1.6, height=2.6, roof_style='LEAN_TO', tier='TIER_3',
                     floor_h=2.8, lower_bounds=None,
-                    win_w=None, win_h=None, shingle_scale=0.32, shingle_rot=0):
+                    win_w=None, win_h=None, shingle_scale=0.32, shingle_rot=0,
+                    off_along=0.0):
     """
     Builds a small outcrop bay room / annex projection:
     - GROUND: rests on grounded stone foundation plinth.
     - UPPER: cantilevered oriel bay with heavy diagonal timber corbel brackets.
-    - Features timber corner posts, leaded glass window, and dedicated shingled roof.
+    - Features timber corner posts, leaded glass window(s), and dedicated shingled roof.
+    ``off_along`` shifts the outcrop along the facade from its centre.
     """
+    # Shift the facade line along the wall so several outcrops can share a facade.
+    if abs(off_along) > 1e-6:
+        if side in ('LEFT', 'RIGHT'):
+            wall_y_min += off_along
+            wall_y_max += off_along
+        else:
+            wall_x_min += off_along
+            wall_x_max += off_along
+        if lower_bounds is not None:
+            lb = list(lower_bounds)
+            if side in ('LEFT', 'RIGHT'):
+                lb[2] += off_along
+                lb[3] += off_along
+            else:
+                lb[0] += off_along
+                lb[1] += off_along
+            lower_bounds = tuple(lb)
     height = max(2.20, min(height, floor_h * 0.82))
     frame = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
     facade_rot_mat = frame.rotation
@@ -55,33 +95,26 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             bevel_amount=0.02
         )
     else:  # UPPER floor oriel bay
-        # Heavy diagonal console brackets springing from the wall BELOW the oriel
-        # (accounting for any jetty / pillared offset) up to the oriel underside,
-        # so the feet always land on real wall instead of floating in mid-air.
+        # Heavy carved console corbels springing from the wall below the oriel
+        # (accounting for any jetty / pillared offset), matching the balcony
+        # brackets instead of plain diagonal beams.
         if lower_bounds is not None:
             lower = get_facade_frame(side, lower_bounds[0], lower_bounds[1], lower_bounds[2], lower_bounds[3])
             inset = max(0.0, (frame.wall_x - lower.wall_x) * frame.out_x + (frame.wall_y - lower.wall_y) * frame.out_y)
         else:
             inset = 0.0
-        foot_x = -inset - 0.10
-        head_x = depth * 0.72
-        foot_z = z_base - 0.95
-        head_z = z_base - 0.04
-        dxc = head_x - foot_x
-        dzc = head_z - foot_z
-        diag_len = math.sqrt(dxc * dxc + dzc * dzc)
-        diag_ang = math.atan2(dzc, dxc)
-        corbel_euler = (facade_rot_mat @ Matrix.Rotation(-diag_ang, 4, 'Y')).to_euler()
-        bracket_spacing = width * 0.36
-        for b_sign in [-1.0, 0.0, 1.0]:
-            loc_c = Vector(((foot_x + head_x) * 0.5, b_sign * bracket_spacing, (foot_z + head_z) * 0.5))
-            create_beveled_box(
-                bm,
-                size=(diag_len, 0.16, 0.18),
-                location=frame.to_world(loc_c),
-                rotation=corbel_euler,
-                mat_index=MAT_INDEX_TIMBER_FRAME,
-                bevel_amount=0.012
+        corbel_w = 0.16
+        corbel_depth = depth + 0.20
+        # Keep the console short so it never reaches down over the window on the
+        # storey below.
+        corbel_h = max(0.34, min(0.48, depth * 0.32 + 0.12))
+        bracket_spacing = width * 0.34
+        for b_sign in (-1.0, 0.0, 1.0):
+            loc = frame.to_world(Vector((-inset - 0.02, b_sign * bracket_spacing, z_base - 0.07)))
+            create_curved_corbel(
+                bm, loc=loc, facing_dir=(frame.out_x, frame.out_y, 0.0),
+                width=corbel_w, depth=corbel_depth, height=corbel_h,
+                mat_index=MAT_INDEX_TIMBER_FRAME
             )
 
     # 2. Walk-in Interior Wooden Floor & Ceiling Planks
@@ -171,48 +204,76 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             bevel_amount=0.010
         )
 
-    # 3b. Outer Front Wall with Window Cutout.
+    # 3b. Outer Front Wall with one or more window bays.
     # Cap the oriel glazing to the hall's own window size so the outcrop never
-    # reads as having a bigger window than the rest of the building.
-    win_w = min(width * 0.52, win_w if win_w else 0.95)
-    win_h = min(height * 0.46, win_h if win_h else 1.15)
+    # reads as having a bigger window than the rest of the building. Wider
+    # outcrops split into multiple evenly-spaced windows instead of one huge pane.
+    cap_w = win_w if win_w else 0.95
+    cap_h = win_h if win_h else 1.15
+    inner_half = max(0.3, half_w - col_w)
+    avail_w = inner_half * 2.0
+    # Pick the most windows that fit while keeping a sane minimum width and
+    # enough centre-to-centre pitch that the open shutters never overlap.
+    cap = min(cap_w, 0.98)
+    min_win_w = 0.68
+    n_win = 1
+    win_w = min(cap, max(min_win_w, avail_w * 0.62))
+    for _k in (3, 2):
+        _step = avail_w / _k
+        _w = min(cap, _step * 0.60)
+        if _w >= min_win_w and _step >= 1.52 * _w + 0.12:
+            n_win, win_w = _k, _w
+            break
+    win_w = min(win_w, max(min_win_w, avail_w - 0.40))
+    bay_step = avail_w / n_win
+    win_h = min(cap_h, height * 0.46)
     win_z = z_base + height * 0.52
     win_bot_z = win_z - win_h * 0.5
     win_top_z = win_z + win_h * 0.5
+    win_centers = [(-avail_w * 0.5) + (i + 0.5) * bay_step for i in range(n_win)]
 
     # Outer front wall center
     f_wall_x = depth - wall_thick * 0.5
-    # Front spandrel below window
+    # Front spandrel below the window band (full width)
     spand_h = win_bot_z - z_base
-    wall_front_faces.extend(create_beveled_box(
-        bm,
-        size=(wall_thick, width - col_w * 1.5, spand_h),
-        location=frame.to_world(Vector((f_wall_x, 0.0, z_base + spand_h * 0.5))),
-        rotation=(0.0, 0.0, frame.rot_z),
-        mat_index=wall_mat,
-        bevel_amount=0.010
-    ))
-    # Front side jambs flanking window
-    jamb_w = (width - col_w * 2.0 - win_w) * 0.5 + 0.02
-    for s_sign in [-1, 1]:
+    if spand_h > 0.02:
         wall_front_faces.extend(create_beveled_box(
             bm,
-            size=(wall_thick, jamb_w, win_h + 0.04),
-            location=frame.to_world(Vector((f_wall_x, (win_w * 0.5 + jamb_w * 0.5 - 0.01) * s_sign, win_z))),
+            size=(wall_thick, width - col_w * 1.5, spand_h),
+            location=frame.to_world(Vector((f_wall_x, 0.0, z_base + spand_h * 0.5))),
+            rotation=(0.0, 0.0, frame.rot_z),
+            mat_index=wall_mat,
+            bevel_amount=0.010
+        ))
+    # Front header above the window band (full width)
+    head_h = (z_base + height) - win_top_z
+    if head_h > 0.02:
+        wall_front_faces.extend(create_beveled_box(
+            bm,
+            size=(wall_thick, width - col_w * 1.5, head_h),
+            location=frame.to_world(Vector((f_wall_x, 0.0, win_top_z + head_h * 0.5))),
             rotation=(0.0, 0.0, frame.rot_z),
             mat_index=wall_mat,
             bevel_amount=0.008
         ))
-    # Front header above window
-    head_h = (z_base + height) - win_top_z
-    wall_front_faces.extend(create_beveled_box(
-        bm,
-        size=(wall_thick, width - col_w * 1.5, head_h),
-        location=frame.to_world(Vector((f_wall_x, 0.0, win_top_z + head_h * 0.5))),
-        rotation=(0.0, 0.0, frame.rot_z),
-        mat_index=wall_mat,
-        bevel_amount=0.008
-    ))
+    # Vertical piers filing the band around and between the windows
+    _piers = []
+    _edge = -inner_half
+    for _c in win_centers:
+        _piers.append((_edge, _c - win_w * 0.5))
+        _edge = _c + win_w * 0.5
+    _piers.append((_edge, inner_half))
+    for _p0, _p1 in _piers:
+        _pw = _p1 - _p0
+        if _pw > 0.04:
+            wall_front_faces.extend(create_beveled_box(
+                bm,
+                size=(wall_thick, _pw, win_h + 0.04),
+                location=frame.to_world(Vector((f_wall_x, (_p0 + _p1) * 0.5, win_z))),
+                rotation=(0.0, 0.0, frame.rot_z),
+                mat_index=wall_mat,
+                bevel_amount=0.008
+            ))
     # Engine-consistent wall UVs: side runs get U along the depth (local X),
     # front runs get U along the width (local Y); both use V vertical at 0.55/m.
     map_local_wall_uv(bm, wall_side_faces, frame.wall_x, frame.wall_y, facade_rot_mat,
@@ -239,20 +300,21 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         bevel_amount=0.012
     )
 
-    # 4. Window assembly - reuses the main building's window construction
+    # 4. Window assemblies - reuse the main building's window construction
     # (reveal lining, exterior casing & stone sill, interior casing, glass panes)
     # so the outcrop matches every other window on the hall.
     from ..openings import build_window_assembly
     normal = (facade_rot_mat @ Vector((1.0, 0.0, 0.0)).to_4d()).to_3d()
-    window_center = frame.to_world(Vector((f_wall_x, 0.0, win_z)))
-    build_window_assembly(
-        bm,
-        center=(window_center.x, window_center.y, window_center.z),
-        size=(win_w, win_h),
-        wall_thickness=wall_thick,
-        normal_axis=(normal.x, normal.y),
-        has_shutters=True,
-    )
+    for _c in win_centers:
+        window_center = frame.to_world(Vector((f_wall_x, _c, win_z)))
+        build_window_assembly(
+            bm,
+            center=(window_center.x, window_center.y, window_center.z),
+            size=(win_w, win_h),
+            wall_thickness=wall_thick,
+            normal_axis=(normal.x, normal.y),
+            has_shutters=True,
+        )
 
     # 5. Dedicated shingled roof (shared outcrop roof builder)
     build_outcrop_roof(
