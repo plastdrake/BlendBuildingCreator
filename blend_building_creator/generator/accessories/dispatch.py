@@ -8,7 +8,7 @@ orchestrator focused on the building itself and gives each accessory a single
 named entry point.
 """
 
-from .mini_wing import build_mini_wing, mini_wing_placements
+from .mini_wing import build_mini_wing
 from .pillared_overhang import build_pillared_overhang
 from .tavern import build_balcony
 from .civic import (
@@ -22,24 +22,15 @@ def _prop(props, name, default):
 
 
 def _build_mini_wing(bm, props, ctx, tier):
+    """Build the outcrops laid out by :func:`mini_wing_spread` (ctx owns the slots)."""
     if not _prop(props, 'has_mini_wing', False):
         return
-    floor_mode = _prop(props, 'mini_wing_floor', 'GROUND')
-    target_fl = 0 if floor_mode == 'GROUND' else min(ctx.num_floors - 1, 1)
-    side = _prop(props, 'mini_wing_side', 'LEFT')
     width = _prop(props, 'mini_wing_width', 2.2)
-    count = int(_prop(props, 'mini_wing_count', 1))
-    randomize = bool(_prop(props, 'mini_wing_random', True))
-    if bool(_prop(props, 'mini_wing_every_floor', False)):
-        target_floors = list(range(target_fl, ctx.num_floors))
-    else:
-        target_floors = [target_fl]
-    for fl in target_floors:
+    for fl, placements in sorted(ctx.mini_wing_spread.items()):
         bounds = ctx.bounds_for(fl)
         lower = ctx.bounds_for(max(0, fl - 1))
         mode = 'GROUND' if fl == 0 else 'UPPER'
-        for side_i, off in mini_wing_placements(bounds, side, count, width,
-                                                randomize=randomize, seed=fl * 5 + 11):
+        for side_i, off in placements:
             build_mini_wing(
                 bm,
                 side=side_i,

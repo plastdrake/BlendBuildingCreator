@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.8.1-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.8.2-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 **BlendBuildingCreator** is a procedural 3D building generator add-on for **Blender 5.2 LTS** (compatible with 4.2+). Designed for concept artists, level designers, and game developers creating stylized modern fantasy, medieval, and rustic architecture in seconds.
@@ -10,9 +10,14 @@ Unlike simple facade generators, **BlendBuildingCreator generates full, walkable
 
 ---
 
+## ✨ What's New in v1.8.2
+
+- 🏘️ **One Amount Slider for Outcrops**: the mini-wing outcrops now only have **Amount** and **Scatter**. `Amount` is the total for the whole building — the outcrops share themselves out over the storeys and over the facades in proportion to the room each one actually has, and they only take **free slots**: never over a doorway, the entrance steps, the outdoor archetype gear (porch/forge/oven/crane/log yard/sails), a wing, the annex, the clock tower, the rampart, a balcony, the turret corners, or a window. They also stagger clear of whatever the storey below carries instead of stacking (and only stack if there is no staggered room left). The old Outcrop Side / Outcrop Level / Outcrops On Every Floor controls are gone, and `Amount` now goes up to 12.
+
+---
+
 ## ✨ What's New in v1.8.1
 
-- 🏘️ **Outcrops Anywhere on the Building**: `Outcrop Side` gained a **Random (Any Facade)** option, so the mini-wing outcrops scatter around the whole building instead of lining up on one wall — each outcrop picks its own facade and position. Works with the new **Outcrop Count** range (1–6), the **Scatter Outcrops** toggle and **Outcrops On Every Floor** (ground or upper + every storey above, each floor spread independently so they never stack into a column).
 - 🚪 **Doors Start Closed**: `Door Open Angle` now defaults to **0°** (as do all shipped presets), and **balcony doors follow the same slider** instead of always hanging ajar.
 - 🪟 **Calmer Window Density**: default `Window Density` eased from 0.8 to **0.6**.
 - 🧱 **Annex Rebuilt in the Main Hall's Style**: the bay portal gets proper timber jambs + lintel, the annex walls now carry the same per-storey timber framing as the hall (plates, mid rails, diagonals, corner posts), and the old solid belt-course slab that read as a phantom mid-height ceiling is gone — it's now a ring of boards with the storey above serving as the ceiling.

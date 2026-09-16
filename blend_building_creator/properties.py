@@ -727,34 +727,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
 
     # --- Architectural Outcrops, Balconies & Overhangs ---
     has_mini_wing: BoolProperty(
-        name="Mini-Wing Outcrop",
-        description="Add a small outcrop bay room / annex projection to the building",
+        name="Mini-Wing Outcrops",
+        description="Add small outcrop bay rooms / oriel projections that spread themselves over the free slots on the facades",
         default=False,
-        update=on_property_updated
-    )
-
-    mini_wing_side: EnumProperty(
-        name="Outcrop Side",
-        description="Wall facade where the mini wing is attached",
-        items=[
-        ('LEFT', "Left (-X)", "Attached to left facade"),
-        ('RIGHT', "Right (+X)", "Attached to right facade"),
-        ('BACK', "Back (+Y)", "Attached to rear facade"),
-        ('FRONT', "Front (-Y)", "Attached to front facade"),
-        ('RANDOM', "Random (Any Facade)", "Scatter the outcrops around the building, each picking its own facade"),
-        ],
-        default='LEFT',
-        update=on_property_updated
-    )
-
-    mini_wing_floor: EnumProperty(
-        name="Outcrop Level",
-        description="Floor level for the mini-wing outcrop",
-        items=[
-            ('GROUND', "Ground Floor (Grounded)", "Grounded room resting on stone foundation plinth"),
-            ('UPPER', "Upper Floor (Oriel)", "Cantilevered upper-floor oriel bay supported by heavy timber corbels"),
-        ],
-        default='GROUND',
         update=on_property_updated
     )
 
@@ -766,25 +741,19 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     )
 
     mini_wing_count: IntProperty(
-        name="Outcrop Count",
-        description="Number of mini-wing outcrops spread along the chosen facade",
-        min=1, max=6, default=1,
+        name="Outcrop Amount",
+        description="Total number of outcrops on the building; they share themselves out over the storeys and open slots (the amount is reduced when there is not enough room)",
+        min=1, max=12, default=2,
         update=on_property_updated
         )
 
     mini_wing_random: BoolProperty(
         name="Scatter Outcrops",
-        description="Scatter the outcrops at random spots along the facade instead of spacing them evenly",
+        description="Pick random open slots instead of spacing the outcrops evenly along each facade",
         default=True,
         update=on_property_updated
         )
 
-    mini_wing_every_floor: BoolProperty(
-        name="Outcrops On Every Floor",
-        description="Place the outcrops on every storey (using the chosen level only as the starting height) instead of a single floor",
-        default=False,
-        update=on_property_updated
-        )
 
 
     mini_wing_depth: FloatProperty(

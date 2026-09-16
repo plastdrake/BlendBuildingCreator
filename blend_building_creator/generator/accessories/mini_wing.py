@@ -25,42 +25,82 @@ from ..uv_utils import map_local_wall_uv
 from ..roof.outcrop_roof import build_outcrop_roof
 
 
-def mini_wing_offsets(bounds, side, count, wing_w, randomize=False, seed=0):
-    """Centres (relative to the facade centre, along the wall) for 1-6 outcrops.
+def mini_wing_offsets(bounds, side, count, wing_w, randomize=False, seed=0, avoid=None):
+    """Centres (relative to the facade centre, along the wall) for the outcrops.
 
     ``bounds`` is (x_min, x_max, y_min, y_max) of the facade box. Offsets run
-    along X for FRONT/BACK facades and along Y for LEFT/RIGHT facades. The
-    requested count is automatically reduced so the outcrops never overlap.
-    When ``randomize`` is set the outcrops are scattered across the free slots
-    (a single outcrop stays centred) for a less regimented, hand-built look.
+    along X for FRONT/BACK facades and along Y for LEFT/RIGHT facades. The wall
+    is reduced to the runs left over once ``avoid`` (a list of (lo, hi) spans
+    such as doorways, turret corners or whatever the storey below carries) has
+    been cut out, then the outcrops are laid into those runs one width + gap
+    apart - evenly spaced, or scattered over the available slots when
+    ``randomize`` is set. Nothing ever overlaps, and the count is reduced when
+    there is not enough room.
     """
     x_min, x_max, y_min, y_max = bounds
     span = (x_max - x_min) if side in ('FRONT', 'BACK') else (y_max - y_min)
-    count = max(1, min(6, int(count)))
-    # Largest number of this-width outcrops that actually fit with a gap.
-    max_fit = max(1, int((span - 0.9) // (wing_w + 0.5)))
-    count = min(count, max_fit)
-    flat = [0.0] if count == 1 else _even_offsets(count, wing_w)
-
-    if not randomize or count < 2:
-        return flat
-
-    # Scatter: use the evenly spaced centres as the slots and pick a random
-    # subset, keeping the original order so they never overlap.
-    slot_pitch = wing_w + 0.5
-    n_slots = max(count, int((span - 0.6) // slot_pitch))
-    n_slots = min(n_slots, 12)
-    total = (n_slots - 1) * slot_pitch
-    slots = [(-total * 0.5) + i * slot_pitch for i in range(n_slots)]
-    rng = _seed_rng(seed, bounds, count)
-    picks = sorted(rng.sample(range(n_slots), min(count, n_slots)))
-    return [slots[i] for i in picks]
-
-
-def _even_offsets(count, wing_w):
+    count = max(1, min(12, int(count)))
     pitch = wing_w + 0.5
-    total = (count - 1) * pitch
-    return [(-total * 0.5) + i * pitch for i in range(count)]
+    half = span * 0.5 - wing_w * 0.5 - 0.05
+    if half <= 0.0:
+        return []
+    clearance = wing_w * 0.5 + 0.30
+    runs = _free_runs(-half, half,
+                      [(lo - clearance, hi + clearance) for lo, hi in (avoid or ())])
+    if not runs:
+        return []
+
+    slot_runs = []
+    for a, b in runs:
+        n = max(1, int((b - a) // pitch) + 1)
+        total = (n - 1) * pitch
+        start = (a + b) * 0.5 - total * 0.5
+        slot_runs.append([start + i * pitch for i in range(n)])
+    total_slots = sum(len(r) for r in slot_runs)
+    if count >= total_slots:
+        return [o for run in slot_runs for o in run]
+
+    if not randomize:
+        # Even spread: at least one per run, then the rest by spare capacity.
+        share = [1] * len(slot_runs)
+        for _ in range(count - len(slot_runs)):
+            best, slack = None, 0
+            for i, run in enumerate(slot_runs):
+                if len(run) - share[i] > slack:
+                    best, slack = i, len(run) - share[i]
+            if best is None:
+                break
+            share[best] += 1
+        out = []
+        for run, k in zip(slot_runs, share):
+            if k >= len(run):
+                out.extend(run)
+            elif k == 1:
+                out.append(run[len(run) // 2])
+            else:
+                out.extend(run[round(j * (len(run) - 1) / (k - 1))] for j in range(k))
+        return sorted(out)
+
+    flat = [o for run in slot_runs for o in run]
+    rng = _seed_rng(seed, bounds, len(flat))
+    return sorted(rng.sample(flat, count))
+
+
+def _free_runs(lo, hi, blocked):
+    """``[lo, hi]`` minus the blocked spans, as a list of (a, b) runs."""
+    out = [(lo, hi)]
+    for blo, bhi in blocked:
+        nxt = []
+        for a, b in out:
+            if bhi <= a or blo >= b:
+                nxt.append((a, b))
+                continue
+            if blo > a:
+                nxt.append((a, min(blo, b)))
+            if bhi < b:
+                nxt.append((max(bhi, a), b))
+        out = nxt
+    return [(a, b) for a, b in out if b - a > 1e-6]
 
 
 def _seed_rng(seed, bounds, count):
@@ -72,28 +112,104 @@ def _seed_rng(seed, bounds, count):
 _MW_SIDES = ('FRONT', 'BACK', 'LEFT', 'RIGHT')
 
 
-def mini_wing_placements(bounds, side_mode, count, wing_w, randomize=True, seed=0):
-    """[(side, offset), ...] for one floor.
+def _share(total, caps):
+    """Split ``total`` over items with capacities ``caps`` (largest remainder)."""
+    n = len(caps)
+    out = [0] * n
+    total_cap = sum(caps)
+    if total <= 0 or n == 0 or total_cap <= 0:
+        return out
+    total = min(total, total_cap)
+    exact = [total * c / float(total_cap) for c in caps]
+    out = [min(int(e), c) for e, c in zip(exact, caps)]
+    left = total - sum(out)
+    order = sorted(range(n), key=lambda i: -(exact[i] - int(exact[i])))
+    while left > 0:
+        moved = False
+        for i in order:
+            if left <= 0:
+                break
+            if out[i] < caps[i]:
+                out[i] += 1
+                left -= 1
+                moved = True
+        if not moved:
+            break
+    return out
 
-    ``side_mode`` is one facade, or 'RANDOM' to scatter the outcrops around the
-    building - each outcrop then picks its own facade. Positions on any single
-    facade are still spread (or scattered) so outcrops never overlap.
+
+def mini_wing_spread(bounds, floors, count, wing_w, randomize=True, seed=0,
+                     open_sides=None, avoid=None):
+    """Lay ``count`` outcrops out over ``floors`` — ``count`` is the total.
+
+    ``open_sides`` maps a floor to the facades still free on it and ``avoid``
+    maps a floor to ``{facade: [(lo, hi), ...]}`` spans the outcrops must keep
+    clear of (doorways, a wing or annex, turret corners, ...). The amount is
+    shared out over the storeys and then over the free facades in proportion to
+    how much room each one still has, so a big clear wall gets more than a
+    narrow strip. Outcrops also keep off the ones on the storey below so the
+    bays stagger; when there is not enough staggered room left they stack
+    instead of being dropped. Returns ``{floor: [(side, offset), ...]}``.
     """
     import random
+    floors = [f for f in dict.fromkeys(int(f) for f in floors)]
+    open_sides = open_sides or {}
+    usable = [f for f in floors if open_sides.get(f)]
+    if not usable:
+        return {}
     count = max(1, int(count))
-    if side_mode != 'RANDOM':
-        return [(side_mode, off) for off in mini_wing_offsets(
-            bounds, side_mode, count, wing_w, randomize=randomize, seed=seed)]
-    rng = random.Random(int(seed) * 977 + 41)
-    picks = [rng.choice(_MW_SIDES) for _ in range(count)]
-    out = []
-    for si, side in enumerate(_MW_SIDES):
-        n = picks.count(side)
-        if not n:
-            continue
-        offsets = mini_wing_offsets(bounds, side, n, wing_w,
-                                    randomize=randomize, seed=seed * 31 + si)
-        out.extend((side, off) for off in offsets)
+
+    def _static(f, side):
+        return list((avoid or {}).get(f, {}).get(side, ()))
+
+    # Capacity of every free facade: how many outcrops fit ignoring the storey
+    # below (which only ever removes slots).
+    caps = {}
+    for f in usable:
+        for side in open_sides[f]:
+            caps[(f, side)] = len(mini_wing_offsets(bounds, side, 99, wing_w,
+                                                     randomize=False, seed=0,
+                                                     avoid=_static(f, side)))
+    capacity = sum(caps.values())
+    if capacity <= 0:
+        return {}
+    count = min(count, capacity)
+
+    floor_caps = {f: sum(caps[(f, s)] for s in open_sides[f]) for f in usable}
+    alloc = {}
+    for f, share in zip(usable, _share(count, [floor_caps[f] for f in usable])):
+        sides = open_sides[f]
+        for s, k in zip(sides, _share(share, [caps[(f, s)] for s in sides])):
+            if k:
+                alloc[(f, s)] = k
+
+    out, placed = {}, {}
+    for f in sorted(usable):
+        row = []
+        for side in open_sides[f]:
+            k = alloc.get((f, side), 0)
+            if not k:
+                continue
+            static = _static(f, side)
+            below = list(placed.get(f - 1, {}).get(side, ()))
+            offsets = mini_wing_offsets(bounds, side, k, wing_w,
+                                        randomize=randomize,
+                                        seed=seed * 31 + f * 7 + _MW_SIDES.index(side),
+                                        avoid=static + below)
+            if len(offsets) < k:
+                # Not enough room to stagger: stack them rather than drop them.
+                offsets = mini_wing_offsets(bounds, side, k, wing_w,
+                                            randomize=randomize,
+                                            seed=seed * 31 + f * 7 + _MW_SIDES.index(side),
+                                            avoid=static)
+            for off in offsets:
+                row.append((side, off))
+                # Body only - the offset routine adds its own clearance, so the
+                # storey above keeps clear of this roof without double-padding.
+                placed.setdefault(f, {}).setdefault(side, []).append(
+                    (off - wing_w * 0.5 - 0.05, off + wing_w * 0.5 + 0.05))
+        if row:
+            out[f] = row
     return out
 
 

@@ -296,19 +296,17 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
         layout = self.layout
         props = context.scene.fantasy_building_settings
         
-        # Mini-Wing Outcrop
+        # Mini-Wing Outcrops
         box_wing = layout.box()
         box_wing.prop(props, "has_mini_wing")
         if props.has_mini_wing:
             col = box_wing.column(align=True)
-            col.prop(props, "mini_wing_side")
-            col.prop(props, "mini_wing_floor")
-            col.prop(props, "mini_wing_every_floor")
-            col.prop(props, "mini_wing_roof")
             col.prop(props, "mini_wing_count")
             col.prop(props, "mini_wing_random")
+            col.separator()
             col.prop(props, "mini_wing_width")
             col.prop(props, "mini_wing_depth")
+            col.prop(props, "mini_wing_roof")
             col.prop(props, "mini_wing_shingle_rot")
             col.prop(props, "mini_wing_shingle_scale")
             

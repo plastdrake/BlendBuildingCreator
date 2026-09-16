@@ -39,7 +39,7 @@ from .accessories.mill import build_lumbermill_yard, build_treadwheel_sawmill
 from .accessories.cargo_port import build_cargo_port_frame
 from .accessories.civic import build_roof_clock_spire
 from .accessories.dispatch import build_architectural_accessories
-from .accessories.mini_wing import mini_wing_offsets, mini_wing_placements
+from .accessories.mini_wing import mini_wing_spread
 from .config import BuildingContext
 
 
@@ -675,13 +675,6 @@ def _create_building_context(props):
             _annex_side = 'LEFT' if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else 'RIGHT'
             _annex_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
         _wing_walls = {w.get('wall') for w in wings} if has_wing else set()
-        _mw_on = getattr(props, 'has_mini_wing', False)
-        _mw_side_name = getattr(props, 'mini_wing_side', 'LEFT') if _mw_on else None
-        _mw_tfl = (0 if getattr(props, 'mini_wing_floor', 'GROUND') == 'GROUND'
-                   else min(num_floors - 1, 1))
-        _mw_every = bool(getattr(props, 'mini_wing_every_floor', False))
-        _mw_floors_ctx = (list(range(_mw_tfl, num_floors)) if _mw_every
-                          else [_mw_tfl, _mw_tfl + 1])
         _rampart_side = (getattr(props, 'rampart_side', 'RIGHT')
                          if getattr(props, 'has_side_rampart', False) else None)
         _order = (balc_side_eff, 'LEFT', 'RIGHT', 'BACK', 'FRONT')
@@ -691,15 +684,10 @@ def _create_building_context(props):
                 _blocked_f |= _wing_walls
             if _annex_on and _bf <= _annex_floors:
                 _blocked_f.add(_annex_side)
-            if _mw_side_name is not None and _bf in _mw_floors_ctx:
-                if _mw_side_name == 'RANDOM':
-                    # Outcrops can land on any facade, so keep balconies off the
-                    # storeys that carry them.
-                    _blocked_f |= {'LEFT', 'RIGHT', 'BACK', 'FRONT'}
-                else:
-                    _blocked_f.add(_mw_side_name)
             if _rampart_side is not None and _bf <= 1:
                 _blocked_f.add(_rampart_side)
+            # Mini-wing outcrops pick their slots after this and keep clear of
+            # whatever facade the balcony ends up on.
             floor_balc_side[_bf] = next((_s for _s in _order if _s not in _blocked_f), None)
 
     return BuildingContext(
@@ -844,9 +832,93 @@ def _build_floors(bm, props, ctx):
         _t_cx = base_w * 0.5 - _thalf
         _turrets = [{'cx': -_t_cx, 'half': _thalf}, {'cx': _t_cx, 'half': _thalf}]
 
-    # Mini-wing outcrop placements per floor, cached so the exclusion pass on a
-    # floor can see exactly what the floor below built.
-    _mw_cache = {}
+    # ---- Mini-wing outcrop layout ------------------------------------------
+    # Outcrops scatter over open slots only: never on a facade that already
+    # carries a wing, annex, clock tower, rampart or balcony, and never over a
+    # doorway, a turret corner, the outdoor archetype gear or the outcrop on
+    # the storey below (whose roof rises into this one).
+    _mw_spread = {}
+    if getattr(props, 'has_mini_wing', False):
+        _mw_count = max(1, int(getattr(props, 'mini_wing_count', 1)))
+        _mw_w = float(getattr(props, 'mini_wing_width', 2.2))
+        _mw_random = bool(getattr(props, 'mini_wing_random', True))
+        _mb = (-base_w * 0.5, base_w * 0.5, -base_d * 0.5, base_d * 0.5)
+        _hxb = base_w * 0.5
+
+        _tower_side = (getattr(props, 'clock_tower_side', 'RIGHT')
+                       if getattr(props, 'has_clock_tower', False) else None)
+        _rampart_side = (getattr(props, 'rampart_side', 'RIGHT')
+                         if getattr(props, 'has_side_rampart', False) else None)
+        # Outdoor archetype gear (forge, oven, porch, crane, log yard) all sits
+        # on the front at ground level; the windmill sails on the top facade.
+        _gear_ground = effective_archetype in ('WAREHOUSE', 'LUMBERMILL',
+                                               'BLACKSMITH', 'TAVERN',
+                                               'FISHERMAN', 'BAKERY')
+        _gear_top = effective_archetype == 'WINDMILL'
+        _pil_side = (getattr(props, 'pillared_overhang_side', 'FRONT')
+                     if getattr(props, 'has_pillared_overhang', False) else None)
+        _dw = float(getattr(props, 'door_width', 1.1))
+
+        _wing_spans, _annex_spans = {}, []
+        for _wg in (wings if has_wing else []):
+            _wl, _wb = _wg.get('wall'), _wg.get('base')
+            if not _wl or not _wb:
+                continue
+            if _wl in ('FRONT', 'BACK'):
+                _wing_spans.setdefault(_wl, []).append((_wb[0] - 0.55, _wb[1] + 0.55))
+            else:
+                _wing_spans.setdefault(_wl, []).append((_wb[2] - 0.55, _wb[3] + 0.55))
+        if _annex_on:
+            _aw = 4.4 if getattr(props, 'material_tier', 'TIER_3') == 'TIER_1' else 5.2
+            _annex_spans = [(-_aw * 0.5 - 0.75, _aw * 0.5 + 0.75)]
+
+        _mw_open, _mw_avoid = {}, {}
+        for _f in range(num_floors):
+            _blocked = set()
+            if _annex_on and _f < _annex_floors:
+                _blocked.add(_annex_side)
+            if _rampart_side and _f <= 1:
+                _blocked.add(_rampart_side)
+            if _tower_side:
+                _blocked.add(_tower_side)
+            if _pil_side and _f >= 1:
+                _blocked.add(_pil_side)
+            if (_gear_ground and _f == 0) or (_gear_top and _f == num_floors - 1):
+                _blocked.add('FRONT')
+            _b_side = floor_balc_side.get(_f)
+            if _b_side:
+                _blocked.add(_b_side)
+            _spans = {s: list(sp) for s, sp in _wing_spans.items()}
+            if _annex_on and _annex_side not in _blocked:
+                _spans.setdefault(_annex_side, []).extend(_annex_spans)
+            if (_f == 0 and getattr(props, 'has_side_door', False) and not open_timber
+                    and getattr(props, 'side_door_facade', 'LEFT') == 'LEFT'):
+                # The left side door sits off-centre next to the stair, so the
+                # whole wall steps aside rather than guessing the span.
+                _blocked.add('LEFT')
+            if _f == 0 and not open_timber:
+                _door_clr = _dw * 0.5 + (1.05 if getattr(props, 'has_front_steps', False) else 0.75)
+                _spans.setdefault('FRONT', []).append(
+                    (main_door_cx - _door_clr, main_door_cx + _door_clr))
+                if getattr(props, 'has_back_door', False):
+                    _spans.setdefault('BACK', []).append(
+                        (-_dw * 0.5 - 0.70, _dw * 0.5 + 0.70))
+                if (getattr(props, 'has_side_door', False)
+                        and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT'):
+                    _spans.setdefault('RIGHT', []).append(
+                        (-_dw * 0.5 - 0.70, _dw * 0.5 + 0.70))
+            if getattr(props, 'has_corner_turrets', False) and not open_timber:
+                _thalf = max(1.0, min(2.0, getattr(props, 'corner_turret_size', 1.35)))
+                _tw = min(2.0 * _thalf, _hxb)
+                _spans.setdefault('BACK', []).extend([
+                    (-_hxb, -(_hxb - _tw) + 0.40), ((_hxb - _tw) - 0.40, _hxb)])
+            _mw_open[_f] = [s for s in ('FRONT', 'BACK', 'LEFT', 'RIGHT')
+                            if s not in _blocked]
+            _mw_avoid[_f] = _spans
+        _mw_spread = mini_wing_spread(_mb, list(range(num_floors)), _mw_count, _mw_w,
+                                      randomize=_mw_random, seed=seed,
+                                      open_sides=_mw_open, avoid=_mw_avoid)
+    ctx.mini_wing_spread = _mw_spread
 
 
     for fl_idx in range(num_floors):
@@ -1403,41 +1475,18 @@ def _build_floors(bm, props, ctx):
                                        location=(f_xf, p_cy, z_floor + 0.05 + 0.019),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
 
-        # Walk-in portal into mini-wing outcrop
+        # Walk-in portal into mini-wing outcrop (layout decided up front)
         has_mw = getattr(props, 'has_mini_wing', False)
-        mw_side = getattr(props, 'mini_wing_side', 'LEFT')
-        mw_floor_mode = getattr(props, 'mini_wing_floor', 'GROUND')
-        mw_fl = 0 if mw_floor_mode == 'GROUND' else min(num_floors - 1, 1)
         mw_w = getattr(props, 'mini_wing_width', 2.2)
-        mw_count = int(getattr(props, 'mini_wing_count', 1))
-        mw_random = bool(getattr(props, 'mini_wing_random', True))
-
-        if has_mw:
-            if bool(getattr(props, 'mini_wing_every_floor', False)):
-                mw_floors = list(range(mw_fl, num_floors))
-            else:
-                mw_floors = [mw_fl]
-        else:
-            mw_floors = []
-
-        def _mw_place(f):
-            """(side, offset) placements for floor f, cached across the loop."""
-            if f < 0 or not has_mw or f not in mw_floors:
-                return []
-            if f not in _mw_cache:
-                _mw_cache[f] = mini_wing_placements(
-                    (x_min, x_max, y_min, y_max), mw_side, mw_count, mw_w,
-                    randomize=mw_random, seed=f * 5 + 11)
-            return _mw_cache[f]
 
         def _mw_offs_for(facade):
             """Offsets of every outcrop touching `facade` on this floor or the one
             below (their roofs rise into the floor above)."""
-            return [off for _s, off in (_mw_place(fl_idx) + _mw_place(fl_idx - 1))
+            return [off for _s, off in (_mw_spread.get(fl_idx, [])
+                                        + _mw_spread.get(fl_idx - 1, []))
                     if _s == facade]
 
-        if has_mw and fl_idx in mw_floors:
-            mw_place = _mw_place(fl_idx)
+        if has_mw and _mw_spread.get(fl_idx):
             mw_portal_w = min(1.30, mw_w - 0.45)
             mw_portal_h = min(2.15, floor_h * 0.78)
             shift_in = 0.05
@@ -1456,7 +1505,7 @@ def _build_floors(bm, props, ctx):
                 'RIGHT': (x_max - wall_t * 0.5, None),
             }
 
-            for mw_side_i, _off in mw_place:
+            for mw_side_i, _off in _mw_spread.get(fl_idx, []):
                 _wc_x, _wc_y = _wall_c.get(mw_side_i, (None, None))
                 if mw_side_i in ('FRONT', 'BACK'):
                     mw_u_mid = (x_max - x_min) * 0.5 + _off
@@ -2206,7 +2255,7 @@ def _build_floors(bm, props, ctx):
                         'z_end': z_floor + floor_h
                     })
 
-            if has_mw and fl_idx in mw_floors:
+            if has_mw and _mw_spread.get(fl_idx):
                 _mw_mask_ops(l_timber_ops, 'LEFT', (y_max - y_min))
                 _mw_mask_ops(r_timber_ops, 'RIGHT', (y_max - y_min))
                 _mw_mask_ops(b_timber_ops, 'BACK', (x_max - x_min))
@@ -2400,13 +2449,13 @@ def build_roof_and_attic(bm, props, ctx):
             _hh2 = 0.45
             _wing_walls = [w.get('wall') for w in wings]
             _balc_side = getattr(props, 'balcony_side', None) if getattr(props, 'has_balcony', False) else None
-            _mini_side = getattr(props, 'mini_wing_side', None) if getattr(props, 'has_mini_wing', False) else None
+            _mini_sides = {s for s, _o in ctx.mini_wing_spread.get(num_floors - 1, [])}
             if not is_rotated_roof:
                 def _lscore(side):
                     s = 0.0
                     if side in _wing_walls:
                         s += 10.0
-                    if _mini_side == side:
+                    if side in _mini_sides:
                         s += 10.0
                     if _balc_side == side:
                         s += 6.0
@@ -2416,7 +2465,7 @@ def build_roof_and_attic(bm, props, ctx):
                 _lside = 'BACK' if _lscore('BACK') <= _lscore('FRONT') else 'FRONT'
                 _lspan = top_x_max - top_x_min
                 _lc = top_cx
-                if _balc_side == _lside or _mini_side == _lside:
+                if _balc_side == _lside or _lside in _mini_sides:
                     _lc = _lc + min(1.2, _lspan * 0.15)
                 _lc = min(top_x_max - 1.05, max(top_x_min + 1.05, _lc))
                 _ov = getattr(props, 'roof_overhang', 0.6)
@@ -2435,7 +2484,7 @@ def build_roof_and_attic(bm, props, ctx):
                     s = 0.0
                     if side in _wing_walls:
                         s += 10.0
-                    if _mini_side == side:
+                    if side in _mini_sides:
                         s += 10.0
                     if _balc_side == side:
                         s += 6.0
@@ -2445,7 +2494,7 @@ def build_roof_and_attic(bm, props, ctx):
                 _lside = 'RIGHT' if _lscore('RIGHT') <= _lscore('LEFT') else 'LEFT'
                 _lspan = top_y_max - top_y_min
                 _lc = top_cy
-                if _balc_side == _lside or _mini_side == _lside:
+                if _balc_side == _lside or _lside in _mini_sides:
                     _lc = _lc + min(1.2, _lspan * 0.15)
                 _lc = min(top_y_max - 1.05, max(top_y_min + 1.05, _lc))
                 _ov = getattr(props, 'roof_overhang', 0.6)
