@@ -36,8 +36,9 @@ class BuildingContext:
     plank_dir: str
     floor_balc_side: Dict[int, str] = field(default_factory=dict)
     active_balc_floors: List[int] = field(default_factory=list)
-    # Mini-wing outcrop slots: {floor: [(facade, offset), ...]} laid out once so
-    # the walls, the timber masks and the outcrop builders all agree.
+    # Mini-wing outcrop slots: {floor: [(facade, offset, width, depth), ...]}
+    # laid out once so the walls, the timber masks and the outcrop builders all
+    # agree (the size travels with the slot for the random-size option).
     mini_wing_spread: Dict[int, Any] = field(default_factory=dict)
     # Extended state populated by the setup/floor phases and consumed by the
     # roof, archetype and accessory phases.

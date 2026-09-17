@@ -25,12 +25,11 @@ def _build_mini_wing(bm, props, ctx, tier):
     """Build the outcrops laid out by :func:`mini_wing_spread` (ctx owns the slots)."""
     if not _prop(props, 'has_mini_wing', False):
         return
-    width = _prop(props, 'mini_wing_width', 2.2)
     for fl, placements in sorted(ctx.mini_wing_spread.items()):
         bounds = ctx.bounds_for(fl)
         lower = ctx.bounds_for(max(0, fl - 1))
         mode = 'GROUND' if fl == 0 else 'UPPER'
-        for side_i, off in placements:
+        for side_i, off, width, depth in placements:
             build_mini_wing(
                 bm,
                 side=side_i,
@@ -39,7 +38,7 @@ def _build_mini_wing(bm, props, ctx, tier):
                 wall_y_min=bounds[2], wall_y_max=bounds[3],
                 z_base=ctx.found_h + fl * ctx.floor_h,
                 width=width,
-                depth=_prop(props, 'mini_wing_depth', 1.6),
+                depth=depth,
                 height=min(2.05, ctx.floor_h * 0.72),
                 roof_style=_prop(props, 'mini_wing_roof', 'LEAN_TO'),
                 tier=tier, floor_h=ctx.floor_h, lower_bounds=lower,

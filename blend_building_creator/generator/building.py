@@ -915,9 +915,17 @@ def _build_floors(bm, props, ctx):
             _mw_open[_f] = [s for s in ('FRONT', 'BACK', 'LEFT', 'RIGHT')
                             if s not in _blocked]
             _mw_avoid[_f] = _spans
+        _mw_d = float(getattr(props, 'mini_wing_depth', 1.6))
+        if getattr(props, 'mini_wing_random_size', False):
+            _mw_wvar = max(0.0, float(getattr(props, 'mini_wing_random_width', 0.0)))
+            _mw_dvar = max(0.0, float(getattr(props, 'mini_wing_random_depth', 0.0)))
+        else:
+            _mw_wvar = _mw_dvar = 0.0
         _mw_spread = mini_wing_spread(_mb, list(range(num_floors)), _mw_count, _mw_w,
                                       randomize=_mw_random, seed=seed,
-                                      open_sides=_mw_open, avoid=_mw_avoid)
+                                      open_sides=_mw_open, avoid=_mw_avoid,
+                                      wing_d=_mw_d, width_var=_mw_wvar,
+                                      depth_var=_mw_dvar)
     ctx.mini_wing_spread = _mw_spread
 
 
@@ -1252,22 +1260,12 @@ def _build_floors(bm, props, ctx):
                         door_u1 = (door_cx - dw * 0.5 - frame_margin) - wings[0]['base'][0]
                         door_u2 = (door_cx + dw * 0.5 + frame_margin) - wings[0]['base'][0]
                         w_front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': door_top_z})
-                        # Interior walkthrough portal from wing into main hall
-                        pass_w = min((wings[0]['base'][1] - wings[0]['base'][0]) - 0.8, max(2.4, dw + 0.8))
-                        pass_u1 = (door_cx - pass_w * 0.5) - x_min
-                        pass_u2 = (door_cx + pass_w * 0.5) - x_min
-                        front_openings.append({'u_start': pass_u1, 'u_end': pass_u2, 'z_start': z_floor, 'z_end': door_top_z})
                     else:
                         door_cx = 0.0
                         door_yf = y_min
                         door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
                         door_u2 = (door_cx + dw * 0.5 + frame_margin) - x_min
                         front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': door_top_z})
-                        if len(wings) > 0:
-                            pass_w = min((wings[0]['base'][1] - wings[0]['base'][0]) - 0.8, max(2.4, dw + 0.8))
-                            pass_u1 = (wings[0]['base'][0] + wings[0]['base'][1]) * 0.5 - pass_w * 0.5 - x_min
-                            pass_u2 = (wings[0]['base'][0] + wings[0]['base'][1]) * 0.5 + pass_w * 0.5 - x_min
-                            back_openings.append({'u_start': pass_u1, 'u_end': pass_u2, 'z_start': z_floor, 'z_end': door_top_z})
 
                 main_door_cx = door_cx
                 main_door_yf = door_yf
@@ -1477,17 +1475,18 @@ def _build_floors(bm, props, ctx):
 
         # Walk-in portal into mini-wing outcrop (layout decided up front)
         has_mw = getattr(props, 'has_mini_wing', False)
-        mw_w = getattr(props, 'mini_wing_width', 2.2)
 
         def _mw_offs_for(facade):
-            """Offsets of every outcrop touching `facade` on this floor or the one
-            below (their roofs rise into the floor above)."""
-            return [off for _s, off in (_mw_spread.get(fl_idx, [])
-                                        + _mw_spread.get(fl_idx - 1, []))
+            """(offset, width) of every outcrop occupying `facade` on this floor.
+
+            An outcrop is capped below the ceiling, so it never reaches into the
+            storey above; windows and framing up there only avoid this storey's
+            outcrops.
+            """
+            return [(off, w) for _s, off, w, _d in _mw_spread.get(fl_idx, [])
                     if _s == facade]
 
         if has_mw and _mw_spread.get(fl_idx):
-            mw_portal_w = min(1.30, mw_w - 0.45)
             mw_portal_h = min(2.15, floor_h * 0.78)
             shift_in = 0.05
             shift_down = 0.0
@@ -1496,7 +1495,6 @@ def _build_floors(bm, props, ctx):
             # lines the whole reveal instead of poking out of the outer face.
             jamb_d = wall_t + 0.02
             lintel_h = 0.18
-            lintel_w = mw_portal_w + jamb_w * 2.0 - shift_in * 2.0 + 0.08
             trim_clr = jamb_w - shift_in + 0.015
             _wall_c = {
                 'FRONT': (None, y_min + wall_t * 0.5),
@@ -1505,7 +1503,9 @@ def _build_floors(bm, props, ctx):
                 'RIGHT': (x_max - wall_t * 0.5, None),
             }
 
-            for mw_side_i, _off in _mw_spread.get(fl_idx, []):
+            for mw_side_i, _off, _mw_pw, _mw_pd in _mw_spread.get(fl_idx, []):
+                mw_portal_w = min(1.30, max(0.0, _mw_pw) - 0.45)
+                lintel_w = mw_portal_w + jamb_w * 2.0 - shift_in * 2.0 + 0.08
                 _wc_x, _wc_y = _wall_c.get(mw_side_i, (None, None))
                 if mw_side_i in ('FRONT', 'BACK'):
                     mw_u_mid = (x_max - x_min) * 0.5 + _off
@@ -1701,9 +1701,9 @@ def _build_floors(bm, props, ctx):
                 front_excludes.append((d_ex1, d_ex2))
                 
             if has_mw:
-                for _off in _mw_offs_for('FRONT'):
+                for _off, _mw_pw in _mw_offs_for('FRONT'):
                     mw_cx = (x_min + x_max) * 0.5 + _off
-                    front_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
+                    front_excludes.append((mw_cx - (_mw_pw * 0.5 + win_w_clr), mw_cx + (_mw_pw * 0.5 + win_w_clr)))
                 
             if b_side == 'FRONT':
                 b_cx = (x_min + x_max) * 0.5
@@ -1742,9 +1742,9 @@ def _build_floors(bm, props, ctx):
                 back_excludes.append((bd_ex1, bd_ex2))
                 
             if has_mw:
-                for _off in _mw_offs_for('BACK'):
+                for _off, _mw_pw in _mw_offs_for('BACK'):
                     mw_cx = (x_min + x_max) * 0.5 + _off
-                    back_excludes.append((mw_cx - (mw_w * 0.5 + win_w_clr), mw_cx + (mw_w * 0.5 + win_w_clr)))
+                    back_excludes.append((mw_cx - (_mw_pw * 0.5 + win_w_clr), mw_cx + (_mw_pw * 0.5 + win_w_clr)))
                 
             if b_side == 'BACK':
                 b_cx = (x_min + x_max) * 0.5
@@ -1776,9 +1776,9 @@ def _build_floors(bm, props, ctx):
                 sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 left_excludes.append((s_cy - sd_clr, s_cy + sd_clr))
             if has_mw:
-                for _off in _mw_offs_for('LEFT'):
+                for _off, _mw_pw in _mw_offs_for('LEFT'):
                     mw_cy = (y_min + y_max) * 0.5 + _off
-                    left_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
+                    left_excludes.append((mw_cy - (_mw_pw * 0.5 + win_w_clr), mw_cy + (_mw_pw * 0.5 + win_w_clr)))
             if _annex_side == 'LEFT' and fl_idx <= _annex_floors:
                 left_excludes.append(_annex_y_span)
             if (fl_idx == 1 and getattr(props, 'has_side_rampart', False)
@@ -1812,9 +1812,9 @@ def _build_floors(bm, props, ctx):
                 sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 right_excludes.append((s_cy - sd_clr, s_cy + sd_clr))
             if has_mw:
-                for _off in _mw_offs_for('RIGHT'):
+                for _off, _mw_pw in _mw_offs_for('RIGHT'):
                     mw_cy = (y_min + y_max) * 0.5 + _off
-                    right_excludes.append((mw_cy - (mw_w * 0.5 + win_w_clr), mw_cy + (mw_w * 0.5 + win_w_clr)))
+                    right_excludes.append((mw_cy - (_mw_pw * 0.5 + win_w_clr), mw_cy + (_mw_pw * 0.5 + win_w_clr)))
             if _annex_side == 'RIGHT' and fl_idx <= _annex_floors:
                 right_excludes.append(_annex_y_span)
             if (fl_idx == 1 and getattr(props, 'has_side_rampart', False)
@@ -2246,11 +2246,11 @@ def _build_floors(bm, props, ctx):
             r_timber_ops = list(right_openings)
             f_timber_ops = list(front_openings)
             def _mw_mask_ops(ops_list, facade, span):
-                for _off in _mw_offs_for(facade):
+                for _off, _mw_pw in _mw_offs_for(facade):
                     _u_mid = span * 0.5 + _off
                     ops_list.append({
-                        'u_start': _u_mid - mw_w * 0.5 - 0.05,
-                        'u_end': _u_mid + mw_w * 0.5 + 0.05,
+                        'u_start': _u_mid - _mw_pw * 0.5 - 0.05,
+                        'u_end': _u_mid + _mw_pw * 0.5 + 0.05,
                         'z_start': z_floor,
                         'z_end': z_floor + floor_h
                     })
@@ -2431,9 +2431,11 @@ def build_roof_and_attic(bm, props, ctx):
     _loft_spec = None
     _loft_arg = None
 
+    # Defined for every archetype: watchtowers skip the main roof but still build
+    # their wing roofs, which use the flare for their slope/valley math.
+    flare_val = getattr(props, 'roof_flare', 0.35)
     if effective_archetype != 'WATCHTOWER':
         # Exterior Roof Construction
-        flare_val = getattr(props, 'roof_flare', 0.35)
         roof_orient = getattr(props, 'roof_orientation', 'FRONT_BACK')
         if roof_orient == 'AUTO':
             roof_orient = 'LEFT_RIGHT' if top_w > top_d * 1.15 else 'FRONT_BACK'
@@ -2449,7 +2451,7 @@ def build_roof_and_attic(bm, props, ctx):
             _hh2 = 0.45
             _wing_walls = [w.get('wall') for w in wings]
             _balc_side = getattr(props, 'balcony_side', None) if getattr(props, 'has_balcony', False) else None
-            _mini_sides = {s for s, _o in ctx.mini_wing_spread.get(num_floors - 1, [])}
+            _mini_sides = {s for s, _o, _w, _d in ctx.mini_wing_spread.get(num_floors - 1, [])}
             if not is_rotated_roof:
                 def _lscore(side):
                     s = 0.0

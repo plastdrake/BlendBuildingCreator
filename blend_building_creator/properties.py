@@ -763,6 +763,29 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    mini_wing_random_size: BoolProperty(
+        name="Use Random Size",
+        description="Give every outcrop a random width and depth instead of one fixed size",
+        default=False,
+        update=on_property_updated
+    )
+
+    mini_wing_random_width: FloatProperty(
+        name="Random Width Amount",
+        description="How far each outcrop's width may stray from the Outcrop Width (plus or minus, clamped to the wall slots)",
+        min=0.0, max=2.0, default=0.4,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    mini_wing_random_depth: FloatProperty(
+        name="Random Depth Amount",
+        description="How far each outcrop's depth may stray from the Outcrop Depth (plus or minus)",
+        min=0.0, max=2.0, default=0.3,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
     mini_wing_roof: EnumProperty(
         name="Outcrop Roof",
         description="Roof style of the mini wing",

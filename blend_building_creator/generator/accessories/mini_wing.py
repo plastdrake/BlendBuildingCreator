@@ -139,7 +139,8 @@ def _share(total, caps):
 
 
 def mini_wing_spread(bounds, floors, count, wing_w, randomize=True, seed=0,
-                     open_sides=None, avoid=None):
+                     open_sides=None, avoid=None, wing_d=1.6,
+                     width_var=0.0, depth_var=0.0):
     """Lay ``count`` outcrops out over ``floors`` — ``count`` is the total.
 
     ``open_sides`` maps a floor to the facades still free on it and ``avoid``
@@ -149,7 +150,12 @@ def mini_wing_spread(bounds, floors, count, wing_w, randomize=True, seed=0,
     how much room each one still has, so a big clear wall gets more than a
     narrow strip. Outcrops also keep off the ones on the storey below so the
     bays stagger; when there is not enough staggered room left they stack
-    instead of being dropped. Returns ``{floor: [(side, offset), ...]}``.
+    instead of being dropped.
+
+    ``width_var`` / ``depth_var`` let each outcrop vary around ``wing_w`` /
+    ``wing_d`` by up to that amount (the random size option). Slots are laid
+    out for the widest outcrop so they can never overlap, and the chosen size
+    travels with the placement. Returns ``{floor: [(side, offset, width, depth), ...]}``.
     """
     import random
     floors = [f for f in dict.fromkeys(int(f) for f in floors)]
@@ -158,6 +164,10 @@ def mini_wing_spread(bounds, floors, count, wing_w, randomize=True, seed=0,
     if not usable:
         return {}
     count = max(1, int(count))
+    width_var = max(0.0, float(width_var))
+    depth_var = max(0.0, float(depth_var))
+    # Reserve the widest possible outcrop so random sizes never overlap.
+    slot_w = wing_w + width_var
 
     def _static(f, side):
         return list((avoid or {}).get(f, {}).get(side, ()))
@@ -167,7 +177,7 @@ def mini_wing_spread(bounds, floors, count, wing_w, randomize=True, seed=0,
     caps = {}
     for f in usable:
         for side in open_sides[f]:
-            caps[(f, side)] = len(mini_wing_offsets(bounds, side, 99, wing_w,
+            caps[(f, side)] = len(mini_wing_offsets(bounds, side, 99, slot_w,
                                                      randomize=False, seed=0,
                                                      avoid=_static(f, side)))
     capacity = sum(caps.values())
@@ -192,25 +202,38 @@ def mini_wing_spread(bounds, floors, count, wing_w, randomize=True, seed=0,
                 continue
             static = _static(f, side)
             below = list(placed.get(f - 1, {}).get(side, ()))
-            offsets = mini_wing_offsets(bounds, side, k, wing_w,
+            offsets = mini_wing_offsets(bounds, side, k, slot_w,
                                         randomize=randomize,
                                         seed=seed * 31 + f * 7 + _MW_SIDES.index(side),
                                         avoid=static + below)
             if len(offsets) < k:
                 # Not enough room to stagger: stack them rather than drop them.
-                offsets = mini_wing_offsets(bounds, side, k, wing_w,
+                offsets = mini_wing_offsets(bounds, side, k, slot_w,
                                             randomize=randomize,
                                             seed=seed * 31 + f * 7 + _MW_SIDES.index(side),
                                             avoid=static)
             for off in offsets:
-                row.append((side, off))
+                mw_w, mw_d = _placement_size(seed, f, side, off, wing_w, wing_d,
+                                             width_var, depth_var)
+                row.append((side, off, mw_w, mw_d))
                 # Body only - the offset routine adds its own clearance, so the
                 # storey above keeps clear of this roof without double-padding.
                 placed.setdefault(f, {}).setdefault(side, []).append(
-                    (off - wing_w * 0.5 - 0.05, off + wing_w * 0.5 + 0.05))
+                    (off - mw_w * 0.5 - 0.05, off + mw_w * 0.5 + 0.05))
         if row:
             out[f] = row
     return out
+
+
+def _placement_size(seed, floor, side, off, wing_w, wing_d, width_var, depth_var):
+    """Deterministic random width/depth for one outcrop (stable per seed+slot)."""
+    import random
+    key = (int(seed) * 131 + int(floor) * 17 + _MW_SIDES.index(side) * 7
+           + int(abs(off) * 1000.0) * 13)
+    rng = random.Random(key)
+    w = wing_w + rng.uniform(-width_var, width_var) if width_var > 0.0 else wing_w
+    d = wing_d + rng.uniform(-depth_var, depth_var) if depth_var > 0.0 else wing_d
+    return (max(1.2, w), max(0.9, d))
 
 
 def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
