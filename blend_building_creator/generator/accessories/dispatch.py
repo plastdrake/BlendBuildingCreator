@@ -10,11 +10,19 @@ named entry point.
 
 from .mini_wing import build_mini_wing
 from .pillared_overhang import build_pillared_overhang
-from .tavern import build_balcony
-from .civic import (
-    build_clock_tower, build_corner_turret, build_entry_ramp, build_arched_porch,
-)
+from .tavern import build_balcony, build_tavern_porch_and_sign
+from .tower import build_clock_tower, build_corner_turret
+from .rampart import build_entry_ramp, build_side_rampart_for_shape
+from .porch import build_arched_porch
 from .town_hall import build_town_hall_composer
+from .blacksmith import build_blacksmith_forge
+from .windmill import build_windmill_sails
+from .watchtower import build_watchtower_lookout
+from .fisherman import build_fisherman_stilts
+from .bakery import build_bakery_oven
+from .crane import build_courtyard_crane
+from .mill import build_lumbermill_yard, build_treadwheel_sawmill, choose_entry_bay
+from ..openings import build_front_steps
 
 
 def _prop(props, name, default):
@@ -156,6 +164,9 @@ def _build_civic_landmarks(bm, props, ctx, tier):
             'seed': ctx.seed, 'fl1_bounds': ctx.floor_wall_bounds.get(1, None),
             'floor_wall_bounds': ctx.floor_wall_bounds, 'wall_t': ctx.wall_t,
         })
+    # Rampart walk for any other footprint (the T-shaped composer owns its own).
+    elif _prop(props, 'has_side_rampart', False):
+        build_side_rampart_for_shape(bm, props, ctx)
 
 
 def build_architectural_accessories(bm, props, ctx):
@@ -165,3 +176,103 @@ def build_architectural_accessories(bm, props, ctx):
     _build_balconies(bm, props, ctx, tier)
     _build_pillared_overhang(bm, props, ctx, tier)
     _build_civic_landmarks(bm, props, ctx, tier)
+
+
+def build_archetype_accessories(bm, props, ctx, _loft_spec):
+    """Archetype-specific structures (forge, sails, crane, mill, ...) and loft hatch."""
+    effective_archetype = ctx.effective_archetype
+    base_w = ctx.base_w
+    found_h = ctx.found_h
+    hx = ctx.hx
+    hy = ctx.hy
+    main_door_cx = ctx.main_door_cx
+    main_door_yf = ctx.main_door_yf
+    seed = ctx.seed
+    shape = ctx.shape
+    top_hx = ctx.top_hx
+    top_hy = ctx.top_hy
+    top_z = ctx.top_z
+    wall_t = ctx.wall_t
+    wings = ctx.wings
+
+    # 4.5. Specialized Architectural Archetype Accessories
+    if effective_archetype == 'BLACKSMITH':
+        build_blacksmith_forge(bm, -hx, hx, -hy, hy, z_ground=0.04, wall_thickness=wall_t, seed=seed)
+    elif effective_archetype == 'WINDMILL':
+        hub_z = top_z - 0.35
+        build_windmill_sails(bm, cx=0.0, front_y=-hy, hub_z=hub_z, radius=max(2.6, props.width * 0.48), wall_y=-hy + 0.35)
+    elif effective_archetype == 'WATCHTOWER':
+        build_watchtower_lookout(bm, -top_hx, top_hx, -top_hy, top_hy, z_platform=top_z)
+    elif effective_archetype == 'TAVERN':
+        build_tavern_porch_and_sign(bm, -hx, hx, front_y=main_door_yf, z_ground=0.0, door_x=main_door_cx, seed=seed)
+    elif effective_archetype == 'FISHERMAN':
+        build_fisherman_stilts(bm, -hx, hx, -hy, hy, z_ground=0.0, z_floor=found_h)
+    elif effective_archetype == 'BAKERY':
+        build_bakery_oven(bm, -hx, hx, -hy, hy, z_ground=0.0)
+    elif effective_archetype == 'WAREHOUSE':
+        yard_x = 0.0
+        yard_y = -hy - 1.8
+        rot_crane = -1.57
+        if shape == 'L_SHAPE' and wings:
+            w_elem = wings[0]
+            wx1, wx2, wy1, wy2 = w_elem['base']
+            # The crane sits toward the courtyard mouth (away from both roofs) with
+            # the jib pointing out of the courtyard so the boom/rope clears the eaves.
+            if w_elem['wall'] == 'FRONT':
+                if w_elem.get('align') == 'RIGHT':
+                    yard_x = (-hx + wx1) * 0.5 - 0.6
+                    yard_y = (wy1 - hy) * 0.5 - 1.2
+                    rot_crane = -1.40
+                else:
+                    yard_x = (wx2 + hx) * 0.5 + 0.6
+                    yard_y = (wy1 - hy) * 0.5 - 1.2
+                    rot_crane = -1.75
+            elif w_elem['wall'] == 'BACK':
+                if w_elem.get('align') == 'RIGHT':
+                    yard_x = (-hx + wx1) * 0.5 - 0.6
+                    yard_y = (hy + wy2) * 0.5 + 1.2
+                    rot_crane = 1.40
+                else:
+                    yard_x = (wx2 + hx) * 0.5 + 0.6
+                    yard_y = (hy + wy2) * 0.5 + 1.2
+                    rot_crane = 1.75
+        build_courtyard_crane(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_crane)
+    elif effective_archetype == 'LUMBERMILL':
+        yard_x = 0.0
+        yard_y = -hy - 2.2
+        rot_yard = 0.0
+        if shape == 'L_SHAPE' and wings:
+            w_elem = wings[0]
+            wx1, wx2, wy1, wy2 = w_elem['base']
+            if w_elem['wall'] == 'FRONT':
+                if w_elem.get('align') == 'RIGHT':
+                    yard_x = (-hx + wx1) * 0.5
+                    yard_y = (wy1 - hy) * 0.5
+                else:
+                    yard_x = (wx2 + hx) * 0.5
+                    yard_y = (wy1 - hy) * 0.5
+            elif w_elem['wall'] == 'BACK':
+                if w_elem.get('align') == 'RIGHT':
+                    yard_x = (-hx + wx1) * 0.5
+                    yard_y = (hy + wy2) * 0.5
+                else:
+                    yard_x = (wx2 + hx) * 0.5
+                    yard_y = (hy + wy2) * 0.5
+        mill_grade = getattr(props, 'mill_grade', 'GRADE_1')
+        build_lumbermill_yard(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_yard, grade=mill_grade)
+        build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=found_h, grade=mill_grade)
+        # Mill worker steps: grounded cut-stone steps on the clearest entrance bay.
+        mill_sx = choose_entry_bay(base_w, hx, yard_x, mill_grade)
+        if props.has_front_steps and props.has_foundation:
+            build_front_steps(bm, center_x=mill_sx, y_front=-hy, z_base=found_h,
+                              num_steps=max(2, int(found_h / 0.18)), normal_axis='-Y')
+
+    # 4.5b Optional gable loft hatch frame, open leaf and leaning ladder.
+    # The wall opening itself was left by the roof builders from _loft_arg.
+    if _loft_spec:
+        from .loft import build_gable_loft_hatch
+        _lout = 1.0 if _loft_spec['side'] in ('BACK', 'RIGHT') else -1.0
+        build_gable_loft_hatch(
+            bm, wall_axis=_loft_spec['axis'], wall_face=_loft_spec['face'],
+            center=_loft_spec['center'], sill_z=_loft_spec['sill'], outward=_lout,
+        )

@@ -3,14 +3,14 @@ Solid double-walled room generator, cantilever corbels, and Tudor timber-framing
 Builds manifold thick walls with cleanly framed door and window cutouts.
 """
 
-import bpy
 import bmesh
 import math
 from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_horizontal_cylinder
 from .materials import (
     MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER, MAT_INDEX_STONE,
-    MAT_INDEX_LOG, MAT_INDEX_LOG_END, MAT_INDEX_WOOD, MAT_INDEX_PLASTER_BRICK
+    MAT_INDEX_LOG, MAT_INDEX_LOG_END, MAT_INDEX_WOOD, MAT_INDEX_PLASTER_BRICK,
+    MAT_INDEX_TIMBER_FRAME,
 )
 
 def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
@@ -1010,4 +1010,94 @@ def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thic
         cx = (lx_max + ux_max) * 0.5
         cy = (ly_min + ly_max) * 0.5
         create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+
+
+def build_open_timber_arcade(bm, p_start, p_end, z_floor, z_top, wall_t=0.28,
+                             has_foundation=True, found_h=0.45, bay_spacing=3.2,
+                             post_w=0.24, mat_post=MAT_INDEX_TIMBER_FRAME, mat_brace=MAT_INDEX_TIMBER):
+    """
+    Builds an authentic open timber post-and-beam arcade along a perimeter wall line:
+    - Ground stone plinth pedestals under each post (if at ground level with foundation).
+    - Chunky vertical timber posts spaced evenly across the span.
+    - Continuous horizontal header beam across the top.
+    - 45-degree knee braces bracing posts to the header beam.
+    """
+    x1, y1 = p_start
+    x2, y2 = p_end
+    dx = x2 - x1
+    dy = y2 - y1
+    seg_len = math.sqrt(dx * dx + dy * dy)
+    if seg_len < 0.5:
+        return
+
+    ux = dx / seg_len
+    uy = dy / seg_len
+    ang_z = math.atan2(dy, dx)
+
+    # 1. Continuous Top Header Beam
+    beam_h = 0.22
+    beam_w = post_w
+    beam_mid_z = z_top - beam_h * 0.5
+    mid_x = (x1 + x2) * 0.5
+    mid_y = (y1 + y2) * 0.5
+
+    create_beveled_box(
+        bm,
+        size=(seg_len + post_w * 0.5, beam_w, beam_h),
+        location=(mid_x, mid_y, beam_mid_z),
+        rotation=(0.0, 0.0, ang_z),
+        mat_index=mat_post,
+        bevel_amount=0.012
+    )
+
+    # 2. Evenly spaced posts along segment
+    n_bays = max(1, int(round(seg_len / bay_spacing)))
+    post_h = z_top - z_floor
+    post_mid_z = z_floor + post_h * 0.5
+
+    for b_i in range(n_bays + 1):
+        t = b_i / float(n_bays)
+        px = x1 + dx * t
+        py = y1 + dy * t
+
+
+        # Vertical Timber Post
+        create_beveled_box(
+            bm,
+            size=(post_w, post_w, post_h),
+            location=(px, py, post_mid_z),
+            rotation=(0.0, 0.0, ang_z),
+            mat_index=mat_post,
+            bevel_amount=0.014
+        )
+
+        # 45-degree Knee Braces to header beam
+        brace_len = 0.65
+        brace_off = 0.26
+        # Forward brace (+ direction along segment)
+        if b_i < n_bays and (seg_len / n_bays) >= 1.4:
+            bx = px + ux * brace_off
+            by = py + uy * brace_off
+            bz = z_top - beam_h - brace_off * 0.5
+            create_beveled_box(
+                bm,
+                size=(brace_len, 0.12, 0.12),
+                location=(bx, by, bz),
+                rotation=(0.0, -0.785, ang_z),
+                mat_index=mat_brace,
+                bevel_amount=0.008
+            )
+        # Backward brace (- direction along segment)
+        if b_i > 0 and (seg_len / n_bays) >= 1.4:
+            bx = px - ux * brace_off
+            by = py - uy * brace_off
+            bz = z_top - beam_h - brace_off * 0.5
+            create_beveled_box(
+                bm,
+                size=(brace_len, 0.12, 0.12),
+                location=(bx, by, bz),
+                rotation=(0.0, 0.785, ang_z),
+                mat_index=mat_brace,
+                bevel_amount=0.008
+            )
 

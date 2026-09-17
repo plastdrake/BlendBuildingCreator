@@ -1,46 +1,24 @@
-"""Civic landmark accessories for Town Halls: clock tower, corner turrets, rampart terrace, gabled porch."""
+"""Reusable tower accessories: clock/belfry tower, square corner turret,
+roof-mounted clock spire, plus the shared square-spire and clock-face fittings.
+
+These were previously bundled as "civic landmarks for town halls", but nothing
+here is town-hall specific - the dispatcher mounts them on any footprint.
+"""
 
 import math
-from mathutils import Vector
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone,
 )
 from ..uv_utils import apply_roof_shingle_uvs
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
-    MAT_INDEX_PLASTER_EXT, MAT_INDEX_SHINGLES, MAT_INDEX_GLASS,
-    MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_DOOR,
-    MAT_INDEX_CUT_STONE, MAT_INDEX_CLOCK_FACE, MAT_INDEX_FLOOR,
+    MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER_FRAME,
+    MAT_INDEX_DOOR, MAT_INDEX_CUT_STONE, MAT_INDEX_CLOCK_FACE,
+    MAT_INDEX_FLOOR,
 )
-from ..roof.gable_roof import build_gable_roof
-from ..roof.turret_roof import build_conical_turret_roof
 from ..openings import build_window_assembly
-from ..railing import build_railing
 from ..walls import build_wall_with_opening
-
-
-def _tier_wall_mat(tier):
-    """Match the engine's wall logic: planks/wood for Tier 1-2, stucco for Tier 3."""
-    return MAT_INDEX_PLASTER_EXT if tier == 'TIER_3' else MAT_INDEX_WOOD
-
-
-def _shed_roof(bm, x_min, x_max, y_wall, y_edge, z_wall, z_edge, thickness=0.10):
-    """Single shingled lean-to slope running from (y_wall, z_wall) down to
-    (y_edge, z_edge), width across X, with correct shingle UVs."""
-    width = x_max - x_min
-    dy = y_wall - y_edge
-    dz = z_wall - z_edge
-    slope_len = math.sqrt(dy * dy + dz * dz)
-    if slope_len < 0.05 or width < 0.05:
-        return
-    ang = math.atan2(dz, dy)
-    loc = ((x_min + x_max) * 0.5, (y_wall + y_edge) * 0.5, (z_wall + z_edge) * 0.5)
-    rot = (ang, 0.0, 0.0)
-    faces = create_beveled_box(
-        bm, size=(width, slope_len, thickness), location=loc, rotation=rot,
-        mat_index=MAT_INDEX_SHINGLES, bevel_amount=0.008,
-    )
-    apply_roof_shingle_uvs(bm, faces, mat_index=MAT_INDEX_SHINGLES, scale=0.32)
+from ..style import tier_wall_mat
 
 
 def _square_spire_roof(bm, cx, cy, z_base, half, height, eave=0.20):
@@ -178,7 +156,7 @@ def build_clock_tower(bm, cx, cy, z_ground=0.0, size=3.0, shaft_top_z=10.0,
     # Match the hall's material language instead of one monotone stone block:
     # a lower ashlar stone stage carries a tier-material (stucco / plank) upper
     # shaft, tied together with cut-stone quoins, bands and string courses.
-    wall_mat = _tier_wall_mat(tier)
+    wall_mat = tier_wall_mat(tier)
     # Stone stage (index 0) receives the engine's clean world-space masonry UVs,
     # instead of the streaky default box UVs wood/plaster would get.
     stage_mat = MAT_INDEX_STONE
@@ -502,7 +480,7 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
     a floor slab per main level, capped with a square shingled spire. Works for
     both side-wall and back-wall mounts.
     """
-    wall_mat = _tier_wall_mat(tier)
+    wall_mat = tier_wall_mat(tier)
     t = 0.34
     levels = list(floor_levels) if floor_levels else [z_ground + floor_h, z_ground + 2.0 * floor_h]
     ox, oy = out_dir
@@ -611,129 +589,3 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
     create_cylinder(bm, radius=0.035, height=0.9, segments=6,
                     location=(cx, cy, _spire_base + _spire_h + 1.30),
                     mat_index=MAT_INDEX_IRON)
-
-
-def build_entry_ramp(bm, door_x, front_y, z_floor=0.6, width=1.6, length=None,
-                     side_offset=2.2):
-    """Raised stone entrance rampart: terrace at door level with parapets + side ramp.
-
-    The terrace wraps the front steps; the ramp descends from its right end to
-    grade. Parapet rampart walls (with coping) replace thin rails on the terrace,
-    timber handrails run along the sloped ramp only.
-    """
-    rise = max(0.2, z_floor)
-    ramp_len = length if length else rise * 5.0 + 2.5
-    deck_t = 0.22
-    deck_top = z_floor
-
-    # Terrace platform wrapping the entrance (steps land on it)
-    terr_w = 5.6
-    terr_d = 2.4
-    terr_cx = door_x + 0.9
-    terr_cy = front_y - terr_d * 0.5 + 0.35
-    create_beveled_box(bm, size=(terr_w, terr_d, deck_t + 0.35),
-                       location=(terr_cx, terr_cy, deck_top - (deck_t + 0.35) * 0.5 + 0.06),
-                       mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
-
-    # Rampart parapets with coping around the terrace (gap left for the ramp)
-    parap_h = 0.62
-    parap_t = 0.26
-    pz = deck_top + parap_h * 0.5
-    # Left cheek
-    create_beveled_box(bm, size=(parap_t, terr_d, parap_h),
-                       location=(terr_cx - terr_w * 0.5 + parap_t * 0.5, terr_cy, pz),
-                       mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
-    # Front wall with opening where the ramp joins (ramp on right half)
-    ramp_mouth_w = width + 0.3
-    mouth_cx = terr_cx + terr_w * 0.5 - ramp_mouth_w * 0.5 - 0.3
-    left_seg_w = (mouth_cx - ramp_mouth_w * 0.5) - (terr_cx - terr_w * 0.5)
-    if left_seg_w > 0.3:
-        create_beveled_box(bm, size=(left_seg_w, parap_t, parap_h),
-                           location=(terr_cx - terr_w * 0.5 + left_seg_w * 0.5,
-                                     terr_cy - terr_d * 0.5 + parap_t * 0.5, pz),
-                           mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
-    # Coping stones on terrace parapets
-    for (cw, cd, cpx, cpy) in (
-        (parap_t + 0.12, terr_d + 0.06, terr_cx - terr_w * 0.5 + parap_t * 0.5, terr_cy),
-    ):
-        create_beveled_box(bm, size=(cw, cd, 0.10), location=(cpx, cpy, deck_top + parap_h + 0.05),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
-    if left_seg_w > 0.3:
-        create_beveled_box(bm, size=(left_seg_w + 0.06, parap_t + 0.12, 0.10),
-                           location=(terr_cx - terr_w * 0.5 + left_seg_w * 0.5,
-                                     terr_cy - terr_d * 0.5 + parap_t * 0.5,
-                                     deck_top + parap_h + 0.05),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
-
-    # Sloped ramp descending from the terrace mouth to grade
-    rcx = mouth_cx
-    mid_y = (terr_cy - terr_d * 0.5) - ramp_len * 0.5
-    mid_z = deck_top - rise * 0.5
-    ang = math.atan2(rise, ramp_len)
-    ramp_diag = math.sqrt(rise * rise + ramp_len * ramp_len)
-    create_beveled_box(bm, size=(width, ramp_diag, 0.14),
-                       location=(rcx, mid_y, mid_z - 0.07),
-                       rotation=(ang, 0.0, 0.0), mat_index=MAT_INDEX_CUT_STONE,
-                       bevel_amount=0.015)
-    # Sloped stone cheeks + detailed timber guard railings on the ramp
-    ramp_top_y = terr_cy - terr_d * 0.5
-    ramp_bot_y = ramp_top_y - ramp_len
-    for s in (-1.0, 1.0):
-        px = rcx + s * (width * 0.5 + 0.02)
-        create_beveled_box(bm, size=(0.16, ramp_diag, 0.34),
-                           location=(px, mid_y, mid_z + 0.10),
-                           rotation=(ang, 0.0, 0.0), mat_index=MAT_INDEX_STONE,
-                           bevel_amount=0.01)
-        build_railing(bm, (px, ramp_top_y), (px, ramp_bot_y),
-                      deck_top, height=0.95, base_z_end=0.0,
-                      baluster_spacing=0.24, braces=False)
-
-
-def build_arched_porch(bm, door_x, front_y, z_ground=0.0, z_floor=0.6,
-                       half_span=1.5, height=2.9, tier='TIER_3',
-                       plank_direction='HORIZONTAL'):
-    """Stone entry porch with an angled two-slope roof and NO gable wall.
-
-    Twin stone piers carry an outer beam; above them the real gable-roof builder
-    raises two shingled slopes (correct UVs, bell-cast flare, bargeboards and ridge)
-    with the gable end walls suppressed so it reads as a porch hood, not a mini house.
-    """
-    pier_w = 0.28
-    outer_y = front_y - 2.05
-    pier_y = outer_y + 0.30
-    for s in (-1.0, 1.0):
-        px = door_x + s * half_span
-        # Slim timber entrance posts (no stone piers).
-        create_beveled_box(bm, size=(pier_w + 0.12, pier_w + 0.12, 0.30),
-                           location=(px, pier_y, z_ground + 0.15),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
-        create_beveled_box(bm, size=(pier_w, pier_w, height),
-                           location=(px, pier_y, z_ground + 0.30 + (height - 0.30) * 0.5),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
-        create_beveled_box(bm, size=(pier_w + 0.16, pier_w + 0.16, 0.18),
-                           location=(px, pier_y, z_ground + height + 0.09),
-                           mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
-    # Outer beam carried by the piers (roof rests on it)
-    eave_z = z_ground + height + 0.22
-    create_beveled_box(bm, size=(half_span * 2.0 + 0.70, 0.20, 0.22),
-                       location=(door_x, pier_y, eave_z),
-                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
-    # Angled two-slope roof, gable end walls suppressed, ridge runs front-to-back
-    build_gable_roof(
-        bm,
-        x_min=door_x - half_span - 0.12,
-        x_max=door_x + half_span + 0.12,
-        y_min=front_y - 2.30,
-        y_max=front_y,
-        z_base=eave_z + 0.10,
-        roof_height=1.15,
-        overhang=0.30,
-        wall_thickness=0.16,
-        gable_ends=('FRONT', 'BACK'),
-        segments_y=3,
-        abut_back=True,
-        tier=tier,
-        plank_direction=plank_direction,
-        roof_flare=0.35,
-        gable_walls=False,
-    )

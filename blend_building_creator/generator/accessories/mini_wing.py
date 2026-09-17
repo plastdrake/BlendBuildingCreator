@@ -11,7 +11,6 @@ main hall:
 - :mod:`generator.facade` / :mod:`generator.uv_utils` for placement and UVs.
 """
 
-import math
 from mathutils import Vector
 
 from ..mesh_utils import create_beveled_box
@@ -514,3 +513,106 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         avail_h=max(0.35, floor_h - height - 0.08), wall_mat=wall_mat,
         wall_thick=wall_thick, shingle_scale=shingle_scale, shingle_rot=shingle_rot,
     )
+
+
+def plan_outcrop_spread(props, base_w, base_d, num_floors, wings, has_wing,
+                        effective_archetype, floor_balc_side, main_door_cx,
+                        annex_on, annex_side, annex_floors, seed, open_timber):
+    """Lay out where every mini-wing outcrop goes before the walls are built.
+
+    Outcrops scatter over open slots only: never on a facade that already
+    carries a wing, annex, clock tower, rampart or balcony, and never over a
+    doorway, a turret corner, the outdoor archetype gear or the outcrop on the
+    storey below (whose roof rises into this one). Returns the ``{floor: [...]}``
+    spread that the walls and the outcrop builder both consume.
+    """
+    _mw_spread = {}
+    if not getattr(props, 'has_mini_wing', False):
+        return _mw_spread
+    _mw_count = max(1, int(getattr(props, 'mini_wing_count', 1)))
+    _mw_w = float(getattr(props, 'mini_wing_width', 2.2))
+    _mw_random = bool(getattr(props, 'mini_wing_random', True))
+    _mb = (-base_w * 0.5, base_w * 0.5, -base_d * 0.5, base_d * 0.5)
+    _hxb = base_w * 0.5
+
+    _tower_side = (getattr(props, 'clock_tower_side', 'RIGHT')
+                   if getattr(props, 'has_clock_tower', False) else None)
+    _rampart_side = (getattr(props, 'rampart_side', 'RIGHT')
+                     if getattr(props, 'has_side_rampart', False) else None)
+    # Outdoor archetype gear (forge, oven, porch, crane, log yard) all sits
+    # on the front at ground level; the windmill sails on the top facade.
+    _gear_ground = effective_archetype in ('WAREHOUSE', 'LUMBERMILL',
+                                           'BLACKSMITH', 'TAVERN',
+                                           'FISHERMAN', 'BAKERY')
+    _gear_top = effective_archetype == 'WINDMILL'
+    _pil_side = (getattr(props, 'pillared_overhang_side', 'FRONT')
+                 if getattr(props, 'has_pillared_overhang', False) else None)
+    _dw = float(getattr(props, 'door_width', 1.1))
+
+    _wing_spans, _annex_spans = {}, []
+    for _wg in (wings if has_wing else []):
+        _wl, _wb = _wg.get('wall'), _wg.get('base')
+        if not _wl or not _wb:
+            continue
+        if _wl in ('FRONT', 'BACK'):
+            _wing_spans.setdefault(_wl, []).append((_wb[0] - 0.55, _wb[1] + 0.55))
+        else:
+            _wing_spans.setdefault(_wl, []).append((_wb[2] - 0.55, _wb[3] + 0.55))
+    if annex_on:
+        _aw = 4.4 if getattr(props, 'material_tier', 'TIER_3') == 'TIER_1' else 5.2
+        _annex_spans = [(-_aw * 0.5 - 0.75, _aw * 0.5 + 0.75)]
+
+    _mw_open, _mw_avoid = {}, {}
+    for _f in range(num_floors):
+        _blocked = set()
+        if annex_on and _f < annex_floors:
+            _blocked.add(annex_side)
+        if _rampart_side and _f <= 1:
+            _blocked.add(_rampart_side)
+        if _tower_side:
+            _blocked.add(_tower_side)
+        if _pil_side and _f >= 1:
+            _blocked.add(_pil_side)
+        if (_gear_ground and _f == 0) or (_gear_top and _f == num_floors - 1):
+            _blocked.add('FRONT')
+        _b_side = floor_balc_side.get(_f)
+        if _b_side:
+            _blocked.add(_b_side)
+        _spans = {s: list(sp) for s, sp in _wing_spans.items()}
+        if annex_on and annex_side not in _blocked:
+            _spans.setdefault(annex_side, []).extend(_annex_spans)
+        if (_f == 0 and getattr(props, 'has_side_door', False) and not open_timber
+                and getattr(props, 'side_door_facade', 'LEFT') == 'LEFT'):
+            # The left side door sits off-centre next to the stair, so the
+            # whole wall steps aside rather than guessing the span.
+            _blocked.add('LEFT')
+        if _f == 0 and not open_timber:
+            _door_clr = _dw * 0.5 + (1.05 if getattr(props, 'has_front_steps', False) else 0.75)
+            _spans.setdefault('FRONT', []).append(
+                (main_door_cx - _door_clr, main_door_cx + _door_clr))
+            if getattr(props, 'has_back_door', False):
+                _spans.setdefault('BACK', []).append(
+                    (-_dw * 0.5 - 0.70, _dw * 0.5 + 0.70))
+            if (getattr(props, 'has_side_door', False)
+                    and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT'):
+                _spans.setdefault('RIGHT', []).append(
+                    (-_dw * 0.5 - 0.70, _dw * 0.5 + 0.70))
+        if getattr(props, 'has_corner_turrets', False) and not open_timber:
+            _thalf = max(1.0, min(2.0, getattr(props, 'corner_turret_size', 1.35)))
+            _tw = min(2.0 * _thalf, _hxb)
+            _spans.setdefault('BACK', []).extend([
+                (-_hxb, -(_hxb - _tw) + 0.40), ((_hxb - _tw) - 0.40, _hxb)])
+        _mw_open[_f] = [s for s in ('FRONT', 'BACK', 'LEFT', 'RIGHT')
+                        if s not in _blocked]
+        _mw_avoid[_f] = _spans
+    _mw_d = float(getattr(props, 'mini_wing_depth', 1.6))
+    if getattr(props, 'mini_wing_random_size', False):
+        _mw_wvar = max(0.0, float(getattr(props, 'mini_wing_random_width', 0.0)))
+        _mw_dvar = max(0.0, float(getattr(props, 'mini_wing_random_depth', 0.0)))
+    else:
+        _mw_wvar = _mw_dvar = 0.0
+    return mini_wing_spread(_mb, list(range(num_floors)), _mw_count, _mw_w,
+                            randomize=_mw_random, seed=seed,
+                            open_sides=_mw_open, avoid=_mw_avoid,
+                            wing_d=_mw_d, width_var=_mw_wvar,
+                            depth_var=_mw_dvar)

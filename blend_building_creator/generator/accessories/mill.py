@@ -1,16 +1,13 @@
 import math
 from mathutils import Vector
-from ..facade import get_facade_frame
 from ..uv_utils import map_planar_faces
 from ..mesh_utils import (
-    create_box, create_beveled_box, create_cylinder, create_cone, create_horizontal_cylinder,
-    create_torus_ring, create_door_batten
+    create_box, create_beveled_box, create_cylinder, create_horizontal_cylinder,
+    create_torus_ring
 )
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
-    MAT_INDEX_PLASTER_EXT, MAT_INDEX_SHINGLES, MAT_INDEX_GLASS,
-    MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_DOOR,
-    MAT_INDEX_CUT_STONE, MAT_INDEX_LOG
+    MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_LOG
 )
 
 def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0, grade='GRADE_1'):
@@ -434,3 +431,28 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
                 rotation=(0.0, -ga, 0.0),
                 mat_index=MAT_INDEX_TIMBER
             )
+
+
+def choose_entry_bay(base_w, hx, yard_x, grade='GRADE_1'):
+    """Pick the front facade bay that best clears the courtyard crane, treadwheel
+    and log yard so the mill worker steps land on a clear entrance.
+
+    The scoring is standardised on the Tier 2 layout (the middle ground) so every
+    grade picks the same, consistently clear bay.
+    """
+    mill_n = max(1, int(round(base_w / 3.2)))
+    mill_bays = [-hx + (i + 0.5) * (base_w / mill_n) for i in range(mill_n)]
+    _tg_crane_x = 0.4 + 4.60
+    _tg_wheel_xx = 0.4 - (4.0 * 0.5 + 1.45 + 1.60)
+    _tg_yard_crane_x = yard_x + 3.6
+
+    def _standard_score(_bx):
+        _s = 0.0
+        _s += max(0.0, 2.3 - abs(_bx - _tg_crane_x)) * 100.0
+        _s += max(0.0, 2.2 - abs(_bx - _tg_yard_crane_x)) * 40.0
+        _s += max(0.0, 1.6 - abs(_bx - _tg_wheel_xx)) * 8.0
+        _s += max(0.0, 1.9 - abs(_bx - yard_x)) * 30.0
+        _s += max(0.0, 1.4 - abs(_bx - (yard_x - 1.8))) * 30.0
+        return _s
+
+    return min(mill_bays, key=lambda c: (_standard_score(c), abs(c - 3.5)))

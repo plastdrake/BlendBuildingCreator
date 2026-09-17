@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.8.3-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.9.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 27 ready-made presets across three material tiers.
@@ -70,12 +70,11 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - Mini-wing outcrops (with optional random width/depth), balconies and a pillared overhang.
 - Archetype props: warehouse crane, lumbermill sawmill, blacksmith forge, windmill sails, watchtower parapet, tavern porch, fisherman pier and bakery oven.
 
-## What's new in 1.8.3
+## What's new in 1.9.0
 
-- Fixed the wing entrance portal on T-shaped buildings: the redundant wall opening is gone, so the timber frame lines the cut-out with no gaps.
-- Fixed mini-wing outcrops blanking the storey above — they no longer remove windows or timber framing on the floor overhead.
-- Added outcrop size controls: **Use Random Size** with **Random Width Amount** and **Random Depth Amount**, for varied bays that never overlap.
-- Fixed a crash when building a winged watchtower.
+- **Infantry Barracks overhaul:** all three tiers rebuilt. Tier 1 is a log camp with a stone gate porch, Tier 2 a plank headquarters with oriel outcrops and a gable loft hatch, Tier 3 a fortified citadel with a clock gate-tower, twin corner towers, a roof spire and scattered oriels.
+- **Rampart walks are now reusable:** the **Side Rampart** option works on any footprint (U-shaped, L-shaped, rectangular), not just T-shaped town halls.
+- **Internal refactor for maintainability:** the 3,600-line orchestrator was split into focused modules (`floors`, `roof/attic`, `roof/details`, `shapes`, `round_tower`, `style`) and the town-hall-only landmark code became reusable `tower`, `rampart` and `porch` modules. Generated geometry is unchanged.
 
 ## License
 

@@ -13,24 +13,20 @@ import math
 import bmesh
 from mathutils import Vector, Matrix
 from ..mesh_utils import (
-    create_box, create_beveled_box, create_cylinder, create_cone,
+    create_box, create_beveled_box,
 )
-from ..railing import build_railing
 from ..walls import build_facade_timber
 from ..materials import (
-    MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
-    MAT_INDEX_PLASTER_EXT, MAT_INDEX_SHINGLES, MAT_INDEX_GLASS,
-    MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_DOOR,
-    MAT_INDEX_CUT_STONE, MAT_INDEX_FLOOR,
+    MAT_INDEX_STONE, MAT_INDEX_TIMBER,
+    MAT_INDEX_GLASS,
+    MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_FLOOR,
 )
 from ..roof.gable_roof import build_gable_roof
 from ..walls import build_wall_with_opening
 from ..openings import build_window_assembly
+from ..style import tier_wall_mat
 from .mini_wing import build_mini_wing
-
-def _tier_wall_mat(tier):
-    """Match the engine's wall logic: planks/wood for Tier 1-2, stucco for Tier 3."""
-    return MAT_INDEX_PLASTER_EXT if tier == 'TIER_3' else MAT_INDEX_WOOD
+from .rampart import build_rampart_walk
 
 
 def _surface_window(bm, x, y, z, w=0.9, h=1.2, facing='front', shutters=True):
@@ -97,7 +93,7 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
     Returns the outer face X for forecourt layout.
     """
     overlap = 0.6
-    wmat_upper = _tier_wall_mat(tier)
+    wmat_upper = tier_wall_mat(tier)
     wall_h = floors * floor_h
     top_z = found_h + wall_h
     wall_t = 0.28
@@ -314,105 +310,6 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
     return outer_x
 
 
-def build_forecourt_walls(bm, x_left, x_right, y_wall, z_ground=0.0,
-                          gate_x=None, gate_w=2.4, wall_h=1.15):
-    """Low stone forecourt ramparts with coping, gate posts and ball caps."""
-    gate_x = gate_x if gate_x is not None else (x_left + x_right) * 0.5
-    g0, g1 = gate_x - gate_w * 0.5, gate_x + gate_w * 0.5
-    t = 0.30
-    # Wall runs either side of the gate
-    for (sx0, sx1) in ((x_left, g0), (g1, x_right)):
-        if sx1 - sx0 < 0.4:
-            continue
-        seg_cx = (sx0 + sx1) * 0.5
-        seg_w = sx1 - sx0
-        create_beveled_box(bm, size=(seg_w, t, wall_h),
-                           location=(seg_cx, y_wall, z_ground + wall_h * 0.5),
-                           mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
-        create_beveled_box(bm, size=(seg_w + 0.04, t + 0.14, 0.12),
-                           location=(seg_cx, y_wall, z_ground + wall_h + 0.06),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
-    # Gate posts with caps + iron lantern balls
-    for gx in (g0 - 0.15, g1 + 0.15):
-        create_beveled_box(bm, size=(0.45, 0.45, wall_h + 0.7),
-                           location=(gx, y_wall, z_ground + (wall_h + 0.7) * 0.5),
-                           mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
-        create_beveled_box(bm, size=(0.60, 0.60, 0.14),
-                           location=(gx, y_wall, z_ground + wall_h + 0.77),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
-        create_cylinder(bm, radius=0.11, height=0.22, segments=8,
-                        location=(gx, y_wall, z_ground + wall_h + 0.95),
-                        mat_index=MAT_INDEX_IRON)
-
-
-def build_side_rampart(bm, side_sgn, wall_face_x, deck_cy, deck_len=7.0,
-                       deck_top_z=3.7, width=2.3, tier='TIER_3', ramp_at_back=False,
-                       ramp_outer=False, ramp_cx=None):
-    """Elevated timber rampart walk: plank deck at upper-floor level on wooden
-    posts, outer + end timber parapets, and a sloped plank ramp descending to
-    grade. The ramp is placed at the front end when the walk starts at the
-    clock tower.
-    """
-    outer_x = wall_face_x + side_sgn * width
-    cx = (wall_face_x + outer_x) * 0.5
-    y0, y1 = deck_cy - deck_len * 0.5, deck_cy + deck_len * 0.5
-    deck_t = 0.20
-    # Plank deck slab + wooden support posts down to grade with wall corbels
-    create_beveled_box(bm, size=(width, deck_len, deck_t),
-                       location=(cx, deck_cy, deck_top_z - deck_t * 0.5),
-                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.02)
-    n_piers = max(2, int(deck_len / 2.2) + 1)
-    for i in range(n_piers):
-        py = y0 + 0.4 + (deck_len - 0.8) * (i / max(1, n_piers - 1))
-        create_beveled_box(bm, size=(0.34, 0.34, deck_top_z - deck_t - 0.30),
-                           location=(outer_x - side_sgn * 0.1, py, 0.30 + (deck_top_z - deck_t - 0.30) * 0.5),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.018)
-        create_beveled_box(bm, size=(0.50, 0.50, 0.30),
-                           location=(outer_x - side_sgn * 0.1, py, 0.15),
-                           mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
-        create_beveled_box(bm, size=(0.16, 0.5, 0.5),
-                           location=(wall_face_x + side_sgn * 0.05, py, deck_top_z - deck_t - 0.25),
-                           mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
-    # Detailed timber guard railings (outer edge + both ends) instead of a
-    # solid plank wall. The ramp end is left open so the ramp meets the deck.
-    rail_x = outer_x - side_sgn * 0.12
-    build_railing(bm, (rail_x, y0), (rail_x, y1), deck_top_z, height=1.05)
-    for ey, is_ramp_end in ((y0 + 0.12, not ramp_at_back),
-                            (y1 - 0.12, ramp_at_back)):
-        if is_ramp_end:
-            continue
-        build_railing(bm, (wall_face_x + side_sgn * 0.12, ey),
-                      (rail_x, ey), deck_top_z, height=1.05, braces=False)
-    # Sloped plank ramp from one deck end down to grade. It descends away from
-    # the front toward the clock tower so you climb it onto the walk.
-    rise = deck_top_z
-    ramp_len = rise * 1.9 + 1.3
-    ramp_w = 1.5
-    if ramp_cx is not None:
-        rcx = ramp_cx
-    elif ramp_outer:
-        rcx = outer_x - side_sgn * (ramp_w * 0.5 + 0.14)
-    else:
-        rcx = cx
-    dir_sgn = 1.0 if ramp_at_back else -1.0
-    start_y = (y1 - 0.3) if ramp_at_back else (y0 + 0.3)
-    mid_y = start_y + dir_sgn * ramp_len * 0.5
-    mid_z = deck_top_z - rise * 0.5
-    tilt = math.atan2(rise, ramp_len) * (-dir_sgn)
-    diag = math.sqrt(rise * rise + ramp_len * ramp_len)
-    create_beveled_box(bm, size=(ramp_w, diag, 0.14),
-                       location=(rcx, mid_y, mid_z - 0.07),
-                       rotation=(tilt, 0.0, 0.0), mat_index=MAT_INDEX_WOOD,
-                       bevel_amount=0.015)
-    # Matching detailed guard railings down both sides of the sloped ramp.
-    foot_y = start_y + dir_sgn * ramp_len
-    for s in (-1.0, 1.0):
-        px = rcx + s * (ramp_w * 0.5 + 0.02)
-        build_railing(bm, (px, start_y), (px, foot_y),
-                      deck_top_z, height=0.95, base_z_end=0.0,
-                      baluster_spacing=0.24, braces=False)
-
-
 def build_town_hall_composer(bm, props, ctx):
     """Compose annex + forecourt around the main hall. Returns annex outer X."""
     tier = ctx.get('tier', 'TIER_3')
@@ -501,7 +398,7 @@ def build_town_hall_composer(bm, props, ctx):
             deck_y1 = deck_y0 + 7.0
         if deck_y1 - deck_y0 < 5.5:
             deck_y1 = deck_y0 + 5.5
-        build_side_rampart(bm, side_sgn=r_sgn, wall_face_x=r_face,
+        build_rampart_walk(bm, side_sgn=r_sgn, wall_face_x=r_face,
                            deck_cy=(deck_y0 + deck_y1) * 0.5,
                            deck_len=deck_y1 - deck_y0,
                            deck_top_z=deck_top,
