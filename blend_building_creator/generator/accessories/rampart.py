@@ -92,14 +92,31 @@ def build_rampart_walk(bm, side_sgn, wall_face_x, deck_cy, deck_len=7.0,
     _sloped_railings(bm, rcx, ramp_w, start_y, foot_y, deck_top_z)
 
 
+def rampart_deck_span(props, ctx):
+    """World-space Y span of the generic side rampart deck.
+
+    Spans the whole main side wall (front to back) so an upper side door at the
+    wall centre always lands safely on the deck, away from the descent ramp.
+    Returns None when a wing projects from the same side (the walk would collide).
+    """
+    side = getattr(props, 'rampart_side', 'RIGHT')
+    if any(w.get('wall') == side for w in ctx.wings):
+        return None
+    base_hy = ctx.base_d * 0.5
+    return (-base_hy + 0.5, base_hy + 0.45)
+
+
 def build_side_rampart_for_shape(bm, props, ctx):
     """Place an elevated rampart walk along a side facade for any footprint.
 
     Mirrors the town-hall placement (deck starts at the back wall, ramp descends
     at the front) but makes no assumptions about a clock tower or turret, so it
-    also works on U/L/rectangular barracks. The walk stays on the main block so
-    it never runs over the front wings.
+    also works on U/L/rectangular barracks. The walk spans the main side wall and
+    is skipped when a wing projects from that same side.
     """
+    span = rampart_deck_span(props, ctx)
+    if span is None:
+        return
     side = getattr(props, 'rampart_side', 'RIGHT')
     sgn = 1.0 if side == 'RIGHT' else -1.0
     fl1 = ctx.floor_wall_bounds.get(1)
@@ -107,11 +124,7 @@ def build_side_rampart_for_shape(bm, props, ctx):
         face = fl1[1] if sgn > 0 else fl1[0]
     else:
         face = sgn * ctx.base_w * 0.5
-    base_hy = ctx.base_d * 0.5
-    deck_y1 = base_hy + 0.45
-    deck_y0 = max(-base_hy + 0.5, deck_y1 - 7.0)
-    if deck_y1 - deck_y0 < 5.5:
-        deck_y0 = deck_y1 - 5.5
+    deck_y0, deck_y1 = span
     deck_top = ctx.found_h + ctx.floor_h + 0.11
     build_rampart_walk(bm, side_sgn=sgn, wall_face_x=face,
                        deck_cy=(deck_y0 + deck_y1) * 0.5,

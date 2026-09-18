@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.9.1-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.9.2-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 27 ready-made presets across three material tiers.
@@ -69,6 +69,11 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 **Accessories**
 - Mini-wing outcrops (with optional random width/depth), balconies and a pillared overhang.
 - Archetype props: warehouse crane, lumbermill sawmill, blacksmith forge, windmill sails, watchtower parapet, tavern porch, fisherman pier and bakery oven.
+
+## What's new in 1.9.2
+
+- **Rampart walks fit better:** the reusable side rampart now spans the full side wall (instead of a fixed 7 m) and the upper door is centred on the walk, so the descent ramp no longer blocks it. The walk is skipped when a wing projects from the same side.
+- **Smarter loft hatch placement:** the gable loft hatch scores potential overlaps (rampart, tower, corner turrets, porch, wings, outcrops, balcony, doors) and, when both main gables are obstructed, falls back to a free front/back wing gable for the hatch and ladder.
 
 ## What's new in 1.9.1
 

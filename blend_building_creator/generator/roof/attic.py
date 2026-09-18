@@ -19,6 +19,60 @@ from .details import (
 )
 
 
+def _wing_loft_candidates(props, ctx, wings, found_h, floor_h, num_floors, wall_t,
+                          roof_height, wing_roof_scale, is_rotated_roof, tier_val,
+                          mini_sides, balc_side):
+    """Outer-gable loft-hatch candidates on FRONT/BACK wings.
+
+    Returns a list of ``(penalty, wing_index, loft_arg, loft_spec)``. Only the
+    outer gable of each wing is used (the natural place for a ground ladder).
+    """
+    cands = []
+    wing_floors = ctx.wing_floors
+    w_top_fl = min(wing_floors, num_floors)
+    w_fl_idx = w_top_fl - 1
+    w_top_z = found_h + w_top_fl * floor_h
+    w_roof_h = roof_height if wing_floors == num_floors else roof_height * wing_roof_scale
+    if w_roof_h < 2.2:
+        return cands
+    for idx, w_elem in enumerate(wings):
+        wall = w_elem.get('wall')
+        if wall not in ('FRONT', 'BACK'):
+            continue
+        if 'bounds_fl' in w_elem and w_fl_idx in w_elem['bounds_fl']:
+            x0b, x1b, y0b, y1b = w_elem['bounds_fl'][w_fl_idx]
+        else:
+            tb = ctx.floor_wall_bounds.get(w_fl_idx, (-ctx.base_w * 0.5, ctx.base_w * 0.5,
+                                                      -ctx.base_d * 0.5, ctx.base_d * 0.5))
+            ov = w_fl_idx * ctx.cantilever if getattr(props, 'has_cantilever', False) else 0.0
+            x0b, x1b, y0b, y1b = compute_fl_wing_bounds(
+                w_elem, w_fl_idx, ov, tb[0], tb[1], tb[2], tb[3])
+        if x1b - x0b < 1.6:
+            continue
+        cx = (x0b + x1b) * 0.5
+        loff = 0.30 if tier_val == 'TIER_1' else (wall_t * 0.5 + 0.03)
+        sill = w_top_z + min(w_roof_h * 0.22, max(0.30, w_roof_h - 1.90))
+        if sill + 1.20 > w_top_z + w_roof_h - 0.50:
+            continue
+        side = 'FRONT' if wall == 'FRONT' else 'BACK'
+        face = y0b - loff if side == 'FRONT' else y1b + loff
+        pen = 1.0
+        if side in mini_sides:
+            pen += 10.0
+        if balc_side == side:
+            pen += 6.0
+        if getattr(props, 'has_arched_porch', False) and side == 'FRONT' and abs(cx) < 2.0:
+            pen += 4.0
+        if getattr(props, 'has_front_door', False) and side == 'FRONT' and abs(cx) < 2.0:
+            pen += 3.0
+        if getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == side:
+            pen += 3.0
+        arg = {'side': side, 'x0': cx - 0.45, 'x1': cx + 0.45, 'z0': sill, 'z1': sill + 1.20}
+        spec = {'axis': 'Y', 'side': side, 'face': face, 'center': cx, 'sill': sill}
+        cands.append((pen, idx, arg, spec))
+    return cands
+
+
 def build_roof_and_attic(bm, props, ctx):
     """Attic deck, exterior roof, dormers, chimneys, turrets and the roof hoist."""
     base_d = ctx.base_d
@@ -69,6 +123,7 @@ def build_roof_and_attic(bm, props, ctx):
     # defined for the later frame/ladder pass.
     _loft_spec = None
     _loft_arg = None
+    _wing_loft = None
 
     # Defined for every archetype: watchtowers skip the main roof but still build
     # their wing roofs, which use the flare for their slope/valley math.
@@ -96,19 +151,30 @@ def build_roof_and_attic(bm, props, ctx):
             _wing_walls = [w.get('wall') for w in wings]
             _balc_side = getattr(props, 'balcony_side', None) if getattr(props, 'has_balcony', False) else None
             _mini_sides = {s for s, _o, _w, _d in ctx.mini_wing_spread.get(num_floors - 1, [])}
+            def _gable_penalty(side):
+                p = 0.0
+                if side in _wing_walls:
+                    p += 10.0
+                if side in _mini_sides:
+                    p += 10.0
+                if _balc_side == side:
+                    p += 6.0
+                if getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == side:
+                    p += 3.0
+                if getattr(props, 'has_side_rampart', False) and getattr(props, 'rampart_side', 'RIGHT') == side:
+                    p += 12.0
+                if getattr(props, 'has_clock_tower', False) and getattr(props, 'clock_tower_side', 'RIGHT') == side:
+                    p += 8.0
+                if getattr(props, 'has_corner_turrets', False) and side == 'BACK':
+                    p += 8.0
+                if getattr(props, 'has_arched_porch', False) and side == 'FRONT':
+                    p += 4.0
+                if getattr(props, 'has_front_door', False) and side == 'FRONT':
+                    p += 3.0
+                return p
+
             if not is_rotated_roof:
-                def _lscore(side):
-                    s = 0.0
-                    if side in _wing_walls:
-                        s += 10.0
-                    if side in _mini_sides:
-                        s += 10.0
-                    if _balc_side == side:
-                        s += 6.0
-                    if side == 'FRONT' and getattr(props, 'has_front_door', False):
-                        s += 3.0
-                    return s
-                _lside = 'BACK' if _lscore('BACK') <= _lscore('FRONT') else 'FRONT'
+                _lside = 'BACK' if _gable_penalty('BACK') <= _gable_penalty('FRONT') else 'FRONT'
                 _lspan = top_x_max - top_x_min
                 _lc = top_cx
                 if _balc_side == _lside or _lside in _mini_sides:
@@ -126,18 +192,7 @@ def build_roof_and_attic(bm, props, ctx):
                     _loft_arg = {'side': _lside, 'x0': _lc - _hh2, 'x1': _lc + _hh2,
                                  'z0': _sill, 'z1': _sill + 1.20}
             else:
-                def _lscore(side):
-                    s = 0.0
-                    if side in _wing_walls:
-                        s += 10.0
-                    if side in _mini_sides:
-                        s += 10.0
-                    if _balc_side == side:
-                        s += 6.0
-                    if side == getattr(props, 'side_door_facade', None) and getattr(props, 'has_side_door', False):
-                        s += 3.0
-                    return s
-                _lside = 'RIGHT' if _lscore('RIGHT') <= _lscore('LEFT') else 'LEFT'
+                _lside = 'RIGHT' if _gable_penalty('RIGHT') <= _gable_penalty('LEFT') else 'LEFT'
                 _lspan = top_y_max - top_y_min
                 _lc = top_cy
                 if _balc_side == _lside or _lside in _mini_sides:
@@ -155,7 +210,21 @@ def build_roof_and_attic(bm, props, ctx):
                     _ls = 'BACK' if _lside == 'RIGHT' else 'FRONT'
                     _loft_arg = {'side': _ls, 'x0': top_cy - (_lc + _hh2), 'x1': top_cy - (_lc - _hh2),
                                  'z0': _sill - top_z, 'z1': _sill + 1.20 - top_z}
-        
+
+            # If every main gable is obstructed, try a free wing gable instead.
+            if _loft_spec is not None and _gable_penalty(_lside) > 0:
+                _wcands = _wing_loft_candidates(
+                    props, ctx, wings, found_h, floor_h, num_floors, wall_t,
+                    props.roof_height, getattr(props, 'wing_roof_scale', 0.88),
+                    is_rotated_roof, tier_val, _mini_sides, _balc_side)
+                if _wcands:
+                    _wcands.sort(key=lambda c: c[0])
+                    _wpen, _widx, _warg, _wspec = _wcands[0]
+                    if _wpen < _gable_penalty(_lside):
+                        _wing_loft = {'idx': _widx, 'arg': _warg}
+                        _loft_spec = _wspec
+                        _loft_arg = None
+
         # Pre-compute dormer apertures to open attic holes in the roof deck and shingles
         dormer_apertures = []
         dormer_placements = []
@@ -497,8 +566,9 @@ def build_roof_and_attic(bm, props, ctx):
             up_front_y = -up_main_hy
             up_back_y = up_main_hy
 
-        for w_elem in wings:
+        for _w_idx, w_elem in enumerate(wings):
             w_wall = w_elem['wall']
+            w_loft_arg = _wing_loft['arg'] if (_wing_loft and _wing_loft['idx'] == _w_idx) else None
             if 'bounds_fl' in w_elem and w_fl_idx in w_elem['bounds_fl']:
                 w_top_xmin, w_top_xmax, w_top_ymin, w_top_ymax = w_elem['bounds_fl'][w_fl_idx]
             else:
@@ -681,6 +751,7 @@ def build_roof_and_attic(bm, props, ctx):
                         segments_y=10,
                         wall_thickness=wall_t,
                         gable_ends=w_gable_fb,
+                        loft_hatch=w_loft_arg,
                         abut_back=abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
@@ -699,6 +770,7 @@ def build_roof_and_attic(bm, props, ctx):
                         overhang=props.roof_overhang,
                         wall_thickness=wall_t,
                         gable_ends=w_gable_fb,
+                        loft_hatch=w_loft_arg,
                         # Denser ridge steps so valley-notch edges run smooth.
                         segments_y=10,
                         abut_back=abut_back,
@@ -844,6 +916,7 @@ def build_roof_and_attic(bm, props, ctx):
                         segments_y=10,
                         wall_thickness=wall_t,
                         gable_ends=w_gable_bk,
+                        loft_hatch=w_loft_arg,
                         abut_front=abut_front,
                         abut_back=False,
                         tier=tier_val,
@@ -863,6 +936,7 @@ def build_roof_and_attic(bm, props, ctx):
                         overhang=props.roof_overhang,
                         wall_thickness=wall_t,
                         gable_ends=w_gable_bk,
+                        loft_hatch=w_loft_arg,
                         # Denser ridge steps so valley-notch edges run smooth.
                         segments_y=10,
                         abut_front=abut_front,

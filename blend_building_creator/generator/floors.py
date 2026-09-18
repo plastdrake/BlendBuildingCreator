@@ -21,6 +21,7 @@ from .interior import (
 from .openings import build_door_assembly, build_front_steps, build_window_assembly
 from .accessories.cargo_port import build_cargo_port_frame
 from .accessories.mini_wing import plan_outcrop_spread
+from .accessories.rampart import rampart_deck_span
 
 
 def build_floors(bm, props, ctx):
@@ -533,32 +534,41 @@ def build_floors(bm, props, ctx):
         # Upper side door onto the side rampart deck (Tier 3 town halls)
         if fl_idx == 1 and getattr(props, 'has_side_rampart', False) and not open_timber:
             r_side = getattr(props, 'rampart_side', 'RIGHT')
-            rdw = min(props.door_width, 1.30)
-            rdh = min(props.door_height, 2.30)
-            r_margin = 0.12
-            r_top_z = z_floor + rdh + r_margin
-            if r_side == 'LEFT':
-                r_cy = (y_min + y_max) * 0.5
-                left_openings.append({'u_start': (r_cy - rdw * 0.5 - r_margin) - y_min,
-                                      'u_end': (r_cy + rdw * 0.5 + r_margin) - y_min,
-                                      'z_start': z_floor, 'z_end': r_top_z})
-                build_door_assembly(
-                    bm, center_x=x_min, y_front=r_cy, z_base=z_floor,
-                    wall_thickness=wall_t, door_w=rdw, door_h=rdh, door_angle_deg=props.door_angle,
-                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
-                    normal_axis='-X'
-                )
+            _composer = (getattr(props, 'town_hall_composer', False) and shape == 'T_SHAPE')
+            if _composer:
+                # Town-hall composer places its own rampart; keep the historic
+                # wall-centre door so that layout is unchanged.
+                _rspan = (y_min, y_max)
             else:
-                r_cy = (y_min + y_max) * 0.5
-                right_openings.append({'u_start': (r_cy - rdw * 0.5 - r_margin) - y_min,
-                                       'u_end': (r_cy + rdw * 0.5 + r_margin) - y_min,
-                                       'z_start': z_floor, 'z_end': r_top_z})
-                build_door_assembly(
-                    bm, center_x=x_max, y_front=r_cy, z_base=z_floor,
-                    wall_thickness=wall_t, door_w=rdw, door_h=rdh, door_angle_deg=props.door_angle,
-                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
-                    normal_axis='+X'
-                )
+                _rspan = rampart_deck_span(props, ctx)
+            if _rspan is not None:
+                rdw = min(props.door_width, 1.30)
+                rdh = min(props.door_height, 2.30)
+                r_margin = 0.12
+                r_top_z = z_floor + rdh + r_margin
+                # Centre the door on the deck (not the wall) so it always lands
+                # on the walk, clear of the descent ramp at the front end.
+                r_cy = (_rspan[0] + _rspan[1]) * 0.5
+                if r_side == 'LEFT':
+                    left_openings.append({'u_start': (r_cy - rdw * 0.5 - r_margin) - y_min,
+                                          'u_end': (r_cy + rdw * 0.5 + r_margin) - y_min,
+                                          'z_start': z_floor, 'z_end': r_top_z})
+                    build_door_assembly(
+                        bm, center_x=x_min, y_front=r_cy, z_base=z_floor,
+                        wall_thickness=wall_t, door_w=rdw, door_h=rdh, door_angle_deg=props.door_angle,
+                        door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
+                        normal_axis='-X'
+                    )
+                else:
+                    right_openings.append({'u_start': (r_cy - rdw * 0.5 - r_margin) - y_min,
+                                           'u_end': (r_cy + rdw * 0.5 + r_margin) - y_min,
+                                           'z_start': z_floor, 'z_end': r_top_z})
+                    build_door_assembly(
+                        bm, center_x=x_max, y_front=r_cy, z_base=z_floor,
+                        wall_thickness=wall_t, door_w=rdw, door_h=rdh, door_angle_deg=props.door_angle,
+                        door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
+                        normal_axis='+X'
+                    )
 
         # Town-Hall annex portal: a plain walk-through opening into the side annex
         # (opposite the clock tower) on every floor the annex spans, so its upper
