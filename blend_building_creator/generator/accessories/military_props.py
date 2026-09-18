@@ -17,6 +17,7 @@ from ..materials import (
     MAT_INDEX_HAY,
 )
 from .shield import build_round_shield
+from .palisade import compound_bounds, fortification_offset
 
 
 def build_shield_mount(bm, x, y, z, normal=(0.0, -1.0, 0.0), r=0.34):
@@ -378,6 +379,58 @@ def build_weapon_rack(bm, x, y, z_ground=0.0, ang=0.0):
             f.tag = True
 
 
+def _paper_target_panel(bm, center, right, up, fwd, size=0.38, thickness=0.014):
+    """A square paper scoring target lashed onto the front of a pell.
+
+    Built as a thin flat plate held proud of the curved barrel (so it can never
+    read as embedded), with corner cords and knots lashing it around the straw.
+    The front face samples the dedicated ring shader through square radial UVs.
+    """
+    c = Vector(center)
+    half = size * 0.5
+    f_front = 0.325
+    f_back = f_front - thickness
+    per = [(-1, -1), (-1, 1), (1, 1), (1, -1)]   # CCW seen from the front
+    front_v = [bm.verts.new(c + right * (sl * half) + up * (su * half) + fwd * f_front)
+               for sl, su in per]
+    back_v = [bm.verts.new(c + right * (sl * half) + up * (su * half) + fwd * f_back)
+              for sl, su in per]
+
+    uvl = bm.loops.layers.uv.verify()
+    face = bm.faces.new(front_v)
+    face.material_index = MAT_INDEX_TARGET
+    face.tag = True
+    for lp, (sl, su) in zip(face.loops, per):
+        lp[uvl].uv = Vector((0.5 + 0.45 * sl, 0.5 + 0.45 * su))
+
+    back = bm.faces.new(list(reversed(back_v)))
+    back.material_index = MAT_INDEX_PLASTER
+    back.tag = True
+    for i in range(4):
+        j = (i + 1) % 4
+        ef = bm.faces.new([front_v[i], back_v[i], back_v[j], front_v[j]])
+        ef.material_index = MAT_INDEX_PLASTER
+        ef.tag = True
+
+    # Corner cords lashing the paper around the barrel, with little knots.
+    for sl, su in per:
+        corner = c + right * (sl * half) + up * (su * half) + fwd * f_front
+        anchor = c + right * (sl * 0.285) + up * (su * 0.16) + fwd * 0.082
+        d = anchor - corner
+        rot = Vector((0.0, 0.0, 1.0)).rotation_difference(d.normalized()).to_euler()
+        cord = create_cylinder(bm, radius=0.009, height=d.length, segments=6,
+                               location=(corner + anchor) * 0.5, rotation=rot,
+                               mat_index=MAT_INDEX_TIMBER)
+        for ff in cord:
+            ff.tag = True
+        knot = create_torus_ring(bm, location=corner, rotation=rot,
+                                 major_radius=0.022, minor_radius=0.008,
+                                 major_segments=8, minor_segments=5,
+                                 mat_index=MAT_INDEX_TIMBER)
+        for ff in knot:
+            ff.tag = True
+
+
 def build_training_dummy(bm, x, y, z_ground=0.0, ang=0.0):
     """A padded training pell on a timber stake (reference-accurate).
 
@@ -449,10 +502,10 @@ def build_training_dummy(bm, x, y, z_ground=0.0, ang=0.0):
         for f in brf:
             f.tag = True
 
-    # 7. Painted bullseye proud of the barrel front (conforms to the barrel so
-    #    the whole disc sits on the surface instead of being embedded).
-    _painted_disc(bm, Vector((x, y, z0)), fwd, 0.20, segments=24,
-                  dome=0.010, surface_radius=0.30)
+    # 7. Square paper target lashed onto the chest (clearly a separate object,
+    #    not a painted spot that can read as sunk into the barrel).
+    _paper_target_panel(bm, Vector((x, y, z0)), right, Vector((0.0, 0.0, 1.0)),
+                        fwd, size=0.38)
 
     # 8. Spent arrows sticking out of the torso at dynamic angles.
     arrow_specs = [(-0.15, 0.14, -1.0), (0.09, -0.06, 1.0), (0.20, 0.12, 1.0)]
@@ -524,13 +577,14 @@ def build_military_props(bm, props, ctx):
         for i in range(n_dummies):
             build_training_dummy(bm, right_wall - stand, ys[min(i, len(ys) - 1)], 0.0,
                                  ang=math.radians(90.0))
-        # Weapon racks at the inner (building-side) ends of the wing walls.
-        rack_y = main_front_y - 1.15
-        for i in range(n_racks):
-            left = (i % 2 == 0)
-            wx = (left_wall + stand * 0.7) if left else (right_wall - stand * 0.7)
-            build_weapon_rack(bm, wx, rack_y, 0.0,
-                              ang=math.radians(-90.0 if left else 90.0))
+        # Weapon racks flank the gate against the front enclosure wall (which has
+        # no windows) and face into the courtyard, so they cannot intersect the
+        # wing windows the way wall-mounted racks did.
+        _x0, _x1, enclosure_y, _y1 = compound_bounds(ctx, fortification_offset(props))
+        rack_y = enclosure_y + 0.85
+        for rx in _spread_positions(n_racks, ctx.main_door_cx - 3.3,
+                                    ctx.main_door_cx + 3.3):
+            build_weapon_rack(bm, rx, rack_y, 0.0, ang=0.0)
     else:
         court_x0 = -ctx.base_w * 0.5 + 1.2
         court_x1 = ctx.base_w * 0.5 - 1.2
@@ -542,10 +596,10 @@ def build_military_props(bm, props, ctx):
         for dx in _spread_positions(n_dummies, court_x0 + 1.1, court_x1 - 1.1):
             build_training_dummy(bm, dx, main_front_y - pal_off * 0.48, 0.0,
                                  ang=math.radians(180.0))
-        for i in range(n_racks):
-            left = (i % 2 == 0)
-            rx = court_x0 + 1.0 if left else court_x1 - 1.0
-            build_weapon_rack(bm, rx, main_front_y - 0.6, 0.0, ang=0.0)
+        rack_y = main_front_y - pal_off + 0.85
+        for rx in _spread_positions(n_racks, ctx.main_door_cx - 3.0,
+                                    ctx.main_door_cx + 3.0):
+            build_weapon_rack(bm, rx, rack_y, 0.0, ang=0.0)
 
     # Mounted heraldic wall shield above the main entrance (never over a window).
     door_cx = ctx.main_door_cx

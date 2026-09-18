@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.11.1-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.11.2-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 27 ready-made presets across three material tiers.
@@ -77,6 +77,14 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.11.2
+
+- **Square paper target on the pell:** the training dummy's painted bullseye is replaced by a flat square paper scoring target lashed onto the chest with four corner cords and knots. Being a separate proud plate, it can never read as embedded in the hay.
+- **Weapon racks moved off windows:** the racks now flank the gate against the front enclosure wall (which has no windows) and face into the courtyard, instead of clipping the wing windows.
+- **Roomier barracks (all tiers):** increased the enclosure offset for a clear walkway around the building, shortened the wings and narrowed the courtyard. T1/T2/T3 now measure roughly 27/34/39 m wide and 22/25/32 m deep.
+- **Tier 3 curtain wall pushed out:** the wall offset was raised to 5.5 m so the curtain clears the building's corner turrets with a wide walkway, while the compound still fits inside 40x40 m.
+- **Square roof turret:** the Tier 3 barracks roof spire turret defaults to the 4-sided **Square Belfry** style.
 
 ## What's new in 1.11.1
 
