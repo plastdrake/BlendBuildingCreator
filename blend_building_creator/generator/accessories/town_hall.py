@@ -402,5 +402,7 @@ def build_town_hall_composer(bm, props, ctx):
                            deck_cy=(deck_y0 + deck_y1) * 0.5,
                            deck_len=deck_y1 - deck_y0,
                            deck_top_z=deck_top,
-                           width=2.6, tier=tier, ramp_at_back=False)
+                           width=2.6, tier=tier, ramp_at_back=False,
+                           battlements=bool(getattr(props, 'has_battlements', False)),
+                           battlement_style=getattr(props, 'battlement_style', 'STONE'))
     return annex_outer

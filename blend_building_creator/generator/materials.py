@@ -82,6 +82,7 @@ MAT_INDEX_LOG          = 9
 MAT_INDEX_LOG_END      = 10
 MAT_INDEX_PLASTER_BRICK = 11
 MAT_INDEX_CLOCK_FACE    = 12
+MAT_INDEX_BANNER        = 13
 
 
 # ---------------------------------------------------------------------------
@@ -1395,6 +1396,15 @@ def create_stylized_clock_face(name="M_Building_Clock_Face", color=(0.95, 0.95, 
     return mat
 
 
+def create_stylized_banner(name="M_Building_Banner", color=(0.55, 0.12, 0.12, 1.0)):
+    """Heraldic painted-cloth standard: flat, matte and readable at a distance."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=0.82, metallic=0.0)
+    return mat
+
+
 # ---------------------------------------------------------------------------
 # 10. Log Ends — Concentric tree rings with warm core & swirl
 # ---------------------------------------------------------------------------
@@ -1661,7 +1671,13 @@ def setup_building_material_slots(obj, props):
         glow=min(1.2, getattr(props, 'window_glow_strength', 0.0) * 0.25),
     )
 
-    # Assemble all 13 canonical slots in strict order
+    # 13. Banner (heraldic painted-cloth standard)
+    mat_banner = getattr(props, 'custom_banner', None) or create_stylized_banner(
+        "M_Building_Banner",
+        color=getattr(props, 'color_banner', (0.55, 0.12, 0.12, 1.0)),
+    )
+
+    # Assemble all 14 canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
         mat_plaster,        # 1  MAT_INDEX_PLASTER
@@ -1676,6 +1692,7 @@ def setup_building_material_slots(obj, props):
         mat_log_end,        # 10 MAT_INDEX_LOG_END
         mat_plaster_brick,  # 11 MAT_INDEX_PLASTER_BRICK
         mat_clock_face,     # 12 MAT_INDEX_CLOCK_FACE
+        mat_banner,         # 13 MAT_INDEX_BANNER
     ]
     obj.data.materials.clear()
     for m in required_mats:

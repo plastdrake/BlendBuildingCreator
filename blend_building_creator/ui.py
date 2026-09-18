@@ -373,6 +373,27 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             if props.has_side_annex:
                 col.prop(props, "annex_floors")
 
+        # Fortifications
+        box_fort = layout.box()
+        box_fort.label(text="Fortifications", icon='MOD_BUILD')
+        box_fort.prop(props, "has_palisade")
+        if props.has_palisade:
+            col = box_fort.column(align=True)
+            col.prop(props, "palisade_style")
+            col.prop(props, "palisade_height")
+            col.prop(props, "palisade_offset")
+        box_fort.prop(props, "has_battlements")
+        if props.has_battlements:
+            box_fort.prop(props, "battlement_style")
+        box_fort.prop(props, "has_banners")
+        if props.has_banners:
+            col = box_fort.column(align=True)
+            col.prop(props, "banner_count")
+            col.prop(props, "color_banner")
+        box_fort.prop(props, "has_military_props")
+        if props.has_military_props:
+            box_fort.prop(props, "military_props_count")
+
 class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
     """Subpanel for procedural stylized colors and custom material overrides"""
     bl_label = "Materials & Colors"
@@ -421,6 +442,7 @@ class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
         grid.prop(props, "color_stone", text="Stone")
         grid.prop(props, "color_floor", text="Floor")
         grid.prop(props, "color_door", text="Door")
+        grid.prop(props, "color_banner", text="Banner")
         
         box_glow = layout.box()
         box_glow.label(text="Night Window Glow", icon='LIGHT_SUN')

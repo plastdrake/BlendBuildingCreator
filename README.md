@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.9.2-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.10.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 27 ready-made presets across three material tiers.
@@ -69,6 +69,18 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 **Accessories**
 - Mini-wing outcrops (with optional random width/depth), balconies and a pillared overhang.
 - Archetype props: warehouse crane, lumbermill sawmill, blacksmith forge, windmill sails, watchtower parapet, tavern porch, fisherman pier and bakery oven.
+
+**Fortifications** (reusable on any preset/footprint)
+- **Palisade** stockade: rough stakes or neat pickets enclosing the compound with a front gate (style, height and offset controls).
+- **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
+- **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
+- **Military props**: weapon racks, wall-mounted shields and training dummies scattered through the yard.
+
+## What's new in 1.10.0
+
+- **New reusable fortification modules** (any preset, any footprint, via new UI toggles): pointed-stake or picket **palisade** with a front gate, heraldic **banner** standards, **crenellated battlements** (stone merlons or timber hoarding) on the rampart walk, and **military props** (weapon racks, wall shields, training dummies).
+- **Banner material:** a new heraldic cloth shader and **Banner colour** picker (the add-on now generates 14 material slots).
+- **Infantry Barracks** use the new fortifications across all three tiers; applying a preset no longer inherits a previous building's fortification state.
 
 ## What's new in 1.9.2
 

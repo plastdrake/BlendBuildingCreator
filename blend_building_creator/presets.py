@@ -709,6 +709,14 @@ PRESETS = {
             'has_hoist_beam': False,
             'has_loft_hatch': False,
             'has_arched_porch': True,
+            'has_palisade': True,
+            'palisade_style': 'STAKES',
+            'palisade_height': 2.4,
+            'palisade_offset': 3.0,
+            'has_banners': True,
+            'banner_count': 2,
+            'has_military_props': True,
+            'military_props_count': 2,
             'color_shingles': (0.34, 0.24, 0.16, 1.0),
             'color_wall_ext': (0.34, 0.22, 0.14, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
@@ -789,6 +797,16 @@ PRESETS = {
             'has_arched_porch': True,
             'has_side_rampart': True,
             'rampart_side': 'RIGHT',
+            'has_palisade': True,
+            'palisade_style': 'PICKET',
+            'palisade_height': 2.3,
+            'palisade_offset': 3.0,
+            'has_banners': True,
+            'banner_count': 3,
+            'has_battlements': True,
+            'battlement_style': 'TIMBER',
+            'has_military_props': True,
+            'military_props_count': 3,
             'color_shingles': (0.26, 0.30, 0.38, 1.0),
             'color_wall_ext': (0.84, 0.78, 0.68, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
@@ -872,6 +890,16 @@ PRESETS = {
             'has_arched_porch': True,
             'has_side_rampart': True,
             'rampart_side': 'RIGHT',
+            'has_palisade': True,
+            'palisade_style': 'STAKES',
+            'palisade_height': 2.2,
+            'palisade_offset': 3.0,
+            'has_banners': True,
+            'banner_count': 4,
+            'has_battlements': True,
+            'battlement_style': 'STONE',
+            'has_military_props': True,
+            'military_props_count': 3,
             'has_mini_wing': True,
             'mini_wing_count': 4,
             'mini_wing_width': 2.4,
@@ -1827,7 +1855,18 @@ def apply_preset(props, preset_key):
     # Temporarily disable auto_update during batch assignment to avoid multiple regenerations
     old_auto = props.auto_update
     props.auto_update = False
-    
+
+    # Fortification props are optional; clear them first so a preset that omits
+    # them does not inherit the previous building's palisade/banners/battlements.
+    for _fk in ('has_palisade', 'palisade_style', 'palisade_height', 'palisade_offset',
+                'has_banners', 'banner_count', 'has_battlements', 'battlement_style',
+                'has_military_props', 'military_props_count'):
+        if hasattr(props, _fk):
+            try:
+                props.property_unset(_fk)
+            except Exception:
+                pass
+
     # Assign archetype
     arch = ARCHETYPE_MAP.get(preset_key, 'NONE')
     if hasattr(props, 'building_archetype'):

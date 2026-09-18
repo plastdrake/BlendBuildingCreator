@@ -9,6 +9,7 @@ plank ramp + paired railings duplicated in both.
 import math
 from ..mesh_utils import create_beveled_box
 from ..railing import build_railing
+from .battlement import build_battlement_run
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_CUT_STONE,
     MAT_INDEX_WOOD, MAT_INDEX_TIMBER_FRAME,
@@ -34,7 +35,8 @@ def _sloped_railings(bm, cx, width, top_y, foot_y, deck_top_z):
 
 def build_rampart_walk(bm, side_sgn, wall_face_x, deck_cy, deck_len=7.0,
                        deck_top_z=3.7, width=2.3, tier='TIER_3', ramp_at_back=False,
-                       ramp_outer=False, ramp_cx=None):
+                       ramp_outer=False, ramp_cx=None, battlements=False,
+                       battlement_style='STONE'):
     """Elevated timber rampart walk: plank deck at upper-floor level on wooden
     posts, outer + end timber parapets, and a sloped plank ramp descending to
     grade. The ramp is placed at the front end when the walk starts at the
@@ -63,7 +65,11 @@ def build_rampart_walk(bm, side_sgn, wall_face_x, deck_cy, deck_len=7.0,
     # Detailed timber guard railings (outer edge + both ends) instead of a
     # solid plank wall. The ramp end is left open so the ramp meets the deck.
     rail_x = outer_x - side_sgn * 0.12
-    build_railing(bm, (rail_x, y0), (rail_x, y1), deck_top_z, height=1.05)
+    if battlements:
+        build_battlement_run(bm, (rail_x, y0), (rail_x, y1), deck_top_z,
+                             height=0.85, thickness=0.28, style=battlement_style)
+    else:
+        build_railing(bm, (rail_x, y0), (rail_x, y1), deck_top_z, height=1.05)
     for ey, is_ramp_end in ((y0 + 0.12, not ramp_at_back),
                             (y1 - 0.12, ramp_at_back)):
         if is_ramp_end:
@@ -131,7 +137,9 @@ def build_side_rampart_for_shape(bm, props, ctx):
                        deck_len=deck_y1 - deck_y0,
                        deck_top_z=deck_top,
                        width=2.6, tier=getattr(props, 'material_tier', 'TIER_3'),
-                       ramp_at_back=False)
+                       ramp_at_back=False,
+                       battlements=bool(getattr(props, 'has_battlements', False)),
+                       battlement_style=getattr(props, 'battlement_style', 'STONE'))
 
 
 def build_entry_ramp(bm, door_x, front_y, z_floor=0.6, width=1.6, length=None,

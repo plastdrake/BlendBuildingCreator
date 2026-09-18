@@ -1068,6 +1068,96 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    # --- Fortifications: Palisade, Banners, Battlements, Military Props ---
+    has_palisade: BoolProperty(
+        name="Palisade Wall",
+        description="Pointed stake / picket stockade enclosing the compound with a front gate",
+        default=False,
+        update=on_property_updated
+    )
+
+    palisade_style: EnumProperty(
+        name="Palisade Style",
+        description="Stake profile of the stockade",
+        items=[
+            ('STAKES', "Rough Stakes", "Irregular pointed log stakes"),
+            ('PICKET', "Neat Picket", "Even tapered pickets with a backing rail"),
+        ],
+        default='STAKES',
+        update=on_property_updated
+    )
+
+    palisade_height: FloatProperty(
+        name="Palisade Height",
+        description="Height of the stockade stakes in meters",
+        min=1.4, max=3.2, default=2.3,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    palisade_offset: FloatProperty(
+        name="Palisade Offset",
+        description="Distance the stockade stands outside the building footprint",
+        min=0.8, max=8.0, default=3.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    has_banners: BoolProperty(
+        name="Banners",
+        description="Heraldic standard poles raised at the gate and compound corners",
+        default=False,
+        update=on_property_updated
+    )
+
+    banner_count: IntProperty(
+        name="Banner Count",
+        description="Number of banner poles to raise",
+        min=2, max=10, default=4,
+        update=on_property_updated
+    )
+
+    has_battlements: BoolProperty(
+        name="Crenellated Battlements",
+        description="Merlons and crenels capping the rampart walk",
+        default=False,
+        update=on_property_updated
+    )
+
+    battlement_style: EnumProperty(
+        name="Battlement Style",
+        description="Material of the crenellations",
+        items=[
+            ('STONE', "Stone Merlons", "Solid masonry merlons with cut-stone coping"),
+            ('TIMBER', "Timber Hoarding", "Boxed timber merlons on a plank rail"),
+        ],
+        default='STONE',
+        update=on_property_updated
+    )
+
+    has_military_props: BoolProperty(
+        name="Military Props",
+        description="Weapon racks, wall shields and training dummies in the yard",
+        default=False,
+        update=on_property_updated
+    )
+
+    military_props_count: IntProperty(
+        name="Prop Count",
+        description="Number of yard props (weapon rack / shield / training dummy) to place",
+        min=1, max=8, default=3,
+        update=on_property_updated
+    )
+
+    color_banner: FloatVectorProperty(
+        name="Banner Color",
+        subtype='COLOR',
+        size=4,
+        default=(0.55, 0.12, 0.12, 1.0),
+        min=0.0, max=1.0,
+        update=on_property_updated
+    )
+
     # --- Material Tier & Stylized Procedural Shaders ---
     material_tier: EnumProperty(
         name="Material Tier",
@@ -1281,3 +1371,4 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     custom_window_frame: PointerProperty(type=bpy.types.Material, name="Window Frame Mat", update=on_property_updated)
     custom_shutter: PointerProperty(type=bpy.types.Material, name="Shutter Mat", update=on_property_updated)
     custom_wall_brick: PointerProperty(type=bpy.types.Material, name="Exposed Brick Stucco Mat", update=on_property_updated)
+    custom_banner: PointerProperty(type=bpy.types.Material, name="Banner Mat", update=on_property_updated)

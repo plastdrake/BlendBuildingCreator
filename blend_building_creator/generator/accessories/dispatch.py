@@ -22,6 +22,9 @@ from .fisherman import build_fisherman_stilts
 from .bakery import build_bakery_oven
 from .crane import build_courtyard_crane
 from .mill import build_lumbermill_yard, build_treadwheel_sawmill, choose_entry_bay
+from .palisade import build_palisade_enclosure, compound_bounds
+from .banner import build_banner_pole
+from .military_props import build_military_props
 from ..openings import build_front_steps
 
 
@@ -176,6 +179,41 @@ def build_architectural_accessories(bm, props, ctx):
     _build_balconies(bm, props, ctx, tier)
     _build_pillared_overhang(bm, props, ctx, tier)
     _build_civic_landmarks(bm, props, ctx, tier)
+    _build_fortifications(bm, props, ctx)
+
+
+def _place_banners(bm, props, ctx):
+    """Raise banner poles around the compound (on the palisade line if present)."""
+    count = max(2, int(_prop(props, 'banner_count', 4)))
+    off = (_prop(props, 'palisade_offset', 3.0)
+           if _prop(props, 'has_palisade', False) else 1.2)
+    x_min, x_max, y_min, y_max = compound_bounds(ctx, off)
+    height = max(4.2, _prop(props, 'palisade_height', 2.3) + 2.2)
+    cands = [
+        (x_min, y_min, (1.0, 0.0)), (x_max, y_min, (-1.0, 0.0)),
+        (x_max, y_max, (-1.0, 0.0)), (x_min, y_max, (1.0, 0.0)),
+        ((x_min + x_max) * 0.5, y_min, (1.0, 0.0)),
+        ((x_min + x_max) * 0.5, y_max, (1.0, 0.0)),
+        (x_min, (y_min + y_max) * 0.5, (0.0, -1.0)),
+        (x_max, (y_min + y_max) * 0.5, (0.0, 1.0)),
+    ]
+    for i in range(count):
+        bx, by, d = cands[i % len(cands)]
+        build_banner_pole(bm, bx, by, 0.0, height=height, flag_dir=d)
+
+
+def _build_fortifications(bm, props, ctx):
+    """Palisade, banners and military yard props (reusable military modules)."""
+    if _prop(props, 'has_palisade', False):
+        build_palisade_enclosure(
+            bm, props, ctx,
+            height=_prop(props, 'palisade_height', 2.3),
+            style=_prop(props, 'palisade_style', 'STAKES'),
+            offset=_prop(props, 'palisade_offset', 3.0))
+    if _prop(props, 'has_military_props', False):
+        build_military_props(bm, props, ctx)
+    if _prop(props, 'has_banners', False):
+        _place_banners(bm, props, ctx)
 
 
 def build_archetype_accessories(bm, props, ctx, _loft_spec):
