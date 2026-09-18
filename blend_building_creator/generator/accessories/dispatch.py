@@ -22,7 +22,10 @@ from .fisherman import build_fisherman_stilts
 from .bakery import build_bakery_oven
 from .crane import build_courtyard_crane
 from .mill import build_lumbermill_yard, build_treadwheel_sawmill, choose_entry_bay
-from .palisade import build_palisade_enclosure, compound_bounds, fortification_offset
+from .palisade import (
+    build_palisade_enclosure, compound_bounds, fortification_offset,
+    fortification_depth_extra,
+)
 from .banner import build_banner_pole
 from .military_props import build_military_props
 from ..openings import build_front_steps
@@ -152,7 +155,15 @@ def _build_civic_landmarks(bm, props, ctx, tier):
                 attach_tuck=max(0.30, _wt),
                 plank_direction=ctx.plank_dir, seed=ctx.seed)
     if _prop(props, 'has_arched_porch', False):
-        build_arched_porch(bm, door_x=ctx.main_door_cx, front_y=ctx.main_door_yf,
+        # A jettied upper storey overhangs the ground-floor wall, so the porch
+        # must abut the outermost storey's face. Anchoring it to the ground
+        # wall would push the tall porch ridge up through the cantilever slab
+        # and into the interior. Tuck it under the jetty instead.
+        _porch_front = ctx.main_door_yf
+        _ptop = ctx.floor_wall_bounds.get(ctx.num_floors - 1)
+        if _ptop is not None and _ptop[2] < _porch_front:
+            _porch_front = _ptop[2]
+        build_arched_porch(bm, door_x=ctx.main_door_cx, front_y=_porch_front,
                            z_ground=0.0, z_floor=ctx.found_h,
                            tier=tier, plank_direction=ctx.plank_dir)
     if _prop(props, 'has_entry_ramp', False):
@@ -192,7 +203,8 @@ def _place_banners(bm, props, ctx):
     has_enclosure = (_prop(props, 'has_palisade', False)
                      or _prop(props, 'has_curtain_wall', False))
     off = fortification_offset(props) if has_enclosure else 1.2
-    x_min, x_max, y_min, y_max = compound_bounds(ctx, off)
+    x_min, x_max, y_min, y_max = compound_bounds(
+        ctx, off, fortification_depth_extra(props) if has_enclosure else 0.0)
     _is_curtain = _prop(props, 'has_curtain_wall', False)
     wall_h = (_prop(props, 'curtain_wall_height', 3.2)
               if _is_curtain
@@ -239,47 +251,32 @@ def _build_fortifications(bm, props, ctx):
         build_bastion_courtyard_towers(bm, props, ctx)
 
     # 2. Perimeter enclosure. A stone curtain wall supersedes the timber palisade.
-    enclosure_res = None
     is_curtain = _prop(props, 'has_curtain_wall', False)
     if is_curtain:
         from .curtain_wall import build_curtain_wall_enclosure
-        enclosure_res = build_curtain_wall_enclosure(bm, props, ctx)
+        build_curtain_wall_enclosure(bm, props, ctx)
     elif _prop(props, 'has_palisade', False):
-        enclosure_res = build_palisade_enclosure(
+        build_palisade_enclosure(
             bm, props, ctx,
             height=_prop(props, 'palisade_height', 2.3),
             style=_prop(props, 'palisade_style', 'STAKES'),
             offset=_prop(props, 'palisade_offset', 3.0))
 
-    # 3. Mounted round shields along the enclosure fence / curtain wall.
-    if (enclosure_res is not None
-            and _prop(props, 'has_mounted_shields', False)
-            and _prop(props, 'shield_placement', 'ALL') in ('PALISADE', 'ALL')):
-        from .shield import build_shield_row
-        x_min, x_max, y_min, y_max, g0, g1 = enclosure_res
-        wall_h = (_prop(props, 'curtain_wall_height', 3.2) if is_curtain
-                  else _prop(props, 'palisade_height', 2.3))
-        wall_t = _prop(props, 'curtain_wall_thickness', 0.55) if is_curtain else 0.10
-        # Mount shields high on the wall, clear above the arrow-slit heads, and
-        # space them widely so they read as sparse garrison heraldry.
-        sh_z = (wall_h - 0.70) if is_curtain else (wall_h * 0.62)
-        mount = (wall_t * 0.5 + 0.06) if is_curtain else 0.16
-        # Compute tower footprint clearance so shields never appear inside a tower
-        has_towers = _prop(props, 'has_bastion_towers', False)
-        t_size = _prop(props, 'bastion_tower_size', 3.2) if has_towers else 0.0
-        t_clear_front = t_size + 0.50 if has_towers else 0.0  # matches enclosure modules
-        t_clear_side = t_size * 0.5 + 0.45 if has_towers else 0.0
-        # Front run — skip both gate gap AND tower footprint zones at each end
-        build_shield_row(bm,
-                         (x_min + t_clear_front, y_min),
-                         (x_max - t_clear_front, y_min),
-                         sh_z, normal=(0.0, -1.0, 0.0), spacing=2.90,
-                         skip_gap=(g0, g1), mount_offset=mount)
-        # Side runs — start from py_min to avoid tower footprint at front corners
-        build_shield_row(bm, (x_min, y_min + t_clear_side), (x_min, y_max), sh_z,
-                         normal=(-1.0, 0.0, 0.0), spacing=3.20, mount_offset=mount)
-        build_shield_row(bm, (x_max, y_min + t_clear_side), (x_max, y_max), sh_z,
-                         normal=(1.0, 0.0, 0.0), spacing=3.20, mount_offset=mount)
+    # 3. A few mounted round shields flanking the main entrance only — no more
+    #    heraldry strung along the outer enclosure walls.
+    if _prop(props, 'has_mounted_shields', False):
+        from .shield import build_round_shield
+        door_half = _prop(props, 'door_width', 1.2) * 0.5
+        base_x = door_half + 0.90
+        n_each = 2 if is_curtain else 1
+        wall_face = ctx.main_door_yf - ctx.wall_t * 0.5 - 0.02
+        sh_z = ctx.found_h + 1.75
+        for s in (-1.0, 1.0):
+            for i in range(n_each):
+                sx = ctx.main_door_cx + s * (base_x + i * 0.85)
+                build_round_shield(bm, (sx, wall_face, sh_z),
+                                   normal=(0.0, -1.0, 0.0), radius=0.30,
+                                   pattern='QUARTERED' if i % 2 == 0 else 'SOLID')
 
 
     # 4. Military drill yard apparatus (archery targets, weapon rack, quintain)
@@ -290,34 +287,82 @@ def _build_fortifications(bm, props, ctx):
     if _prop(props, 'has_banners', False):
         _place_banners(bm, props, ctx)
 
-    # 6. Mounted Heraldic Crest / Crossed Swords (Concept 1 barracks)
+    # 6. Mounted heraldic gable banners (Concept 1 barracks)
     if _prop(props, 'has_gable_crest', False):
-        from .heraldic_crest import build_gable_heraldic_crest
-        wall_t = ctx.wall_t
-        num_fl = getattr(props, 'num_floors', 1)
-        fl_h = getattr(props, 'floor_height', 2.8)
-        found_h = getattr(props, 'foundation_height', 0.5)
-        c_scale = getattr(props, 'gable_crest_scale', 1.0)
-        c_style = getattr(props, 'gable_crest_style', 'CROSSED_SWORDS')
-        eave_z = found_h + num_fl * fl_h
-        # Use the TOP storey's jettied wall bounds so the crest sits proud of the
-        # real gable face instead of buried inside a cantilevered overhang.
-        _fb = ctx.floor_wall_bounds.get(num_fl - 1)
-        if _fb is None:
-            _fb = (-ctx.base_w * 0.5, ctx.base_w * 0.5,
-                   -ctx.base_d * 0.5, ctx.base_d * 0.5)
-        crest_z = eave_z + props.roof_height * 0.40
-        if ctx.is_rotated_roof:
-            # Ridge runs side-to-side, so the real gables are the left/right
-            # walls. Seat the crest up in the gable triangle where no window,
-            # door or eave can hide it (and the swords clear the roof).
-            build_gable_heraldic_crest(
-                bm, (_fb[0] - wall_t * 0.5 - 0.04, 0.0, crest_z),
-                normal=(-1.0, 0.0, 0.0), scale=c_scale, style=c_style)
-        else:
-            build_gable_heraldic_crest(
-                bm, (ctx.main_door_cx, _fb[2] - wall_t * 0.5 - 0.04, crest_z),
-                normal=(0.0, -1.0, 0.0), scale=c_scale, style=c_style)
+        _build_gable_crests(bm, props, ctx)
+
+
+def _build_gable_crests(bm, props, ctx):
+    """Mount a banner plaque on the main hall's gables and every wing gable.
+
+    The main ridge contributes two gable ends (front/back or left/right when the
+    roof is rotated) and each wing contributes its outer gable face; the inner
+    wing gable dies into the main roof so it is skipped.
+    """
+    from .heraldic_crest import build_gable_heraldic_crest
+    wall_t = ctx.wall_t
+    num_fl = getattr(props, 'num_floors', 1)
+    fl_h = getattr(props, 'floor_height', 2.8)
+    found_h = getattr(props, 'foundation_height', 0.5)
+    c_scale = getattr(props, 'gable_crest_scale', 1.0)
+    c_style = getattr(props, 'gable_crest_style', 'KITE_SHIELD')
+    roof_h = getattr(props, 'roof_height', 3.0)
+    # Sit the banner a little further off the gable face so the timber framing
+    # reads clearly in front of it rather than fighting the frame.
+    _off = wall_t * 0.5 + 0.08
+
+    # Main hall: top-storey jettied bounds so the banner sits proud of the real
+    # gable face instead of buried inside a cantilevered overhang.
+    eave_z = found_h + num_fl * fl_h
+    _fb = ctx.floor_wall_bounds.get(num_fl - 1)
+    if _fb is None:
+        _fb = (-ctx.base_w * 0.5, ctx.base_w * 0.5,
+               -ctx.base_d * 0.5, ctx.base_d * 0.5)
+    crest_z = eave_z + roof_h * 0.40 + 1.25
+    if ctx.is_rotated_roof:
+        # Ridge runs side-to-side: the real gables are the left/right walls.
+        build_gable_heraldic_crest(
+            bm, (_fb[0] - _off, 0.0, crest_z),
+            normal=(-1.0, 0.0, 0.0), scale=c_scale, style=c_style)
+        build_gable_heraldic_crest(
+            bm, (_fb[1] + _off, 0.0, crest_z),
+            normal=(1.0, 0.0, 0.0), scale=c_scale, style=c_style)
+    else:
+        build_gable_heraldic_crest(
+            bm, (ctx.main_door_cx, _fb[2] - _off, crest_z),
+            normal=(0.0, -1.0, 0.0), scale=c_scale, style=c_style)
+        build_gable_heraldic_crest(
+            bm, (ctx.main_door_cx, _fb[3] + _off, crest_z),
+            normal=(0.0, 1.0, 0.0), scale=c_scale, style=c_style)
+
+    # Wing gables (outer face only).
+    if not ctx.has_wing:
+        return
+    w_top_fl = min(ctx.wing_floors, num_fl)
+    w_fl_idx = w_top_fl - 1
+    w_top_z = found_h + w_top_fl * fl_h
+    _wr_scale = getattr(props, 'wing_roof_scale', 0.88)
+    w_roof_h = roof_h if ctx.wing_floors == num_fl else roof_h * _wr_scale
+    w_crest_z = w_top_z + w_roof_h * 0.40 + 1.25
+    for w in ctx.wings:
+        wb = (w.get('bounds_fl') or {}).get(w_fl_idx)
+        if wb is None:
+            continue
+        wx0, wx1, wy0, wy1 = wb
+        wall = w.get('wall')
+        if wall == 'FRONT':
+            loc = ((wx0 + wx1) * 0.5, wy0 - _off, w_crest_z)
+            nrm = (0.0, -1.0, 0.0)
+        elif wall == 'BACK':
+            loc = ((wx0 + wx1) * 0.5, wy1 + _off, w_crest_z)
+            nrm = (0.0, 1.0, 0.0)
+        elif wall == 'LEFT':
+            loc = (wx0 - _off, (wy0 + wy1) * 0.5, w_crest_z)
+            nrm = (-1.0, 0.0, 0.0)
+        else:  # RIGHT
+            loc = (wx1 + _off, (wy0 + wy1) * 0.5, w_crest_z)
+            nrm = (1.0, 0.0, 0.0)
+        build_gable_heraldic_crest(bm, loc, normal=nrm, scale=c_scale, style=c_style)
 
 
 def build_archetype_accessories(bm, props, ctx, _loft_spec):

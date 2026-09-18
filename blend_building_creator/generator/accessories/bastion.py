@@ -1,8 +1,11 @@
 """Reusable fortified corner bastion towers with hollow interiors and crenellated merlons.
 
 Based on fortress/citadel architecture:
-- Massive flared stone plinth (battered talus) at the exterior base.
-- Real walk-in hollow interior chamber with flagstone floor, ceiling timber joists, ladder, and wall torch.
+- Straight masonry base with the same cut-stone plinth band as the curtain wall
+  (the old flared talus did not line up with the wall and left a seam at the
+  inside corner).
+- Real walk-in hollow interior chamber with plank upper floor/ceiling and a
+  timber-framed hatch the access ladder climbs through, plus a wall torch.
 - Open arched courtyard entrance doorway with an inward-swung heavy timber door leaf (no palisade conflict).
 - Chamfered quoin corners and horizontal string courses to eliminate blockiness.
 - Real window slits (arrow loops): genuine through-holes cut into the shaft and
@@ -18,19 +21,20 @@ from ..walls import build_wall_with_opening
 from ..openings import build_arrow_slit
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_TIMBER,
-    MAT_INDEX_IRON, MAT_INDEX_WOOD,
+    MAT_INDEX_IRON, MAT_INDEX_WOOD, MAT_INDEX_FLOOR,
 )
-from .palisade import compound_bounds, fortification_offset
+from .palisade import (
+    compound_bounds, fortification_offset, fortification_depth_extra,
+)
 
 
 def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
-                        talus_height=2.2, talus_flare=0.55, roof_style='MERLONS',
+                        roof_style='MERLONS',
                         mat_index=MAT_INDEX_STONE, door_dir=(0.0, 1.0)):
     """A heavy fortified bastion tower with walk-in hollow interior, courtyard entrance,
     open rooftop stone platform with crenellated merlons, and chamfered quoin corners.
     """
     half_s = base_size * 0.5
-    flare_w = half_s + talus_flare
     wall_t = 0.38
     int_half = max(0.6, half_s - wall_t)
 
@@ -58,82 +62,52 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     deck_z = z_ground + deck_lz
 
     # -----------------------------------------------------------------------
-    # 1. Flared Stone Talus (Battered Base on 3 Exterior Faces)
+    # 1. Straight Masonry Base matching the Curtain Wall
     # -----------------------------------------------------------------------
-    # Courtyard face (+ly) is vertical for clean doorway; Rear (-ly), Left (-lx), Right (+lx) flare
+    # The old flared talus (battered base) never lined up with the curtain
+    # wall's straight plinth and left an open seam at the inside corner, so the
+    # shaft now rises straight from grade wearing the same cut-stone plinth.
     corner_signs = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
-    b_verts = []
-    for s_x, s_y in corner_signs:
-        fx = flare_w
-        fy = half_s if s_y > 0 else flare_w
-        b_verts.append(bm.verts.new(to_world(s_x * fx, s_y * fy, 0.0)))
-
-    t_verts = [
-        bm.verts.new(to_world(-half_s, -half_s, talus_height)),
-        bm.verts.new(to_world( half_s, -half_s, talus_height)),
-        bm.verts.new(to_world( half_s,  half_s, talus_height)),
-        bm.verts.new(to_world(-half_s,  half_s, talus_height)),
-    ]
-
+    plinth_h = 0.45
     uv_layer = bm.loops.layers.uv.verify()
 
-    # Build the 3 exterior battered faces only:
-    # i = 0: Rear (-ly) from (-1,-1) to (1,-1)
-    # i = 1: Right (+lx) from (1,-1) to (1,1)
-    # i = 3: Left (-lx) from (-1,1) to (-1,-1)
-    # (Face i = 2 is the Courtyard face (+ly), which is built as vertical walls around the doorway)
-    for i in (0, 1, 3):
-        nxt = (i + 1) % 4
-        f = bm.faces.new([b_verts[i], b_verts[nxt], t_verts[nxt], t_verts[i]])
-        f.material_index = mat_index
-        f.tag = False
-        # Calculate UV coordinates for seamless stone brick texture
-        for lp in f.loops:
-            v_local = lp.vert.co - Vector((x, y, z_ground))
-            if i == 0:
-                u = (d_right.dot(v_local)) * 0.70
-            elif i == 1:
-                u = (d_fwd.dot(v_local)) * 0.70
-            else:
-                u = (-d_fwd.dot(v_local)) * 0.70
-            v = v_local.z * 0.70
-            lp[uv_layer].uv = Vector((u, v))
-
-    # Bottom foundation floor plate under the talus
-    f_bot = bm.faces.new([b_verts[3], b_verts[2], b_verts[1], b_verts[0]])
+    base_v = [bm.verts.new(to_world(s_x * half_s, s_y * half_s, 0.0))
+              for s_x, s_y in corner_signs]
+    f_bot = bm.faces.new(base_v)
     f_bot.material_index = mat_index
     for lp in f_bot.loops:
         lp[uv_layer].uv = Vector((lp.vert.co.x * 0.5, lp.vert.co.y * 0.5))
 
-    # Chunky cut-stone quoins along exterior base corners of the talus
-    for s_x, s_y in ((-1, -1), (1, -1)):
-        q_pos = to_world(s_x * (flare_w - 0.15), s_y * (flare_w - 0.15), 0.18)
-        qf = create_beveled_box(bm, size=(0.48, 0.48, 0.36), location=q_pos,
+    # Cut-stone plinth band (0.17 proud) wrapping all four faces, broken across
+    # the doorway on the courtyard face exactly like the wall plinth is broken
+    # across the gate. Every strip is run *past* the corner by pl_t so the four
+    # strips overlap in solid 0.34 x 0.34 corner blocks: separate strips that
+    # only just met at the corners left a notch of bare masonry showing.
+    pl_t = 0.34
+    pl_reach = half_s + pl_t
+    for lx, ly, sx, sy in ((0.0, -half_s, base_size + pl_t * 2.0, pl_t),
+                           (-half_s, 0.0, pl_t, base_size + pl_t * 2.0),
+                           (half_s, 0.0, pl_t, base_size + pl_t * 2.0)):
+        pf = create_beveled_box(bm, size=(sx, sy, plinth_h),
+                                location=to_world(lx, ly, plinth_h * 0.5),
                                 rotation=(0.0, 0.0, door_yaw),
                                 mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-        for f in qf:
+        for f in pf:
             f.tag = False
-
-    # Cut-stone torus stringer belt course atop the talus
-    belt_lz = talus_height + 0.08
-    belt_f = create_beveled_box(bm, size=(base_size + 0.18, base_size + 0.18, 0.16),
-                                location=to_world(0.0, 0.0, belt_lz),
+    door_w_pl = 1.05
+    pl_jamb = pl_reach - door_w_pl * 0.5
+    for s_p in (-1.0, 1.0):
+        pf = create_beveled_box(bm, size=(pl_jamb, pl_t, plinth_h),
+                                location=to_world(s_p * (door_w_pl * 0.5 + pl_jamb * 0.5),
+                                                  half_s, plinth_h * 0.5),
                                 rotation=(0.0, 0.0, door_yaw),
                                 mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-    for f in belt_f:
-        f.tag = False
+        for f in pf:
+            f.tag = False
 
     # -----------------------------------------------------------------------
     # 2. Real Hollow Walk-In Interior Chamber & 4 Walls
     # -----------------------------------------------------------------------
-    # Ground floor cut-stone flagstone slab inside the chamber
-    fl_slab = create_beveled_box(bm, size=(int_half * 2.0 - 0.04, int_half * 2.0 - 0.04, 0.14),
-                                location=to_world(0.0, 0.0, 0.07),
-                                rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
-    for f in fl_slab:
-        f.tag = False
-
     # Heavy ceiling timber joists overhead inside the chamber
     joist_lz = 2.85
     for j_off in (-0.70, 0.0, 0.70):
@@ -144,7 +118,49 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
         for f in jf:
             f.tag = True
 
-    shaft_bot_lz = belt_lz + 0.08
+    # Plank upper floor/ceiling over the joists with a hatch the ladder climbs
+    # through, so the ladder reads as rising into a hole rather than a solid slab.
+    floor_lz = joist_lz + 0.14
+    floor_t = 0.07
+    hole_c_lx = int_half * 0.50
+    hole_c_ly = -int_half * 0.55
+    hole_half = 0.38
+    ih = int_half
+    floor_segs = [
+        (-ih, hole_c_lx - hole_half, -ih, ih),
+        (hole_c_lx + hole_half, ih, -ih, ih),
+        (hole_c_lx - hole_half, hole_c_lx + hole_half, hole_c_ly + hole_half, ih),
+        (hole_c_lx - hole_half, hole_c_lx + hole_half, -ih, hole_c_ly - hole_half),
+    ]
+    for lx0, lx1, ly0, ly1 in floor_segs:
+        if lx1 - lx0 < 0.02 or ly1 - ly0 < 0.02:
+            continue
+        ff = create_beveled_box(bm, size=(lx1 - lx0, ly1 - ly0, floor_t),
+                                location=to_world((lx0 + lx1) * 0.5,
+                                                  (ly0 + ly1) * 0.5, floor_lz),
+                                rotation=(0.0, 0.0, door_yaw),
+                                mat_index=MAT_INDEX_FLOOR, bevel_amount=0.006)
+        for f in ff:
+            f.tag = True
+
+    # Timber frame ringing the hatch opening.
+    fr_t = 0.11
+    fr_h = 0.10
+    fr_z = floor_lz + floor_t * 0.5 + fr_h * 0.5
+    for flx, fly, fsx, fsy in (
+            (hole_c_lx, hole_c_ly - hole_half - fr_t * 0.5, hole_half * 2.0 + fr_t * 2.0, fr_t),
+            (hole_c_lx, hole_c_ly + hole_half + fr_t * 0.5, hole_half * 2.0 + fr_t * 2.0, fr_t),
+            (hole_c_lx - hole_half - fr_t * 0.5, hole_c_ly, fr_t, hole_half * 2.0),
+            (hole_c_lx + hole_half + fr_t * 0.5, hole_c_ly, fr_t, hole_half * 2.0)):
+        ffr = create_beveled_box(bm, size=(fsx, fsy, fr_h),
+                                 location=to_world(flx, fly, fr_z),
+                                 rotation=(0.0, 0.0, door_yaw),
+                                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+        for f in ffr:
+            f.tag = True
+
+
+    shaft_bot_lz = 0.0
     shaft_wall_h = deck_lz - shaft_bot_lz
 
     # Window-slit schedule: two real through-slits per exterior face, placed
@@ -315,9 +331,9 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     # -----------------------------------------------------------------------
     # 4. Interior Furnishings (Access Ladder & Wall Torch)
     # -----------------------------------------------------------------------
-    # Sturdy timber access ladder leaning against back-right corner towards ceiling joists
-    lad_bottom = to_world(int_half * 0.55, -int_half * 0.50, 0.07)
-    lad_top = to_world(int_half * 0.55, -int_half * 0.82, joist_lz + 0.10)
+    # Sturdy timber access ladder climbing through the hatch in the upper floor.
+    lad_bottom = to_world(hole_c_lx + 0.24, hole_c_ly + int_half * 0.72, 0.02)
+    lad_top = to_world(hole_c_lx, hole_c_ly, floor_lz + 0.50)
     lad_vec = lad_top - lad_bottom
     lad_len = lad_vec.length
     lad_mid = (lad_bottom + lad_top) * 0.5
@@ -546,7 +562,7 @@ def build_bastion_courtyard_towers(bm, props, ctx):
     so the courtyard-facing door is never blocked by the side palisades.
     """
     off = fortification_offset(props)
-    x_min, x_max, y_min, y_max = compound_bounds(ctx, off)
+    x_min, x_max, y_min, y_max = compound_bounds(ctx, off, fortification_depth_extra(props))
     t_size = getattr(props, 'bastion_tower_size', 3.2)
     t_height = getattr(props, 'bastion_tower_height', 8.2)
     t_half = t_size * 0.5
@@ -567,6 +583,6 @@ def build_bastion_courtyard_towers(bm, props, ctx):
 
     for cx, cy, d_dir in corners:
         build_bastion_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,
-                            height=t_height, talus_height=2.2, talus_flare=0.55,
-                            mat_index=MAT_INDEX_STONE, door_dir=d_dir)
+                            height=t_height, mat_index=MAT_INDEX_STONE,
+                            door_dir=d_dir)
 

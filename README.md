@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.11.2-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.11.3-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 27 ready-made presets across three material tiers.
@@ -77,6 +77,14 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.11.3
+
+- **Painted pell bullseye:** the training dummy's paper plate and lashing cords are gone; the ring is now a painted red circle that conforms to the barrel, so it can never read as a detached plate (the paper panel was removed entirely).
+- **Heritage banners:** the gable crest is a single flat heraldic banner hanging behind the timber gable framing (was a kite shield), pushed clear of the roof and scaled up. Shields now flank only the main entrance instead of ringing the outer walls.
+- **Cleaner gatehouse:** the entrance piers are pulled in and deepened, and the lintel deepened, so the timber frame reaches through the wall without z-fighting the masonry and covers the stone head of the opening.
+- **Seamless wall-to-tower plinths:** the corner bastion's cut-stone plinth is a continuous ring and every curtain-wall run tucks its plinth under the tower band, closing the notch of bare masonry where the wall met the tower.
+- **Tier 3 rampart walk restored:** the elevated side rampart walk and its long descent ramp are back on the citadel barracks, running between the building and the curtain wall.
 
 ## What's new in 1.11.2
 

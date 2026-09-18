@@ -7,7 +7,7 @@ curved sway roofs, timber framing, and rich stylized shaders.
 bl_info = {
     "name": "Stylized Fantasy Building Generator",
     "author": "Stylized 3D Studio",
-    "version": (1, 11, 2),
+    "version": (1, 11, 3),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar (N) > Fantasy Building",
     "description": "Quickly create and iterate stylized fantasy buildings with walk-in interiors and materials",

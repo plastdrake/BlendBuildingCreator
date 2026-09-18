@@ -597,6 +597,15 @@ def plan_outcrop_spread(props, base_w, base_d, num_floors, wings, has_wing,
                     and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT'):
                 _spans.setdefault('RIGHT', []).append(
                     (-_dw * 0.5 - 0.70, _dw * 0.5 + 0.70))
+        if (getattr(props, 'has_arched_porch', False) and not open_timber
+                and _f <= 1):
+            # Keep outcrops well off the entry porch hood on the ground and first
+            # storeys (its ridge rises past the first-floor level). The span is
+            # the porch roof half-width plus its eave overhang plus a clear gap,
+            # so outcrops land in a safe slot rather than crowding the roof.
+            _porch_half = 1.5 + 0.12 + 0.30 + 0.75
+            _spans.setdefault('FRONT', []).append(
+                (main_door_cx - _porch_half, main_door_cx + _porch_half))
         if getattr(props, 'has_corner_turrets', False) and not open_timber:
             _thalf = max(1.0, min(2.0, getattr(props, 'corner_turret_size', 1.35)))
             _tw = min(2.0 * _thalf, _hxb)

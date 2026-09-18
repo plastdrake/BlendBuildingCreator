@@ -1200,7 +1200,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
 
     has_gable_crest: BoolProperty(
         name="Gable Heraldic Crest",
-        description="Mount an ornamental heraldic heater shield with crossed broadswords on the facade/gable",
+        description="Mount an ornamental heraldic kite-shield plaque on every gable facade",
         default=False,
         update=on_property_updated
     )
@@ -1209,10 +1209,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Crest Style",
         description="Style of the mounted heraldic crest",
         items=[
-            ('CROSSED_SWORDS', "Crossed Swords", "Two crossed broadswords behind a heater shield"),
-            ('SHIELD_ONLY', "Shield Plaque", "Ornamental heraldic shield plaque only"),
+            ('KITE_SHIELD', "Kite Shield", "Rounded heraldic kite-shield plaque"),
         ],
-        default='CROSSED_SWORDS',
+        default='KITE_SHIELD',
         update=on_property_updated
     )
 
@@ -1280,6 +1279,14 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Curtain Offset",
         description="Distance the curtain wall stands outside the building footprint",
         min=1.5, max=8.0, default=3.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    curtain_wall_depth_extra: FloatProperty(
+        name="Curtain Depth Extra",
+        description="Extra distance to push the rear curtain wall back beyond the normal offset",
+        min=0.0, max=6.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )

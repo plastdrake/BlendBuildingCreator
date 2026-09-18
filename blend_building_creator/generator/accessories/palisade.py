@@ -11,15 +11,26 @@ from ..mesh_utils import create_beveled_box
 from ..materials import MAT_INDEX_LOG, MAT_INDEX_TIMBER, MAT_INDEX_TIMBER_FRAME
 
 
-def compound_bounds(ctx, offset):
-    """Axis-aligned bounds enclosing the whole building (main + wings) + offset."""
+def compound_bounds(ctx, offset, depth_extra=0.0):
+    """Axis-aligned bounds enclosing the whole building (main + wings) + offset.
+
+    ``depth_extra`` pushes only the rear (+Y) boundary further out, so the rear
+    wall can be moved back without growing the compound in X.
+    """
     x_min, x_max = -ctx.base_w * 0.5, ctx.base_w * 0.5
     y_min, y_max = -ctx.base_d * 0.5, ctx.base_d * 0.5
     for w in ctx.wings:
         b = w['base']
         x_min, x_max = min(x_min, b[0]), max(x_max, b[1])
         y_min, y_max = min(y_min, b[2]), max(y_max, b[3])
-    return x_min - offset, x_max + offset, y_min - offset, y_max + offset
+    return x_min - offset, x_max + offset, y_min - offset, y_max + offset + depth_extra
+
+
+def fortification_depth_extra(props):
+    """Rear-depth extension of the enclosure (curtain wall only)."""
+    if getattr(props, 'has_curtain_wall', False):
+        return getattr(props, 'curtain_wall_depth_extra', 0.0)
+    return 0.0
 
 
 def fortification_offset(props):

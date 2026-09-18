@@ -18,9 +18,11 @@ import math
 from ..mesh_utils import create_beveled_box
 from ..walls import build_wall_with_opening
 from ..openings import build_arrow_slit
-from ..materials import MAT_INDEX_STONE, MAT_INDEX_CUT_STONE
+from ..materials import MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_TIMBER
 from .battlement import build_battlement_run
-from .palisade import compound_bounds, fortification_offset
+from .palisade import (
+    compound_bounds, fortification_offset, fortification_depth_extra,
+)
 
 
 def _subtract_gaps(total, gaps):
@@ -44,13 +46,19 @@ def _subtract_gaps(total, gaps):
 def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
                            height=3.2, thickness=0.55, plinth_h=0.45,
                            walk_width=0.95, merlon_h=0.78,
-                           slits=True, slit_spacing=3.0, gate=None, seed=42):
+                           slits=True, slit_spacing=3.0, gate=None,
+                           plinth_end=(0.0, 0.0), seed=42):
     """Build one straight curtain-wall run between two (x, y) points.
 
     ``outward`` is the horizontal normal the merlons and arrow slits face.
     ``gate`` is an optional ``{'u0', 'u1', 'h'}`` gate opening: the plinth is
     broken across it, the wall keeps a lintel band above it (via the wall
     builder), and the wall-walk and battlements run straight over the top.
+
+    ``plinth_end`` shifts the plinth in (+) or out (-) at the start/end of the
+    run. Where a run buries its head inside a corner bastion the caller pushes
+    the plinth a little further in so it laps well under the tower's own plinth
+    band rather than stopping flush against it (which read as a notch).
     """
     x1, y1 = p_start
     x2, y2 = p_end
@@ -75,6 +83,12 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
     if gate is not None:
         gate_gap = (min(gate['u0'], gate['u1']), max(gate['u0'], gate['u1']))
     plinth_spans = _subtract_gaps(length, [gate_gap] if gate_gap else None)
+    if plinth_end and plinth_spans:
+        s_trim, e_trim = plinth_end
+        spans = list(plinth_spans)
+        spans[0] = (spans[0][0] + s_trim, spans[0][1])
+        spans[-1] = (spans[-1][0], spans[-1][1] - e_trim)
+        plinth_spans = spans
     walk_spans = [(0.0, length)]
 
     # 1. Battered cut-stone plinth (broken only across the gate).
@@ -156,30 +170,37 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
     on = math.hypot(ox, oy)
     if on > 1e-5:
         ox, oy = ox / on, oy / on
-    ang = math.atan2(oy, ox)
     tx, ty = -oy, ox            # wall tangent
-    half_outer = gap_w * 0.5 + 0.34
+    # Rotate the frame members about the *wall tangent* (not the outward normal)
+    # or every box ends up turned 90 degrees across the gate.
+    ang = math.atan2(ty, tx)
+    # Pull the piers in so their inner faces cover the masonry reveal at the
+    # edge of the opening, and keep them low and plain (no cap blocks) so the
+    # lintel alone closes the top of the frame.
+    half_outer = gap_w * 0.5 + 0.22
+    # Push the whole frame proud of the wall face so it is not half-buried in
+    # the masonry, and dress it in timber to read as a gate frame.
+    push = 0.12
+    # Deep members: the frame reaches well through the wall so none of its
+    # faces land coplanar with the masonry (which z-fights) and the timber
+    # covers the recessed stone reveal of the opening.
+    frame_depth = thickness + 0.40
 
     for s in (-1.0, 1.0):
-        px = cx + tx * (s * half_outer)
-        py = cy + ty * (s * half_outer)
-        pier_h = gate_h + 0.55
-        create_beveled_box(bm, size=(0.58, thickness + 0.20, pier_h),
+        px = cx + tx * (s * half_outer) + ox * push
+        py = cy + ty * (s * half_outer) + oy * push
+        pier_h = gate_h + 0.20
+        create_beveled_box(bm, size=(0.62, frame_depth, pier_h),
                            location=(px, py, ground_z + pier_h * 0.5),
                            rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-        create_beveled_box(bm, size=(0.70, thickness + 0.30, 0.14),
-                           location=(px, py, ground_z + pier_h + 0.07),
-                           rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.018)
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
 
-    # Slim lintel band across the opening, flush with the masonry above. A bulky
-    # projecting lintel + keystone boss read as a random slab over the gate, so
-    # only a shallow band is left proud of the wall here.
-    create_beveled_box(bm, size=(gap_w + 0.52, thickness + 0.08, 0.26),
-                       location=(cx, cy, ground_z + gate_h + 0.13),
+    # Deep lintel band across the opening, seated proud of the wall face and
+    # reaching back through the wall so it hides the stone head of the opening.
+    create_beveled_box(bm, size=(gap_w + 0.52, frame_depth, 0.32),
+                       location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.16),
                        rotation=(0.0, 0.0, ang),
-                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
 
 
 def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
@@ -191,7 +212,8 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
     Returns (x_min, x_max, y_min, y_max, gate_u0_world, gate_u1_world).
     """
     off = offset if offset is not None else fortification_offset(props)
-    x_min, x_max, y_min, y_max = compound_bounds(ctx, off)
+    x_min, x_max, y_min, y_max = compound_bounds(
+        ctx, off, fortification_depth_extra(props))
     gate_cx = ctx.main_door_cx
     gate_half = max(1.35, (getattr(props, 'door_width', 1.2) + 1.6) * 0.5)
     g0, g1 = gate_cx - gate_half, gate_cx + gate_half
@@ -216,20 +238,27 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
 
     # Front run with the gate opening.
     front_u0 = x_min + clear_x_f
+    # Where a run buries its head inside a bastion footprint, run the plinth a
+    # little further in as well so its end face sits well under the tower's own
+    # plinth band instead of stopping flush against it (which read as a notch).
+    p_ext = 0.12
+    pt_f = -p_ext if has_towers else 0.0
+    pt_b = -p_ext if has_back else 0.0
     build_curtain_wall_run(
         bm, (front_u0, y_min), (x_max - clear_x_f, y_min), (0.0, -1.0), 0.0, H, T,
-        gate={'u0': g0 - front_u0, 'u1': g1 - front_u0, 'h': gate_h}, seed=ctx.seed)
+        gate={'u0': g0 - front_u0, 'u1': g1 - front_u0, 'h': gate_h},
+        plinth_end=(pt_f, pt_f), seed=ctx.seed)
     # Back run.
     build_curtain_wall_run(
         bm, (x_min + clear_x_b, y_max), (x_max - clear_x_b, y_max), (0.0, 1.0), 0.0, H, T,
-        seed=ctx.seed + 1)
+        plinth_end=(pt_b, pt_b), seed=ctx.seed + 1)
     # Left and right runs, clearing the tower footprints at front and back.
     build_curtain_wall_run(
         bm, (x_min, y_min + clear_y_f), (x_min, y_max - clear_y_b), (-1.0, 0.0), 0.0, H, T,
-        seed=ctx.seed + 2)
+        plinth_end=(pt_f, pt_b), seed=ctx.seed + 2)
     build_curtain_wall_run(
         bm, (x_max, y_min + clear_y_f), (x_max, y_max - clear_y_b), (1.0, 0.0), 0.0, H, T,
-        seed=ctx.seed + 3)
+        plinth_end=(pt_f, pt_b), seed=ctx.seed + 3)
 
     # Gatehouse dressing over the front opening.
     build_gate_house(bm, gate_cx, y_min, (0.0, -1.0), g1 - g0, 0.0, T, gate_h=gate_h)

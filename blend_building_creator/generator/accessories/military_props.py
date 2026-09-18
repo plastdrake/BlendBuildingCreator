@@ -26,7 +26,7 @@ def build_shield_mount(bm, x, y, z, normal=(0.0, -1.0, 0.0), r=0.34):
 
 
 def _painted_disc(bm, center, normal, radius, segments=18, dome=0.004,
-                  surface_radius=None, n_rings=None):
+                  surface_radius=None, n_rings=None, uv_radius=None):
     """A painted scoring-ring disc facing ``normal``, with radial UVs for the
     dedicated target material.
 
@@ -35,6 +35,9 @@ def _painted_disc(bm, center, normal, radius, segments=18, dome=0.004,
     (+``dome``). A single flat fan would cut *inside* the curved surface between
     the raised centre and rim and appear half-embedded, so multiple rings keep
     the whole bullseye proud of the barrel.
+
+    ``uv_radius`` clamps every loop to a single ring of the target shader, so the
+    whole disc samples one flat colour (used to paint a plain red circle).
     """
     fn = Vector(normal).normalized()
     up_ref = Vector((0.0, 0.0, 1.0)) if abs(fn.z) <= 0.95 else Vector((0.0, 1.0, 0.0))
@@ -49,12 +52,21 @@ def _painted_disc(bm, center, normal, radius, segments=18, dome=0.004,
         n_rings = 4
     n_rings = max(1, int(n_rings))
 
-    def off(rho):
+    def off(rho, a):
         if surface_radius is None:
             return 0.0
-        return math.sqrt(max(0.0, surface_radius * surface_radius - rho * rho)) + dome
+        # Conform to a vertical cylinder: depth depends on the *horizontal*
+        # offset (rho*cos a) alone. Using the full radius here would build a
+        # sphere cap instead, burying the top and bottom of the disc in the
+        # barrel so only a thin horizontal band stayed visible.
+        u = rho * math.cos(a)
+        return math.sqrt(max(0.0, surface_radius * surface_radius - u * u)) + dome
 
     def uv_at(rho, a):
+        if uv_radius is not None:
+            # Pin every loop to one ring of the shader so the disc is a single
+            # flat colour (a painted circle) instead of concentric rings.
+            return Vector((0.5 + uv_radius, 0.5))
         f = rho / radius
         return Vector((0.5 + 0.5 * f * math.cos(a), 0.5 + 0.5 * f * math.sin(a)))
 
@@ -65,7 +77,7 @@ def _painted_disc(bm, center, normal, radius, segments=18, dome=0.004,
         row = []
         for i in range(segments):
             a = 2.0 * math.pi * i / segments
-            p = c + fn * off(rho) + right * (rho * math.cos(a)) + up * (rho * math.sin(a))
+            p = c + fn * off(rho, a) + right * (rho * math.cos(a)) + up * (rho * math.sin(a))
             row.append(bm.verts.new(p))
         rings.append(row)
 
@@ -78,7 +90,7 @@ def _painted_disc(bm, center, normal, radius, segments=18, dome=0.004,
         f = bm.faces.new([center_v, rings[1][i], rings[1][nxt]])
         f.material_index = MAT_INDEX_TARGET
         f.tag = True
-        f.loops[0][uv_layer].uv = Vector((0.5, 0.5))
+        f.loops[0][uv_layer].uv = uv_at(0.0, 0.0)
         f.loops[1][uv_layer].uv = uv_at(r1, a0)
         f.loops[2][uv_layer].uv = uv_at(r1, a1)
 
@@ -379,58 +391,6 @@ def build_weapon_rack(bm, x, y, z_ground=0.0, ang=0.0):
             f.tag = True
 
 
-def _paper_target_panel(bm, center, right, up, fwd, size=0.38, thickness=0.014):
-    """A square paper scoring target lashed onto the front of a pell.
-
-    Built as a thin flat plate held proud of the curved barrel (so it can never
-    read as embedded), with corner cords and knots lashing it around the straw.
-    The front face samples the dedicated ring shader through square radial UVs.
-    """
-    c = Vector(center)
-    half = size * 0.5
-    f_front = 0.325
-    f_back = f_front - thickness
-    per = [(-1, -1), (-1, 1), (1, 1), (1, -1)]   # CCW seen from the front
-    front_v = [bm.verts.new(c + right * (sl * half) + up * (su * half) + fwd * f_front)
-               for sl, su in per]
-    back_v = [bm.verts.new(c + right * (sl * half) + up * (su * half) + fwd * f_back)
-              for sl, su in per]
-
-    uvl = bm.loops.layers.uv.verify()
-    face = bm.faces.new(front_v)
-    face.material_index = MAT_INDEX_TARGET
-    face.tag = True
-    for lp, (sl, su) in zip(face.loops, per):
-        lp[uvl].uv = Vector((0.5 + 0.45 * sl, 0.5 + 0.45 * su))
-
-    back = bm.faces.new(list(reversed(back_v)))
-    back.material_index = MAT_INDEX_PLASTER
-    back.tag = True
-    for i in range(4):
-        j = (i + 1) % 4
-        ef = bm.faces.new([front_v[i], back_v[i], back_v[j], front_v[j]])
-        ef.material_index = MAT_INDEX_PLASTER
-        ef.tag = True
-
-    # Corner cords lashing the paper around the barrel, with little knots.
-    for sl, su in per:
-        corner = c + right * (sl * half) + up * (su * half) + fwd * f_front
-        anchor = c + right * (sl * 0.285) + up * (su * 0.16) + fwd * 0.082
-        d = anchor - corner
-        rot = Vector((0.0, 0.0, 1.0)).rotation_difference(d.normalized()).to_euler()
-        cord = create_cylinder(bm, radius=0.009, height=d.length, segments=6,
-                               location=(corner + anchor) * 0.5, rotation=rot,
-                               mat_index=MAT_INDEX_TIMBER)
-        for ff in cord:
-            ff.tag = True
-        knot = create_torus_ring(bm, location=corner, rotation=rot,
-                                 major_radius=0.022, minor_radius=0.008,
-                                 major_segments=8, minor_segments=5,
-                                 mat_index=MAT_INDEX_TIMBER)
-        for ff in knot:
-            ff.tag = True
-
-
 def build_training_dummy(bm, x, y, z_ground=0.0, ang=0.0):
     """A padded training pell on a timber stake (reference-accurate).
 
@@ -502,15 +462,20 @@ def build_training_dummy(bm, x, y, z_ground=0.0, ang=0.0):
         for f in brf:
             f.tag = True
 
-    # 7. Square paper target lashed onto the chest (clearly a separate object,
-    #    not a painted spot that can read as sunk into the barrel).
-    _paper_target_panel(bm, Vector((x, y, z0)), right, Vector((0.0, 0.0, 1.0)),
-                        fwd, size=0.38)
+    # 7. Painted red target circle on the belly, conforming to the barrel so it
+    #    reads as painted-on straw rather than a separate lashed-on paper plate.
+    #    Sits below the cross arms and above the hem rope so it stays unoccluded.
+    _R = 0.30
+    _painted_disc(bm, Vector((x, y, z0 - 0.06)), fwd, 0.15, segments=24, dome=0.004,
+                  surface_radius=_R, n_rings=3, uv_radius=0.12)
 
-    # 8. Spent arrows sticking out of the torso at dynamic angles.
+    # 8. Spent arrows sticking out of the torso at dynamic angles. The butt is
+    #    seated inside the barrel surface at that lateral offset (sqrt profile),
+    #    so every shaft emerges through the straw instead of floating in front.
     arrow_specs = [(-0.15, 0.14, -1.0), (0.09, -0.06, 1.0), (0.20, 0.12, 1.0)]
     for hx, hz, side in arrow_specs:
-        base = Vector((x, y, z0 + hz)) + fwd * 0.27 + right * hx
+        surf = math.sqrt(max(0.0, _R * _R - hx * hx))
+        base = Vector((x, y, z0 + hz)) + right * hx + fwd * (surf - 0.06)
         adir = (fwd * 0.55 + Vector((0.0, 0.0, 1.0)) * 0.5
                 + right * (0.35 * side)).normalized()
         alen = 0.34
@@ -602,8 +567,20 @@ def build_military_props(bm, props, ctx):
             build_weapon_rack(bm, rx, rack_y, 0.0, ang=0.0)
 
     # Mounted heraldic wall shield above the main entrance (never over a window).
+    # Shrink it to the headroom between the door head and the storey above, and
+    # skip it entirely when even a small plaque would clip the ceiling/floor.
     door_cx = ctx.main_door_cx
     door_h = getattr(props, 'door_height', 2.1)
-    shield_z = found_h + door_h + 0.36
+    door_head = found_h + door_h
+    radius = 0.34
+    shield_z = door_head + 0.36
+    if ctx.num_floors >= 2:
+        floor_above = found_h + getattr(props, 'floor_height', 2.8)
+        head_room = floor_above - door_head
+        if shield_z + radius + 0.06 > floor_above:
+            radius = (head_room - 0.12) * 0.5
+            if radius < 0.18:
+                return
+            shield_z = door_head + head_room * 0.5
     build_round_shield(bm, (door_cx, main_front_y - 0.02, shield_z),
-                       normal=(0.0, -1.0, 0.0), radius=0.34, pattern='QUARTERED')
+                       normal=(0.0, -1.0, 0.0), radius=radius, pattern='QUARTERED')
