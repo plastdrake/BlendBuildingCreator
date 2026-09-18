@@ -12,6 +12,8 @@ targets = [
     os.path.join(blender_root, "5.1", "extensions", "user_default", "blend_building_creator"),
     os.path.join(blender_root, "5.0", "extensions", "user_default", "blend_building_creator"),
     os.path.join(blender_root, "4.4", "extensions", "user_default", "blend_building_creator"),
+    os.path.join(blender_root, "4.3", "extensions", "user_default", "blend_building_creator"),
+    os.path.join(blender_root, "4.2", "extensions", "user_default", "blend_building_creator"),
 ]
 
 # Legacy add-on copies with the same module name conflict with the extension and
@@ -21,6 +23,8 @@ legacy_dupes = [
     os.path.join(blender_root, "5.1", "scripts", "addons", "blend_building_creator"),
     os.path.join(blender_root, "5.0", "scripts", "addons", "blend_building_creator"),
     os.path.join(blender_root, "4.4", "scripts", "addons", "blend_building_creator"),
+    os.path.join(blender_root, "4.3", "scripts", "addons", "blend_building_creator"),
+    os.path.join(blender_root, "4.2", "scripts", "addons", "blend_building_creator"),
 ]
 
 for d in legacy_dupes:
