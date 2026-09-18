@@ -1158,6 +1158,80 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    has_mounted_shields: BoolProperty(
+        name="Mounted Shields",
+        description="Line palisades, rampart walks, or walls with painted fantasy round shields",
+        default=False,
+        update=on_property_updated
+    )
+
+    shield_placement: EnumProperty(
+        name="Shield Placement",
+        description="Where to mount the round shields",
+        items=[
+            ('PALISADE', "Palisade Fence", "Mount along the palisade perimeter"),
+            ('RAMPART', "Rampart Walk", "Mount along elevated rampart railings"),
+            ('ALL', "All Fortifications", "Mount along both palisade fences and rampart walks"),
+        ],
+        default='ALL',
+        update=on_property_updated
+    )
+
+    has_gable_crest: BoolProperty(
+        name="Gable Heraldic Crest",
+        description="Mount an ornamental heraldic heater shield with crossed broadswords on the facade/gable",
+        default=False,
+        update=on_property_updated
+    )
+
+    gable_crest_style: EnumProperty(
+        name="Crest Style",
+        description="Style of the mounted heraldic crest",
+        items=[
+            ('CROSSED_SWORDS', "Crossed Swords", "Two crossed broadswords behind a heater shield"),
+            ('SHIELD_ONLY', "Shield Plaque", "Ornamental heraldic shield plaque only"),
+        ],
+        default='CROSSED_SWORDS',
+        update=on_property_updated
+    )
+
+    gable_crest_scale: FloatProperty(
+        name="Crest Scale",
+        description="Size multiplier for the mounted gable crest",
+        min=0.5, max=2.5, default=1.0,
+        update=on_property_updated
+    )
+
+    has_bastion_towers: BoolProperty(
+        name="Corner Bastion Towers",
+        description="Heavy stone bastion towers with battered talus bases at compound corners (Citadel Tier 3)",
+        default=False,
+        update=on_property_updated
+    )
+
+    bastion_tower_count: IntProperty(
+        name="Bastion Towers",
+        description="Number of corner bastion towers (2 for front corners, 4 for full enclosure)",
+        min=2, max=4, default=2,
+        update=on_property_updated
+    )
+
+    bastion_tower_size: FloatProperty(
+        name="Bastion Size",
+        description="Square shaft width of the bastion towers in meters",
+        min=2.0, max=5.0, default=3.2,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    bastion_tower_height: FloatProperty(
+        name="Bastion Height",
+        description="Overall height of the bastion towers in meters",
+        min=5.0, max=14.0, default=8.2,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
     # --- Material Tier & Stylized Procedural Shaders ---
     material_tier: EnumProperty(
         name="Material Tier",

@@ -730,7 +730,7 @@ PRESETS = {
         'tier': 2,
         'name': "Infantry Barracks (Tier 2)",
         'plot': "40m x 40m",
-        'description': "Two-storey U-shaped plank headquarters with a stone plinth, arched gatehouse porch, scattered oriel outcrops and a gable loft hatch.",
+        'description': "Two-storey U-shaped plank headquarters with a stone plinth, mounted round shields, side rampart walk, crossed swords gable crest and drill yard.",
         'settings': {
             'building_shape': 'U_SHAPE',
             'wing_placement': 'FRONT',
@@ -801,6 +801,10 @@ PRESETS = {
             'palisade_style': 'PICKET',
             'palisade_height': 2.3,
             'palisade_offset': 3.0,
+            'has_mounted_shields': True,
+            'shield_placement': 'ALL',
+            'has_gable_crest': True,
+            'gable_crest_style': 'CROSSED_SWORDS',
             'has_banners': True,
             'banner_count': 3,
             'has_battlements': True,
@@ -820,7 +824,7 @@ PRESETS = {
         'tier': 3,
         'name': "Infantry Barracks (Tier 3)",
         'plot': "40m x 40m",
-        'description': "Fortified citadel garrison: stone-clad wings around the muster yard, a clock gate-tower, twin corner towers, a roof spire and scattered oriels.",
+        'description': "Fortified citadel garrison: stone-clad wings around the muster yard, flared corner bastion towers, stone battlements, crossed swords crest and roof spire.",
         'settings': {
             'building_shape': 'U_SHAPE',
             'wing_placement': 'FRONT',
@@ -890,10 +894,18 @@ PRESETS = {
             'has_arched_porch': True,
             'has_side_rampart': True,
             'rampart_side': 'RIGHT',
+            'has_bastion_towers': True,
+            'bastion_tower_count': 2,
+            'bastion_tower_size': 3.4,
+            'bastion_tower_height': 8.5,
             'has_palisade': True,
             'palisade_style': 'STAKES',
             'palisade_height': 2.2,
             'palisade_offset': 3.0,
+            'has_mounted_shields': True,
+            'shield_placement': 'ALL',
+            'has_gable_crest': True,
+            'gable_crest_style': 'CROSSED_SWORDS',
             'has_banners': True,
             'banner_count': 4,
             'has_battlements': True,
@@ -1860,7 +1872,10 @@ def apply_preset(props, preset_key):
     # them does not inherit the previous building's palisade/banners/battlements.
     for _fk in ('has_palisade', 'palisade_style', 'palisade_height', 'palisade_offset',
                 'has_banners', 'banner_count', 'has_battlements', 'battlement_style',
-                'has_military_props', 'military_props_count'):
+                'has_military_props', 'military_props_count',
+                'has_mounted_shields', 'shield_placement',
+                'has_gable_crest', 'gable_crest_style', 'gable_crest_scale',
+                'has_bastion_towers', 'bastion_tower_count', 'bastion_tower_size', 'bastion_tower_height'):
         if hasattr(props, _fk):
             try:
                 props.property_unset(_fk)

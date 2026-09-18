@@ -183,37 +183,104 @@ def build_architectural_accessories(bm, props, ctx):
 
 
 def _place_banners(bm, props, ctx):
-    """Raise banner poles around the compound (on the palisade line if present)."""
+    """Raise banner poles around the compound (on the palisade line if present).
+
+    When bastion towers are present the front corner slots are shifted inward to
+    sit between the gate and the tower, not on top of the tower itself.
+    """
     count = max(2, int(_prop(props, 'banner_count', 4)))
     off = (_prop(props, 'palisade_offset', 3.0)
            if _prop(props, 'has_palisade', False) else 1.2)
     x_min, x_max, y_min, y_max = compound_bounds(ctx, off)
     height = max(4.2, _prop(props, 'palisade_height', 2.3) + 2.2)
+
+    has_towers = _prop(props, 'has_bastion_towers', False)
+    t_size = _prop(props, 'bastion_tower_size', 3.2) if has_towers else 0.0
+    t_half = t_size * 0.5
+    # Front palisade clear zone starts at x_min + t_size + 0.5 from each side
+    t_clear_front = t_size + 0.5 if has_towers else 0.0
+    px_min = x_min + t_clear_front   # leftmost safe banner X on front run
+    px_max = x_max - t_clear_front   # rightmost safe banner X on front run
+    gate_cx = ctx.main_door_cx
+
+    # Candidate positions — front corners shift to midpoint between tower and gate
+    front_left_x  = (px_min + gate_cx) * 0.5 if has_towers else x_min
+    front_right_x = (px_max + gate_cx) * 0.5 if has_towers else x_max
+
     cands = [
-        (x_min, y_min, (1.0, 0.0)), (x_max, y_min, (-1.0, 0.0)),
-        (x_max, y_max, (-1.0, 0.0)), (x_min, y_max, (1.0, 0.0)),
-        ((x_min + x_max) * 0.5, y_min, (1.0, 0.0)),
-        ((x_min + x_max) * 0.5, y_max, (1.0, 0.0)),
-        (x_min, (y_min + y_max) * 0.5, (0.0, -1.0)),
-        (x_max, (y_min + y_max) * 0.5, (0.0, 1.0)),
+        (front_left_x,           y_min, (0.0, -1.0)),               # Front-left mid
+        (front_right_x,          y_min, (0.0, -1.0)),               # Front-right mid
+        (gate_cx - 1.8,          y_min, (0.0, -1.0)),               # Front gate left
+        (gate_cx + 1.8,          y_min, (0.0, -1.0)),               # Front gate right
+        (x_max,                  y_max, (0.0,  1.0)),               # Back-right corner
+        (x_min,                  y_max, (0.0,  1.0)),               # Back-left corner
+        (x_min, (y_min + y_max) * 0.5, (-1.0, 0.0)),               # Left side flank
+        (x_max, (y_min + y_max) * 0.5, ( 1.0, 0.0)),               # Right side flank
     ]
     for i in range(count):
         bx, by, d = cands[i % len(cands)]
         build_banner_pole(bm, bx, by, 0.0, height=height, flag_dir=d)
 
 
+
+
 def _build_fortifications(bm, props, ctx):
-    """Palisade, banners and military yard props (reusable military modules)."""
+    """Palisades, bastions, shields, banners, crests and military drill props (reusable fortification modules)."""
+    # 1. Corner bastion towers (Citadel Tier 3)
+    if _prop(props, 'has_bastion_towers', False):
+        from .bastion import build_bastion_courtyard_towers
+        build_bastion_courtyard_towers(bm, props, ctx)
+
+    # 2. Palisade compound enclosure
     if _prop(props, 'has_palisade', False):
-        build_palisade_enclosure(
+        p_res = build_palisade_enclosure(
             bm, props, ctx,
             height=_prop(props, 'palisade_height', 2.3),
             style=_prop(props, 'palisade_style', 'STAKES'),
             offset=_prop(props, 'palisade_offset', 3.0))
+
+        # 3. Mounted round shields along the palisade fence (Concept 2 Norse compound)
+        if _prop(props, 'has_mounted_shields', False) and _prop(props, 'shield_placement', 'ALL') in ('PALISADE', 'ALL'):
+            from .shield import build_shield_row
+            x_min, x_max, y_min, y_max, g0, g1 = p_res
+            sh_z = _prop(props, 'palisade_height', 2.3) * 0.62
+            # Compute tower footprint clearance so shields never appear inside a tower
+            has_towers = _prop(props, 'has_bastion_towers', False)
+            t_size = _prop(props, 'bastion_tower_size', 3.2) if has_towers else 0.0
+            t_clear_front = t_size + 0.50 if has_towers else 0.0  # matches palisade.py
+            t_clear_side  = t_size * 0.5 + 0.45 if has_towers else 0.0
+            # Front run — skip both gate gap AND tower footprint zones at each end
+            build_shield_row(bm,
+                             (x_min + t_clear_front, y_min),
+                             (x_max - t_clear_front, y_min),
+                             sh_z, normal=(0.0, -1.0, 0.0), spacing=1.25,
+                             skip_gap=(g0, g1))
+            # Side runs — start from py_min to avoid tower footprint at front corners
+            build_shield_row(bm, (x_min, y_min + t_clear_side), (x_min, y_max), sh_z, normal=(-1.0, 0.0, 0.0), spacing=1.45)
+            build_shield_row(bm, (x_max, y_min + t_clear_side), (x_max, y_max), sh_z, normal=(1.0, 0.0, 0.0), spacing=1.45)
+
+
+    # 4. Military drill yard apparatus (archery targets, weapon rack, quintain)
     if _prop(props, 'has_military_props', False):
         build_military_props(bm, props, ctx)
+
+    # 5. Heraldic standards / banner poles
     if _prop(props, 'has_banners', False):
         _place_banners(bm, props, ctx)
+
+    # 6. Mounted Heraldic Crest / Crossed Swords (Concept 1 barracks)
+    if _prop(props, 'has_gable_crest', False):
+        from .heraldic_crest import build_gable_heraldic_crest
+        wall_t = ctx.wall_t
+        y_front = -ctx.base_d * 0.5 - wall_t * 0.5 - 0.04
+        num_fl = getattr(props, 'num_floors', 1)
+        fl_h = getattr(props, 'floor_height', 2.8)
+        found_h = getattr(props, 'foundation_height', 0.5)
+        crest_z = found_h + num_fl * fl_h - 0.35
+        c_scale = getattr(props, 'gable_crest_scale', 1.0)
+        c_style = getattr(props, 'gable_crest_style', 'CROSSED_SWORDS')
+        build_gable_heraldic_crest(bm, (ctx.main_door_cx, y_front, crest_z),
+                                  normal=(0.0, -1.0, 0.0), scale=c_scale, style=c_style)
 
 
 def build_archetype_accessories(bm, props, ctx, _loft_spec):

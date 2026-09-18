@@ -542,10 +542,10 @@ def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=
         
     return faces
 
-def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10)):
+def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13)):
     """Calculates clean cubic / triplanar style UVs for bmesh faces.
     Skips faces whose materials already have specialized local unwraps
-    (timber frames 2, roof shingles 4, forged iron 6, wood facade/accessories 7, logs 9, log end caps 10).
+    (timber frames 2, roof shingles 4, forged iron 6, wood facade/accessories 7, logs 9, log end caps 10, clock face 12, banner 13).
     Stone (0), plaster (1), floor (3), and cut stone (8) receive continuous world-space meter-scaled UVs.
     Tagged faces (face.tag == True) are also preserved.
     """

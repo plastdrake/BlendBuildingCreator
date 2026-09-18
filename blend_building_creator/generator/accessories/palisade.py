@@ -6,8 +6,9 @@ available to any building via the Palisade toggle.
 """
 
 import math
-from ..mesh_utils import create_beveled_box, create_cone
-from ..materials import MAT_INDEX_LOG, MAT_INDEX_TIMBER, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_CUT_STONE
+from mathutils import Vector, Matrix, Euler
+from ..mesh_utils import create_beveled_box
+from ..materials import MAT_INDEX_LOG, MAT_INDEX_TIMBER, MAT_INDEX_TIMBER_FRAME
 
 
 def compound_bounds(ctx, offset):
@@ -21,20 +22,57 @@ def compound_bounds(ctx, offset):
     return x_min - offset, x_max + offset, y_min - offset, y_max + offset
 
 
-def _stake(bm, x, y, z, height, w, mat, tip_mat, lean=0.0, jitter=0.0):
-    """One vertical stake with a pointed top."""
-    create_beveled_box(
-        bm, size=(w, w, height),
-        location=(x, y, z + height * 0.5),
-        rotation=(lean, 0.0, 0.0),
-        mat_index=mat, bevel_amount=0.012,
-    )
-    tip_h = max(0.14, w * 1.35)
-    create_cone(
-        bm, radius1=w * 0.74, radius2=0.0, height=tip_h, segments=4,
-        location=(x, y, z + height + tip_h * 0.5),
-        mat_index=tip_mat,
-    )
+def _stake(bm, x, y, z, height, w, mat, tip_mat=None, lean=0.0, jitter=0.0):
+    """One vertical stake with a beveled pointy top (no pyramid cap)."""
+    tip_h = max(0.18, w * 1.35)
+    shaft_h = max(0.2, height - tip_h)
+    sx, sy = w * 0.5, w * 0.5
+    tw = w * 0.08  # sharp beveled tip
+    tx, ty = tw * 0.5, tw * 0.5
+
+    local_verts = [
+        Vector((-sx, -sy, 0.0)),
+        Vector(( sx, -sy, 0.0)),
+        Vector(( sx,  sy, 0.0)),
+        Vector((-sx,  sy, 0.0)),
+        Vector((-sx, -sy, shaft_h)),
+        Vector(( sx, -sy, shaft_h)),
+        Vector(( sx,  sy, shaft_h)),
+        Vector((-sx,  sy, shaft_h)),
+        Vector((-tx, -ty, height)),
+        Vector(( tx, -ty, height)),
+        Vector(( tx,  ty, height)),
+        Vector((-tx,  ty, height)),
+    ]
+
+    rot_mat = Euler((lean, 0.0, 0.0), 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector((x, y, z)))
+    tr = loc_mat @ rot_mat
+
+    bm_verts = [bm.verts.new(tr @ v) for v in local_verts]
+
+    faces_indices = [
+        (0, 3, 2, 1),           # bottom
+        (0, 1, 5, 4),           # front
+        (1, 2, 6, 5),           # right
+        (2, 3, 7, 6),           # back
+        (3, 0, 4, 7),           # left
+        (4, 5, 9, 8),           # bevel front
+        (5, 6, 10, 9),          # bevel right
+        (6, 7, 11, 10),         # bevel back
+        (7, 4, 8, 11),          # bevel left
+        (8, 9, 10, 11),         # tip top
+    ]
+
+    uv_layer = bm.loops.layers.uv.verify()
+    for idxs in faces_indices:
+        f = bm.faces.new([bm_verts[i] for i in idxs])
+        f.material_index = mat
+        for loop_idx, v_idx in enumerate(idxs):
+            lv = local_verts[v_idx]
+            u = (lv.x + sx) * 1.0
+            v = lv.z * 0.45
+            f.loops[loop_idx][uv_layer].uv = Vector((u, v))
 
 
 def build_palisade_run(bm, p_start, p_end, ground_z=0.0, height=2.3,
@@ -127,17 +165,53 @@ def build_palisade_run(bm, p_start, p_end, ground_z=0.0, height=2.3,
 
 
 def _gate_post(bm, x, y, ground_z, height):
-    post_h = height * 0.82
-    create_beveled_box(
-        bm, size=(0.34, 0.34, post_h),
-        location=(x, y, ground_z + post_h * 0.5),
-        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.02,
-    )
-    create_beveled_box(
-        bm, size=(0.48, 0.48, 0.14),
-        location=(x, y, ground_z + post_h + 0.07),
-        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012,
-    )
+    """Substantial timber post for gates and palisade corners (no cut stone cap)."""
+    post_w = 0.52
+    post_h = height * 1.08
+    cap_h = 0.16
+    shaft_h = post_h - cap_h
+    sx, sy = post_w * 0.5, post_w * 0.5
+    tw = post_w * 0.28
+    tx, ty = tw * 0.5, tw * 0.5
+
+    local_verts = [
+        Vector((-sx, -sy, 0.0)),
+        Vector(( sx, -sy, 0.0)),
+        Vector(( sx,  sy, 0.0)),
+        Vector((-sx,  sy, 0.0)),
+        Vector((-sx, -sy, shaft_h)),
+        Vector(( sx, -sy, shaft_h)),
+        Vector(( sx,  sy, shaft_h)),
+        Vector((-sx,  sy, shaft_h)),
+        Vector((-tx, -ty, post_h)),
+        Vector(( tx, -ty, post_h)),
+        Vector(( tx,  ty, post_h)),
+        Vector((-tx,  ty, post_h)),
+    ]
+    loc_mat = Matrix.Translation(Vector((x, y, ground_z)))
+    bm_verts = [bm.verts.new(loc_mat @ v) for v in local_verts]
+
+    faces_indices = [
+        (0, 3, 2, 1),           # bottom
+        (0, 1, 5, 4),           # front
+        (1, 2, 6, 5),           # right
+        (2, 3, 7, 6),           # back
+        (3, 0, 4, 7),           # left
+        (4, 5, 9, 8),           # chamfer front
+        (5, 6, 10, 9),          # chamfer right
+        (6, 7, 11, 10),         # chamfer back
+        (7, 4, 8, 11),          # chamfer left
+        (8, 9, 10, 11),         # cap top
+    ]
+    uv_layer = bm.loops.layers.uv.verify()
+    for idxs in faces_indices:
+        f = bm.faces.new([bm_verts[i] for i in idxs])
+        f.material_index = MAT_INDEX_TIMBER_FRAME
+        for loop_idx, v_idx in enumerate(idxs):
+            lv = local_verts[v_idx]
+            u = (lv.x + sx) * 0.9
+            v = lv.z * 0.40
+            f.loops[loop_idx][uv_layer].uv = Vector((u, v))
 
 
 def build_palisade_enclosure(bm, props, ctx, height=2.3, style='STAKES', offset=3.0):
@@ -147,15 +221,37 @@ def build_palisade_enclosure(bm, props, ctx, height=2.3, style='STAKES', offset=
     gate_half = max(1.1, (getattr(props, 'door_width', 1.2) + 1.0) * 0.5)
     g0, g1 = gate_cx - gate_half, gate_cx + gate_half
 
-    build_palisade_run(bm, (x_min, y_min), (x_max, y_min), 0.0, height, style, gaps=[(g0, g1)], seed=ctx.seed)
-    build_palisade_run(bm, (x_min, y_max), (x_max, y_max), 0.0, height, style, seed=ctx.seed + 1)
-    build_palisade_run(bm, (x_min, y_min), (x_min, y_max), 0.0, height, style, seed=ctx.seed + 2)
-    build_palisade_run(bm, (x_max, y_min), (x_max, y_max), 0.0, height, style, seed=ctx.seed + 3)
+    has_towers = getattr(props, 'has_bastion_towers', False)
+    t_size = getattr(props, 'bastion_tower_size', 3.2)
+    t_half = t_size * 0.5
+    # Towers are now placed with their outer wall on x_min/x_max (centers are shifted inward by t_half)
+    # so front palisade clearance = full tower width + buffer, side = half tower + buffer
+    t_clear_front = (t_size + 0.50) if has_towers else 0.0
+    t_clear_side  = (t_half  + 0.45) if has_towers else 0.0
 
-    # Corner posts + gate posts.
-    for cx in (x_min, x_max):
-        for cy in (y_min, y_max):
-            _gate_post(bm, cx, cy, 0.0, height)
+    px_min = x_min + t_clear_front
+    px_max = x_max - t_clear_front
+    py_min = y_min + t_clear_side
+    has_back_towers = has_towers and getattr(props, 'bastion_tower_count', 2) >= 4
+    py_max = y_max - (t_clear_side if has_back_towers else 0.0)
+
+    build_palisade_run(bm, (px_min, y_min), (px_max, y_min), 0.0, height, style, gaps=[(g0, g1)], seed=ctx.seed)
+    build_palisade_run(bm, (px_min if has_back_towers else x_min, y_max),
+                           (px_max if has_back_towers else x_max, y_max),
+                           0.0, height, style, seed=ctx.seed + 1)
+    build_palisade_run(bm, (x_min, py_min), (x_min, py_max if has_back_towers else y_max),
+                       0.0, height, style, seed=ctx.seed + 2)
+    build_palisade_run(bm, (x_max, py_min), (x_max, py_max if has_back_towers else y_max),
+                       0.0, height, style, seed=ctx.seed + 3)
+
+    # Corner posts (only placed where no bastion tower stands)
+    if not has_towers:
+        for cx in (x_min, x_max):
+            for cy in (y_min, y_max):
+                _gate_post(bm, cx, cy, 0.0, height)
+    elif not has_back_towers:
+        for cx in (x_min, x_max):
+            _gate_post(bm, cx, y_max, 0.0, height)
     _gate_post(bm, g0, y_min, 0.0, height)
     _gate_post(bm, g1, y_min, 0.0, height)
     return (x_min, x_max, y_min, y_max, g0, g1)

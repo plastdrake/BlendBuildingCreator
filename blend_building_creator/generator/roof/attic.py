@@ -491,7 +491,7 @@ def build_roof_and_attic(bm, props, ctx):
                 height=props.roof_height * 1.3
             )
         if getattr(props, 'has_hoist_beam', False) and roof_style in ('SWAY', 'GABLE'):
-            from .roof import build_hoist_beam
+            from .features import build_hoist_beam
             if is_rotated_roof:
                 hoist_bm = bmesh.new()
                 build_hoist_beam(

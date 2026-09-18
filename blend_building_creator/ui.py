@@ -382,6 +382,15 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             col.prop(props, "palisade_style")
             col.prop(props, "palisade_height")
             col.prop(props, "palisade_offset")
+        box_fort.prop(props, "has_bastion_towers")
+        if props.has_bastion_towers:
+            col = box_fort.column(align=True)
+            col.prop(props, "bastion_tower_count")
+            col.prop(props, "bastion_tower_size")
+            col.prop(props, "bastion_tower_height")
+        box_fort.prop(props, "has_mounted_shields")
+        if props.has_mounted_shields:
+            box_fort.prop(props, "shield_placement")
         box_fort.prop(props, "has_battlements")
         if props.has_battlements:
             box_fort.prop(props, "battlement_style")
@@ -390,6 +399,11 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             col = box_fort.column(align=True)
             col.prop(props, "banner_count")
             col.prop(props, "color_banner")
+        box_fort.prop(props, "has_gable_crest")
+        if props.has_gable_crest:
+            col = box_fort.column(align=True)
+            col.prop(props, "gable_crest_style")
+            col.prop(props, "gable_crest_scale")
         box_fort.prop(props, "has_military_props")
         if props.has_military_props:
             box_fort.prop(props, "military_props_count")

@@ -1397,9 +1397,39 @@ def create_stylized_clock_face(name="M_Building_Clock_Face", color=(0.95, 0.95, 
 
 
 def create_stylized_banner(name="M_Building_Banner", color=(0.55, 0.12, 0.12, 1.0)):
-    """Heraldic painted-cloth standard: flat, matte and readable at a distance."""
+    """Heraldic painted-cloth standard with dragon crest shield texture."""
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1000)
+    c = _coord(tree, loc_x=-1000)
+
+    tex_node = _load_image_texture(tree, "banner_dragon_diffuse.png", c, loc_x=-700, loc_y=120)
+    if tex_node is not None:
+        def_red = (0.55, 0.12, 0.12)
+        cur_rgb = (color[0], color[1], color[2])
+        diff = sum(abs(a - b) for a, b in zip(cur_rgb, def_red))
+        if diff > 0.08:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'COLOR'
+            tint.inputs["Factor"].default_value = 0.55
+            tint.location = (-350, 120)
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = color
+            out_col = tint.outputs["Result"]
+        else:
+            out_col = tex_node.outputs["Color"]
+        _apply_ao(tree, bsdf, out_col, strength=0.35, distance=0.15)
+        _setup_pbr(tree, bsdf, out, roughness=0.75, metallic=0.0)
+        # Connect texture alpha to BSDF alpha for transparent cutout shape
+        if "Alpha" in bsdf.inputs and "Alpha" in tex_node.outputs:
+            tree.links.new(tex_node.outputs["Alpha"], bsdf.inputs["Alpha"])
+        try:
+            mat.blend_method = 'CLIP'
+            mat.shadow_method = 'CLIP'
+        except Exception:
+            pass
+        return mat
+
     _set_bsdf_input(bsdf, "Base Color", color)
     _setup_pbr(tree, bsdf, out, roughness=0.82, metallic=0.0)
     return mat
