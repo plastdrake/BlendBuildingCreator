@@ -5,7 +5,8 @@ Based on fortress/citadel architecture:
 - Real walk-in hollow interior chamber with flagstone floor, ceiling timber joists, ladder, and wall torch.
 - Open arched courtyard entrance doorway with an inward-swung heavy timber door leaf (no palisade conflict).
 - Chamfered quoin corners and horizontal string courses to eliminate blockiness.
-- Authentic 3D recessed arrow slits (embrasures) with cut-stone reveals and iron cross-loops.
+- Real window slits (arrow loops): genuine through-holes cut into the shaft and
+  dressed with cut-stone reveals, so the dark chamber is visible through them.
 - Stepped stone corbels and machicolation brackets.
 - Open rooftop stone platform (fighting deck) surrounded by crenellated merlons with coping caps (no roof).
 """
@@ -13,11 +14,13 @@ Based on fortress/citadel architecture:
 import math
 from mathutils import Vector, Matrix, Euler
 from ..mesh_utils import create_beveled_box, create_cylinder, create_cone
+from ..walls import build_wall_with_opening
+from ..openings import build_arrow_slit
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_TIMBER,
     MAT_INDEX_IRON, MAT_INDEX_WOOD,
 )
-from .palisade import compound_bounds
+from .palisade import compound_bounds, fortification_offset
 
 
 def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
@@ -144,30 +147,55 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     shaft_bot_lz = belt_lz + 0.08
     shaft_wall_h = deck_lz - shaft_bot_lz
 
-    # Rear Exterior Wall (-ly) - full height solid stone wall
-    rear_wall_pos = to_world(0.0, -half_s + wall_t * 0.5, shaft_bot_lz + shaft_wall_h * 0.5)
-    rw_f = create_beveled_box(bm, size=(base_size, wall_t, shaft_wall_h),
-                              location=rear_wall_pos, rotation=(0.0, 0.0, door_yaw),
-                              mat_index=mat_index, bevel_amount=0.02)
-    for f in rw_f:
-        f.tag = False
+    # Window-slit schedule: two real through-slits per exterior face, placed
+    # above the interior joists and clear of the string courses. The wall builder
+    # cuts the apertures; ``slit_specs`` remembers where to dress each one into a
+    # cut-stone arrow loop afterwards.
+    slit_w, slit_h = 0.18, 0.92
+    slit_zs = [shaft_bot_lz + shaft_wall_h * 0.32,
+               shaft_bot_lz + shaft_wall_h * 0.66]
+    slit_specs = []  # (local_lx, local_ly, z, outward_normal)
+
+    def _slit_ops(u_center):
+        return [{'u_start': u_center - slit_w * 0.5, 'u_end': u_center + slit_w * 0.5,
+                 'z_start': z - slit_h * 0.5, 'z_end': z + slit_h * 0.5}
+                for z in slit_zs]
+
+    def _wall_line(lx_a, ly_a, lx_b, ly_b):
+        pa = to_world(lx_a, ly_a, 0.0)
+        pb = to_world(lx_b, ly_b, 0.0)
+        return (pa.x, pa.y), (pb.x, pb.y)
+
+    # Rear Exterior Wall (-ly)
+    _rear_y = -half_s + wall_t * 0.5
+    p0, p1 = _wall_line(-half_s, _rear_y, half_s, _rear_y)
+    build_wall_with_opening(bm, p0, p1, shaft_bot_lz, deck_lz, wall_t,
+                            _slit_ops(base_size * 0.5), mat_ext=mat_index,
+                            normal_vec=(-d_fwd.x, -d_fwd.y), tier='TIER_3',
+                            physical_siding=False)
+    for z in slit_zs:
+        slit_specs.append((0.0, _rear_y, z, (-d_fwd.x, -d_fwd.y)))
 
     # Left Exterior Wall (-lx)
     lw_len = base_size - 2.0 * wall_t
-    left_wall_pos = to_world(-half_s + wall_t * 0.5, 0.0, shaft_bot_lz + shaft_wall_h * 0.5)
-    lw_f = create_beveled_box(bm, size=(wall_t, lw_len, shaft_wall_h),
-                              location=left_wall_pos, rotation=(0.0, 0.0, door_yaw),
-                              mat_index=mat_index, bevel_amount=0.02)
-    for f in lw_f:
-        f.tag = False
+    _lx = -half_s + wall_t * 0.5
+    p0, p1 = _wall_line(_lx, -lw_len * 0.5, _lx, lw_len * 0.5)
+    build_wall_with_opening(bm, p0, p1, shaft_bot_lz, deck_lz, wall_t,
+                            _slit_ops(lw_len * 0.5), mat_ext=mat_index,
+                            normal_vec=(-d_right.x, -d_right.y), tier='TIER_3',
+                            physical_siding=False)
+    for z in slit_zs:
+        slit_specs.append((_lx, 0.0, z, (-d_right.x, -d_right.y)))
 
     # Right Exterior Wall (+lx)
-    right_wall_pos = to_world(half_s - wall_t * 0.5, 0.0, shaft_bot_lz + shaft_wall_h * 0.5)
-    r_wall_f = create_beveled_box(bm, size=(wall_t, lw_len, shaft_wall_h),
-                                  location=right_wall_pos, rotation=(0.0, 0.0, door_yaw),
-                                  mat_index=mat_index, bevel_amount=0.02)
-    for f in r_wall_f:
-        f.tag = False
+    _rx = half_s - wall_t * 0.5
+    p0, p1 = _wall_line(_rx, -lw_len * 0.5, _rx, lw_len * 0.5)
+    build_wall_with_opening(bm, p0, p1, shaft_bot_lz, deck_lz, wall_t,
+                            _slit_ops(lw_len * 0.5), mat_ext=mat_index,
+                            normal_vec=(d_right.x, d_right.y), tier='TIER_3',
+                            physical_siding=False)
+    for z in slit_zs:
+        slit_specs.append((_rx, 0.0, z, (d_right.x, d_right.y)))
 
     # Courtyard Wall (+ly) with real walk-in entrance opening:
     door_w = 1.05
@@ -191,14 +219,18 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     for f in rj_f:
         f.tag = False
 
-    # Upper wall above door lintel up to the rooftop platform
+    # Upper wall above the door lintel, carrying one courtyard-facing slit.
     upper_wall_h = deck_lz - door_h
-    upper_wall_pos = to_world(0.0, half_s - wall_t * 0.5, door_h + upper_wall_h * 0.5)
-    uw_f = create_beveled_box(bm, size=(base_size, wall_t, upper_wall_h),
-                             location=upper_wall_pos, rotation=(0.0, 0.0, door_yaw),
-                             mat_index=mat_index, bevel_amount=0.02)
-    for f in uw_f:
-        f.tag = False
+    _cw_y = half_s - wall_t * 0.5
+    _cw_lz = (door_h + deck_lz) * 0.5
+    _cw_ops = [{'u_start': base_size * 0.5 - slit_w * 0.5,
+                'u_end': base_size * 0.5 + slit_w * 0.5,
+                'z_start': _cw_lz - slit_h * 0.5, 'z_end': _cw_lz + slit_h * 0.5}]
+    p0, p1 = _wall_line(-half_s, _cw_y, half_s, _cw_y)
+    build_wall_with_opening(bm, p0, p1, door_h, deck_lz, wall_t, _cw_ops,
+                            mat_ext=mat_index, normal_vec=(d_fwd.x, d_fwd.y),
+                            tier='TIER_3', physical_siding=False)
+    slit_specs.append((0.0, _cw_y, _cw_lz, (d_fwd.x, d_fwd.y)))
 
     # -----------------------------------------------------------------------
     # 3. Arched Cut-Stone Doorway Trimmings & Open Inward Timber Door Leaf
@@ -349,71 +381,13 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
         f.tag = False
 
     # -----------------------------------------------------------------------
-    # 6. 3D Recessed Arrow Slits (Embrasures) on 3 Exterior Faces
+    # 6. Real Window Slits: cut-stone reveals dressing the through-holes
     # -----------------------------------------------------------------------
-    exterior_faces = [
-        (0.0, -1.0, 0.0),             # Rear wall (-ly)
-        (-1.0, 0.0, math.pi * 0.5),   # Left wall (-lx)
-        (1.0, 0.0, -math.pi * 0.5),   # Right wall (+lx)
-    ]
-
-    slit_lz = mid_lz + 0.55
-    for fx_sign, fy_sign, slit_ang in exterior_faces:
-        slit_cx = fx_sign * (half_s + 0.01)
-        slit_cy = fy_sign * (half_s + 0.01)
-        slit_world = to_world(slit_cx, slit_cy, slit_lz)
-        tot_yaw = door_yaw + slit_ang
-
-        # Sloped cut-stone wash sill
-        sill_f = create_beveled_box(bm, size=(0.42, 0.24, 0.12),
-                                   location=slit_world - d_up * 0.42,
-                                   rotation=(math.radians(-10.0), 0.0, tot_yaw),
-                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-        for f in sill_f:
-            f.tag = False
-
-        # Cut-stone lintel cap
-        top_lint = create_beveled_box(bm, size=(0.42, 0.24, 0.14),
-                                     location=slit_world + d_up * 0.44,
-                                     rotation=(0.0, 0.0, tot_yaw),
-                                     mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-        for f in top_lint:
-            f.tag = False
-
-        # Left and right cut-stone reveals
-        for s_r in (-1.0, 1.0):
-            r_vec = Vector((-math.sin(tot_yaw), math.cos(tot_yaw), 0.0)) * (s_r * 0.18)
-            j_f = create_beveled_box(bm, size=(0.14, 0.22, 0.78),
-                                    location=slit_world + r_vec,
-                                    rotation=(0.0, 0.0, tot_yaw),
-                                    mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
-            for f in j_f:
-                f.tag = False
-
-        # Deep recessed dark embrasure cavity
-        fwd_vec = Vector((math.cos(tot_yaw), math.sin(tot_yaw), 0.0))
-        recess_f = create_beveled_box(bm, size=(0.20, 0.16, 0.74),
-                                      location=slit_world - fwd_vec * 0.08,
-                                      rotation=(0.0, 0.0, tot_yaw),
-                                      mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
-        for f in recess_f:
-            f.tag = True
-
-        # Narrow vertical aperture slit piercing inward
-        vert_slit = create_beveled_box(bm, size=(0.075, 0.26, 0.70),
-                                      location=slit_world,
-                                      rotation=(0.0, 0.0, tot_yaw),
-                                      mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
-        for f in vert_slit:
-            f.tag = True
-
-        # Authentic medieval horizontal cross-loop bar
-        cross_bar = create_beveled_box(bm, size=(0.28, 0.20, 0.065),
-                                       location=slit_world + d_up * 0.08,
-                                       rotation=(0.0, 0.0, tot_yaw),
-                                       mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
-        for f in cross_bar:
-            f.tag = True
+    for lx, ly, lz, out_n in slit_specs:
+        c = to_world(lx, ly, lz)
+        build_arrow_slit(bm, center=(c.x, c.y, c.z), normal_axis=out_n,
+                         wall_thickness=wall_t, slit_w=slit_w, slit_h=slit_h,
+                         has_transom=True)
 
     # -----------------------------------------------------------------------
     # 7. Stepped Corbels & Open Rooftop Stone Platform (Fighting Deck)
@@ -571,7 +545,7 @@ def build_bastion_courtyard_towers(bm, props, ctx):
     Tower outer walls align flush with the compound X boundary (tower center shifted inward by half_s)
     so the courtyard-facing door is never blocked by the side palisades.
     """
-    off = getattr(props, 'palisade_offset', 3.0)
+    off = fortification_offset(props)
     x_min, x_max, y_min, y_max = compound_bounds(ctx, off)
     t_size = getattr(props, 'bastion_tower_size', 3.2)
     t_height = getattr(props, 'bastion_tower_height', 8.2)

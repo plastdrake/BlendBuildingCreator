@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.10.1-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.11.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 27 ready-made presets across three material tiers.
@@ -72,9 +72,20 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 
 **Fortifications** (reusable on any preset/footprint)
 - **Palisade** stockade: rough stakes or neat pickets enclosing the compound with a front gate (style, height and offset controls).
+- **Stone curtain wall**: ashlar enclosing wall on a battered plinth with a wall-walk, crenellated merlons and a gated gatehouse (height, thickness and offset controls). Supersedes the palisade on the same defensive line.
+- **Real arrow slits**: pierced arrow loops (with cut-stone reveals and a crosslet transom) in the bastion towers and curtain walls — genuine through-holes, not surface appliqués.
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
-- **Military props**: weapon racks, wall-mounted shields and training dummies scattered through the yard.
+- **Military props**: archery targets with painted rings, weapon racks, wall-mounted shields and padded training pells scattered through the yard (the target face uses a dedicated ring shader).
+
+## What's new in 1.11.0
+
+- **Reusable stone curtain wall** (any preset/footprint): a new `curtain_wall` module builds an ashlar enclosure with a battered plinth, a crenellated wall-walk, and a gated gatehouse. It supersedes the palisade on the shared defensive line, so towers, walls, gates, banners and shields all align. New UI toggles for **height**, **thickness** and **offset**.
+- **Genuine arrow slits:** bastion towers and the curtain wall now have real through-wall arrow loops (cut with the host-wall opening system and dressed with cut-stone reveals, sill, lintel and a crosslet transom) instead of applied stone/iron "window" blocks.
+- **Dedicated archery-target material:** a new procedural `M_Building_Target` shader paints the scoring rings and gold bullseye from radial UVs, so the target face no longer borrows the wall/iron materials. The add-on now generates 15 material slots.
+- **Nicer training pell:** the old shield-quintain (whose shield clipped through the arm) is replaced by a padded burlap pell with a painted bullseye, stuffed head, cross arms with rope-wrapped ends, rope bindings and a bracketed round timber base — matching the reference art.
+- **Fixes:** palisade stake/post UV stretching (per-face planar mapping so the bark grain no longer smears on the sides); arrow fletching was rotated 180° (now flares toward the archer); removed the mis-rotated shield bolts; and the **gable heraldic crest** now works — the crossed swords lie flat in the gable plane and the crest mounts on a true gable instead of being buried under the eave.
+- **Infantry Barracks Tier 3** now reads as a stone-walled fortress: curtain wall + gatehouse + real ramparts replace the wooden palisade.
 
 ## What's new in 1.10.0
 

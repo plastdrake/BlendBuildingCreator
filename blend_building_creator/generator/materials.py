@@ -83,6 +83,7 @@ MAT_INDEX_LOG_END      = 10
 MAT_INDEX_PLASTER_BRICK = 11
 MAT_INDEX_CLOCK_FACE    = 12
 MAT_INDEX_BANNER        = 13
+MAT_INDEX_TARGET        = 14
 
 
 # ---------------------------------------------------------------------------
@@ -1396,6 +1397,54 @@ def create_stylized_clock_face(name="M_Building_Clock_Face", color=(0.95, 0.95, 
     return mat
 
 
+def create_stylized_target(name="M_Building_Target", color=(0.78, 0.72, 0.58, 1.0)):
+    """Painted archery target face: concentric scoring rings with a gold bullseye.
+
+    Consumes the radial UVs written by the target/pell builders (uv centre at
+    0.5, 0.5) to paint the rings procedurally, so the props no longer borrow the
+    wall/iron/wood materials for their painted face.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    c = _coord(tree, loc_x=-900)
+
+    center = tree.nodes.new("ShaderNodeVectorMath")
+    center.location = (-700, 60)
+    center.operation = 'SUBTRACT'
+    center.inputs[1].default_value = (0.5, 0.5, 0.0)
+    tree.links.new(c.outputs["UV"], center.inputs[0])
+
+    dist = tree.nodes.new("ShaderNodeVectorMath")
+    dist.location = (-500, 60)
+    dist.operation = 'LENGTH'
+    tree.links.new(center.outputs["Vector"], dist.inputs[0])
+
+    # Radial UVs span 0.5 from centre to rim; remap so the rim lands at 1.0.
+    scale = tree.nodes.new("ShaderNodeMath")
+    scale.location = (-320, 60)
+    scale.operation = 'MULTIPLY'
+    scale.inputs[1].default_value = 2.0
+    tree.links.new(dist.outputs["Value"], scale.inputs[0])
+
+    ramp = tree.nodes.new("ShaderNodeValToRGB")
+    ramp.location = (-140, 60)
+    ramp.color_ramp.interpolation = 'CONSTANT'
+    e = ramp.color_ramp.elements
+    e[0].position = 0.00
+    e[0].color = (0.95, 0.78, 0.16, 1.0)                   # gold bullseye
+    e[1].position = 0.16
+    e[1].color = (0.80, 0.18, 0.14, 1.0)                   # red ring
+    r3 = e.new(0.34); r3.color = (0.92, 0.89, 0.82, 1.0)   # white ring
+    r4 = e.new(0.52); r4.color = (0.16, 0.15, 0.15, 1.0)   # black ring
+    r5 = e.new(0.70); r5.color = (0.92, 0.89, 0.82, 1.0)   # white ring
+    r6 = e.new(0.86); r6.color = color                     # straw rim
+    tree.links.new(scale.outputs["Value"], ramp.inputs["Fac"])
+
+    _apply_ao(tree, bsdf, ramp.outputs["Color"], strength=0.32, distance=0.10)
+    _setup_pbr(tree, bsdf, out, roughness=0.85, metallic=0.0)
+    return mat
+
+
 def create_stylized_banner(name="M_Building_Banner", color=(0.55, 0.12, 0.12, 1.0)):
     """Heraldic painted-cloth standard with dragon crest shield texture."""
     mat, tree = _new_mat(name)
@@ -1707,7 +1756,10 @@ def setup_building_material_slots(obj, props):
         color=getattr(props, 'color_banner', (0.55, 0.12, 0.12, 1.0)),
     )
 
-    # Assemble all 14 canonical slots in strict order
+    # 14. Archery Target / Pell (painted concentric scoring rings)
+    mat_target = getattr(props, 'custom_target', None) or create_stylized_target("M_Building_Target")
+
+    # Assemble all 15 canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
         mat_plaster,        # 1  MAT_INDEX_PLASTER
@@ -1723,6 +1775,7 @@ def setup_building_material_slots(obj, props):
         mat_plaster_brick,  # 11 MAT_INDEX_PLASTER_BRICK
         mat_clock_face,     # 12 MAT_INDEX_CLOCK_FACE
         mat_banner,         # 13 MAT_INDEX_BANNER
+        mat_target,         # 14 MAT_INDEX_TARGET
     ]
     obj.data.materials.clear()
     for m in required_mats:

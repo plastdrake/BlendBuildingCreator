@@ -1232,6 +1232,37 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    has_curtain_wall: BoolProperty(
+        name="Stone Curtain Wall",
+        description="Masonry perimeter wall with a rampart walk, crenellated parapet, arrow slits and a gatehouse (used instead of the timber palisade)",
+        default=False,
+        update=on_property_updated
+    )
+
+    curtain_wall_height: FloatProperty(
+        name="Curtain Height",
+        description="Height of the stone curtain wall in meters",
+        min=2.4, max=4.5, default=3.2,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    curtain_wall_thickness: FloatProperty(
+        name="Curtain Thickness",
+        description="Thickness of the stone curtain wall in meters",
+        min=0.35, max=0.90, default=0.55,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    curtain_wall_offset: FloatProperty(
+        name="Curtain Offset",
+        description="Distance the curtain wall stands outside the building footprint",
+        min=1.5, max=8.0, default=3.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
     # --- Material Tier & Stylized Procedural Shaders ---
     material_tier: EnumProperty(
         name="Material Tier",

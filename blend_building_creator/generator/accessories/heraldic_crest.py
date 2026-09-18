@@ -27,81 +27,79 @@ def _basis_from_normal(normal):
 
 
 def _build_sword(bm, tr, angle=45.0, scale=1.0):
-    """Build a medieval broadsword with crossguard, grip, pommel, and fuller blade."""
+    """Build a medieval broadsword lying in the crest plane (blade up, thickness
+    across the wall). The sword is rotated about the wall normal by ``angle`` so
+    the pair crosses behind the shield instead of poking out of the facade."""
     rad = math.radians(angle)
-    ca, sa = math.cos(rad), math.sin(rad)
+    # In-plane rotation about the outward normal (local Z = forward).
+    str_mat = tr @ Matrix.Rotation(rad, 4, 'Z')
+    str_eul = str_mat.to_euler('XYZ')
+    str_rot3 = str_mat.to_3x3()
 
-    # Local sword transform rotated in the shield plane (XY plane)
-    s_rot = Matrix([
-        [ca, -sa, 0.0, 0.0],
-        [sa,  ca, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0]
-    ])
-    str_mat = tr @ s_rot
+    def loc(x, y, z):
+        return str_mat @ Vector((x, y, z))
 
-    # 1. Double-edged blade (protruding upward)
+    y_axis = (str_rot3 @ Vector((0.0, 1.0, 0.0))).normalized()
+    z_axis = (str_rot3 @ Vector((0.0, 0.0, 1.0))).normalized()
+    y_rot = Vector((0.0, 0.0, 1.0)).rotation_difference(y_axis).to_euler()
+    z_rot = Vector((0.0, 0.0, 1.0)).rotation_difference(z_axis).to_euler()
+
+    # 1. Double-edged blade, length along local Y, thickness along local Z.
     blade_len = 1.35 * scale
     blade_w = 0.09 * scale
     blade_t = 0.022 * scale
-    blade_cz = blade_len * 0.5 + 0.10 * scale
-    # Main blade body
+    y0 = 0.10 * scale
+    tip_y = y0 + blade_len
+    blade_mid = (y0 + tip_y) * 0.5
     b_verts = [
-        str_mat @ Vector((-blade_w * 0.5, 0.0, 0.10 * scale)),
-        str_mat @ Vector((-blade_w * 0.45, 0.0, 0.10 * scale + blade_len * 0.82)),
-        str_mat @ Vector((0.0, 0.0, 0.10 * scale + blade_len)),                    # Point tip
-        str_mat @ Vector((blade_w * 0.45, 0.0, 0.10 * scale + blade_len * 0.82)),
-        str_mat @ Vector((blade_w * 0.5, 0.0, 0.10 * scale)),
+        loc(-blade_w * 0.5, y0, 0.0),
+        loc(-blade_w * 0.45, y0 + blade_len * 0.82, 0.0),
+        loc(0.0, tip_y, 0.0),
+        loc(blade_w * 0.45, y0 + blade_len * 0.82, 0.0),
+        loc(blade_w * 0.5, y0, 0.0),
     ]
-    # Beveled blade diamond cross-section front and back
-    f_center = str_mat @ Vector((0.0,  blade_t * 0.5, blade_cz))
-    b_center = str_mat @ Vector((0.0, -blade_t * 0.5, blade_cz))
-    vf_c = bm.verts.new(f_center)
-    vb_c = bm.verts.new(b_center)
+    vf_c = bm.verts.new(loc(0.0, blade_mid, blade_t * 0.5))
+    vb_c = bm.verts.new(loc(0.0, blade_mid, -blade_t * 0.5))
     bm_v = [bm.verts.new(v) for v in b_verts]
-
-    # Front blade bevel facets
     for i in range(4):
         f = bm.faces.new([vf_c, bm_v[i], bm_v[i + 1]])
         f.material_index = MAT_INDEX_IRON
         f.tag = True
-    # Back blade bevel facets
-    for i in range(4):
         fb = bm.faces.new([vb_c, bm_v[i + 1], bm_v[i]])
         fb.material_index = MAT_INDEX_IRON
         fb.tag = True
 
-    # 2. Forged Iron Crossguard
+    # 2. Forged iron crossguard (across the blade, local X).
     guard_w = 0.38 * scale
     guard_t = 0.038 * scale
     g_faces = create_beveled_box(bm, size=(guard_w, guard_t, guard_t),
-                                 location=str_mat @ Vector((0.0, 0.0, 0.09 * scale)),
+                                 location=loc(0.0, 0.09 * scale, 0.0),
+                                 rotation=str_eul,
                                  mat_index=MAT_INDEX_IRON, bevel_amount=0.006 * scale)
     for f in g_faces:
         f.tag = True
-    # Quillon flared tips on crossguard ends
     for sgn in (-1.0, 1.0):
-        q_pos = str_mat @ Vector((sgn * guard_w * 0.5, 0.0, 0.09 * scale))
+        q_pos = loc(sgn * guard_w * 0.5, 0.09 * scale, 0.0)
         q_faces = create_cylinder(bm, radius=0.024 * scale, height=0.04 * scale, segments=6,
                                   location=(q_pos.x, q_pos.y, q_pos.z),
-                                  rotation=(0.0, 1.5708, rad), mat_index=MAT_INDEX_IRON)
+                                  rotation=z_rot, mat_index=MAT_INDEX_IRON)
         for f in q_faces:
             f.tag = True
 
-    # 3. Grip / Hilt (leather/wire wrapped)
+    # 3. Grip / hilt below the guard (along the blade axis).
     grip_len = 0.22 * scale
-    grip_pos = str_mat @ Vector((0.0, 0.0, -grip_len * 0.5 + 0.07 * scale))
+    grip_pos = loc(0.0, 0.09 * scale - grip_len * 0.5, 0.0)
     h_faces = create_cylinder(bm, radius=0.022 * scale, height=grip_len, segments=8,
                               location=(grip_pos.x, grip_pos.y, grip_pos.z),
-                              rotation=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_WOOD)
+                              rotation=y_rot, mat_index=MAT_INDEX_WOOD)
     for f in h_faces:
         f.tag = True
 
-    # 4. Spherical / faceted iron pommel
-    pommel_pos = str_mat @ Vector((0.0, 0.0, -grip_len + 0.04 * scale))
+    # 4. Faceted iron pommel at the hilt base.
+    pommel_pos = loc(0.0, 0.09 * scale - grip_len, 0.0)
     pm_faces = create_cylinder(bm, radius=0.038 * scale, height=0.045 * scale, segments=8,
                                location=(pommel_pos.x, pommel_pos.y, pommel_pos.z),
-                               mat_index=MAT_INDEX_IRON)
+                               rotation=y_rot, mat_index=MAT_INDEX_IRON)
     for f in pm_faces:
         f.tag = True
 

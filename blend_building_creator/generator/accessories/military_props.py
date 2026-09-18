@@ -1,17 +1,19 @@
-"""Reusable military yard props: archery targets, weapon racks, quintains, wall shields.
+"""Reusable military yard props: archery targets, weapon racks, training pells, wall shields.
 
 Authentic medieval garrison props based on reference concept art:
 - Archery targets with painted concentric rings, wooden tripod stands, and embedded arrows.
 - A-frame weapon racks with spears, halberds, and a hanging battleaxe.
-- Training quintains with spinning shield arm and sandbag counterweight.
+- Padded training pells (burlap torso with painted bullseye, stuffed head, cross arms).
 """
 
 import math
 from mathutils import Vector, Matrix, Euler
-from ..mesh_utils import create_beveled_box, create_cylinder, create_cone
+from ..mesh_utils import (
+    create_beveled_box, create_cylinder, create_cone, create_torus_ring,
+)
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_IRON,
-    MAT_INDEX_WOOD, MAT_INDEX_PLASTER, MAT_INDEX_CUT_STONE,
+    MAT_INDEX_WOOD, MAT_INDEX_PLASTER, MAT_INDEX_CUT_STONE, MAT_INDEX_TARGET,
 )
 from .shield import build_round_shield
 
@@ -19,6 +21,42 @@ from .shield import build_round_shield
 def build_shield_mount(bm, x, y, z, normal=(0.0, -1.0, 0.0), r=0.34):
     """A round shield with an iron boss and heraldic pattern mounted flat on a wall or post."""
     build_round_shield(bm, (x, y, z), normal=normal, radius=r, pattern='QUARTERED')
+
+
+def _painted_disc(bm, center, normal, radius, segments=18, dome=0.004,
+                  surface_radius=None):
+    """A painted scoring-ring disc facing ``normal``, with radial UVs for the
+    dedicated target material. When ``surface_radius`` is given the disc is
+    curved onto a cylinder of that radius so it lies flush on a barrel body.
+    """
+    fn = Vector(normal).normalized()
+    up_ref = Vector((0.0, 0.0, 1.0)) if abs(fn.z) <= 0.95 else Vector((0.0, 1.0, 0.0))
+    right = up_ref.cross(fn).normalized()
+    up = fn.cross(right).normalized()
+    c = Vector(center)
+    uv_layer = bm.loops.layers.uv.verify()
+
+    def ring_off(rho):
+        if surface_radius is None:
+            return 0.0
+        return math.sqrt(max(0.0, surface_radius * surface_radius - rho * rho)) + dome
+
+    center_v = bm.verts.new(c + fn * ((surface_radius if surface_radius else 0.0) + dome))
+    ring = []
+    for i in range(segments):
+        a = 2.0 * math.pi * i / segments
+        p = c + fn * ring_off(radius) + right * (radius * math.cos(a)) + up * (radius * math.sin(a))
+        ring.append(bm.verts.new(p))
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f = bm.faces.new([center_v, ring[i], ring[nxt]])
+        f.material_index = MAT_INDEX_TARGET
+        f.tag = True
+        a0 = 2.0 * math.pi * i / segments
+        a1 = 2.0 * math.pi * (i + 1) / segments
+        f.loops[0][uv_layer].uv = Vector((0.5, 0.5))
+        f.loops[1][uv_layer].uv = Vector((0.5 + 0.5 * math.cos(a0), 0.5 + 0.5 * math.sin(a0)))
+        f.loops[2][uv_layer].uv = Vector((0.5 + 0.5 * math.cos(a1), 0.5 + 0.5 * math.sin(a1)))
 
 
 def build_archery_target(bm, x, y, z_ground=0.0, ang=0.0):
@@ -81,32 +119,10 @@ def build_archery_target(bm, x, y, z_ground=0.0, ang=0.0):
         bf.material_index = MAT_INDEX_TIMBER
         bf.tag = True
 
-    # 2. Concentric scoring rings on the front face (clean rings, no banner texture)
-    ring_radii = [
-        (target_r * 1.00, 0.000, MAT_INDEX_WOOD),         # Outer straw braid rim
-        (target_r * 0.88, 0.003, MAT_INDEX_PLASTER),      # Outer white scoring ring
-        (target_r * 0.65, 0.006, MAT_INDEX_IRON),         # Black scoring ring
-        (target_r * 0.42, 0.009, MAT_INDEX_TIMBER),       # Red/dark scoring ring
-        (target_r * 0.20, 0.012, MAT_INDEX_WOOD),         # Center gold bullseye
-    ]
-
-    for r_outer, z_off, mat_idx in ring_radii:
-        ring_verts = []
-        for i in range(segments):
-            a = 2.0 * math.pi * i / segments
-            vf = tr @ Vector((r_outer * math.cos(a), r_outer * math.sin(a), half_t + z_off))
-            ring_verts.append(bm.verts.new(vf))
-        c_v = bm.verts.new(tr @ Vector((0.0, 0.0, half_t + z_off)))
-        for i in range(segments):
-            nxt = (i + 1) % segments
-            rf = bm.faces.new([c_v, ring_verts[i], ring_verts[nxt]])
-            rf.material_index = mat_idx
-            rf.tag = True
-            a0 = 2.0 * math.pi * i / segments
-            a1 = 2.0 * math.pi * (i + 1) / segments
-            rf.loops[0][uv_layer].uv = Vector((0.5, 0.5))
-            rf.loops[1][uv_layer].uv = Vector((0.5 + 0.5 * math.cos(a0), 0.5 + 0.5 * math.sin(a0)))
-            rf.loops[2][uv_layer].uv = Vector((0.5 + 0.5 * math.cos(a1), 0.5 + 0.5 * math.sin(a1)))
+    # 2. Painted target face: one disc with radial UVs sampled by the dedicated
+    #    target material (concentric scoring rings + gold bullseye).
+    _painted_disc(bm, tr @ Vector((0.0, 0.0, half_t)), fn, target_r,
+                  segments=segments, dome=0.004)
 
     # 3. Timber tripod stand (two front splayed legs + rear kickstand prop leg)
     # Both situated 100% behind the disc face (local Z <= -half_t)
@@ -171,9 +187,11 @@ def build_archery_target(bm, x, y, z_ground=0.0, ang=0.0):
         for f in shaft_f:
             f.tag = True
 
-        # Fletching feathers at tail end
+        # Fletching feathers at the tail end. The cone's wide end must sit at the
+        # tail (+arr_dir, away from the target), not at the head, so the flare
+        # points back toward the archer.
         tail_pos = hit_pos + arr_dir * (shaft_len - 0.06)
-        fletch_f = create_cone(bm, radius1=0.025, radius2=0.006, height=0.10, segments=5,
+        fletch_f = create_cone(bm, radius1=0.006, radius2=0.028, height=0.12, segments=5,
                                location=tail_pos, rotation=arr_euler,
                                mat_index=MAT_INDEX_PLASTER)
         for f in fletch_f:
@@ -321,61 +339,108 @@ def build_weapon_rack(bm, x, y, z_ground=0.0, ang=0.0):
 
 
 def build_training_dummy(bm, x, y, z_ground=0.0, ang=0.0):
-    """A medieval training quintain: pivoting crossbeam with a shield target and hanging sandbag."""
-    # 1. Chunky timber center post with iron reinforcing bands
-    post_h = 2.10
-    post_r = 0.11
-    p_faces = create_cylinder(bm, radius=post_r, height=post_h, segments=8,
-                              location=(x, y, z_ground + post_h * 0.5), mat_index=MAT_INDEX_TIMBER)
-    for f in p_faces:
-        f.tag = True
+    """A padded training pell on a timber stake (reference-accurate).
 
-    # Iron base & top bands
-    for b_z in (z_ground + 0.35, z_ground + 1.85):
-        bf = create_cylinder(bm, radius=post_r + 0.015, height=0.08, segments=8,
-                             location=(x, y, b_z), mat_index=MAT_INDEX_IRON)
-        for f in bf:
+    Stuffed burlap torso with a painted bullseye, rounded head, cross arms with
+    rope-wrapped ends and rope bindings, standing on a bracketed round timber
+    base. Replaces the old shield-quintain whose shield clipped through the arm.
+    """
+    ca, sa = math.cos(ang), math.sin(ang)
+    fwd = Vector((-sa, ca, 0.0))     # torso faces the archer
+    right = Vector((ca, sa, 0.0))
+
+    # 1. Bracketed round timber base.
+    create_cylinder(bm, radius=0.34, height=0.10, segments=16,
+                    location=(x, y, z_ground + 0.05), mat_index=MAT_INDEX_TIMBER)
+    create_cylinder(bm, radius=0.26, height=0.07, segments=16,
+                    location=(x, y, z_ground + 0.12), mat_index=MAT_INDEX_TIMBER)
+    for k in range(4):
+        ba = ang + math.radians(45.0 + 90.0 * k)
+        bx = x + math.cos(ba) * 0.28
+        by = y + math.sin(ba) * 0.28
+        br_f = create_beveled_box(bm, size=(0.22, 0.09, 0.05),
+                                  location=(bx, by, z_ground + 0.15),
+                                  rotation=(0.0, 0.0, ba),
+                                  mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
+        for f in br_f:
             f.tag = True
 
-    # 2. Horizontal pivoting crossarm
-    bar_z = z_ground + 1.75
-    bar_len = 1.30
-    ca, sa = math.cos(ang), math.sin(ang)
-    arm_f = create_beveled_box(bm, size=(bar_len, 0.12, 0.12),
-                               location=(x, y, bar_z),
-                               rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+    # 2. Central stake up through the pell.
+    create_cylinder(bm, radius=0.05, height=1.72, segments=10,
+                    location=(x, y, z_ground + 0.86), mat_index=MAT_INDEX_TIMBER)
+
+    # 3. Stuffed burlap torso (main barrel + lower skirt) and shoulders.
+    z0 = z_ground + 1.18
+    create_cylinder(bm, radius=0.30, height=0.55, segments=14,
+                    location=(x, y, z0), mat_index=MAT_INDEX_PLASTER)
+    create_cylinder(bm, radius=0.25, height=0.30, segments=14,
+                    location=(x, y, z0 - 0.32), mat_index=MAT_INDEX_PLASTER)
+    create_cylinder(bm, radius=0.16, height=0.14, segments=12,
+                    location=(x, y, z0 + 0.30), mat_index=MAT_INDEX_PLASTER)
+
+    # 4. Stuffed head with a rounded crown.
+    head_z = z0 + 0.56
+    create_cylinder(bm, radius=0.18, height=0.26, segments=12,
+                    location=(x, y, head_z), mat_index=MAT_INDEX_PLASTER)
+    create_cone(bm, radius1=0.18, radius2=0.05, height=0.16, segments=12,
+                location=(x, y, head_z + 0.21), mat_index=MAT_INDEX_PLASTER)
+
+    # 5. Rope bindings (neck, waist, lower hem).
+    for rz, rr in ((head_z - 0.17, 0.15), (z0 - 0.26, 0.27), (z0 + 0.20, 0.30)):
+        rf = create_torus_ring(bm, location=(x, y, rz), rotation=(0.0, 0.0, 0.0),
+                               major_radius=rr, minor_radius=0.022,
+                               major_segments=14, minor_segments=6,
+                               mat_index=MAT_INDEX_TIMBER)
+        for f in rf:
+            f.tag = True
+
+    # 6. Cross arms with rope-wrapped padded ends.
+    arm_z = z0 + 0.14
+    arm_f = create_beveled_box(bm, size=(0.98, 0.085, 0.085),
+                               location=(x, y, arm_z), rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
     for f in arm_f:
         f.tag = True
+    for s in (-1.0, 1.0):
+        ap = Vector((x, y, arm_z)) + right * (s * 0.44)
+        pf = create_cylinder(bm, radius=0.065, height=0.18, segments=8,
+                             location=(ap.x, ap.y, ap.z),
+                             rotation=(0.0, math.pi * 0.5, ang),
+                             mat_index=MAT_INDEX_PLASTER)
+        for f in pf:
+            f.tag = True
+        brf = create_torus_ring(bm, location=(ap.x, ap.y, ap.z),
+                                rotation=(0.0, math.pi * 0.5, ang),
+                                major_radius=0.07, minor_radius=0.016,
+                                major_segments=8, minor_segments=5,
+                                mat_index=MAT_INDEX_TIMBER)
+        for f in brf:
+            f.tag = True
 
-    # Iron pivot cap on top
-    cap_f = create_cylinder(bm, radius=0.075, height=0.20, segments=8,
-                            location=(x, y, bar_z + 0.12), mat_index=MAT_INDEX_IRON)
-    for f in cap_f:
-        f.tag = True
+    # 7. Painted bullseye painted flush on the barrel front.
+    _painted_disc(bm, Vector((x, y, z0)), fwd, 0.205, segments=18,
+                  dome=0.006, surface_radius=0.30)
 
-    # 3. Arm 1: Wooden round shield target
-    sh_x = x + ca * (bar_len * 0.5)
-    sh_y = y + sa * (bar_len * 0.5)
-    build_round_shield(bm, (sh_x, sh_y, bar_z), normal=(-sa, ca, 0.0), radius=0.28, pattern='QUARTERED')
-
-    # 4. Arm 2: Hanging counterweighted wooden sandbag / flail
-    fl_x = x - ca * (bar_len * 0.48)
-    fl_y = y - sa * (bar_len * 0.48)
-    # Suspension link
-    link_f = create_cylinder(bm, radius=0.015, height=0.45, segments=6,
-                             location=(fl_x, fl_y, bar_z - 0.22), mat_index=MAT_INDEX_IRON)
-    for f in link_f:
-        f.tag = True
-    # Chunky barrel / sandbag counterweight
-    sb_f = create_cylinder(bm, radius=0.16, height=0.42, segments=10,
-                           location=(fl_x, fl_y, bar_z - 0.58), mat_index=MAT_INDEX_TIMBER_FRAME)
-    for f in sb_f:
-        f.tag = True
-    # Iron band around sandbag
-    sbb_f = create_cylinder(bm, radius=0.17, height=0.06, segments=10,
-                            location=(fl_x, fl_y, bar_z - 0.58), mat_index=MAT_INDEX_IRON)
-    for f in sbb_f:
-        f.tag = True
+    # 8. Spent arrows sticking out of the torso at dynamic angles.
+    arrow_specs = [(-0.15, 0.14, -1.0), (0.09, -0.06, 1.0), (0.20, 0.12, 1.0)]
+    for hx, hz, side in arrow_specs:
+        base = Vector((x, y, z0 + hz)) + fwd * 0.27 + right * hx
+        adir = (fwd * 0.55 + Vector((0.0, 0.0, 1.0)) * 0.5
+                + right * (0.35 * side)).normalized()
+        alen = 0.34
+        mid = base + adir * (alen * 0.5)
+        arot = Vector((0.0, 0.0, 1.0)).rotation_difference(adir).to_euler()
+        sf = create_cylinder(bm, radius=0.008, height=alen, segments=6,
+                             location=(mid.x, mid.y, mid.z), rotation=arot,
+                             mat_index=MAT_INDEX_WOOD)
+        for f in sf:
+            f.tag = True
+        tail = base + adir * (alen - 0.05)
+        flf = create_cone(bm, radius1=0.006, radius2=0.026, height=0.10, segments=5,
+                          location=(tail.x, tail.y, tail.z), rotation=arot,
+                          mat_index=MAT_INDEX_PLASTER)
+        for f in flf:
+            f.tag = True
 
 
 def build_military_props(bm, props, ctx):

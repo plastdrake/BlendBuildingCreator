@@ -497,6 +497,72 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         in_ring_c = in_boss_c + (rot_mat @ Vector((0.0, 0.012, -0.052)))
         _create_torus_ring(bm, location=in_ring_c, rotation=(1.57, 0.0, out_ang), major_radius=0.060, minor_radius=0.013, major_segments=18, minor_segments=12, mat_index=MAT_INDEX_IRON)
 
+def build_arrow_slit(bm, center=(0.0, 0.0, 0.0), normal_axis='-Y', wall_thickness=0.38,
+                     slit_w=0.18, slit_h=0.92, has_transom=False,
+                     mat_index=MAT_INDEX_CUT_STONE):
+    """Dress a real, pre-cut slit opening (cut by ``build_wall_with_opening``)
+    into a fortified window slit / arrow loop.
+
+    Unlike the old surface applique (a slab plus an iron block that merely *looked*
+    like a window), this expects the host wall to already carry a matching through
+    hole. It only adds the cut-stone reveal linings, a washed exterior sill and
+    lintel, and an optional recessed stone transom (crosslet) - so the dark
+    embrasure behind stays visible through a genuinely open aperture.
+    """
+    if isinstance(normal_axis, (int, float)):
+        facing_angle = float(normal_axis)
+    elif isinstance(normal_axis, (Vector, tuple, list)):
+        nx, ny = normal_axis[0], normal_axis[1]
+        facing_angle = math.atan2(nx, -ny)
+    elif normal_axis == '-Y':
+        facing_angle = 0.0
+    elif normal_axis == '+Y':
+        facing_angle = math.pi
+    elif normal_axis == '-X':
+        facing_angle = -math.pi * 0.5
+    elif normal_axis == '+X':
+        facing_angle = math.pi * 0.5
+    else:
+        facing_angle = 0.0
+
+    rot_mat_4x4 = Euler((0.0, 0.0, facing_angle), 'XYZ').to_matrix().to_4x4()
+    tr_mat = Matrix.Translation(Vector(center)) @ rot_mat_4x4
+
+    def to_world(loc, rot=(0.0, 0.0, 0.0)):
+        w_loc = tr_mat @ Vector(loc)
+        w_rot = (rot_mat_4x4 @ Euler(rot, 'XYZ').to_matrix().to_4x4()).to_euler('XYZ')
+        return w_loc, (w_rot.x, w_rot.y, w_rot.z)
+
+    liner_t = 0.05
+    depth = wall_thickness + 0.01
+
+    # Cut-stone reveals lining the cut aperture on all four sides.
+    for sx in (-1.0, 1.0):
+        loc, rot = to_world((sx * (slit_w * 0.5 - liner_t * 0.5), 0.0, 0.0))
+        create_beveled_box(bm, size=(liner_t, depth, slit_h), location=loc, rotation=rot,
+                           mat_index=mat_index, bevel_amount=0.004)
+    for sz in (-1.0, 1.0):
+        loc, rot = to_world((0.0, 0.0, sz * (slit_h * 0.5 - liner_t * 0.5)))
+        create_beveled_box(bm, size=(slit_w, depth, liner_t), location=loc, rotation=rot,
+                           mat_index=mat_index, bevel_amount=0.004)
+
+    # Slim sloped exterior sill and lintel, flush against the outer wall face.
+    sill_d = wall_thickness * 0.5 + 0.10
+    sill_loc, sill_rot = to_world((0.0, -wall_thickness * 0.5 - 0.02, -slit_h * 0.5 - 0.05))
+    create_beveled_box(bm, size=(slit_w + 0.30, sill_d, 0.10), location=sill_loc,
+                       rotation=sill_rot, mat_index=mat_index, bevel_amount=0.012)
+    head_loc, head_rot = to_world((0.0, -wall_thickness * 0.5 - 0.02, slit_h * 0.5 + 0.05))
+    create_beveled_box(bm, size=(slit_w + 0.24, sill_d - 0.04, 0.09), location=head_loc,
+                       rotation=head_rot, mat_index=mat_index, bevel_amount=0.012)
+
+    # Optional recessed stone transom turning the loop into a crosslet. Kept
+    # inside the reveal so the four fire-slots stay open.
+    if has_transom:
+        loc, rot = to_world((0.0, 0.0, 0.0))
+        create_beveled_box(bm, size=(slit_w + 0.02, wall_thickness * 0.7, 0.11),
+                           location=loc, rotation=rot, mat_index=mat_index, bevel_amount=0.006)
+
+
 def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, step_d=0.35, step_h=0.18, normal_axis='-Y'):
     """
     Creates solid grounded fantasy stone steps leading up to the front door.

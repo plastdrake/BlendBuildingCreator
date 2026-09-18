@@ -382,6 +382,12 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             col.prop(props, "palisade_style")
             col.prop(props, "palisade_height")
             col.prop(props, "palisade_offset")
+        box_fort.prop(props, "has_curtain_wall")
+        if props.has_curtain_wall:
+            col = box_fort.column(align=True)
+            col.prop(props, "curtain_wall_height")
+            col.prop(props, "curtain_wall_thickness")
+            col.prop(props, "curtain_wall_offset")
         box_fort.prop(props, "has_bastion_towers")
         if props.has_bastion_towers:
             col = box_fort.column(align=True)

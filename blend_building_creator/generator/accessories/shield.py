@@ -152,24 +152,14 @@ def build_round_shield(bm, location, normal=(0.0, -1.0, 0.0), radius=0.36,
         df.material_index = rim_mat
         df.tag = True
 
-    # 4. Perimeter Rivet Studs around the iron boss flange
-    for r_idx in range(6):
-        ra = 2.0 * math.pi * r_idx / 6
-        rcx = (boss_r + flange_r) * 0.5 * math.cos(ra)
-        rcy = (boss_r + flange_r) * 0.5 * math.sin(ra)
-        rv_pos = tr @ Vector((rcx, rcy, body_t * 0.5 + 0.022))
-        # Small 4-sided pyramid / cone rivet
-        rv_cone = create_cone(bm, radius1=0.014, radius2=0.004, height=0.014, segments=6,
-                              location=(rv_pos.x, rv_pos.y, rv_pos.z),
-                              rotation=(fn.x, fn.y, fn.z), mat_index=rim_mat)
-        for f in rv_cone:
-            f.tag = True
-
 
 def build_shield_row(bm, p0, p1, z, normal=(0.0, -1.0, 0.0), spacing=1.25,
-                     radius=0.34, skip_gap=None):
+                     radius=0.34, skip_gap=None, mount_offset=0.16):
     """Distribute round shields evenly along a horizontal segment (p0 to p1).
     Used to line palisade walls, rampart railings, or stone barriers (Concept 2).
+
+    mount_offset is how far proud of the run centre-line the shield body sits, so
+    a thicker stone curtain wall can keep its shields flush on the outer face.
     """
     x0, y0 = p0
     x1, y1 = p1
@@ -194,9 +184,9 @@ def build_shield_row(bm, p0, p1, z, normal=(0.0, -1.0, 0.0), spacing=1.25,
             if g0 <= sx <= g1:
                 continue
 
-        # Mount shield offset along outward normal so it sits flush on the outer face of pickets
+        # Mount shield offset along outward normal so it sits flush on the outer face
         nx, ny = normal[0], normal[1]
-        mx = sx + nx * 0.16
-        my = sy + ny * 0.16
+        mx = sx + nx * mount_offset
+        my = sy + ny * mount_offset
         build_round_shield(bm, (mx, my, z), normal=normal, radius=radius,
                            pattern='QUARTERED' if (i % 2 == 0) else 'SOLID')

@@ -22,6 +22,17 @@ def compound_bounds(ctx, offset):
     return x_min - offset, x_max + offset, y_min - offset, y_max + offset
 
 
+def fortification_offset(props):
+    """Resolve the offset of the enclosing fortification perimeter.
+
+    A stone curtain wall supersedes the palisade when enabled, so towers, walls,
+    gates, banners and shields all snap to the same defensive line.
+    """
+    if getattr(props, 'has_curtain_wall', False):
+        return getattr(props, 'curtain_wall_offset', 3.0)
+    return getattr(props, 'palisade_offset', 3.0)
+
+
 def _stake(bm, x, y, z, height, w, mat, tip_mat=None, lean=0.0, jitter=0.0):
     """One vertical stake with a beveled pointy top (no pyramid cap)."""
     tip_h = max(0.18, w * 1.35)
@@ -64,15 +75,27 @@ def _stake(bm, x, y, z, height, w, mat, tip_mat=None, lean=0.0, jitter=0.0):
         (8, 9, 10, 11),         # tip top
     ]
 
+    # Per-face planar UVs so the bark grain keeps a consistent scale on every
+    # side: V always runs up the stake, U wraps the perimeter. The old mapping
+    # sampled x on all faces, which left the side faces with a constant U and
+    # smeared the texture (the "super stretch" on some sides).
     uv_layer = bm.loops.layers.uv.verify()
-    for idxs in faces_indices:
+    for fi, idxs in enumerate(faces_indices):
         f = bm.faces.new([bm_verts[i] for i in idxs])
         f.material_index = mat
         for loop_idx, v_idx in enumerate(idxs):
             lv = local_verts[v_idx]
-            u = (lv.x + sx) * 1.0
-            v = lv.z * 0.45
-            f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+            if fi in (0, 9):
+                u, v = lv.x, lv.y
+            elif fi in (1, 5):
+                u, v = lv.x, lv.z
+            elif fi in (2, 6):
+                u, v = lv.y, lv.z
+            elif fi in (3, 7):
+                u, v = -lv.x, lv.z
+            else:
+                u, v = -lv.y, lv.z
+            f.loops[loop_idx][uv_layer].uv = Vector((u, v * 0.45))
 
 
 def build_palisade_run(bm, p_start, p_end, ground_z=0.0, height=2.3,
@@ -203,15 +226,24 @@ def _gate_post(bm, x, y, ground_z, height):
         (7, 4, 8, 11),          # chamfer left
         (8, 9, 10, 11),         # cap top
     ]
+    # Same per-face planar UV scheme as _stake, so the post grain is not smeared.
     uv_layer = bm.loops.layers.uv.verify()
-    for idxs in faces_indices:
+    for fi, idxs in enumerate(faces_indices):
         f = bm.faces.new([bm_verts[i] for i in idxs])
         f.material_index = MAT_INDEX_TIMBER_FRAME
         for loop_idx, v_idx in enumerate(idxs):
             lv = local_verts[v_idx]
-            u = (lv.x + sx) * 0.9
-            v = lv.z * 0.40
-            f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+            if fi in (0, 9):
+                u, v = lv.x, lv.y
+            elif fi in (1, 5):
+                u, v = lv.x, lv.z
+            elif fi in (2, 6):
+                u, v = lv.y, lv.z
+            elif fi in (3, 7):
+                u, v = -lv.x, lv.z
+            else:
+                u, v = -lv.y, lv.z
+            f.loops[loop_idx][uv_layer].uv = Vector((u * 0.9, v * 0.40))
 
 
 def build_palisade_enclosure(bm, props, ctx, height=2.3, style='STAKES', offset=3.0):
