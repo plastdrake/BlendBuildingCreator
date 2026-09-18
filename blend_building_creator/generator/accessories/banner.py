@@ -72,7 +72,7 @@ def build_banner_pole(bm, x, y, z_ground=0.0, height=4.6,
         tip_y = cap_y + sy * (0.05 * end_sign)
         tip_faces = create_cone(bm, radius1=0.032, radius2=0.0, height=0.08, segments=8,
                                 location=(tip_x, tip_y, bar_z),
-                                rotation=(0.0, 1.5708 * end_sign, ang_side if end_sign > 0 else ang_side + math.pi),
+                                rotation=(0.0, 1.5708 * end_sign, ang_side),
                                 mat_index=MAT_INDEX_IRON)
         for f in tip_faces:
             f.tag = True

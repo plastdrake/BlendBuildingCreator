@@ -14,6 +14,7 @@ from ..mesh_utils import (
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_IRON,
     MAT_INDEX_WOOD, MAT_INDEX_PLASTER, MAT_INDEX_CUT_STONE, MAT_INDEX_TARGET,
+    MAT_INDEX_HAY,
 )
 from .shield import build_round_shield
 
@@ -24,10 +25,15 @@ def build_shield_mount(bm, x, y, z, normal=(0.0, -1.0, 0.0), r=0.34):
 
 
 def _painted_disc(bm, center, normal, radius, segments=18, dome=0.004,
-                  surface_radius=None):
+                  surface_radius=None, n_rings=None):
     """A painted scoring-ring disc facing ``normal``, with radial UVs for the
-    dedicated target material. When ``surface_radius`` is given the disc is
-    curved onto a cylinder of that radius so it lies flush on a barrel body.
+    dedicated target material.
+
+    When ``surface_radius`` is given the disc is built as a tessellated cap of
+    ``n_rings`` concentric rings that each conform to a cylinder of that radius
+    (+``dome``). A single flat fan would cut *inside* the curved surface between
+    the raised centre and rim and appear half-embedded, so multiple rings keep
+    the whole bullseye proud of the barrel.
     """
     fn = Vector(normal).normalized()
     up_ref = Vector((0.0, 0.0, 1.0)) if abs(fn.z) <= 0.95 else Vector((0.0, 1.0, 0.0))
@@ -36,27 +42,61 @@ def _painted_disc(bm, center, normal, radius, segments=18, dome=0.004,
     c = Vector(center)
     uv_layer = bm.loops.layers.uv.verify()
 
-    def ring_off(rho):
+    if surface_radius is None:
+        n_rings = 1
+    elif n_rings is None:
+        n_rings = 4
+    n_rings = max(1, int(n_rings))
+
+    def off(rho):
         if surface_radius is None:
             return 0.0
         return math.sqrt(max(0.0, surface_radius * surface_radius - rho * rho)) + dome
 
+    def uv_at(rho, a):
+        f = rho / radius
+        return Vector((0.5 + 0.5 * f * math.cos(a), 0.5 + 0.5 * f * math.sin(a)))
+
     center_v = bm.verts.new(c + fn * ((surface_radius if surface_radius else 0.0) + dome))
-    ring = []
-    for i in range(segments):
-        a = 2.0 * math.pi * i / segments
-        p = c + fn * ring_off(radius) + right * (radius * math.cos(a)) + up * (radius * math.sin(a))
-        ring.append(bm.verts.new(p))
+    rings = [center_v]
+    for ri in range(1, n_rings + 1):
+        rho = radius * ri / n_rings
+        row = []
+        for i in range(segments):
+            a = 2.0 * math.pi * i / segments
+            p = c + fn * off(rho) + right * (rho * math.cos(a)) + up * (rho * math.sin(a))
+            row.append(bm.verts.new(p))
+        rings.append(row)
+
+    # Centre fan to the first ring.
+    r1 = radius / n_rings
     for i in range(segments):
         nxt = (i + 1) % segments
-        f = bm.faces.new([center_v, ring[i], ring[nxt]])
-        f.material_index = MAT_INDEX_TARGET
-        f.tag = True
         a0 = 2.0 * math.pi * i / segments
         a1 = 2.0 * math.pi * (i + 1) / segments
+        f = bm.faces.new([center_v, rings[1][i], rings[1][nxt]])
+        f.material_index = MAT_INDEX_TARGET
+        f.tag = True
         f.loops[0][uv_layer].uv = Vector((0.5, 0.5))
-        f.loops[1][uv_layer].uv = Vector((0.5 + 0.5 * math.cos(a0), 0.5 + 0.5 * math.sin(a0)))
-        f.loops[2][uv_layer].uv = Vector((0.5 + 0.5 * math.cos(a1), 0.5 + 0.5 * math.sin(a1)))
+        f.loops[1][uv_layer].uv = uv_at(r1, a0)
+        f.loops[2][uv_layer].uv = uv_at(r1, a1)
+
+    # Quad bands between successive rings.
+    for ri in range(1, n_rings):
+        rho0 = radius * ri / n_rings
+        rho1 = radius * (ri + 1) / n_rings
+        for i in range(segments):
+            nxt = (i + 1) % segments
+            a0 = 2.0 * math.pi * i / segments
+            a1 = 2.0 * math.pi * (i + 1) / segments
+            f = bm.faces.new([rings[ri][i], rings[ri][nxt],
+                              rings[ri + 1][nxt], rings[ri + 1][i]])
+            f.material_index = MAT_INDEX_TARGET
+            f.tag = True
+            f.loops[0][uv_layer].uv = uv_at(rho0, a0)
+            f.loops[1][uv_layer].uv = uv_at(rho0, a1)
+            f.loops[2][uv_layer].uv = uv_at(rho1, a1)
+            f.loops[3][uv_layer].uv = uv_at(rho1, a0)
 
 
 def build_archery_target(bm, x, y, z_ground=0.0, ang=0.0):
@@ -349,41 +389,33 @@ def build_training_dummy(bm, x, y, z_ground=0.0, ang=0.0):
     fwd = Vector((-sa, ca, 0.0))     # torso faces the archer
     right = Vector((ca, sa, 0.0))
 
-    # 1. Bracketed round timber base.
+    # 1. Round timber base (plain stacked discs, no metal brackets).
     create_cylinder(bm, radius=0.34, height=0.10, segments=16,
                     location=(x, y, z_ground + 0.05), mat_index=MAT_INDEX_TIMBER)
     create_cylinder(bm, radius=0.26, height=0.07, segments=16,
                     location=(x, y, z_ground + 0.12), mat_index=MAT_INDEX_TIMBER)
-    for k in range(4):
-        ba = ang + math.radians(45.0 + 90.0 * k)
-        bx = x + math.cos(ba) * 0.28
-        by = y + math.sin(ba) * 0.28
-        br_f = create_beveled_box(bm, size=(0.22, 0.09, 0.05),
-                                  location=(bx, by, z_ground + 0.15),
-                                  rotation=(0.0, 0.0, ba),
-                                  mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
-        for f in br_f:
-            f.tag = True
 
     # 2. Central stake up through the pell.
     create_cylinder(bm, radius=0.05, height=1.72, segments=10,
                     location=(x, y, z_ground + 0.86), mat_index=MAT_INDEX_TIMBER)
 
-    # 3. Stuffed burlap torso (main barrel + lower skirt) and shoulders.
+    # 3. Stuffed hay torso (main barrel + lower skirt) and shoulders. High
+    #    segment count keeps the barrel round so the painted bullseye conforms
+    #    flush to the surface instead of sinking into a flat facet.
     z0 = z_ground + 1.18
-    create_cylinder(bm, radius=0.30, height=0.55, segments=14,
-                    location=(x, y, z0), mat_index=MAT_INDEX_PLASTER)
-    create_cylinder(bm, radius=0.25, height=0.30, segments=14,
-                    location=(x, y, z0 - 0.32), mat_index=MAT_INDEX_PLASTER)
-    create_cylinder(bm, radius=0.16, height=0.14, segments=12,
-                    location=(x, y, z0 + 0.30), mat_index=MAT_INDEX_PLASTER)
+    create_cylinder(bm, radius=0.30, height=0.55, segments=28,
+                    location=(x, y, z0), mat_index=MAT_INDEX_HAY)
+    create_cylinder(bm, radius=0.25, height=0.30, segments=28,
+                    location=(x, y, z0 - 0.32), mat_index=MAT_INDEX_HAY)
+    create_cylinder(bm, radius=0.16, height=0.14, segments=20,
+                    location=(x, y, z0 + 0.30), mat_index=MAT_INDEX_HAY)
 
     # 4. Stuffed head with a rounded crown.
     head_z = z0 + 0.56
-    create_cylinder(bm, radius=0.18, height=0.26, segments=12,
-                    location=(x, y, head_z), mat_index=MAT_INDEX_PLASTER)
-    create_cone(bm, radius1=0.18, radius2=0.05, height=0.16, segments=12,
-                location=(x, y, head_z + 0.21), mat_index=MAT_INDEX_PLASTER)
+    create_cylinder(bm, radius=0.18, height=0.26, segments=20,
+                    location=(x, y, head_z), mat_index=MAT_INDEX_HAY)
+    create_cone(bm, radius1=0.18, radius2=0.05, height=0.16, segments=20,
+                location=(x, y, head_z + 0.21), mat_index=MAT_INDEX_HAY)
 
     # 5. Rope bindings (neck, waist, lower hem).
     for rz, rr in ((head_z - 0.17, 0.15), (z0 - 0.26, 0.27), (z0 + 0.20, 0.30)):
@@ -406,7 +438,7 @@ def build_training_dummy(bm, x, y, z_ground=0.0, ang=0.0):
         pf = create_cylinder(bm, radius=0.065, height=0.18, segments=8,
                              location=(ap.x, ap.y, ap.z),
                              rotation=(0.0, math.pi * 0.5, ang),
-                             mat_index=MAT_INDEX_PLASTER)
+                             mat_index=MAT_INDEX_HAY)
         for f in pf:
             f.tag = True
         brf = create_torus_ring(bm, location=(ap.x, ap.y, ap.z),
@@ -417,9 +449,10 @@ def build_training_dummy(bm, x, y, z_ground=0.0, ang=0.0):
         for f in brf:
             f.tag = True
 
-    # 7. Painted bullseye painted flush on the barrel front.
-    _painted_disc(bm, Vector((x, y, z0)), fwd, 0.205, segments=18,
-                  dome=0.006, surface_radius=0.30)
+    # 7. Painted bullseye proud of the barrel front (conforms to the barrel so
+    #    the whole disc sits on the surface instead of being embedded).
+    _painted_disc(bm, Vector((x, y, z0)), fwd, 0.20, segments=24,
+                  dome=0.010, surface_radius=0.30)
 
     # 8. Spent arrows sticking out of the torso at dynamic angles.
     arrow_specs = [(-0.15, 0.14, -1.0), (0.09, -0.06, 1.0), (0.20, 0.12, 1.0)]
@@ -443,82 +476,79 @@ def build_training_dummy(bm, x, y, z_ground=0.0, ang=0.0):
             f.tag = True
 
 
-def build_military_props(bm, props, ctx):
-    """Scatter an authentic military drill yard layout: archery lane, weapon rack, quintain.
+def _spread_positions(n, lo, hi):
+    """Return ``n`` evenly spaced positions between ``lo`` and ``hi`` (inclusive)."""
+    n = max(1, int(n))
+    if n == 1 or hi <= lo:
+        return [(lo + hi) * 0.5]
+    return [lo + (hi - lo) * i / (n - 1) for i in range(n)]
 
-    Shape-aware collision avoidance guarantees props never clip inside wings, rooms, or walls.
+
+def build_military_props(bm, props, ctx):
+    """Lay out the military drill yard along the courtyard walls.
+
+    On U-shaped buildings the archery targets line one wing's inner wall and the
+    training pells line the opposite wing, both facing into the courtyard so they
+    face each other across the drill lane. Weapon racks stand at the inner ends
+    of the wing walls. Shape-aware so props never clip wings, rooms or walls.
     """
-    count = max(1, int(getattr(props, 'military_props_count', 3)))
     wall_t = ctx.wall_t
     found_h = getattr(props, 'foundation_height', 0.5)
 
-    # 1. Determine safe courtyard and drill yard boundaries factoring in wings
-    has_u_wings = (ctx.shape == 'U_SHAPE' and ctx.wings and any(w.get('wall') == 'FRONT' for w in ctx.wings))
+    n_racks = max(0, int(getattr(props, 'military_rack_count', 2)))
+    n_dummies = max(0, int(getattr(props, 'military_dummy_count', 3)))
+    n_targets = max(0, int(getattr(props, 'military_target_count', 3)))
+
+    main_front_y = -ctx.base_d * 0.5 - wall_t * 0.5
+    has_u_wings = (ctx.shape == 'U_SHAPE' and ctx.wings
+                   and any(w.get('wall') == 'FRONT' for w in ctx.wings))
 
     if has_u_wings:
         front_wings = [w for w in ctx.wings if w.get('wall') == 'FRONT']
         w_left = min(front_wings, key=lambda w: w['base'][0])
         w_right = max(front_wings, key=lambda w: w['base'][1])
-        # Inner walls of wings forming the courtyard
-        court_x0 = w_left['base'][1]
-        court_x1 = w_right['base'][0]
+        left_wall = w_left['base'][1]     # left wing inner face (faces +X)
+        right_wall = w_right['base'][0]   # right wing inner face (faces -X)
         wing_front_y = min(w['base'][2] for w in front_wings)
-        main_front_y = -ctx.base_d * 0.5 - wall_t * 0.5
+
+        stand = 0.82
+        y_front = wing_front_y + 1.8
+        y_back = max(y_front, main_front_y - 3.1)
+        ys = _spread_positions(max(n_targets, n_dummies, 1), y_front, y_back)
+
+        # Archery targets on the left wall, facing right into the courtyard.
+        for i in range(n_targets):
+            build_archery_target(bm, left_wall + stand, ys[min(i, len(ys) - 1)], 0.0,
+                                 ang=math.radians(-90.0))
+        # Training pells on the right wall, facing left into the courtyard.
+        for i in range(n_dummies):
+            build_training_dummy(bm, right_wall - stand, ys[min(i, len(ys) - 1)], 0.0,
+                                 ang=math.radians(90.0))
+        # Weapon racks at the inner (building-side) ends of the wing walls.
+        rack_y = main_front_y - 1.15
+        for i in range(n_racks):
+            left = (i % 2 == 0)
+            wx = (left_wall + stand * 0.7) if left else (right_wall - stand * 0.7)
+            build_weapon_rack(bm, wx, rack_y, 0.0,
+                              ang=math.radians(-90.0 if left else 90.0))
     else:
         court_x0 = -ctx.base_w * 0.5 + 1.2
         court_x1 = ctx.base_w * 0.5 - 1.2
-        wing_front_y = -ctx.base_d * 0.5 - wall_t * 0.5
-        main_front_y = wing_front_y
+        pal_off = (getattr(props, 'palisade_offset', 3.0)
+                   if getattr(props, 'has_palisade', False) else 2.0)
 
-    court_w = max(2.0, court_x1 - court_x0)
-    court_cx = (court_x0 + court_x1) * 0.5
+        for tx in _spread_positions(n_targets, court_x0 + 0.9, court_x1 - 0.9):
+            build_archery_target(bm, tx, main_front_y + 1.3, 0.0, ang=0.0)
+        for dx in _spread_positions(n_dummies, court_x0 + 1.1, court_x1 - 1.1):
+            build_training_dummy(bm, dx, main_front_y - pal_off * 0.48, 0.0,
+                                 ang=math.radians(180.0))
+        for i in range(n_racks):
+            left = (i % 2 == 0)
+            rx = court_x0 + 1.0 if left else court_x1 - 1.0
+            build_weapon_rack(bm, rx, main_front_y - 0.6, 0.0, ang=0.0)
 
-    # Palisade boundary
-    has_pal = getattr(props, 'has_palisade', False)
-    pal_off = getattr(props, 'palisade_offset', 3.0) if has_pal else 2.0
-    pal_front_y = wing_front_y - pal_off
-
+    # Mounted heraldic wall shield above the main entrance (never over a window).
     door_cx = ctx.main_door_cx
-    door_clear = getattr(props, 'door_width', 1.2) * 0.5 + 1.1
-
-    # 1. Weapon rack placed on the right flank of the drill yard
-    if has_u_wings:
-        rack_x = court_cx + court_w * 0.22
-        rack_y = (main_front_y + wing_front_y) * 0.50
-        build_weapon_rack(bm, rack_x, rack_y, 0.0, ang=math.radians(-25.0))
-    else:
-        rack_x = door_cx - door_clear - 0.9
-        rack_x = max(court_x0 + 0.95, min(rack_x, court_x1 - 0.95))
-        build_weapon_rack(bm, rack_x, main_front_y - 0.45, 0.0, ang=0.0)
-
-    # 2. Training quintain / dummy on the left flank of the drill yard
-    if has_u_wings:
-        dummy_x = court_cx - court_w * 0.22
-        dummy_y = (main_front_y + wing_front_y) * 0.50
-        build_training_dummy(bm, dummy_x, dummy_y, 0.0, ang=math.radians(20.0))
-    else:
-        dummy_x = court_x0 + 1.3
-        dummy_y = main_front_y - pal_off * 0.48
-        build_training_dummy(bm, dummy_x, dummy_y, 0.0, ang=math.radians(20.0))
-
-    # 3. Archery target(s):
-    # Placed at the end of the courtyard shooting lane facing +Y toward archers
-    if has_u_wings:
-        target_x = court_cx + court_w * 0.32
-        target_y = wing_front_y + 1.6
-        build_archery_target(bm, target_x, target_y, 0.0, ang=math.radians(170.0))
-        if count >= 3:
-            build_archery_target(bm, target_x - 1.25, target_y + 0.35, 0.0, ang=math.radians(165.0))
-    else:
-        target_x = court_x1 - 0.85
-        target_y = main_front_y - pal_off * 0.65
-        build_archery_target(bm, target_x, target_y, 0.0, ang=math.radians(165.0))
-        if count >= 3:
-            build_archery_target(bm, target_x - 1.25, target_y - 0.30, 0.0, ang=math.radians(170.0))
-
-    # 4. Mounted wall shield:
-    # Mounted directly above the main entrance door lintel (garrison heraldry)
-    # Guaranteed never to collide with window openings
     door_h = getattr(props, 'door_height', 2.1)
     shield_z = found_h + door_h + 0.36
     build_round_shield(bm, (door_cx, main_front_y - 0.02, shield_z),

@@ -1149,6 +1149,27 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    military_rack_count: IntProperty(
+        name="Weapon Racks",
+        description="Number of A-frame weapon racks in the drill yard",
+        min=0, max=6, default=2,
+        update=on_property_updated
+    )
+
+    military_dummy_count: IntProperty(
+        name="Training Pells",
+        description="Number of padded training pells (dummies) in the drill yard",
+        min=0, max=6, default=3,
+        update=on_property_updated
+    )
+
+    military_target_count: IntProperty(
+        name="Archery Targets",
+        description="Number of archery targets in the drill yard",
+        min=0, max=6, default=3,
+        update=on_property_updated
+    )
+
     color_banner: FloatVectorProperty(
         name="Banner Color",
         subtype='COLOR',

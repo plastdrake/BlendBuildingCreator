@@ -59,7 +59,7 @@ def _load_image_texture(tree, filename, coord, loc_x=-800, loc_y=120, scale=(1.0
     return tex_node
 
 # ---------------------------------------------------------------------------
-# Material slot index constants (11 canonical slots for UE optimization)
+# Material slot index constants (16 canonical slots for UE optimization)
 # ---------------------------------------------------------------------------
 MAT_INDEX_STONE        = 0
 MAT_INDEX_PLASTER      = 1
@@ -84,6 +84,7 @@ MAT_INDEX_PLASTER_BRICK = 11
 MAT_INDEX_CLOCK_FACE    = 12
 MAT_INDEX_BANNER        = 13
 MAT_INDEX_TARGET        = 14
+MAT_INDEX_HAY           = 15
 
 
 # ---------------------------------------------------------------------------
@@ -1445,6 +1446,38 @@ def create_stylized_target(name="M_Building_Target", color=(0.78, 0.72, 0.58, 1.
     return mat
 
 
+def create_stylized_hay(name="M_Building_Hay", color=(0.78, 0.60, 0.30, 1.0)):
+    """Handpainted woven straw/burlap for the padded training pell and sacks.
+
+    Uses the packaged ``hay_diffuse.png`` handpainted texture (procedurally
+    painted woven straw fibres) tinted toward the requested straw colour, with a
+    soft painterly wash and contact AO so it bakes cleanly.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-900)
+
+    tex_node = _load_image_texture(tree, "hay_diffuse.png", c, loc_x=-660, loc_y=120,
+                                   scale=(1.4, 1.4, 1.0))
+    if tex_node is not None:
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-200, 120)
+        tint.inputs["Factor"].default_value = 0.18
+        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = color
+        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-240,
+                                       strength=0.12, scale=1.8)
+        _apply_ao(tree, bsdf, painted, strength=0.38, distance=0.14)
+        _setup_pbr(tree, bsdf, out, roughness=0.96)
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=0.96)
+    return mat
+
+
 def create_stylized_banner(name="M_Building_Banner", color=(0.55, 0.12, 0.12, 1.0)):
     """Heraldic painted-cloth standard with dragon crest shield texture."""
     mat, tree = _new_mat(name)
@@ -1679,7 +1712,7 @@ create_stylized_floor = create_stylized_floorboards
 
 def setup_building_material_slots(obj, props):
     """
-    Populates all 11 canonical material slots on obj.
+    Populates all 16 canonical material slots on obj.
     Slot indices match MAT_INDEX_* constants.
     Material names are generic and consistent across all tiers (no _T1, _T2, etc.)
     for seamless, reusable master materials in Unreal Engine.
@@ -1759,7 +1792,10 @@ def setup_building_material_slots(obj, props):
     # 14. Archery Target / Pell (painted concentric scoring rings)
     mat_target = getattr(props, 'custom_target', None) or create_stylized_target("M_Building_Target")
 
-    # Assemble all 15 canonical slots in strict order
+    # 15. Hay / Burlap (hay_diffuse.png) - padded training pell stuffing and sacks
+    mat_hay = getattr(props, 'custom_hay', None) or create_stylized_hay("M_Building_Hay")
+
+    # Assemble all 16 canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
         mat_plaster,        # 1  MAT_INDEX_PLASTER
@@ -1776,6 +1812,7 @@ def setup_building_material_slots(obj, props):
         mat_clock_face,     # 12 MAT_INDEX_CLOCK_FACE
         mat_banner,         # 13 MAT_INDEX_BANNER
         mat_target,         # 14 MAT_INDEX_TARGET
+        mat_hay,            # 15 MAT_INDEX_HAY
     ]
     obj.data.materials.clear()
     for m in required_mats:

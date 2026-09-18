@@ -193,10 +193,13 @@ def _place_banners(bm, props, ctx):
                      or _prop(props, 'has_curtain_wall', False))
     off = fortification_offset(props) if has_enclosure else 1.2
     x_min, x_max, y_min, y_max = compound_bounds(ctx, off)
+    _is_curtain = _prop(props, 'has_curtain_wall', False)
     wall_h = (_prop(props, 'curtain_wall_height', 3.2)
-              if _prop(props, 'has_curtain_wall', False)
+              if _is_curtain
               else _prop(props, 'palisade_height', 2.3))
-    height = max(4.2, wall_h + 2.2)
+    # Curtain walls carry a raised wall-walk and crenellated merlons, so raise
+    # the standard further or the hanging cloth overlaps the parapet.
+    height = max(4.2, wall_h + 2.2 + (1.15 if _is_curtain else 0.0))
 
     has_towers = _prop(props, 'has_bastion_towers', False)
     t_size = _prop(props, 'bastion_tower_size', 3.2) if has_towers else 0.0
@@ -257,7 +260,9 @@ def _build_fortifications(bm, props, ctx):
         wall_h = (_prop(props, 'curtain_wall_height', 3.2) if is_curtain
                   else _prop(props, 'palisade_height', 2.3))
         wall_t = _prop(props, 'curtain_wall_thickness', 0.55) if is_curtain else 0.10
-        sh_z = wall_h * (0.55 if is_curtain else 0.62)
+        # Mount shields high on the wall, clear above the arrow-slit heads, and
+        # space them widely so they read as sparse garrison heraldry.
+        sh_z = (wall_h - 0.70) if is_curtain else (wall_h * 0.62)
         mount = (wall_t * 0.5 + 0.06) if is_curtain else 0.16
         # Compute tower footprint clearance so shields never appear inside a tower
         has_towers = _prop(props, 'has_bastion_towers', False)
@@ -268,13 +273,13 @@ def _build_fortifications(bm, props, ctx):
         build_shield_row(bm,
                          (x_min + t_clear_front, y_min),
                          (x_max - t_clear_front, y_min),
-                         sh_z, normal=(0.0, -1.0, 0.0), spacing=1.25,
+                         sh_z, normal=(0.0, -1.0, 0.0), spacing=2.90,
                          skip_gap=(g0, g1), mount_offset=mount)
         # Side runs — start from py_min to avoid tower footprint at front corners
         build_shield_row(bm, (x_min, y_min + t_clear_side), (x_min, y_max), sh_z,
-                         normal=(-1.0, 0.0, 0.0), spacing=1.45, mount_offset=mount)
+                         normal=(-1.0, 0.0, 0.0), spacing=3.20, mount_offset=mount)
         build_shield_row(bm, (x_max, y_min + t_clear_side), (x_max, y_max), sh_z,
-                         normal=(1.0, 0.0, 0.0), spacing=1.45, mount_offset=mount)
+                         normal=(1.0, 0.0, 0.0), spacing=3.20, mount_offset=mount)
 
 
     # 4. Military drill yard apparatus (archery targets, weapon rack, quintain)

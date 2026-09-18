@@ -164,24 +164,22 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
         px = cx + tx * (s * half_outer)
         py = cy + ty * (s * half_outer)
         pier_h = gate_h + 0.55
-        create_beveled_box(bm, size=(0.68, thickness + 0.30, pier_h),
+        create_beveled_box(bm, size=(0.58, thickness + 0.20, pier_h),
                            location=(px, py, ground_z + pier_h * 0.5),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-        create_beveled_box(bm, size=(0.80, thickness + 0.42, 0.16),
-                           location=(px, py, ground_z + pier_h + 0.08),
+        create_beveled_box(bm, size=(0.70, thickness + 0.30, 0.14),
+                           location=(px, py, ground_z + pier_h + 0.07),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.018)
 
-    # Lintel spanning the opening + central keystone boss.
-    create_beveled_box(bm, size=(gap_w + 0.68, thickness + 0.20, 0.42),
-                       location=(cx, cy, ground_z + gate_h + 0.21),
+    # Slim lintel band across the opening, flush with the masonry above. A bulky
+    # projecting lintel + keystone boss read as a random slab over the gate, so
+    # only a shallow band is left proud of the wall here.
+    create_beveled_box(bm, size=(gap_w + 0.52, thickness + 0.08, 0.26),
+                       location=(cx, cy, ground_z + gate_h + 0.13),
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-    create_beveled_box(bm, size=(0.30, thickness + 0.34, 0.34),
-                       location=(cx, cy, ground_z + gate_h + 0.57),
-                       rotation=(0.0, 0.0, ang),
-                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.018)
 
 
 def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
@@ -200,29 +198,37 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
 
     has_towers = getattr(props, 'has_bastion_towers', False)
     t_size = getattr(props, 'bastion_tower_size', 3.2) if has_towers else 0.0
+    t_half = t_size * 0.5
     has_back = has_towers and getattr(props, 'bastion_tower_count', 2) >= 4
-    clear_f = t_size if has_towers else 0.0
-    clear_b = t_size if has_back else 0.0
+    # Bastion towers straddle the boundary: centred ON the front/back line, they
+    # occupy a full t_size across X but only t_half inward in Y. Clear the
+    # matching footprint per axis (with a small overlap) so the runs meet the
+    # tower walls cleanly instead of leaving a gap at the side corners.
+    ov = 0.12
+    clear_x_f = (t_size - ov) if has_towers else 0.0
+    clear_x_b = (t_size - ov) if has_back else 0.0
+    clear_y_f = (t_half - ov) if has_towers else 0.0
+    clear_y_b = (t_half - ov) if has_back else 0.0
 
     H = height if height is not None else getattr(props, 'curtain_wall_height', 3.2)
     T = thickness if thickness is not None else getattr(props, 'curtain_wall_thickness', 0.55)
     gate_h = max(2.2, min(3.0, H - 0.55))
 
     # Front run with the gate opening.
-    front_u0 = x_min + clear_f
+    front_u0 = x_min + clear_x_f
     build_curtain_wall_run(
-        bm, (front_u0, y_min), (x_max - clear_f, y_min), (0.0, -1.0), 0.0, H, T,
+        bm, (front_u0, y_min), (x_max - clear_x_f, y_min), (0.0, -1.0), 0.0, H, T,
         gate={'u0': g0 - front_u0, 'u1': g1 - front_u0, 'h': gate_h}, seed=ctx.seed)
     # Back run.
     build_curtain_wall_run(
-        bm, (x_min + clear_b, y_max), (x_max - clear_b, y_max), (0.0, 1.0), 0.0, H, T,
+        bm, (x_min + clear_x_b, y_max), (x_max - clear_x_b, y_max), (0.0, 1.0), 0.0, H, T,
         seed=ctx.seed + 1)
     # Left and right runs, clearing the tower footprints at front and back.
     build_curtain_wall_run(
-        bm, (x_min, y_min + clear_f), (x_min, y_max - clear_b), (-1.0, 0.0), 0.0, H, T,
+        bm, (x_min, y_min + clear_y_f), (x_min, y_max - clear_y_b), (-1.0, 0.0), 0.0, H, T,
         seed=ctx.seed + 2)
     build_curtain_wall_run(
-        bm, (x_max, y_min + clear_f), (x_max, y_max - clear_b), (1.0, 0.0), 0.0, H, T,
+        bm, (x_max, y_min + clear_y_f), (x_max, y_max - clear_y_b), (1.0, 0.0), 0.0, H, T,
         seed=ctx.seed + 3)
 
     # Gatehouse dressing over the front opening.

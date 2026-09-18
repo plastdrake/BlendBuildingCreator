@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.11.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.11.1-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 27 ready-made presets across three material tiers.
@@ -76,7 +76,17 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Real arrow slits**: pierced arrow loops (with cut-stone reveals and a crosslet transom) in the bastion towers and curtain walls — genuine through-holes, not surface appliqués.
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
-- **Military props**: archery targets with painted rings, weapon racks, wall-mounted shields and padded training pells scattered through the yard (the target face uses a dedicated ring shader).
+- **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.11.1
+
+- **Plot fits 40x40:** the Tier 3 Infantry Barracks footprint was slimmed (33x11.5 m → 29x10.5 m) so the whole compound, curtain wall and corner towers measure under 40x40 m with a roomier drill yard.
+- **Curtain-wall corners sealed:** bastion towers straddle the compound boundary (full width across X, half in Y), so the side runs now meet the towers cleanly instead of leaving a gap at the corners.
+- **Cleaner gatehouse:** removed the bulky projecting lintel + keystone boss that read as a stray slab above the entrance; replaced with a slim flush lintel band and slimmer piers.
+- **Fewer, better-placed shields:** mounted higher (clear of the arrow-slit heads) and spaced much wider by default.
+- **Drill-yard layout:** archery targets line one wing wall and training pells the opposite wall, both facing into the courtyard so they face each other; weapon racks stand at the inner ends. New **Weapon Racks / Training Pells / Archery Targets** counts (Tier 3 defaults 2/3/3).
+- **Better training pell:** removed the odd metal base brackets, the painted bullseye now sits proud of the barrel (no longer embedded), and the stuffed torso/head use a new handpainted **hay/burlap** material (`M_Building_Hay`, the 16th material slot).
+- **Raised banners** so the hanging cloth clears the crenellated parapet, and fixed a crossbar finial spike that pointed 180 degrees the wrong way.
 
 ## What's new in 1.11.0
 
