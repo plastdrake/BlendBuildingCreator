@@ -209,6 +209,17 @@ def _build_generic_annex(bm, props, ctx, tier):
         tier=tier, width=a_w, depth=a_d, roof_h=a_roof,
         plank_direction=ctx.plank_dir,
         main_bounds_by_floor=ctx.floor_wall_bounds,
+        main_roof={
+            'num_floors': ctx.num_floors, 'rotated': ctx.is_rotated_roof,
+            'top_z': ctx.found_h + ctx.num_floors * ctx.floor_h,
+            'top_cx': 0.0, 'top_cy': 0.0, 'top_hx': ctx.hx, 'top_hy': ctx.hy,
+            'x_min': -ctx.hx, 'x_max': ctx.hx, 'y_min': -ctx.hy, 'y_max': ctx.hy,
+            'roof_h': _prop(props, 'roof_height', 3.0),
+            'flare': _prop(props, 'roof_flare', 0.40),
+            'sway': _prop(props, 'roof_sway', 0.30),
+            'style': _prop(props, 'roof_style', 'SWAY'),
+            'ov': _prop(props, 'roof_overhang', 0.70),
+        },
         # Log (Tier 1) buildings get a plain log annex, never half-timbering.
         timber_framing=bool(_prop(props, 'has_timber_framing', True)) and tier != 'TIER_1',
         diagonals=bool(_prop(props, 'timber_diagonals', True)),
@@ -455,6 +466,13 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
                     yard_y = (hy + wy2) * 0.5 + 1.2
                     rot_crane = 1.75
         build_courtyard_crane(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_crane)
+        # For primitive / supply-depot tier, dress the yard with crates, barrels, lumber piles, and sacks
+        if getattr(props, 'material_tier', 'TIER_3') == 'TIER_1' or props.roof_style in ('NONE', 'MAKESHIFT') or open_timber:
+            from .warehouse import build_supply_depot_yard
+            build_supply_depot_yard(bm, min_x=-hx, max_x=hx, min_y=-hy, max_y=hy, z_floor=found_h, seed=seed)
+            if shape == 'L_SHAPE' and wings:
+                wx1, wx2, wy1, wy2 = wings[0]['base']
+                build_supply_depot_yard(bm, min_x=wx1, max_x=wx2, min_y=wy1, max_y=wy2, z_floor=found_h, seed=seed + 31)
     elif effective_archetype == 'LUMBERMILL':
         yard_x = 0.0
         yard_y = -hy - 2.2

@@ -19,6 +19,30 @@ from .details import (
 )
 
 
+def _annex_roof_band(props, ctx):
+    """World (side_sign, y_min, y_max) of a full-height side annex's roof band.
+
+    A full-height annex ties into the main roof across a valley, so its roof
+    occupies a band of the main roof on the annex side. Main-roof dormers and the
+    chimney must stay out of that band or they collide with the annex roof.
+    Returns None when there is no such annex.
+    """
+    if not getattr(props, 'has_side_annex', False):
+        return None
+    if getattr(props, 'town_hall_composer', False) and ctx.shape != 'T_SHAPE':
+        return None
+    tier = getattr(props, 'material_tier', 'TIER_3')
+    a_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
+    if a_floors < ctx.num_floors:
+        return None
+    if getattr(props, 'town_hall_composer', False):
+        side_sgn = -1.0 if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else 1.0
+    else:
+        side_sgn = 1.0 if getattr(props, 'annex_side', 'LEFT') == 'RIGHT' else -1.0
+    a_w = min(6.0, max(3.6, ctx.base_d * 0.72))
+    return (side_sgn, -a_w * 0.5 - 0.45, a_w * 0.5 + 0.45)
+
+
 def _wing_loft_candidates(props, ctx, wings, found_h, floor_h, num_floors, wall_t,
                           roof_height, wing_roof_scale, is_rotated_roof, tier_val,
                           mini_sides, balc_side):
@@ -102,6 +126,27 @@ def build_roof_and_attic(bm, props, ctx):
     top_cy = (top_y_min + top_y_max) * 0.5
     top_z = found_h + num_floors * floor_h
     roof_style = props.roof_style
+    _annex_band = _annex_roof_band(props, ctx)
+
+    if roof_style in ('NONE', 'MAKESHIFT'):
+        if roof_style == 'MAKESHIFT':
+            from .makeshift_roof import build_makeshift_roof
+            build_makeshift_roof(
+                bm, top_x_min, top_x_max, top_y_min, top_y_max,
+                z_base=top_z, effective_archetype=effective_archetype, seed=seed
+            )
+            if has_wing and wings:
+                fl_wings_b = compute_fl_wing_bounds(wings, floor_wall_bounds, top_fl_idx)
+                for w_idx, wb in enumerate(fl_wings_b):
+                    wx1, wx2, wy1, wy2 = wb
+                    build_makeshift_roof(
+                        bm, wx1, wx2, wy1, wy2,
+                        z_base=top_z, effective_archetype=effective_archetype, seed=seed + 17 + w_idx
+                    )
+        ctx.top_z = top_z
+        ctx.top_hx = top_hx
+        ctx.top_hy = top_hy
+        return None
     
     # Attic floor plate (embedded into wall core with zero gap)
     build_floor_slab(
@@ -348,6 +393,15 @@ def build_roof_and_attic(bm, props, ctx):
                         'u_min': max(0.25, u_intersect + 0.04),
                         'u_max': min(0.70, dormer_u + 0.08)
                     })
+
+        # Drop dormers that would sit in the band a full-height annex roof ties
+        # into (its valley extension covers that part of the main slope).
+        if _annex_band is not None and not is_rotated_roof:
+            _as, _ay0, _ay1 = _annex_band
+            dormer_placements = [
+                dp for dp in dormer_placements
+                if not (dp['side'] == _as and _ay0 <= dp['pos'][1] <= _ay1)
+            ]
 
         # Eave exclusions for equal-floor wings so eave fascia beams don't slice through wing roofs
         eave_ex = {'min': [], 'max': []}
@@ -1221,7 +1275,8 @@ def build_roof_and_attic(bm, props, ctx):
     build_roof_chimney(bm, props, effective_archetype,
                        dormer_placements, wing_dormer_placements,
                        top_cx, top_cy, top_hx, top_hy,
-                       top_x_min, top_x_max, top_y_min, top_y_max, total_height)
+                       top_x_min, top_x_max, top_y_min, top_y_max, total_height,
+                       annex_band=_annex_band)
 
     ctx.top_z = top_z
     ctx.top_hx = top_hx

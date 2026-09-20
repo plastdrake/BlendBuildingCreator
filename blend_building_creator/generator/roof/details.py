@@ -134,7 +134,8 @@ def build_roof_clock_spire_pass(bm, props, effective_archetype, roof_style,
 def build_roof_chimney(bm, props, effective_archetype,
                        dormer_placements, wing_dormer_placements,
                        top_cx, top_cy, top_hx, top_hy,
-                       top_x_min, top_x_max, top_y_min, top_y_max, total_height):
+                       top_x_min, top_x_max, top_y_min, top_y_max, total_height,
+                       annex_band=None):
     """Stylized crooked stone chimney that dodges pillared overhangs and dormers."""
     if not (props.has_chimney and effective_archetype != 'WATCHTOWER'):
         return
@@ -175,6 +176,19 @@ def build_roof_chimney(bm, props, effective_archetype,
                 moved = True
         if not moved:
             break
+    # Keep the chimney out of a full-height annex's roof band (its valley
+    # extension sweeps across that part of the main slope).
+    if annex_band is not None:
+        _as, _ay0, _ay1 = annex_band
+        if (chim_x - top_cx) * _as > -0.2 and _ay0 <= chim_y <= _ay1:
+            if chim_y - _ay0 < _ay1 - chim_y:
+                chim_y = _ay0 - 0.60
+            else:
+                chim_y = _ay1 + 0.60
+            chim_y = max(top_y_min + 0.9, min(top_y_max - 0.9, chim_y))
+            if _ay0 <= chim_y <= _ay1:
+                chim_x = top_cx - _as * abs(chim_x - top_cx)
+                chim_x = max(top_x_min + 0.9, min(top_x_max - 0.9, chim_x))
     chim_total_h = total_height + 0.8
     build_fantasy_chimney(
         bm,

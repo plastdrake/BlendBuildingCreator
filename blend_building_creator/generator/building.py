@@ -7,7 +7,10 @@ Supports Rectangular, L-Shaped, T-Shaped, and Round Tower footprint architecture
 
 import bmesh
 from .mesh_utils import create_beveled_box, apply_box_uvs, add_wonkiness, apply_organic_shading
-from .materials import setup_building_material_slots, MAT_INDEX_STONE
+from .materials import (
+    setup_building_material_slots, MAT_INDEX_STONE,
+    MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON
+)
 from .shapes import get_wings_setup
 from .round_tower import build_round_tower
 from .floors import build_floors
@@ -154,12 +157,17 @@ def _create_building_context(props):
     balc_side_eff = getattr(props, 'balcony_side', 'FRONT')
     floor_balc_side = {}
     if has_balc:
-        _annex_on = (getattr(props, 'town_hall_composer', False)
-                     and getattr(props, 'has_side_annex', False) and shape == 'T_SHAPE')
+        _annex_on = (getattr(props, 'has_side_annex', False)
+                     and (not getattr(props, 'town_hall_composer', False)
+                          or shape == 'T_SHAPE'))
         _annex_side = None
         _annex_floors = 0
         if _annex_on:
-            _annex_side = 'LEFT' if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else 'RIGHT'
+            if getattr(props, 'town_hall_composer', False):
+                _annex_side = ('LEFT' if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT'
+                               else 'RIGHT')
+            else:
+                _annex_side = getattr(props, 'annex_side', 'LEFT')
             _annex_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
         _wing_walls = {w.get('wall') for w in wings} if has_wing else set()
         _rampart_side = (getattr(props, 'rampart_side', 'RIGHT')
@@ -168,7 +176,16 @@ def _create_building_context(props):
         # a front balcony would intersect its roof. Force balconies elsewhere.
         _has_veranda = (getattr(props, 'has_veranda', False)
                         or effective_archetype in ('TAVERN', 'INN'))
-        _order = (balc_side_eff, 'LEFT', 'RIGHT', 'BACK', 'FRONT')
+        # The loft/gable ladder climbs a gable end, so a balcony on the same
+        # facade would collide with it. Prefer the eave facades (where the ladder
+        # never goes), then the requested side, then the gables as a last resort.
+        _gable_f = ['LEFT', 'RIGHT'] if is_rotated_roof else ['FRONT', 'BACK']
+        _eave_f = ['FRONT', 'BACK'] if is_rotated_roof else ['LEFT', 'RIGHT']
+        _order = []
+        for _s in (*_eave_f, balc_side_eff, *_gable_f):
+            if _s not in _order:
+                _order.append(_s)
+        _order = tuple(_order)
         for _bf in active_balc_floors:
             _blocked_f = set()
             if _bf <= wing_floors:
@@ -201,33 +218,77 @@ def _create_building_context(props):
     )
 
 
+def _build_foundation_block(bm, fw, fd, fcx, fcy, found_h, found_type):
+    if found_type == 'WOOD':
+        # Main wooden plank platform deck
+        create_beveled_box(
+            bm,
+            size=(fw, fd, found_h),
+            location=(fcx, fcy, found_h * 0.5),
+            mat_index=MAT_INDEX_WOOD,
+            bevel_amount=0.02
+        )
+        # Heavy perimeter timber sill balks (proud framing)
+        sill_w = 0.22
+        sill_h = found_h + 0.02
+        # Front & Back sills
+        for sgn in (-1.0, 1.0):
+            py = fcy + sgn * (fd * 0.5 - sill_w * 0.5)
+            create_beveled_box(
+                bm,
+                size=(fw + 0.04, sill_w, sill_h),
+                location=(fcx, py, sill_h * 0.5),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.012
+            )
+        # Left & Right sills
+        for sgn in (-1.0, 1.0):
+            px = fcx + sgn * (fw * 0.5 - sill_w * 0.5)
+            create_beveled_box(
+                bm,
+                size=(sill_w, max(0.2, fd - sill_w * 2.0), sill_h),
+                location=(px, fcy, sill_h * 0.5),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.012
+            )
+        # Iron corner brackets
+        for sx in (-1.0, 1.0):
+            for sy in (-1.0, 1.0):
+                cx = fcx + sx * (fw * 0.5 - 0.08)
+                cy = fcy + sy * (fd * 0.5 - 0.08)
+                create_beveled_box(
+                    bm,
+                    size=(0.24, 0.24, found_h + 0.04),
+                    location=(cx, cy, (found_h + 0.04) * 0.5),
+                    mat_index=MAT_INDEX_IRON,
+                    bevel_amount=0.008
+                )
+    else:
+        create_beveled_box(
+            bm,
+            size=(fw, fd, found_h),
+            location=(fcx, fcy, found_h * 0.5),
+            mat_index=MAT_INDEX_STONE,
+            bevel_amount=0.04
+        )
+
+
 def _build_foundation(bm, props, ctx):
-    """Stone foundation plinth under the main footprint and every wing."""
+    """Foundation plinth (stone or timber sleeper deck) under the main footprint and every wing."""
     if not props.has_foundation:
         return
     found_h = ctx.found_h
+    found_type = getattr(props, 'foundation_type', 'STONE')
     fw = ctx.base_w + 0.35
     fd = ctx.base_d + 0.35
-    create_beveled_box(
-        bm,
-        size=(fw, fd, found_h),
-        location=(0.0, 0.0, found_h * 0.5),
-        mat_index=MAT_INDEX_STONE,
-        bevel_amount=0.04
-    )
+    _build_foundation_block(bm, fw, fd, 0.0, 0.0, found_h, found_type)
     for w_elem in ctx.wings:
         wb = w_elem['base']
         w_fw = (wb[1] - wb[0]) + 0.35
         w_fd = (wb[3] - wb[2]) + 0.35
         w_fcx = (wb[0] + wb[1]) * 0.5
         w_fcy = (wb[2] + wb[3]) * 0.5
-        create_beveled_box(
-            bm,
-            size=(w_fw, w_fd, found_h),
-            location=(w_fcx, w_fcy, found_h * 0.5),
-            mat_index=MAT_INDEX_STONE,
-            bevel_amount=0.04
-        )
+        _build_foundation_block(bm, w_fw, w_fd, w_fcx, w_fcy, found_h, found_type)
 
 
 def _finalize_building(obj, bm, props, ctx):

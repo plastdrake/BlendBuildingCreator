@@ -10,12 +10,12 @@ reaches, so callers simply yaw the whole prop.
 
 import math
 import random
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 from ..mesh_utils import (
     create_beveled_box, create_cylinder, create_cone, create_torus_ring, transform_faces,
 )
-from ..materials import MAT_INDEX_IRON, MAT_INDEX_GLASS, MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_CUT_STONE
+from ..materials import MAT_INDEX_IRON, MAT_INDEX_LANTERN, MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_CUT_STONE
 
 
 def _place(x, y, z_ground=0.0, ang=0.0):
@@ -24,6 +24,30 @@ def _place(x, y, z_ground=0.0, ang=0.0):
 
 def _rng(x, y, salt=0):
     return random.Random((int(abs(x) * 73856093) ^ int(abs(y) * 19349663) ^ int(salt * 83492791)) & 0x7FFFFFFF)
+
+
+def _uv_faces(faces, bm, scale=1.0):
+    """Cube-project UVs for prop faces.
+
+    The global box-UV pass skips forged iron, so lantern cages (struts, plates
+    and especially the pyramid roof cone) would otherwise carry no usable UVs.
+    A local triplanar/cube projection gives them clean unwraps.
+    """
+    uv_layer = bm.loops.layers.uv.verify()
+    for f in faces:
+        if not f.is_valid:
+            continue
+        n = f.normal
+        nx, ny, nz = abs(n.x), abs(n.y), abs(n.z)
+        for loop in f.loops:
+            co = loop.vert.co
+            if nz >= nx and nz >= ny:
+                u, v = co.x * scale, co.y * scale
+            elif nx >= ny:
+                u, v = co.y * scale, co.z * scale
+            else:
+                u, v = co.x * scale, co.z * scale
+            loop[uv_layer].uv = Vector((u, v))
 
 
 def _lantern_cage(bm, cx, cy, cz, size=0.22, height=0.32, rng=None):
@@ -40,18 +64,11 @@ def _lantern_cage(bm, cx, cy, cz, size=0.22, height=0.32, rng=None):
     faces += create_beveled_box(bm, size=(w * 1.06, w * 1.06, 0.045),
                                 location=(cx, cy, cz - hh), mat_index=MAT_INDEX_IRON,
                                 bevel_amount=0.007)
-    # Glowing glass body.
+    # Glowing glass body. This is the whole light source - no candle or other
+    # geometry sits inside the panes (they would show through the emissive glass).
     faces += create_beveled_box(bm, size=(w * 0.74, w * 0.74, height * 0.86),
-                                location=(cx, cy, cz), mat_index=MAT_INDEX_GLASS,
+                                location=(cx, cy, cz), mat_index=MAT_INDEX_LANTERN,
                                 bevel_amount=0.0)
-    # Interior candle.
-    candle_h = height * 0.40
-    faces += create_cylinder(bm, radius=0.022, height=candle_h, segments=8,
-                             location=(cx, cy, cz - hh + 0.02 + candle_h * 0.5),
-                             mat_index=MAT_INDEX_WOOD)
-    faces += create_cone(bm, radius1=0.011, radius2=0.002, height=0.03, segments=6,
-                         location=(cx, cy, cz - hh + 0.02 + candle_h + 0.015),
-                         mat_index=MAT_INDEX_IRON)
     # Four vertical corner struts.
     for sx in (-w * 0.5, w * 0.5):
         for sy in (-w * 0.5, w * 0.5):
@@ -156,10 +173,12 @@ def build_post_lantern(bm, x, y, z_ground=0.0, ang=0.0, height=2.55,
 
     # 5. Lantern cage hanging cleanly beneath the chain
     cage_z = arm_base_z - 0.38 * s
-    faces += _lantern_cage(bm, tip_x, 0.0, cage_z, size=0.28 * s,
-                           height=0.38 * s, rng=rng)
+    cage = _lantern_cage(bm, tip_x, 0.0, cage_z, size=0.28 * s,
+                         height=0.38 * s, rng=rng)
+    faces += cage
 
     transform_faces(faces, _place(x, y, z_ground, ang))
+    _uv_faces(cage, bm)
     return faces
 
 
@@ -201,7 +220,9 @@ def build_hanging_lantern(bm, x, y, z_top, arm_ang=0.0, arm_len=0.42,
     # Lantern cage with its suspension ring directly under the hook.
     hh = 0.17 * s
     cage_cz = -0.11 - hh - 0.27
-    faces += _lantern_cage(bm, arm_len, 0.0, cage_cz, size=0.22 * s, height=0.34 * s)
+    cage = _lantern_cage(bm, arm_len, 0.0, cage_cz, size=0.22 * s, height=0.34 * s)
+    faces += cage
     transform_faces(faces, _place(x, y, z_top, arm_ang))
+    _uv_faces(cage, bm)
     return faces
 

@@ -820,7 +820,7 @@ def build_floors(bm, props, ctx):
 
         # Dynamic Windows - Facade Openings & Shutters
         # Dynamic Windows - Facade Openings & Shutters
-        eff_spacing = max(1.0, props.window_spacing / max(0.2, getattr(props, 'window_density', 1.0)))
+        eff_spacing = max(1.6, (props.window_spacing / max(0.2, getattr(props, 'window_density', 1.0))) * 1.5)
         win_w_clr = (win_w * 0.5 + 0.65) if props.has_shutters else (win_w * 0.5 + 0.45)
         w_top_roof_z = (found_h + wing_floors * floor_h + props.roof_height * 0.88) if has_wing else 0.0
 
@@ -990,7 +990,11 @@ def build_floors(bm, props, ctx):
                 )
 
         # Dynamic Windows - Side Walls (Left and Right)
-        if props.has_windows and not open_timber and cur_d > 2.8:
+        rec_cargo_side = getattr(props, 'cargo_dock_facade', 'AUTO')
+        if rec_cargo_side == 'AUTO':
+            rec_cargo_side = 'RIGHT' if effective_archetype == 'LUMBERMILL' else 'LEFT'
+
+        if not open_timber and cur_d > 2.8:
             # Left side
             left_excludes = list(get_facade_wing_exclusions('LEFT')) + get_turret_exclusions('LEFT')
             if fl_idx == 0 and props.has_stairs:
@@ -1013,22 +1017,40 @@ def build_floors(bm, props, ctx):
                 b_cy = (y_min + y_max) * 0.5
                 left_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
 
-            left_spans = carve_intervals([(y_min, y_max)], left_excludes, min_len=win_w + 0.35)
-            left_win_ys = []
-            for s1, s2 in left_spans:
-                left_win_ys.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=1.0))
-            left_win_ys = [wy for wy in left_win_ys if not any(ex1 <= wy <= ex2 for ex1, ex2 in left_excludes)]
+            # Rectangular main building cargo dock / freight opening (Left)
+            if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not fl_has_wing and rec_cargo_side == 'LEFT':
+                _cp_w = 2.6
+                _cp_h = min(2.8, floor_h - 0.35)
+                _cp_cy = (y_min + y_max) * 0.5
+                left_excludes.append((_cp_cy - _cp_w * 0.5 - 0.5, _cp_cy + _cp_w * 0.5 + 0.5))
+                left_openings.append({'u_start': _cp_cy - _cp_w * 0.5 - y_min, 'u_end': _cp_cy + _cp_w * 0.5 - y_min, 'z_start': z_floor, 'z_end': z_floor + _cp_h})
+                build_cargo_port_frame(bm, x_min, -1.0, _cp_cy, _cp_w, _cp_h, z_floor, wall_t, dock_y1=y_min + 0.4, dock_y2=y_max - 0.4)
+            elif fl_idx == 1 and getattr(props, 'has_upper_cargo_crane', False) and rec_cargo_side == 'LEFT':
+                _cp_w = 2.0
+                _cp_h = min(2.5, floor_h - 0.35)
+                _cp_cy = (y_min + y_max) * 0.5
+                left_excludes.append((_cp_cy - _cp_w * 0.5 - 0.5, _cp_cy + _cp_w * 0.5 + 0.5))
+                left_openings.append({'u_start': _cp_cy - _cp_w * 0.5 - y_min, 'u_end': _cp_cy + _cp_w * 0.5 - y_min, 'z_start': z_floor, 'z_end': z_floor + _cp_h})
+                from .accessories.crane import build_wall_jib_crane
+                build_wall_jib_crane(bm, wall_x=x_min, wall_y=_cp_cy, z_mount=z_floor, outward_dir=(-1.0, 0.0), jib_len=2.8)
 
-            for wy in left_win_ys:
-                wu = (wy - y_min)
-                left_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
-                window_centers.setdefault(fl_idx, {}).setdefault('LEFT', []).append((x_min, wy, win_z1))
-                sh_act, sh_cl = get_shutter_info(x_min, wy, win_cz)
-                build_window_assembly(
-                    bm, center=(x_min, wy, win_cz), size=(win_w, win_h),
-                    wall_thickness=wall_t, normal_axis='-X',
-                    has_shutters=sh_act, shutters_closed=sh_cl
-                )
+            if props.has_windows:
+                left_spans = carve_intervals([(y_min, y_max)], left_excludes, min_len=win_w + 0.35)
+                left_win_ys = []
+                for s1, s2 in left_spans:
+                    left_win_ys.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=1.0))
+                left_win_ys = [wy for wy in left_win_ys if not any(ex1 <= wy <= ex2 for ex1, ex2 in left_excludes)]
+
+                for wy in left_win_ys:
+                    wu = (wy - y_min)
+                    left_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
+                    window_centers.setdefault(fl_idx, {}).setdefault('LEFT', []).append((x_min, wy, win_z1))
+                    sh_act, sh_cl = get_shutter_info(x_min, wy, win_cz)
+                    build_window_assembly(
+                        bm, center=(x_min, wy, win_cz), size=(win_w, win_h),
+                        wall_thickness=wall_t, normal_axis='-X',
+                        has_shutters=sh_act, shutters_closed=sh_cl
+                    )
 
             # Right side
             right_excludes = list(get_facade_wing_exclusions('RIGHT')) + get_turret_exclusions('RIGHT')
@@ -1050,22 +1072,40 @@ def build_floors(bm, props, ctx):
                 b_cy = (y_min + y_max) * 0.5
                 right_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
 
-            right_spans = carve_intervals([(y_min, y_max)], right_excludes, min_len=win_w + 0.35)
-            right_win_ys = []
-            for s1, s2 in right_spans:
-                right_win_ys.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=1.0))
-            right_win_ys = [wy for wy in right_win_ys if not any(ex1 <= wy <= ex2 for ex1, ex2 in right_excludes)]
+            # Rectangular main building cargo dock / freight opening (Right)
+            if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not fl_has_wing and rec_cargo_side == 'RIGHT':
+                _cp_w = 2.6
+                _cp_h = min(2.8, floor_h - 0.35)
+                _cp_cy = (y_min + y_max) * 0.5
+                right_excludes.append((_cp_cy - _cp_w * 0.5 - 0.5, _cp_cy + _cp_w * 0.5 + 0.5))
+                right_openings.append({'u_start': _cp_cy - _cp_w * 0.5 - y_min, 'u_end': _cp_cy + _cp_w * 0.5 - y_min, 'z_start': z_floor, 'z_end': z_floor + _cp_h})
+                build_cargo_port_frame(bm, x_max, 1.0, _cp_cy, _cp_w, _cp_h, z_floor, wall_t, dock_y1=y_min + 0.4, dock_y2=y_max - 0.4)
+            elif fl_idx == 1 and getattr(props, 'has_upper_cargo_crane', False) and rec_cargo_side == 'RIGHT':
+                _cp_w = 2.0
+                _cp_h = min(2.5, floor_h - 0.35)
+                _cp_cy = (y_min + y_max) * 0.5
+                right_excludes.append((_cp_cy - _cp_w * 0.5 - 0.5, _cp_cy + _cp_w * 0.5 + 0.5))
+                right_openings.append({'u_start': _cp_cy - _cp_w * 0.5 - y_min, 'u_end': _cp_cy + _cp_w * 0.5 - y_min, 'z_start': z_floor, 'z_end': z_floor + _cp_h})
+                from .accessories.crane import build_wall_jib_crane
+                build_wall_jib_crane(bm, wall_x=x_max, wall_y=_cp_cy, z_mount=z_floor, outward_dir=(1.0, 0.0), jib_len=2.8)
 
-            for wy in right_win_ys:
-                wu = (wy - y_min)
-                right_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
-                window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((x_max, wy, win_z1))
-                sh_act, sh_cl = get_shutter_info(x_max, wy, win_cz)
-                build_window_assembly(
-                    bm, center=(x_max, wy, win_cz), size=(win_w, win_h),
-                    wall_thickness=wall_t, normal_axis='+X',
-                    has_shutters=sh_act, shutters_closed=sh_cl
-                )
+            if props.has_windows:
+                right_spans = carve_intervals([(y_min, y_max)], right_excludes, min_len=win_w + 0.35)
+                right_win_ys = []
+                for s1, s2 in right_spans:
+                    right_win_ys.extend(get_facade_window_positions(s1, s2, target_spacing=eff_spacing, min_margin=1.0))
+                right_win_ys = [wy for wy in right_win_ys if not any(ex1 <= wy <= ex2 for ex1, ex2 in right_excludes)]
+
+                for wy in right_win_ys:
+                    wu = (wy - y_min)
+                    right_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
+                    window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((x_max, wy, win_z1))
+                    sh_act, sh_cl = get_shutter_info(x_max, wy, win_cz)
+                    build_window_assembly(
+                        bm, center=(x_max, wy, win_cz), size=(win_w, win_h),
+                        wall_thickness=wall_t, normal_axis='+X',
+                        has_shutters=sh_act, shutters_closed=sh_cl
+                    )
 
         # Dynamic Windows - Wing Walls
         wing_wall_openings = [] # List of tuples: (w_elem, wall_face, openings, start_pt, end_pt, norm_vec)
@@ -1432,7 +1472,8 @@ def build_floors(bm, props, ctx):
         # Corner posts stay even on a stone ground storey so the frame reads as continuous;
         # only the infill/brace timbering is dropped there to keep the base solid masonry.
         _stone_ground_fl = (fl_idx == 0 and props.ground_floor_stone)
-        if not open_timber and props.has_timber_framing and effective_archetype != 'WATCHTOWER' and tier_val != 'TIER_1':
+        _frame_here = (tier_val != 'TIER_1') or _stone_ground_fl
+        if not open_timber and props.has_timber_framing and effective_archetype != 'WATCHTOWER' and _frame_here:
             post_w = 0.30
             timber_jank = props.wonkiness * 0.5
             is_top_fl = (fl_idx == num_floors - 1)

@@ -385,7 +385,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             sl_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.42, out_sy, hz_factor * leaf_h)))
             create_beveled_box(bm, size=(leaf_w * 0.80, 0.020, 0.060), location=sl_c, rotation=(0.0, 0.0, left_ang), mat_index=MAT_INDEX_IRON, bevel_amount=0.004, bevel_segments=2)
             for r_frac in [0.22, 0.55, 0.82]:
-                rv_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * 0.80 * (r_frac-0.5), out_sy, hz_factor * leaf_h)))
+                rv_c = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((leaf_w * (0.42 + (r_frac-0.5)*0.72), out_sy, hz_factor * leaf_h)))
                 create_cylinder(bm, radius=0.010, height=0.026, segments=6, location=rv_c, rotation=(1.57, 0.0, left_ang), mat_index=MAT_INDEX_IRON)
             # hinge barrel exterior
             hb = Vector((hinge_lx, hinge_ly, z_base + 0.05)) + (rot_l @ Vector((0.012, out_sy, hz_factor * leaf_h)))
@@ -394,7 +394,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             sr_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.42, out_sy, hz_factor * leaf_h)))
             create_beveled_box(bm, size=(leaf_w * 0.80, 0.020, 0.060), location=sr_c, rotation=(0.0, 0.0, right_ang), mat_index=MAT_INDEX_IRON, bevel_amount=0.004, bevel_segments=2)
             for r_frac in [0.22, 0.55, 0.82]:
-                rv_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * 0.80 * (r_frac-0.5), out_sy, hz_factor * leaf_h)))
+                rv_c = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-leaf_w * (0.42 + (r_frac-0.5)*0.72), out_sy, hz_factor * leaf_h)))
                 create_cylinder(bm, radius=0.010, height=0.026, segments=6, location=rv_c, rotation=(1.57, 0.0, right_ang), mat_index=MAT_INDEX_IRON)
             hb2 = Vector((hinge_rx, hinge_ry, z_base + 0.05)) + (rot_r @ Vector((-0.012, out_sy, hz_factor * leaf_h)))
             create_cylinder(bm, radius=0.022, height=0.14, segments=8, location=hb2, rotation=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_IRON)
@@ -466,7 +466,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             strap_world_c = Vector((hinge_x, hinge_y, hz)) + (rot_mat @ Vector((strap_len * 0.42, strap_out_y, 0.0)))
             create_beveled_box(bm, size=(strap_len, 0.020, 0.060), location=strap_world_c, rotation=(0.0, 0.0, out_ang), mat_index=MAT_INDEX_IRON, bevel_amount=0.004, bevel_segments=2)
             for r_frac in [0.22, 0.55, 0.82]:
-                rv_c = Vector((hinge_x, hinge_y, hz)) + (rot_mat @ Vector((strap_len * (r_frac-0.5)*0.92, strap_out_y, 0.0)))
+                rv_c = Vector((hinge_x, hinge_y, hz)) + (rot_mat @ Vector((strap_len * (0.42 + (r_frac-0.5)*0.80), strap_out_y, 0.0)))
                 create_cylinder(bm, radius=0.010, height=0.026, segments=6, location=rv_c, rotation=(1.57, 0.0, out_ang), mat_index=MAT_INDEX_IRON)
             # hinge barrel on exterior
             hb = Vector((hinge_x, hinge_y, hz)) + (rot_mat @ Vector((0.012, strap_out_y, 0.0)))

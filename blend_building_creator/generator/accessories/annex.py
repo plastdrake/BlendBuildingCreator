@@ -15,9 +15,11 @@ from ..mesh_utils import create_beveled_box
 from ..walls import build_facade_timber, build_wall_with_opening
 from ..openings import build_window_assembly
 from ..roof.gable_roof import build_gable_roof
+from ..roof.valley import build_valley_rafters, deck_top_z
 from ..style import tier_wall_mat
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_FLOOR,
+    MAT_INDEX_PLASTER_EXT,
 )
 from .mini_wing import build_mini_wing
 
@@ -25,7 +27,8 @@ from .mini_wing import build_mini_wing
 def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                      found_h=0.6, floors=2, floor_h=3.0, tier='TIER_3',
                      width=5.2, depth=4.0, roof_h=3.0, plank_direction='HORIZONTAL',
-                     main_bounds_by_floor=None, timber_framing=True, diagonals=True):
+                     main_bounds_by_floor=None, timber_framing=True, diagonals=True,
+                     main_roof=None):
     """Half-timbered side volume embedded into the main side wall.
 
     side_sgn: +1 attaches on +X, -1 on -X. width runs along Y, depth along X.
@@ -149,7 +152,12 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                 list(_fb_ops),
                 mat_ext=f_mat, normal_vec=nvec, tier=tier, physical_siding=True,
                 plank_direction=plank_direction, seed=42,
-                omit_top_log_row=(tier == 'TIER_1'))
+                # Inner end dies into the main hall wall, so logs must not saddle
+                # over-run into the interior; the outer end does turn a corner.
+                # A log eave side also drops its top log - it rides into the roof.
+                is_corner_start=False, is_corner_end=True,
+                omit_top_log_row=(tier == 'TIER_1'),
+                force_omit_top_log_row=(tier == 'TIER_1'))
             build_window_assembly(
                 bm, center=(cxf, wy, sill + win_h * 0.5), size=(win_w, win_h),
                 wall_thickness=wall_t, normal_axis=nvec, has_shutters=shutters)
@@ -213,12 +221,58 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
     else:
         _gable_ends, _abut_front, _abut_back = ('FRONT',), False, True
     annex_roof_bm = bmesh.new()
+    # For a full-height annex under a front/back main ridge, extend the deck
+    # inward along the valley: it must reach where the main slope climbs to the
+    # annex ridge (the valley apex). The deck is notch-cut back along the two
+    # valley lines so the annex roof meets the main roof instead of stopping bare
+    # at the wall (and the apex never runs past the main slope into the attic).
+    _use_valley = (bool(main_roof) and not main_roof.get('rotated', False)
+                   and floors >= main_roof.get('num_floors', floors))
+    _ov = 0.20
+    _r_y_min, _r_y_max = -_annex_depth * 0.5, _annex_depth * 0.5
+    _vnotch = None
+    _seg_y = 3
+    _valley = None
+    if _use_valley:
+        mr = main_roof
+        _swm = mr['sway'] if mr['style'] == 'SWAY' else 0.0
+        _ezm = (mr['top_z'] - 0.12) if mr['style'] == 'SWAY' else (mr['top_z'] - 0.10)
+
+        def _main_fn(px, py):
+            return deck_top_z(px, py, mr['top_cx'], mr['top_hx'] + mr['ov'],
+                              mr['top_z'], mr['roof_h'], mr['flare'], _swm,
+                              mr['y_min'] - mr['ov'], mr['y_max'] + mr['ov'],
+                              _ezm, top_off=0.05)
+
+        _eave_x = side_sgn * (mr['top_hx'] + mr['ov'])
+        _ridge_z = top_z + roof_h
+        # Walk from the main eave inward until the main slope reaches the annex
+        # ridge height; that crossing is the valley apex.
+        _apex_x = 0.0
+        for _i in range(81):
+            _x = _eave_x * (1.0 - _i / 80.0)
+            if _main_fn(_x, cy) >= _ridge_z:
+                _apex_x = _x
+                break
+        _apex_ly = _roof_cx - _apex_x
+        _base_ly = _roof_cx - _eave_x
+        if side_sgn > 0:
+            _r_y_max = _apex_ly
+            _keep = 'le'
+        else:
+            _r_y_min = _apex_ly
+            _keep = 'ge'
+        _vnotch = {'apex_x': -cy, 'apex_y': _apex_ly, 'base_y': _base_ly,
+                   'half_width': width * 0.5 + _ov, 'keep': _keep,
+                   'overlap': 0.02, 'side': 'BOTH'}
+        _seg_y = 10
+        _valley = {'main_fn': _main_fn, 'eave_x': _eave_x, 'apex_x': _apex_x}
     build_gable_roof(
         annex_roof_bm,
         x_min=-width * 0.5,
         x_max=width * 0.5,
-        y_min=-_annex_depth * 0.5,
-        y_max=_annex_depth * 0.5,
+        y_min=_r_y_min,
+        y_max=_r_y_max,
         z_base=top_z,
         roof_height=roof_h,
         overhang=0.20,
@@ -226,10 +280,11 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
         gable_ends=_gable_ends,
         abut_front=_abut_front,
         abut_back=_abut_back,
-        segments_y=3,
+        segments_y=_seg_y,
         tier=tier,
         plank_direction='HORIZONTAL',
         roof_flare=0.35,
+        valley_notch=_vnotch,
     )
     bmesh.ops.transform(
         annex_roof_bm,
@@ -238,6 +293,15 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
     )
     for v in annex_roof_bm.verts:
         v.co += Vector((_roof_cx, cy, 0.0))
+    # The gable wall UVs came out of the roof builder in its LOCAL frame, so the
+    # 90 deg rotation left the facade texture rotated/misaligned against the rest
+    # of the building. Remap the gable faces (wood / plaster) to world-space UVs.
+    _uvg = annex_roof_bm.loops.layers.uv.verify()
+    for _gf in annex_roof_bm.faces:
+        if _gf.material_index in (MAT_INDEX_WOOD, MAT_INDEX_PLASTER_EXT):
+            for _gl in _gf.loops:
+                _gc = _gl.vert.co
+                _gl[_uvg].uv = (_gc.y * 0.55, (_gc.z - top_z) * 0.55)
     uv_src = annex_roof_bm.loops.layers.uv.verify()
     uv_dst = bm.loops.layers.uv.verify()
     vert_map = {v: bm.verts.new(v.co) for v in annex_roof_bm.verts}
@@ -251,5 +315,26 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
         except ValueError:
             pass
     annex_roof_bm.free()
+
+    # Connect the annex cross-gable roof into the main roof with the same valley
+    # rafters the wings get. The rafters run from the main eave corners to the
+    # valley apex (where the annex ridge meets the main slope), i.e. exactly on
+    # the deck's notch edge, so the frame actually touches the roof.
+    if _valley is not None:
+        _main_fn = _valley['main_fn']
+        _lx_half = width * 0.5
+        _ly_half = _annex_depth * 0.5
+        _hw = _lx_half + _ov
+
+        def _annex_fn(px, py):
+            return deck_top_z(py - cy, _roof_cx - px, 0.0, _hw, 0.0, roof_h, 0.35, 0.0,
+                              -_ly_half - _ov, _apex_ly, -0.10, top_off=0.05) + top_z
+
+        _ex = _valley['eave_x']
+        _ax = _valley['apex_x']
+        corners = [(_ex, cy - _lx_half - _ov), (_ex, cy + _lx_half + _ov)]
+        die = (_ax, cy)
+        for _cx0, _cy0 in corners:
+            build_valley_rafters(bm, (_cx0, _cy0), die, _main_fn, _annex_fn)
 
     return outer_x

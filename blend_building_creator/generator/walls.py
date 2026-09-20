@@ -15,7 +15,7 @@ from .materials import (
 
 def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                            openings=[], normal_vec=None, is_corner_start=False, is_corner_end=False,
-                           is_y_wall=None, seed=42, omit_top_row=False):
+                           is_y_wall=None, seed=42, omit_top_row=False, force_omit_top_row=False):
     """
     Builds authentic rustic 3D rounded logs with staggered interlocking saddle-notched
     projecting ends and organic handcrafted variation for Tier 1 architecture.
@@ -89,7 +89,7 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                     if z_bottom - 0.05 <= (kk + 0.5) * log_h + z_shift <= z_top + 0.05]
         if len(valid_ks) >= 2:
             top_z = (valid_ks[-1] + 0.5) * log_h + z_shift
-            if top_z > z_top - 0.02:
+            if force_omit_top_row or top_z > z_top - 0.02:
                 skip_k = valid_ks[-1]
 
     for k in range(k_start, k_end + 1):
@@ -367,6 +367,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                             stone_block_scale=1.0, stone_disorder=0.35,
                             is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0,
                             omit_top_log_row=False,
+                            force_omit_top_log_row=False,
                             has_exposed_brick=False, exposed_brick_freq=0.25):
     """
     Builds a wall along the line p_start -> p_end, cleanly cutting around
@@ -406,7 +407,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             bm, p_start, p_end, z_bottom, z_top, thickness,
             openings=openings, normal_vec=normal_vec,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end,
-            seed=seed, omit_top_row=omit_top_log_row
+            seed=seed, omit_top_row=omit_top_log_row,
+            force_omit_top_row=force_omit_top_log_row
         )
         # Build sealed interior core around openings in matching warm wood planks.
         # Kept just below the floor line so it meets the floor slab without

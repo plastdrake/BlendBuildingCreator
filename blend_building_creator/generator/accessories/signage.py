@@ -79,13 +79,14 @@ def build_hanging_sign(bm, x, y, z_top, run_ang=0.0, bracket_len=0.60,
                                 location=(bracket_len * 0.40, 0.0, -0.15),
                                 rotation=(0.0, -brace_a, 0.0),
                                 mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
-    # Two short straps hanging the board directly from the arm.
+    # Two short straps hanging the board directly from the arm. The board hangs
+    # low enough that the diagonal brace ends above it instead of crossing it.
     board_cx = bracket_len * 0.55
-    board_top_z = -0.15
+    board_top_z = -0.34
     board_cz = board_top_z - board_h * 0.5
     for hx in (board_cx - board_w * 0.30, board_cx + board_w * 0.30):
-        faces += create_beveled_box(bm, size=(0.03, 0.03, 0.17),
-                                    location=(hx, 0.0, -0.07),
+        faces += create_beveled_box(bm, size=(0.03, 0.03, -board_top_z + 0.03),
+                                    location=(hx, 0.0, board_top_z * 0.5),
                                     mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
 
     # Chunky wooden sign board (3 vertical planks lying in the local XZ plane).

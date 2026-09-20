@@ -31,9 +31,7 @@ def _is_log_floor(props, ctx, tier, floor):
     """
     if floor <= 0 and bool(getattr(props, 'ground_floor_stone', False)):
         return False
-    return (getattr(props, 'building_material', 'LOG') == 'LOG' or
-            getattr(props, 'material_tier', 'TIER_1') == 'TIER_1' or
-            (ctx.effective_archetype in ('TAVERN', 'INN') and tier == 'TIER_1'))
+    return (tier or getattr(props, 'material_tier', 'TIER_1')) == 'TIER_1'
 
 
 def _wall_out(props, ctx, tier, floor=0):
@@ -149,11 +147,15 @@ def _build_gable_signs(bm, props, ctx, tier):
             anchors.append((sx, sy, gz, ang))
 
     # Wing gables: each wing reads as a cross-gable facing away from the wall.
-    wtop = ctx.found_h + max(1, ctx.wing_floors) * ctx.floor_h
+    # Track the wing's TOP storey bounds - a jettied wing wall stands well proud
+    # of its ground footprint, so hanging off 'base' would bury the sign.
+    wfl = max(1, ctx.wing_floors)
+    wtop = ctx.found_h + wfl * ctx.floor_h
     wrh = roof_h * _prop(props, 'wing_roof_scale', 0.88)
-    w_out = _wall_out(props, ctx, tier, max(0, ctx.wing_floors - 1))
+    w_out = _wall_out(props, ctx, tier, wfl - 1)
     for w in getattr(ctx, 'wings', []):
-        base, wall = w.get('base'), w.get('wall')
+        base = (w.get('bounds_fl') or {}).get(wfl - 1) or w.get('base')
+        wall = w.get('wall')
         if not base:
             continue
         if wall == 'FRONT':
@@ -167,13 +169,18 @@ def _build_gable_signs(bm, props, ctx, tier):
         anchors.append((ax, ay, wtop + max(0.8, wrh * 0.5), ang))
 
     # Annex gable: its cross-gable faces straight out from the main side wall.
+    # The annex outer face is exactly (main_half_width + depth - overlap 0.6), so
+    # anchor there (not on ctx.hx, which includes the main hall's jetty/cantilever).
     if _prop(props, 'has_side_annex', False):
         side_sgn = 1.0 if _prop(props, 'annex_side', 'LEFT') == 'RIGHT' else -1.0
         a_floors = max(1, min(2, _prop(props, 'annex_floors', 2)))
         a_d = 3.6 if tier == 'TIER_1' else 4.0
         a_roof = 3.0 if tier == 'TIER_3' else 2.6
-        a_out = _wall_out(props, ctx, tier, a_floors - 1)
-        ax = side_sgn * (ctx.hx + a_d - 0.6 + a_out)
+        a_face = ctx.base_w * 0.5 + a_d - 0.6
+        # A Tier-1 annex is built entirely from logs (including its ground storey),
+        # so its gable skin bulges; every other tier is flush stone/plank/stucco.
+        a_out = 0.12 if tier == 'TIER_1' else 0.03
+        ax = side_sgn * (a_face + a_out)
         atop = ctx.found_h + a_floors * ctx.floor_h
         ang = 0.0 if side_sgn > 0 else math.pi
         anchors.append((ax, 0.0, atop + max(0.8, a_roof * 0.5), ang))
@@ -193,10 +200,10 @@ def _build_window_flower_boxes(bm, props, ctx, tier):
     for fl_idx, facades in ctx.window_centers.items():
         if fl_idx > 1:
             continue
-        # Planters clear the whole log bulge (a touch more than the sign/lantern
-        # skin offset) so their top edge meets the sill; stone ground storeys are
-        # flush, so they only need the thin offset.
-        wall_out = ctx.wall_t * 0.5 + (0.22 if _is_log_floor(props, ctx, tier, fl_idx) else 0.06)
+        # The exterior timber sill projects ~0.20m past the wall face, so the
+        # planter has to clear that or it buries itself inside the sill. This is
+        # true on flush stone/plank/stucco walls too, not just log bulges.
+        wall_out = ctx.wall_t * 0.5 + 0.22
         for facade, windows in facades.items():
             for wx, wy, sill_z in windows:
                 # Seat the top edge flush against the underside of the sill.
@@ -249,12 +256,59 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
     porch_d = 1.5 if (_prop(props, 'has_veranda', False) or ctx.effective_archetype in ('TAVERN', 'INN')) else 0.0
 
     # 1. Wall lanterns hung at both front corners of the facade (no poles).
+    #    If a wing occupies that corner, hang the lantern on the wing's own outer
+    #    wall instead of burying it inside the wing block.
     outer = _wall_out(props, ctx, tier)
     lan_z = ctx.found_h + ctx.floor_h * 0.62
     lan_y = ctx.bounds_for(0)[2] - outer
     front_win_x = [w[0] for w in ctx.window_centers.get(0, {}).get('FRONT', [])]
     door_half_l = _prop(props, 'door_width', 1.2) * 0.5
+
+    def _blocking_wing(s):
+        """Wing whose footprint covers the front corner on side s, if any."""
+        for w in getattr(ctx, 'wings', []):
+            b = (w.get('bounds_fl') or {}).get(max(1, ctx.wing_floors) - 1) or w.get('base')
+            if not b:
+                continue
+            wall = w.get('wall')
+            if wall == 'FRONT' and b[2] < lan_y - 0.2 and (b[0] - 0.6) <= s * (ctx.hx - 0.55) <= (b[1] + 0.6):
+                return w, b, wall
+            if wall == 'LEFT' and s < 0:
+                return w, b, wall
+            if wall == 'RIGHT' and s > 0:
+                return w, b, wall
+        return None
+
     for s in (-1, 1):
+        wing = _blocking_wing(s)
+        if wing is not None:
+            _w, _b, wall = wing
+            # The lantern hangs at ground-storey height, so mount it on the wing's
+            # GROUND footprint (a jettied wing wall sits proud of the ground wall).
+            b = _w.get('base') or _b
+            w_out = _wall_out(props, ctx, tier, 0)
+            # Keep the original wall, but sit right on the wing's corner post
+            # instead of 0.6m inboard (which landed it in a window).
+            inset = 0.14
+            lx = (b[1] - inset) if s > 0 else (b[0] + inset)
+            if wall == 'FRONT':
+                build_hanging_lantern(bm, lx, b[2] - w_out - 0.065, z_top=lan_z,
+                                      arm_ang=-math.pi * 0.5, arm_len=0.65,
+                                      scale=1.0 if rich else 0.92)
+            elif wall == 'BACK':
+                build_hanging_lantern(bm, lx, b[3] + w_out + 0.065, z_top=lan_z,
+                                      arm_ang=math.pi * 0.5, arm_len=0.65,
+                                      scale=1.0 if rich else 0.92)
+            elif wall == 'LEFT':
+                build_hanging_lantern(bm, b[0] - w_out - 0.065, b[2] + inset, z_top=lan_z,
+                                      arm_ang=math.pi, arm_len=0.65,
+                                      scale=1.0 if rich else 0.92)
+            else:
+                build_hanging_lantern(bm, b[1] + w_out + 0.065, b[2] + inset, z_top=lan_z,
+                                      arm_ang=0.0, arm_len=0.65,
+                                      scale=1.0 if rich else 0.92)
+            continue
+
         X0 = max(1.5, ctx.hx - 0.55)
         # If a front wing crowds this corner, start further in.
         if not is_point_outside_building(s * X0, lan_y - 0.30, 0.25, ctx, margin=0.05):
@@ -296,14 +350,11 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
                 build_crate(bm, cx_base + side_sign * 0.60, face_y - 1.05, ang=-0.18 * side_sign, size=0.48)
                 build_sack(bm, cx_base + side_sign * 0.15, face_y - 1.40, scale=1.05)
 
-    # 3. Tavern Beer Garden: a tidy picnic table cluster, clear of the door path.
+    # 3. Tavern Beer Garden: a single picnic table, clear of the door path.
     tx_base = door_x - side_sign * (porch_w * 0.5 + 1.85)
     table_y = face_y - (porch_d + 1.45)
     if is_point_outside_building(tx_base, table_y, 0.95, ctx, margin=0.15):
         build_picnic_table(bm, tx_base, table_y, ang=0.08 * -side_sign, length=2.05)
-        if rich and is_point_outside_building(tx_base - side_sign * 1.10, table_y - 1.70, 0.95, ctx, margin=0.15):
-            build_picnic_table(bm, tx_base - side_sign * 1.10, table_y - 1.70,
-                               ang=-0.12 * -side_sign, length=1.95)
 
     # 4. A bench set against the wall beside the entrance (left if free, else right).
     door_half = _prop(props, 'door_width', 1.2) * 0.5

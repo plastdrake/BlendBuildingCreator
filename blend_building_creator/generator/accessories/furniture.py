@@ -17,7 +17,7 @@ import random
 from mathutils import Matrix
 
 from ..mesh_utils import (
-    create_beveled_box, create_cylinder, create_torus_ring, transform_faces,
+    create_beveled_box, create_cylinder, create_cone, create_torus_ring, transform_faces,
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_IRON, MAT_INDEX_WOOD,

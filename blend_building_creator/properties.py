@@ -309,11 +309,42 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    cargo_dock_facade: EnumProperty(
+        name="Cargo Dock Facade",
+        description="Facade to place the industrial loading dock on",
+        items=[
+            ('AUTO', 'Auto', 'Automatically pick the clearest facade away from entrance/machinery'),
+            ('LEFT', 'Left', 'Place cargo dock on the left facade'),
+            ('RIGHT', 'Right', 'Place cargo dock on the right facade'),
+            ('BACK', 'Back', 'Place cargo dock on the rear facade'),
+        ],
+        default='AUTO',
+        update=on_property_updated
+    )
+
+    has_upper_cargo_crane: BoolProperty(
+        name="Upper Cargo Crane",
+        description="Cantilevered timber jib crane mounted on the 2nd floor above the loading dock",
+        default=False,
+        update=on_property_updated
+    )
+
     # --- Foundation ---
     has_foundation: BoolProperty(
         name="Stone Foundation",
         description="Chunky stone foundation base",
         default=True,
+        update=on_property_updated
+    )
+    
+    foundation_type: EnumProperty(
+        name="Foundation Type",
+        description="Material and construction style of the foundation",
+        items=[
+            ('STONE', "Stone Plinth", "Chunky cut-stone masonry foundation base"),
+            ('WOOD', "Timber Sleeper Deck", "Heavy timber sill beams, sleeper joists, and wooden platform"),
+        ],
+        default='STONE',
         update=on_property_updated
     )
     
@@ -528,7 +559,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('SWAY', 'Fairytale Sway Roof', 'Curved dipping ridge and flared eaves'),
             ('GABLE', 'Steep Medieval Gable', 'Classic high-pitch dramatic gable'),
-            ('TURRET', 'Wizard Turret', 'Faceted conical roof with finial spire')
+            ('TURRET', 'Wizard Turret', 'Faceted conical roof with finial spire'),
+            ('NONE', 'No Roof (Open Yard)', 'Open-air footprint with no formal roof structure'),
+            ('MAKESHIFT', 'Makeshift Planks & Cloth', 'Rough timber rafters with scattered loose planks and draped weather cloth'),
         ],
         default='SWAY',
         update=on_property_updated
@@ -542,7 +575,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('LEFT_RIGHT', 'Side-to-Side (90°)', 'Roof ridge runs side to side with gables facing left and right'),
             ('AUTO', 'Auto (Aspect Ratio)', 'Automatically align roof ridge along the building long axis'),
         ],
-        default='FRONT_BACK',
+        default='AUTO',
         update=on_property_updated
     )
     

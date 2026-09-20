@@ -59,7 +59,7 @@ def _load_image_texture(tree, filename, coord, loc_x=-800, loc_y=120, scale=(1.0
     return tex_node
 
 # ---------------------------------------------------------------------------
-# Material slot index constants (19 canonical slots for UE optimization)
+# Material slot index constants (20 canonical slots for UE optimization)
 # ---------------------------------------------------------------------------
 MAT_INDEX_STONE        = 0
 MAT_INDEX_PLASTER      = 1
@@ -88,6 +88,7 @@ MAT_INDEX_HAY           = 15
 MAT_INDEX_DIRT          = 16
 MAT_INDEX_SIGN          = 17
 MAT_INDEX_ROPE          = 18
+MAT_INDEX_LANTERN       = 19
 
 
 # ---------------------------------------------------------------------------
@@ -1218,6 +1219,27 @@ def create_stylized_glass(name="M_Building_Glass", glow_strength=0.0,
     return mat
 
 
+def create_lantern_emissive(name="LanternEmissive", color=(1.0, 0.80, 0.46, 1.0),
+                            glow_strength=6.0):
+    """Purely emissive lantern panes.
+
+    The hand-forged lanterns carry no interior geometry, so the whole cage reads
+    as a warm glowing lamp. Kept as its own slot so it can be swapped for a
+    dedicated emissive master material in-engine.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=800)
+
+    _set_bsdf_input(bsdf, "Base Color", (0.05, 0.045, 0.04, 1.0))
+    _set_bsdf_input(bsdf, "Roughness", 0.30)
+    _set_bsdf_input(bsdf, "Metallic", 0.0)
+    _set_bsdf_input(bsdf, "Emission Color", color)
+    _set_bsdf_input(bsdf, "Emission Strength", glow_strength)
+
+    tree.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+    return mat
+
+
 # ---------------------------------------------------------------------------
 # 7. Door — 3 wide vertical planks with thin dark seams
 # ---------------------------------------------------------------------------
@@ -1803,7 +1825,7 @@ create_stylized_floor = create_stylized_floorboards
 
 def setup_building_material_slots(obj, props):
     """
-    Populates all 19 canonical material slots on obj.
+    Populates all 20 canonical material slots on obj.
     Slot indices match MAT_INDEX_* constants.
     Material names are generic and consistent across all tiers (no _T1, _T2, etc.)
     for seamless, reusable master materials in Unreal Engine.
@@ -1899,7 +1921,13 @@ def setup_building_material_slots(obj, props):
     # 18. Rope (rope_diffuse.jpg) - well windlass, bucket and tie cords
     mat_rope = getattr(props, 'custom_rope', None) or create_stylized_rope("M_Building_Rope")
 
-    # Assemble all 19 canonical slots in strict order
+    # 19. Lantern Emissive - glowing panes of the hand-forged lanterns
+    mat_lantern = (getattr(props, 'custom_lantern', None) or
+                   create_lantern_emissive(
+                       "LanternEmissive",
+                       glow_strength=max(3.0, props.window_glow_strength * 1.8)))
+
+    # Assemble all 20 canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
         mat_plaster,        # 1  MAT_INDEX_PLASTER
@@ -1920,6 +1948,7 @@ def setup_building_material_slots(obj, props):
         mat_dirt,           # 16 MAT_INDEX_DIRT
         mat_sign,           # 17 MAT_INDEX_SIGN
         mat_rope,           # 18 MAT_INDEX_ROPE
+        mat_lantern,        # 19 MAT_INDEX_LANTERN
     ]
     obj.data.materials.clear()
     for m in required_mats:

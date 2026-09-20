@@ -16,7 +16,9 @@ def get_facade_window_positions(span_min, span_max, target_spacing=2.4, min_marg
     if avail < 0.4:
         return []
 
-    count = max(1, int(round(avail / target_spacing)))
+    count = int(round(avail / target_spacing))
+    if count <= 0:
+        return [(span_min + span_max) * 0.5] if avail >= target_spacing * 0.8 else []
     if count == 1:
         return [(span_min + span_max) * 0.5]
     step = avail / max(1, count - 1)

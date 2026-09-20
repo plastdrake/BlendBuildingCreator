@@ -69,6 +69,12 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         box_arch.prop(props, "building_archetype", text="")
         if props.building_archetype == 'LUMBERMILL':
             box_arch.prop(props, "mill_grade", text="Mill Grade")
+            box_arch.prop(props, "cargo_dock_facade")
+            if props.num_floors > 1:
+                box_arch.prop(props, "has_upper_cargo_crane")
+        elif props.building_archetype == 'WAREHOUSE':
+            if props.num_floors > 1:
+                box_arch.prop(props, "has_upper_cargo_crane")
         
         box_tier = layout.box()
         box_tier.label(text="Building Material Tier", icon='MATERIAL')
@@ -143,6 +149,7 @@ class VIEW3D_PT_fantasy_building_dimensions(bpy.types.Panel):
         box_found = layout.box()
         box_found.prop(props, "has_foundation")
         if props.has_foundation:
+            box_found.prop(props, "foundation_type")
             box_found.prop(props, "foundation_height")
             box_found.prop(props, "ground_floor_stone")
             box_found.prop(props, "has_front_steps")
@@ -246,14 +253,15 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
         
         col = layout.column(align=True)
         col.prop(props, "roof_style")
-        if props.roof_style in ('SWAY', 'GABLE'):
-            col.prop(props, "roof_orientation")
-        col.prop(props, "roof_height")
-        col.prop(props, "roof_overhang")
-        if props.roof_style == 'SWAY':
-            col.prop(props, "roof_sway")
-        col.prop(props, "roof_flare")
-        col.prop(props, "has_hoist_beam")
+        if props.roof_style != 'NONE':
+            if props.roof_style in ('SWAY', 'GABLE'):
+                col.prop(props, "roof_orientation")
+            col.prop(props, "roof_height")
+            col.prop(props, "roof_overhang")
+            if props.roof_style == 'SWAY':
+                col.prop(props, "roof_sway")
+            col.prop(props, "roof_flare")
+            col.prop(props, "has_hoist_beam")
 
         # Shingles & Dormers
         box_det = layout.box()

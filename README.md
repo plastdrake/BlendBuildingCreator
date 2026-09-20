@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.21.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.24.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 36 ready-made presets across three material tiers.
@@ -79,6 +79,37 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.24.0
+
+- **Annex roof joins the main roof.** A full-height side annex now ties its cross-gable roof into the main roof with the same valley rafters the wings use. The deck is extended and notch-cut along the valley to the true apex (where the annex ridge meets the main slope), so the roof surface reaches the connection frame and the annex ridge no longer runs into the attic.
+- **Wing lantern at the pillar.** A wing-corner lantern now mounts on the wing's outer side face at the corner post instead of on the windowed front face.
+- **Balcony keeps clear of the gable ladder.** Balconies prefer the eave facades (where the loft/gable ladder never goes), so they no longer overlap the ladder to the gable hatch.
+- **Wonkiness off.** All building presets now default to zero fantasy wonkiness.
+- **Fewer windows.** Facades no longer get a forced window on every short segment, and the effective window spacing is sparser, so buildings read with a sensible number of windows per floor.
+- **Dormers and chimney clear the annex.** Main-roof dormers that would land in a full-height annex's roof band are dropped, and the chimney is pushed out of that band, so nothing collides with the annex roof.
+- **Natural roof orientation.** Presets no longer inherit a fixed front-to-back ridge: orientation now defaults to Auto, so the ridge always runs along the building's long axis and the gable ends are the short walls.
+- **No balcony inside an annex.** Balconies now avoid whichever facade a side annex occupies (not just the town-hall composer's), so a balcony can't end up buried inside the annex.
+- **Annex gable texture fixed.** The annex gable wall was textured in the roof's local frame and came out rotated/misaligned against the rest of the building; its UVs are now remapped in world space.
+- **Lantern glass is a real light.** The lantern pane uses a dedicated emissive material (a 20th canonical slot), the fake interior candle geometry is gone, and the cage (roof cone included) is now properly UV-unwrapped.
+- **Lantern holder off the posts.** Wall lanterns stand a few centimetres further off the wall so the bracket plate no longer sinks into the corner/veranda posts.
+- **Door rivets on the strap.** Hinge-strap rivets were laid out from the hinge instead of the strap centre, so the outermost one fell onto the door frame; they now sit on the strap.
+- **Flower boxes under the sill.** The trough stands off far enough to clear the projecting timber sill.
+- **Sack props no longer crash.** A reuse of the cone helper in the sack builder was missing its import (only surfaced when sacks were generated).
+
+## What's new in 1.23.0
+
+- **Wing lanterns sit on the wall.** The wing-mounted lantern was hanging off the jettied upper-wall plane in mid-air; it now mounts on the wing's ground-storey footprint with the ground-floor skin offset, so it sits flush like the other lantern.
+- **Annex sign respects log walls.** The annex gable sign now accounts for a Tier-1 annex being built entirely from logs (bulging skin) versus the flush stone/plank/stucco of other tiers, so it lands at the right depth.
+- **Cleaner log annexes.** A log annex's eave (non-gable) walls now drop their top log so it can't poke into the roof overlap, and the logs where the annex meets the main hall no longer saddle-over-run into the main building's interior.
+
+## What's new in 1.22.0
+
+- **Corner posts on every stone base.** Tier-1 log cabins keep their oak corner posts on the stone ground storey too (previously the whole ground-floor frame was skipped on Tier 1). Only the infill/brace timbering stays off the masonry.
+- **Signs sit on the right wall again.** Wing gable signs now track the wing's *top* storey bounds, so they no longer bury themselves in a jettied log wall - and the annex gable sign anchors to the annex's true outer face instead of the main hall's (jettied) half-width, so it no longer floats in mid-air.
+- **Signs clear their brace.** The board hangs lower on its straps, so the diagonal support sits fully above it instead of crossing the face.
+- **Wing-aware lanterns.** When a wing occupies a front corner, the lantern detects it and mounts on the wing's own outer wall instead of burying itself inside the wing block.
+- **Tier detection fixed.** Wall props consulted a non-existent "building material" flag that always read as log, pushing signs/lanterns/planters off flush stucco and plank walls; they now key off the real material tier.
 
 ## What's new in 1.21.0
 

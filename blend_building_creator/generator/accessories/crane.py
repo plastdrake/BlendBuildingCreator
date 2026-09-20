@@ -237,3 +237,124 @@ def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib
         _cyl_axis(((c1x+c2x)*0.5, (c1y+c2y)*0.5, (c1z+c1z)*0.5),
                       0.028 * (1.0 - t1 * 0.3), seg_len + 0.01,
                       (c2x-c1x, c2y-c1y, c2z-c1z), MAT_INDEX_IRON, segments=6)
+
+
+def build_wall_jib_crane(bm, wall_x, wall_y, z_mount, outward_dir=(1.0, 0.0), jib_len=2.8):
+    """
+    Builds a cantilevered timber jib crane mounted on an upper-floor wall/portal:
+    - Vertical wall bracket post attached to the wall with iron strapping plates.
+    - Horizontal heavy timber boom extending outward_dir over the loading dock.
+    - 45-degree diagonal under-brace strut supporting the boom.
+    - Iron pulley wheel at the jib tip with hanging rope and forged iron cargo hook.
+    - Hand winch wheel and crank mechanism on the wall bracket.
+    """
+    ox, oy = outward_dir
+    d_len = math.sqrt(ox * ox + oy * oy)
+    if d_len > 0.001:
+        ox /= d_len
+        oy /= d_len
+    else:
+        ox, oy = 1.0, 0.0
+
+    rot_z = math.atan2(oy, ox)
+    side_x, side_y = -oy, ox
+
+    # 1. Vertical wall bracket post
+    bracket_h = 2.4
+    bracket_w = 0.22
+    create_beveled_box(
+        bm, size=(bracket_w, bracket_w, bracket_h),
+        location=(wall_x + ox * 0.08, wall_y + oy * 0.08, z_mount - 0.2),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+    )
+    # Iron mounting wall straps
+    for sz in (-0.9, 0.1, 0.8):
+        create_beveled_box(
+            bm, size=(bracket_w + 0.05, bracket_w + 0.05, 0.09),
+            location=(wall_x + ox * 0.08, wall_y + oy * 0.08, z_mount - 0.2 + sz),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.005
+        )
+
+    # 2. Horizontal cantilever boom
+    boom_w = 0.20
+    boom_h = 0.22
+    boom_cx = wall_x + ox * (jib_len * 0.5 + 0.08)
+    boom_cy = wall_y + oy * (jib_len * 0.5 + 0.08)
+    boom_cz = z_mount + 0.85
+    create_beveled_box(
+        bm, size=(jib_len, boom_w, boom_h),
+        location=(boom_cx, boom_cy, boom_cz),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+    )
+
+    # 3. 45-degree diagonal under-brace strut
+    strut_run = min(1.6, jib_len * 0.65)
+    strut_len = math.sqrt(strut_run * strut_run * 2.0)
+    strut_cx = wall_x + ox * (strut_run * 0.5 + 0.08)
+    strut_cy = wall_y + oy * (strut_run * 0.5 + 0.08)
+    strut_cz = boom_cz - strut_run * 0.5
+    # Rotation: pitch 45 deg, yaw rot_z
+    pitch = 0.785398
+    create_beveled_box(
+        bm, size=(strut_len, 0.16, 0.16),
+        location=(strut_cx, strut_cy, strut_cz),
+        rotation=(0.0, -pitch, rot_z),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+    )
+
+    # 4. Iron Pulley Wheel at jib tip
+    tip_x = wall_x + ox * (jib_len + 0.02)
+    tip_y = wall_y + oy * (jib_len + 0.02)
+    tip_z = boom_cz
+    create_torus_ring(
+        bm, location=(tip_x, tip_y, tip_z),
+        rotation=(1.5708, 0.0, rot_z),
+        major_radius=0.18, minor_radius=0.03,
+        major_segments=12, minor_segments=6,
+        mat_index=MAT_INDEX_IRON
+    )
+
+    # 5. Hanging Rope and Hook
+    rope_h = 2.4
+    rope_cz = tip_z - 0.20 - rope_h * 0.5
+    create_cylinder(
+        bm, radius=0.016, height=rope_h, segments=6,
+        location=(tip_x, tip_y, rope_cz),
+        mat_index=MAT_INDEX_WOOD
+    )
+    hook_z = rope_cz - rope_h * 0.5 - 0.12
+    create_cylinder(
+        bm, radius=0.045, height=0.18, segments=8,
+        location=(tip_x, tip_y, hook_z),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Curved hook loop
+    create_torus_ring(
+        bm, location=(tip_x, tip_y, hook_z - 0.10),
+        rotation=(0.0, 1.5708, rot_z),
+        major_radius=0.09, minor_radius=0.022,
+        major_segments=10, minor_segments=6,
+        mat_index=MAT_INDEX_IRON
+    )
+
+    # 6. Hand winch wheel on the bracket post
+    winch_z = z_mount - 0.35
+    winch_x = wall_x + ox * 0.08 + side_x * 0.18
+    winch_y = wall_y + oy * 0.08 + side_y * 0.18
+    create_torus_ring(
+        bm, location=(winch_x, winch_y, winch_z),
+        rotation=(0.0, 1.5708, rot_z),
+        major_radius=0.28, minor_radius=0.03,
+        major_segments=12, minor_segments=6,
+        mat_index=MAT_INDEX_IRON
+    )
+    # Winch axle & crank
+    create_cylinder(
+        bm, radius=0.04, height=0.35, segments=8,
+        location=(wall_x + ox * 0.08, wall_y + oy * 0.08, winch_z),
+        rotation=(1.5708, 0.0, rot_z),
+        mat_index=MAT_INDEX_IRON
+    )
