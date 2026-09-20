@@ -164,6 +164,10 @@ def _create_building_context(props):
         _wing_walls = {w.get('wall') for w in wings} if has_wing else set()
         _rampart_side = (getattr(props, 'rampart_side', 'RIGHT')
                          if getattr(props, 'has_side_rampart', False) else None)
+        # A covered veranda occupies the front facade up past the first floor, so
+        # a front balcony would intersect its roof. Force balconies elsewhere.
+        _has_veranda = (getattr(props, 'has_veranda', False)
+                        or effective_archetype in ('TAVERN', 'INN'))
         _order = (balc_side_eff, 'LEFT', 'RIGHT', 'BACK', 'FRONT')
         for _bf in active_balc_floors:
             _blocked_f = set()
@@ -173,6 +177,8 @@ def _create_building_context(props):
                 _blocked_f.add(_annex_side)
             if _rampart_side is not None and _bf <= 1:
                 _blocked_f.add(_rampart_side)
+            if _has_veranda:
+                _blocked_f.add('FRONT')
             # Mini-wing outcrops pick their slots after this and keep clear of
             # whatever facade the balcony ends up on.
             floor_balc_side[_bf] = next((_s for _s in _order if _s not in _blocked_f), None)

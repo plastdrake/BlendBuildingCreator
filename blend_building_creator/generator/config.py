@@ -54,6 +54,9 @@ class BuildingContext:
     wing_side: str = 'RIGHT'
     total_height: float = 0.0
     floor_stair_holes: Dict[int, Any] = field(default_factory=dict)
+    # World-space window sill centres: {floor: {facade: [(x, y, sill_z), ...]}}
+    # recorded by the wall phase so accessories can align to real windows.
+    window_centers: Dict[int, Any] = field(default_factory=dict)
     wx_base_min: float = 0.0
     wx_base_max: float = 0.0
     wy_base_min: float = 0.0

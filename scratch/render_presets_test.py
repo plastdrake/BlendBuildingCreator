@@ -1,0 +1,84 @@
+import sys, os, math
+import bpy
+
+repo_root = r'd:\BlendBuildingCreator'
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+import blend_building_creator
+try:
+    blend_building_creator.register()
+except Exception as e:
+    pass
+
+def render_preset(preset_name, output_filename, cam_loc, cam_rot):
+    # Clear scene
+    for obj in list(bpy.context.scene.objects):
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+    bpy.ops.building.create_fantasy_building()
+    bpy.ops.building.apply_preset(preset_key=preset_name)
+
+    props = bpy.context.scene.fantasy_building_settings
+    props.door_angle = 35.0
+    bpy.ops.building.regenerate()
+
+    # Lighting
+    sun_data = bpy.data.lights.new(name="SunLight", type='SUN')
+    sun_data.energy = 3.5
+    sun_data.color = (1.0, 0.96, 0.90)
+    sun_obj = bpy.data.objects.new(name="SunLight", object_data=sun_data)
+    bpy.context.scene.collection.objects.link(sun_obj)
+    sun_obj.rotation_euler = (math.radians(50), math.radians(20), math.radians(35))
+
+    world = bpy.context.scene.world or bpy.data.worlds.new("World")
+    bpy.context.scene.world = world
+    world.use_nodes = True
+    bg_node = world.node_tree.nodes.get("Background")
+    if bg_node:
+        bg_node.inputs["Color"].default_value = (0.6, 0.75, 0.9, 1.0)
+        bg_node.inputs["Strength"].default_value = 1.0
+
+    # Cycles
+    bpy.context.scene.render.engine = 'CYCLES'
+    bpy.context.scene.cycles.device = 'CPU'
+    bpy.context.scene.cycles.samples = 16
+    bpy.context.scene.cycles.use_denoising = False
+    bpy.context.scene.render.resolution_x = 960
+    bpy.context.scene.render.resolution_y = 640
+
+    cam_data = bpy.data.cameras.new(name="Camera")
+    cam_data.lens = 28
+    cam_obj = bpy.data.objects.new(name="Camera", object_data=cam_data)
+    bpy.context.scene.collection.objects.link(cam_obj)
+    cam_obj.location = cam_loc
+    cam_obj.rotation_euler = cam_rot
+    bpy.context.scene.camera = cam_obj
+
+    out_img = os.path.join(repo_root, "scratch", output_filename)
+    bpy.context.scene.render.filepath = out_img
+    bpy.ops.render.render(write_still=True)
+    print(f"RENDERED {preset_name} -> {out_img}")
+
+# 1. Render TAVERN_T1
+render_preset('TAVERN_T1', 'tavern_t1_new.png',
+              (8.0, -12.0, 5.0),
+              (math.radians(68), 0, math.radians(32)))
+
+# 2. Render TAVERN_T2
+render_preset('TAVERN_T2', 'tavern_t2_new.png',
+              (10.0, -15.0, 6.0),
+              (math.radians(68), 0, math.radians(32)))
+
+# 3. Render TAVERN_T3 (L-Shape courtyard tavern with well)
+render_preset('TAVERN_T3', 'tavern_t3_new.png',
+              (-12.0, -18.0, 8.0),
+              (math.radians(65), 0, math.radians(-35)))
+
+# 4. Render INN_T2 (3-story coaching inn with courtyard and well)
+render_preset('INN_T2', 'inn_t2_new.png',
+              (-14.0, -20.0, 9.0),
+              (math.radians(65), 0, math.radians(-35)))
+
+print("ALL PRESET RENDERS COMPLETED SUCCESSFULLY!")
+sys.exit(0)

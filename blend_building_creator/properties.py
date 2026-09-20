@@ -130,6 +130,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('MILITARY', "Military", "Barracks and military quarters"),
             ('INDUSTRIAL', "Industrial", "Warehouses, storage, and lumbermills"),
             ('RESIDENTIAL', "Residential", "Houses, cottages, and town residences"),
+            ('HOSPITALITY', "Hospitality", "Taverns, inns, and wayside hostelries"),
         ],
         default='ALL'
     )
@@ -288,6 +289,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('WINDMILL', "Windmill Sails", "4-blade rotating lattice timber windmill rotor on upper facade"),
             ('WATCHTOWER', "Watchtower Parapet", "Machicolated defensive timber hoarding, corbel brackets, and arrow slits"),
             ('TAVERN', "Tavern Porch & Sign", "Covered entrance veranda porch and hanging ornate tavern sign"),
+            ('INN', "Inn Veranda & Sign", "Grander hospitality front: veranda, hanging sign, and a furnished guest yard"),
             ('FISHERMAN', "Fisherman Pier & Nets", "Raised timber piling pier stilts and outdoor fish drying net frame"),
             ('BAKERY', "Bakery Bread Oven", "Protruding outdoor curved brick bread oven with chimney flue"),
         ],
@@ -1068,6 +1070,17 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    annex_side: EnumProperty(
+        name="Annex Side",
+        description="Side of the building the annex attaches to (generic annex)",
+        items=[
+            ('LEFT', "Left (-X)", "Attach the annex to the left side wall"),
+            ('RIGHT', "Right (+X)", "Attach the annex to the right side wall"),
+        ],
+        default='LEFT',
+        update=on_property_updated
+    )
+
     # --- Fortifications: Palisade, Banners, Battlements, Military Props ---
     has_palisade: BoolProperty(
         name="Palisade Wall",
@@ -1167,6 +1180,42 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Archery Targets",
         description="Number of archery targets in the drill yard",
         min=0, max=6, default=3,
+        update=on_property_updated
+    )
+
+    # --- Hospitality & Outdoor Decor (reusable on any building) ---
+    has_veranda: BoolProperty(
+        name="Covered Veranda",
+        description="Covered timber entrance veranda (porch) over the front door",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_trade_sign: BoolProperty(
+        name="Hanging Trade Sign",
+        description="Iron-bracketed hanging sign; mounted on the veranda post or beside the front door",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_flower_boxes: BoolProperty(
+        name="Window Flower Boxes",
+        description="Blooming timber planters mounted beneath the lower-storey windows",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_outdoor_decor: BoolProperty(
+        name="Yard Props & Furniture",
+        description="Barrels, picnic tables, benches, crates, sacks and lantern posts dressing the frontage",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_well: BoolProperty(
+        name="Courtyard Well",
+        description="Round stone well with a timber windlass and shingled hood",
+        default=False,
         update=on_property_updated
     )
 

@@ -10,11 +10,13 @@ named entry point.
 
 from .mini_wing import build_mini_wing
 from .pillared_overhang import build_pillared_overhang
-from .tavern import build_balcony, build_tavern_porch_and_sign
+from .balcony import build_balcony
+from .hospitality import build_hospitality_scene
 from .tower import build_clock_tower, build_corner_turret
 from .rampart import build_entry_ramp, build_side_rampart_for_shape
 from .porch import build_arched_porch
 from .town_hall import build_town_hall_composer
+from .annex import build_side_annex
 from .blacksmith import build_blacksmith_forge
 from .windmill import build_windmill_sails
 from .watchtower import build_watchtower_lookout
@@ -104,6 +106,11 @@ def _build_pillared_overhang(bm, props, ctx, tier):
     )
 
 
+def _build_hospitality(bm, props, ctx, tier):
+    """Tavern/inn front-of-house plus any reusable yard decor toggles."""
+    build_hospitality_scene(bm, props, ctx, tier)
+
+
 def _build_civic_landmarks(bm, props, ctx, tier):
     base_hx = ctx.base_w * 0.5
     base_hy = ctx.base_d * 0.5
@@ -178,9 +185,34 @@ def _build_civic_landmarks(bm, props, ctx, tier):
             'seed': ctx.seed, 'fl1_bounds': ctx.floor_wall_bounds.get(1, None),
             'floor_wall_bounds': ctx.floor_wall_bounds, 'wall_t': ctx.wall_t,
         })
+    # Generic reusable side annex for any other building/preset.
+    elif _prop(props, 'has_side_annex', False):
+        _build_generic_annex(bm, props, ctx, tier)
     # Rampart walk for any other footprint (the T-shaped composer owns its own).
     elif _prop(props, 'has_side_rampart', False):
         build_side_rampart_for_shape(bm, props, ctx)
+
+
+def _build_generic_annex(bm, props, ctx, tier):
+    """Attach the reusable half-timbered side annex to any footprint."""
+    side_sgn = 1.0 if _prop(props, 'annex_side', 'LEFT') == 'RIGHT' else -1.0
+    a_floors = max(1, min(2, _prop(props, 'annex_floors', 2)))
+    base_hx = ctx.base_w * 0.5
+    base_hy = ctx.base_d * 0.5
+    a_w = min(6.0, max(3.6, ctx.base_d * 0.72))
+    a_d = 3.6 if tier == 'TIER_1' else 4.0
+    a_roof = 3.0 if tier == 'TIER_3' else 2.6
+    build_side_annex(
+        bm, side_sgn=side_sgn, main_hx=base_hx,
+        main_cy0=-base_hy, main_cy1=base_hy,
+        z_ground=0.0, found_h=ctx.found_h, floors=a_floors, floor_h=ctx.floor_h,
+        tier=tier, width=a_w, depth=a_d, roof_h=a_roof,
+        plank_direction=ctx.plank_dir,
+        main_bounds_by_floor=ctx.floor_wall_bounds,
+        # Log (Tier 1) buildings get a plain log annex, never half-timbering.
+        timber_framing=bool(_prop(props, 'has_timber_framing', True)) and tier != 'TIER_1',
+        diagonals=bool(_prop(props, 'timber_diagonals', True)),
+    )
 
 
 def build_architectural_accessories(bm, props, ctx):
@@ -189,6 +221,7 @@ def build_architectural_accessories(bm, props, ctx):
     _build_mini_wing(bm, props, ctx, tier)
     _build_balconies(bm, props, ctx, tier)
     _build_pillared_overhang(bm, props, ctx, tier)
+    _build_hospitality(bm, props, ctx, tier)
     _build_civic_landmarks(bm, props, ctx, tier)
     _build_fortifications(bm, props, ctx)
 
@@ -390,8 +423,6 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
         build_windmill_sails(bm, cx=0.0, front_y=-hy, hub_z=hub_z, radius=max(2.6, props.width * 0.48), wall_y=-hy + 0.35)
     elif effective_archetype == 'WATCHTOWER':
         build_watchtower_lookout(bm, -top_hx, top_hx, -top_hy, top_hy, z_platform=top_z)
-    elif effective_archetype == 'TAVERN':
-        build_tavern_porch_and_sign(bm, -hx, hx, front_y=main_door_yf, z_ground=0.0, door_x=main_door_cx, seed=seed)
     elif effective_archetype == 'FISHERMAN':
         build_fisherman_stilts(bm, -hx, hx, -hy, hy, z_ground=0.0, z_floor=found_h)
     elif effective_archetype == 'BAKERY':

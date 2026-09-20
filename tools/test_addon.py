@@ -45,7 +45,7 @@ def run_tests():
     m_count = len(obj.data.materials)
     print(f"  -> Generated default building: {v_count} verts, {p_count} polys, {m_count} materials.")
     assert v_count > 500, f"Expected rich geometry (>500 verts), got {v_count}"
-    assert m_count == 16, f"Expected 16 material slots, got {m_count}"
+    assert m_count == 19, f"Expected 19 material slots, got {m_count}"
     
     # 3. Test Interior Floor and Door Angle
     print("[3/6] Testing door toggle & walk-in interior...")
@@ -91,15 +91,18 @@ def run_tests():
             bpy.ops.building.regenerate()
             print(f"  -> Tier 1 with rounded interlocking logs: {len(obj.data.vertices)} verts.")
         m_count = len(obj.data.materials)
-        assert m_count == 16, f"Expected 16 material slots for {tier}, got {m_count}"
+        assert m_count == 19, f"Expected 19 material slots for {tier}, got {m_count}"
         mat_names = [m.name for m in obj.data.materials]
         expected_names = [
             "M_Building_Stone", "M_Building_Plaster", "M_Building_Timber",
             "M_Building_Floor", "M_Building_Shingles", "M_Building_Glass",
             "M_Building_Iron", "M_Building_Wood", "M_Building_Cut_Stone",
             "M_Building_Log", "M_Building_Log_End", "M_Building_Plaster_Brick",
-            "M_Building_Clock_Face", "M_Building_Banner", "M_Building_Target",
-            "M_Building_Hay"
+            "M_Building_Clock_Face", "M_Building_Banner",             "M_Building_Target",
+            "M_Building_Hay",
+            "M_Building_Dirt",
+            "M_Building_Sign",
+            "M_Building_Rope"
         ]
         assert mat_names == expected_names, f"Unexpected material names for {tier}: {mat_names}"
         print(f"  -> Material {tier}: verified {len(expected_names)} generic procedural shader slots successfully: {mat_names}")
@@ -147,7 +150,7 @@ def run_tests():
     # 8. Test Archetypes & Accessories
     print("[8/10] Testing Specialized Architectural Archetypes...")
     obj["is_fantasy_building"] = True
-    for arch in ['BLACKSMITH', 'WINDMILL', 'WATCHTOWER', 'TAVERN', 'FISHERMAN', 'BAKERY', 'WAREHOUSE', 'LUMBERMILL']:
+    for arch in ['BLACKSMITH', 'WINDMILL', 'WATCHTOWER', 'TAVERN', 'INN', 'FISHERMAN', 'BAKERY', 'WAREHOUSE', 'LUMBERMILL']:
         props.building_archetype = arch
         bpy.ops.building.regenerate()
         print(f"  -> Archetype '{arch}': {len(obj.data.vertices)} verts, {len(obj.data.polygons)} polys.")
@@ -162,7 +165,7 @@ def run_tests():
     # Run Reset Operator
     bpy.ops.building.reset_settings(regenerate_active=False)
     assert props.num_floors == 2, f"Expected reset to 2 floors, got {props.num_floors}"
-    assert abs(props.wonkiness - 0.08) < 0.001, f"Expected reset to wonkiness 0.08, got {props.wonkiness}"
+    assert abs(props.wonkiness - 0.0) < 0.001, f"Expected reset to wonkiness 0.0, got {props.wonkiness}"
     assert props.building_archetype == 'AUTO', f"Expected reset to AUTO archetype, got {props.building_archetype}"
     print("  -> Reset operator restored all settings to defaults.")
 

@@ -177,123 +177,6 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                 uv_offset=shared_uv
             )
 
-def build_plank_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
-                             normal_vec=None, direction='HORIZONTAL', jankiness=0.35, seed=42):
-    """
-    Builds physical 3D wooden plank walls with organic jankiness for Tier 2 architecture.
-    Supports:
-    - 'HORIZONTAL': Classic overlapping weatherboard lap planks with stepped depth and bevels.
-    - 'VERTICAL': Stylized board-and-batten vertical plank siding with raised battens over seams.
-    """
-    x1, y1 = p_start
-    x2, y2 = p_end
-    dx = x2 - x1
-    dy = y2 - y1
-    seg_len = math.sqrt(dx * dx + dy * dy)
-    if seg_len < 0.001:
-        return
-        
-    angle = math.atan2(dy, dx)
-    height = z_top - z_bottom
-    if height < 0.05:
-        return
-        
-    # Outward normal vector
-    if normal_vec is not None:
-        nx, ny = normal_vec[0], normal_vec[1]
-    else:
-        nx = -dy / seg_len
-        ny = dx / seg_len
-        
-    ux = dx / seg_len
-    uy = dy / seg_len
-    
-    # 1. Solid Interior Core (sealed flat interior surface, flush with planks)
-    core_thick = thickness * 0.84
-    core_cx = (x1 + x2) * 0.5 - nx * (thickness * 0.06)
-    core_cy = (y1 + y2) * 0.5 - ny * (thickness * 0.06)
-    core_cz = (z_bottom + z_top) * 0.5
-    create_box(
-        bm,
-        size=(seg_len, core_thick, height),
-        location=(core_cx, core_cy, core_cz),
-        rotation=(0.0, 0.0, angle),
-        mat_index=MAT_INDEX_PLASTER_INT
-    )
-    
-    ext_offset = thickness * 0.40
-    
-    if direction == 'VERTICAL':
-        # --- VERTICAL BOARD AND BATTEN SIDING ---
-        target_bw = 0.24
-        num_boards = max(1, int(round(seg_len / target_bw)))
-        actual_bw = seg_len / num_boards
-        batten_w = 0.065
-        
-        for k in range(num_boards):
-            mid_u = (k + 0.5) * actual_bw
-            
-            # Jankiness perturbations per board
-            h_val = ((seed * 47 + k * 181 + int(abs(x1) * 23) + int(abs(y1) * 37)) % 1000) / 1000.0
-            depth_j = (h_val - 0.5) * (0.035 * jankiness)
-            tilt_v = ((h_val * 5.3) % 1.0 - 0.5) * (0.055 * jankiness)
-            tilt_h = ((h_val * 9.7) % 1.0 - 0.5) * (0.035 * jankiness)
-            w_jitter = (h_val - 0.5) * (0.035 * jankiness)
-            
-            bx = x1 + ux * mid_u + nx * (ext_offset + depth_j)
-            by = y1 + uy * mid_u + ny * (ext_offset + depth_j)
-            bz = (z_bottom + z_top) * 0.5
-            
-            # Base wide board
-            create_beveled_box(
-                bm,
-                size=(max(0.08, actual_bw - 0.008 + w_jitter), 0.032, height),
-                location=(bx, by, bz),
-                rotation=(tilt_h, tilt_v, angle),
-                mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.005
-            )
-            
-            # Raised batten strip over vertical seam
-            seam_u = k * actual_bw
-            if 0.02 < seam_u < seg_len - 0.02:
-                batten_x = x1 + ux * seam_u + nx * (ext_offset + 0.016 + depth_j * 0.5)
-                batten_y = y1 + uy * seam_u + ny * (ext_offset + 0.016 + depth_j * 0.5)
-                create_beveled_box(
-                    bm,
-                    size=(batten_w, 0.035, height),
-                    location=(batten_x, batten_y, bz),
-                    rotation=(tilt_h * 0.5, tilt_v * 0.5, angle),
-                    mat_index=MAT_INDEX_TIMBER,
-                    bevel_amount=0.005
-                )
-    else:
-        # --- HORIZONTAL OVERLAPPING LAP WEATHERBOARDS ---
-        plank_h = 0.20
-        reveal = 0.17
-        num_planks = max(1, int(math.ceil(height / reveal)))
-        
-        for j in range(num_planks):
-            pz = z_bottom + min(height - plank_h * 0.5, j * reveal + plank_h * 0.5)
-            
-            h_val = ((seed * 53 + j * 239 + int(abs(x1) * 19) + int(abs(y1) * 41)) % 1000) / 1000.0
-            depth_j = (h_val - 0.5) * (0.045 * jankiness)
-            tilt_j = ((h_val * 7.9) % 1.0 - 0.5) * (0.090 * jankiness)
-            z_tilt = ((h_val * 13.1) % 1.0 - 0.5) * (0.035 * jankiness)
-            
-            row_step = (j % 2) * 0.005
-            pcx = (x1 + x2) * 0.5 + nx * (ext_offset + row_step + depth_j)
-            pcy = (y1 + y2) * 0.5 + ny * (ext_offset + row_step + depth_j)
-            
-            create_beveled_box(
-                bm,
-                size=(seg_len, 0.035, plank_h),
-                location=(pcx, pcy, pz),
-                rotation=(tilt_j, z_tilt, angle),
-                mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.006
-            )
-
 def build_stone_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                              normal_vec=None, block_scale=1.0, disorder=0.35,
                              is_corner_start=False, is_corner_end=False, seed=42):
@@ -446,7 +329,7 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         )
         return
 
-    if tier in ('TIER_1', 'TIER_2') and mat_ext in (MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER):
+    if tier == 'TIER_1' and mat_ext in (MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER):
         mat_ext = MAT_INDEX_WOOD
 
     if mat_ext == MAT_INDEX_PLASTER_EXT and has_exposed_brick:

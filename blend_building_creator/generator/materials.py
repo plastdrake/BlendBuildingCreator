@@ -59,7 +59,7 @@ def _load_image_texture(tree, filename, coord, loc_x=-800, loc_y=120, scale=(1.0
     return tex_node
 
 # ---------------------------------------------------------------------------
-# Material slot index constants (16 canonical slots for UE optimization)
+# Material slot index constants (19 canonical slots for UE optimization)
 # ---------------------------------------------------------------------------
 MAT_INDEX_STONE        = 0
 MAT_INDEX_PLASTER      = 1
@@ -85,6 +85,9 @@ MAT_INDEX_CLOCK_FACE    = 12
 MAT_INDEX_BANNER        = 13
 MAT_INDEX_TARGET        = 14
 MAT_INDEX_HAY           = 15
+MAT_INDEX_DIRT          = 16
+MAT_INDEX_SIGN          = 17
+MAT_INDEX_ROPE          = 18
 
 
 # ---------------------------------------------------------------------------
@@ -1478,6 +1481,94 @@ def create_stylized_hay(name="M_Building_Hay", color=(0.78, 0.60, 0.30, 1.0)):
     return mat
 
 
+def create_stylized_dirt(name="M_Building_Dirt", color=(0.33, 0.23, 0.15, 1.0)):
+    """Tilable handpainted soil/potting-dirt for planter and flower-box fill."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-900)
+
+    tex_node = _load_image_texture(tree, "dirt_diffuse.jpg", c, loc_x=-660, loc_y=120,
+                                   scale=(0.55, 0.55, 1.0))
+    if tex_node is not None:
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-200, 120)
+        tint.inputs["Factor"].default_value = 0.30
+        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = color
+        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-240,
+                                       strength=0.10, scale=2.2)
+        _apply_ao(tree, bsdf, painted, strength=0.50, distance=0.10)
+        _setup_pbr(tree, bsdf, out, roughness=0.98)
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=0.98)
+    return mat
+
+
+def create_stylized_sign(name="M_Building_Sign", icon_filename="tavern_sign.png"):
+    """Hanging trade sign face: a handpainted icon decal for a light plank board.
+
+    The supplied icons are dark line-art on a fully transparent background, so
+    the icon's own alpha channel is the cut-out mask and the board shows through
+    everywhere else.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    c = _coord(tree, loc_x=-1000)
+
+    tex_node = _load_image_texture(tree, icon_filename, c, loc_x=-700, loc_y=120)
+    if tex_node is not None:
+        _set_bsdf_input(bsdf, "Base Color", (0.07, 0.055, 0.045, 1.0))
+        if "Alpha" in bsdf.inputs and "Alpha" in tex_node.outputs:
+            tree.links.new(tex_node.outputs["Alpha"], bsdf.inputs["Alpha"])
+        _setup_pbr(tree, bsdf, out, roughness=0.60, metallic=0.0)
+        for attr, val in (("blend_method", 'CLIP'), ("shadow_method", 'CLIP'),
+                          ("surface_render_method", 'DITHERED')):
+            try:
+                setattr(mat, attr, val)
+            except Exception:
+                pass
+        try:
+            mat.clip_threshold = 0.35
+        except Exception:
+            pass
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", (0.06, 0.05, 0.04, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.60)
+    return mat
+
+
+def create_stylized_rope(name="M_Building_Rope", color=(0.62, 0.48, 0.28, 1.0)):
+    """Coiled hemp rope (rope_diffuse.jpg) for windlasses, buckets and ties."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-900)
+
+    tex_node = _load_image_texture(tree, "rope_diffuse.jpg", c, loc_x=-660, loc_y=120,
+                                   scale=(0.0625, 0.7, 1.0))
+    if tex_node is not None:
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-200, 120)
+        tint.inputs["Factor"].default_value = 0.22
+        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = color
+        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-240,
+                                       strength=0.10, scale=2.6)
+        _apply_ao(tree, bsdf, painted, strength=0.42, distance=0.10)
+        _setup_pbr(tree, bsdf, out, roughness=0.98)
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=0.98)
+    return mat
+
+
 def create_stylized_banner(name="M_Building_Banner", color=(0.55, 0.12, 0.12, 1.0)):
     """Heraldic painted-cloth standard with dragon crest shield texture."""
     mat, tree = _new_mat(name)
@@ -1712,7 +1803,7 @@ create_stylized_floor = create_stylized_floorboards
 
 def setup_building_material_slots(obj, props):
     """
-    Populates all 16 canonical material slots on obj.
+    Populates all 19 canonical material slots on obj.
     Slot indices match MAT_INDEX_* constants.
     Material names are generic and consistent across all tiers (no _T1, _T2, etc.)
     for seamless, reusable master materials in Unreal Engine.
@@ -1795,7 +1886,20 @@ def setup_building_material_slots(obj, props):
     # 15. Hay / Burlap (hay_diffuse.png) - padded training pell stuffing and sacks
     mat_hay = getattr(props, 'custom_hay', None) or create_stylized_hay("M_Building_Hay")
 
-    # Assemble all 16 canonical slots in strict order
+    # 16. Dirt / Soil (dirt_diffuse.jpg) - planter and flower-box fill
+    mat_dirt = getattr(props, 'custom_dirt', None) or create_stylized_dirt("M_Building_Dirt")
+
+    # 17. Trade Sign (handpainted icon decal cut out of a light plank board)
+    _sign_icon = (getattr(props, 'sign_icon', '') or
+                  ('inn_sign.png' if getattr(props, 'building_archetype', 'AUTO') == 'INN'
+                   else 'tavern_sign.png'))
+    mat_sign = getattr(props, 'custom_sign', None) or create_stylized_sign(
+        "M_Building_Sign", icon_filename=_sign_icon)
+
+    # 18. Rope (rope_diffuse.jpg) - well windlass, bucket and tie cords
+    mat_rope = getattr(props, 'custom_rope', None) or create_stylized_rope("M_Building_Rope")
+
+    # Assemble all 19 canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
         mat_plaster,        # 1  MAT_INDEX_PLASTER
@@ -1813,6 +1917,9 @@ def setup_building_material_slots(obj, props):
         mat_banner,         # 13 MAT_INDEX_BANNER
         mat_target,         # 14 MAT_INDEX_TARGET
         mat_hay,            # 15 MAT_INDEX_HAY
+        mat_dirt,           # 16 MAT_INDEX_DIRT
+        mat_sign,           # 17 MAT_INDEX_SIGN
+        mat_rope,           # 18 MAT_INDEX_ROPE
     ]
     obj.data.materials.clear()
     for m in required_mats:

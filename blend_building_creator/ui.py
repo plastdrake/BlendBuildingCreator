@@ -366,12 +366,23 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
         box_civic.prop(props, "has_arched_porch")
         box_civic.prop(props, "has_entry_ramp")
         box_civic.separator()
-        box_civic.prop(props, "town_hall_composer")
-        if props.town_hall_composer:
+        box_civic.prop(props, "has_side_annex")
+        if props.has_side_annex:
             col = box_civic.column(align=True)
-            col.prop(props, "has_side_annex")
-            if props.has_side_annex:
-                col.prop(props, "annex_floors")
+            col.prop(props, "annex_floors")
+            if not props.town_hall_composer:
+                col.prop(props, "annex_side")
+        box_civic.separator()
+        box_civic.prop(props, "town_hall_composer")
+
+        # Hospitality & Outdoor Decor
+        box_hosp = layout.box()
+        box_hosp.label(text="Hospitality & Yard Props", icon='HOME')
+        box_hosp.prop(props, "has_veranda")
+        box_hosp.prop(props, "has_trade_sign")
+        box_hosp.prop(props, "has_flower_boxes")
+        box_hosp.prop(props, "has_outdoor_decor")
+        box_hosp.prop(props, "has_well")
 
         # Fortifications
         box_fort = layout.box()
@@ -433,12 +444,6 @@ class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
         box_tier.prop(props, "material_tier", expand=True)
         box_tier.prop(props, "physical_siding")
         
-        if props.material_tier == 'TIER_2' and props.physical_siding:
-            box_tier.label(text="Plank Wall Style", icon='MOD_BUILD')
-            row_p = box_tier.row(align=True)
-            row_p.prop(props, "plank_direction", expand=True)
-            box_tier.prop(props, "plank_jankiness", slider=True)
-            
         if (props.material_tier == 'TIER_3' or props.ground_floor_stone) and props.physical_siding:
             box_tier.label(text="Stone Masonry Style", icon='SNAP_VOLUME')
             col_st = box_tier.column(align=True)

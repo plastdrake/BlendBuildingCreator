@@ -542,11 +542,13 @@ def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=
         
     return faces
 
-def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14)):
+def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 17, 18)):
     """Calculates clean cubic / triplanar style UVs for bmesh faces.
     Skips faces whose materials already have specialized local unwraps
-    (timber frames 2, roof shingles 4, forged iron 6, wood facade/accessories 7, logs 9, log end caps 10, clock face 12, banner 13, archery target 14).
-    Stone (0), plaster (1), floor (3), and cut stone (8) receive continuous world-space meter-scaled UVs.
+    (timber frames 2, roof shingles 4, forged iron 6, wood facade/accessories 7,
+    logs 9, log end caps 10, clock face 12, banner 13, archery target 14, sign
+    decal 17, rope 18). Stone (0), plaster (1), floor (3), cut stone (8), hay (15)
+    and dirt (16) receive continuous world-space meter-scaled UVs.
     Tagged faces (face.tag == True) are also preserved, but note bmesh.ops.bevel
     clears the generic face tag, so material-index skips are the reliable guard.
     """
@@ -675,6 +677,30 @@ def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=2
             u, v = v, u
             loop[uv_layer].uv = Vector((u, v))
             
+    return faces
+
+
+def transform_faces(faces, matrix):
+    """Apply a 4x4 world matrix to every vertex touched by ``faces`` (in place).
+
+    Lets a prop builder model its geometry once at a local origin and then drop
+    it anywhere in the world (rotation, mirroring, tilt) without recomputing
+    every child location. Handy for reusing a barrel as an upright, a lying or
+    a stacked prop.
+    """
+    seen = set()
+    for f in faces or ():
+        if not f.is_valid:
+            continue
+        for v in f.verts:
+            # BMesh elements are hashable by their underlying pointer, so key the
+            # dedup on the element itself. Do NOT use id(): Blender hands out
+            # transient Python wrappers, so id() differs per access and a shared
+            # vertex would be transformed once per face that references it.
+            if v in seen:
+                continue
+            seen.add(v)
+            v.co = matrix @ v.co
     return faces
 
 

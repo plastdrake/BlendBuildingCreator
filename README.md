@@ -1,10 +1,10 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.11.3-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.21.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
-A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 27 ready-made presets across three material tiers.
+A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 36 ready-made presets across three material tiers.
 
 ## Installation
 
@@ -29,7 +29,7 @@ Or copy the `blend_building_creator` folder into:
 
 ## Presets
 
-There are 27 presets (9 building families in 3 tiers each). Filter them by category in the preset panel.
+There are 36 presets (12 building families in 3 tiers each). Filter them by category in the preset panel.
 
 | Category | Buildings |
 | --- | --- |
@@ -37,6 +37,7 @@ There are 27 presets (9 building families in 3 tiers each). Filter them by categ
 | Military | Infantry Barracks (U-shaped, 40x40) |
 | Industrial | Warehouse (L-shaped, 20x20), Lumbermill (rectangular, 20x20) |
 | Residential | House 1 Small (12x12), House 2 Small (fairytale, 12x12), House 1 Medium (20x20), House 2 Medium (narrow, 12x20), House 3 Medium (L-shaped, 20x20 with courtyard) |
+| Hospitality | Tavern (pub, 20x20), Tavern Long (narrow pub, 12x20), Inn (accommodation + pub, 40x40) |
 
 Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks** and **Tier 3 Stone/Stucco**.
 
@@ -69,6 +70,7 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 **Accessories**
 - Mini-wing outcrops (with optional random width/depth), balconies and a pillared overhang.
 - Archetype props: warehouse crane, lumbermill sawmill, blacksmith forge, windmill sails, watchtower parapet, tavern porch, fisherman pier and bakery oven.
+- **Hospitality dressing** (reusable on any building): covered veranda, hanging textured trade sign, soil-filled window boxes, courtyard well, barrels, crates, sacks, stools, benches, picnic tables, post/hanging lanterns, notice boards and cloth awnings.
 
 **Fortifications** (reusable on any preset/footprint)
 - **Palisade** stockade: rough stakes or neat pickets enclosing the compound with a front gate (style, height and offset controls).
@@ -77,6 +79,84 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.21.0
+
+- **Tier-2 walls are planks, not planks-on-stucco.** Removed the physical 3D plank siding that was layered over a stucco core (and its now-unused builder). Tier-2 walls are a clean surface textured with the facade-plank material, so the timber frame reads on top of real planks rather than a board shell.
+- **Timber corner posts back on stone foundations.** The stone ground storey keeps its oak corner posts again (they were being skipped wholesale with the rest of the ground-floor timbering). Only the infill/brace timbering stays off the stone base.
+- **Wall props are floor-aware.** Sign, lanterns and flower boxes use the correct wall thickness per storey, so on a thin stone ground floor they sit dead flush against the wall again instead of floating at the log-crest offset.
+
+## What's new in 1.20.0
+
+- **Signs on every gable.** The trade sign now also hangs on each wing's gable and on the annex's own gable (as well as the main roof gable ends). Where a loft hatch sits low in a gable, the sign is raised near the apex so it clears the hatch instead of hanging in the middle of it.
+- **Notice board fixed.** A leftover duplicate placement was overriding the new shape-aware one (so it always ended up in the L-shaped spot). Removed, and the board now clears the jettied upper floor - beside the door against the facade for rectangle/square plans, on the wing wall for L-shaped plans. Its pinned papers now use the clock-face material.
+- **Lanterns avoid windows.** Wall lanterns slide along the facade to the clearest spot, so they no longer sit in the middle of a window (or the door).
+- **Double doors.** Tavern / Tavern Long / Inn doors are now at least 1.7m wide, so they build as double doors.
+- **Plain log annexes.** Tier-1 annexes drop the timber corner posts and the top log on their eave sides (the one that poked through the roof); half-timbered tiers keep their framing.
+
+## What's new in 1.19.0
+
+- **Trade sign now hangs from the roof gables.** Instead of one sign beside the door, a large bracket sign is hung on every exposed gable end of the main roof (front and back for a front-back ridge, left and right for a rotated one). Gable ends already taken by a wing or the side annex are skipped. Buildings whose roof raises no gable (hip roofs) keep the beside-the-door sign as a fallback.
+
+## What's new in 1.18.0
+
+- **Sign + lanterns sit on the wall now.** Both are mounted at a storey-relative height on the facade (the old fixed ~3.5m mount floated above the wall top on single-storey buildings) and their brackets are longer so the board/lantern clears the logs. The trade sign is also bigger.
+- **Bucket handle.** Removed the ring from the rope; the bucket now has a proper forged bail handle arcing over the top and the rope runs down through it and is lashed at the apex, so they read as connected.
+- **Well clearance.** The well sits further from the building and the hood is more compact, so its roof no longer reaches into the main building's timber framing.
+- **Flower boxes restored** to their previous stand-off so they sit under the sill instead of inside it.
+- **Smarter yard props:** the bench picks whichever side of the door is free (so it no longer vanishes), and the notice board leans on the wing wall for L-shaped buildings but turns to sit against the facade beside the door for rectangular/square ones.
+
+## What's new in 1.17.0
+
+- **Annex portal:** generic side annexes (taverns/inns/etc.) now open into the main hall with a framed walk-through doorway on every floor the annex spans, matching the Town Hall annex.
+- **Wall props actually bolt on:** the trade sign and corner lanterns now mount flush against the wall (log crest aware) and reach far enough out to clear it - no more floating brackets.
+- **Well cleaned up:** the well roof's shingle slabs are fixed in place (they were stuck at the world origin, floating inside the building), the fake water table and inner shaft are gone (the lid covers it), and the hood sits down on its posts.
+- **Well bucket fixed:** it's raised, now has a solid floor, and the rope runs all the way down to a forged tie-loop set into its rim so the two connect.
+- **Tavern entrance tidied:** the bench moves to the wall on the **left** of the door and the notice board to the **right**, angled out toward the street; the notice board's backing no longer pokes through its top/bottom rails.
+
+## What's new in 1.16.0
+
+- **Clear material tiers:** Tier 1 builds stacked rounded **logs**, Tier 2 now builds physical **wood-plank siding** (overlapping weatherboards, or board-and-batten when the plank direction is vertical) instead of smooth stucco, and Tier 3 stays **stucco over an ashlar stone base**. The tiers read as three genuinely different constructions.
+- Plank walls cut cleanly around every door/window, with the sealed interior core kept recessed behind the boards so the planks are the visible skin (no plaster poking through).
+
+## What's new in 1.15.0
+
+- **Overhang-aware facade mounting:** the trade sign, corner lanterns, window boxes and the veranda awning now attach to the correct outer face of the storey they sit on (and clear the log bulge), so nothing buries into a jettied wall or shows up inside the interior any more.
+- **Veranda anchored to the outer face:** the porch/awning is built off the outermost front wall, so its roof no longer clips into the upper storey or the ceiling.
+- **Well off the doorstep:** the well now sits to the **left** of the entrance instead of straight in the dooring line.
+- **Rebuilt well:** proper framed gable hood (fascia + raked barge boards) resting directly on the posts - no more floating beams or bare edges - plus a truly **hollow** bucket and a small rope-tie loop on the rim (the rope now ends where it would be knotted, instead of dangling from a big ring).
+- **Correct rope UVs:** rope is unwrapped so the strand texture (`rope_diffuse`) runs along the length with a single strand wrapping the circumference, instead of smearing around.
+- **Annex matches the walls:** a log (Tier 1) building now gets a plain log annex - no half-timbering over logs.
+- **Hay bales removed** entirely (bring your own in-engine) and the notice board is turned ~100° clockwise to sit along the entrance path.
+
+## What's new in 1.14.0
+
+- **Simpler window boxes:** the planters are now plain timber troughs with a soil fill, seated right under the sill — no fake plants, lid or iron brackets; drop your own flowers in-engine.
+- **Wall lanterns:** the corner lanterns hang from the facade on forged brackets (no more posts), with a narrower cage, no stray cross-wires, and hook/ring geometry that actually links. The veranda no longer sits in the doorway.
+- **Cleaner sign:** removed the loose iron rings/scrolls; the support brace now actually braces the arm, the board sits close to the wall beside the door and angles a few degrees toward the entrance.
+- **Round well:** smooth masonry shaft and coping (no block-by-block stones), a fitted lid, a real banded bucket, a proper windlass crank, and a new rope material (19 slots).
+- **Reusable side annex:** the Town Hall's half-timbered annex is extracted into a generic `annex` module and is now available on any building (added to the Tavern/Inn tiers).
+- **Tavern/Inn tier fix:** restored the Tier 1/2/3 material progression (they had all been flattened to Tier 2) and rotated the Inn's main roof 90° (`LEFT_RIGHT`).
+- **Tidier beer garden:** benches moved out of the doorway into the table cluster, and the front balcony is kept clear of the raised veranda.
+
+## What's new in 1.13.0
+
+- **Two taverns + a grand inn:** Hospitality is now three families — **Tavern** (20x20), **Tavern Long** (12x20, narrow) and **Inn** (40x40). Top tiers fill most of their plot with building plus garden/well/props.
+- **All doors ship closed** (Door Open Angle 0 in every preset).
+- **Higher-quality handmade props** (chunky, slightly wonky, game-ready): lathe-turned **barrels** with staves and three iron hoops, planked **crates** with iron corner straps, braced **stools**, slatted **benches**, heavy A-frame **picnic tables**, hand-forged **post/hanging lanterns** and **sacks**.
+- **Textured hanging signs:** a large light-plank sign carrying a handpainted **beer-mug (tavern)** or **bed (inn)** icon decal, hung high on the frontage facing the street.
+- **Soil-filled window boxes:** the planters are now proper wooden troughs with iron brackets and a tilable **dirt** fill (no fake foliage) — drop your own flowers in-engine.
+- **Veranda roof fixed:** the lean-to now uses the same shingle UV orientation and scale as the main roofs, with fascia/barge/flashing boards covering the exposed slab edges.
+- **Two new material slots** (`M_Building_Dirt`, `M_Building_Sign`) for **18** total.
+- **Tidier beer-garden layout:** furniture sits in clusters clear of the entrance path instead of blocking the door.
+
+## What's new in 1.12.0
+
+- **New Hospitality category:** tiered **Tavern** (public house) and **Inn** (accommodation + pub) families, each in three tiers, plus a new `INN` archetype.
+- **Reusable prop modules:** new generic `furniture`, `lighting`, `garden` and `signage` modules (barrels, crates, sacks, stools, benches, picnic tables, post/hanging lanterns, flower boxes, wells, hay bales, hanging trade signs, notice boards and cloth awnings) usable by any building.
+- **Refactor for SOLID/GRASP:** the generic balcony moved out of `tavern.py` into `balcony.py`, the hanging sign moved into `signage.py`, and the veranda porch now returns its post so signage composes onto it. New `hospitality.py` holds only the tavern/inn composition.
+- **New UI toggles (any building):** Covered Veranda, Hanging Trade Sign, Window Flower Boxes, Yard Props & Furniture, and Courtyard Well.
+- **Window boxes align to real windows:** the wall phase now records window sill centres on the generation context, so flower boxes, awnings, lanterns and baskets can line up with the actual openings.
 
 ## What's new in 1.11.3
 

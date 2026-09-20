@@ -95,21 +95,32 @@ def build_floors(bm, props, ctx):
     # Track stair holes and wall bounds per floor
     floor_stair_holes = {}
     floor_wall_bounds = {}
+    # World-space window sill centres per floor/facade, so accessories (flower
+    # boxes, awnings, hanging baskets, lanterns) can align to the real windows.
+    window_centers = {}
 
     # Town-Hall side annex: it hugs the main side wall (opposite the clock tower)
     # for its whole height. Windows on the main wall behind it are interior and
     # must be suppressed, and its portal opens on every floor it spans so the
     # upper storey is reachable from inside the hall.
-    _annex_on = (getattr(props, 'town_hall_composer', False)
-                 and getattr(props, 'has_side_annex', False) and shape == 'T_SHAPE')
+    _is_hall_annex = (getattr(props, 'town_hall_composer', False) and shape == 'T_SHAPE')
+    _is_generic_annex = (not getattr(props, 'town_hall_composer', False))
+    _annex_on = bool(getattr(props, 'has_side_annex', False)) and (_is_hall_annex or _is_generic_annex)
     _annex_floors = 0
     _annex_side = None
     _annex_y_span = None
     if _annex_on:
-        _annex_side = 'LEFT' if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else 'RIGHT'
         _annex_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
-        _a_w = 5.2 if getattr(props, 'material_tier', 'TIER_3') != 'TIER_1' else 4.4
-        _annex_y_span = (-_a_w * 0.5 - 0.5, _a_w * 0.5 + 0.5)
+        if _is_hall_annex:
+            _annex_side = 'LEFT' if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else 'RIGHT'
+            _a_w = 5.2 if getattr(props, 'material_tier', 'TIER_3') != 'TIER_1' else 4.4
+            _annex_y_span = (-_a_w * 0.5 - 0.5, _a_w * 0.5 + 0.5)
+        else:
+            # Generic side annex mirrors _build_generic_annex (centred on the
+            # middle of the side wall) so the portal lines up with the annex room.
+            _annex_side = 'RIGHT' if getattr(props, 'annex_side', 'LEFT') == 'RIGHT' else 'LEFT'
+            _a_w = min(6.0, max(3.6, base_d * 0.72))
+            _annex_y_span = (-_a_w * 0.5 - 0.1, _a_w * 0.5 + 0.1)
 
     # Square corner turrets bolt onto the outside of the BACK wall, so each one
     # connects through a doorway cut in the back wall (clear of the stairs).
@@ -935,6 +946,7 @@ def build_floors(bm, props, ctx):
             for wx in front_win_xs:
                 wu = (wx - x_min)
                 front_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
+                window_centers.setdefault(fl_idx, {}).setdefault('FRONT', []).append((wx, y_min, win_z1))
                 sh_act, sh_cl = get_shutter_info(wx, y_min, win_cz)
                 build_window_assembly(
                     bm, center=(wx, y_min, win_cz), size=(win_w, win_h),
@@ -969,6 +981,7 @@ def build_floors(bm, props, ctx):
             for wx in back_win_xs:
                 wu = (wx - x_min)
                 back_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
+                window_centers.setdefault(fl_idx, {}).setdefault('BACK', []).append((wx, y_max, win_z1))
                 sh_act, sh_cl = get_shutter_info(wx, y_max, win_cz)
                 build_window_assembly(
                     bm, center=(wx, y_max, win_cz), size=(win_w, win_h),
@@ -1009,6 +1022,7 @@ def build_floors(bm, props, ctx):
             for wy in left_win_ys:
                 wu = (wy - y_min)
                 left_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
+                window_centers.setdefault(fl_idx, {}).setdefault('LEFT', []).append((x_min, wy, win_z1))
                 sh_act, sh_cl = get_shutter_info(x_min, wy, win_cz)
                 build_window_assembly(
                     bm, center=(x_min, wy, win_cz), size=(win_w, win_h),
@@ -1045,6 +1059,7 @@ def build_floors(bm, props, ctx):
             for wy in right_win_ys:
                 wu = (wy - y_min)
                 right_openings.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
+                window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((x_max, wy, win_z1))
                 sh_act, sh_cl = get_shutter_info(x_max, wy, win_cz)
                 build_window_assembly(
                     bm, center=(x_max, wy, win_cz), size=(win_w, win_h),
@@ -1256,12 +1271,18 @@ def build_floors(bm, props, ctx):
 
         # 4 Main Solid Walls with Openings
         tier_val = getattr(props, 'material_tier', 'TIER_3')
-        if tier_val in ('TIER_1', 'TIER_2'):
+        if fl_idx == 0 and props.ground_floor_stone:
+            mat_w = MAT_INDEX_STONE
+        elif tier_val == 'TIER_1':
+            mat_w = MAT_INDEX_WOOD
+        elif tier_val == 'TIER_2':
             mat_w = MAT_INDEX_WOOD
         else:
-            mat_w = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_PLASTER_EXT
+            mat_w = MAT_INDEX_PLASTER_EXT
 
         phys_siding = getattr(props, 'physical_siding', True)
+        if fl_idx == 0 and props.ground_floor_stone and tier_val in ('TIER_1', 'TIER_2'):
+            phys_siding = False
         plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
         plank_jank = getattr(props, 'plank_jankiness', 0.35)
         stone_scale = getattr(props, 'stone_block_scale', 1.0)
@@ -1407,7 +1428,10 @@ def build_floors(bm, props, ctx):
                     )
 
         # Timber Framing (Tudor Half-Timbering)
-        # In Tier 1 (Log Cabin), authentic interlocking logs already provide all structural aesthetics
+        # In Tier 1 (Log Cabin), authentic interlocking logs already provide all structural aesthetics.
+        # Corner posts stay even on a stone ground storey so the frame reads as continuous;
+        # only the infill/brace timbering is dropped there to keep the base solid masonry.
+        _stone_ground_fl = (fl_idx == 0 and props.ground_floor_stone)
         if not open_timber and props.has_timber_framing and effective_archetype != 'WATCHTOWER' and tier_val != 'TIER_1':
             post_w = 0.30
             timber_jank = props.wonkiness * 0.5
@@ -1521,10 +1545,11 @@ def build_floors(bm, props, ctx):
                     elif ww == 'RIGHT':
                         r_occs.append((wy_min - y_min, wy_max - y_min))
 
-            build_exposed_wall_timber((x_min, y_min), (x_max, y_min), (0.0, -1.0), f_timber_ops, f_occs)
-            build_exposed_wall_timber((x_min, y_max), (x_max, y_max), (0.0, 1.0), b_timber_ops, b_occs)
-            build_exposed_wall_timber((x_min, y_min), (x_min, y_max), (-1.0, 0.0), l_timber_ops, l_occs)
-            build_exposed_wall_timber((x_max, y_min), (x_max, y_max), (1.0, 0.0), r_timber_ops, r_occs)
+            if not _stone_ground_fl:
+                build_exposed_wall_timber((x_min, y_min), (x_max, y_min), (0.0, -1.0), f_timber_ops, f_occs)
+                build_exposed_wall_timber((x_min, y_max), (x_max, y_max), (0.0, 1.0), b_timber_ops, b_occs)
+                build_exposed_wall_timber((x_min, y_min), (x_min, y_max), (-1.0, 0.0), l_timber_ops, l_occs)
+                build_exposed_wall_timber((x_max, y_min), (x_max, y_max), (1.0, 0.0), r_timber_ops, r_occs)
 
             # 3. Wing exterior facades and corner posts
             if fl_has_wing:
@@ -1571,9 +1596,10 @@ def build_floors(bm, props, ctx):
                                            mat_index=MAT_INDEX_TIMBER, flare=0.42, jankiness=timber_jank,
                                            chamfer_top=is_top_fl)
 
-                for p1, p2, w_ops, norm_v in wing_wall_openings:
-                    build_facade_timber(bm, p1, p2, z_floor, z_ceil, wall_t,
-                                        norm_v, w_ops, props.timber_diagonals, is_top_floor=is_top_fl)
+                if not _stone_ground_fl:
+                    for p1, p2, w_ops, norm_v in wing_wall_openings:
+                        build_facade_timber(bm, p1, p2, z_floor, z_ceil, wall_t,
+                                            norm_v, w_ops, props.timber_diagonals, is_top_floor=is_top_fl)
 
         # Update previous floor tracking for overhang transitions
         prev_fl_overhang = fl_overhang
@@ -1582,6 +1608,7 @@ def build_floors(bm, props, ctx):
 
     ctx.floor_wall_bounds = floor_wall_bounds
     ctx.floor_stair_holes = floor_stair_holes
+    ctx.window_centers = window_centers
     ctx.hx = hx
     ctx.hy = hy
     ctx.main_door_cx = main_door_cx
