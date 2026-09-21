@@ -45,7 +45,7 @@ def run_tests():
     m_count = len(obj.data.materials)
     print(f"  -> Generated default building: {v_count} verts, {p_count} polys, {m_count} materials.")
     assert v_count > 500, f"Expected rich geometry (>500 verts), got {v_count}"
-    assert m_count == 20, f"Expected 20 material slots, got {m_count}"
+    assert m_count == 22, f"Expected 22 material slots, got {m_count}"
     
     # 3. Test Interior Floor and Door Angle
     print("[3/6] Testing door toggle & walk-in interior...")

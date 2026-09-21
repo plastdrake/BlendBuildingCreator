@@ -389,19 +389,35 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
 def _build_well(bm, props, ctx):
     """A well tucked off to the LEFT of the entrance so it never blocks the door."""
     door_yf = ctx.main_door_yf
+    is_tavern = ctx.effective_archetype == 'TAVERN'
+    max_xy = 9.1 if is_tavern else 19.0
+
+    # Side clearance from main wall: sits in the side garden lane
+    side_x = ctx.hx + 1.45
+    if is_tavern:
+        side_x = min(side_x, max_xy - 0.9)
+
     candidates = [
+        (-side_x, door_yf + 1.2),
+        (-side_x, door_yf - 1.6),
+        (-side_x, 0.0),
         (-ctx.hx - 2.8, door_yf - 2.1),
         (-ctx.hx - 3.3, door_yf - 3.5),
         (-ctx.hx - 2.5, door_yf + 1.9),
-        (-ctx.hx * 0.6, door_yf - 5.2),
+        (-ctx.hx * 0.6, door_yf - 3.5),
+        (side_x, door_yf + 1.2),
         (ctx.hx + 2.8, door_yf - 2.1),
         (ctx.hx + 3.3, door_yf - 3.5),
     ]
     for wx, wy in candidates:
+        if is_tavern and (abs(wx) > max_xy or abs(wy) > max_xy):
+            continue
         # Margin clears the roof overhang too, so the hood can't meet the framing.
         if is_point_outside_building(wx, wy, 1.15, ctx, margin=0.90):
             build_well(bm, wx, wy, z_ground=0.0, radius=0.66, wall_h=0.62)
             return
     min_y = min(b[2] for b in get_building_footprint_boxes(ctx))
-    build_well(bm, -ctx.hx - 3.2, min_y - 2.6, z_ground=0.0, radius=0.66, wall_h=0.62)
+    fallback_x = -min(side_x, max_xy - 0.9) if is_tavern else (-ctx.hx - 3.2)
+    fallback_y = max(min_y - 2.2, -max_xy) if is_tavern else (min_y - 2.6)
+    build_well(bm, fallback_x, fallback_y, z_ground=0.0, radius=0.66, wall_h=0.62)
 

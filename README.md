@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.25.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.26.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 36 ready-made presets across three material tiers.
@@ -79,6 +79,14 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.26.0
+
+- **Tavern (20m x 20m) Preset Standardization**:
+  - All three Tavern tiers (T1, T2, T3) now share a consistent, stately rectangular coaching tavern silhouette, eliminating the jarring jump to an L-shaped layout at Tier 3.
+  - Fixed $20\text{m} \times 20\text{m}$ plot fit across all tiers: removed the $4.2\text{m}$ asymmetrical side annex from T2/T3 that breached the plot by 1.25m, and eliminated the massive 4m Y-axis plot overflow on T3.
+  - Explicit `roof_orientation: 'FRONT_BACK'` locks the sway roof ridge so the iconic front gable and beer-mug sign face the street consistently across all tiers.
+  - Garden well placement in `hospitality.py` is clamped within plot bounds ($|X|, |Y| \le 9.1\text{m}$) so taverns keep their courtyard well neatly in the side beer garden without exceeding the plot.
 
 ## What's new in 1.25.0
 
