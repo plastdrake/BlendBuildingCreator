@@ -899,7 +899,8 @@ def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thic
 
 def build_open_timber_arcade(bm, p_start, p_end, z_floor, z_top, wall_t=0.28,
                              has_foundation=True, found_h=0.45, bay_spacing=3.2,
-                             post_w=0.24, mat_post=MAT_INDEX_TIMBER_FRAME, mat_brace=MAT_INDEX_TIMBER):
+                             post_w=0.24, mat_post=MAT_INDEX_TIMBER_FRAME, mat_brace=MAT_INDEX_TIMBER,
+                             placed_posts=None):
     """
     Builds an authentic open timber post-and-beam arcade along a perimeter wall line:
     - Ground stone plinth pedestals under each post (if at ground level with foundation).
@@ -945,16 +946,19 @@ def build_open_timber_arcade(bm, p_start, p_end, z_floor, z_top, wall_t=0.28,
         px = x1 + dx * t
         py = y1 + dy * t
 
-
-        # Vertical Timber Post
-        create_beveled_box(
-            bm,
-            size=(post_w, post_w, post_h),
-            location=(px, py, post_mid_z),
-            rotation=(0.0, 0.0, ang_z),
-            mat_index=mat_post,
-            bevel_amount=0.014
-        )
+        # Vertical Timber Post (skip if already placed by meeting segment)
+        p_key = (round(px, 1), round(py, 1))
+        if placed_posts is None or p_key not in placed_posts:
+            if placed_posts is not None:
+                placed_posts.add(p_key)
+            create_beveled_box(
+                bm,
+                size=(post_w, post_w, post_h),
+                location=(px, py, post_mid_z),
+                rotation=(0.0, 0.0, ang_z),
+                mat_index=mat_post,
+                bevel_amount=0.014
+            )
 
         # 45-degree Knee Braces to header beam
         brace_len = 0.65

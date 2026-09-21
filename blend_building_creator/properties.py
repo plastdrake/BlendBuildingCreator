@@ -314,6 +314,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         description="Facade to place the industrial loading dock on",
         items=[
             ('AUTO', 'Auto', 'Automatically pick the clearest facade away from entrance/machinery'),
+            ('FRONT', 'Front', 'Place cargo dock on the front facade'),
             ('LEFT', 'Left', 'Place cargo dock on the left facade'),
             ('RIGHT', 'Right', 'Place cargo dock on the right facade'),
             ('BACK', 'Back', 'Place cargo dock on the rear facade'),
@@ -409,6 +410,15 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Front Door",
         description="Walkthrough front entrance doorway",
         default=True,
+        update=on_property_updated
+    )
+
+    front_door_offset_x: FloatProperty(
+        name="Front Door Offset",
+        description="Horizontal offset for the front entrance doorway along the facade",
+        default=0.0,
+        min=-15.0, max=15.0,
+        unit='LENGTH',
         update=on_property_updated
     )
 
@@ -1064,6 +1074,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('LEFT', "Left (-X)", "Rampart along the left wall"),
         ],
         default='RIGHT',
+        update=on_property_updated
+    )
+
+    rampart_door_width: FloatProperty(
+        name="Rampart Door Width",
+        description="Width of the upper walk-in door opening onto the elevated rampart walk",
+        min=0.8, max=3.5, default=1.2,
         update=on_property_updated
     )
 

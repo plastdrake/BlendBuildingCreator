@@ -81,7 +81,7 @@ def _create_building_context(props):
     base_d = props.depth
     wall_t = props.wall_thickness
     cantilever = props.cantilever_overhang if props.has_cantilever else 0.0
-    found_h = props.foundation_height if props.has_foundation else 0.2
+    found_h = props.foundation_height if props.has_foundation else 0.0
     open_timber = getattr(props, 'open_timber_frame', False)
 
     # Archetype resolution
@@ -220,49 +220,31 @@ def _create_building_context(props):
 
 def _build_foundation_block(bm, fw, fd, fcx, fcy, found_h, found_type):
     if found_type == 'WOOD':
-        # Main wooden plank platform deck
-        create_beveled_box(
-            bm,
-            size=(fw, fd, found_h),
-            location=(fcx, fcy, found_h * 0.5),
-            mat_index=MAT_INDEX_WOOD,
-            bevel_amount=0.02
-        )
-        # Heavy perimeter timber sill balks (proud framing)
-        sill_w = 0.22
-        sill_h = found_h + 0.02
+        # Clean perimeter timber sill frame: no duplicate inner box (floor slab provides
+        # the single clean floor deck), no metal corners, and cleanly butted side beams.
+        sill_w = 0.24
+        sill_h = found_h + 0.05
         # Front & Back sills
         for sgn in (-1.0, 1.0):
             py = fcy + sgn * (fd * 0.5 - sill_w * 0.5)
             create_beveled_box(
                 bm,
-                size=(fw + 0.04, sill_w, sill_h),
+                size=(fw, sill_w, sill_h),
                 location=(fcx, py, sill_h * 0.5),
                 mat_index=MAT_INDEX_TIMBER,
                 bevel_amount=0.012
             )
-        # Left & Right sills
+        # Left & Right sills (cleanly butted between front & back to avoid coplanar overlap)
+        side_l = max(0.2, fd - sill_w * 2.0)
         for sgn in (-1.0, 1.0):
             px = fcx + sgn * (fw * 0.5 - sill_w * 0.5)
             create_beveled_box(
                 bm,
-                size=(sill_w, max(0.2, fd - sill_w * 2.0), sill_h),
+                size=(sill_w, side_l, sill_h),
                 location=(px, fcy, sill_h * 0.5),
                 mat_index=MAT_INDEX_TIMBER,
                 bevel_amount=0.012
             )
-        # Iron corner brackets
-        for sx in (-1.0, 1.0):
-            for sy in (-1.0, 1.0):
-                cx = fcx + sx * (fw * 0.5 - 0.08)
-                cy = fcy + sy * (fd * 0.5 - 0.08)
-                create_beveled_box(
-                    bm,
-                    size=(0.24, 0.24, found_h + 0.04),
-                    location=(cx, cy, (found_h + 0.04) * 0.5),
-                    mat_index=MAT_INDEX_IRON,
-                    bevel_amount=0.008
-                )
     else:
         create_beveled_box(
             bm,

@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.24.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.25.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 36 ready-made presets across three material tiers.
@@ -79,6 +79,20 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.25.0
+
+- **Warehouse Tier 1 Temporary Supply Stockpile**: Rebuilt Warehouse Tier 1 into a lightweight, realistic supply stockpile covered by canvas tarp and timber lean-to awnings, stacked crate clusters, barrel racks, sawn lumber piles, and earthenware clay pots. Cleaned up orphan chock geometry and removed diagonal guy ropes and ground stakes.
+- **Lumbermill Cargo Bay & Dock Overhaul**:
+  - Moved freight portals to the front crane side with recessed jambs and lower lintel beams that completely eliminate coplanar face battles with the building walls.
+  - Sawn lumber piles now stage neatly on the cargo dock platform, leaving entrance corridors completely open.
+  - Round timber log piles rotated ~85° perpendicular to the facade and staged further out in the yard on heavy timber runner sleepers.
+  - Tier 3 platform depth increased to 3.2m outwards, with ground and upper swivel cranes repositioned outwards to comfortably clear the dock and swing freely.
+  - Fixed 2nd-floor crane diagonal braces so all support struts land squarely on the turntable disc.
+- **Tier 3 Lumbermill Side Rampart Walk**: Added an elevated timber rampart walk and sloped descent ramp along the free left gable wall, with a walk-in upper door on the loft floor.
+- **Customizable Rampart Door Width**: Added a `rampart_door_width` slider (exposed in both Openings and Fortifications panels), defaulting to a wide 2.0m double-leaf door on Tier 3 Lumbermill.
+- **Door Batten Wood Grain Alignment**: Fixed UV orientation across all doors, double doors, and hatches so the wood grain on horizontal support battens and ledgers flows naturally along the length of the board instead of across it.
+- **New Stylized PBR Textures**: Integrated dedicated textures for earthenware clay pots (`clay_diffuse.png`), canvas tarp canopies (`tarp_fabric_diffuse.png`), and hemp rope cords (`rope_diffuse.png`).
 
 ## What's new in 1.24.0
 

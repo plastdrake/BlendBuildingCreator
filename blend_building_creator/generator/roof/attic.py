@@ -136,9 +136,8 @@ def build_roof_and_attic(bm, props, ctx):
                 z_base=top_z, effective_archetype=effective_archetype, seed=seed
             )
             if has_wing and wings:
-                fl_wings_b = compute_fl_wing_bounds(wings, floor_wall_bounds, top_fl_idx)
-                for w_idx, wb in enumerate(fl_wings_b):
-                    wx1, wx2, wy1, wy2 = wb
+                for w_idx, w_elem in enumerate(wings):
+                    wx1, wx2, wy1, wy2 = w_elem['base']
                     build_makeshift_roof(
                         bm, wx1, wx2, wy1, wy2,
                         z_base=top_z, effective_archetype=effective_archetype, seed=seed + 17 + w_idx

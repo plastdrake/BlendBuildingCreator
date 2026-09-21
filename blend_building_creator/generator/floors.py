@@ -8,7 +8,10 @@ the shared :class:`BuildingContext`.
 
 import math
 from .mesh_utils import create_beveled_box, create_flared_post
-from .materials import MAT_INDEX_STONE, MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER, MAT_INDEX_FLOOR, MAT_INDEX_WOOD, MAT_INDEX_TIMBER_FRAME
+from .materials import (
+    MAT_INDEX_STONE, MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER,
+    MAT_INDEX_FLOOR, MAT_INDEX_WOOD, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_DIRT
+)
 from .walls import (
     build_wall_with_opening, build_facade_timber,
     build_cantilever_corbels, build_cantilever_soffit, build_open_timber_arcade
@@ -182,11 +185,20 @@ def build_floors(bm, props, ctx):
         # Interior bounds for current floor room (inner wall face at wall_t * 0.50)
         ix_min, ix_max = x_min + wall_t * 0.50, x_max - wall_t * 0.50
         iy_min, iy_max = y_min + wall_t * 0.50, y_max - wall_t * 0.50
-        # Floor slab strictly interior so no double floor line visible outside
-        slab_xmin = ix_min + 0.02
-        slab_xmax = ix_max - 0.02
-        slab_ymin = iy_min + 0.02
-        slab_ymax = iy_max - 0.02
+        # Floor slab bounds:
+        if open_timber:
+            # Open timber frames (Lumbermill / Warehouse T1) have arcade posts rather than solid walls.
+            # Inset slightly inside the outer timber sleeper sills so it does NOT fight with the sill edges.
+            slab_xmin = x_min + 0.01
+            slab_xmax = x_max - 0.01
+            slab_ymin = y_min + 0.01
+            slab_ymax = y_max - 0.01
+        else:
+            # Floor slab strictly interior so no double floor line visible outside
+            slab_xmin = ix_min + 0.02
+            slab_xmax = ix_max - 0.02
+            slab_ymin = iy_min + 0.02
+            slab_ymax = iy_max - 0.02
         
         # Wing coordinates if this floor has an active wing
         fl_wings_bounds = []
@@ -242,18 +254,31 @@ def build_floors(bm, props, ctx):
         # Determine staircase cutout for this floor (if coming from below)
         cur_stair_hole = floor_stair_holes.get(fl_idx, None)
 
-        # Floor Slab (Ground floor is stone/timber; upper floors have stair cutout)
-        floor_mat = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_FLOOR
-        build_floor_slab(
-            bm,
-            floor_idx=fl_idx,
-            x_min=slab_xmin, x_max=slab_xmax,
-            y_min=slab_ymin, y_max=slab_ymax,
-            z_level=z_floor + 0.05,
-            thickness=0.12,
-            stair_hole=cur_stair_hole if (fl_idx > 0 and props.has_stairs) else None,
-            mat_idx=floor_mat
+        is_temporary_stockpile = (
+            effective_archetype == 'WAREHOUSE'
+            and getattr(props, 'material_tier', 'TIER_1') == 'TIER_1'
+            and props.roof_style == 'NONE'
         )
+
+        # Floor Slab (Ground floor is stone/timber/dirt; upper floors have stair cutout)
+        if is_temporary_stockpile:
+            pass
+        else:
+            floor_mat = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_FLOOR
+            # Lumbermill Tier 1: lower ground floor slab down 3cm (z_floor + 0.02 instead of z_floor + 0.05)
+            is_lumbermill_t1 = (effective_archetype == 'LUMBERMILL' and fl_idx == 0
+                                and getattr(props, 'material_tier', 'TIER_1') == 'TIER_1')
+            slab_z = z_floor + 0.02 if is_lumbermill_t1 else z_floor + 0.05
+            build_floor_slab(
+                bm,
+                floor_idx=fl_idx,
+                x_min=slab_xmin, x_max=slab_xmax,
+                y_min=slab_ymin, y_max=slab_ymax,
+                z_level=slab_z,
+                thickness=0.12,
+                stair_hole=cur_stair_hole if (fl_idx > 0 and props.has_stairs) else None,
+                mat_idx=floor_mat
+            )
         
         # Upper floor safety guardrail around stair opening
         if fl_idx > 0 and props.has_stairs and cur_stair_hole is not None:
@@ -445,7 +470,8 @@ def build_floors(bm, props, ctx):
             # 1. Front Entrance
             if props.has_front_door and not open_timber:
                 if shape == 'RECTANGLE':
-                    door_cx = 0.0
+                    door_offset = getattr(props, 'front_door_offset_x', 0.0)
+                    door_cx = 0.0 + door_offset
                     door_yf = y_min
                     door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
                     door_u2 = (door_cx + dw * 0.5 + frame_margin) - x_min
@@ -553,8 +579,8 @@ def build_floors(bm, props, ctx):
             else:
                 _rspan = rampart_deck_span(props, ctx)
             if _rspan is not None:
-                rdw = min(props.door_width, 1.30)
-                rdh = min(props.door_height, 2.30)
+                rdw = getattr(props, 'rampart_door_width', getattr(props, 'door_width', 1.20))
+                rdh = min(props.door_height, 2.40)
                 r_margin = 0.12
                 r_top_z = z_floor + rdh + r_margin
                 # Centre the door on the deck (not the wall) so it always lands
@@ -909,6 +935,53 @@ def build_floors(bm, props, ctx):
                     ex.append((y_max - 0.9, y_max + 1.2))
             return ex
 
+        # Determine industrial cargo dock facade placement
+        rec_cargo_side = getattr(props, 'cargo_dock_facade', 'AUTO')
+        if rec_cargo_side == 'AUTO':
+            rec_cargo_side = 'FRONT' if effective_archetype == 'LUMBERMILL' else 'LEFT'
+
+        # Rectangular main building cargo dock / freight opening (Front facade)
+        front_cargo_port_cx = None
+        if not open_timber and not fl_has_wing and rec_cargo_side == 'FRONT':
+            _is_t3 = (effective_archetype == 'LUMBERMILL' and getattr(props, 'material_tier', 'TIER_3') == 'TIER_3')
+            _cp_w = 2.6
+            _cp_h = min(2.8, floor_h - 0.35)
+            _cp_cx = 3.5 if cur_w > 13.5 else 3.2
+            # Generous deep platform extending outwards for heavy timber freight handling
+            _dock_depth = 3.2 if _is_t3 else 2.2
+            _dock_x1 = 0.8
+            _dock_x2 = _dock_x1 + (6.0 if _is_t3 else 5.0)
+            front_cargo_port_cx = _cp_cx
+
+            if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not is_temporary_stockpile:
+                front_openings.append({
+                    'u_start': _cp_cx - _cp_w * 0.5 - x_min,
+                    'u_end': _cp_cx + _cp_w * 0.5 - x_min,
+                    'z_start': z_floor,
+                    'z_end': z_floor + _cp_h
+                })
+                build_cargo_port_frame(
+                    bm, face_coord=y_min, outward_sgn=-1.0, portal_center=_cp_cx,
+                    portal_w=_cp_w, portal_h=_cp_h, z_floor=z_floor, wall_t=wall_t,
+                    dock_span1=_dock_x1, dock_span2=_dock_x2,
+                    axis='Y', deck_depth=_dock_depth
+                )
+            elif fl_idx == 1 and getattr(props, 'has_upper_cargo_crane', False):
+                front_openings.append({
+                    'u_start': _cp_cx - _cp_w * 0.5 - x_min,
+                    'u_end': _cp_cx + _cp_w * 0.5 - x_min,
+                    'z_start': z_floor,
+                    'z_end': z_floor + _cp_h
+                })
+                build_cargo_port_frame(
+                    bm, face_coord=y_min, outward_sgn=-1.0, portal_center=_cp_cx,
+                    portal_w=_cp_w, portal_h=_cp_h, z_floor=z_floor, wall_t=wall_t,
+                    dock_span1=_dock_x1, dock_span2=_dock_x2,
+                    axis='Y', deck_depth=_dock_depth,
+                    is_upper_tier=True, lower_z_floor=found_h,
+                    has_upper_crane=True
+                )
+
         # Dynamic Windows - Front Wall
         if props.has_windows and not open_timber:
             front_excludes = list(get_facade_wing_exclusions('FRONT')) + get_turret_exclusions('FRONT')
@@ -920,6 +993,9 @@ def build_floors(bm, props, ctx):
                 d_ex1 = door_cx - door_clr
                 d_ex2 = door_cx + door_clr
                 front_excludes.append((d_ex1, d_ex2))
+
+            if front_cargo_port_cx is not None and (fl_idx == 0 or (fl_idx == 1 and getattr(props, 'has_upper_cargo_crane', False))):
+                front_excludes.append((front_cargo_port_cx - _cp_w * 0.5 - 0.5, front_cargo_port_cx + _cp_w * 0.5 + 0.5))
                 
             if has_mw:
                 for _off, _mw_pw in _mw_offs_for('FRONT'):
@@ -990,10 +1066,6 @@ def build_floors(bm, props, ctx):
                 )
 
         # Dynamic Windows - Side Walls (Left and Right)
-        rec_cargo_side = getattr(props, 'cargo_dock_facade', 'AUTO')
-        if rec_cargo_side == 'AUTO':
-            rec_cargo_side = 'RIGHT' if effective_archetype == 'LUMBERMILL' else 'LEFT'
-
         if not open_timber and cur_d > 2.8:
             # Left side
             left_excludes = list(get_facade_wing_exclusions('LEFT')) + get_turret_exclusions('LEFT')
@@ -1018,7 +1090,7 @@ def build_floors(bm, props, ctx):
                 left_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
 
             # Rectangular main building cargo dock / freight opening (Left)
-            if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not fl_has_wing and rec_cargo_side == 'LEFT':
+            if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not is_temporary_stockpile and not fl_has_wing and rec_cargo_side == 'LEFT':
                 _cp_w = 2.6
                 _cp_h = min(2.8, floor_h - 0.35)
                 _cp_cy = (y_min + y_max) * 0.5
@@ -1073,7 +1145,7 @@ def build_floors(bm, props, ctx):
                 right_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
 
             # Rectangular main building cargo dock / freight opening (Right)
-            if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not fl_has_wing and rec_cargo_side == 'RIGHT':
+            if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not is_temporary_stockpile and not fl_has_wing and rec_cargo_side == 'RIGHT':
                 _cp_w = 2.6
                 _cp_h = min(2.8, floor_h - 0.35)
                 _cp_cy = (y_min + y_max) * 0.5
@@ -1331,7 +1403,7 @@ def build_floors(bm, props, ctx):
         brick_freq = getattr(props, 'exposed_brick_frequency', 0.25)
 
         # Interior joinery
-        if not open_timber:
+        if not open_timber and not is_temporary_stockpile:
             build_interior_trims(
                 bm, ix_min, ix_max, iy_min, iy_max, z_floor, z_ceil,
                 wall_thickness=wall_t, stair_hole=cur_stair_hole,
@@ -1345,7 +1417,9 @@ def build_floors(bm, props, ctx):
 
         wall_top_z = z_ceil
 
-        if open_timber:
+        if is_temporary_stockpile:
+            pass  # Open-air temporary stockpile: no perimeter walls or arcade columns
+        elif open_timber:
             arcade_segs = []
             if fl_has_wing:
                 for p1, p2, w_ops, norm_v in wing_wall_openings:
@@ -1391,10 +1465,13 @@ def build_floors(bm, props, ctx):
                     ((x_min, y_min), (x_min, y_max)),
                     ((x_max, y_min), (x_max, y_max)),
                 ]
+            arcade_spacing = 5.2 if effective_archetype in ('LUMBERMILL', 'WAREHOUSE') else 3.8
+            placed_posts = set()
             for p_start, p_end in arcade_segs:
                 build_open_timber_arcade(
                     bm, p_start, p_end, z_floor, wall_top_z, wall_t,
-                    has_foundation=props.has_foundation, found_h=found_h
+                    has_foundation=props.has_foundation, found_h=found_h,
+                    bay_spacing=arcade_spacing, placed_posts=placed_posts
                 )
         else:
             # A Tier-1 log crown may only be dropped on the walls that sit under

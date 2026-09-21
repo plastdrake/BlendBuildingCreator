@@ -21,6 +21,7 @@ from ..mesh_utils import (
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_IRON, MAT_INDEX_WOOD,
+    MAT_INDEX_CLAY, MAT_INDEX_HAY,
 )
 
 
@@ -68,37 +69,30 @@ def _barrel_shell(bm, radius, height, segments, rng, mat_index=MAT_INDEX_TIMBER)
             f.loops[3][uv_layer].uv = (u0, z1)
             faces.append(f)
 
-    top = bm.faces.new(list(rings[-1]))
-    bot = bm.faces.new(list(reversed(rings[0])))
-    for cap, zc in ((top, height * 0.5), (bot, -height * 0.5)):
-        cap.material_index = mat_index
-        for loop in cap.loops:
-            loop[uv_layer].uv = (loop.vert.co.x, loop.vert.co.y)
-        faces.append(cap)
     return faces
 
 
 def build_barrel(bm, x, y, z_ground=0.0, ang=0.0, radius=0.34, height=0.74, lying=False):
-    """A chunky fantasy ale barrel with bulging staves, 4 forged iron hoops with rivets and a bung."""
+    """A clean fantasy timber ale barrel with bulging staves and smooth forged iron hoops."""
     rng = _rng(x, y, 1)
     r, h = radius, height
     faces = []
     # Bulging barrel shell with stave UVs
     faces += _barrel_shell(bm, r, h, 14, rng, mat_index=MAT_INDEX_WOOD)
 
-    # Recessed top and bottom wooden lids (chime rims)
-    lid_r = r * 0.82
-    for lid_z in (-(h * 0.5 - 0.04), h * 0.5 - 0.04):
-        faces += create_cylinder(bm, radius=lid_r, height=0.03, segments=14,
+    # Clearly visible top and bottom wooden lids
+    lid_r = r * 0.86
+    for lid_z in (-(h * 0.5 - 0.012), h * 0.5 - 0.012):
+        faces += create_cylinder(bm, radius=lid_r, height=0.024, segments=14,
                                  location=(0.0, 0.0, lid_z), mat_index=MAT_INDEX_TIMBER)
         # Plank lines across the lid
         for off in (-lid_r * 0.45, 0.0, lid_r * 0.45):
             faces += create_beveled_box(
-                bm, size=(lid_r * 1.8, 0.02, 0.015),
-                location=(0.0, off, lid_z + (0.015 if lid_z > 0 else -0.015)),
+                bm, size=(lid_r * 1.8, 0.02, 0.012),
+                location=(0.0, off, lid_z + (0.012 if lid_z > 0 else -0.012)),
                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.002)
 
-    # 4 Forged iron hoops: 2 chime hoops at ends, 2 quarter hoops around the bulge
+    # 4 Clean forged iron hoops (no rivets/nails, smooth bands)
     hoop_profiles = [
         (-h * 0.42, r * 0.85, 0.045),  # bottom chime
         (-h * 0.16, r * 0.98, 0.040),  # lower bilge
@@ -107,24 +101,14 @@ def build_barrel(bm, x, y, z_ground=0.0, ang=0.0, radius=0.34, height=0.74, lyin
     ]
     for hz, hr, hw in hoop_profiles:
         faces += create_torus_ring(bm, location=(0.0, 0.0, hz),
-                                   major_radius=hr + 0.010, minor_radius=0.018,
+                                   major_radius=hr + 0.008, minor_radius=0.016,
                                    major_segments=14, minor_segments=6,
                                    mat_index=MAT_INDEX_IRON)
-        # Forged iron square rivets / lugs around each hoop
-        for ai in (0.0, math.pi * 0.5, math.pi, math.pi * 1.5):
-            faces += create_beveled_box(
-                bm, size=(0.022, 0.022, 0.022),
-                location=((hr + 0.022) * math.cos(ai), (hr + 0.022) * math.sin(ai), hz),
-                rotation=(0.0, 0.0, ai),
-                mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
-
-    # Wooden bung / tap plug on the belly
-    faces += create_cylinder(bm, radius=0.028, height=0.06, segments=8,
-                             location=(r + 0.02, 0.0, 0.0),
-                             rotation=(0.0, math.pi * 0.5, 0.0),
-                             mat_index=MAT_INDEX_WOOD)
 
     if lying:
+        mat = _place(x, y, z_ground + r + 0.04, ang, extra=Matrix.Rotation(math.pi * 0.5, 4, 'Y'))
+        transform_faces(faces, mat)
+
         # Timber cradle / chock blocks underneath so lying barrels don't roll or float
         cradle_mat = _place(x, y, z_ground, ang)
         chock_faces = []
@@ -135,99 +119,300 @@ def build_barrel(bm, x, y, z_ground=0.0, ang=0.0, radius=0.34, height=0.74, lyin
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
         transform_faces(chock_faces, cradle_mat)
         faces += chock_faces
-
-        mat = _place(x, y, z_ground + r + 0.04, ang, extra=Matrix.Rotation(math.pi * 0.5, 4, 'Y'))
     else:
         mat = _place(x, y, z_ground + h * 0.5, ang)
+        transform_faces(faces, mat)
 
-    transform_faces(faces, mat)
     return faces
 
 
-def build_crate(bm, x, y, z_ground=0.0, ang=0.0, size=0.58):
-    """A chunky fantasy RPG shipping crate with heavy timber frame, X-bracing, and iron corner straps."""
-    s = size
-    rng = _rng(x, y, 2)
+def build_crate(bm, x, y, z_ground=0.0, ang=0.0, size=0.58, height=None, depth=None, brace_style='DIAGONAL'):
+    """
+    A chunky fantasy RPG shipping crate with clean framing, corner caps with iron pins,
+    and diagonal braces matching reference art:
+    - Inner recessed plank core box (MAT_INDEX_WOOD)
+    - 4 vertical timber corner posts (MAT_INDEX_TIMBER)
+    - 4 top and 4 bottom perimeter framing rails (MAT_INDEX_TIMBER)
+    - Diagonal timber braces flush inside the recessed panel faces
+    - Chunky beveled corner caps with iron stud pins on all 8 corners
+    - Flush plank lid detailing on top
+    - Strictly bounded: NOTHING sticks out past the crate perimeter!
+    """
+    sx = size
+    sy = depth if depth is not None else size
+    sz = height if height is not None else size
+    b = min(sx, sy, sz) * 0.14  # beam member thickness
     faces = []
 
-    # 1. Inner planked core box
-    faces += create_beveled_box(bm, size=(s * 0.94, s * 0.94, s * 0.94),
-                                location=(0.0, 0.0, s * 0.5),
-                                mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+    # 1. Inner recessed planked core box
+    recess = b * 0.35
+    core_sx = sx - recess * 2.0
+    core_sy = sy - recess * 2.0
+    core_sz = sz - recess * 2.0
+    faces += create_beveled_box(
+        bm, size=(core_sx, core_sy, core_sz),
+        location=(0.0, 0.0, sz * 0.5),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
+    )
 
-    # 2. Chunky square timber corner posts
-    b = s * 0.14
-    for cx in (-s * 0.5 + b * 0.5, s * 0.5 - b * 0.5):
-        for cy in (-s * 0.5 + b * 0.5, s * 0.5 - b * 0.5):
-            j = (rng.random() - 0.5) * 0.008
+    # 2. 4 Vertical Timber Corner Posts
+    for cx in (-sx * 0.5 + b * 0.5, sx * 0.5 - b * 0.5):
+        for cy in (-sy * 0.5 + b * 0.5, sy * 0.5 - b * 0.5):
             faces += create_beveled_box(
-                bm, size=(b, b, s + 0.01),
-                location=(cx, cy, s * 0.5 + j),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+                bm, size=(b, b, sz),
+                location=(cx, cy, sz * 0.5),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+            )
 
-    # 3. Heavy top and bottom framing perimeter rails
-    for rz in (b * 0.5, s - b * 0.5):
-        for face_rot in (0.0, math.pi * 0.5):
+    # 3. Horizontal Perimeter Rails (Top and Bottom)
+    rail_x_len = max(0.06, sx - b * 2.0)
+    rail_y_len = max(0.06, sy - b * 2.0)
+    for rz in (b * 0.5, sz - b * 0.5):
+        # Front & Back rails (along X)
+        for cy in (-sy * 0.5 + b * 0.5, sy * 0.5 - b * 0.5):
             faces += create_beveled_box(
-                bm, size=(s - b * 1.8, b, b * 0.85),
-                location=(0.0, s * 0.5 - b * 0.5, rz),
-                rotation=(0.0, 0.0, face_rot),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+                bm, size=(rail_x_len, b, b),
+                location=(0.0, cy, rz),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
+            )
+        # Left & Right rails (along Y)
+        for cx in (-sx * 0.5 + b * 0.5, sx * 0.5 - b * 0.5):
             faces += create_beveled_box(
-                bm, size=(s - b * 1.8, b, b * 0.85),
-                location=(0.0, -(s * 0.5 - b * 0.5), rz),
-                rotation=(0.0, 0.0, face_rot),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+                bm, size=(b, rail_y_len, b),
+                location=(cx, 0.0, rz),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
+            )
 
-    # 4. Diagonal X-brace timber battens on all 4 vertical faces
-    diag_len = math.hypot(s - b * 1.6, s - b * 1.6)
-    diag_ang = math.atan2(s - b * 1.6, s - b * 1.6)
-    for face_rot in (0.0, math.pi * 0.5, math.pi, math.pi * 1.5):
-        for d_sign in (-1.0, 1.0):
-            faces += create_beveled_box(
-                bm, size=(diag_len, b * 0.72, 0.024),
-                location=(0.0, s * 0.5 - b * 0.42, s * 0.5),
-                rotation=(0.0, d_sign * diag_ang, face_rot),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
+    # 4. Diagonal Bracing inside recessed panel walls
+    span_h = max(0.06, sz - b * 2.0)
+    diag_t = b * 0.35
+    diag_w = b * 0.68
 
-    # 5. Forged iron corner L-plates on all 8 corners
-    strap_len = b * 1.8
-    strap_t = 0.025
-    for cz in (strap_len * 0.45, s - strap_len * 0.45):
-        for corner in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+    # Front & Back faces (span along X)
+    diag_lx = math.hypot(rail_x_len, span_h)
+    diag_ang_x = math.atan2(span_h, rail_x_len)
+    for cy_sign in (-1.0, 1.0):
+        fy = cy_sign * (sy * 0.5 - b * 0.5)
+        if brace_style in ('DIAGONAL', 'CROSS'):
             faces += create_beveled_box(
-                bm, size=(b * 1.2, b * 0.42, strap_t),
-                location=(corner[0] * (s * 0.5 - b * 0.6), corner[1] * (s * 0.5 - b * 0.22), cz),
-                mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
+                bm, size=(diag_lx, diag_t, diag_w),
+                location=(0.0, fy, sz * 0.5),
+                rotation=(0.0, -diag_ang_x, 0.0),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004
+            )
+        if brace_style == 'CROSS':
             faces += create_beveled_box(
-                bm, size=(b * 0.42, b * 1.2, strap_t),
-                location=(corner[0] * (s * 0.5 - b * 0.22), corner[1] * (s * 0.5 - b * 0.6), cz),
-                mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
+                bm, size=(diag_lx, diag_t, diag_w),
+                location=(0.0, fy, sz * 0.5),
+                rotation=(0.0, diag_ang_x, 0.0),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004
+            )
+
+    # Left & Right faces (span along Y)
+    diag_ly = math.hypot(rail_y_len, span_h)
+    diag_ang_y = math.atan2(span_h, rail_y_len)
+    for cx_sign in (-1.0, 1.0):
+        fx = cx_sign * (sx * 0.5 - b * 0.5)
+        if brace_style in ('DIAGONAL', 'CROSS'):
+            faces += create_beveled_box(
+                bm, size=(diag_t, diag_ly, diag_w),
+                location=(fx, 0.0, sz * 0.5),
+                rotation=(diag_ang_y, 0.0, 0.0),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004
+            )
+        if brace_style == 'CROSS':
+            faces += create_beveled_box(
+                bm, size=(diag_t, diag_ly, diag_w),
+                location=(fx, 0.0, sz * 0.5),
+                rotation=(-diag_ang_y, 0.0, 0.0),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004
+            )
+
+    # 5. Chunky Corner Caps with Iron Stud Pins on all 8 corners
+    for cx_sign in (-1.0, 1.0):
+        for cy_sign in (-1.0, 1.0):
+            cx = cx_sign * (sx * 0.5 - b * 0.5)
+            cy = cy_sign * (sy * 0.5 - b * 0.5)
+            for cz_sign in (-1.0, 1.0):
+                cz = sz * 0.5 + cz_sign * (sz * 0.5 - b * 0.16)
+                # Corner bracket cap block
+                faces += create_beveled_box(
+                    bm, size=(b * 1.15, b * 1.15, b * 0.32),
+                    location=(cx, cy, cz),
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+                )
+                # Forged iron nail studs
+                faces += create_cylinder(
+                    bm, radius=0.009, height=0.012, segments=6,
+                    location=(cx + cx_sign * (b * 0.58), cy, cz),
+                    rotation=(0.0, 1.57, 0.0),
+                    mat_index=MAT_INDEX_IRON
+                )
+                faces += create_cylinder(
+                    bm, radius=0.009, height=0.012, segments=6,
+                    location=(cx, cy + cy_sign * (b * 0.58), cz),
+                    rotation=(1.57, 0.0, 0.0),
+                    mat_index=MAT_INDEX_IRON
+                )
+
+    # 6. Plank Detailing on Top Lid
+    for off in (-rail_y_len * 0.30, 0.0, rail_y_len * 0.30):
+        faces += create_beveled_box(
+            bm, size=(rail_x_len, 0.018, 0.006),
+            location=(0.0, off, sz - 0.003),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.002
+        )
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_clay_pot(bm, x, y, z_ground=0.0, ang=0.0, radius=0.22, height=0.48, pot_type='JAR'):
+    """
+    A smooth, stylized terracotta/earthenware pottery jar, urn or jug with a carved wooden lid/bung.
+    - Smooth 16-segment lathe-turned profile (smooth round silhouette)
+    - UV unwrap mapped for MAT_INDEX_CLAY
+    - Carved wooden stopper/lid with handle knob (MAT_INDEX_WOOD / MAT_INDEX_TIMBER)
+    - Optional clay ear handles
+    """
+    r, h = radius, height
+    faces = []
+
+    # 1. Profile selection
+    if pot_type == 'URN':
+        # Bulbous round storage pot
+        z_profile = [
+            (0.00, 0.60),  # base foot
+            (0.06, 0.66),  # foot flare
+            (0.20, 0.94),  # lower swell
+            (0.42, 1.00),  # wide belly
+            (0.65, 0.88),  # tapering shoulder
+            (0.82, 0.56),  # neck constriction
+            (0.92, 0.64),  # rolled rim lip
+            (1.00, 0.60),  # rim top
+        ]
+    elif pot_type == 'JUG':
+        # Taller jug / pitcher profile
+        z_profile = [
+            (0.00, 0.55),
+            (0.06, 0.60),
+            (0.26, 0.96),
+            (0.48, 0.94),
+            (0.68, 0.74),
+            (0.84, 0.46),
+            (0.93, 0.54),
+            (1.00, 0.50),
+        ]
+    else:  # 'JAR'
+        # Standard wide-mouth storage jar
+        z_profile = [
+            (0.00, 0.62),
+            (0.06, 0.68),
+            (0.22, 0.95),
+            (0.45, 1.00),
+            (0.70, 0.84),
+            (0.85, 0.58),
+            (0.93, 0.66),
+            (1.00, 0.62),
+        ]
+
+    segments = 16  # Smooth curved geometry
+    rings = []
+    for zn, rn in z_profile:
+        ring = []
+        cur_z = zn * h
+        cur_r = rn * r
+        for i in range(segments):
+            a = 2.0 * math.pi * i / segments
+            ring.append(bm.verts.new((cur_r * math.cos(a), cur_r * math.sin(a), cur_z)))
+        rings.append(ring)
+
+    uv_layer = bm.loops.layers.uv.verify()
+    circumference = 2.0 * math.pi * r
+
+    # Lathe faces
+    for s in range(len(rings) - 1):
+        z0 = z_profile[s][0] * h
+        z1 = z_profile[s + 1][0] * h
+        for i in range(segments):
+            j = (i + 1) % segments
+            f = bm.faces.new([rings[s][i], rings[s][j], rings[s + 1][j], rings[s + 1][i]])
+            f.material_index = MAT_INDEX_CLAY
+            u0 = circumference * i / segments
+            u1 = circumference * (i + 1) / segments
+            f.loops[0][uv_layer].uv = (u0, z0)
+            f.loops[1][uv_layer].uv = (u1, z0)
+            f.loops[2][uv_layer].uv = (u1, z1)
+            f.loops[3][uv_layer].uv = (u0, z1)
+            faces.append(f)
+
+    # Bottom cap
+    bot = bm.faces.new(list(reversed(rings[0])))
+    bot.material_index = MAT_INDEX_CLAY
+    for loop in bot.loops:
+        loop[uv_layer].uv = (loop.vert.co.x + r, loop.vert.co.y + r)
+    faces.append(bot)
+
+    # 2. Carved Wooden Lid / Bung Stopper (MAT_INDEX_WOOD)
+    neck_r = z_profile[-3][1] * r
+    rim_r = z_profile[-1][1] * r
+
+    # Plug into rim
+    faces += create_cylinder(
+        bm, radius=neck_r * 0.94, height=0.035, segments=16,
+        location=(0.0, 0.0, h - 0.005),
+        mat_index=MAT_INDEX_WOOD
+    )
+    # Flanged lid rim over pot mouth
+    faces += create_cylinder(
+        bm, radius=rim_r * 1.05, height=0.035, segments=16,
+        location=(0.0, 0.0, h + 0.02),
+        mat_index=MAT_INDEX_WOOD
+    )
+    # Turned wooden knob / grip
+    faces += create_cylinder(
+        bm, radius=0.032, height=0.032, segments=10,
+        location=(0.0, 0.0, h + 0.046),
+        mat_index=MAT_INDEX_TIMBER
+    )
+
+    # 3. Optional Clay Ear Handles (for JUG / URN)
+    if pot_type in ('JUG', 'URN'):
+        for h_sign in (-1.0, 1.0) if pot_type == 'URN' else (1.0,):
+            hx = h_sign * (r * 0.88)
+            hz = h * 0.72
+            faces += create_torus_ring(
+                bm, location=(hx, 0.0, hz),
+                major_radius=0.065, minor_radius=0.016,
+                major_segments=10, minor_segments=6,
+                mat_index=MAT_INDEX_CLAY
+            )
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
 
 def build_sack(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
-    """A plump burlap sack of grain, tied at the neck."""
+    """A plump burlap sack of grain, tied at the neck with rope cord."""
     s = scale
-    rng = _rng(x, y, 3)
     faces = []
-    faces += create_cylinder(bm, radius=0.28 * s, height=0.42 * s, segments=12,
-                             location=(0.0, 0.0, 0.21 * s), mat_index=MAT_INDEX_TIMBER)
-    faces += create_cylinder(bm, radius=0.32 * s, height=0.18 * s, segments=12,
-                             location=(0.0, 0.0, 0.26 * s), mat_index=MAT_INDEX_TIMBER)
-    faces += create_cylinder(bm, radius=0.22 * s, height=0.20 * s, segments=10,
-                             location=(0.0, 0.0, 0.48 * s), mat_index=MAT_INDEX_TIMBER)
+    # Smooth curved burlap body (MAT_INDEX_HAY)
+    faces += create_cylinder(bm, radius=0.28 * s, height=0.42 * s, segments=14,
+                             location=(0.0, 0.0, 0.21 * s), mat_index=MAT_INDEX_HAY)
+    faces += create_cylinder(bm, radius=0.32 * s, height=0.18 * s, segments=14,
+                             location=(0.0, 0.0, 0.26 * s), mat_index=MAT_INDEX_HAY)
+    faces += create_cylinder(bm, radius=0.22 * s, height=0.20 * s, segments=12,
+                             location=(0.0, 0.0, 0.48 * s), mat_index=MAT_INDEX_HAY)
     # Tied neck with rope cord
     faces += create_torus_ring(bm, location=(0.0, 0.0, 0.58 * s), major_radius=0.10 * s,
-                               minor_radius=0.022 * s, major_segments=10, minor_segments=6,
+                               minor_radius=0.022 * s, major_segments=12, minor_segments=6,
                                mat_index=MAT_INDEX_WOOD)
     # Frilled bag opening
-    faces += create_cone(bm, radius1=0.09 * s, radius2=0.16 * s, height=0.12 * s, segments=8,
-                         location=(0.0, 0.0, 0.65 * s), mat_index=MAT_INDEX_TIMBER)
+    faces += create_cone(bm, radius1=0.09 * s, radius2=0.16 * s, height=0.12 * s, segments=10,
+                         location=(0.0, 0.0, 0.65 * s), mat_index=MAT_INDEX_HAY)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
 
 
 def build_stool(bm, x, y, z_ground=0.0, ang=0.0, radius=0.22, height=0.48):

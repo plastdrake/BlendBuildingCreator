@@ -672,9 +672,6 @@ def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=2
                     # Front / back (+X, -X)
                     u = lco.z
                     v = lco.y
-            # Cross-members carry grain across their short axis: rotate the UVs
-            # 90 degrees (swap U/V) on every door batten face.
-            u, v = v, u
             loop[uv_layer].uv = Vector((u, v))
             
     return faces

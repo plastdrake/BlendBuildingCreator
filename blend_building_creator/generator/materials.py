@@ -89,6 +89,8 @@ MAT_INDEX_DIRT          = 16
 MAT_INDEX_SIGN          = 17
 MAT_INDEX_ROPE          = 18
 MAT_INDEX_LANTERN       = 19
+MAT_INDEX_TARP          = 20
+MAT_INDEX_CLAY          = 21
 
 
 # ---------------------------------------------------------------------------
@@ -1570,8 +1572,8 @@ def create_stylized_rope(name="M_Building_Rope", color=(0.62, 0.48, 0.28, 1.0)):
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-900)
 
-    tex_node = _load_image_texture(tree, "rope_diffuse.jpg", c, loc_x=-660, loc_y=120,
-                                   scale=(0.0625, 0.7, 1.0))
+    tex_node = _load_image_texture(tree, "rope_diffuse.png", c, loc_x=-660, loc_y=120,
+                                   scale=(1.0, 1.0, 1.0))
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
@@ -1813,6 +1815,62 @@ def create_stylized_stairs(name="M_Building_Stairs", color=(0.32, 0.20, 0.11, 1.
     return create_stylized_timber(name, color=color)
 
 
+def create_stylized_tarp(name="M_Building_Tarp", color=(0.84, 0.76, 0.65, 1.0)):
+    """
+    Hand-painted rustic canvas tarpaulin / coarse textile fabric material.
+    Uses seamless handpainted coarse textile weave texture with warm organic shading.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1400)
+    c = _coord(tree, loc_x=-1100)
+
+    tex_node = _load_image_texture(tree, "tarp_fabric_diffuse.png", c, loc_x=-800, loc_y=120, scale=(1.2, 1.2, 1.2))
+    if tex_node is not None:
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-250, 120)
+        tint.inputs["Factor"].default_value = 0.20
+        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = color
+        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260, strength=0.06, scale=1.6)
+        _apply_ao(tree, bsdf, painted, strength=0.48, distance=0.15)
+        _setup_pbr(tree, bsdf, out, roughness=0.92)
+        return mat
+
+    _apply_ao(tree, bsdf, color, strength=0.48, distance=0.15)
+    _setup_pbr(tree, bsdf, out, roughness=0.92)
+    return mat
+
+
+def create_stylized_clay(name="M_Building_Clay", color=(0.82, 0.52, 0.36, 1.0)):
+    """
+    Hand-painted warm terracotta / earthenware pottery material.
+    Uses clay_diffuse.png with warm painterly shading and soft ceramic roughness.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1400)
+    c = _coord(tree, loc_x=-1100)
+
+    tex_node = _load_image_texture(tree, "clay_diffuse.png", c, loc_x=-800, loc_y=120, scale=(1.0, 1.0, 1.0))
+    if tex_node is not None:
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-250, 120)
+        tint.inputs["Factor"].default_value = 0.12
+        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = color
+        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260, strength=0.06, scale=1.4)
+        _apply_ao(tree, bsdf, painted, strength=0.50, distance=0.15)
+        _setup_pbr(tree, bsdf, out, roughness=0.68)
+        return mat
+
+    _apply_ao(tree, bsdf, color, strength=0.50, distance=0.15)
+    _setup_pbr(tree, bsdf, out, roughness=0.68)
+    return mat
+
+
 # Backward compatibility aliases
 create_stylized_log_walls = create_stylized_log
 create_stylized_plank_siding = create_stylized_interior_planks
@@ -1927,7 +1985,13 @@ def setup_building_material_slots(obj, props):
                        "LanternEmissive",
                        glow_strength=max(3.0, props.window_glow_strength * 1.8)))
 
-    # Assemble all 20 canonical slots in strict order
+    # 20. Tarp / Coarse Textile Fabric (tarp_fabric_diffuse.png)
+    mat_tarp = getattr(props, 'custom_tarp', None) or create_stylized_tarp("M_Building_Tarp")
+
+    # 21. Clay / Terracotta (clay_diffuse.png) - earthenware jars, pots and urns
+    mat_clay = getattr(props, 'custom_clay', None) or create_stylized_clay("M_Building_Clay")
+
+    # Assemble all 22 canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
         mat_plaster,        # 1  MAT_INDEX_PLASTER
@@ -1949,6 +2013,8 @@ def setup_building_material_slots(obj, props):
         mat_sign,           # 17 MAT_INDEX_SIGN
         mat_rope,           # 18 MAT_INDEX_ROPE
         mat_lantern,        # 19 MAT_INDEX_LANTERN
+        mat_tarp,           # 20 MAT_INDEX_TARP
+        mat_clay,           # 21 MAT_INDEX_CLAY
     ]
     obj.data.materials.clear()
     for m in required_mats:

@@ -202,12 +202,16 @@ class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
         row.prop(props, "has_side_door", text="Side Door")
         if props.has_side_door:
             box_door.prop(props, "side_door_facade")
+        if props.has_front_door:
+            box_door.prop(props, "front_door_offset_x")
         if props.has_front_door or props.has_back_door or props.has_side_door:
             col = box_door.column(align=True)
             col.prop(props, "door_shape")
             col.prop(props, "door_width")
             col.prop(props, "door_height")
             col.prop(props, "door_angle", slider=True)
+        if props.has_side_rampart:
+            box_door.prop(props, "rampart_door_width")
             
         # Windows Box
         box_win = layout.box()
@@ -370,7 +374,9 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             box_civic.prop(props, "corner_turret_size")
         box_civic.prop(props, "has_side_rampart")
         if props.has_side_rampart:
-            box_civic.prop(props, "rampart_side")
+            col_ramp = box_civic.column(align=True)
+            col_ramp.prop(props, "rampart_side")
+            col_ramp.prop(props, "rampart_door_width")
         box_civic.prop(props, "has_arched_porch")
         box_civic.prop(props, "has_entry_ramp")
         box_civic.separator()

@@ -10,79 +10,125 @@ from ..materials import (
     MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_LOG
 )
 
-def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0, grade='GRADE_1'):
-    cos_r = math.cos(rot_angle)
-    sin_r = math.sin(rot_angle)
+def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0, grade='GRADE_1',
+                          dock_planks_pos=None):
+    # For enclosed mill tiers (Tier 2 and 3), rotate logs ~85 degrees (perpendicular to wall)
+    # and stage them further out in the yard so the entrance door has a wide open corridor.
+    if grade in ('GRADE_2', 'GRADE_3'):
+        rot_logs = rot_angle + math.radians(85.0)
+    else:
+        rot_logs = rot_angle
+
+    cos_l = math.cos(rot_logs)
+    sin_l = math.sin(rot_logs)
+    # Lateral vector perpendicular to log length
+    lat_x = -sin_l
+    lat_y = cos_l
 
     log_r = 0.24
     log_l = 3.4
-    for off_s in [-0.50, 0.0, 0.50]:
-        lx = yard_x + (-sin_r * off_s)
-        ly = yard_y + (cos_r * off_s)
+
+    # Timber runner sleepers underneath the log stack so logs stay off bare ground
+    for l_end in [-1.05, 1.05]:
+        create_beveled_box(
+            bm, size=(1.35, 0.16, 0.12),
+            location=(yard_x + cos_l * l_end, yard_y + sin_l * l_end, z_ground + 0.06),
+            rotation=(0.0, 0.0, rot_logs + 1.5708),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+
+    # Layer 1: 3 logs
+    for off_s in [-0.48, 0.0, 0.48]:
+        lx = yard_x + (lat_x * off_s)
+        ly = yard_y + (lat_y * off_s)
         create_horizontal_cylinder(
             bm, radius_y=log_r, radius_z=log_r, length=log_l, segments=12,
-            location=(lx, ly, z_ground + log_r - 0.02),
+            location=(lx, ly, z_ground + 0.12 + log_r - 0.02),
+            rotation=(0.0, 0.0, rot_logs),
             mat_index=MAT_INDEX_LOG
         )
-    for off_s in [-0.25, 0.25]:
-        lx = yard_x + (-sin_r * off_s)
-        ly = yard_y + (cos_r * off_s)
+    # Layer 2: 2 logs
+    for off_s in [-0.24, 0.24]:
+        lx = yard_x + (lat_x * off_s)
+        ly = yard_y + (lat_y * off_s)
         create_horizontal_cylinder(
             bm, radius_y=log_r * 0.95, radius_z=log_r * 0.95, length=log_l * 0.97, segments=12,
-            location=(lx, ly, z_ground + log_r * 2.55),
+            location=(lx, ly, z_ground + 0.12 + log_r * 2.55),
+            rotation=(0.0, 0.0, rot_logs),
             mat_index=MAT_INDEX_LOG
         )
+    # Layer 3: 1 cap log
     create_horizontal_cylinder(
         bm, radius_y=log_r * 0.90, radius_z=log_r * 0.90, length=log_l * 0.94, segments=12,
-        location=(yard_x, yard_y, z_ground + log_r * 4.05),
+        location=(yard_x, yard_y, z_ground + 0.12 + log_r * 4.05),
+        rotation=(0.0, 0.0, rot_logs),
         mat_index=MAT_INDEX_LOG
     )
-    for chock_s in [-0.82, 0.82]:
-        cx = yard_x + (-sin_r * chock_s)
-        cy = yard_y + (cos_r * chock_s)
+    # Iron end chocks on bottom outer logs
+    for chock_s in [-0.80, 0.80]:
+        cx = yard_x + (lat_x * chock_s)
+        cy = yard_y + (lat_y * chock_s)
         create_beveled_box(
-            bm, size=(0.35, 0.20, 0.22),
-            location=(cx, cy, z_ground + 0.09),
-            rotation=(0.0, 0.0, rot_angle),
+            bm, size=(0.20, 0.35, 0.22),
+            location=(cx, cy, z_ground + 0.12 + 0.07),
+            rotation=(0.0, 0.0, rot_logs),
             mat_index=MAT_INDEX_IRON, bevel_amount=0.01
         )
 
-    plank_x = yard_x - cos_r * 1.8 - sin_r * 1.4
-    plank_y = yard_y - sin_r * 1.8 + cos_r * 1.4
-    for b_off in [-0.6, 0.6]:
+    # Sawn lumber plank stack: placed either on the cargo dock platform or in the yard
+    if dock_planks_pos is not None:
+        plank_x, plank_y, plank_z, plank_rot = dock_planks_pos
+        plank_l = 1.65
+        plank_w = 0.90
+    else:
+        cos_r = math.cos(rot_angle)
+        sin_r = math.sin(rot_angle)
+        plank_x = yard_x - cos_r * 1.8 - sin_r * 1.4
+        plank_y = yard_y - sin_r * 1.8 + cos_r * 1.4
+        plank_z = z_ground
+        plank_rot = rot_angle
+        plank_l = 1.85
+        plank_w = 0.95
+
+    cos_p = math.cos(plank_rot)
+    sin_p = math.sin(plank_rot)
+    for b_off in [-0.55, 0.55]:
         create_beveled_box(
-            bm, size=(0.14, 1.10, 0.12),
-            location=(plank_x + cos_r * b_off, plank_y + sin_r * b_off, z_ground + 0.06),
-            rotation=(0.0, 0.0, rot_angle),
+            bm, size=(0.12, plank_w + 0.10, 0.10),
+            location=(plank_x + cos_p * b_off, plank_y + sin_p * b_off, plank_z + 0.05),
+            rotation=(0.0, 0.0, plank_rot),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
     for row_i in range(5):
-        rz = z_ground + 0.165 + row_i * 0.125
+        rz = plank_z + 0.10 + 0.045 + row_i * 0.11
         create_beveled_box(
-            bm, size=(1.85, 0.95, 0.09),
+            bm, size=(plank_l, plank_w, 0.08),
             location=(plank_x, plank_y, rz),
-            rotation=(0.0, 0.0, rot_angle + 0.02),
+            rotation=(0.0, 0.0, plank_rot + 0.015),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
         )
         if row_i < 4:
-            for s_off in [-0.65, 0.0, 0.65]:
+            for s_off in [-0.55, 0.0, 0.55]:
                 create_box(
-                    bm, size=(0.04, 0.95, 0.035),
-                    location=(plank_x + cos_r * s_off, plank_y + sin_r * s_off, rz + 0.0625),
-                    rotation=(0.0, 0.0, rot_angle),
+                    bm, size=(0.035, plank_w, 0.03),
+                    location=(plank_x + cos_p * s_off, plank_y + sin_p * s_off, rz + 0.055),
+                    rotation=(0.0, 0.0, plank_rot),
                     mat_index=MAT_INDEX_TIMBER
                 )
 
     if grade in ('GRADE_2', 'GRADE_3'):
         from .crane import build_courtyard_crane
-        crane_x = yard_x + cos_r * 3.6 + sin_r * 1.4
-        crane_y = yard_y + sin_r * 3.6 - cos_r * 1.4
         if grade == 'GRADE_2':
+            crane_x = 2.0
+            crane_y = yard_y - 0.2 if dock_planks_pos is not None else yard_y - 1.4
             build_courtyard_crane(bm, yard_x=crane_x, yard_y=crane_y, z_ground=z_ground,
                                    mast_height=3.0, jib_length=2.6, rot_angle=rot_angle - 0.35)
         else:
+            # GRADE_3: moved further outwards past the deeper 3.2m dock to generously clear platforms
+            crane_x = 2.6
+            crane_y = yard_y - 1.6 if dock_planks_pos is not None else yard_y - 3.2
             build_courtyard_crane(bm, yard_x=crane_x, yard_y=crane_y, z_ground=z_ground,
-                                   mast_height=3.6, jib_length=3.0, rot_angle=rot_angle - 0.35)
+                                   mast_height=4.0, jib_length=3.8, rot_angle=rot_angle - 0.35)
 
 def _build_shaft_pillar(bm, x, y, z_floor, z_shaft):
     h = max(0.15, z_shaft - z_floor)

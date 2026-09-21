@@ -425,6 +425,7 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
     top_z = ctx.top_z
     wall_t = ctx.wall_t
     wings = ctx.wings
+    open_timber = getattr(props, 'open_timber_frame', False)
 
     # 4.5. Specialized Architectural Archetype Accessories
     if effective_archetype == 'BLACKSMITH':
@@ -439,44 +440,59 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
     elif effective_archetype == 'BAKERY':
         build_bakery_oven(bm, -hx, hx, -hy, hy, z_ground=0.0)
     elif effective_archetype == 'WAREHOUSE':
-        yard_x = 0.0
-        yard_y = -hy - 1.8
-        rot_crane = -1.57
-        if shape == 'L_SHAPE' and wings:
-            w_elem = wings[0]
-            wx1, wx2, wy1, wy2 = w_elem['base']
-            # The crane sits toward the courtyard mouth (away from both roofs) with
-            # the jib pointing out of the courtyard so the boom/rope clears the eaves.
-            if w_elem['wall'] == 'FRONT':
-                if w_elem.get('align') == 'RIGHT':
-                    yard_x = (-hx + wx1) * 0.5 - 0.6
-                    yard_y = (wy1 - hy) * 0.5 - 1.2
-                    rot_crane = -1.40
-                else:
-                    yard_x = (wx2 + hx) * 0.5 + 0.6
-                    yard_y = (wy1 - hy) * 0.5 - 1.2
-                    rot_crane = -1.75
-            elif w_elem['wall'] == 'BACK':
-                if w_elem.get('align') == 'RIGHT':
-                    yard_x = (-hx + wx1) * 0.5 - 0.6
-                    yard_y = (hy + wy2) * 0.5 + 1.2
-                    rot_crane = 1.40
-                else:
-                    yard_x = (wx2 + hx) * 0.5 + 0.6
-                    yard_y = (hy + wy2) * 0.5 + 1.2
-                    rot_crane = 1.75
-        build_courtyard_crane(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_crane)
-        # For primitive / supply-depot tier, dress the yard with crates, barrels, lumber piles, and sacks
-        if getattr(props, 'material_tier', 'TIER_3') == 'TIER_1' or props.roof_style in ('NONE', 'MAKESHIFT') or open_timber:
+        if getattr(props, 'material_tier', 'TIER_1') != 'TIER_1' and props.roof_style != 'NONE':
+            yard_x = 0.0
+            yard_y = -hy - 1.8
+            rot_crane = -1.57
+            if shape == 'L_SHAPE' and wings:
+                w_elem = wings[0]
+                wx1, wx2, wy1, wy2 = w_elem['base']
+                # The crane sits toward the courtyard mouth (away from both roofs) with
+                # the jib pointing out of the courtyard so the boom/rope clears the eaves.
+                if w_elem['wall'] == 'FRONT':
+                    if w_elem.get('align') == 'RIGHT':
+                        yard_x = (-hx + wx1) * 0.5 - 0.6
+                        yard_y = (wy1 - hy) * 0.5 - 1.2
+                        rot_crane = -1.40
+                    else:
+                        yard_x = (wx2 + hx) * 0.5 + 0.6
+                        yard_y = (wy1 - hy) * 0.5 - 1.2
+                        rot_crane = -1.75
+                elif w_elem['wall'] == 'BACK':
+                    if w_elem.get('align') == 'RIGHT':
+                        yard_x = (-hx + wx1) * 0.5 - 0.6
+                        yard_y = (hy + wy2) * 0.5 + 1.2
+                        rot_crane = 1.40
+                    else:
+                        yard_x = (wx2 + hx) * 0.5 + 0.6
+                        yard_y = (hy + wy2) * 0.5 + 1.2
+                        rot_crane = 1.75
+            build_courtyard_crane(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_crane)
+        # For primitive / supply-depot tier, dress the yard with crates, barrels, lumber piles, sacks, and awnings
+        if getattr(props, 'material_tier', 'TIER_3') == 'TIER_1' or props.roof_style in ('NONE', 'MAKESHIFT'):
             from .warehouse import build_supply_depot_yard
             build_supply_depot_yard(bm, min_x=-hx, max_x=hx, min_y=-hy, max_y=hy, z_floor=found_h, seed=seed)
             if shape == 'L_SHAPE' and wings:
                 wx1, wx2, wy1, wy2 = wings[0]['base']
                 build_supply_depot_yard(bm, min_x=wx1, max_x=wx2, min_y=wy1, max_y=wy2, z_floor=found_h, seed=seed + 31)
     elif effective_archetype == 'LUMBERMILL':
-        yard_x = 0.0
-        yard_y = -hy - 2.2
+        mill_grade = getattr(props, 'mill_grade', 'GRADE_1')
+        is_enclosed_mill = (mill_grade in ('GRADE_2', 'GRADE_3') or not open_timber)
         rot_yard = 0.0
+        dock_planks = None
+        if is_enclosed_mill:
+            # Staged in the open yard between entrance corridor and dock, rotated ~85 deg
+            yard_x = -1.4
+            yard_y = -hy - 3.4 if mill_grade == 'GRADE_2' else -hy - 4.0
+            # Sawn planks placed directly on the cargo dock floor (right side of freight portal)
+            dock_x = 4.8 if mill_grade == 'GRADE_2' else 5.2
+            dock_y = -hy - 1.0 if mill_grade == 'GRADE_2' else -hy - 1.2
+            dock_z = found_h + 0.05
+            dock_planks = (dock_x, dock_y, dock_z, 0.03)
+        else:
+            yard_x = 0.0
+            yard_y = -hy - 2.2
+
         if shape == 'L_SHAPE' and wings:
             w_elem = wings[0]
             wx1, wx2, wy1, wy2 = w_elem['base']
@@ -494,12 +510,16 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
                 else:
                     yard_x = (wx2 + hx) * 0.5
                     yard_y = (hy + wy2) * 0.5
-        mill_grade = getattr(props, 'mill_grade', 'GRADE_1')
-        build_lumbermill_yard(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_yard, grade=mill_grade)
+
+        build_lumbermill_yard(
+            bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0,
+            rot_angle=rot_yard, grade=mill_grade, dock_planks_pos=dock_planks
+        )
         build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=found_h, grade=mill_grade)
         # Mill worker steps: grounded cut-stone steps on the clearest entrance bay.
+        # Only on open-timber / Tier 1 pavilions; Tier 2 and 3 have enclosed front walls with their own offset front door and steps.
         mill_sx = choose_entry_bay(base_w, hx, yard_x, mill_grade)
-        if props.has_front_steps and props.has_foundation:
+        if props.has_front_steps and props.has_foundation and (open_timber or mill_grade == 'GRADE_1'):
             build_front_steps(bm, center_x=mill_sx, y_front=-hy, z_base=found_h,
                               num_steps=max(2, int(found_h / 0.18)), normal_axis='-Y')
 

@@ -14,7 +14,7 @@ from ..materials import (
 )
 
 def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib_length=3.4, rot_angle=0.45,
-                          pad_mat=None):
+                          pad_mat=None, include_stone_pad=True, pad_radius=None):
     cos_r = math.cos(rot_angle)
     sin_r = math.sin(rot_angle)
     boom_dir = Vector((cos_r, sin_r, 0.0))
@@ -42,23 +42,30 @@ def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib
             location=(p[0], p[1], p[2]), rotation=rot, mat_index=mat
         )
 
-    pad_h = 0.16
-    pad_r = 1.30
-    _pad_mat = pad_mat if pad_mat is not None else MAT_INDEX_CUT_STONE
-    create_cylinder(
-        bm, radius=pad_r, height=pad_h, segments=24,
-        location=(yard_x, yard_y, z_ground + pad_h * 0.5),
-        mat_index=_pad_mat
-    )
+    if include_stone_pad:
+        pad_h = 0.16
+        pad_r = pad_radius if pad_radius is not None else 1.30
+        _pad_mat = pad_mat if pad_mat is not None else MAT_INDEX_CUT_STONE
+        create_cylinder(
+            bm, radius=pad_r, height=pad_h, segments=24,
+            location=(yard_x, yard_y, z_ground + pad_h * 0.5),
+            mat_index=_pad_mat
+        )
+        ring_r = pad_r * 0.78
+    else:
+        pad_h = 0.0
+        pad_r = pad_radius if pad_radius is not None else 0.72
+        ring_r = pad_r
+
     ring_h = 0.07
     ring_z = z_ground + pad_h + ring_h * 0.5
     create_cylinder(
-        bm, radius=1.02, height=ring_h, segments=24,
+        bm, radius=ring_r, height=ring_h, segments=24,
         location=(yard_x, yard_y, ring_z),
         mat_index=MAT_INDEX_IRON
     )
     disc_h = 0.15
-    disc_r = 0.95
+    disc_r = ring_r * 0.92
     disc_z = z_ground + pad_h + ring_h + disc_h * 0.5
     create_cylinder(
         bm, radius=disc_r, height=disc_h, segments=16,
@@ -105,7 +112,7 @@ def build_courtyard_crane(bm, yard_x, yard_y, z_ground=0.0, mast_height=4.0, jib
     )
 
     brace_h = 1.15
-    brace_dist = 0.78
+    brace_dist = min(0.68, disc_r * 0.78)
     for i in range(4):
         ang = rot_angle + math.pi * 0.25 + i * (math.pi * 0.5)
         ca = math.cos(ang)
