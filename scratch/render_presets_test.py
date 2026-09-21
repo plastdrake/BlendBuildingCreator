@@ -62,23 +62,18 @@ def render_preset(preset_name, output_filename, cam_loc, cam_rot):
 
 # 1. Render TAVERN_T1
 render_preset('TAVERN_T1', 'tavern_t1_new.png',
-              (8.0, -12.0, 5.0),
+              (9.0, -14.0, 6.0),
               (math.radians(68), 0, math.radians(32)))
 
 # 2. Render TAVERN_T2
 render_preset('TAVERN_T2', 'tavern_t2_new.png',
-              (10.0, -15.0, 6.0),
+              (11.0, -16.5, 7.0),
               (math.radians(68), 0, math.radians(32)))
 
-# 3. Render TAVERN_T3 (L-Shape courtyard tavern with well)
+# 3. Render TAVERN_T3
 render_preset('TAVERN_T3', 'tavern_t3_new.png',
-              (-12.0, -18.0, 8.0),
-              (math.radians(65), 0, math.radians(-35)))
-
-# 4. Render INN_T2 (3-story coaching inn with courtyard and well)
-render_preset('INN_T2', 'inn_t2_new.png',
-              (-14.0, -20.0, 9.0),
-              (math.radians(65), 0, math.radians(-35)))
+              (12.5, -18.5, 8.0),
+              (math.radians(68), 0, math.radians(32)))
 
 print("ALL PRESET RENDERS COMPLETED SUCCESSFULLY!")
 sys.exit(0)
