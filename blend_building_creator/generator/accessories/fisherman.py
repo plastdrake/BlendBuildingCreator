@@ -15,28 +15,31 @@ from ..materials import (
 )
 
 def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
-    stilt_h = z_floor - z_ground + 0.60
-    stilt_z = z_ground - 0.30 + stilt_h * 0.5
-    pile_r = 0.13
-    coords = [
-        (x_min + pile_r, y_min + pile_r),
-        (x_max - pile_r, y_min + pile_r),
-        (x_min + pile_r, y_max - pile_r),
-        (x_max - pile_r, y_max - pile_r),
-        ((x_min + x_max) * 0.5, y_min + pile_r),
-        ((x_min + x_max) * 0.5, y_max - pile_r),
-    ]
-    for px, py in coords:
-        create_cylinder(
-            bm, radius=pile_r, height=stilt_h, segments=12,
-            location=(px, py, stilt_z),
-            mat_index=MAT_INDEX_TIMBER
-        )
-        create_cylinder(
-            bm, radius=pile_r * 1.15, height=0.06, segments=12,
-            location=(px, py, z_floor - 0.15),
-            mat_index=MAT_INDEX_IRON
-        )
+    # Only sink piles when the floor is actually raised. A fisher dropped straight
+    # onto a dock/pier (no foundation) gets no stub piles poking through its floor.
+    if (z_floor - z_ground) > 0.10:
+        stilt_h = z_floor - z_ground + 0.60
+        stilt_z = z_ground - 0.30 + stilt_h * 0.5
+        pile_r = 0.13
+        coords = [
+            (x_min + pile_r, y_min + pile_r),
+            (x_max - pile_r, y_min + pile_r),
+            (x_min + pile_r, y_max - pile_r),
+            (x_max - pile_r, y_max - pile_r),
+            ((x_min + x_max) * 0.5, y_min + pile_r),
+            ((x_min + x_max) * 0.5, y_max - pile_r),
+        ]
+        for px, py in coords:
+            create_cylinder(
+                bm, radius=pile_r, height=stilt_h, segments=12,
+                location=(px, py, stilt_z),
+                mat_index=MAT_INDEX_TIMBER
+            )
+            create_cylinder(
+                bm, radius=pile_r * 1.15, height=0.06, segments=12,
+                location=(px, py, z_floor - 0.15),
+                mat_index=MAT_INDEX_IRON
+            )
     bollard_x = x_min - 0.65
     bollard_y = y_min - 0.55
     create_cylinder(
