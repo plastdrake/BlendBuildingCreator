@@ -249,7 +249,7 @@ def _build_lean_to_awning(bm, cx, cy, z_base, width=2.5, depth=2.2, front_h=1.85
 
 def _build_handcart(bm, cx, cy, z_base, rot_ang=0.45):
     """A rugged 2-wheeled wooden cargo handcart carrying burlap sacks."""
-    from .furniture import build_sack
+    from .furniture import build_clay_pot
     mat = Matrix.Translation((cx, cy, z_base)) @ Matrix.Rotation(rot_ang, 4, 'Z')
 
     # Bed dimensions
@@ -309,9 +309,11 @@ def _build_handcart(bm, cx, cy, z_base, rot_ang=0.45):
         )
     transform_faces(faces, mat)
 
-    # Sacks in the cart bed
-    build_sack(bm, x=cx - 0.12, y=cy, z_ground=z_base + bed_z + 0.06, ang=rot_ang + 0.2, scale=0.88)
-    build_sack(bm, x=cx + 0.15, y=cy - 0.08, z_ground=z_base + bed_z + 0.06, ang=rot_ang - 0.3, scale=0.82)
+    # Glazed pots riding in the cart bed
+    build_clay_pot(bm, x=cx - 0.12, y=cy, z_ground=z_base + bed_z + 0.06,
+                   ang=rot_ang + 0.2, radius=0.20, height=0.46, pot_type='JAR')
+    build_clay_pot(bm, x=cx + 0.15, y=cy - 0.08, z_ground=z_base + bed_z + 0.06,
+                   ang=rot_ang - 0.3, radius=0.17, height=0.40, pot_type='URN')
 
 
 def build_supply_depot_yard(bm, min_x, max_x, min_y, max_y, z_floor, seed=42):

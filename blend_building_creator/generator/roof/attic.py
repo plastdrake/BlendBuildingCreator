@@ -98,7 +98,7 @@ def _wing_loft_candidates(props, ctx, wings, found_h, floor_h, num_floors, wall_
 
 
 def build_roof_and_attic(bm, props, ctx):
-    """Attic deck, exterior roof, dormers, chimneys, turrets and the roof hoist."""
+    """Attic deck, exterior roof, dormers, chimneys, and turrets."""
     base_d = ctx.base_d
     base_w = ctx.base_w
     cantilever = ctx.cantilever
@@ -543,41 +543,6 @@ def build_roof_and_attic(bm, props, ctx):
                 radius=radius,
                 height=props.roof_height * 1.3
             )
-        if getattr(props, 'has_hoist_beam', False) and roof_style in ('SWAY', 'GABLE'):
-            from .features import build_hoist_beam
-            if is_rotated_roof:
-                hoist_bm = bmesh.new()
-                build_hoist_beam(
-                    hoist_bm,
-                    front_x=0.0,
-                    front_y=0.0,
-                    z_ridge=0.0,
-                    length=1.4
-                )
-                rot_m = Matrix.Rotation(-math.pi * 0.5, 4, 'Z')
-                trans_m = Matrix.Translation(Vector((top_x_min - props.roof_overhang, top_cy, top_z + props.roof_height)))
-                bmesh.ops.transform(hoist_bm, matrix=trans_m @ rot_m, verts=hoist_bm.verts)
-                uv_src = hoist_bm.loops.layers.uv.verify()
-                uv_dst = bm.loops.layers.uv.verify()
-                vmap = {v: bm.verts.new(v.co) for v in hoist_bm.verts}
-                for f in hoist_bm.faces:
-                    try:
-                        nf = bm.faces.new([vmap[v] for v in f.verts])
-                        nf.material_index = f.material_index
-                        nf.smooth = f.smooth
-                        for ls, ld in zip(f.loops, nf.loops):
-                            ld[uv_dst].uv = ls[uv_src].uv
-                    except ValueError:
-                        pass
-                hoist_bm.free()
-            else:
-                build_hoist_beam(
-                    bm,
-                    front_x=top_cx,
-                    front_y=top_y_min - props.roof_overhang,
-                    z_ridge=top_z + props.roof_height,
-                    length=1.4
-                )
             
         # Physical shingle layers disabled: textured roof deck provides stylized clay tiles cleanly without micro-geometry
         if False and props.has_roof_shingles and roof_style in ('SWAY', 'GABLE'):

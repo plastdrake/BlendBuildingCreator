@@ -265,7 +265,6 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
             if props.roof_style == 'SWAY':
                 col.prop(props, "roof_sway")
             col.prop(props, "roof_flare")
-            col.prop(props, "has_hoist_beam")
 
         # Shingles & Dormers
         box_det = layout.box()
@@ -377,7 +376,9 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             col_ramp = box_civic.column(align=True)
             col_ramp.prop(props, "rampart_side")
             col_ramp.prop(props, "rampart_door_width")
-        box_civic.prop(props, "has_arched_porch")
+        row_ap = box_civic.row()
+        row_ap.enabled = not props.has_veranda
+        row_ap.prop(props, "has_arched_porch")
         box_civic.prop(props, "has_entry_ramp")
         box_civic.separator()
         box_civic.prop(props, "has_side_annex")
@@ -392,11 +393,33 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
         # Hospitality & Outdoor Decor
         box_hosp = layout.box()
         box_hosp.label(text="Hospitality & Yard Props", icon='HOME')
-        box_hosp.prop(props, "has_veranda")
+        row_v = box_hosp.row()
+        row_v.enabled = not props.has_arched_porch
+        row_v.prop(props, "has_veranda")
         box_hosp.prop(props, "has_trade_sign")
+        if props.has_trade_sign:
+            box_hosp.prop(props, "sign_icon", text="Sign Emblem")
         box_hosp.prop(props, "has_flower_boxes")
         box_hosp.prop(props, "has_outdoor_decor")
         box_hosp.prop(props, "has_well")
+
+        # Estate Grounds & Outbuildings
+        box_estate = layout.box()
+        box_estate.label(text="Estate Grounds & Outbuildings", icon='COMMUNITY')
+        row_e = box_estate.row(align=True)
+        row_e.prop(props, "has_stable")
+        row_e.prop(props, "has_servant_quarters")
+        box_estate.prop(props, "has_estate_fountain")
+        box_estate.prop(props, "estate_awnings")
+        if props.has_stable or props.has_servant_quarters or props.has_estate_fountain:
+            col_est = box_estate.column(align=True)
+            if props.has_stable:
+                col_est.prop(props, "stable_side")
+            if props.has_servant_quarters:
+                col_est.prop(props, "servant_quarters_side")
+            col_est.prop(props, "outbuilding_offset_x")
+            col_est.prop(props, "outbuilding_offset_y")
+            col_est.prop(props, "plot_setback")
 
         # Fortifications
         box_fort = layout.box()

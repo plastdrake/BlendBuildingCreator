@@ -30,7 +30,7 @@ def apply_organic_shading(obj, angle_deg=42.0):
         except Exception:
             pass
 
-def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, is_wall=False, u_offset=0.0, v_offset=0.0):
+def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, is_wall=False, u_offset=0.0, v_offset=0.0, transform_matrix=None):
     """
     Creates an oriented box in bmesh with center or base alignment.
     Returns list of faces.
@@ -51,6 +51,8 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
     tr_mat = loc_mat @ rot_mat
+    if transform_matrix is not None:
+        tr_mat = transform_matrix @ tr_mat
     
     bm_verts = [bm.verts.new(tr_mat @ v) for v in verts]
     
@@ -160,9 +162,9 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
         
     return faces
 
-def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, bevel_amount=0.03, bevel_segments=2, is_wall=False, u_offset=0.0, v_offset=0.0):
+def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, bevel_amount=0.03, bevel_segments=2, is_wall=False, u_offset=0.0, v_offset=0.0, transform_matrix=None):
     """Creates a box and softly rounds its edges for a chunky, hand-carved organic look."""
-    faces = create_box(bm, size, location, rotation, mat_index, is_wall=is_wall, u_offset=u_offset, v_offset=v_offset)
+    faces = create_box(bm, size, location, rotation, mat_index, is_wall=is_wall, u_offset=u_offset, v_offset=v_offset, transform_matrix=transform_matrix)
     if bevel_amount > 0.001:
         edges = list({e for f in faces for e in f.edges})
         try:
@@ -172,7 +174,10 @@ def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotat
                 uv_layer = bm.loops.layers.uv.verify()
                 rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
                 loc_mat = Matrix.Translation(Vector(location))
-                inv_tr = (loc_mat @ rot_mat).inverted()
+                base_tr = loc_mat @ rot_mat
+                if transform_matrix is not None:
+                    base_tr = transform_matrix @ base_tr
+                inv_tr = base_tr.inverted()
                 dx, dy, dz = size
                 sx, sy, sz = dx * 0.5, dy * 0.5, dz * 0.5
                 scale = 1.0
@@ -295,11 +300,13 @@ def create_flared_post(bm, size=(0.28, 0.28, 3.0), location=(0.0, 0.0, 0.0), rot
 
     return faces
 
-def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0):
+def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, transform_matrix=None):
     """Creates a stylized faceted cylinder with end caps."""
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
     tr_mat = loc_mat @ rot_mat
+    if transform_matrix is not None:
+        tr_mat = transform_matrix @ tr_mat
     
     half_h = height * 0.5
     bottom_verts = []
@@ -341,7 +348,7 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
     f_top.material_index = mat_index
     faces.append(f_top)
 
-    axis = rot_mat @ Vector((0.0, 0.0, 1.0))
+    axis = (tr_mat.to_3x3() @ Vector((0.0, 0.0, 1.0))).normalized()
     ax, ay, az = abs(axis.x), abs(axis.y), abs(axis.z)
     for cap in (f_bot, f_top):
         for loop in cap.loops:
@@ -505,11 +512,13 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
     
     return faces
 
-def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0):
+def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, transform_matrix=None):
     """Creates a cone/frustum for turrets and chimneys."""
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
     tr_mat = loc_mat @ rot_mat
+    if transform_matrix is not None:
+        tr_mat = transform_matrix @ tr_mat
     
     half_h = height * 0.5
     bottom_verts = []

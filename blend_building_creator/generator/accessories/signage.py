@@ -13,7 +13,7 @@ the door. Local +X is the bracket/outward direction: the board faces out along
 
 import math
 import random
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 from ..mesh_utils import (
     create_beveled_box, create_cylinder, create_torus_ring, transform_faces,
@@ -33,23 +33,47 @@ def _rng(x, y, salt=0):
     return random.Random((int(abs(x) * 73856093) ^ int(abs(y) * 19349663) ^ int(salt * 83492791)) & 0x7FFFFFFF)
 
 
-def _map_sign_decal(bm, faces, cx, cz, w, h):
-    """Planar 0..1 UV map for the icon decal faces (mirrored on the back face).
-    Board lies in the local XZ plane (parallel to bracket arm, readable along street).
+def _create_sign_decal_quad(bm, cx, dy, cz, w, h, is_back=False):
+    """Creates a planar decal quad for the trade sign emblem.
+    
+    The sign faces along +/- Y in local coordinates.
+    When viewed from the outside:
+      - Front face (+Y normal): viewer looking toward -Y has viewer's Left at +X and Right at -X.
+        Therefore, U=0 (left) is at +X and U=1 (right) is at -X.
+      - Back face (-Y normal): viewer looking toward +Y has viewer's Left at -X and Right at +X.
+        Therefore, U=0 (left) is at -X and U=1 (right) is at +X.
+    This guarantees that text and emblems read completely un-mirrored and left-to-right from BOTH directions along the street!
     """
+    hw = w * 0.5
+    hh = h * 0.5
     uv = bm.loops.layers.uv.verify()
-    for f in faces:
-        if not f.is_valid:
-            continue
-        back = f.normal.y < 0.0
-        for loop in f.loops:
-            lx = loop.vert.co.x - cx
-            lz = loop.vert.co.z - cz
-            u = (lx + w * 0.5) / w
-            if back:
-                u = 1.0 - u
-            v = (lz + h * 0.5) / h
-            loop[uv].uv = (u, v)
+    
+    if not is_back:
+        # Front face (+Y): normal points along +Y (0, 1, 0)
+        # CCW loop from outside: Bottom-Left (+X), Bottom-Right (-X), Top-Right (-X), Top-Left (+X)
+        p0 = Vector((cx + hw, dy, cz - hh))
+        p1 = Vector((cx - hw, dy, cz - hh))
+        p2 = Vector((cx - hw, dy, cz + hh))
+        p3 = Vector((cx + hw, dy, cz + hh))
+        uvs = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+    else:
+        # Back face (-Y): normal points along -Y (0, -1, 0)
+        # CCW loop from outside: Bottom-Left (-X), Bottom-Right (+X), Top-Right (+X), Top-Left (-X)
+        p0 = Vector((cx - hw, dy, cz - hh))
+        p1 = Vector((cx + hw, dy, cz - hh))
+        p2 = Vector((cx + hw, dy, cz + hh))
+        p3 = Vector((cx - hw, dy, cz + hh))
+        uvs = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+        
+    v_objs = [bm.verts.new(p) for p in (p0, p1, p2, p3)]
+    face = bm.faces.new(v_objs)
+    face.material_index = MAT_INDEX_SIGN
+    face.normal_update()
+    
+    for loop, uv_coord in zip(face.loops, uvs):
+        loop[uv].uv = uv_coord
+        
+    return [face]
 
 
 def build_hanging_sign(bm, x, y, z_top, run_ang=0.0, bracket_len=0.60,
@@ -113,13 +137,10 @@ def build_hanging_sign(bm, x, y, z_top, run_ang=0.0, bracket_len=0.60,
     decal_w = board_w * 0.82
     decal_h = board_h * 0.76
     for side in (-1.0, 1.0):
-        dy = side * (board_thick * 0.5 + 0.006)
-        decal = create_beveled_box(
-            bm, size=(decal_w, 0.008, decal_h),
-            location=(board_cx, dy, board_cz),
-            mat_index=MAT_INDEX_SIGN, bevel_amount=0.0)
-        _map_sign_decal(bm, decal, board_cx, board_cz, decal_w, decal_h)
-        faces += decal
+        dy = side * (board_thick * 0.5 + 0.005)
+        faces += _create_sign_decal_quad(
+            bm, board_cx, dy, board_cz, decal_w, decal_h, is_back=(side < 0.0)
+        )
 
     transform_faces(faces, _place(x, y, z_top, run_ang))
     return faces

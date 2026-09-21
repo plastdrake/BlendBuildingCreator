@@ -19,6 +19,23 @@ def on_property_updated(self, context):
         from .generator.building import generate_building
         generate_building(obj, self)
 
+def on_veranda_updated(self, context):
+    """A covered veranda and an arched entry porch are mutually exclusive treatments."""
+    if getattr(self, 'has_veranda', False) and getattr(self, 'has_arched_porch', False):
+        self.auto_update = False
+        self.has_arched_porch = False
+        self.auto_update = True
+    on_property_updated(self, context)
+
+
+def on_arched_porch_updated(self, context):
+    if getattr(self, 'has_arched_porch', False) and getattr(self, 'has_veranda', False):
+        self.auto_update = False
+        self.has_veranda = False
+        self.auto_update = True
+    on_property_updated(self, context)
+
+
 def on_tier_updated(self, context):
     """When the user changes material tier, dynamically scale layout, floors, and dimensions."""
     if not getattr(self, "auto_update", True):
@@ -127,6 +144,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('ALL', "All Presets", "Show all building style presets"),
             ('CIVIC', "Civic", "Town halls and civic estates"),
+            ('ARTISAN', "Artisan", "Artisans, workshops, and trade shops"),
             ('MILITARY', "Military", "Barracks and military quarters"),
             ('INDUSTRIAL', "Industrial", "Warehouses, storage, and lumbermills"),
             ('RESIDENTIAL', "Residential", "Houses, cottages, and town residences"),
@@ -154,7 +172,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     width: FloatProperty(
         name="Width",
         description="Building width (X axis) in meters",
-        min=3.5, max=50.0, default=6.0,
+        min=3.5, max=80.0, default=6.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -162,7 +180,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     depth: FloatProperty(
         name="Depth",
         description="Building depth (Y axis) in meters",
-        min=3.5, max=50.0, default=5.0,
+        min=3.5, max=80.0, default=5.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -283,6 +301,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('AUTO', "Auto (From Preset)", "Use specialized features defined by the selected preset"),
             ('NONE', "None (Standard)", "Standard fantasy building without archetype additions"),
+            ('STABLE', "Stable & Carriage Barn", "Working stable: open stall row and fenced paddock pen beside the barn"),
             ('WAREHOUSE', "Warehouse Crane & Cargo", "L-shaped courtyard timber swivel crane and loading bays"),
             ('LUMBERMILL', "Lumbermill Workframe", "Open timber sawmill pavilion with creature treadwheel, saw bench, and log yard"),
             ('BLACKSMITH', "Blacksmith Forge", "Outdoor forge lean-to canopy, stone furnace with chimney, and metal anvil"),
@@ -756,13 +775,6 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
     
-    has_hoist_beam: BoolProperty(
-        name="Roof Hoist Beam",
-        description="Projecting heavy timber ridge beam with suspended cargo hook / pulley on the front gable",
-        default=False,
-        update=on_property_updated
-    )
-
     has_loft_hatch: BoolProperty(
         name="Gable Loft Hatch",
         description="Timber attic hatch door on the gable end with an exterior ladder from the ground (auto picks the clearest gable)",
@@ -1093,9 +1105,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
 
     has_arched_porch: BoolProperty(
         name="Arched Entry Porch",
-        description="Stone pier porch with mini gable roof over the main door",
+        description="Stone pier porch with mini gable roof over the main door (replaces a covered veranda)",
         default=False,
-        update=on_property_updated
+        update=on_arched_porch_updated
     )
 
     # --- Town Hall Composer: multi-volume sprawling civic composition ---
@@ -1161,7 +1173,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     palisade_offset: FloatProperty(
         name="Palisade Offset",
         description="Distance the stockade stands outside the building footprint",
-        min=0.8, max=8.0, default=3.0,
+        min=0.8, max=35.0, default=3.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1236,15 +1248,42 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     # --- Hospitality & Outdoor Decor (reusable on any building) ---
     has_veranda: BoolProperty(
         name="Covered Veranda",
-        description="Covered timber entrance veranda (porch) over the front door",
+        description="Covered timber entrance veranda (porch) over the front door (replaces an arched entry porch)",
         default=False,
-        update=on_property_updated
+        update=on_veranda_updated
     )
 
     has_trade_sign: BoolProperty(
         name="Hanging Trade Sign",
         description="Iron-bracketed hanging sign; mounted on the veranda post or beside the front door",
         default=False,
+        update=on_property_updated
+    )
+
+    sign_icon: EnumProperty(
+        name="Trade Sign Emblem",
+        description="Emblem texture to paint on the hanging trade sign",
+        items=[
+            ('AUTO', "Auto (From Preset)", "Choose sign emblem automatically based on building preset or archetype"),
+            ('bakery_sign.png', "Bakery", "Bakery pretzel and bread sign"),
+            ('tailor_sign.png', "Tailor", "Tailor scissors and thread spool sign"),
+            ('toolsmith_sign.png', "Toolsmith", "Toolsmith hammer and pincers sign"),
+            ('jeweler_sign.png', "Jeweler", "Jeweler cut gemstone and signet ring sign"),
+            ('brewery_sign.png', "Brewery", "Brewery ale mug and hop sign"),
+            ('fisher_sign.png', "Fisher", "Fisherman catch and hook sign"),
+            ('furniture_maker_sign.png', "Furniture Maker", "Woodcrafter chair and plane sign"),
+            ('butcher_sign.png', "Butcher", "Butcher meat cleaver sign"),
+            ('tavern_sign.png', "Tavern", "Tavern tankard sign"),
+            ('inn_sign.png', "Inn", "Inn crescent moon and key sign"),
+            ('mill_sign.png', "Mill", "Mill rotor blades sign"),
+            ('armorsmith_sign.png', "Armorsmith", "Armorsmith breastplate and shield sign"),
+            ('weaponsmith_sign.png', "Weaponsmith", "Weaponsmith crossed blades sign"),
+            ('weaver_sign.png', "Weaver", "Weaver shuttle and loom sign"),
+            ('tannery_sign.png', "Tannery", "Tannery stretched hide sign"),
+            ('general_store_sign.png', "General Store", "General store scales sign"),
+            ('market_sign.png', "Market", "Market goods sign"),
+        ],
+        default='AUTO',
         update=on_property_updated
     )
 
@@ -1377,7 +1416,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     curtain_wall_offset: FloatProperty(
         name="Curtain Offset",
         description="Distance the curtain wall stands outside the building footprint",
-        min=1.5, max=8.0, default=3.0,
+        min=1.5, max=35.0, default=3.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1385,8 +1424,83 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     curtain_wall_depth_extra: FloatProperty(
         name="Curtain Depth Extra",
         description="Extra distance to push the rear curtain wall back beyond the normal offset",
-        min=0.0, max=6.0, default=0.0,
+        min=0.0, max=25.0, default=0.0,
         unit='LENGTH',
+        update=on_property_updated
+    )
+
+    # --- Estate Grounds & Outbuildings (Noble Estate / Compound) ---
+    has_stable: BoolProperty(
+        name="Horse Stables",
+        description="Detached timber and stone horse stables with carriage entry, hayloft and horse trough",
+        default=False,
+        update=on_property_updated
+    )
+
+    stable_side: EnumProperty(
+        name="Stable Side",
+        description="Side of the courtyard where the stable sits",
+        items=[
+            ('LEFT', "Left (-X)", "Place stable on the left flank of the courtyard"),
+            ('RIGHT', "Right (+X)", "Place stable on the right flank of the courtyard"),
+        ],
+        default='LEFT',
+        update=on_property_updated
+    )
+
+    has_servant_quarters: BoolProperty(
+        name="Servant Quarters",
+        description="Detached domestic residence / steward lodge with domestic hearth chimney",
+        default=False,
+        update=on_property_updated
+    )
+
+    servant_quarters_side: EnumProperty(
+        name="Servant Quarters Side",
+        description="Side of the courtyard where the servant quarters sit",
+        items=[
+            ('LEFT', "Left (-X)", "Place servant quarters on the left flank of the courtyard"),
+            ('RIGHT', "Right (+X)", "Place servant quarters on the right flank of the courtyard"),
+        ],
+        default='RIGHT',
+        update=on_property_updated
+    )
+
+    has_estate_fountain: BoolProperty(
+        name="Courtyard Fountain",
+        description="Multi-tiered stone fountain basin for the central honor court",
+        default=False,
+        update=on_property_updated
+    )
+
+    outbuilding_offset_x: FloatProperty(
+        name="Outbuilding Spread",
+        description="Lateral distance of outbuildings from the estate central axis in meters",
+        min=8.0, max=45.0, default=24.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    outbuilding_offset_y: FloatProperty(
+        name="Outbuilding Forecourt Pos",
+        description="Forward positioning of outbuildings along the courtyard depth in meters",
+        min=-35.0, max=15.0, default=-10.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    plot_setback: FloatProperty(
+        name="Manor Plot Setback",
+        description="Distance to push the main manor back on the plot, deepening the front honor court while the outbuildings, fountain and perimeter walls stay put",
+        min=0.0, max=40.0, default=0.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    estate_awnings: BoolProperty(
+        name="Estate Yard Awnings",
+        description="Add rustic canvas tarp and board lean-to awnings around the estate courtyard and outbuildings",
+        default=False,
         update=on_property_updated
     )
 

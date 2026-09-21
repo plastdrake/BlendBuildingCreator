@@ -6,7 +6,7 @@ Modularized following SOLID, GRASP, and DRY principles:
 - turret_roof: Conical turret spire roofs
 - shingles: Layered 3D roof shingles with aperture clipping
 - dormer: Bell-cast flared dormer windows
-- features: Bargeboards, roof turrets, chimneys, hoist beams
+- features: Bargeboards, roof turrets, chimneys
 - gable_wall: Shared DRY gable end wall and log siding builders
 - valley: Segmented valley flashing following deck profiles
 - outcrop_roof: Lean-to and mini-gable roofs for facade projections
@@ -21,7 +21,6 @@ from .features import (
     build_curved_bargeboards,
     build_roof_turret,
     build_fantasy_chimney,
-    build_hoist_beam
 )
 from .gable_wall import (
     build_gable_end_wall,
@@ -46,7 +45,6 @@ __all__ = [
     'build_dormer',
     'build_roof_turret',
     'build_fantasy_chimney',
-    'build_hoist_beam',
     'build_curved_bargeboards',
     'build_gable_end_wall',
     'build_gable_physical_siding',

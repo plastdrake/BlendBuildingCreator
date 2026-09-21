@@ -87,10 +87,7 @@ def _create_building_context(props):
     # Archetype resolution
     archetype = getattr(props, 'building_archetype', 'AUTO')
     if archetype == 'AUTO':
-        if getattr(props, 'has_hoist_beam', False):
-            archetype = 'WAREHOUSE'
-        else:
-            archetype = 'NONE'
+        archetype = 'NONE'
     effective_archetype = archetype
 
     shape = getattr(props, 'building_shape', 'RECTANGLE')

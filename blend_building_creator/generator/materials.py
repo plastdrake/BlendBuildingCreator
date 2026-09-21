@@ -1970,9 +1970,21 @@ def setup_building_material_slots(obj, props):
     mat_dirt = getattr(props, 'custom_dirt', None) or create_stylized_dirt("M_Building_Dirt")
 
     # 17. Trade Sign (handpainted icon decal cut out of a light plank board)
-    _sign_icon = (getattr(props, 'sign_icon', '') or
-                  ('inn_sign.png' if getattr(props, 'building_archetype', 'AUTO') == 'INN'
-                   else 'tavern_sign.png'))
+    _prop_icon = getattr(props, 'sign_icon', 'AUTO')
+    if _prop_icon and _prop_icon != 'AUTO':
+        _sign_icon = _prop_icon
+    else:
+        _arch = getattr(props, 'building_archetype', 'AUTO')
+        if _arch == 'INN':
+            _sign_icon = 'inn_sign.png'
+        elif _arch == 'BAKERY':
+            _sign_icon = 'bakery_sign.png'
+        elif _arch == 'FISHERMAN':
+            _sign_icon = 'fisher_sign.png'
+        elif _arch == 'BLACKSMITH':
+            _sign_icon = 'toolsmith_sign.png'
+        else:
+            _sign_icon = 'tavern_sign.png'
     mat_sign = getattr(props, 'custom_sign', None) or create_stylized_sign(
         "M_Building_Sign", icon_filename=_sign_icon)
 

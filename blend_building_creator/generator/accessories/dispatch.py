@@ -161,7 +161,8 @@ def _build_civic_landmarks(bm, props, ctx, tier):
                 floor_h=ctx.floor_h, main_wall_top=_eave,
                 attach_tuck=max(0.30, _wt),
                 plank_direction=ctx.plank_dir, seed=ctx.seed)
-    if _prop(props, 'has_arched_porch', False):
+    if (_prop(props, 'has_arched_porch', False)
+            and getattr(ctx, 'effective_archetype', None) != 'STABLE'):
         # A jettied upper storey overhangs the ground-floor wall, so the porch
         # must abut the outermost storey's face. Anchoring it to the ground
         # wall would push the tall porch ridge up through the cantilever slab
@@ -227,14 +228,36 @@ def _build_generic_annex(bm, props, ctx, tier):
 
 
 def build_architectural_accessories(bm, props, ctx):
-    """Build every enabled outcrop, balcony, overhang and civic landmark."""
+    """Build every enabled outcrop, balcony, overhang, estate grounds and civic landmark.
+
+    The main manor (shell plus everything attached to it) can be pushed back on the
+    plot via ``plot_setback``. That translation happens after the manor-attached
+    pieces and before the detached grounds, so the outbuildings, fountain and
+    perimeter enclosure stay put and the front honor court simply deepens.
+    """
     tier = _prop(props, 'material_tier', 'TIER_3')
     _build_mini_wing(bm, props, ctx, tier)
     _build_balconies(bm, props, ctx, tier)
     _build_pillared_overhang(bm, props, ctx, tier)
     _build_hospitality(bm, props, ctx, tier)
     _build_civic_landmarks(bm, props, ctx, tier)
-    _build_fortifications(bm, props, ctx)
+    # Manor-borne fortifications (mounted shields, gable crests) travel with it.
+    _build_manor_fortifications(bm, props, ctx)
+
+    setback = _prop(props, 'plot_setback', 0.0)
+    if abs(setback) > 1e-6:
+        for v in bm.verts:
+            v.co.y += setback
+
+    _build_estate_grounds(bm, props, ctx)
+    # Plot-borne fortifications (enclosure, bastions, banners, drill yard) stay put.
+    _build_plot_fortifications(bm, props, ctx)
+
+
+def _build_estate_grounds(bm, props, ctx):
+    """Procedurally construct detached outbuildings and courtyard fountain."""
+    from .estate import build_estate_outbuildings
+    build_estate_outbuildings(bm, props, ctx)
 
 
 def _place_banners(bm, props, ctx):
@@ -287,8 +310,37 @@ def _place_banners(bm, props, ctx):
 
 
 
-def _build_fortifications(bm, props, ctx):
-    """Palisades, curtain walls, bastions, shields, banners, crests and military drill props (reusable fortification modules)."""
+def _build_manor_fortifications(bm, props, ctx):
+    """Fortification pieces that are physically mounted on the manor itself.
+
+    Built before the plot setback is applied so they travel with the building:
+    mounted entrance shields and heraldic gable crests.
+    """
+    # A few mounted round shields flanking the main entrance only — no more
+    # heraldry strung along the outer enclosure walls.
+    if _prop(props, 'has_mounted_shields', False):
+        from .shield import build_round_shield
+        is_curtain = _prop(props, 'has_curtain_wall', False)
+        door_half = _prop(props, 'door_width', 1.2) * 0.5
+        base_x = door_half + 0.90
+        n_each = 2 if is_curtain else 1
+        wall_face = ctx.main_door_yf - ctx.wall_t * 0.5 - 0.02
+        sh_z = ctx.found_h + 1.75
+        for s in (-1.0, 1.0):
+            for i in range(n_each):
+                sx = ctx.main_door_cx + s * (base_x + i * 0.85)
+                build_round_shield(bm, (sx, wall_face, sh_z),
+                                   normal=(0.0, -1.0, 0.0), radius=0.30,
+                                   pattern='QUARTERED' if i % 2 == 0 else 'SOLID')
+
+    # Mounted heraldic gable banners (Concept 1 barracks)
+    if _prop(props, 'has_gable_crest', False):
+        _build_gable_crests(bm, props, ctx)
+
+
+def _build_plot_fortifications(bm, props, ctx):
+    """Plot-level fortifications that stay anchored to the estate grounds:
+    palisades, curtain walls, bastions, banners and military drill props."""
     # 1. Corner bastion towers (Citadel Tier 3)
     if _prop(props, 'has_bastion_towers', False):
         from .bastion import build_bastion_courtyard_towers
@@ -306,23 +358,6 @@ def _build_fortifications(bm, props, ctx):
             style=_prop(props, 'palisade_style', 'STAKES'),
             offset=_prop(props, 'palisade_offset', 3.0))
 
-    # 3. A few mounted round shields flanking the main entrance only — no more
-    #    heraldry strung along the outer enclosure walls.
-    if _prop(props, 'has_mounted_shields', False):
-        from .shield import build_round_shield
-        door_half = _prop(props, 'door_width', 1.2) * 0.5
-        base_x = door_half + 0.90
-        n_each = 2 if is_curtain else 1
-        wall_face = ctx.main_door_yf - ctx.wall_t * 0.5 - 0.02
-        sh_z = ctx.found_h + 1.75
-        for s in (-1.0, 1.0):
-            for i in range(n_each):
-                sx = ctx.main_door_cx + s * (base_x + i * 0.85)
-                build_round_shield(bm, (sx, wall_face, sh_z),
-                                   normal=(0.0, -1.0, 0.0), radius=0.30,
-                                   pattern='QUARTERED' if i % 2 == 0 else 'SOLID')
-
-
     # 4. Military drill yard apparatus (archery targets, weapon rack, quintain)
     if _prop(props, 'has_military_props', False):
         build_military_props(bm, props, ctx)
@@ -330,10 +365,6 @@ def _build_fortifications(bm, props, ctx):
     # 5. Heraldic standards / banner poles
     if _prop(props, 'has_banners', False):
         _place_banners(bm, props, ctx)
-
-    # 6. Mounted heraldic gable banners (Concept 1 barracks)
-    if _prop(props, 'has_gable_crest', False):
-        _build_gable_crests(bm, props, ctx)
 
 
 def _build_gable_crests(bm, props, ctx):
@@ -426,6 +457,7 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
     wall_t = ctx.wall_t
     wings = ctx.wings
     open_timber = getattr(props, 'open_timber_frame', False)
+    tier = _prop(props, 'material_tier', 'TIER_1')
 
     # 4.5. Specialized Architectural Archetype Accessories
     if effective_archetype == 'BLACKSMITH':
@@ -438,7 +470,10 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
     elif effective_archetype == 'FISHERMAN':
         build_fisherman_stilts(bm, -hx, hx, -hy, hy, z_ground=0.0, z_floor=found_h)
     elif effective_archetype == 'BAKERY':
-        build_bakery_oven(bm, -hx, hx, -hy, hy, z_ground=0.0)
+        build_bakery_oven(bm, props, ctx, tier)
+    elif effective_archetype == 'STABLE':
+        from .estate import build_stable_yard_for_building
+        build_stable_yard_for_building(bm, props, ctx)
     elif effective_archetype == 'WAREHOUSE':
         if getattr(props, 'material_tier', 'TIER_1') != 'TIER_1' and props.roof_style != 'NONE':
             yard_x = 0.0

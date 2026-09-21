@@ -137,7 +137,9 @@ def build_roof_chimney(bm, props, effective_archetype,
                        top_x_min, top_x_max, top_y_min, top_y_max, total_height,
                        annex_band=None):
     """Stylized crooked stone chimney that dodges pillared overhangs and dormers."""
-    if not (props.has_chimney and effective_archetype != 'WATCHTOWER'):
+    # Bakery builds its own dedicated bake-oven flue in the accessories phase, so
+    # it must not also receive this generic (unrelated) chimney.
+    if not (props.has_chimney and effective_archetype not in ('WATCHTOWER', 'BAKERY')):
         return
     cpx = getattr(props, 'chimney_pos_x', 0.55)
     cpy = getattr(props, 'chimney_pos_y', 0.55)

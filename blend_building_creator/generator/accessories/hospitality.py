@@ -12,7 +12,7 @@ import math
 from .tavern import build_tavern_porch
 from .signage import build_hanging_sign, build_notice_board, build_awning
 from .furniture import (
-    build_barrel, build_crate, build_sack, build_stool, build_bench,
+    build_barrel, build_crate, build_clay_pot, build_bench,
     build_picnic_table,
 )
 from .lighting import build_post_lantern, build_hanging_lantern
@@ -49,8 +49,11 @@ def build_hospitality_scene(bm, props, ctx, tier):
     is_hospitality = ctx.effective_archetype in ('TAVERN', 'INN')
     is_inn = ctx.effective_archetype == 'INN'
 
+    # An arched entry porch and a covered veranda are mutually exclusive; when the
+    # arched porch is present it owns the entrance, so skip the veranda entirely.
+    has_arched = _prop(props, 'has_arched_porch', False)
     porch_info = None
-    if _prop(props, 'has_veranda', False) or is_hospitality:
+    if (_prop(props, 'has_veranda', False) or is_hospitality) and not has_arched:
         # Anchor the veranda to the OUTERMOST front face (the jettied upper wall)
         # and clear the log bulge, so the awning roof never pokes into the
         # interior or under the upper storey.
@@ -63,9 +66,11 @@ def build_hospitality_scene(bm, props, ctx, tier):
         )
 
     if _prop(props, 'has_trade_sign', False) or is_hospitality:
-        # Prefer a big sign hung on each roof gable end; only fall back to the
-        # beside-the-door wall sign when the roof raises no gables at all.
-        if _build_gable_signs(bm, props, ctx, tier) == 0:
+        # With an arched entry porch the gable anchors sit behind the porch roof,
+        # so hang the sign off the porch's own beam instead.
+        if has_arched:
+            _build_porch_sign(bm, props, ctx, tier)
+        elif _build_gable_signs(bm, props, ctx, tier) == 0:
             _build_trade_sign(bm, props, ctx, porch_info)
 
     if _prop(props, 'has_flower_boxes', False):
@@ -109,76 +114,76 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
     )
 
 
-def _build_gable_signs(bm, props, ctx, tier):
-    """Hang one large trade sign on every roof gable end (main, wings, annex).
+def _build_porch_sign(bm, props, ctx, tier):
+    """Hang the trade sign off the arched entry porch's outer beam.
 
-    The main gable/sway roof raises two gable-end walls: FRONT/BACK for a
-    front-back ridge, LEFT/RIGHT for a rotated ridge. A main gable end already
-    taken by a wing or the side annex is skipped. Returns how many were placed.
+    The gable anchors sit behind the porch hood, which buries the sign, so when an
+    arched porch owns the entrance the sign is carried on the porch itself.
     """
+    door_x = ctx.main_door_cx
+    front_y = ctx.main_door_yf
+    top_bounds = ctx.floor_wall_bounds.get(ctx.num_floors - 1)
+    if top_bounds is not None and top_bounds[2] < front_y:
+        front_y = top_bounds[2]
+    # Mirror build_arched_porch(): outer beam sits on piers set 1.75m out.
+    pier_y = (front_y - 2.05) + 0.30
+    eave_z = 2.9 + 0.22
+    mount_x = door_x - (1.5 - 0.15)
+    build_hanging_sign(
+        bm, mount_x, pier_y - 0.02, eave_z + 0.06,
+        run_ang=-math.pi * 0.5,
+        bracket_len=0.95, board_w=1.05, board_h=0.90, light_board=True,
+    )
+
+
+def _build_gable_signs(bm, props, ctx, tier):
+    """Hang trade sign on the roof gable end facing the street."""
     roof_style = _prop(props, 'roof_style', 'SWAY')
     roof_h = _prop(props, 'roof_height', 3.0)
     outer = _wall_out(props, ctx, tier, ctx.num_floors - 1)
     has_hatch = bool(_prop(props, 'has_loft_hatch', False))
     anchors = []
 
-    if roof_style in ('GABLE', 'SWAY'):
+    # Priority 1: Front wing cross-gable (projects furthest forward toward the street)
+    for w in getattr(ctx, 'wings', []):
+        wall = w.get('wall')
+        if wall == 'FRONT':
+            wfl = max(1, ctx.wing_floors)
+            wtop = ctx.found_h + wfl * ctx.floor_h
+            wrh = roof_h * _prop(props, 'wing_roof_scale', 0.88)
+            w_out = _wall_out(props, ctx, tier, wfl - 1)
+            base = (w.get('bounds_fl') or {}).get(wfl - 1) or w.get('base')
+            if base:
+                ax = (base[0] + base[1]) * 0.5
+                ay = base[2] - w_out
+                az = wtop + max(0.9, wrh * 0.52)
+                anchors.append((ax, ay, az, -math.pi * 0.5))
+                break
+
+    # Priority 2: Main roof front gable
+    if not anchors and roof_style in ('GABLE', 'SWAY'):
         b = ctx.bounds_for(ctx.num_floors - 1)
         cx, cy = (b[0] + b[1]) * 0.5, (b[2] + b[3]) * 0.5
-        # A loft hatch sits low in one gable; hang the board high enough that it
-        # clears the hatch instead of sitting in the middle of it.
-        gz = ctx.top_z + roof_h * (0.80 if has_hatch else 0.5)
-        annex_side = (_prop(props, 'annex_side', 'LEFT')
-                      if _prop(props, 'has_side_annex', False) else None)
-        ends = ('LEFT', 'RIGHT') if ctx.is_rotated_roof else ('FRONT', 'BACK')
-        for end in ends:
-            if end == 'FRONT':
-                sx, sy, ang = cx, b[2] - outer, -math.pi * 0.5
-            elif end == 'BACK':
-                sx, sy, ang = cx, b[3] + outer, math.pi * 0.5
-            elif end == 'LEFT':
-                if annex_side == 'LEFT':
-                    continue
-                sx, sy, ang = b[0] - outer, cy, math.pi
-            else:
-                if annex_side == 'RIGHT':
-                    continue
-                sx, sy, ang = b[1] + outer, cy, 0.0
+        gz = ctx.top_z + roof_h * (0.75 if has_hatch else 0.55)
+        if not ctx.is_rotated_roof:
+            sx, sy, ang = cx, b[2] - outer, -math.pi * 0.5
             anchors.append((sx, sy, gz, ang))
-
-    # Wing gables: each wing reads as a cross-gable facing away from the wall.
-    # Track the wing's TOP storey bounds - a jettied wing wall stands well proud
-    # of its ground footprint, so hanging off 'base' would bury the sign.
-    wfl = max(1, ctx.wing_floors)
-    wtop = ctx.found_h + wfl * ctx.floor_h
-    wrh = roof_h * _prop(props, 'wing_roof_scale', 0.88)
-    w_out = _wall_out(props, ctx, tier, wfl - 1)
-    for w in getattr(ctx, 'wings', []):
-        base = (w.get('bounds_fl') or {}).get(wfl - 1) or w.get('base')
-        wall = w.get('wall')
-        if not base:
-            continue
-        if wall == 'FRONT':
-            ax, ay, ang = (base[0] + base[1]) * 0.5, base[2] - w_out, -math.pi * 0.5
-        elif wall == 'BACK':
-            ax, ay, ang = (base[0] + base[1]) * 0.5, base[3] + w_out, math.pi * 0.5
-        elif wall == 'LEFT':
-            ax, ay, ang = base[0] - w_out, (base[2] + base[3]) * 0.5, math.pi
         else:
-            ax, ay, ang = base[1] + w_out, (base[2] + base[3]) * 0.5, 0.0
-        anchors.append((ax, ay, wtop + max(0.8, wrh * 0.5), ang))
+            # Rotated roof: ridge runs left-right, gable ends face left/right
+            annex_side = (_prop(props, 'annex_side', 'LEFT')
+                          if _prop(props, 'has_side_annex', False) else None)
+            if annex_side != 'LEFT':
+                anchors.append((b[0] - outer, cy, gz, math.pi))
+            elif annex_side != 'RIGHT':
+                anchors.append((b[1] + outer, cy, gz, 0.0))
 
-    # Annex gable: its cross-gable faces straight out from the main side wall.
-    # The annex outer face is exactly (main_half_width + depth - overlap 0.6), so
-    # anchor there (not on ctx.hx, which includes the main hall's jetty/cantilever).
-    if _prop(props, 'has_side_annex', False):
+    # Priority 3: Side annex cross-gable if no other gable was found
+    if not anchors and _prop(props, 'has_side_annex', False):
         side_sgn = 1.0 if _prop(props, 'annex_side', 'LEFT') == 'RIGHT' else -1.0
         a_floors = max(1, min(2, _prop(props, 'annex_floors', 2)))
         a_d = 3.6 if tier == 'TIER_1' else 4.0
         a_roof = 3.0 if tier == 'TIER_3' else 2.6
         a_face = ctx.base_w * 0.5 + a_d - 0.6
-        # A Tier-1 annex is built entirely from logs (including its ground storey),
-        # so its gable skin bulges; every other tier is flush stone/plank/stucco.
         a_out = 0.12 if tier == 'TIER_1' else 0.03
         ax = side_sgn * (a_face + a_out)
         atop = ctx.found_h + a_floors * ctx.floor_h
@@ -187,7 +192,7 @@ def _build_gable_signs(bm, props, ctx, tier):
 
     for ax, ay, az, ang in anchors:
         build_hanging_sign(bm, ax, ay, az, run_ang=ang,
-                           bracket_len=1.55, board_w=1.00, board_h=0.90,
+                           bracket_len=1.55, board_w=1.05, board_h=0.92,
                            light_board=True)
     return len(anchors)
 
@@ -341,49 +346,40 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
         build_barrel(bm, bx_base + side_sign * 0.10, face_y - 0.65, radius=0.34, height=0.74)
         build_barrel(bm, bx_base + side_sign * 0.70, face_y - 0.60, radius=0.27, height=0.60)
         build_barrel(bm, bx_base + side_sign * 0.40, face_y - 1.25, radius=0.30, height=0.68, lying=True, ang=0.15 * side_sign)
-        build_stool(bm, bx_base + side_sign * 0.85, face_y - 1.10)
 
         cx_base = bx_base + side_sign * 1.45
         if is_point_outside_building(cx_base, face_y - 0.75, 0.35, ctx, margin=0.05):
             build_crate(bm, cx_base, face_y - 0.75, ang=0.14 * side_sign, size=0.60)
             if rich and is_point_outside_building(cx_base + side_sign * 0.60, face_y - 1.05, 0.30, ctx, margin=0.05):
                 build_crate(bm, cx_base + side_sign * 0.60, face_y - 1.05, ang=-0.18 * side_sign, size=0.48)
-                build_sack(bm, cx_base + side_sign * 0.15, face_y - 1.40, scale=1.05)
+                build_clay_pot(bm, cx_base + side_sign * 0.15, face_y - 1.40, radius=0.21,
+                               height=0.52, ang=0.3, pot_type='JAR')
 
-    # 3. Tavern Beer Garden: a single picnic table, clear of the door path.
-    tx_base = door_x - side_sign * (porch_w * 0.5 + 1.85)
-    table_y = face_y - (porch_d + 1.45)
-    if is_point_outside_building(tx_base, table_y, 0.95, ctx, margin=0.15):
-        build_picnic_table(bm, tx_base, table_y, ang=0.08 * -side_sign, length=2.05)
+    # 3. Tavern Beer Garden: a single picnic table, clear of the door path (Tavern/Inn only).
+    if is_inn or ctx.effective_archetype in ('TAVERN', 'INN'):
+        tx_base = door_x - side_sign * (porch_w * 0.5 + 1.85)
+        table_y = face_y - (porch_d + 1.45)
+        if is_point_outside_building(tx_base, table_y, 0.95, ctx, margin=0.15):
+            build_picnic_table(bm, tx_base, table_y, ang=0.08 * -side_sign, length=2.05)
 
-    # 4. A bench set against the wall beside the entrance (left if free, else right).
+    # 4. A bench set against the wall beside the entrance on the free side.
     door_half = _prop(props, 'door_width', 1.2) * 0.5
-    for s in (-1.0, 1.0):
-        bench_x = door_x + s * (door_half + 1.75)
-        bench_y = face_y - (outer + 0.30)
-        if is_point_outside_building(bench_x, bench_y, 0.40, ctx, margin=0.05):
-            build_bench(bm, bench_x, bench_y, ang=0.0, length=1.60, with_back=True)
-            break
+    bench_side = -side_sign
+    bench_x = door_x + bench_side * (door_half + 1.55)
+    bench_y = face_y - (outer + 0.30)
+    if is_point_outside_building(bench_x, bench_y, 0.40, ctx, margin=0.05):
+        build_bench(bm, bench_x, bench_y, ang=0.0, length=1.50, with_back=True)
 
-    # 5. Notice board. On an L-shaped building it leans on the wing wall; on a
-    #    plain rectangle/square it sits against the facade wall beside the door,
-    #    facing the street (rotated 90 deg relative to the wing-wall case).
-    #    Placed just clear of the front-most footprint (the jettied top floor
-    #    sticks out past the ground wall, so "against the wall" has to clear it).
-    min_y = min(b[2] for b in get_building_footprint_boxes(ctx))
-    nb_y = min_y - 0.85
-    if ctx.shape == 'L_SHAPE':
-        nb_ang = -math.radians(45.0)
-    else:
-        nb_ang = 0.0
-    nb_x = door_x + (door_half + 1.95)
-    for s in (1.0, -1.0):
-        cand_x = door_x + s * (door_half + 1.95)
-        if is_point_outside_building(cand_x, nb_y, 0.45, ctx, margin=0.10):
-            nb_x = cand_x
-            break
-    if is_point_outside_building(nb_x, nb_y, 0.45, ctx, margin=0.10):
-        build_notice_board(bm, nb_x, nb_y, ang=nb_ang, width=1.10, post_h=1.70)
+    # 5. Notice board: strictly for Inns / Taverns. Never on artisan workshops.
+    if is_inn or ctx.effective_archetype in ('TAVERN', 'INN'):
+        # Place with generous clearance away from entrance and barrels
+        nb_side = -side_sign
+        nb_x = door_x + nb_side * (porch_w * 0.5 + 2.50)
+        min_y = min(b[2] for b in get_building_footprint_boxes(ctx))
+        nb_y = min_y - 0.90
+        nb_ang = -math.radians(45.0) if ctx.shape == 'L_SHAPE' else 0.0
+        if is_point_outside_building(nb_x, nb_y, 0.50, ctx, margin=0.15):
+            build_notice_board(bm, nb_x, nb_y, ang=nb_ang, width=1.10, post_h=1.70)
 
 
 def _build_well(bm, props, ctx):
@@ -409,6 +405,17 @@ def _build_well(bm, props, ctx):
         (ctx.hx + 2.8, door_yf - 2.1),
         (ctx.hx + 3.3, door_yf - 3.5),
     ]
+
+    # Beyond the manor's own footprint the side lanes belong to the estate
+    # outbuildings and their fenced pens, so keep the well in the honor court.
+    if _prop(props, 'has_stable', False) or _prop(props, 'has_servant_quarters', False):
+        candidates = [
+            (ctx.hx * 0.42, door_yf - 3.0),
+            (-ctx.hx * 0.42, door_yf - 3.0),
+            (ctx.hx * 0.60, door_yf - 5.2),
+            (-ctx.hx * 0.60, door_yf - 5.2),
+        ]
+
     for wx, wy in candidates:
         if is_tavern and (abs(wx) > max_xy or abs(wy) > max_xy):
             continue
