@@ -144,8 +144,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('ALL', "All Presets", "Show all building style presets"),
             ('CIVIC', "Civic", "Town halls and civic estates"),
+            ('ESTATE', "Estate", "Estate outbuildings such as stables and carriage barns"),
             ('ARTISAN', "Artisan", "Artisans, workshops, and trade shops"),
-            ('MILITARY', "Military", "Barracks and military quarters"),
+            ('MILITARY', "Military", "Barracks, ranges and military quarters"),
             ('INDUSTRIAL', "Industrial", "Warehouses, storage, and lumbermills"),
             ('RESIDENTIAL', "Residential", "Houses, cottages, and town residences"),
             ('HOSPITALITY', "Hospitality", "Taverns, inns, and wayside hostelries"),
@@ -163,8 +164,8 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     
     floor_height: FloatProperty(
         name="Floor Height",
-        description="Height per storey in meters",
-        min=2.2, max=4.5, default=2.8,
+        description="Height per storey in meters (Mage Towers use very tall levels)",
+        min=2.2, max=8.0, default=2.8,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -311,6 +312,10 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('INN', "Inn Veranda & Sign", "Grander hospitality front: veranda, hanging sign, and a furnished guest yard"),
             ('FISHERMAN', "Fisherman Pier & Nets", "Raised timber piling pier stilts and outdoor fish drying net frame"),
             ('BAKERY', "Bakery Bread Oven", "Protruding outdoor curved brick bread oven with chimney flue"),
+            ('ARCHERY_RANGE', "Archery Range", "Straw target butts, a thatched shooting pavilion, and a marked range field"),
+            ('CHAPEL', "Healers' Chapel", "Rounded apse, stone bell tower, rose window and a quiet herb churchyard"),
+            ('KNIGHTS_MANOR', "Knights Manor", "Fortified hall: gatehouse with portcullis, courtyard and training yard"),
+            ('MAGE_TOWER', "Mage Tower", "Round wizard tower with a jettied belvedere, ring balcony and tall spire"),
         ],
         default='AUTO',
         update=on_property_updated
@@ -1429,6 +1434,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    has_portcullis: BoolProperty(
+        name="Gate Portcullis",
+        description="Hang an iron portcullis grille in the curtain-wall gatehouse",
+        default=False,
+        update=on_property_updated
+    )
+
     # --- Estate Grounds & Outbuildings (Noble Estate / Compound) ---
     has_stable: BoolProperty(
         name="Horse Stables",
@@ -1445,6 +1457,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('RIGHT', "Right (+X)", "Place stable on the right flank of the courtyard"),
         ],
         default='LEFT',
+        update=on_property_updated
+    )
+
+    stable_rotate: BoolProperty(
+        name="Rotate Stable 90deg",
+        description="Turn the stable a quarter turn so its carriage door faces the courtyard from the flank",
+        default=False,
         update=on_property_updated
     )
 
@@ -1493,6 +1512,14 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Manor Plot Setback",
         description="Distance to push the main manor back on the plot, deepening the front honor court while the outbuildings, fountain and perimeter walls stay put",
         min=0.0, max=40.0, default=0.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    plot_offset_x: FloatProperty(
+        name="Plot Offset X",
+        description="Sideways shift of the main building on its plot (plot-borne props such as the archery range stay put)",
+        min=-30.0, max=30.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )

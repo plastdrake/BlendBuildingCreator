@@ -1,10 +1,10 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.26.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.29.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
-A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 36 ready-made presets across three material tiers.
+A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 78 ready-made presets across three material tiers.
 
 ## Installation
 
@@ -29,15 +29,17 @@ Or copy the `blend_building_creator` folder into:
 
 ## Presets
 
-There are 36 presets (12 building families in 3 tiers each). Filter them by category in the preset panel.
+There are 78 presets (26 building families in 3 tiers each). Filter them by category in the preset panel.
 
 | Category | Buildings |
 | --- | --- |
-| Civic | Town Hall (T-shaped, 40x40) |
-| Military | Infantry Barracks (U-shaped, 40x40) |
+| Civic | Town Hall (T-shaped, 40x40), Noble Manor (palatial, 100x100) |
+| Military | Infantry Barracks (U-shaped, 40x40), Archery Range (butts field, 40x40), Knights Manor (fortified hall, 40x40), Healers' Chapel (nave + bell tower, 40x40), Mage Tower (round wizard tower, 20x20) |
 | Industrial | Warehouse (L-shaped, 20x20), Lumbermill (rectangular, 20x20) |
 | Residential | House 1 Small (12x12), House 2 Small (fairytale, 12x12), House 1 Medium (20x20), House 2 Medium (narrow, 12x20), House 3 Medium (L-shaped, 20x20 with courtyard) |
 | Hospitality | Tavern (pub, 20x20), Tavern Long (narrow pub, 12x20), Inn (accommodation + pub, 40x40) |
+| Artisan | Bakery, Tailor, Toolsmith, Jeweler, Brewery, Fisher, Furniture Maker, Butcher |
+| Estate | Stable & Carriage Barn (16x12) |
 
 Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks** and **Tier 3 Stone/Stucco**.
 
@@ -79,6 +81,20 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.29.0
+
+- **Four new preset families** (12 presets), each with its own reusable accessory kit and archetype:
+  - **Archery Range** (40x40, Military): a new `archery` module builds a shooting-line rail fence, an open thatched shooting pavilion and rows of straw target butts. The painted target faces are reused straight from `military_props` (DRY).
+  - **Knights Manor** (40x40, Civic): fortified hall composed from the existing curtain-wall, bastion and estate modules, plus a new reused **portcullis** (`gatehouse` module) hung in the gatehouse and a new **tournament yard** (`tournament` module) of rotary jousting quintains, weapon racks and standards.
+  - **Healers' Chapel** (40x40, Sacred): a new `chapel` module adds a polygonal chancel apse, a stone bell tower with an open louvred belfry, hung bell, spire and cross, a decorative rose window and a churchyard of graves, planters, bench and lantern.
+  - **Mage Tower** (20x20, Arcane): the round-tower footprint was **completely rebuilt to be genuinely round** (16-facet smooth shell instead of an 8-sided prism), with real arched door and windows, jettied floors, a ring balcony belvedere, a corbelled side tourelle and a tall spire crowned with a glowing arcane crystal.
+- All four new families live under the **Military** category in the preset filter (the previously unreachable **Estate** category is also now exposed).
+- **Architecture refactor (SOLID / GRASP / DRY)**:
+  - New `generator/poly.py` owns all curved-shell maths (segment frames, annular slabs, corner posts, corbels, wall rings) so the round tower and the chapel apse share one implementation.
+  - New `base_settings()` helper in `presets.py` gives every new preset one complete, explicit baseline, so a preset can never inherit the previous building's optional features.
+  - The square-spire roof is now a public `tower.build_square_spire_roof`, reused by the clock tower, corner turret and chapel bell tower.
+- **Tests**: `tools/test_addon.py` updated for the 22-slot material set and the four new archetypes; the four circular/tower presets and all new families verify within their plot bounds.
 
 ## What's new in 1.26.0
 

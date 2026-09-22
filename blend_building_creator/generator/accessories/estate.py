@@ -571,7 +571,9 @@ def build_estate_outbuildings(bm, props, ctx):
         st_x = st_sgn * spread_x
         st_y = fore_y
         # Rotate 90 deg so the carriage door faces the courtyard, not the field.
-        st_rot = -math.pi * 0.5 * st_sgn if spread_x > 18.0 else 0.0
+        # Auto on very wide plots, or whenever the preset explicitly asks for it.
+        _rot_on = getattr(props, 'stable_rotate', False) or spread_x > 18.0
+        st_rot = -math.pi * 0.5 * st_sgn if _rot_on else 0.0
         build_stable(bm, props, pos=(st_x, st_y, 0.0), rot_z=st_rot, tier=tier)
         stable_slot = (st_x, st_y, st_rot, _stable_dims(tier)[0])
 

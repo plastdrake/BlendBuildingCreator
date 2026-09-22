@@ -22,6 +22,9 @@ from .windmill import build_windmill_sails
 from .watchtower import build_watchtower_lookout
 from .fisherman import build_fisherman_stilts
 from .bakery import build_bakery_oven
+from .archery import build_archery_range
+from .chapel import build_chapel_kit
+from .tournament import build_tournament_yard
 from .crane import build_courtyard_crane
 from .mill import build_lumbermill_yard, build_treadwheel_sawmill, choose_entry_bay
 from .palisade import (
@@ -245,13 +248,23 @@ def build_architectural_accessories(bm, props, ctx):
     _build_manor_fortifications(bm, props, ctx)
 
     setback = _prop(props, 'plot_setback', 0.0)
-    if abs(setback) > 1e-6:
+    off_x = _prop(props, 'plot_offset_x', 0.0)
+    if abs(setback) > 1e-6 or abs(off_x) > 1e-6:
         for v in bm.verts:
             v.co.y += setback
+            v.co.x += off_x
 
     _build_estate_grounds(bm, props, ctx)
     # Plot-borne fortifications (enclosure, bastions, banners, drill yard) stay put.
     _build_plot_fortifications(bm, props, ctx)
+    # Plot-borne archetype grounds (the archery field, the knights' yard) stay
+    # put, laid out in plot space so the hall can be offset/set back without
+    # dragging the grounds with it.
+    _plot_arch = _prop(props, 'building_archetype', '')
+    if _plot_arch == 'ARCHERY_RANGE':
+        build_archery_range(bm, props, ctx, tier)
+    elif _plot_arch == 'KNIGHTS_MANOR':
+        build_tournament_yard(bm, props, ctx, tier)
 
 
 def _build_estate_grounds(bm, props, ctx):
@@ -471,6 +484,8 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
         build_fisherman_stilts(bm, -hx, hx, -hy, hy, z_ground=0.0, z_floor=found_h)
     elif effective_archetype == 'BAKERY':
         build_bakery_oven(bm, props, ctx, tier)
+    elif effective_archetype == 'CHAPEL':
+        build_chapel_kit(bm, props, ctx, tier)
     elif effective_archetype == 'STABLE':
         from .estate import build_stable_yard_for_building
         build_stable_yard_for_building(bm, props, ctx)

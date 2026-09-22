@@ -162,10 +162,14 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
 
 
 def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
-                     gate_h=2.7):
+                     gate_h=2.7, portcullis=False):
     """Cut-stone gatehouse framing the front gate: flanking piers proud of the
     wall, a lintel arch over the opening and stepped coping caps. The wall body
-    itself supplies the masonry above the gate; this only dresses the opening."""
+    itself supplies the masonry above the gate; this only dresses the opening.
+
+    When ``portcullis`` is set an iron grille (built by the reusable
+    :func:`gatehouse.build_portcullis`) hangs in the opening.
+    """
     ox, oy = outward
     on = math.hypot(ox, oy)
     if on > 1e-5:
@@ -201,6 +205,11 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
                        location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.16),
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
+
+    if portcullis:
+        from .gatehouse import build_portcullis
+        build_portcullis(bm, cx, cy, ground_z, width=gap_w, height=gate_h,
+                         outward=(ox, oy))
 
 
 def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
@@ -261,6 +270,7 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
         plinth_end=(pt_f, pt_b), seed=ctx.seed + 3)
 
     # Gatehouse dressing over the front opening.
-    build_gate_house(bm, gate_cx, y_min, (0.0, -1.0), g1 - g0, 0.0, T, gate_h=gate_h)
+    build_gate_house(bm, gate_cx, y_min, (0.0, -1.0), g1 - g0, 0.0, T,
+                     gate_h=gate_h, portcullis=getattr(props, 'has_portcullis', False))
 
     return (x_min, x_max, y_min, y_max, g0, g1)

@@ -21,9 +21,13 @@ from ..walls import build_wall_with_opening
 from ..style import tier_wall_mat
 
 
-def _square_spire_roof(bm, cx, cy, z_base, half, height, eave=0.20):
+def build_square_spire_roof(bm, cx, cy, z_base, half, height, eave=0.20):
     """Axis-aligned 4-facet square spire roof (a regular pyramid, no cylinder),
-    with per-face shingle UVs, a square timber eave board and an iron finial."""
+    with per-face shingle UVs, a square timber eave board and an iron finial.
+
+    Shared by the civic clock tower, the corner turret and the chapel bell
+    tower (DRY): every square spire in the add-on comes from this one builder.
+    """
     # Lift the roof 10cm off the plate below so no faces end up coplanar.
     z_roof = z_base + 0.10
     apex_z = z_roof + height
@@ -395,7 +399,7 @@ def build_clock_tower(bm, cx, cy, z_ground=0.0, size=3.0, shaft_top_z=10.0,
 
     # Square 4-facet spire roof (regular pyramid, no cylinder)
     spire_base = belf_z + post_h + 0.18
-    _square_spire_roof(bm, cx, cy, spire_base, half + 0.50, 3.1)
+    build_square_spire_roof(bm, cx, cy, spire_base, half + 0.50, 3.1)
 
 
 def build_roof_clock_spire(bm, cx, cy, z_base, scale=0.85, tier='TIER_3'):
@@ -465,7 +469,7 @@ def build_roof_clock_spire(bm, cx, cy, z_base, scale=0.85, tier='TIER_3'):
     create_cylinder(bm, radius=0.045 * sc, height=0.10 * sc, segments=8,
                     location=(cx, cy, bell_shoulder - bell_h - 0.02 * sc), mat_index=MAT_INDEX_IRON)
     # Square 4-facet spire roof (regular pyramid, no cylinder)
-    _square_spire_roof(bm, cx, cy, plate_z + 0.10 * sc, half + 0.28 * sc, 2.5 * sc)
+    build_square_spire_roof(bm, cx, cy, plate_z + 0.10 * sc, half + 0.28 * sc, 2.5 * sc)
 
 
 def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
@@ -584,7 +588,7 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
     # above the shaft head so the roof never floats.
     _spire_base = wall_top_z + 0.02
     _spire_h = max(2.6, half * 1.9)
-    _square_spire_roof(bm, cx, cy, _spire_base, half + 0.40, _spire_h)
+    build_square_spire_roof(bm, cx, cy, _spire_base, half + 0.40, _spire_h)
     # Iron finial needle above the spire
     create_cylinder(bm, radius=0.035, height=0.9, segments=6,
                     location=(cx, cy, _spire_base + _spire_h + 1.30),
