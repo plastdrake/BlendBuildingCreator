@@ -31,80 +31,91 @@ from ..poly import segment_frame, wall_ring
 from ..openings import build_door_assembly, build_window_assembly
 from ..style import tier_wall_mat
 from ..walls import build_wall_with_opening
-from ..uv_utils import apply_roof_shingle_uvs
+from ..uv_utils import apply_roof_shingle_uvs, map_planar_faces
 from .tower import build_square_spire_roof
 from .lighting import build_hanging_lantern
 
 
-def build_chapel_apse(bm, cx, cy, z_ground, z_top, radius, wall_t, tier, seed,
-                      door_w=1.3, door_h=2.5):
-    """A fully-walled octagonal chancel pavilion behind the nave.
+def build_chapel_apse(bm, cx, cy, z_ground, z_top, radius, wall_t, tier, seed):
+    """A half-round chancel apse attached to the nave's rear wall.
 
-    ``cy`` is the nave's rear wall line; the pavilion is placed just outside it
-    so it never appears inside the nave. Facet 0 faces the nave and carries a
-    doorway that lines up with the nave's rear door (``has_back_door``), so the
-    two interiors connect. A full shingle cone caps it.
+    The drum's base diameter lies on the wall line ``cy`` and only the outward
+    half is built, so nothing ever appears inside the nave. It is open to the
+    nave at the chord (the nave cuts its own rear portal), and a half-cone of
+    correctly-UV'd shingles caps it. ``center`` is threaded through the shared
+    wall builder so the ring is placed at the apse, not the world origin.
     """
     segments = 8
     d_ang = 2.0 * math.pi / segments
-    offset = -math.radians(112.5)          # facet 0 faces -Y (toward the nave)
+    offset = 0.0                     # facets 0-3 span 0..180 deg (the +Y half)
+    indices = [0, 1, 2, 3]
     wall_mat = tier_wall_mat(tier)
-    ccx = cx
-    ccy = cy + wall_t * 0.5 + 0.02 + radius   # sit just outside the nave wall
+    ccx, ccy = cx, cy
 
-    # Full floor disc, level with the nave floor.
-    create_cylinder(bm, radius=radius - wall_t * 0.5, height=0.14,
-                    segments=segments, location=(ccx, ccy, z_ground + 0.07),
-                    mat_index=MAT_INDEX_FLOOR)
+    # Half-disc floor (fan of triangles), level with the nave floor.
+    z_floor = z_ground + 0.06
+    center_v = bm.verts.new((ccx, ccy, z_floor))
+    floor_faces = []
+    for k in indices:
+        p1, p2, _n, _m = segment_frame(radius, k, segments, offset)
+        a = bm.verts.new((ccx + p1[0], ccy + p1[1], z_floor))
+        b = bm.verts.new((ccx + p2[0], ccy + p2[1], z_floor))
+        f = bm.faces.new([center_v, a, b])
+        f.material_index = MAT_INDEX_FLOOR
+        floor_faces.append(f)
+    map_planar_faces(bm, floor_faces, scale=0.5, axis=2)
 
     facet_len = 2.0 * radius * math.sin(d_ang * 0.5)
     win_w = min(0.9, facet_len - 0.55)
-    win_h = min(1.7, (z_top - z_ground) * 0.62)
+    win_h = min(1.7, (z_top - z_ground) * 0.6)
     win_cz = z_ground + (z_top - z_ground) * 0.55
     stone_top = min(z_ground + 1.0, z_top - 0.4)
 
     openings = {}
     win_specs = []
-    for k in range(segments):
+    for k in indices:
         _p1, _p2, nrm, mid = segment_frame(radius, k, segments, offset)
         u_mid = facet_len * 0.5
-        if k == 0:
-            openings[k] = [{'u_start': u_mid - door_w * 0.5, 'u_end': u_mid + door_w * 0.5,
-                            'z_start': z_ground, 'z_end': z_ground + door_h + 0.12}]
-        elif k in (2, 3, 4, 5, 6):
-            openings[k] = [{'u_start': u_mid - win_w * 0.5, 'u_end': u_mid + win_w * 0.5,
-                            'z_start': win_cz - win_h * 0.5, 'z_end': win_cz + win_h * 0.5}]
-            win_specs.append(((ccx + mid[0], ccy + mid[1], win_cz), (nrm.x, nrm.y)))
-        else:
-            openings[k] = []
+        openings[k] = [{'u_start': u_mid - win_w * 0.5, 'u_end': u_mid + win_w * 0.5,
+                        'z_start': win_cz - win_h * 0.5, 'z_end': win_cz + win_h * 0.5}]
+        win_specs.append(((ccx + mid[0], ccy + mid[1], win_cz), (nrm.x, nrm.y)))
 
     wall_ring(bm, radius, z_ground, stone_top, wall_t, segments, offset,
-              openings, MAT_INDEX_STONE, tier=tier, seed=seed)
+              openings, MAT_INDEX_STONE, tier=tier, seed=seed, indices=indices,
+              center=(ccx, ccy))
     wall_ring(bm, radius, stone_top, z_top, wall_t, segments, offset,
-              openings, wall_mat, tier=tier, seed=seed + 7)
-
-    _p1, _p2, _n, mid0 = segment_frame(radius, 0, segments, offset)
-    build_door_assembly(bm, center_x=ccx + mid0[0], y_front=ccy + mid0[1],
-                        z_base=z_ground, wall_thickness=wall_t, door_w=door_w,
-                        door_h=door_h, door_angle_deg=0.0, door_shape='ARCHED',
-                        ground_floor_stone=False, normal_axis='-Y')
+              openings, wall_mat, tier=tier, seed=seed + 7, indices=indices,
+              center=(ccx, ccy))
     for center, nv in win_specs:
         build_window_assembly(bm, center=center, size=(win_w, win_h),
                               wall_thickness=wall_t, normal_axis=nv,
                               has_shutters=False)
 
-    # Full shingle cone roof over the pavilion.
+    # Half-cone shingle roof, apex above the wall-line centre.
     roof_r = radius + 0.24
-    roof_h = max(1.9, radius * 0.95)
-    uv = bm.loops.layers.uv.verify()
-    cone = create_cone(bm, radius1=roof_r, radius2=0.06, height=roof_h,
-                       segments=segments, location=(ccx, ccy, z_top + roof_h * 0.5),
-                       mat_index=MAT_INDEX_SHINGLES)
-    apply_roof_shingle_uvs(bm, cone)
-    create_cylinder(bm, radius=roof_r + 0.04, height=0.14, segments=segments,
-                    location=(ccx, ccy, z_top + 0.06), mat_index=MAT_INDEX_TIMBER)
-    create_cylinder(bm, radius=0.035, height=0.6, segments=6,
-                    location=(ccx, ccy, z_top + roof_h + 0.26),
+    roof_h = max(1.9, radius * 0.9)
+    apex = bm.verts.new((ccx, ccy, z_top + roof_h))
+    roof_faces = []
+    for k in indices:
+        a1 = k * d_ang + offset
+        a2 = (k + 1) * d_ang + offset
+        q1 = bm.verts.new((ccx + roof_r * math.cos(a1),
+                           ccy + roof_r * math.sin(a1), z_top))
+        q2 = bm.verts.new((ccx + roof_r * math.cos(a2),
+                           ccy + roof_r * math.sin(a2), z_top))
+        f = bm.faces.new([q1, q2, apex])
+        f.material_index = MAT_INDEX_SHINGLES
+        f.tag = True
+        roof_faces.append(f)
+        create_beveled_box(
+            bm, size=(facet_len + 0.2, 0.10, 0.10),
+            location=((q1.co.x + q2.co.x) * 0.5, (q1.co.y + q2.co.y) * 0.5,
+                      z_top + 0.03),
+            rotation=(0.0, 0.0, (a1 + a2) * 0.5 + math.pi * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    apply_roof_shingle_uvs(bm, roof_faces)
+    create_cylinder(bm, radius=0.035, height=0.55, segments=6,
+                    location=(ccx, ccy, z_top + roof_h + 0.24),
                     mat_index=MAT_INDEX_IRON)
 
 
@@ -113,12 +124,19 @@ def _square_shaft(bm, cx, cy, size, wall_t, z0, z1, tier, seed,
     """A square tower shaft from four wall facets with per-face openings."""
     half = size * 0.5
     inset = wall_t * 0.5
+    lo = half - inset                 # trim the faces so corners never overlap
     faces = {
-        'front': ((cx - half, cy - half + inset), (cx + half, cy - half + inset), (0.0, -1.0)),
-        'back': ((cx - half, cy + half - inset), (cx + half, cy + half - inset), (0.0, 1.0)),
-        'left': ((cx - half + inset, cy - half), (cx - half + inset, cy + half), (-1.0, 0.0)),
-        'right': ((cx + half - inset, cy - half), (cx + half - inset, cy + half), (1.0, 0.0)),
+        'front': ((cx - lo, cy - half + inset), (cx + lo, cy - half + inset), (0.0, -1.0)),
+        'back': ((cx - lo, cy + half - inset), (cx + lo, cy + half - inset), (0.0, 1.0)),
+        'left': ((cx - half + inset, cy - lo), (cx - half + inset, cy + lo), (-1.0, 0.0)),
+        'right': ((cx + half - inset, cy - lo), (cx + half - inset, cy + lo), (1.0, 0.0)),
     }
+    # Cut-stone corner posts close the trimmed corner notches cleanly.
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            create_beveled_box(bm, size=(wall_t + 0.08, wall_t + 0.08, z1 - z0),
+                               location=(cx + sx * lo, cy + sy * lo, (z0 + z1) * 0.5),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
     wall_mat = tier_wall_mat(tier)
     stone_top = min(z0 + size * 0.55, z1 - 0.4)
     for face, (p0, p1, nv) in faces.items():
@@ -155,7 +173,7 @@ def build_bell_tower(bm, cx, cy, z_ground, size, z_top, tier, seed):
     # Opening centre is half the *face* length (the shaft spans the full size).
     openings = {}
     for face in ('front', 'back', 'left', 'right'):
-        c = size * 0.5
+        c = (size - wall_t) * 0.5
         openings[face] = [
             {'u_start': c - win_w * 0.5, 'u_end': c + win_w * 0.5,
              'z_start': base_z + (shaft_top - base_z) * 0.35 - win_h * 0.5,

@@ -536,6 +536,31 @@ def build_floors(bm, props, ctx):
                 if props.has_front_steps and props.has_foundation:
                     build_front_steps(bm, center_x=b_cx, y_front=b_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+Y')
 
+            # 2b. Open rear portal (framed opening, no door leaf). Used to join
+            # the nave to an attached chancel apse.
+            if (getattr(props, 'has_back_portal', False) and not open_timber
+                    and not getattr(props, 'has_back_door', False)):
+                p_cx = 0.0
+                p_yf = y_max
+                p_w = max(dw, 1.7)
+                p_top = z_floor + dh + frame_margin
+                p_u1 = (p_cx - p_w * 0.5 - frame_margin) - x_min
+                p_u2 = (p_cx + p_w * 0.5 + frame_margin) - x_min
+                back_openings.append({'u_start': p_u1, 'u_end': p_u2,
+                                      'z_start': z_floor, 'z_end': p_top})
+                jamb = 0.16
+                fy = p_yf + wall_t * 0.5
+                for jx in (-1.0, 1.0):
+                    create_beveled_box(
+                        bm, size=(jamb, wall_t + 0.10, p_top - z_floor),
+                        location=(p_cx + jx * (p_w * 0.5 + jamb * 0.5), fy,
+                                  (z_floor + p_top) * 0.5),
+                        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
+                create_beveled_box(
+                    bm, size=(p_w + jamb * 2.0 + 0.10, wall_t + 0.10, jamb),
+                    location=(p_cx, fy, p_top + jamb * 0.5),
+                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
+
             # 3. Side Door
             if getattr(props, 'has_side_door', False) and not open_timber:
                 s_facade = getattr(props, 'side_door_facade', 'LEFT')

@@ -54,7 +54,8 @@ def base_settings():
         'has_ceiling_beams': True,
         # Openings
         'has_front_door': True, 'front_door_offset_x': 0.0,
-        'has_back_door': False, 'has_side_door': False, 'side_door_facade': 'RIGHT',
+        'has_back_door': False, 'has_back_portal': False,
+        'has_side_door': False, 'side_door_facade': 'RIGHT',
         'door_width': 1.2, 'door_height': 2.2, 'door_angle': 0.0,
         'door_shape': 'SQUARE',
         'has_windows': True, 'window_spacing': 2.4, 'window_density': 1.0,
@@ -4538,6 +4539,8 @@ PRESETS = {
             'roof_flare': 0.36, 'roof_overhang': 0.85,
             'has_roof_shingles': True, 'shingle_rows': 9,
             'has_chimney': True, 'chimney_pos_x': 0.5, 'chimney_pos_y': 0.5,
+            'has_palisade': True, 'palisade_style': 'STAKES',
+            'palisade_height': 2.6, 'palisade_offset': 14.0,
             'has_outdoor_decor': False,
             'color_shingles': (0.60, 0.31, 0.14, 1.0),
             'color_wall_ext': (0.40, 0.27, 0.16, 1.0),
@@ -4573,6 +4576,8 @@ PRESETS = {
             'has_dormers': True, 'dormer_count': 2, 'dormer_sides': 'BOTH',
             'has_chimney': True, 'chimney_pos_x': 0.6, 'chimney_pos_y': 0.5,
             'has_veranda': False, 'has_outdoor_decor': False, 'has_flower_boxes': False,
+            'has_curtain_wall': True, 'curtain_wall_height': 3.2,
+            'curtain_wall_thickness': 0.6, 'curtain_wall_offset': 13.0,
             'color_shingles': (0.42, 0.26, 0.16, 1.0),
             'color_wall_ext': (0.90, 0.86, 0.78, 1.0),
             'color_timber': (0.22, 0.13, 0.08, 1.0),
@@ -4608,6 +4613,9 @@ PRESETS = {
             'has_chimney': True, 'chimney_pos_x': 0.55, 'chimney_pos_y': 0.5,
             'has_veranda': False, 'has_outdoor_decor': False, 'has_flower_boxes': False,
             'has_banners': True, 'banner_count': 2,
+            'has_curtain_wall': True, 'curtain_wall_height': 3.6,
+            'curtain_wall_thickness': 0.7, 'curtain_wall_offset': 12.5,
+            'has_battlements': True, 'battlement_style': 'STONE',
             'color_shingles': (0.36, 0.24, 0.18, 1.0),
             'color_wall_ext': (0.92, 0.89, 0.83, 1.0),
             'color_timber': (0.20, 0.12, 0.07, 1.0),
@@ -4632,7 +4640,7 @@ PRESETS = {
             'material_tier': 'TIER_1',
             'num_floors': 2, 'floor_height': 3.0,
             'width': 14.0, 'depth': 9.0, 'wall_thickness': 0.30,
-            'plot_setback': 11.4,
+            'plot_setback': 10.5,
             'has_cantilever': True, 'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.36,
             'has_foundation': True, 'foundation_height': 0.6, 'ground_floor_stone': True,
@@ -4695,8 +4703,7 @@ PRESETS = {
             'has_arched_porch': True,
             'has_corner_turrets': True, 'corner_turret_size': 1.5,
             'has_curtain_wall': True, 'curtain_wall_height': 3.6,
-            'curtain_wall_thickness': 0.7, 'curtain_wall_offset': 11.0,
-            'has_portcullis': True,
+            'curtain_wall_thickness': 0.7, 'curtain_wall_offset': 11.5,
             'has_banners': True, 'banner_count': 4,
             'has_mounted_shields': True, 'has_gable_crest': True,
             'has_stable': True, 'stable_side': 'LEFT', 'stable_rotate': True,
@@ -4747,7 +4754,6 @@ PRESETS = {
             'bastion_tower_size': 2.6, 'bastion_tower_height': 9.0,
             'has_curtain_wall': True, 'curtain_wall_height': 4.0,
             'curtain_wall_thickness': 0.85, 'curtain_wall_offset': 11.0,
-            'has_portcullis': True,
             'has_battlements': True, 'battlement_style': 'STONE',
             'has_banners': True, 'banner_count': 6,
             'has_mounted_shields': True, 'has_gable_crest': True,
@@ -4781,7 +4787,7 @@ PRESETS = {
             'has_cantilever': False,
             'has_foundation': True, 'foundation_height': 0.45, 'ground_floor_stone': False,
             'has_front_steps': True, 'has_stairs': False, 'has_ceiling_beams': True,
-            'has_front_door': True, 'has_back_door': True, 'door_width': 1.5, 'door_height': 2.6, 'door_shape': 'ARCHED',
+            'has_front_door': True, 'has_back_portal': True, 'door_width': 1.5, 'door_height': 2.6, 'door_shape': 'ARCHED',
             'has_windows': True, 'window_spacing': 3.0, 'window_width': 0.8, 'window_height': 1.6,
             'has_shutters': False,
             'has_timber_framing': False, 'timber_diagonals': False,
@@ -4813,7 +4819,7 @@ PRESETS = {
             'has_foundation': True, 'foundation_height': 0.6, 'ground_floor_stone': True,
             'has_front_steps': True, 'has_stairs': True, 'stair_style': 'STRAIGHT',
             'stair_width': 1.1, 'has_ceiling_beams': True,
-            'has_front_door': True, 'has_back_door': True, 'door_width': 1.6, 'door_height': 2.7, 'door_shape': 'ARCHED',
+            'has_front_door': True, 'has_back_portal': True, 'door_width': 1.6, 'door_height': 2.7, 'door_shape': 'ARCHED',
             'has_windows': True, 'window_spacing': 2.8, 'window_width': 0.85, 'window_height': 1.7,
             'has_shutters': False,
             'has_timber_framing': True, 'timber_diagonals': True,
@@ -4847,7 +4853,7 @@ PRESETS = {
             'has_foundation': True, 'foundation_height': 0.8, 'ground_floor_stone': True,
             'has_front_steps': True, 'has_stairs': True, 'stair_style': 'STRAIGHT',
             'stair_width': 1.2, 'has_ceiling_beams': True,
-            'has_front_door': True, 'has_back_door': True, 'door_width': 2.0, 'door_height': 3.0, 'door_shape': 'ARCHED',
+            'has_front_door': True, 'has_back_portal': True, 'door_width': 2.0, 'door_height': 3.0, 'door_shape': 'ARCHED',
             'has_windows': True, 'window_spacing': 2.8, 'window_width': 0.9, 'window_height': 1.9,
             'has_shutters': False,
             'has_timber_framing': True, 'timber_diagonals': False,
@@ -5400,6 +5406,8 @@ def apply_preset(props, preset_key):
         obj = context.active_object
         if obj and obj.get("is_fantasy_building", False):
             generate_building(obj, props)
+
+
 
 
 

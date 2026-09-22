@@ -88,16 +88,21 @@ def wall_ring(bm, radius, z0, z1, wall_t, segments, offset, openings_by_seg,
               mat_ext, normal_face=True, seed=42, tier='TIER_3',
               physical_siding=True, plank_direction='HORIZONTAL',
               plank_jankiness=0.35, stone_block_scale=1.0, stone_disorder=0.35,
-              has_exposed_brick=True, exposed_brick_freq=0.25, indices=None):
+              has_exposed_brick=True, exposed_brick_freq=0.25, indices=None,
+              center=(0.0, 0.0)):
     """Emit a circular (or arc) wall as flat facets with per-facet openings.
 
     ``openings_by_seg`` maps a facet index to its list of opening dictionaries
     (same schema as :func:`walls.build_wall_with_opening`). ``indices`` restricts
     emission to a subset of facets, so a half-round apse reuses the same maths as
-    a full round tower.
+    a full round tower. ``center`` shifts the whole ring to a world position (the
+    tower sits at the origin; an attached apse does not).
     """
+    ccx, ccy = center
     for k in (range(segments) if indices is None else indices):
         p1, p2, nrm, _mid = segment_frame(radius, k, segments, offset)
+        p1 = (p1[0] + ccx, p1[1] + ccy)
+        p2 = (p2[0] + ccx, p2[1] + ccy)
         build_wall_with_opening(
             bm, p1, p2, z0, z1, wall_t, openings_by_seg.get(k, ()),
             mat_ext=mat_ext, normal_vec=(nrm.x, nrm.y), tier=tier,

@@ -1,10 +1,11 @@
-"""Reusable tournament / knights' yard props.
+"""Reusable knights' training yard.
 
 - :func:`build_jousting_quintain` - a pivoting practice target (shield + sandbag)
-- :func:`build_tournament_yard`    - lays out quintains, racks and standards
+- :func:`build_tournament_yard`    - lays out a training area of dummies,
+  archery targets and weapon racks (the same props the Infantry Barracks use)
 
-The yard reuses the shared weapon rack (DRY) and the generic range fence from
-:mod:`archery`, so a tiltyard and an archery line are built from one fence.
+The yard is laid out in plot space on the flank *opposite* the stable, so the
+two never overlap, and reuses the shared military props (DRY).
 """
 
 import math
@@ -17,9 +18,9 @@ from ..materials import (
     MAT_INDEX_IRON, MAT_INDEX_HAY,
 )
 from .shield import build_round_shield
-from .military_props import build_weapon_rack
-from .archery import build_range_fence
-from .banner import build_banner_pole
+from .military_props import (
+    build_weapon_rack, build_archery_target, build_training_dummy,
+)
 from .palisade import (
     compound_bounds, fortification_offset, fortification_depth_extra,
 )
@@ -96,24 +97,48 @@ def build_tournament_yard(bm, props, ctx, tier):
     except Exception:
         x_min, y_min = -18.0, -18.0
 
-    court_y = max(wing_tip_y - 2.8, y_min + 2.6)
+    try:
+        x_min, x_max, y_min, _y_max = compound_bounds(
+            ctx, fortification_offset(props),
+            fortification_depth_extra(props) if (
+                getattr(props, 'has_curtain_wall', False)
+                or getattr(props, 'has_palisade', False)) else 0.0)
+    except Exception:
+        x_min, x_max, y_min = -18.0, 18.0, -18.0
 
-    # Keep the yard on the opposite flank to the stable, clear of the central wing.
-    lane_side = -1.0
-    if (getattr(props, 'has_stable', False)
-            and getattr(props, 'stable_side', 'RIGHT') == 'LEFT'):
-        lane_side = 1.0
-    x_lane = max(wing_half_w + 2.0, base_hx * 0.75)
-    x_lane = min(x_lane, abs(x_min) - 2.5, 14.0) * lane_side
+    # Training area on the flank OPPOSITE the stable so the two never overlap.
+    stable_left = (getattr(props, 'has_stable', False)
+                   and getattr(props, 'stable_side', 'RIGHT') == 'LEFT')
+    side = 1.0 if stable_left else -1.0        # stable left -> train on +X
+    facing = math.radians(90.0 if side > 0 else -90.0)
 
-    for qx in (x_lane, x_lane * 0.5):
-        build_jousting_quintain(bm, qx, court_y, z_ground=0.0, ang=0.0)
+    # The forecourt runs from the rear wall up to the hall's front.
+    y_lo = y_min + 3.0
+    y_hi = wing_tip_y - 2.2
+    if y_hi - y_lo < 4.0:
+        y_hi = y_lo + 6.0
+    else:
+        y_lo = max(y_lo, y_hi - 14.0)
 
-    build_range_fence(bm, (x_lane + lane_side * 1.6, court_y - 1.5),
-                      (x_lane * 0.15, court_y - 1.5),
-                      z_ground=0.0, post_spacing=2.2, height=0.95)
+    # A lane against the flank wall, clear of the corner.
+    x_wall = abs(x_min) if side > 0 else abs(x_max)
+    lane_x = side * min(x_wall - 2.4, 15.5)
+    rack_x = side * min(x_wall - 5.2, 12.5)
 
-    build_weapon_rack(bm, x_lane + lane_side * 1.4, court_y + 0.6, 0.0,
-                      ang=-lane_side * math.pi * 0.5)
-    build_banner_pole(bm, x_lane + lane_side * 2.0, court_y - 1.0,
-                      z_ground=0.0, height=4.6, flag_dir=(0.0, -1.0))
+    def _spread(n, lo, hi):
+        if n <= 1:
+            return [(lo + hi) * 0.5]
+        return [lo + (hi - lo) * i / (n - 1) for i in range(n)]
+
+    # 1. A row of the real training dummies (Infantry Barracks props).
+    for dy in _spread(3, y_lo, y_hi):
+        build_training_dummy(bm, lane_x, dy, 0.0, ang=facing)
+
+    # 2. Archery targets on a parallel line, inboard of the dummies.
+    for ty in _spread(2, y_lo + 1.2, y_hi - 1.2):
+        build_archery_target(bm, lane_x - side * 3.2, ty, 0.0, ang=facing)
+
+    # 3. Weapon racks closer to the hall, facing across the yard.
+    for ry in (y_lo + 0.6, y_hi - 0.6):
+        build_weapon_rack(bm, rack_x, ry, 0.0,
+                          ang=(math.pi * 0.5 if side > 0 else -math.pi * 0.5))

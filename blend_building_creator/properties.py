@@ -453,6 +453,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    has_back_portal: BoolProperty(
+        name="Rear Portal",
+        description="Open rear portal (framed opening, no door leaf) for attaching an annex or apse",
+        default=False,
+        update=on_property_updated
+    )
+
     has_side_door: BoolProperty(
         name="Side Door",
         description="Walkthrough secondary entrance doorway on a side facade",
