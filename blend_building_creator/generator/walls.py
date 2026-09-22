@@ -749,7 +749,7 @@ def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth
             if is_side:
                 loop[uv_layer].uv = Vector((lv.y * 0.85, lv.z * 0.85))
             else:
-                loop[uv_layer].uv = Vector((lv.x * 0.85, (lv.y + lv.z) * 0.85))
+                loop[uv_layer].uv = Vector((lv.x * 0.85, lv.y * 0.85))
 
 def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, include_left=False, include_right=False, front_exclude_x=None, drop=0.10):
     """

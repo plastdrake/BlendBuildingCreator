@@ -18,6 +18,7 @@ A majestic round wizard tower inspired by classic high-fantasy arcane sanctuarie
 """
 
 import math
+import random
 from mathutils import Vector, Euler, Matrix
 
 from .mesh_utils import (
@@ -372,7 +373,8 @@ def _build_exterior_annular_band(bm, r_in, r_out, z_bot, z_top, segments=48, off
 # =============================================================================
 
 def _build_exterior_seam_pillars(bm, r_shaft, z_base, z_top, bays=BAYS, offset=OFFSET,
-                                 with_foot=True, with_collar=True):
+                                 with_foot=True, with_collar=True,
+                                 foot_mat=MAT_INDEX_CUT_STONE):
     """Chunky beveled vertical timber pillars running up the exterior facet seams (Warcraft style).
 
     Frames the round stone cylinder into 8 intentional medieval bays and adds depth and majesty.
@@ -399,7 +401,7 @@ def _build_exterior_seam_pillars(bm, r_shaft, z_base, z_top, bays=BAYS, offset=O
                 bm, size=(w * 1.30, d * 1.25, foot_h),
                 location=(px, py, z_base + foot_h * 0.5),
                 rotation=(0.0, 0.0, ang),
-                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.014
+                mat_index=foot_mat, bevel_amount=0.014
             )
 
         # 2. Main Vertical Timber Pillar
@@ -451,15 +453,21 @@ def _build_belvedere_framing_posts(bm, bel_r, crown_z, roof_z, bays=BAYS, offset
 def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
                               door_bay=None, door_w=1.40, door_h=2.60,
                               window_bays=set(), win_w=0.85, win_h=1.40,
-                              mat_ext=MAT_INDEX_STONE, mat_int=MAT_INDEX_PLASTER_INT):
+                              mat_ext=MAT_INDEX_STONE, mat_int=MAT_INDEX_PLASTER_INT,
+                              extra_door_bays=set(), extra_door_w=1.20,
+                              extra_door_h=2.20, center=(0.0, 0.0)):
     """Build a smooth cylindrical wall ring with watertight door/window cutouts.
 
     Uses a unified vertex grid with shared height levels across ALL bays,
     eliminating T-junctions at opening boundaries so Blender auto-smooth
     produces 100% seamless curvature even around doors and windows.
     Each bay is subdivided into 6 angular slices for a 48-segment cylinder.
+
+    ``extra_door_bays`` adds additional floor-level doorway openings (used for
+    the mage tower's outcrop rooms) alongside the single main ``door_bay``.
     """
     d_bay = 2.0 * math.pi / bays
+    cx, cy = center
     uv_layer = bm.loops.layers.uv.verify()
 
     # -- Compute unified Z levels shared by every bay boundary ----------------
@@ -470,6 +478,8 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
     cut_win_h = max(0.30, win_h + 0.02)
     cut_door_w = max(0.60, door_w + 0.10)
     cut_door_h = max(0.60, door_h + 0.10)
+    cut_xd_w = max(0.60, extra_door_w + 0.10)
+    cut_xd_h = max(0.60, extra_door_h + 0.10)
 
     levels = [z0, z1]
     z_dh = None
@@ -477,6 +487,11 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
         z_dh = z0 + cut_door_h
         if z0 < z_dh < z1:
             levels.append(z_dh)
+    z_dhx = None
+    if extra_door_bays:
+        z_dhx = z0 + cut_xd_h
+        if z0 < z_dhx < z1:
+            levels.append(z_dhx)
     zw0 = zw1 = None
     if window_bays:
         w_cz = z0 + (z1 - z0) * 0.52
@@ -494,8 +509,8 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
     for k in range(bays):
         ang = k * d_bay + offset
         ca, sa = math.cos(ang), math.sin(ang)
-        col = [(bm.verts.new((r_out * ca, r_out * sa, lz)),
-                bm.verts.new((r_in  * ca, r_in  * sa, lz)))
+        col = [(bm.verts.new((cx + r_out * ca, cy + r_out * sa, lz)),
+                bm.verts.new((cx + r_in  * ca, cy + r_in  * sa, lz)))
                for lz in levels]
         boundary.append(col)
 
@@ -508,19 +523,23 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
         a1 = (b + 1) * d_bay + offset
         a_mid = (a0 + a1) * 0.5
 
-        # -- Angular stations for this bay ------------------------------------
+        # -- Resolve this bay's opening type (door / outcrop door / window) ---
         if b == door_bay and z_dh is not None:
-            da = 2.0 * math.asin(min(0.99, (cut_door_w * 0.5) / r_out))
-            ad0 = a_mid - da * 0.5
-            ad1 = a_mid + da * 0.5
-            angles = [a0, (a0 + ad0) * 0.5, ad0, a_mid, ad1,
-                      (ad1 + a1) * 0.5, a1]
+            opening_kind, cut_w, z_open = 'door', cut_door_w, z_dh
+        elif b in extra_door_bays and z_dhx is not None:
+            opening_kind, cut_w, z_open = 'door', cut_xd_w, z_dhx
         elif b in window_bays and zw0 is not None:
-            da = 2.0 * math.asin(min(0.99, (cut_win_w * 0.5) / r_out))
-            aw0a = a_mid - da * 0.5
-            aw1a = a_mid + da * 0.5
-            angles = [a0, (a0 + aw0a) * 0.5, aw0a, a_mid, aw1a,
-                      (aw1a + a1) * 0.5, a1]
+            opening_kind, cut_w, z_open = 'window', cut_win_w, zw0
+        else:
+            opening_kind, cut_w, z_open = None, None, None
+
+        # -- Angular stations for this bay ------------------------------------
+        if opening_kind is not None:
+            da = 2.0 * math.asin(min(0.99, (cut_w * 0.5) / r_out))
+            o0 = a_mid - da * 0.5
+            o1 = a_mid + da * 0.5
+            angles = [a0, (a0 + o0) * 0.5, o0, a_mid, o1,
+                      (o1 + a1) * 0.5, a1]
         else:
             angles = [a0 + i * (a1 - a0) / 6.0 for i in range(7)]
 
@@ -536,19 +555,19 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
             else:
                 a = angles[si]
                 ca, sa = math.cos(a), math.sin(a)
-                col = [(bm.verts.new((r_out * ca, r_out * sa, lz)),
-                        bm.verts.new((r_in  * ca, r_in  * sa, lz)))
+                col = [(bm.verts.new((cx + r_out * ca, cy + r_out * sa, lz)),
+                        bm.verts.new((cx + r_in  * ca, cy + r_in  * sa, lz)))
                        for lz in levels]
                 grid.append(col)
 
         # -- Determine which cells (slice, band) are openings -----------------
         opening = set()
-        if b == door_bay and z_dh is not None and z_dh in levels:
-            idx_dh = levels.index(z_dh)
+        if opening_kind == 'door' and z_open in levels:
+            idx_dh = levels.index(z_open)
             for s in (2, 3):
                 for l in range(0, idx_dh):
                     opening.add((s, l))
-        elif b in window_bays and zw0 is not None and zw1 is not None:
+        elif opening_kind == 'window' and zw0 is not None and zw1 is not None:
             if zw0 in levels and zw1 in levels:
                 idx_w0 = levels.index(zw0)
                 idx_w1 = levels.index(zw1)
@@ -570,8 +589,8 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
                 created_faces.extend([fo, fi])
 
         # -- Jamb, sill and lintel faces for openings -------------------------
-        if b == door_bay and z_dh is not None and z_dh in levels:
-            idx_dh = levels.index(z_dh)
+        if opening_kind == 'door' and z_open in levels:
+            idx_dh = levels.index(z_open)
             # Left jamb (station 2, facing right into opening)
             for l in range(0, idx_dh):
                 f = bm.faces.new([grid[2][l][1], grid[2][l][0],
@@ -591,7 +610,7 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
                 f.material_index = MAT_INDEX_CUT_STONE
                 trim_faces.append(f)
 
-        elif b in window_bays and zw0 is not None and zw1 is not None:
+        elif opening_kind == 'window' and zw0 is not None and zw1 is not None:
             if zw0 in levels and zw1 in levels:
                 idx_w0 = levels.index(zw0)
                 idx_w1 = levels.index(zw1)
@@ -632,7 +651,7 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
         angs = []
         for lp in f.loops:
             co = lp.vert.co
-            angs.append((math.atan2(co.y, co.x) - offset) % two_pi)
+            angs.append((math.atan2(co.y - cy, co.x - cx) - offset) % two_pi)
         a0 = angs[0]
         for lp, a in zip(f.loops, angs):
             while a - a0 > math.pi:
@@ -1170,6 +1189,343 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
 # MAIN MAGE TOWER GENERATOR
 # =============================================================================
 
+def _plan_mage_outcrops(props, levels):
+    """Work out (floor, bay) slots for the whimsical outcrops.
+
+    Returns a dict ``{floor_index: [bay, ...]}``. Odd bays are always solid wall
+    (the shaft windows live on the even bays), so an outcrop can never punch
+    through a window or the front door. Bays cycle round-robin while the storeys
+    climb, which spirals the outcrops up and around the tower instead of stacking
+    them all on the same side.
+    """
+    if not getattr(props, 'has_mage_outcrops', False):
+        return {}
+    count = int(getattr(props, 'mage_outcrop_count', 0))
+    if count <= 0:
+        return {}
+
+    storeys = max(1, levels - 1)
+    solid_bays = [1, 3, 5, 7]
+    count = min(count, storeys * len(solid_bays))
+
+    # Cluster the outcrops on the upper storeys just below the belvedere so the
+    # lower shaft stays clean and tall and the tower gets that top-heavy,
+    # clustered-with-life silhouette instead of bays dotted evenly all the way up.
+    top_storeys = min(storeys, 3)
+    usable = list(range(storeys - top_storeys, storeys))
+
+    by_floor = {}
+    for i in range(count):
+        bay = solid_bays[i % len(solid_bays)]
+        fl = usable[min(len(usable) - 1, int(i * len(usable) / float(count)))]
+        slots = by_floor.setdefault(fl, [])
+        # Keep each floor's bays distinct so two bays never collide.
+        while bay in slots:
+            bay = solid_bays[(solid_bays.index(bay) + 1) % len(solid_bays)]
+        slots.append(bay)
+    return by_floor
+
+
+def _build_mage_outcrop(bm, props, cur_r, ang, z0, level_h, wall_t, win_w, win_h, seed, index):
+    """A whimsical mini-wing style oriel bay grafted onto the round tower.
+
+    Reuses the tested mini-wing outcrop builder with a facade frame tangent to
+    the shaft, so the bay gets proper post-and-panel walls, its own leaded
+    window(s), heavy console corbels, a threshold board bridging through the
+    shaft wall and a dedicated shingled roof. The room's rear is open and the
+    caller has already notched the shaft wall behind it, so the bay opens
+    straight through into the storey. Size, proportions and roof vary per bay.
+    """
+    from .accessories.mini_wing import build_mini_wing
+    from .facade import FacadeFrame
+
+    rng = random.Random(int(seed) * 911 + int(index) * 37 + 13)
+    width = rng.uniform(2.3, 2.9)
+    depth = rng.uniform(1.8, 2.4)
+    roof_style = rng.choice(('GABLE', 'GABLE', 'LEAN_TO'))
+    shingle_rot = rng.choice((0, 90, 180, 270))
+    bay_h = 2.60
+    peak_h = width * rng.uniform(0.42, 0.55)
+
+    ox, oy = math.cos(ang), math.sin(ang)
+    # Sink the bay a little into the shaft so its flat back and roof cheek edges
+    # bury into the curved wall instead of floating just off it (no corner gaps).
+    embed = 0.22
+    frame = FacadeFrame(
+        (cur_r - embed) * ox, (cur_r - embed) * oy,
+        ox, oy,
+        -oy, ox,
+        ang)
+
+    # A walk-in room: its floor sits on the storey floor and the shaft wall has
+    # a matching floor-level doorway cut behind it (extra_door_bays), so the bay
+    # opens straight through into the interior.
+    build_mini_wing(
+        bm, 'FRONT', 'UPPER', 0.0, 0.0, 0.0, 0.0,
+        z_base=z0 + 0.14, width=width, depth=depth, height=bay_h,
+        roof_style=roof_style, tier=getattr(props, 'material_tier', 'TIER_3'),
+        floor_h=level_h, win_w=win_w, win_h=win_h, peak_h=peak_h,
+        shingle_scale=0.32, shingle_rot=shingle_rot, frame=frame)
+
+
+def _build_doorframe(bm, frame, z_base, cut_w, cut_h, wall_t,
+                     with_leaf=False, jamb=0.22, depth_pad=0.16,
+                     mat=MAT_INDEX_TIMBER, leaf_mat=MAT_INDEX_TIMBER):
+    """A timber door casing that lines and covers a wall opening cutout.
+
+    ``cut_w``/``cut_h`` are the raw wall holes (the ring cuts a little larger
+    than the clear door). The casing runs the full wall depth plus a pad so it
+    caps the reveal on both faces, and its members lap over the cut edges so no
+    raw wall is left showing around the frame.
+    """
+    depth = wall_t + depth_pad
+    half_j = jamb * 0.5
+    overlap = 0.04
+    jamb_y = cut_w * 0.5 + half_j - overlap
+    jamb_h = cut_h + 0.12
+    for s in (-1.0, 1.0):
+        create_beveled_box(
+            bm, size=(depth, jamb, jamb_h),
+            location=frame.to_world(Vector((0.0, s * jamb_y, z_base + jamb_h * 0.5 - 0.02))),
+            rotation=(0.0, 0.0, frame.rot_z),
+            mat_index=mat, bevel_amount=0.012)
+    create_beveled_box(
+        bm, size=(depth, cut_w + jamb * 2.0, jamb),
+        location=frame.to_world(Vector((0.0, 0.0, z_base + cut_h + half_j - overlap))),
+        rotation=(0.0, 0.0, frame.rot_z),
+        mat_index=mat, bevel_amount=0.012)
+    if with_leaf:
+        create_beveled_box(
+            bm, size=(0.08, cut_w - 0.14, cut_h - 0.14),
+            location=frame.to_world(Vector((0.03, 0.0, z_base + cut_h * 0.5))),
+            rotation=(0.0, 0.0, frame.rot_z),
+            mat_index=leaf_mat, bevel_amount=0.008)
+
+
+def _build_pointed_tail(bm, cx, cy, z_top, radius, depth, segments=32,
+                        rings=14, mat_index=MAT_INDEX_STONE, power=1.6, uv_scale=0.45):
+    """A revolved, cleanly-unwrapped teardrop tail curving down to a point."""
+    uv = bm.loops.layers.uv.verify()
+    d_ang = 2.0 * math.pi / segments
+    grid = []
+    vert_info = {}
+    radii = []
+    svals = []
+    s = 0.0
+    prev = None
+    for i in range(rings):
+        t = i / float(rings)
+        r = radius * (1.0 - t) ** power
+        z = z_top - depth * t
+        if prev is not None:
+            s += math.hypot(prev[0] - r, prev[1] - z)
+        prev = (r, z)
+        radii.append(r)
+        svals.append(s)
+        ring = []
+        for k in range(segments):
+            a = k * d_ang
+            v = bm.verts.new((cx + r * math.cos(a), cy + r * math.sin(a), z))
+            vert_info[v] = (k, i)
+            ring.append(v)
+        grid.append(ring)
+    tip_s = s + math.hypot(prev[0], depth / rings)
+    tip = bm.verts.new((cx, cy, z_top - depth))
+
+    def base_uv(v):
+        k, i = vert_info[v]
+        return (k * d_ang * max(radii[i], 0.02) * uv_scale, svals[i] * uv_scale)
+
+    def wrapped_u(i):
+        return segments * d_ang * max(radii[i], 0.02) * uv_scale
+
+    for i in range(rings - 1):
+        for k in range(segments):
+            kn = (k + 1) % segments
+            f = bm.faces.new([grid[i][k], grid[i][kn], grid[i + 1][kn], grid[i + 1][k]])
+            f.material_index = mat_index
+            f.smooth = True
+            f.tag = True
+            for lp in f.loops:
+                if k + 1 == segments and lp.vert is grid[i][0]:
+                    u = wrapped_u(i)
+                elif k + 1 == segments and lp.vert is grid[i + 1][0]:
+                    u = wrapped_u(i + 1)
+                else:
+                    u = base_uv(lp.vert)[0]
+                lp[uv].uv = (u, base_uv(lp.vert)[1])
+    last = grid[-1]
+    for k in range(segments):
+        kn = (k + 1) % segments
+        f = bm.faces.new([last[k], last[kn], tip])
+        f.material_index = mat_index
+        f.smooth = True
+        f.tag = True
+        for lp in f.loops:
+            if lp.vert is tip:
+                lp[uv].uv = (0.0, tip_s * uv_scale)
+            else:
+                lp[uv].uv = (base_uv(lp.vert)[0], base_uv(lp.vert)[1])
+
+
+def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r):
+    """A hanging stone bridge from the belvedere to a walk-in round side turret.
+
+    The walkway springs from the observatory (bay 0) and arches cleanly over the
+    void (a real arched stone wall, not stacked blocks), reaching a full little
+    turret: curved walls with a framed plank entrance facing the bridge, glowing
+    windows, a boarded interior floor/ceiling, a UV-unwrapped curved teardrop
+    tail beneath and a conical shingle cap with a crystal finial.
+    """
+    from .facade import FacadeFrame
+
+    ang = 0.5 * BAY_ANG + OFFSET          # front bay centre
+    ox, oy = math.cos(ang), math.sin(ang)
+    frame = FacadeFrame(bel_r * ox, bel_r * oy, ox, oy, -oy, ox, ang)
+
+    deck_z = crown_z + 0.14
+    deck_t = 0.32
+    deck_w = 1.60
+    tower_r = 1.60
+    tower_t = 0.30
+    tower_dist = bel_r + 4.10
+    body_drop = 2.60
+    span = (tower_dist - tower_r) - bel_r + 0.25
+    wall_t = getattr(props, 'wall_thickness', 0.32)
+
+    # Timber doorframe trimming the belvedere opening onto the bridge.
+    a0 = 0.5 * BAY_ANG + OFFSET
+    b_r = bel_r - wall_t * 0.5
+    b_frame = FacadeFrame(b_r * math.cos(a0), b_r * math.sin(a0),
+                          math.cos(a0), math.sin(a0), -math.sin(a0), math.cos(a0), a0)
+    _build_doorframe(bm, b_frame, crown_z, cut_w=1.50, cut_h=2.30,
+                     wall_t=wall_t, with_leaf=False)
+
+    # 1. Stone deck
+    create_beveled_box(
+        bm, size=(span, deck_w, deck_t),
+        location=frame.to_world(Vector((span * 0.5 - 0.10, 0.0, deck_z - deck_t * 0.5))),
+        rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+
+    # 2. Timber supports that lean on the tower wall and brace the deck: an
+    #    under-deck beam plus a fan of diagonal struts springing from the shaft
+    #    wall below and from the turret wall, so the deck is genuinely carried.
+    z_db = deck_z - deck_t
+    overhang = bel_r - top_shaft_r
+    shaft_x = -overhang - 0.05          # embedded into the shaft wall
+    turret_x = (tower_dist - tower_r) - bel_r
+    x_lo = 0.08
+    x_hi = turret_x + 0.12              # embedded into the turret
+    beam_t = 0.18
+    y_off = deck_w * 0.5 - 0.14
+
+    def _strut(p0, p1, w=beam_t, h=beam_t, mat=MAT_INDEX_TIMBER):
+        a = frame.to_world(Vector(p0))
+        b = frame.to_world(Vector(p1))
+        d = b - a
+        eul = d.to_track_quat('X', 'Z').to_euler()
+        create_beveled_box(bm, size=(d.length, w, h),
+                           location=(a + b) * 0.5, rotation=tuple(eul),
+                           mat_index=mat, bevel_amount=0.012)
+
+    for y in (-y_off, y_off):
+        # Under-deck beam
+        _strut((x_lo, y, z_db - 0.09), (x_hi, y, z_db - 0.09))
+        # Brackets leaning on the shaft wall beneath the belvedere
+        _strut((shaft_x, y, z_db - 2.30), (x_lo + span * 0.34, y, z_db - 0.10))
+        _strut((shaft_x, y, z_db - 1.30), (x_lo + span * 0.62, y, z_db - 0.10))
+        # Bracket leaning on the turret's lower body
+        _strut((turret_x + 0.12, y, z_db - body_drop + 0.35),
+               (x_hi - 0.30, y, z_db - 0.10))
+
+    # 3. Railings along both deck edges
+    n_posts = max(3, int(span / 0.55))
+    for s_sign in (-1.0, 1.0):
+        ry = (deck_w * 0.5 - 0.05) * s_sign
+        create_beveled_box(
+            bm, size=(span, 0.09, 0.09),
+            location=frame.to_world(Vector((span * 0.5 - 0.10, ry, deck_z + 0.92))),
+            rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        for i in range(n_posts + 1):
+            lx = -0.10 + span * i / float(n_posts)
+            create_beveled_box(
+                bm, size=(0.09, 0.09, 0.95),
+                location=frame.to_world(Vector((lx, ry, deck_z + 0.47))),
+                rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+    # 4. Walk-in round side turret. Its body drops below the bridge deck so the
+    #    braces bear against it, then tapers to a hanging tail.
+    tx, ty = tower_dist * ox, tower_dist * oy
+    tz_floor = deck_z
+    tz_lower = tz_floor - body_drop
+    tower_h = 5.20
+    tz_top = tz_floor + tower_h
+    drum_off = ang - 0.5 * BAY_ANG
+
+    # 4a. Solid stucco lower body beneath the deck.
+    create_cylinder(bm, radius=tower_r, height=body_drop, segments=32,
+                    location=(tx, ty, (tz_lower + tz_floor) * 0.5),
+                    mat_index=MAT_INDEX_PLASTER_EXT)
+
+    # 4a. Curved stucco wall shell: bay 4 faces back toward the bridge (the
+    #     doorway), a single window on the far side (bay 0).
+    _build_seamless_wall_ring(
+        bm, r_out=tower_r, r_in=tower_r - tower_t, z0=tz_floor, z1=tz_top,
+        bays=BAYS, offset=drum_off,
+        door_bay=4, door_w=0.98, door_h=2.05,
+        window_bays={0}, win_w=0.72, win_h=1.15,
+        mat_ext=MAT_INDEX_PLASTER_EXT, mat_int=MAT_INDEX_WOOD,
+        center=(tx, ty))
+
+    # 4b. Boarded interior floor and ceiling (full radius so the wall shell ends
+    #     are capped, leaving no open annulus).
+    create_cylinder(bm, radius=tower_r, height=0.14, segments=32,
+                    location=(tx, ty, tz_floor + 0.07), mat_index=MAT_INDEX_FLOOR)
+    create_cylinder(bm, radius=tower_r, height=0.14, segments=32,
+                    location=(tx, ty, tz_top - 0.07), mat_index=MAT_INDEX_FLOOR)
+
+    # 4c. Single glowing window (aligned to the ring's 0.52 opening height)
+    for wk in (0,):
+        a_win = (wk + 0.5) * BAY_ANG + drum_off
+        wx = tx + (tower_r - 0.20) * math.cos(a_win)
+        wy = ty + (tower_r - 0.20) * math.sin(a_win)
+        build_window_assembly(
+            bm, center=(wx, wy, tz_floor + tower_h * 0.52),
+            size=(0.72, 1.15), wall_thickness=tower_t,
+            normal_axis=(math.cos(a_win), math.sin(a_win)), has_shutters=False)
+
+    # 4d. Real timber-framed plank door facing the bridge
+    d_ang = (4 + 0.5) * BAY_ANG + drum_off
+    door_r = tower_r - tower_t * 0.5
+    d_frame = FacadeFrame(tx + door_r * math.cos(d_ang), ty + door_r * math.sin(d_ang),
+                          math.cos(d_ang), math.sin(d_ang),
+                          -math.sin(d_ang), math.cos(d_ang), d_ang)
+    _build_doorframe(bm, d_frame, tz_floor, cut_w=1.08, cut_h=2.15,
+                     wall_t=tower_t, with_leaf=True)
+
+    # 4e. Cut-stone collar bands
+    create_cylinder(bm, radius=tower_r + 0.06, height=0.16, segments=32,
+                    location=(tx, ty, tz_lower + 0.02), mat_index=MAT_INDEX_CUT_STONE)
+    create_cylinder(bm, radius=tower_r + 0.06, height=0.16, segments=32,
+                    location=(tx, ty, tz_floor + 0.02), mat_index=MAT_INDEX_CUT_STONE)
+    create_cylinder(bm, radius=tower_r + 0.06, height=0.16, segments=32,
+                    location=(tx, ty, tz_top - 0.08), mat_index=MAT_INDEX_CUT_STONE)
+
+    # 4f. Curved hanging tail beneath the turret (stucco to match the walls)
+    _build_pointed_tail(bm, tx, ty, tz_lower, tower_r, depth=2.20, segments=32,
+                        rings=16, mat_index=MAT_INDEX_PLASTER_EXT, power=1.7)
+
+    # 4g. Conical shingle cap and crystal finial
+    cap_h = 2.30
+    cap = create_cone(bm, radius1=(tower_r + 0.10) * 1.16, radius2=0.05, height=cap_h,
+                      segments=32, location=(tx, ty, tz_top + cap_h * 0.5),
+                      mat_index=MAT_INDEX_SHINGLES)
+    for f in cap:
+        f.smooth = True
+    apply_roof_shingle_uvs(bm, cap, scale=0.32)
+    _arcane_crystal(bm, tx, ty, tz_top + cap_h, scale=0.75)
+
+
 def build_mage_tower(bm, props, seed):
     """Build the authentic whimsical fantasy Mage Tower."""
     wall_t = props.wall_thickness
@@ -1177,6 +1533,21 @@ def build_mage_tower(bm, props, seed):
     R = max(3.8, props.width * 0.46)
     level_h = max(4.6, props.floor_height)
     levels = max(3, props.num_floors)
+
+    # Material progression: the tall shaft is always dressed stone, while the
+    # cantilevered upper storey (belvedere) is timber-boarded on the apprentice
+    # and journeyman towers (TIER_1/TIER_2) and bright stucco on the archmage
+    # spire (TIER_3) -- so each tier reads differently instead of being the same
+    # stone tower merely scaled up.
+    # Interior wall finish mirrors the exterior: the stone shaft is stone inside,
+    # while the boarded/stucco upper storey is lined with wood interior planks.
+    tier = getattr(props, 'material_tier', 'TIER_3')
+    boarded = (tier != 'TIER_3')
+    body_ext = MAT_INDEX_STONE
+    body_int = MAT_INDEX_STONE
+    trim_mat = MAT_INDEX_CUT_STONE
+    crown_ext = MAT_INDEX_WOOD if boarded else MAT_INDEX_PLASTER_EXT
+    crown_int = MAT_INDEX_WOOD
 
     # Grand entrance dimensions
     door_w = 1.45
@@ -1197,6 +1568,8 @@ def build_mage_tower(bm, props, seed):
     # 2. Lower Tower Shaft Storeys (Sturdy stone masonry)
     # -------------------------------------------------------------------------
     shaft_storeys = levels - 1
+    outcrop_by_floor = _plan_mage_outcrops(props, levels)
+    outcrop_index = 0
 
     # Stair flight trajectory along the inner wall with comfortable landing gaps
     stair_configs = []
@@ -1232,13 +1605,18 @@ def build_mage_tower(bm, props, seed):
         # --- Openings configuration ---
         door_k = 0 if (fl == 0 and props.has_front_door) else None
         win_facets = {k for k in ((2, 4, 6) if fl == 0 else (0, 2, 4, 6)) if (props.has_windows and k != door_k)}
+        # Whimsical outcrops on this storey notch a floor-level doorway through
+        # the shaft wall so their little rooms connect straight into the interior.
+        outcrop_bays = set(outcrop_by_floor.get(fl, ()))
 
         # Continuous smooth stone wall ring with precision cutouts (8 bays, 48 segments)
         _build_seamless_wall_ring(bm, r_out=cur_r, r_in=r_inner, z0=z0, z1=z1,
                                   bays=BAYS, offset=OFFSET,
                                   door_bay=door_k, door_w=door_w, door_h=door_h,
                                   window_bays=win_facets, win_w=win_w, win_h=win_h,
-                                  mat_ext=MAT_INDEX_STONE, mat_int=MAT_INDEX_PLASTER_INT)
+                                  mat_ext=body_ext, mat_int=body_int,
+                                  extra_door_bays=outcrop_bays,
+                                  extra_door_w=1.20, extra_door_h=2.60)
 
         # Front Door Assembly (projected slightly proud to eliminate any coplanar overlaps)
         if door_k is not None:
@@ -1260,8 +1638,8 @@ def build_mage_tower(bm, props, seed):
                 build_front_steps(bm, center_x=dx, y_front=cur_r * math.sin(a_door),
                                   z_base=z0, num_steps=max(2, int(found_h / 0.18)))
 
-        # Windows with stone sills & frames
-        for wk in win_facets:
+        # Windows with stone sills & frames (outcrop bays get their own glass)
+        for wk in (win_facets - outcrop_bays):
             a_win = (wk + 0.5) * BAY_ANG + OFFSET
             # Seated 20 cm into the wall (recessed reveal).
             w_r = cur_r - 0.20
@@ -1271,26 +1649,36 @@ def build_mage_tower(bm, props, seed):
                                   size=(win_w, win_h), wall_thickness=wall_t,
                                   normal_axis=(math.cos(a_win), math.sin(a_win)), has_shutters=False)
 
-        # Exterior-only stone string course band between storeys (keep smooth round look)
-        _build_exterior_annular_band(bm, r_in=cur_r - 0.02, r_out=cur_r + 0.08,
-                                    z_bot=z1 - 0.12, z_top=z1,
-                                    segments=48, offset=OFFSET, mat_index=MAT_INDEX_CUT_STONE)
+        # Whimsical mini-wing oriel bays that open through into this storey.
+        for bay in sorted(outcrop_bays):
+            _build_mage_outcrop(bm, props, cur_r, (bay + 0.5) * BAY_ANG + OFFSET,
+                                z0, level_h, wall_t, win_w, win_h, seed, outcrop_index)
+            outcrop_index += 1
+
+        # Exterior-only string course band between storeys. The shaft tapers, so
+        # the storey above is inset; the band reaches well inside the upper
+        # storey's radius and laps up past the joint so no cavity gap is left.
+        _build_exterior_annular_band(bm, r_in=cur_r - 0.16, r_out=cur_r + 0.08,
+                                    z_bot=z1 - 0.16, z_top=z1 + 0.03,
+                                    segments=48, offset=OFFSET, mat_index=trim_mat)
 
         # Warcraft-style chunky timber seam pillars at THIS storey's radius so
         # they follow the taper and stay proud of the wall on every level.
         _build_exterior_seam_pillars(bm, r_shaft=cur_r, z_base=z0, z_top=z1,
                                     bays=BAYS, offset=OFFSET,
                                     with_foot=(fl == 0),
-                                    with_collar=(fl == shaft_storeys - 1))
+                                    with_collar=(fl == shaft_storeys - 1),
+                                    foot_mat=trim_mat)
 
     # -------------------------------------------------------------------------
     # 3. Cantilevered Belvedere / Crown (Archmage Observatory)
     # -------------------------------------------------------------------------
     top_shaft_r = R - (shaft_storeys - 1) * 0.08
     crown_z = found_h + shaft_storeys * level_h
-    # Dramatic overhang: ~1.32x shaft radius (matching Reference Image 2)
-    bel_r = top_shaft_r + 1.28
-    bel_h = max(3.4, level_h * 0.75)
+    # Generous overhang and a tall, airy observatory to give the tower its
+    # crowning, top-heavy silhouette.
+    bel_r = top_shaft_r + 1.45
+    bel_h = max(4.4, level_h * 0.95)
     soffit_thickness = 0.14
     # The crown floor slab (below) is the single wooden ceiling/soffit; the
     # corbels sit directly underneath it, aligned with the 8 seam pillars.
@@ -1315,8 +1703,8 @@ def build_mage_tower(bm, props, seed):
         _hanging_corbel_banner(bm, bx, by, corbel_z, facing_ang=b_ang,
                                banner_w=0.85, banner_h=1.60)
 
-    # --- Hanging Chain Lanterns Centered in Front and Rear Bays ---
-    for lf in (0, 4):
+    # --- Hanging Chain Lanterns Centered in Two Bays (clear of the bridge) ---
+    for lf in (1, 5):
         l_ang = (lf + 0.5) * BAY_ANG + OFFSET
         lx = (bel_r - 0.22) * math.cos(l_ang)
         ly = (bel_r - 0.22) * math.sin(l_ang)
@@ -1334,25 +1722,31 @@ def build_mage_tower(bm, props, seed):
                             stair_inner_r=top_wall_in - 1.10,
                             stair_outer_r=top_wall_in)
 
-    # --- Crown Walls: Continuous Smooth Plaster with Precision Cutouts (8 bays, 48 segments) ---
-    crown_win_facets = {0, 2, 4, 6}
+    # --- Crown Walls: Continuous timber-framed observatory, windows all round,
+    # with one floor-level doorway (bay 0) opening onto the hanging bridge. ---
+    crown_win_facets = {1, 2, 3, 4, 5, 6, 7}
+    crown_win_w = 0.70
+    crown_win_h = min(2.10, bel_h * 0.62)
     _build_seamless_wall_ring(bm, r_out=bel_r, r_in=inner_bel_r,
                               z0=crown_z, z1=crown_z + bel_h,
                               bays=BAYS, offset=OFFSET,
                               window_bays=crown_win_facets,
-                              win_w=win_w, win_h=win_h,
-                              mat_ext=MAT_INDEX_PLASTER_EXT, mat_int=MAT_INDEX_PLASTER_INT)
+                              win_w=crown_win_w, win_h=crown_win_h,
+                              mat_ext=crown_ext, mat_int=crown_int,
+                              extra_door_bays={0},
+                              extra_door_w=1.40, extra_door_h=2.20)
 
     # --- Belvedere Timber Corner Framing Posts (Covering Plaster Seams on 8 bays) ---
     _build_belvedere_framing_posts(bm, bel_r=bel_r, crown_z=crown_z, roof_z=crown_z + bel_h,
                                   bays=BAYS, offset=OFFSET)
 
-    # Belvedere exterior timber string courses (horizontal only, never interior!)
-    _build_exterior_annular_band(bm, r_in=bel_r - 0.02, r_out=bel_r + 0.08,
-                                z_bot=crown_z - 0.02, z_top=crown_z + 0.13,
+    # Belvedere exterior timber string courses. They run the full wall thickness
+    # so no open shell edge is left where the crown wall meets the slab / roof.
+    _build_exterior_annular_band(bm, r_in=inner_bel_r, r_out=bel_r + 0.08,
+                                z_bot=crown_z - 0.06, z_top=crown_z + 0.16,
                                 segments=48, offset=OFFSET, mat_index=MAT_INDEX_TIMBER)
-    _build_exterior_annular_band(bm, r_in=bel_r - 0.02, r_out=bel_r + 0.08,
-                                z_bot=crown_z + bel_h - 0.12, z_top=crown_z + bel_h,
+    _build_exterior_annular_band(bm, r_in=inner_bel_r, r_out=bel_r + 0.08,
+                                z_bot=crown_z + bel_h - 0.16, z_top=crown_z + bel_h + 0.05,
                                 segments=48, offset=OFFSET, mat_index=MAT_INDEX_TIMBER)
 
     # Arched leaded windows with warm glowing glass
@@ -1363,21 +1757,24 @@ def build_mage_tower(bm, props, seed):
         wx = w_r * math.cos(a_win)
         wy = w_r * math.sin(a_win)
         build_window_assembly(bm, center=(wx, wy, crown_z + bel_h * 0.52),
-                              size=(win_w, win_h), wall_thickness=wall_t,
+                              size=(crown_win_w, crown_win_h), wall_thickness=wall_t,
                               normal_axis=(math.cos(a_win), math.sin(a_win)), has_shutters=False)
+
+    # Hanging bridge out to a little side turret (the classic mage lookout).
+    if getattr(props, 'has_mage_outcrops', False):
+        _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r)
 
     # -------------------------------------------------------------------------
     # 4. Roof, Spires, Tourelles & Orbiting Arcane Crystals
     # -------------------------------------------------------------------------
     roof_z = crown_z + bel_h
-    roof_h = max(5.8, level_h * 1.25)
+    roof_h = max(6.8, level_h * 1.50)
 
     # Main flared witch-hat spire (round smooth look)
     _witch_hat_roof(bm, 0.0, 0.0, roof_z, radius=bel_r, height=roof_h, segments=48)
 
-    # 4 high-poly smooth corner tourelles / pinnacles around the eaves (matching Image 2).
-    # Seated just above the eaves fascia so they no longer punch through the soffit wood.
-    _corner_tourelles(bm, 0.0, 0.0, roof_z + 0.16, bel_r, height=2.30)
+    # High-poly smooth corner tourelles / pinnacles around the eaves.
+    _corner_tourelles(bm, 0.0, 0.0, roof_z + 0.16, bel_r, height=2.85)
 
     # Floating orbiting arcane crystal shards (matching Images 4 & 5)
     _floating_arcane_shards(bm, 0.0, 0.0, roof_z, bel_r)

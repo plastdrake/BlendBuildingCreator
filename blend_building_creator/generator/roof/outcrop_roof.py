@@ -34,11 +34,11 @@ def _shingle_plane(bm, center, rotation, half_x, half_y, up_offset=0.0,
 
 
 def build_lean_to_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
-                       wall_thick=0.12, shingle_scale=0.32, shingle_rot=0):
+                       wall_thick=0.12, shingle_scale=0.32, shingle_rot=0, peak_h=None):
     """Sloping shed roof over a facade projection, with sealed side cheeks."""
     half_w = width * 0.5
     roof_pitch = 0.32
-    r_rise = min(avail_h, depth * roof_pitch)
+    r_rise = min(avail_h, peak_h if peak_h else depth * roof_pitch)
     x_back = -0.01
     x_front = depth + 0.16
     roof_len = x_front - x_back
@@ -114,10 +114,10 @@ def build_lean_to_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
 
 
 def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
-                             shingle_scale=0.32, shingle_rot=0):
+                             shingle_scale=0.32, shingle_rot=0, peak_h=None):
     """Pitched mini-gable roof over a facade projection (ridge runs outward)."""
     half_w = width * 0.5
-    g_roof_h = min(avail_h, 0.58)
+    g_roof_h = min(avail_h, peak_h if peak_h else 0.58)
     x_back = -0.03
     x_front = depth + 0.16
     roof_len = x_front - x_back
@@ -234,15 +234,16 @@ def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
 
 
 def build_outcrop_roof(bm, style, frame, z_roof, depth, width, avail_h, wall_mat,
-                       wall_thick=0.12, shingle_scale=0.32, shingle_rot=0):
+                       wall_thick=0.12, shingle_scale=0.32, shingle_rot=0, peak_h=None):
     """Dispatch to the lean-to or gable outcrop roof builder."""
     if style == 'GABLE':
         build_outcrop_gable_roof(
             bm, frame, z_roof, depth, width, avail_h, wall_mat,
-            shingle_scale=shingle_scale, shingle_rot=shingle_rot,
+            shingle_scale=shingle_scale, shingle_rot=shingle_rot, peak_h=peak_h,
         )
     else:
         build_lean_to_roof(
             bm, frame, z_roof, depth, width, avail_h, wall_mat,
-            wall_thick=wall_thick, shingle_scale=shingle_scale, shingle_rot=shingle_rot,
+            wall_thick=wall_thick, shingle_scale=shingle_scale,
+            shingle_rot=shingle_rot, peak_h=peak_h,
         )

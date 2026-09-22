@@ -157,8 +157,8 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     # --- Dimensions & Floors ---
     num_floors: IntProperty(
         name="Floors",
-        description="Number of walk-in building storeys (1 to 5)",
-        min=1, max=5, default=2,
+        description="Number of walk-in building storeys (1 to 12; tall mage spires use up to 9)",
+        min=1, max=12, default=2,
         update=on_property_updated
     )
     
@@ -883,6 +883,21 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Outcrop Shingle Size",
         description="UV scale for the outcrop roof shingles (matches the main roofs at 0.32; smaller value = bigger tiles)",
         min=0.05, max=0.60, default=0.32,
+        update=on_property_updated
+    )
+
+    # --- Mage Tower Whimsical Outcrops (rounded oriel side-turrets) ---
+    has_mage_outcrops: BoolProperty(
+        name="Whimsical Outcrops",
+        description="Sprout rounded oriel outcrops with their own little shingle pinnacles up the mage tower shaft",
+        default=False,
+        update=on_property_updated
+    )
+
+    mage_outcrop_count: IntProperty(
+        name="Outcrop Amount",
+        description="How many whimsical outcrops to scatter up the mage tower shaft",
+        min=0, max=12, default=0,
         update=on_property_updated
     )
 

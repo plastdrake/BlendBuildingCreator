@@ -324,7 +324,14 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             col.prop(props, "mini_wing_roof")
             col.prop(props, "mini_wing_shingle_rot")
             col.prop(props, "mini_wing_shingle_scale")
-            
+
+        # Mage Tower Whimsical Outcrops
+        if props.building_archetype == 'MAGE_TOWER' or props.building_shape == 'ROUND_TOWER':
+            box_mage = layout.box()
+            box_mage.prop(props, "has_mage_outcrops")
+            if props.has_mage_outcrops:
+                box_mage.prop(props, "mage_outcrop_count")
+
         # Balcony
         box_balc = layout.box()
         box_balc.prop(props, "has_balcony")

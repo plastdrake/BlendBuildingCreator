@@ -239,16 +239,18 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                     z_base, width=2.2, depth=1.6, height=2.6, roof_style='LEAN_TO', tier='TIER_3',
                     floor_h=2.8, lower_bounds=None,
                     win_w=None, win_h=None, shingle_scale=0.32, shingle_rot=0,
-                    off_along=0.0):
+                    off_along=0.0, frame=None, peak_h=None):
     """
     Builds a small outcrop bay room / annex projection:
     - GROUND: rests on grounded stone foundation plinth.
     - UPPER: cantilevered oriel bay with heavy diagonal timber corbel brackets.
     - Features timber corner posts, leaded glass window(s), and dedicated shingled roof.
-    ``off_along`` shifts the outcrop along the facade from its centre.
+    ``off_along`` shifts the outcrop along the facade from its centre. Pass an
+    explicit ``frame`` (e.g. a tangent frame on a round tower wall) to place the
+    outcrop at an arbitrary angle instead of an axis-aligned box facade.
     """
     # Shift the facade line along the wall so several outcrops can share a facade.
-    if abs(off_along) > 1e-6:
+    if frame is None and abs(off_along) > 1e-6:
         if side in ('LEFT', 'RIGHT'):
             wall_y_min += off_along
             wall_y_max += off_along
@@ -265,7 +267,10 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                 lb[1] += off_along
             lower_bounds = tuple(lb)
     height = max(2.20, min(height, floor_h * 0.82))
-    frame = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
+    if frame is None:
+        frame = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
+    else:
+        lower_bounds = None
     facade_rot_mat = frame.rotation
 
     half_w = width * 0.5
@@ -512,6 +517,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         z_roof=z_base + height, depth=depth, width=width,
         avail_h=max(0.35, floor_h - height - 0.08), wall_mat=wall_mat,
         wall_thick=wall_thick, shingle_scale=shingle_scale, shingle_rot=shingle_rot,
+        peak_h=peak_h,
     )
 
 
