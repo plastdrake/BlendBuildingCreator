@@ -549,17 +549,22 @@ def build_floors(bm, props, ctx):
                 back_openings.append({'u_start': p_u1, 'u_end': p_u2,
                                       'z_start': z_floor, 'z_end': p_top})
                 jamb = 0.16
-                fy = p_yf + wall_t * 0.5
+                fy = p_yf  # Exactly centered on the rear wall line
                 for jx in (-1.0, 1.0):
                     create_beveled_box(
-                        bm, size=(jamb, wall_t + 0.10, p_top - z_floor),
+                        bm, size=(jamb, wall_t + 0.04, p_top - z_floor),
                         location=(p_cx + jx * (p_w * 0.5 + jamb * 0.5), fy,
                                   (z_floor + p_top) * 0.5),
                         mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
                 create_beveled_box(
-                    bm, size=(p_w + jamb * 2.0 + 0.10, wall_t + 0.10, jamb),
+                    bm, size=(p_w + jamb * 2.0 + 0.04, wall_t + 0.04, jamb),
                     location=(p_cx, fy, p_top + jamb * 0.5),
                     mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
+                # Level floor threshold bridging nave floor to apse with no height gap
+                create_beveled_box(
+                    bm, size=(p_w + 0.02, wall_t + 0.04, 0.03),
+                    location=(p_cx, fy, z_floor + 0.035),
+                    mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005)
 
             # 3. Side Door
             if getattr(props, 'has_side_door', False) and not open_timber:
@@ -1058,6 +1063,9 @@ def build_floors(bm, props, ctx):
         # Dynamic Windows - Back Wall
         if props.has_windows and not open_timber:
             back_excludes = list(get_facade_wing_exclusions('BACK')) + get_turret_exclusions('BACK')
+            if effective_archetype == 'CHAPEL' or getattr(props, 'has_back_portal', False):
+                apse_r = max(1.8, min(3.2, cur_w * 0.32))
+                back_excludes.append((-apse_r - 0.6, apse_r + 0.6))
             if fl_idx == 0 and getattr(props, 'has_back_door', False):
                 bd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 bd_ex1 = b_cx - bd_clr

@@ -9,7 +9,7 @@ ramps. It supports level runs and sloped runs (a straight grade from
 
 import math
 
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 from .mesh_utils import create_box, create_beveled_box, create_cylinder
 from .materials import (
@@ -57,10 +57,11 @@ def _beam(bm, p0, p1, z0, z1, cross_w, cross_t, mat, bevel=0.012):
     yaw = math.atan2(dy, dx)
     pitch = math.atan2(dz, run)
     rot = Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Rotation(-pitch, 4, 'Y')
-    create_beveled_box(bm, size=(length, cross_w, cross_t),
-                       location=((x0 + x1) * 0.5, (y0 + y1) * 0.5, (z0 + z1) * 0.5),
-                       rotation=tuple(rot.to_euler()), mat_index=mat,
-                       bevel_amount=bevel)
+    faces = create_beveled_box(bm, size=(length, cross_w, cross_t),
+                               location=((x0 + x1) * 0.5, (y0 + y1) * 0.5, (z0 + z1) * 0.5),
+                               rotation=tuple(rot.to_euler()), mat_index=mat,
+                               bevel_amount=bevel)
+    pass
 
 
 def build_railing_post(bm, x, y, base_z, height=1.05,

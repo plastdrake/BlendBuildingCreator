@@ -369,7 +369,7 @@ def _build_plot_fortifications(bm, props, ctx):
             bm, props, ctx,
             height=_prop(props, 'palisade_height', 2.3),
             style=_prop(props, 'palisade_style', 'STAKES'),
-            offset=_prop(props, 'palisade_offset', 3.0))
+            offset=None)
 
     # 4. Military drill yard apparatus (archery targets, weapon rack, quintain)
     if _prop(props, 'has_military_props', False):

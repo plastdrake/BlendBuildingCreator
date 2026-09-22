@@ -260,7 +260,13 @@ def _build_foundation(bm, props, ctx):
     found_type = getattr(props, 'foundation_type', 'STONE')
     fw = ctx.base_w + 0.35
     fd = ctx.base_d + 0.35
-    _build_foundation_block(bm, fw, fd, 0.0, 0.0, found_h, found_type)
+    fcx = 0.0
+    fcy = 0.0
+    if ctx.effective_archetype == 'CHAPEL' or getattr(props, 'has_back_portal', False):
+        # Stop foundation plinth at rear wall line (y_max = base_hy) so it does not poke into apse room
+        fd = ctx.base_d + 0.175
+        fcy = -0.0875
+    _build_foundation_block(bm, fw, fd, fcx, fcy, found_h, found_type)
     for w_elem in ctx.wings:
         wb = w_elem['base']
         w_fw = (wb[1] - wb[0]) + 0.35

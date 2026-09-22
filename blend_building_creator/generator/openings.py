@@ -179,7 +179,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         for side_sign in [-1, 1]:
             for b in range(num_blocks):
                 bz = z_base + 0.09 + (b + 0.5) * block_step
-                bw = 0.24 if (b % 2 == 0) else 0.18
+                bw = 0.20 if (b % 2 == 0) else 0.16
                 bx = center_x + side_sign * (R_in + bw * 0.5)
                 create_beveled_box(
                     bm,
@@ -189,7 +189,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                     bevel_amount=0.015
                 )
                 
-        sp_outer_w = R_in + 0.32
+        sp_outer_w = R_in + 0.22
         sp_top_z = z_spring + R_in + 0.25
         num_arc = 6
         
@@ -277,7 +277,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 bmesh.ops.reverse_faces(bm, faces=sp_faces)
                 
         create_beveled_box(
-            bm, size=(door_w + 0.64, frame_depth + 0.04, 0.16),
+            bm, size=(door_w + 0.44, frame_depth + 0.04, 0.16),
             location=(center_x, y_front, sp_top_z + 0.08),
             mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015
         )
@@ -678,9 +678,11 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
     rjl_loc, rjl_rot = to_world((win_w * 0.5 - liner_t * 0.5, 0.0, 0.0))
     create_beveled_box(bm, size=(liner_t, lining_depth, win_h), location=rjl_loc, rotation=rjl_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
     # Head and Sill liners (spanning full width, flush with cutout edges)
-    thl_loc, thl_rot = to_world((0.0, 0.0, win_h * 0.5 - liner_t * 0.5))
+    # Head/sill liners sit a hair outside the aperture so they always lap over
+    # the (slightly larger) raw wall cut edge inside the reveal.
+    thl_loc, thl_rot = to_world((0.0, 0.0, win_h * 0.5 + 0.0))
     create_beveled_box(bm, size=(win_w, lining_depth, liner_t), location=thl_loc, rotation=thl_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
-    bsl_loc, bsl_rot = to_world((0.0, 0.0, -win_h * 0.5 + liner_t * 0.5))
+    bsl_loc, bsl_rot = to_world((0.0, 0.0, -win_h * 0.5 + 0.0))
     create_beveled_box(bm, size=(win_w, lining_depth, liner_t), location=bsl_loc, rotation=bsl_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
 
     # 2. Exterior Heavy Timber Sill (proud of log wall, covers cutout gap completely)
@@ -721,8 +723,8 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
     create_beveled_box(bm, size=(win_w + in_casing_w * 2.0 + 0.06, in_casing_t + 0.01, in_th_h), location=ith_loc, rotation=ith_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
     # Interior Sill Stool shelf extending into room, resting flush across the opening sill
-    ist_loc, ist_rot = to_world((0.0, in_casing_y + 0.025, -win_h * 0.5 + 0.025))
-    create_beveled_box(bm, size=(win_w + in_casing_w * 2.0 + 0.08, in_casing_t + 0.06, 0.05), location=ist_loc, rotation=ist_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    ist_loc, ist_rot = to_world((0.0, in_casing_y + 0.025, -win_h * 0.5 - 0.005))
+    create_beveled_box(bm, size=(win_w + in_casing_w * 2.0 + 0.08, in_casing_t + 0.06, 0.07), location=ist_loc, rotation=ist_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
     
     # Interior side jambs running cleanly from stool shelf up into header (authentic joinery)
     in_jamb_h = win_h + 0.02

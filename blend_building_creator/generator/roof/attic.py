@@ -382,6 +382,10 @@ def build_roof_and_attic(bm, props, ctx):
                         ry = top_cy if n_right == 1 else (y_start + ((i + 0.5) / n_right) * y_span)
                         dormer_placements.append({'pos': (top_cx + roof_half_w * dormer_u, ry), 'facing': (1, 0), 'side': 1})
 
+                if effective_archetype == 'CHAPEL':
+                    t_front_margin = top_y_min + 3.4
+                    dormer_placements = [dp for dp in dormer_placements if dp['pos'][1] >= t_front_margin]
+
                 ap_half = max(0.24, main_dormer_w * 0.5 - 0.18)
                 for dp in dormer_placements:
                     d_cx, d_cy = dp['pos']

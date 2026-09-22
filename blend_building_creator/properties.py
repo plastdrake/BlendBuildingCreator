@@ -1190,6 +1190,30 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    palisade_offset_x: FloatProperty(
+        name="Palisade Offset X",
+        description="Custom X distance the palisade stands outside the building (0 = use Palisade Offset)",
+        min=0.0, max=35.0, default=0.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    palisade_offset_y: FloatProperty(
+        name="Palisade Offset Y",
+        description="Custom Y distance the palisade stands outside the building (0 = use Palisade Offset)",
+        min=0.0, max=35.0, default=0.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    palisade_depth_extra: FloatProperty(
+        name="Palisade Depth Extra",
+        description="Extra distance to push the rear palisade wall back beyond the normal offset",
+        min=0.0, max=25.0, default=0.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
     has_banners: BoolProperty(
         name="Banners",
         description="Heraldic standard poles raised at the gate and compound corners",
@@ -1429,6 +1453,22 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Curtain Offset",
         description="Distance the curtain wall stands outside the building footprint",
         min=1.5, max=35.0, default=3.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    curtain_wall_offset_x: FloatProperty(
+        name="Curtain Offset X",
+        description="Custom X distance the curtain wall stands outside the building (0 = use Curtain Offset)",
+        min=0.0, max=35.0, default=0.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    curtain_wall_offset_y: FloatProperty(
+        name="Curtain Offset Y",
+        description="Custom Y distance the curtain wall stands outside the building (0 = use Curtain Offset)",
+        min=0.0, max=35.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )

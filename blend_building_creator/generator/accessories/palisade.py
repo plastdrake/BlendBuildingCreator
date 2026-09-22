@@ -16,6 +16,7 @@ def compound_bounds(ctx, offset, depth_extra=0.0):
 
     ``depth_extra`` pushes only the rear (+Y) boundary further out, so the rear
     wall can be moved back without growing the compound in X.
+    ``offset`` can be a single float or a tuple (off_x, off_y).
     """
     x_min, x_max = -ctx.base_w * 0.5, ctx.base_w * 0.5
     y_min, y_max = -ctx.base_d * 0.5, ctx.base_d * 0.5
@@ -23,13 +24,22 @@ def compound_bounds(ctx, offset, depth_extra=0.0):
         b = w['base']
         x_min, x_max = min(x_min, b[0]), max(x_max, b[1])
         y_min, y_max = min(y_min, b[2]), max(y_max, b[3])
-    return x_min - offset, x_max + offset, y_min - offset, y_max + offset + depth_extra
+
+    if isinstance(offset, (tuple, list)):
+        off_x = float(offset[0])
+        off_y = float(offset[1])
+    else:
+        off_x = off_y = float(offset)
+
+    return x_min - off_x, x_max + off_x, y_min - off_y, y_max + off_y + depth_extra
 
 
 def fortification_depth_extra(props):
-    """Rear-depth extension of the enclosure (curtain wall only)."""
+    """Rear-depth extension of the enclosure."""
     if getattr(props, 'has_curtain_wall', False):
         return getattr(props, 'curtain_wall_depth_extra', 0.0)
+    elif getattr(props, 'has_palisade', False):
+        return getattr(props, 'palisade_depth_extra', getattr(props, 'curtain_wall_depth_extra', 0.0))
     return 0.0
 
 
@@ -38,10 +48,20 @@ def fortification_offset(props):
 
     A stone curtain wall supersedes the palisade when enabled, so towers, walls,
     gates, banners and shields all snap to the same defensive line.
+    Returns (off_x, off_y).
     """
     if getattr(props, 'has_curtain_wall', False):
-        return getattr(props, 'curtain_wall_offset', 3.0)
-    return getattr(props, 'palisade_offset', 3.0)
+        base_off = getattr(props, 'curtain_wall_offset', 3.0)
+        off_x = getattr(props, 'curtain_wall_offset_x', 0.0)
+        off_y = getattr(props, 'curtain_wall_offset_y', 0.0)
+    else:
+        base_off = getattr(props, 'palisade_offset', 3.0)
+        off_x = getattr(props, 'palisade_offset_x', 0.0)
+        off_y = getattr(props, 'palisade_offset_y', 0.0)
+
+    ox = off_x if off_x > 0.001 else base_off
+    oy = off_y if off_y > 0.001 else base_off
+    return (ox, oy)
 
 
 def _stake(bm, x, y, z, height, w, mat, tip_mat=None, lean=0.0, jitter=0.0):
@@ -257,9 +277,11 @@ def _gate_post(bm, x, y, ground_z, height):
             f.loops[loop_idx][uv_layer].uv = Vector((u * 0.9, v * 0.40))
 
 
-def build_palisade_enclosure(bm, props, ctx, height=2.3, style='STAKES', offset=3.0):
+def build_palisade_enclosure(bm, props, ctx, height=2.3, style='STAKES', offset=None, depth_extra=None):
     """Enclose the whole compound with a palisade and a front gate gap."""
-    x_min, x_max, y_min, y_max = compound_bounds(ctx, offset)
+    off = offset if offset is not None else fortification_offset(props)
+    d_extra = depth_extra if depth_extra is not None else fortification_depth_extra(props)
+    x_min, x_max, y_min, y_max = compound_bounds(ctx, off, d_extra)
     gate_cx = ctx.main_door_cx
     gate_half = max(1.1, (getattr(props, 'door_width', 1.2) + 1.0) * 0.5)
     g0, g1 = gate_cx - gate_half, gate_cx + gate_half
