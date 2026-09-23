@@ -512,6 +512,57 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default='AUTO',
         update=on_property_updated
     )
+
+    include_door_leaves: BoolProperty(
+        name="Include Door Leaves",
+        description="Generate door leaves inside doorway frames. Turn off to keep door openings/frames open for interactive Unreal Engine doors",
+        default=True,
+        update=on_property_updated
+    )
+
+    door_blade_leaf_type: EnumProperty(
+        name="Door Leaf Type",
+        description="Type of door leaf to generate",
+        items=[
+            ('SINGLE', "Single Door", "Full single door blade with centered arch apex if arched"),
+            ('DOUBLE_LEAF', "Double Door Leaf (Half)", "One side of a double door pair; arch rises to apex at meeting stile"),
+        ],
+        default='SINGLE',
+    )
+
+    door_blade_width: FloatProperty(
+        name="Door Blade Width",
+        description="Width of standalone door blade in meters for Unreal Engine export",
+        min=0.4, max=3.0, default=1.0,
+        unit='LENGTH',
+    )
+
+    door_blade_height: FloatProperty(
+        name="Door Blade Height",
+        description="Height of standalone door blade in meters",
+        min=1.0, max=4.0, default=2.2,
+        unit='LENGTH',
+    )
+
+    door_blade_shape: EnumProperty(
+        name="Door Blade Shape",
+        description="Profile shape of the standalone door blade",
+        items=[
+            ('SQUARE', "Square / Rectangular", "Rectangular door blade for square frames"),
+            ('ARCHED', "Arched", "Curved arched top door blade for stone arched portals"),
+        ],
+        default='SQUARE',
+    )
+
+    door_blade_hinge: EnumProperty(
+        name="Hinge Placement",
+        description="Which side has the hinge and pivot at (0, 0)",
+        items=[
+            ('LEFT', "Left Hinge", "Hinge at (0, 0), door blade extends along +X"),
+            ('RIGHT', "Right Hinge", "Hinge at (0, 0), door blade extends along -X"),
+        ],
+        default='LEFT',
+    )
     
     has_windows: BoolProperty(
         name="Windows",
@@ -1349,6 +1400,18 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Yard Props & Furniture",
         description="Barrels, picnic tables, benches, crates, sacks and lantern posts dressing the frontage",
         default=False,
+        update=on_property_updated
+    )
+
+    lantern_style: EnumProperty(
+        name="Lantern Style",
+        description="Mounting style for frontage lanterns",
+        items=[
+            ('AUTO', "Automatic", "Hang from chains under porch/overhang, or bracket on corner posts"),
+            ('CORNER_BRACKET', "Corner Post Bracket", "Mount bracket lanterns directly on front corner posts facing the street"),
+            ('HANGING_CHAIN', "Hanging Chain", "Hang lanterns from unbroken chains (like in Mage Tower)"),
+        ],
+        default='AUTO',
         update=on_property_updated
     )
 

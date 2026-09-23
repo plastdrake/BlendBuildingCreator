@@ -267,6 +267,7 @@ def build_round_tower(bm, props, seed):
                     door_angle_deg=props.door_angle,
                     door_shape=getattr(props, 'door_shape', 'AUTO'),
                     ground_floor_stone=props.ground_floor_stone,
+                    include_leaf=getattr(props, 'include_door_leaves', True)
                 )
                 if props.has_front_steps and props.has_foundation:
                     build_front_steps(bm, center_x=mid[0], y_front=mid[1],

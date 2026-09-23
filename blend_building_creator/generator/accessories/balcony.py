@@ -24,7 +24,7 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
                   z_floor, width=2.4, depth=1.3, tier='TIER_3',
                   lower_wall_x_min=None, lower_wall_x_max=None,
                   lower_wall_y_min=None, lower_wall_y_max=None,
-                  door_angle_deg=0.0):
+                  door_angle_deg=0.0, include_leaf=True):
     wx, wy, ox, oy, tx, ty, rot_z = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
     facade_rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
 
@@ -114,6 +114,9 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.010
         )
+
+    if not include_leaf:
+        return
 
     door_leaf_w = door_w - 0.06
     door_leaf_h = door_h - 0.06

@@ -15,8 +15,10 @@ from .furniture import (
     build_barrel, build_crate, build_clay_pot, build_bench,
     build_picnic_table,
 )
-from .lighting import build_post_lantern, build_hanging_lantern
+from .lighting import build_post_lantern, build_hanging_lantern, build_chain_lantern
 from .garden import build_flower_box, build_well
+from ..mesh_utils import create_beveled_box
+from ..materials import MAT_INDEX_IRON, MAT_INDEX_TIMBER
 
 
 def _prop(props, name, default):
@@ -66,11 +68,8 @@ def build_hospitality_scene(bm, props, ctx, tier):
         )
 
     if _prop(props, 'has_trade_sign', False) or is_hospitality:
-        # With an arched entry porch the gable anchors sit behind the porch roof,
-        # so hang the sign off the porch's own beam instead.
-        if has_arched:
-            _build_porch_sign(bm, props, ctx, tier)
-        elif _build_gable_signs(bm, props, ctx, tier) == 0:
+        # Hang trade sign on the roof gable end facing the street, or on the facade
+        if _build_gable_signs(bm, props, ctx, tier) == 0:
             _build_trade_sign(bm, props, ctx, porch_info)
 
     if _prop(props, 'has_flower_boxes', False):
@@ -114,26 +113,6 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
     )
 
 
-def _build_porch_sign(bm, props, ctx, tier):
-    """Hang the trade sign off the arched entry porch's outer beam.
-
-    The gable anchors sit behind the porch hood, which buries the sign, so when an
-    arched porch owns the entrance the sign is carried on the porch itself.
-    """
-    door_x = ctx.main_door_cx
-    front_y = ctx.main_door_yf
-    top_bounds = ctx.floor_wall_bounds.get(ctx.num_floors - 1)
-    if top_bounds is not None and top_bounds[2] < front_y:
-        front_y = top_bounds[2]
-    # Mirror build_arched_porch(): outer beam sits on piers set 1.75m out.
-    pier_y = (front_y - 2.05) + 0.30
-    eave_z = 2.9 + 0.22
-    mount_x = door_x - (1.5 - 0.15)
-    build_hanging_sign(
-        bm, mount_x, pier_y - 0.02, eave_z + 0.06,
-        run_ang=-math.pi * 0.5,
-        bracket_len=0.95, board_w=1.05, board_h=0.90, light_board=True,
-    )
 
 
 def _build_gable_signs(bm, props, ctx, tier):
@@ -259,15 +238,31 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
 
     porch_w = 2.8
     porch_d = 1.5 if (_prop(props, 'has_veranda', False) or ctx.effective_archetype in ('TAVERN', 'INN')) else 0.0
-
-    # 1. Wall lanterns hung at both front corners of the facade (no poles).
-    #    If a wing occupies that corner, hang the lantern on the wing's own outer
-    #    wall instead of burying it inside the wing block.
     outer = _wall_out(props, ctx, tier)
-    lan_z = ctx.found_h + ctx.floor_h * 0.62
-    lan_y = ctx.bounds_for(0)[2] - outer
-    front_win_x = [w[0] for w in ctx.window_centers.get(0, {}).get('FRONT', [])]
-    door_half_l = _prop(props, 'door_width', 1.2) * 0.5
+
+    # 1. Lanterns mounted directly on front corner posts facing forward (the street),
+    #    or hanging from chains under eaves/overhangs/porch.
+    #    If a wing occupies that corner, mount on the wing's front corner post.
+    b0 = ctx.bounds_for(0)
+    b_cx = (b0[0] + b0[1]) * 0.5
+    b_cy = (b0[2] + b0[3]) * 0.5
+    off = ctx.wall_t * 0.46
+    post_w = 0.30
+    lan_z = ctx.found_h + min(ctx.floor_h * 0.70, 2.45)
+    lantern_style = _prop(props, 'lantern_style', 'AUTO')
+    scale_val = 1.0 if rich else 0.92
+
+    def _porch_roof_soffit_z(y, pinfo):
+        if not pinfo:
+            return None
+        mid_y = pinfo.get('awning_mid_y')
+        mid_z = pinfo.get('awning_mid_z')
+        ang = pinfo.get('awning_ang', 0.0)
+        pitch = pinfo.get('awning_pitch', 0.35)
+        if mid_y is None or mid_z is None:
+            return None
+        # Deck board is 0.08m thick. Underside at coordinate y:
+        return mid_z - (0.04 / max(1e-4, math.cos(ang))) + (y - mid_y) * pitch
 
     def _blocking_wing(s):
         """Wing whose footprint covers the front corner on side s, if any."""
@@ -276,7 +271,7 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
             if not b:
                 continue
             wall = w.get('wall')
-            if wall == 'FRONT' and b[2] < lan_y - 0.2 and (b[0] - 0.6) <= s * (ctx.hx - 0.55) <= (b[1] + 0.6):
+            if wall == 'FRONT' and b[2] < b0[2] - 0.2 and (b[0] - 0.6) <= s * (ctx.hx - 0.55) <= (b[1] + 0.6):
                 return w, b, wall
             if wall == 'LEFT' and s < 0:
                 return w, b, wall
@@ -288,51 +283,77 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
         wing = _blocking_wing(s)
         if wing is not None:
             _w, _b, wall = wing
-            # The lantern hangs at ground-storey height, so mount it on the wing's
-            # GROUND footprint (a jettied wing wall sits proud of the ground wall).
             b = _w.get('base') or _b
-            w_out = _wall_out(props, ctx, tier, 0)
-            # Keep the original wall, but sit right on the wing's corner post
-            # instead of 0.6m inboard (which landed it in a window).
-            inset = 0.14
-            lx = (b[1] - inset) if s > 0 else (b[0] + inset)
-            if wall == 'FRONT':
-                build_hanging_lantern(bm, lx, b[2] - w_out - 0.065, z_top=lan_z,
-                                      arm_ang=-math.pi * 0.5, arm_len=0.65,
-                                      scale=1.0 if rich else 0.92)
-            elif wall == 'BACK':
-                build_hanging_lantern(bm, lx, b[3] + w_out + 0.065, z_top=lan_z,
-                                      arm_ang=math.pi * 0.5, arm_len=0.65,
-                                      scale=1.0 if rich else 0.92)
-            elif wall == 'LEFT':
-                build_hanging_lantern(bm, b[0] - w_out - 0.065, b[2] + inset, z_top=lan_z,
-                                      arm_ang=math.pi, arm_len=0.65,
-                                      scale=1.0 if rich else 0.92)
-            else:
-                build_hanging_lantern(bm, b[1] + w_out + 0.065, b[2] + inset, z_top=lan_z,
-                                      arm_ang=0.0, arm_len=0.65,
-                                      scale=1.0 if rich else 0.92)
-            continue
+            wb_cx = (b[0] + b[1]) * 0.5
+            wb_cy = (b[2] + b[3]) * 0.5
+            wcx = b[1] if s > 0 else b[0]
+            wcy = b[2]
+            w_dx = wcx - wb_cx
+            w_dy = wcy - wb_cy
+            w_dlen = math.hypot(w_dx, w_dy)
+            w_nx = (w_dx / w_dlen) if w_dlen > 1e-4 else 0.0
+            w_ny = (w_dy / w_dlen) if w_dlen > 1e-4 else 0.0
+            post_cx = wcx + w_nx * off
+            post_cy = wcy + w_ny * off
+        else:
+            cx = b0[1] if s > 0 else b0[0]
+            cy = b0[2]
+            dx = cx - b_cx
+            dy = cy - b_cy
+            dlen = math.hypot(dx, dy)
+            nx = (dx / dlen) if dlen > 1e-4 else 0.0
+            ny = (dy / dlen) if dlen > 1e-4 else 0.0
+            post_cx = cx + nx * off
+            post_cy = cy + ny * off
 
-        X0 = max(1.5, ctx.hx - 0.55)
-        # If a front wing crowds this corner, start further in.
-        if not is_point_outside_building(s * X0, lan_y - 0.30, 0.25, ctx, margin=0.05):
-            X0 = max(1.2, ctx.hx - 1.7)
-        # Slide along the wall until clear of every window and the door.
-        best_lx, best_score = s * X0, -1e9
-        for dX in (0.0, -0.45, 0.45, -0.9, 0.9, -1.35, 1.35, -1.8, 1.8):
-            X = X0 + dX
-            if X < 0.9 or X > ctx.hx - 0.35:
-                continue
-            cand = s * X
-            win_clear = min((abs(cand - wx) for wx in front_win_x), default=99.0)
-            door_clear = abs(cand - ctx.main_door_cx) - door_half_l
-            score = min(win_clear, door_clear + 0.02)
-            if score > best_score:
-                best_score, best_lx = score, cand
-        build_hanging_lantern(bm, best_lx, lan_y - 0.02, z_top=lan_z,
-                              arm_ang=-math.pi * 0.5, arm_len=0.65,
-                              scale=1.0 if rich else 0.92)
+        post_front_y = post_cy - post_w * 0.5
+        lx = post_cx
+        ly = post_front_y - 0.01
+
+        # Check if there is an upper floor jetty overhang or eave above this corner post
+        has_overhang = (ctx.num_floors > 1 and getattr(props, 'has_jetty', True))
+
+        if lantern_style == 'HANGING_CHAIN':
+            if has_overhang:
+                z_soffit = ctx.found_h + ctx.floor_h - 0.05
+                build_chain_lantern(bm, lx, ly - 0.15, z_ceiling=z_soffit,
+                                    chain_len=0.55, scale=scale_val)
+            else:
+                # Wall crane arm anchored directly into the timber pillar
+                create_beveled_box(bm, size=(0.04, 0.46, 0.04),
+                                    location=(lx, post_front_y - 0.22, lan_z + 0.50),
+                                    mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
+                brace_l = math.hypot(0.32, 0.26)
+                brace_a = math.atan2(0.26, 0.32)
+                create_beveled_box(bm, size=(0.026, brace_l, 0.026),
+                                    location=(lx, post_front_y - 0.16, lan_z + 0.37),
+                                    rotation=(brace_a, 0.0, 0.0),
+                                    mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
+                build_chain_lantern(bm, lx, post_front_y - 0.42, z_ceiling=lan_z + 0.48,
+                                    chain_len=0.45, scale=scale_val)
+        else:
+            # Mount holder firmly on corner post facing forward (the street)
+            build_hanging_lantern(bm, lx, ly, z_top=lan_z,
+                                  arm_ang=-math.pi * 0.5, arm_len=0.55,
+                                  scale=scale_val)
+
+    # If there is a veranda porch and style is AUTO or HANGING_CHAIN,
+    # hang a cozy chain lantern under the porch roof, firmly touching the roof deck!
+    if porch_info is not None and lantern_style in ('AUTO', 'HANGING_CHAIN'):
+        p_door_x = porch_info.get('door_x', door_x)
+        p_front_y = porch_info.get('front_y', ctx.bounds_for(0)[2])
+        p_depth = porch_info.get('porch_d', 1.5)
+        p_lx = p_door_x - 0.75
+        p_ly = p_front_y - p_depth * 0.48
+        soffit_z = _porch_roof_soffit_z(p_ly, porch_info)
+        if soffit_z is not None:
+            # Level timber mounting block (cleat) affixed to the underside of the sloped roof
+            create_beveled_box(bm, size=(0.18, 0.18, 0.06),
+                                location=(p_lx, p_ly, soffit_z + 0.01),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+            # Ceiling boss of the chain lantern attached flush to the bottom of the mounting block
+            build_chain_lantern(bm, p_lx, p_ly, z_ceiling=soffit_z - 0.02,
+                                chain_len=0.48, scale=scale_val)
 
     # 2. Tavern Supply Nook: Barrels, Crates & Grain Sacks tucked against the exterior foundation
     side_sign = 1.0

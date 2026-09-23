@@ -89,6 +89,7 @@ def _build_balconies(bm, props, ctx, tier):
             z_floor=ctx.found_h + fl_idx * ctx.floor_h,
             width=width, depth=depth, tier=tier,
             door_angle_deg=_prop(props, 'door_angle', 0.0),
+            include_leaf=_prop(props, 'include_door_leaves', True),
         )
 
 
@@ -144,6 +145,7 @@ def _build_civic_landmarks(bm, props, ctx, tier):
             roof_flare=_prop(props, 'roof_flare', 0.38),
             floor_levels=floor_decks, front_y=wing_front,
             arch_passage=bool(_prop(props, 'town_hall_composer', False)),
+            include_leaf=_prop(props, 'include_door_leaves', True),
         )
     if _prop(props, 'has_corner_turrets', False):
         # Square corner towers, ~30% taller than before, mounted on the BACK

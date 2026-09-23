@@ -35,7 +35,7 @@ from .poly import segment_frame
 from .railing import build_railing, _beam
 from .openings import build_door_assembly, build_front_steps, build_window_assembly
 from .walls import create_curved_corbel
-from .uv_utils import apply_roof_shingle_uvs, map_planar_faces
+from .uv_utils import apply_roof_shingle_uvs, map_planar_faces, timber_box
 from .accessories.lighting import _lantern_cage, _uv_faces
 
 
@@ -43,6 +43,14 @@ BAYS = 8
 BAY_ANG = 2.0 * math.pi / BAYS
 OFFSET = -math.pi * 0.5 - BAY_ANG * 0.5     # bay 0 faces -Y (the front entrance)
 SEGMENTS = 24
+
+# Walkable stairwell geometry. The curved staircase hugs the inner wall and the
+# floor opening above matches it exactly.
+STAIR_W = 1.50            # radial width of the stair treads and floor cutout (m)
+STAIR_ARC = 135.0         # angular climb of each flight (deg)
+STAIR_OPEN = 75.0         # floor opening span behind the top landing (deg) -
+                          # big enough that a ~1.9 m character sprinting up the
+                          # last flight clears the ceiling with room to spare
 
 
 # =============================================================================
@@ -378,8 +386,7 @@ def _build_exterior_seam_pillars(bm, r_shaft, z_base, z_top, bays=BAYS, offset=O
     """Chunky beveled vertical timber pillars running up the exterior facet seams (Warcraft style).
 
     Frames the round stone cylinder into 8 intentional medieval bays and adds depth and majesty.
-    Built per storey at that storey's radius so the pillar always follows the tower's
-    taper (otherwise the lower, wider storeys swallow the pillar body entirely).
+    Built per storey at the shaft radius so each pillar segment stands proud of the wall.
     """
     d_ang = 2.0 * math.pi / bays
     h = z_top - z_base
@@ -455,7 +462,7 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
                               window_bays=set(), win_w=0.85, win_h=1.40,
                               mat_ext=MAT_INDEX_STONE, mat_int=MAT_INDEX_PLASTER_INT,
                               extra_door_bays=set(), extra_door_w=1.20,
-                              extra_door_h=2.20, center=(0.0, 0.0)):
+                              extra_door_h=2.20, center=(0.0, 0.0), r_in_top=None):
     """Build a smooth cylindrical wall ring with watertight door/window cutouts.
 
     Uses a unified vertex grid with shared height levels across ALL bays,
@@ -465,10 +472,23 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
 
     ``extra_door_bays`` adds additional floor-level doorway openings (used for
     the mage tower's outcrop rooms) alongside the single main ``door_bay``.
+
+    If ``r_in_top`` is given, the inner face tapers linearly from ``r_in`` at
+    ``z0`` to ``r_in_top`` at ``z1`` (a conical storey segment) so consecutive
+    rings chain into one continuous interior cone with no stepped ledges.
     """
     d_bay = 2.0 * math.pi / bays
     cx, cy = center
     uv_layer = bm.loops.layers.uv.verify()
+
+    # Inner radius at a given height: constant when r_in_top is None, otherwise
+    # interpolated so the wall's inner face is a smooth cone across the storey.
+    if r_in_top is None:
+        r_in_top = r_in
+    slope_in = ((r_in_top - r_in) / (z1 - z0)) if z1 > z0 else 0.0
+
+    def rin_at(lz):
+        return r_in + slope_in * (lz - z0)
 
     # -- Compute unified Z levels shared by every bay boundary ----------------
     # Cut the wall openings a touch LARGER than the glazing/door aperture so the
@@ -510,7 +530,7 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
         ang = k * d_bay + offset
         ca, sa = math.cos(ang), math.sin(ang)
         col = [(bm.verts.new((cx + r_out * ca, cy + r_out * sa, lz)),
-                bm.verts.new((cx + r_in  * ca, cy + r_in  * sa, lz)))
+                bm.verts.new((cx + rin_at(lz) * ca, cy + rin_at(lz) * sa, lz)))
                for lz in levels]
         boundary.append(col)
 
@@ -545,19 +565,37 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
 
         n_st = len(angles)
 
+        # -- Parallel-sided openings: the inner face uses wider stations so --
+        # -- the hole keeps a constant chord through the curved (and possibly --
+        # -- conical) wall. With constant-angle stations the opening is a wedge
+        # -- (narrower inside), and no straight jamb/frame can cover both faces.
+        inner_angles = None
+        if opening_kind is not None:
+            inner_angles = []
+            for lz in levels:
+                ri = rin_at(lz)
+                dai = 2.0 * math.asin(min(0.99, (cut_w * 0.5) / ri))
+                oi0 = a_mid - dai * 0.5
+                oi1 = a_mid + dai * 0.5
+                inner_angles.append([a0, (a0 + oi0) * 0.5, oi0, a_mid, oi1,
+                                     (oi1 + a1) * 0.5, a1])
+
         # -- Build vertex grid[station][level] = (v_out, v_in) ----------------
         grid = []
-        for si in range(n_st):
-            if si == 0:
+        for stn in range(n_st):
+            if stn == 0:
                 grid.append(boundary[b])
-            elif si == n_st - 1:
+            elif stn == n_st - 1:
                 grid.append(boundary[bn])
             else:
-                a = angles[si]
-                ca, sa = math.cos(a), math.sin(a)
-                col = [(bm.verts.new((cx + r_out * ca, cy + r_out * sa, lz)),
-                        bm.verts.new((cx + r_in  * ca, cy + r_in  * sa, lz)))
-                       for lz in levels]
+                col = []
+                for li, lz in enumerate(levels):
+                    ao = angles[stn]
+                    ai = inner_angles[li][stn] if inner_angles is not None else ao
+                    co, so = math.cos(ao), math.sin(ao)
+                    ci, sn = math.cos(ai), math.sin(ai)
+                    col.append((bm.verts.new((cx + r_out * co, cy + r_out * so, lz)),
+                                bm.verts.new((cx + rin_at(lz) * ci, cy + rin_at(lz) * sn, lz))))
                 grid.append(col)
 
         # -- Determine which cells (slice, band) are openings -----------------
@@ -774,7 +812,7 @@ def _sweep_helical_beam(bm, r_helix, theta_start, theta_end, z_start, z_end,
 # CURVED WALL STAIRCASE (CONTINUOUS HELICAL RAILING, STEP 0 TO LANDING)
 # =============================================================================
 
-def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=135.0, stair_w=1.10):
+def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=STAIR_ARC, stair_w=STAIR_W):
     """Curved castle staircase running along the inside perimeter of the stone wall.
 
     - Treads hug the inner face of the wall.
@@ -902,12 +940,14 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
     # 4. Vertical balusters / pickets placed at every step
     for i in range(num_steps - 1):
         mid_ang = start_ang_rad + (i + 1.5) * step_ang_rad
-        cur_z = z0 + (i + 1) * step_h
         px = r_stair_in * math.cos(mid_ang)
         py = r_stair_in * math.sin(mid_ang)
         # Balusters run from the handrail down onto the base stringer beam.
-        top_z = cur_z + 0.09 + (rail_h - 0.18)
+        # Top is measured on the helix line (not the tread height, which sits a
+        # full step lower) and tucked up into the main handrail beam so the rail
+        # never floats above the pickets.
         bot_z = _helix_z(mid_ang) + beam_top
+        top_z = _helix_z(mid_ang) + (rail_h - 0.06) + 0.02
         if top_z - bot_z > 0.20:
             create_beveled_box(bm, size=(0.075, 0.075, top_z - bot_z),
                                location=(px, py, (top_z + bot_z) * 0.5),
@@ -918,11 +958,11 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
     for frac in (0.33, 0.67):
         i_step = int((num_steps - 1) * frac)
         p_ang = start_ang_rad + (i_step + 1.5) * step_ang_rad
-        pz = z0 + (i_step + 1) * step_h
         px = r_stair_in * math.cos(p_ang)
         py = r_stair_in * math.sin(p_ang)
         # Intermediate posts drop all the way down onto the base stringer beam.
-        top_z = pz + rail_h
+        # Top measured on the helix line so it reaches up into the handrail beam.
+        top_z = _helix_z(p_ang) + (rail_h - 0.06) + 0.02
         bot_z = _helix_z(p_ang) + beam_top
         create_beveled_box(bm, size=(0.09, 0.09, top_z - bot_z),
                            location=(px, py, (top_z + bot_z) * 0.5),
@@ -987,7 +1027,7 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
     """
     if shaft_r_in is None:
         shaft_r_in = r_floor
-    stair_w = 1.10
+    stair_w = STAIR_W
     if stair_inner_r is None:
         stair_inner_r = shaft_r_in - stair_w
     if stair_outer_r is None:
@@ -1010,7 +1050,7 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
     if stair_arc is not None:
         s_deg = stair_arc[0] % 360.0
         e_deg = stair_arc[1] % 360.0
-        cut_s_deg = (e_deg - 42.0) % 360.0
+        cut_s_deg = (e_deg - STAIR_OPEN) % 360.0
         cut_e_deg = e_deg % 360.0
 
     def in_cut(ang):
@@ -1132,10 +1172,22 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
     if stair_arc is not None:
         # Snap the railing to the *actual* cutout boundaries (the opening is
         # quantised to whole sectors), so no unfenced sliver is left open.
+        # The cut sectors must be treated as one contiguous run on the circle:
+        # when the opening wraps across 0 degrees, min()/max() of the cut
+        # indices would span the whole disc and draw a full-circle railing.
         cut_idx = [j for j in range(N) if sector_cut[j]]
-        if cut_idx:
-            cut_s_deg = math.degrees(min(cut_idx) * d_ang + offset) % 360.0
-            cut_e_deg = math.degrees((max(cut_idx) + 1) * d_ang + offset) % 360.0
+        if len(cut_idx) > 1:
+            srt = sorted(cut_idx)
+            gap_of = [b - a for a, b in zip(srt, srt[1:] + [srt[0] + N])]
+            gi = gap_of.index(max(gap_of))
+            js = srt[(gi + 1) % len(srt)]
+            je = srt[gi]
+            cut_s_deg = math.degrees(js * d_ang + offset) % 360.0
+            cut_e_deg = math.degrees((je + 1) * d_ang + offset) % 360.0
+        elif len(cut_idx) == 1:
+            j0 = cut_idx[0]
+            cut_s_deg = math.degrees(j0 * d_ang + offset) % 360.0
+            cut_e_deg = math.degrees((j0 + 1) * d_ang + offset) % 360.0
         r_rail = r_cut_in - 0.05
         th_s = math.radians(cut_s_deg)
         th_e = math.radians(cut_e_deg)
@@ -1189,6 +1241,37 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
 # MAIN MAGE TOWER GENERATOR
 # =============================================================================
 
+def _stair_arc_deg(fl):
+    """Angular (start, end) of the stair flight that climbs INTO storey ``fl``."""
+    s_ang = (-30.0 + fl * 200.0) % 360.0
+    return (s_ang, (s_ang + STAIR_ARC) % 360.0)
+
+
+def _stair_open_range_deg(fl):
+    """Angular range of the floor opening cut in storey ``fl``'s slab.
+
+    The slab at the top of flight ``fl - 1`` is opened over the last
+    ``STAIR_OPEN`` degrees of that flight so a runner's head clears the ceiling
+    while sprinting up (see ``_build_watertight_floor``). The ground storey has
+    a solid slab, hence ``None``.
+    """
+    if fl <= 0:
+        return None
+    s_ang, e_ang = _stair_arc_deg(fl - 1)
+    return ((e_ang - STAIR_OPEN) % 360.0, e_ang % 360.0)
+
+
+def _angle_in_open(a, open_range):
+    """True when angle ``a`` (deg) falls inside a (possibly wrapping) opening range."""
+    if open_range is None:
+        return False
+    cs, ce = open_range
+    a = a % 360.0
+    if cs <= ce:
+        return cs <= a <= ce
+    return a >= cs or a <= ce
+
+
 def _plan_mage_outcrops(props, levels):
     """Work out (floor, bay) slots for the whimsical outcrops.
 
@@ -1197,6 +1280,11 @@ def _plan_mage_outcrops(props, levels):
     through a window or the front door. Bays cycle round-robin while the storeys
     climb, which spirals the outcrops up and around the tower instead of stacking
     them all on the same side.
+
+    The stairwell opening in each storey's slab (the last ``STAIR_OPEN`` degrees
+    of the flight below) sits right against the wall - exactly where an outcrop
+    doorway passes through - so bays whose doorway would open over the opening
+    are skipped, keeping every outcrop reachable from solid floor.
     """
     if not getattr(props, 'has_mage_outcrops', False):
         return {}
@@ -1214,15 +1302,39 @@ def _plan_mage_outcrops(props, levels):
     top_storeys = min(storeys, 3)
     usable = list(range(storeys - top_storeys, storeys))
 
+    # Doorway keep-out around each odd bay: the wall door cut (up to ~10 deg
+    # half-width on the T1 shaft) plus the floor-opening sector quantum (~7.5 deg).
+    door_keep = 20.0
+
+    def _bay_clear(bay, fl, used):
+        if bay in used:
+            return False
+        opening = _stair_open_range_deg(fl)
+        if opening is None:
+            return True
+        center = (bay * 45.0 - 90.0) % 360.0   # bay centre angle (deg)
+        return not any(_angle_in_open(center + off, opening)
+                       for off in (-door_keep, 0.0, door_keep))
+
     by_floor = {}
     for i in range(count):
-        bay = solid_bays[i % len(solid_bays)]
-        fl = usable[min(len(usable) - 1, int(i * len(usable) / float(count)))]
-        slots = by_floor.setdefault(fl, [])
-        # Keep each floor's bays distinct so two bays never collide.
-        while bay in slots:
-            bay = solid_bays[(solid_bays.index(bay) + 1) % len(solid_bays)]
-        slots.append(bay)
+        preferred = usable[min(len(usable) - 1, int(i * len(usable) / float(count)))]
+        placed = False
+        for shift in range(len(usable)):
+            fl = usable[(usable.index(preferred) + shift) % len(usable)]
+            slots = by_floor.setdefault(fl, [])
+            for probe in range(len(solid_bays)):
+                bay = solid_bays[(i + probe) % len(solid_bays)]
+                if _bay_clear(bay, fl, slots):
+                    slots.append(bay)
+                    placed = True
+                    break
+            if placed:
+                break
+        # The keep-out margin makes this effectively unreachable; as a last
+        # resort accept the round-robin pick on the preferred storey.
+        if not placed:
+            by_floor.setdefault(preferred, []).append(solid_bays[i % len(solid_bays)])
     return by_floor
 
 
@@ -1267,6 +1379,15 @@ def _build_mage_outcrop(bm, props, cur_r, ang, z0, level_h, wall_t, win_w, win_h
         floor_h=level_h, win_w=win_w, win_h=win_h, peak_h=peak_h,
         shingle_scale=0.32, shingle_rot=shingle_rot, frame=frame)
 
+    # The shaft wall is a straight cylinder of constant wall_t, so the casing
+    # is centered on the mid-wall and laps BOTH faces of the 1.30 x 2.70
+    # extra-door cutout the ring builder cut.
+    door_wt = wall_t
+    d_r = cur_r - door_wt * 0.5
+    d_frame = FacadeFrame(d_r * ox, d_r * oy, ox, oy, -oy, ox, ang)
+    _build_doorframe(bm, d_frame, z_base=z0, cut_w=1.30, cut_h=2.70,
+                     wall_t=door_wt, with_leaf=False)
+
 
 def _build_doorframe(bm, frame, z_base, cut_w, cut_h, wall_t,
                      with_leaf=False, jamb=0.22, depth_pad=0.16,
@@ -1284,18 +1405,18 @@ def _build_doorframe(bm, frame, z_base, cut_w, cut_h, wall_t,
     jamb_y = cut_w * 0.5 + half_j - overlap
     jamb_h = cut_h + 0.12
     for s in (-1.0, 1.0):
-        create_beveled_box(
+        timber_box(
             bm, size=(depth, jamb, jamb_h),
             location=frame.to_world(Vector((0.0, s * jamb_y, z_base + jamb_h * 0.5 - 0.02))),
             rotation=(0.0, 0.0, frame.rot_z),
             mat_index=mat, bevel_amount=0.012)
-    create_beveled_box(
+    timber_box(
         bm, size=(depth, cut_w + jamb * 2.0, jamb),
         location=frame.to_world(Vector((0.0, 0.0, z_base + cut_h + half_j - overlap))),
         rotation=(0.0, 0.0, frame.rot_z),
         mat_index=mat, bevel_amount=0.012)
     if with_leaf:
-        create_beveled_box(
+        timber_box(
             bm, size=(0.08, cut_w - 0.14, cut_h - 0.14),
             location=frame.to_world(Vector((0.03, 0.0, z_base + cut_h * 0.5))),
             rotation=(0.0, 0.0, frame.rot_z),
@@ -1368,7 +1489,9 @@ def _build_pointed_tail(bm, cx, cy, z_top, radius, depth, segments=32,
                 lp[uv].uv = (base_uv(lp.vert)[0], base_uv(lp.vert)[1])
 
 
-def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r):
+def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r, bay=0,
+                        tower_r=1.60, tower_h=5.20, turret_mat=MAT_INDEX_PLASTER_EXT,
+                        bridge_len=4.10, shaft_door_w=1.50, shaft_door_h=2.30):
     """A hanging stone bridge from the belvedere to a walk-in round side turret.
 
     The walkway springs from the observatory (bay 0) and arches cleanly over the
@@ -1379,32 +1502,37 @@ def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r):
     """
     from .facade import FacadeFrame
 
-    ang = 0.5 * BAY_ANG + OFFSET          # front bay centre
+    ang = (bay + 0.5) * BAY_ANG + OFFSET
     ox, oy = math.cos(ang), math.sin(ang)
     frame = FacadeFrame(bel_r * ox, bel_r * oy, ox, oy, -oy, ox, ang)
 
     deck_z = crown_z + 0.14
     deck_t = 0.32
-    deck_w = 1.60
-    tower_r = 1.60
+    # The deck walks through the shaft doorway, so it must fit between the
+    # doorframe jambs (clear opening = cut - 2x overlap) with margin.
+    deck_w = shaft_door_w - 0.16
     tower_t = 0.30
-    tower_dist = bel_r + 4.10
+    tower_dist = bel_r + bridge_len
     body_drop = 2.60
     span = (tower_dist - tower_r) - bel_r + 0.25
     wall_t = getattr(props, 'wall_thickness', 0.32)
 
     # Timber doorframe trimming the belvedere opening onto the bridge.
-    a0 = 0.5 * BAY_ANG + OFFSET
+    # ``shaft_door_w/h`` must match the wall cutout the ring actually made at
+    # this bay (crown: 1.50x2.30; lower bridge: 1.30x2.70) or the frame and
+    # the hole misalign.
+    a0 = (bay + 0.5) * BAY_ANG + OFFSET
     b_r = bel_r - wall_t * 0.5
     b_frame = FacadeFrame(b_r * math.cos(a0), b_r * math.sin(a0),
                           math.cos(a0), math.sin(a0), -math.sin(a0), math.cos(a0), a0)
-    _build_doorframe(bm, b_frame, crown_z, cut_w=1.50, cut_h=2.30,
+    _build_doorframe(bm, b_frame, crown_z, cut_w=shaft_door_w, cut_h=shaft_door_h,
                      wall_t=wall_t, with_leaf=False)
 
-    # 1. Stone deck
+    # 1. Stone deck (sits 1 cm proud of the shaft floor slab so the two top
+    #    faces never go coplanar where the deck tip overlaps the slab).
     create_beveled_box(
         bm, size=(span, deck_w, deck_t),
-        location=frame.to_world(Vector((span * 0.5 - 0.10, 0.0, deck_z - deck_t * 0.5))),
+        location=frame.to_world(Vector((span * 0.5 - 0.10, 0.0, deck_z - deck_t * 0.5 + 0.01))),
         rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
 
     # 2. Timber supports that lean on the tower wall and brace the deck: an
@@ -1424,9 +1552,9 @@ def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r):
         b = frame.to_world(Vector(p1))
         d = b - a
         eul = d.to_track_quat('X', 'Z').to_euler()
-        create_beveled_box(bm, size=(d.length, w, h),
-                           location=(a + b) * 0.5, rotation=tuple(eul),
-                           mat_index=mat, bevel_amount=0.012)
+        timber_box(bm, size=(d.length, w, h),
+                   location=(a + b) * 0.5, rotation=tuple(eul),
+                   mat_index=mat, bevel_amount=0.012)
 
     for y in (-y_off, y_off):
         # Under-deck beam
@@ -1442,13 +1570,13 @@ def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r):
     n_posts = max(3, int(span / 0.55))
     for s_sign in (-1.0, 1.0):
         ry = (deck_w * 0.5 - 0.05) * s_sign
-        create_beveled_box(
+        timber_box(
             bm, size=(span, 0.09, 0.09),
             location=frame.to_world(Vector((span * 0.5 - 0.10, ry, deck_z + 0.92))),
             rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
         for i in range(n_posts + 1):
             lx = -0.10 + span * i / float(n_posts)
-            create_beveled_box(
+            timber_box(
                 bm, size=(0.09, 0.09, 0.95),
                 location=frame.to_world(Vector((lx, ry, deck_z + 0.47))),
                 rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
@@ -1458,14 +1586,13 @@ def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r):
     tx, ty = tower_dist * ox, tower_dist * oy
     tz_floor = deck_z
     tz_lower = tz_floor - body_drop
-    tower_h = 5.20
     tz_top = tz_floor + tower_h
     drum_off = ang - 0.5 * BAY_ANG
 
-    # 4a. Solid stucco lower body beneath the deck.
+    # 4a. Solid lower body beneath the deck.
     create_cylinder(bm, radius=tower_r, height=body_drop, segments=32,
                     location=(tx, ty, (tz_lower + tz_floor) * 0.5),
-                    mat_index=MAT_INDEX_PLASTER_EXT)
+                    mat_index=turret_mat)
 
     # 4a. Curved stucco wall shell: bay 4 faces back toward the bridge (the
     #     doorway), a single window on the far side (bay 0).
@@ -1474,14 +1601,16 @@ def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r):
         bays=BAYS, offset=drum_off,
         door_bay=4, door_w=0.98, door_h=2.05,
         window_bays={0}, win_w=0.72, win_h=1.15,
-        mat_ext=MAT_INDEX_PLASTER_EXT, mat_int=MAT_INDEX_WOOD,
+        mat_ext=turret_mat, mat_int=MAT_INDEX_WOOD,
         center=(tx, ty))
 
-    # 4b. Boarded interior floor and ceiling (full radius so the wall shell ends
-    #     are capped, leaving no open annulus).
-    create_cylinder(bm, radius=tower_r, height=0.14, segments=32,
-                    location=(tx, ty, tz_floor + 0.07), mat_index=MAT_INDEX_FLOOR)
-    create_cylinder(bm, radius=tower_r, height=0.14, segments=32,
+    # 4b. Boarded interior floor and ceiling. Both stop 2 cm short of the
+    #     outer face (no coplanar shell around the drum), and the floor top
+    #     sits flush with the bridge deck so it clears the door leaf and only
+    #     forms a 1 cm threshold lip instead of burying the doorway.
+    create_cylinder(bm, radius=tower_r - 0.02, height=0.14, segments=32,
+                    location=(tx, ty, tz_floor - 0.06), mat_index=MAT_INDEX_FLOOR)
+    create_cylinder(bm, radius=tower_r - 0.02, height=0.14, segments=32,
                     location=(tx, ty, tz_top - 0.07), mat_index=MAT_INDEX_FLOOR)
 
     # 4c. Single glowing window (aligned to the ring's 0.52 opening height)
@@ -1506,14 +1635,17 @@ def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r):
     # 4e. Cut-stone collar bands
     create_cylinder(bm, radius=tower_r + 0.06, height=0.16, segments=32,
                     location=(tx, ty, tz_lower + 0.02), mat_index=MAT_INDEX_CUT_STONE)
-    create_cylinder(bm, radius=tower_r + 0.06, height=0.16, segments=32,
+    # Deck-level collar is a slim bead standing 2.5 cm proud of the turret
+    # wall: it never goes coplanar with the drum shell, and the doorframe
+    # jambs (which reach 8 cm past the wall) cross it cleanly at the entrance.
+    create_cylinder(bm, radius=tower_r + 0.025, height=0.16, segments=32,
                     location=(tx, ty, tz_floor + 0.02), mat_index=MAT_INDEX_CUT_STONE)
     create_cylinder(bm, radius=tower_r + 0.06, height=0.16, segments=32,
                     location=(tx, ty, tz_top - 0.08), mat_index=MAT_INDEX_CUT_STONE)
 
     # 4f. Curved hanging tail beneath the turret (stucco to match the walls)
     _build_pointed_tail(bm, tx, ty, tz_lower, tower_r, depth=2.20, segments=32,
-                        rings=16, mat_index=MAT_INDEX_PLASTER_EXT, power=1.7)
+                        rings=16, mat_index=turret_mat, power=1.7)
 
     # 4g. Conical shingle cap and crystal finial
     cap_h = 2.30
@@ -1571,18 +1703,26 @@ def build_mage_tower(bm, props, seed):
     outcrop_by_floor = _plan_mage_outcrops(props, levels)
     outcrop_index = 0
 
+    # Straight cylindrical shaft: every storey keeps the full radius R all the
+    # way up to the belvedere overhang -- no exterior stepping, no interior
+    # cone, so doors, windows and frames always meet a constant-thickness
+    # cylindrical wall.
+    top_shaft_r = R
+
+    has_bridge = getattr(props, 'has_mage_outcrops', False)
+    has_lower_bridge = (tier == 'TIER_3' and has_bridge and shaft_storeys >= 4)
+    lower_bridge_fl = 3 if shaft_storeys >= 5 else (shaft_storeys - 2)
+    lower_bridge_bay = 2
+
     # Stair flight trajectory along the inner wall with comfortable landing gaps
-    stair_configs = []
-    for fl in range(shaft_storeys):
-        s_ang = (-30.0 + fl * 200.0) % 360.0
-        e_ang = (s_ang + 135.0) % 360.0
-        stair_configs.append((s_ang, e_ang))
+    stair_configs = [_stair_arc_deg(fl) for fl in range(shaft_storeys)]
 
     for fl in range(shaft_storeys):
         z0 = found_h + fl * level_h
         z1 = z0 + level_h
-        cur_r = R - fl * 0.08
+        cur_r = R
         r_inner = cur_r - wall_t
+        r_inner_top = r_inner
 
         # --- Solid unified floor (zero concentric seams, with stairwell cutout) ---
         if fl == 0:
@@ -1590,17 +1730,17 @@ def build_mage_tower(bm, props, seed):
                             location=(0.0, 0.0, z0 + 0.07), mat_index=MAT_INDEX_STONE)
         else:
             prev_stair_arc = stair_configs[fl - 1]
-            prev_wall_in = (R - (fl - 1) * 0.08) - wall_t - 0.02
+            prev_wall_in = R - wall_t - 0.02
             _build_watertight_floor(bm, r_floor=r_inner, z_floor=z0 + 0.14,
                                     stair_arc=prev_stair_arc, shaft_r_in=r_inner,
                                     thickness=0.14, segments=48, offset=OFFSET,
-                                    stair_inner_r=prev_wall_in - 1.10,
+                                    stair_inner_r=prev_wall_in - STAIR_W,
                                     stair_outer_r=prev_wall_in)
 
         # --- Curved castle staircase along the wall with interior support pillars ---
         s_ang_deg, _ = stair_configs[fl]
         _build_curved_wall_stairs(bm, cur_r=cur_r, wall_t=wall_t, z0=z0 + 0.14, z1=z1 + 0.14,
-                                  start_ang_deg=s_ang_deg, arc_deg=135.0, stair_w=1.10)
+                                  start_ang_deg=s_ang_deg, arc_deg=STAIR_ARC, stair_w=STAIR_W)
 
         # --- Openings configuration ---
         door_k = 0 if (fl == 0 and props.has_front_door) else None
@@ -1608,14 +1748,22 @@ def build_mage_tower(bm, props, seed):
         # Whimsical outcrops on this storey notch a floor-level doorway through
         # the shaft wall so their little rooms connect straight into the interior.
         outcrop_bays = set(outcrop_by_floor.get(fl, ()))
+        is_lower_bridge_fl = (has_lower_bridge and fl == lower_bridge_fl)
+        if is_lower_bridge_fl:
+            win_facets = win_facets - {lower_bridge_bay}
+            extra_doors = outcrop_bays | {lower_bridge_bay}
+        else:
+            extra_doors = outcrop_bays
 
         # Continuous smooth stone wall ring with precision cutouts (8 bays, 48 segments)
-        _build_seamless_wall_ring(bm, r_out=cur_r, r_in=r_inner, z0=z0, z1=z1,
+        # (straight cylinder: r_in_top == r_in, so inner and outer faces are parallel).
+        _build_seamless_wall_ring(bm, r_out=cur_r, r_in=r_inner, r_in_top=r_inner_top,
+                                  z0=z0, z1=z1,
                                   bays=BAYS, offset=OFFSET,
                                   door_bay=door_k, door_w=door_w, door_h=door_h,
                                   window_bays=win_facets, win_w=win_w, win_h=win_h,
                                   mat_ext=body_ext, mat_int=body_int,
-                                  extra_door_bays=outcrop_bays,
+                                  extra_door_bays=extra_doors,
                                   extra_door_w=1.20, extra_door_h=2.60)
 
         # Front Door Assembly (projected slightly proud to eliminate any coplanar overlaps)
@@ -1633,7 +1781,8 @@ def build_mage_tower(bm, props, seed):
                                 wall_thickness=wall_t + door_proud + door_margin - 0.06,
                                 door_w=door_w, door_h=door_h,
                                 door_angle_deg=getattr(props, 'door_angle', 0.0),
-                                door_shape='ARCHED', ground_floor_stone=True)
+                                door_shape='ARCHED', ground_floor_stone=True,
+                                include_leaf=getattr(props, 'include_door_leaves', True))
             if props.has_front_steps and props.has_foundation:
                 build_front_steps(bm, center_x=dx, y_front=cur_r * math.sin(a_door),
                                   z_base=z0, num_steps=max(2, int(found_h / 0.18)))
@@ -1641,12 +1790,14 @@ def build_mage_tower(bm, props, seed):
         # Windows with stone sills & frames (outcrop bays get their own glass)
         for wk in (win_facets - outcrop_bays):
             a_win = (wk + 0.5) * BAY_ANG + OFFSET
-            # Seated 20 cm into the wall (recessed reveal).
-            w_r = cur_r - 0.20
+            # Straight cylindrical wall of constant wall_t: seat the frame on
+            # the mid-wall so the reveal sleeve laps both faces exactly.
+            win_wt = wall_t
+            w_r = cur_r - win_wt * 0.5
             wx = w_r * math.cos(a_win)
             wy = w_r * math.sin(a_win)
             build_window_assembly(bm, center=(wx, wy, z0 + level_h * 0.52),
-                                  size=(win_w, win_h), wall_thickness=wall_t,
+                                  size=(win_w, win_h), wall_thickness=win_wt,
                                   normal_axis=(math.cos(a_win), math.sin(a_win)), has_shutters=False)
 
         # Whimsical mini-wing oriel bays that open through into this storey.
@@ -1655,15 +1806,23 @@ def build_mage_tower(bm, props, seed):
                                 z0, level_h, wall_t, win_w, win_h, seed, outcrop_index)
             outcrop_index += 1
 
-        # Exterior-only string course band between storeys. The shaft tapers, so
-        # the storey above is inset; the band reaches well inside the upper
-        # storey's radius and laps up past the joint so no cavity gap is left.
+        # Tier 3 secondary hanging bridge & watch-turret on mid-shaft level.
+        # The shaft ring cuts a 1.30 x 2.70 doorway at this bay - pass those
+        # exact sizes so the bridge-side doorframe matches the cutout.
+        if is_lower_bridge_fl:
+            _build_bridge_tower(bm, props, cur_r, z0, cur_r, bay=lower_bridge_bay,
+                                tower_r=1.50, tower_h=4.80, turret_mat=MAT_INDEX_PLASTER_EXT,
+                                bridge_len=3.80, shaft_door_w=1.30, shaft_door_h=2.70)
+
+        # Exterior-only string course band between storeys. It laps the ring
+        # joint (reaching inside the wall and up past it) so no cavity gap
+        # is left where two straight rings meet.
         _build_exterior_annular_band(bm, r_in=cur_r - 0.16, r_out=cur_r + 0.08,
                                     z_bot=z1 - 0.16, z_top=z1 + 0.03,
                                     segments=48, offset=OFFSET, mat_index=trim_mat)
 
-        # Warcraft-style chunky timber seam pillars at THIS storey's radius so
-        # they follow the taper and stay proud of the wall on every level.
+        # Warcraft-style chunky timber seam pillars running the straight shaft,
+        # standing proud of the wall on every level.
         _build_exterior_seam_pillars(bm, r_shaft=cur_r, z_base=z0, z_top=z1,
                                     bays=BAYS, offset=OFFSET,
                                     with_foot=(fl == 0),
@@ -1673,7 +1832,6 @@ def build_mage_tower(bm, props, seed):
     # -------------------------------------------------------------------------
     # 3. Cantilevered Belvedere / Crown (Archmage Observatory)
     # -------------------------------------------------------------------------
-    top_shaft_r = R - (shaft_storeys - 1) * 0.08
     crown_z = found_h + shaft_storeys * level_h
     # Generous overhang and a tall, airy observatory to give the tower its
     # crowning, top-heavy silhouette.
@@ -1714,17 +1872,22 @@ def build_mage_tower(bm, props, seed):
     # overhang soffit, with the precise stairwell cutout and guard railing) ---
     inner_bel_r = bel_r - wall_t
     top_stair_arc = stair_configs[-1]
-    shaft_r_in = top_shaft_r - wall_t
-    top_wall_in = top_shaft_r - wall_t - 0.02
     _build_watertight_floor(bm, r_floor=bel_r + 0.04, z_floor=crown_z + 0.14,
-                            stair_arc=top_stair_arc, shaft_r_in=shaft_r_in,
+                            stair_arc=top_stair_arc, shaft_r_in=top_shaft_r - wall_t,
                             thickness=soffit_thickness, segments=48, offset=OFFSET,
-                            stair_inner_r=top_wall_in - 1.10,
-                            stair_outer_r=top_wall_in)
+                            stair_inner_r=(top_shaft_r - wall_t - 0.02) - STAIR_W,
+                            stair_outer_r=top_shaft_r - wall_t - 0.02)
 
     # --- Crown Walls: Continuous timber-framed observatory, windows all round,
     # with one floor-level doorway (bay 0) opening onto the hanging bridge. ---
-    crown_win_facets = {1, 2, 3, 4, 5, 6, 7}
+    has_bridge = getattr(props, 'has_mage_outcrops', False)
+    if has_bridge:
+        crown_win_facets = {0, 1, 2, 3, 4, 5, 7}
+        crown_door_bays = {6}
+    else:
+        crown_win_facets = {0, 1, 2, 3, 4, 5, 6, 7}
+        crown_door_bays = set()
+
     crown_win_w = 0.70
     crown_win_h = min(2.10, bel_h * 0.62)
     _build_seamless_wall_ring(bm, r_out=bel_r, r_in=inner_bel_r,
@@ -1733,7 +1896,7 @@ def build_mage_tower(bm, props, seed):
                               window_bays=crown_win_facets,
                               win_w=crown_win_w, win_h=crown_win_h,
                               mat_ext=crown_ext, mat_int=crown_int,
-                              extra_door_bays={0},
+                              extra_door_bays=crown_door_bays,
                               extra_door_w=1.40, extra_door_h=2.20)
 
     # --- Belvedere Timber Corner Framing Posts (Covering Plaster Seams on 8 bays) ---
@@ -1762,7 +1925,7 @@ def build_mage_tower(bm, props, seed):
 
     # Hanging bridge out to a little side turret (the classic mage lookout).
     if getattr(props, 'has_mage_outcrops', False):
-        _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r)
+        _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r, bay=6)
 
     # -------------------------------------------------------------------------
     # 4. Roof, Spires, Tourelles & Orbiting Arcane Crystals

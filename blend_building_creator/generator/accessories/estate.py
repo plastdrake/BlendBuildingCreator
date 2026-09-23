@@ -171,6 +171,7 @@ _OUTHOUSE_DISABLED = (
 _INHERITED = (
     'color_shingles', 'color_wall_ext', 'color_timber', 'color_stone',
     'color_floor', 'color_timber_frame', 'window_glow_strength',
+    'include_door_leaves',
 )
 
 

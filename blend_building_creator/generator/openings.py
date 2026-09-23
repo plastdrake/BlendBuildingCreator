@@ -33,45 +33,92 @@ def _shift_face_uvs(bm, faces, du, dv):
             c = loop[uv].uv
             loop[uv].uv = Vector((c.x + du, c.y + dv))
 
-def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z_right, leaf_t, out_ang, rot_mat, mat_index=MAT_INDEX_DOOR, plank_k=0):
+
+def create_pyramid_clavo(bm, size=0.022, height=0.012, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_IRON):
+    """
+    Creates a hand-forged 4-sided pyramid iron stud (clavo).
+    Points along the local -Y direction (outward from door surface).
+    """
+    hs = size * 0.5
+    b0 = Vector((-hs, 0.0, -hs))
+    b1 = Vector(( hs, 0.0, -hs))
+    b2 = Vector(( hs, 0.0,  hs))
+    b3 = Vector((-hs, 0.0,  hs))
+    apex = Vector((0.0, -height, 0.0))
+
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector(location))
+    tr_mat = loc_mat @ rot_mat
+
+    vb0 = bm.verts.new(tr_mat @ b0)
+    vb1 = bm.verts.new(tr_mat @ b1)
+    vb2 = bm.verts.new(tr_mat @ b2)
+    vb3 = bm.verts.new(tr_mat @ b3)
+    va = bm.verts.new(tr_mat @ apex)
+
+    fb = bm.faces.new([vb0, vb3, vb2, vb1])
+    f0 = bm.faces.new([vb0, vb1, va])
+    f1 = bm.faces.new([vb1, vb2, va])
+    f2 = bm.faces.new([vb2, vb3, va])
+    f3 = bm.faces.new([vb3, vb0, va])
+    faces = [fb, f0, f1, f2, f3]
+    for f in faces:
+        f.material_index = mat_index
+
+    uv_layer = bm.loops.layers.uv.verify()
+    for f in faces:
+        for loop in f.loops:
+            loop[uv_layer].uv = Vector((loop.vert.co.x * 2.0 + 0.5, loop.vert.co.z * 2.0 + 0.5))
+    return faces
+
+
+def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z_right, leaf_t, out_ang, rot_mat, mat_index=MAT_INDEX_DOOR, plank_k=0, stagger_y=0.0, top_points=None):
     hw = leaf_t * 0.5
     origin = Vector((hinge_x, hinge_y, z_bot))
-    v0 = origin + (rot_mat @ Vector((x_left, -hw, 0.0)))
-    v1 = origin + (rot_mat @ Vector((x_right, -hw, 0.0)))
-    v2 = origin + (rot_mat @ Vector((x_right, hw, 0.0)))
-    v3 = origin + (rot_mat @ Vector((x_left, hw, 0.0)))
-    hl = z_left - z_bot
-    hr = z_right - z_bot
-    vt0 = origin + (rot_mat @ Vector((x_left, -hw, hl)))
-    vt1 = origin + (rot_mat @ Vector((x_right, -hw, hr)))
-    vt2 = origin + (rot_mat @ Vector((x_right, hw, hr)))
-    vt3 = origin + (rot_mat @ Vector((x_left, hw, hl)))
+    v0 = origin + (rot_mat @ Vector((x_left, -hw + stagger_y, 0.0)))
+    v1 = origin + (rot_mat @ Vector((x_right, -hw + stagger_y, 0.0)))
+    v2 = origin + (rot_mat @ Vector((x_right, hw + stagger_y, 0.0)))
+    v3 = origin + (rot_mat @ Vector((x_left, hw + stagger_y, 0.0)))
     bv0 = bm.verts.new(v0)
     bv1 = bm.verts.new(v1)
     bv2 = bm.verts.new(v2)
     bv3 = bm.verts.new(v3)
-    tv0 = bm.verts.new(vt0)
-    tv1 = bm.verts.new(vt1)
-    tv2 = bm.verts.new(vt2)
-    tv3 = bm.verts.new(vt3)
+
+    if not top_points or len(top_points) < 2:
+        top_points = [(x_left, z_left), (x_right, z_right)]
+
+    # Generate high-poly top front (-Y) and top back (+Y) vertices along the curved arc
+    top_front = []
+    top_back = []
+    for px, pz in top_points:
+        hl = pz - z_bot
+        vf = origin + (rot_mat @ Vector((px, -hw + stagger_y, hl)))
+        vb = origin + (rot_mat @ Vector((px, hw + stagger_y, hl)))
+        top_front.append(bm.verts.new(vf))
+        top_back.append(bm.verts.new(vb))
+
     faces = []
-    face_vertex_lists = [
-        [bv0, bv3, bv2, bv1],  # Bottom (-Z)
-        [tv0, tv1, tv2, tv3],  # Top (+Z)
-        [bv0, bv1, tv1, tv0],  # Front (-Y)
-        [bv1, bv2, tv2, tv1],  # Right (+X)
-        [bv2, bv3, tv3, tv2],  # Back (+Y)
-        [bv3, bv0, tv0, tv3],  # Left (-X)
-    ]
-    for fvs in face_vertex_lists:
-        f = bm.faces.new(fvs)
+    # Bottom (-Z)
+    faces.append(bm.faces.new([bv0, bv3, bv2, bv1]))
+    # Front (-Y)
+    faces.append(bm.faces.new([bv0, bv1] + list(reversed(top_front))))
+    # Back (+Y)
+    faces.append(bm.faces.new([bv2, bv3] + top_back))
+    # Left (-X)
+    faces.append(bm.faces.new([bv3, bv0, top_front[0], top_back[0]]))
+    # Right (+X)
+    faces.append(bm.faces.new([bv1, bv2, top_back[-1], top_front[-1]]))
+    # Top curved arc facets (+Z)
+    for i in range(len(top_points) - 1):
+        faces.append(bm.faces.new([top_front[i], top_front[i + 1], top_back[i + 1], top_back[i]]))
+
+    for f in faces:
         f.material_index = mat_index
-        faces.append(f)
-    
+
     res = {}
     try:
         edges = list({e for f in faces for e in f.edges})
-        res = bmesh.ops.bevel(bm, geom=edges, offset=0.010, segments=2, profile=0.7, affect='EDGES')
+        res = bmesh.ops.bevel(bm, geom=edges, offset=0.008, segments=2, profile=0.7, affect='EDGES')
         for f in res.get('faces', []):
             if f.is_valid:
                 f.material_index = mat_index
@@ -112,7 +159,8 @@ def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z
             loop[uv_layer].uv = Vector((u, v))
 
 def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_w=1.0, door_h=2.2,
-                        door_angle_deg=45.0, door_shape='AUTO', ground_floor_stone=True, normal_axis='-Y'):
+                        door_angle_deg=45.0, door_shape='AUTO', ground_floor_stone=True, normal_axis='-Y',
+                        include_leaf=True):
     """
     Builds the door frame, casing, openable door panel, iron hinges, and ring handle.
     door_angle_deg controls how open the door leaf is (0 = closed, 90 = fully open outward).
@@ -125,7 +173,8 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         build_door_assembly(door_bm, center_x=0.0, y_front=0.0, z_base=0.0,
                             wall_thickness=wall_thickness, door_w=door_w, door_h=door_h,
                             door_angle_deg=door_angle_deg, door_shape=door_shape,
-                            ground_floor_stone=ground_floor_stone, normal_axis='-Y')
+                            ground_floor_stone=ground_floor_stone, normal_axis='-Y',
+                            include_leaf=include_leaf)
         if normal_axis == '+Y':
             ang = math.pi
         elif normal_axis == '+X':
@@ -191,7 +240,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 
         sp_outer_w = R_in + 0.22
         sp_top_z = z_spring + R_in + 0.25
-        num_arc = 6
+        num_arc = 20
         
         yf_f = y_front - frame_depth * 0.5 - 0.012
         yf_b = y_front + frame_depth * 0.5 + 0.012
@@ -334,6 +383,9 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
     
+    if not include_leaf:
+        return
+
     leaf_t = 0.055
     arch_clear = 0.014
     outer_face_y = (y_front - frame_depth * 0.5) if is_arched else (y_front - 0.12)
@@ -433,14 +485,19 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         if is_arched:
             R_door = max(0.10, R_in - arch_clear)
             door_center_local = door_leaf_w * 0.5
+            num_sub = 5
             for k in range(num_planks):
                 x_l = k * (pw + gap)
                 x_r = x_l + pw
-                dl = x_l - door_center_local
-                dr = x_r - door_center_local
-                zl = z_spring + math.sqrt(max(0.0, R_door*R_door - dl*dl)) if abs(dl) < R_door else z_spring
-                zr = z_spring + math.sqrt(max(0.0, R_door*R_door - dr*dr)) if abs(dr) < R_door else z_spring
-                _create_arched_plank(bm, hinge_x, hinge_y, z_door_bot, x_l, x_r, zl, zr, door_leaf_t, out_ang, rot_mat, MAT_INDEX_DOOR, k)
+                top_pts = []
+                for si in range(num_sub + 1):
+                    t = si / num_sub
+                    lx = x_l + t * (x_r - x_l)
+                    dl = lx - door_center_local
+                    lz = z_spring + math.sqrt(max(0.0, R_door * R_door - dl * dl)) if abs(dl) < R_door else z_spring
+                    top_pts.append((lx, lz))
+                _create_arched_plank(bm, hinge_x, hinge_y, z_door_bot, x_l, x_r, top_pts[0][1], top_pts[-1][1],
+                                     door_leaf_t, out_ang, rot_mat, MAT_INDEX_DOOR, k, top_points=top_pts)
         else:
             for k in range(num_planks):
                 px = (k + 0.5) * pw + k * gap
@@ -496,6 +553,225 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         create_cylinder(bm, radius=0.013, height=0.032, segments=8, location=in_boss_c, rotation=(1.57, 0.0, out_ang), mat_index=MAT_INDEX_IRON)
         in_ring_c = in_boss_c + (rot_mat @ Vector((0.0, 0.012, -0.052)))
         _create_torus_ring(bm, location=in_ring_c, rotation=(1.57, 0.0, out_ang), major_radius=0.060, minor_radius=0.013, major_segments=18, minor_segments=12, mat_index=MAT_INDEX_IRON)
+
+
+def build_standalone_door_blade(bm, width=1.0, height=2.2, thickness=0.055, shape='SQUARE', hinge_side='LEFT',
+                               door_blade_type='SINGLE', mat_wood_idx=0, mat_iron_idx=1):
+    """
+    Builds an isolated, richly detailed fantasy stylized door blade with its hinge pin
+    and pivot point positioned strictly at local (0, 0, 0).
+    Optimized for export to Unreal Engine as an interactive door actor.
+    - If hinge_side == 'LEFT': Hinge is at (0,0), blade extends along +X [0, width].
+    - If hinge_side == 'RIGHT': Hinge is at (0,0), blade extends along -X [-width, 0].
+    - If door_blade_type == 'SINGLE': Full single door blade (arch apex at center W/2).
+    - If door_blade_type == 'DOUBLE_LEAF': One side of a double door pair (arch apex at meeting stile W).
+    - Bottom of the door blade is at z = 0.0, top is at z = height.
+    - Hinge barrel is centered at (x=0, y=0).
+    - Exterior face is at -thickness * 0.5, interior face is at +thickness * 0.5.
+    - Uses 2 material indices: mat_wood_idx (default 0) and mat_iron_idx (default 1).
+    """
+    s_h = 1.0 if hinge_side == 'LEFT' else -1.0
+    leaf_t = thickness
+    is_arched = (shape == 'ARCHED')
+    is_double = (door_blade_type == 'DOUBLE_LEAF')
+
+    # 1. Door Planks
+    num_planks = max(4, int(round(width / 0.13)))
+    gap = 0.0032
+    pw = (width - (num_planks - 1) * gap) / num_planks
+
+    z_spring = height
+    if is_arched:
+        num_sub = 6  # 6 subdivisions per plank for high-poly smooth arch curvature!
+        if is_double:
+            # Half-arch of a double door: apex is at the inner meeting stile (x = width),
+            # spring line is at the hinge jamb (x = 0).
+            # Architectural segmental circular arch with graceful rise (~35-38cm)
+            # so the hinge jamb stays comfortably tall (~1.80m+) and battens clear the handle.
+            h_rise = min(0.38, max(0.20, height * 0.18), width * 0.38)
+            R_door = (width * width + h_rise * h_rise) / (2.0 * h_rise)
+            z_spring = height - h_rise
+            zc = height - R_door
+            for k in range(num_planks):
+                x_l = k * (pw + gap)
+                x_r = x_l + pw
+
+                top_pts = []
+                for si in range(num_sub + 1):
+                    t = si / num_sub
+                    lx = x_l + t * (x_r - x_l)
+                    dl = width - lx
+                    lz = zc + math.sqrt(max(0.0, R_door * R_door - dl * dl)) if abs(dl) <= R_door else z_spring
+                    top_pts.append((lx, lz))
+
+                if s_h > 0:
+                    xl_world, xr_world = x_l, x_r
+                    zl_world, zr_world = top_pts[0][1], top_pts[-1][1]
+                    world_top_pts = top_pts
+                else:
+                    xl_world, xr_world = -x_r, -x_l
+                    zl_world, zr_world = top_pts[-1][1], top_pts[0][1]
+                    world_top_pts = [(-px, pz) for px, pz in reversed(top_pts)]
+
+                stagger_y = 0.0016 * math.sin(k * 2.8 + 1.2) + (0.0010 if k % 2 == 1 else -0.0010)
+                _create_arched_plank(bm, hinge_x=0.0, hinge_y=0.0, z_bot=0.0,
+                                     x_left=xl_world, x_right=xr_world,
+                                     z_left=zl_world, z_right=zr_world,
+                                     leaf_t=leaf_t, out_ang=0.0, rot_mat=Matrix.Identity(4),
+                                     mat_index=mat_wood_idx, plank_k=k, stagger_y=stagger_y,
+                                     top_points=world_top_pts)
+        else:
+            # Single arched door: apex is at center (x = width * 0.5)
+            R_door = min(width * 0.5, max(0.15, height - 0.35))
+            z_spring = height - R_door
+            door_center_local = width * 0.5
+            for k in range(num_planks):
+                x_l = k * (pw + gap)
+                x_r = x_l + pw
+
+                top_pts = []
+                for si in range(num_sub + 1):
+                    t = si / num_sub
+                    lx = x_l + t * (x_r - x_l)
+                    dl = lx - door_center_local
+                    lz = z_spring + math.sqrt(max(0.0, R_door * R_door - dl * dl)) if abs(dl) <= R_door else z_spring
+                    top_pts.append((lx, lz))
+
+                if s_h > 0:
+                    xl_world, xr_world = x_l, x_r
+                    zl_world, zr_world = top_pts[0][1], top_pts[-1][1]
+                    world_top_pts = top_pts
+                else:
+                    xl_world, xr_world = -x_r, -x_l
+                    zl_world, zr_world = top_pts[-1][1], top_pts[0][1]
+                    world_top_pts = [(-px, pz) for px, pz in reversed(top_pts)]
+
+                stagger_y = 0.0016 * math.sin(k * 2.8 + 1.2) + (0.0010 if k % 2 == 1 else -0.0010)
+                _create_arched_plank(bm, hinge_x=0.0, hinge_y=0.0, z_bot=0.0,
+                                     x_left=xl_world, x_right=xr_world,
+                                     z_left=zl_world, z_right=zr_world,
+                                     leaf_t=leaf_t, out_ang=0.0, rot_mat=Matrix.Identity(4),
+                                     mat_index=mat_wood_idx, plank_k=k, stagger_y=stagger_y,
+                                     top_points=world_top_pts)
+    else:
+        for k in range(num_planks):
+            px = s_h * ((k + 0.5) * pw + k * gap)
+            stagger_y = 0.0016 * math.sin(k * 2.8 + 1.2) + (0.0010 if k % 2 == 1 else -0.0010)
+            plank_loc = Vector((px, stagger_y, height * 0.5))
+            _pf = create_beveled_box(bm, size=(pw - 0.0025, leaf_t, height),
+                                     location=plank_loc, rotation=(0.0, 0.0, 0.0),
+                                     mat_index=mat_wood_idx, bevel_amount=0.009, bevel_segments=2)
+            _shift_face_uvs(bm, _pf, (k * 0.613) % 1.0, (k * 0.271) % 1.0)
+
+    # 2. Forged Iron Clavos Studs along bottom (and top if square) of planks
+    for k in range(num_planks):
+        px = s_h * ((k + 0.5) * pw + k * gap)
+        create_pyramid_clavo(bm, size=0.018, height=0.009,
+                             location=Vector((px, -leaf_t * 0.5 - 0.004, 0.055)),
+                             mat_index=mat_iron_idx)
+        if not is_arched:
+            create_pyramid_clavo(bm, size=0.018, height=0.009,
+                                 location=Vector((px, -leaf_t * 0.5 - 0.004, height - 0.055)),
+                                 mat_index=mat_iron_idx)
+
+    # 3. Interior Battens & Diagonal Z-Brace (+Y)
+    bat_z_bot = height * 0.16
+    bat_z_top = min(z_spring - 0.08, height * 0.80) if is_arched else height * 0.82
+    for bz in [bat_z_bot, bat_z_top]:
+        bat_loc = Vector((s_h * width * 0.5, leaf_t * 0.5 + 0.012, bz))
+        create_door_batten(bm, size=(width * 0.94, 0.024, 0.11),
+                           location=bat_loc, rotation=(0.0, 0.0, 0.0),
+                           mat_index=mat_wood_idx, bevel_amount=0.005, bevel_segments=2)
+
+    # Authentic Medieval Diagonal Z-Brace (mortised into horizontal battens, slightly thinner than horizontal ones)
+    brace_y = leaf_t * 0.5 + 0.0085
+    p0 = Vector((s_h * width * 0.14, brace_y, bat_z_bot + 0.015))
+    p1 = Vector((s_h * width * 0.62, brace_y, bat_z_top - 0.015))
+    pmid = (p0 + p1) * 0.5
+    v_brace = p1 - p0
+    len_brace = v_brace.length
+    rot_y = -math.atan2(v_brace.z, v_brace.x)
+    create_beveled_box(bm, size=(len_brace + 0.05, 0.017, 0.082),
+                       location=pmid, rotation=(0.0, rot_y, 0.0),
+                       mat_index=mat_wood_idx, bevel_amount=0.004, bevel_segments=2)
+
+    # 4. Double Door Astragal Strip (if double door half leaf)
+    if is_double:
+        astragal_x = s_h * (width - 0.016)
+        astragal_h = height
+        create_beveled_box(bm, size=(0.034, 0.022, astragal_h),
+                           location=Vector((astragal_x, -leaf_t * 0.5 - 0.011, astragal_h * 0.5)),
+                           mat_index=mat_wood_idx, bevel_amount=0.005, bevel_segments=2)
+        for zf in [0.18, 0.38, 0.62, 0.85]:
+            create_pyramid_clavo(bm, size=0.016, height=0.008,
+                                 location=Vector((astragal_x, -leaf_t * 0.5 - 0.022, height * zf)),
+                                 mat_index=mat_iron_idx)
+
+    # 5. Ornamental Fantasy Forged Iron Strap Hinges on exterior (-Y)
+    strap_len = width * 0.76
+    strap_z_list = [height * 0.18, min(z_spring - 0.08, height * 0.78) if is_arched else height * 0.78]
+    if height > 2.4:
+        strap_z_list.insert(1, height * 0.48)
+
+    for hz in strap_z_list:
+        out_sy = -leaf_t * 0.5 - 0.010
+        # Strap body
+        strap_c = Vector((s_h * (strap_len * 0.44 + 0.015), out_sy, hz))
+        create_beveled_box(bm, size=(strap_len, 0.018, 0.055), location=strap_c,
+                           mat_index=mat_iron_idx, bevel_amount=0.004, bevel_segments=2)
+
+        # Forged pyramid clavo studs along the strap
+        for r_frac in [0.22, 0.50, 0.74]:
+            rv_c = Vector((s_h * (strap_len * r_frac), out_sy - 0.009, hz))
+            create_pyramid_clavo(bm, size=0.020, height=0.010, location=rv_c, mat_index=mat_iron_idx)
+
+        # Hinge barrel knuckle strictly at (x=0.0, y=0.0)
+        create_cylinder(bm, radius=0.022, height=0.15, segments=12,
+                        location=(0.0, 0.0, hz), rotation=(0.0, 0.0, 0.0), mat_index=mat_iron_idx)
+
+    # 6. Ornate Fantasy Ring Pull Handle & Escutcheon Plate
+    handle_z = height * 0.46
+    handle_x = s_h * (width - 0.12) if is_double else s_h * (width * 0.80)
+
+    # Exterior handle (-Y)
+    out_y = -leaf_t * 0.5 - 0.012
+    esc_c = Vector((handle_x, out_y, handle_z))
+    create_beveled_box(bm, size=(0.090, 0.014, 0.160), location=esc_c,
+                       mat_index=mat_iron_idx, bevel_amount=0.004, bevel_segments=2)
+    for dx_c, dz_c in [(-0.032, -0.062), (0.032, -0.062), (-0.032, 0.062), (0.032, 0.062)]:
+        create_pyramid_clavo(bm, size=0.014, height=0.007,
+                             location=esc_c + Vector((s_h * dx_c, -0.007, dz_c)), mat_index=mat_iron_idx)
+    hang_c = Vector((handle_x, out_y - 0.010, handle_z - 0.035))
+    create_beveled_box(bm, size=(0.055, 0.018, 0.055), location=hang_c,
+                       mat_index=mat_iron_idx, bevel_amount=0.004, bevel_segments=2)
+    boss_c = hang_c + Vector((0.0, -0.009, -0.008))
+    create_cylinder(bm, radius=0.012, height=0.026, segments=8,
+                    location=boss_c, rotation=(1.57, 0.0, 0.0), mat_index=mat_iron_idx)
+    ring_c = boss_c + Vector((0.0, -0.008, -0.045))
+    _create_torus_ring(bm, location=ring_c, rotation=(1.57, 0.0, 0.0),
+                       major_radius=0.054, minor_radius=0.011,
+                       major_segments=16, minor_segments=10, mat_index=mat_iron_idx)
+
+    # Interior handle (+Y)
+    in_y = leaf_t * 0.5 + 0.012
+    in_esc_c = Vector((handle_x, in_y, handle_z))
+    create_beveled_box(bm, size=(0.090, 0.014, 0.160), location=in_esc_c,
+                       mat_index=mat_iron_idx, bevel_amount=0.004, bevel_segments=2)
+    for dx_c, dz_c in [(-0.032, -0.062), (0.032, -0.062), (-0.032, 0.062), (0.032, 0.062)]:
+        create_pyramid_clavo(bm, size=0.014, height=0.007,
+                             location=in_esc_c + Vector((s_h * dx_c, 0.007, dz_c)),
+                             rotation=(0.0, 0.0, 3.14159), mat_index=mat_iron_idx)
+    in_hang_c = Vector((handle_x, in_y + 0.010, handle_z - 0.035))
+    create_beveled_box(bm, size=(0.055, 0.018, 0.055), location=in_hang_c,
+                       mat_index=mat_iron_idx, bevel_amount=0.004, bevel_segments=2)
+    in_boss_c = in_hang_c + Vector((0.0, 0.009, -0.008))
+    create_cylinder(bm, radius=0.012, height=0.026, segments=8,
+                    location=in_boss_c, rotation=(1.57, 0.0, 0.0), mat_index=mat_iron_idx)
+    in_ring_c = in_boss_c + Vector((0.0, 0.008, -0.045))
+    _create_torus_ring(bm, location=in_ring_c, rotation=(1.57, 0.0, 0.0),
+                       major_radius=0.054, minor_radius=0.011,
+                       major_segments=16, minor_segments=10, mat_index=mat_iron_idx)
+
 
 def build_arrow_slit(bm, center=(0.0, 0.0, 0.0), normal_axis='-Y', wall_thickness=0.38,
                      slit_w=0.18, slit_h=0.92, has_transom=False,

@@ -209,9 +209,23 @@ class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
             col.prop(props, "door_shape")
             col.prop(props, "door_width")
             col.prop(props, "door_height")
-            col.prop(props, "door_angle", slider=True)
+            col.prop(props, "include_door_leaves", text="Generate Door Leaves")
+            if props.include_door_leaves:
+                col.prop(props, "door_angle", slider=True)
         if props.has_side_rampart:
             box_door.prop(props, "rampart_door_width")
+
+        # Standalone Door Blade Box (for Unreal Engine)
+        box_ue = box_door.box()
+        box_ue.label(text="Unreal Engine Standalone Door Blade", icon='EXPORT')
+        box_ue.prop(props, "door_blade_leaf_type", text="Type")
+        row_ue = box_ue.row(align=True)
+        row_ue.prop(props, "door_blade_width", text="Width")
+        row_ue.prop(props, "door_blade_height", text="Height")
+        row_ue2 = box_ue.row(align=True)
+        row_ue2.prop(props, "door_blade_shape", text="Shape")
+        row_ue2.prop(props, "door_blade_hinge", text="Hinge")
+        box_ue.operator("building.create_door_blade", text="Create Door Blade (Pivot at 0,0)", icon='SNAP_VERTEX')
             
         # Windows Box
         box_win = layout.box()
@@ -408,6 +422,8 @@ class VIEW3D_PT_fantasy_building_extensions(bpy.types.Panel):
             box_hosp.prop(props, "sign_icon", text="Sign Emblem")
         box_hosp.prop(props, "has_flower_boxes")
         box_hosp.prop(props, "has_outdoor_decor")
+        if props.has_outdoor_decor:
+            box_hosp.prop(props, "lantern_style")
         box_hosp.prop(props, "has_well")
 
         # Estate Grounds & Outbuildings

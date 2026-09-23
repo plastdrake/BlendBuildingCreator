@@ -387,7 +387,7 @@ def build_chapel_kit(bm, props, ctx, tier):
     # 4. Forged wall lanterns flanking the entrance (reuses the hospitality fitment).
     door_half = getattr(props, 'door_width', 1.2) * 0.5
     lan_z = ctx.found_h + 2.35
-    lan_y = ctx.main_door_yf - wall_t * 0.5 - 0.07
+    lan_y = ctx.main_door_yf - wall_t * 0.5
     for s in (-1.0, 1.0):
         build_hanging_lantern(bm, ctx.main_door_cx + s * (door_half + 0.75),
                               lan_y, z_top=lan_z, arm_ang=-math.pi * 0.5,

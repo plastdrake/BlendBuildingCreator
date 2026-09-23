@@ -76,6 +76,85 @@ def build_floors(bm, props, ctx):
                 bx1 += p_depth
         return bx0, bx1, by0, by1
 
+    def _get_floor_door_corbel_exclusions(f_idx, bounds):
+        """Returns (front_ex, back_ex, left_ex, right_ex) exclusion ranges along each facade
+
+        for doorways/portals on storey `f_idx`, ensuring overhang support corbels are never
+        placed inside door frames, portals, or entrance arches.
+        """
+        lx_min, lx_max, ly_min, ly_max = bounds
+        dw = getattr(props, 'door_width', 1.0)
+        door_margin = dw * 0.5 + 0.50
+        front_ex = []
+        back_ex = []
+        left_ex = []
+        right_ex = []
+
+        if f_idx == 0:
+            # 1. Front entrance
+            if getattr(props, 'has_front_door', True) and not open_timber:
+                if shape == 'RECTANGLE':
+                    door_offset = getattr(props, 'front_door_offset_x', 0.0)
+                    door_cx = 0.0 + door_offset
+                elif shape == 'L_SHAPE':
+                    if wing_placement == 'FRONT' and len(wings) > 0:
+                        door_cx = (lx_min + wings[0]['base'][0]) * 0.5 if wing_side == 'RIGHT' else (wings[0]['base'][1] + lx_max) * 0.5
+                    else:
+                        door_cx = 0.0
+                elif shape == 'U_SHAPE':
+                    door_cx = 0.0
+                else: # T_SHAPE
+                    if wing_placement == 'FRONT':
+                        door_cx = None
+                    else:
+                        door_cx = 0.0
+                if door_cx is not None:
+                    f_margin = door_margin
+                    if getattr(props, 'has_arched_porch', False):
+                        f_margin = max(f_margin, 1.65)
+                    front_ex.append((door_cx - f_margin, door_cx + f_margin))
+
+            # 2. Back entrance
+            if getattr(props, 'has_back_door', False) and not open_timber:
+                b_cx = 0.0
+                if shape == 'L_SHAPE' and wing_placement == 'BACK' and len(wings) > 0:
+                    b_cx = (lx_min + wings[0]['base'][0]) * 0.5 if wing_side == 'RIGHT' else (wings[0]['base'][1] + lx_max) * 0.5
+                back_ex.append((b_cx - door_margin, b_cx + door_margin))
+
+            # 2b. Open rear portal
+            if (getattr(props, 'has_back_portal', False) and not open_timber
+                    and not getattr(props, 'has_back_door', False)):
+                p_w = max(dw, 1.7)
+                p_margin = p_w * 0.5 + 0.50
+                back_ex.append((-p_margin, p_margin))
+
+            # 3. Side door
+            if getattr(props, 'has_side_door', False) and not open_timber:
+                s_facade = getattr(props, 'side_door_facade', 'LEFT')
+                if s_facade == 'LEFT':
+                    s_cy = (ly_min + stair_y_bot) * 0.5 if (props.has_stairs and (stair_y_bot - ly_min) > 2.0) else (ly_min + ly_max) * 0.5
+                    left_ex.append((s_cy - door_margin, s_cy + door_margin))
+                else:
+                    s_cy = (ly_min + ly_max) * 0.5
+                    right_ex.append((s_cy - door_margin, s_cy + door_margin))
+
+        elif f_idx == 1:
+            # Upper side door onto rampart deck
+            if getattr(props, 'has_side_rampart', False) and not open_timber:
+                r_side = getattr(props, 'rampart_side', 'RIGHT')
+                _composer = (getattr(props, 'town_hall_composer', False) and shape == 'T_SHAPE')
+                _rspan = (ly_min, ly_max) if _composer else rampart_deck_span(props, ctx)
+                if _rspan is not None:
+                    rdw = getattr(props, 'rampart_door_width', dw)
+                    r_cy = (_rspan[0] + _rspan[1]) * 0.5
+                    r_margin = rdw * 0.5 + 0.50
+                    if r_side == 'LEFT':
+                        left_ex.append((r_cy - r_margin, r_cy + r_margin))
+                    else:
+                        right_ex.append((r_cy - r_margin, r_cy + r_margin))
+
+        return front_ex, back_ex, left_ex, right_ex
+
     # Ground floor master interior reference for staircase
     fl0_ix_min = -base_w * 0.5 + wall_t
     fl0_ix_max = base_w * 0.5 - wall_t
@@ -235,8 +314,19 @@ def build_floors(bm, props, ctx):
                 cor_l = False
             elif _annex_side == 'RIGHT' and _annex_floors > 0:
                 cor_r = False
+            door_ex_f, door_ex_b, door_ex_l, door_ex_r = _get_floor_door_corbel_exclusions(
+                fl_idx - 1, (prev_x_min, prev_x_max, prev_y_min, prev_y_max)
+            )
+            corbel_ex_f = []
+            if front_ex:
+                corbel_ex_f.append(front_ex)
+            corbel_ex_f.extend(door_ex_f)
             build_cantilever_corbels(bm, x_min, x_max, y_min, y_max, z_floor,
-                                    overhang_dist=overhang_step, front_exclude_x=front_ex,
+                                    overhang_dist=overhang_step,
+                                    front_exclude_x=corbel_ex_f if corbel_ex_f else None,
+                                    back_exclude_x=door_ex_b if door_ex_b else None,
+                                    left_exclude_y=door_ex_l if door_ex_l else None,
+                                    right_exclude_y=door_ex_r if door_ex_r else None,
                                     include_front=inc_f, include_back=inc_b,
                                     include_left=cor_l, include_right=cor_r)
             build_cantilever_soffit(
@@ -349,8 +439,16 @@ def build_floors(bm, props, ctx):
                             include_left=(w_wall != 'RIGHT') and inc_l,
                             include_right=(w_wall != 'LEFT') and inc_r
                         )
+                    w_corbel_ex_f = []
+                    if fl_idx - 1 == 0 and w_wall == 'FRONT' and getattr(props, 'has_wing_door', False) and not open_timber:
+                        w_cx = (w_xmin + w_xmax) * 0.5
+                        w_dw = getattr(props, 'door_width', 1.0)
+                        w_margin = w_dw * 0.5 + 0.50
+                        w_corbel_ex_f.append((w_cx - w_margin, w_cx + w_margin))
+
                     build_cantilever_corbels(bm, w_xmin, w_xmax, w_ymin, w_ymax, z_floor,
                                             overhang_dist=overhang_step,
+                                            front_exclude_x=w_corbel_ex_f if w_corbel_ex_f else None,
                                             include_back=(w_wall != 'FRONT') and inc_b,
                                             include_front=(w_wall != 'BACK') and inc_f,
                                             include_left=(w_wall != 'RIGHT') and inc_l,
@@ -512,7 +610,7 @@ def build_floors(bm, props, ctx):
                     bm, center_x=door_cx, y_front=door_yf, z_base=z_floor,
                     wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
                     door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone,
-                    normal_axis='-Y'
+                    normal_axis='-Y', include_leaf=getattr(props, 'include_door_leaves', True)
                 )
                 if props.has_front_steps and props.has_foundation:
                     build_front_steps(bm, center_x=door_cx, y_front=door_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='-Y')
@@ -531,7 +629,7 @@ def build_floors(bm, props, ctx):
                     bm, center_x=b_cx, y_front=b_yf, z_base=z_floor,
                     wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
                     door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone,
-                    normal_axis='+Y'
+                    normal_axis='+Y', include_leaf=getattr(props, 'include_door_leaves', True)
                 )
                 if props.has_front_steps and props.has_foundation:
                     build_front_steps(bm, center_x=b_cx, y_front=b_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+Y')
@@ -579,7 +677,7 @@ def build_floors(bm, props, ctx):
                         bm, center_x=s_xf, y_front=s_cy, z_base=z_floor,
                         wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
                         door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone,
-                        normal_axis='-X'
+                        normal_axis='-X', include_leaf=getattr(props, 'include_door_leaves', True)
                     )
                     if props.has_front_steps and props.has_foundation:
                         build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='-X')
@@ -593,7 +691,7 @@ def build_floors(bm, props, ctx):
                         bm, center_x=s_xf, y_front=s_cy, z_base=z_floor,
                         wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
                         door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone,
-                        normal_axis='+X'
+                        normal_axis='+X', include_leaf=getattr(props, 'include_door_leaves', True)
                     )
                     if props.has_front_steps and props.has_foundation:
                         build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+X')
@@ -624,7 +722,7 @@ def build_floors(bm, props, ctx):
                         bm, center_x=x_min, y_front=r_cy, z_base=z_floor,
                         wall_thickness=wall_t, door_w=rdw, door_h=rdh, door_angle_deg=props.door_angle,
                         door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
-                        normal_axis='-X'
+                        normal_axis='-X', include_leaf=getattr(props, 'include_door_leaves', True)
                     )
                 else:
                     right_openings.append({'u_start': (r_cy - rdw * 0.5 - r_margin) - y_min,
@@ -634,7 +732,7 @@ def build_floors(bm, props, ctx):
                         bm, center_x=x_max, y_front=r_cy, z_base=z_floor,
                         wall_thickness=wall_t, door_w=rdw, door_h=rdh, door_angle_deg=props.door_angle,
                         door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
-                        normal_axis='+X'
+                        normal_axis='+X', include_leaf=getattr(props, 'include_door_leaves', True)
                     )
 
         # Town-Hall annex portal: a plain walk-through opening into the side annex

@@ -27,6 +27,7 @@ from .operators import (
     BUILDING_OT_apply_preset,
     BUILDING_OT_toggle_door,
     BUILDING_OT_finalize,
+    BUILDING_OT_create_door_blade,
 )
 from .ui import (
     VIEW3D_PT_fantasy_building_main,
@@ -48,6 +49,7 @@ classes = (
     BUILDING_OT_apply_preset,
     BUILDING_OT_toggle_door,
     BUILDING_OT_finalize,
+    BUILDING_OT_create_door_blade,
     VIEW3D_PT_fantasy_building_main,
     VIEW3D_PT_fantasy_building_dimensions,
     VIEW3D_PT_fantasy_building_interior,

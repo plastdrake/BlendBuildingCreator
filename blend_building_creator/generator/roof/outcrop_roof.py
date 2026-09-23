@@ -13,7 +13,7 @@ from mathutils import Euler, Matrix, Vector
 
 from ..mesh_utils import create_beveled_box
 from ..materials import MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER_FRAME
-from ..uv_utils import apply_roof_shingle_uvs, map_planar_faces
+from ..uv_utils import apply_roof_shingle_uvs, map_planar_faces, timber_box
 
 
 def _shingle_plane(bm, center, rotation, half_x, half_y, up_offset=0.0,
@@ -59,7 +59,7 @@ def build_lean_to_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
     apply_roof_shingle_uvs(bm, [lean_face], scale=shingle_scale, rot_deg=shingle_rot)
 
     # Front eave purlin beam capping the slab's front edge
-    create_beveled_box(
+    timber_box(
         bm,
         size=(0.10, width + 0.38, 0.14),
         location=frame.to_world(Vector((x_front - 0.04, 0.0, z_roof + 0.04))),
@@ -71,7 +71,7 @@ def build_lean_to_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
     # Side triangular cheek closure walls & sloping timber bargeboards
     cheek_faces = []
     for s_sign in [-1, 1]:
-        create_beveled_box(
+        timber_box(
             bm,
             size=(r_len + 0.04, 0.08, 0.12),
             location=frame.to_world(Vector((mid_x, (half_w + 0.16) * s_sign, mid_z))),
@@ -80,7 +80,7 @@ def build_lean_to_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
             bevel_amount=0.008
         )
         # Sloping timber rafter plate atop the side wall
-        create_beveled_box(
+        timber_box(
             bm,
             size=(r_len, wall_thick + 0.02, 0.10),
             location=frame.to_world(Vector((mid_x, (half_w - wall_thick * 0.5) * s_sign, mid_z - 0.06))),
@@ -154,7 +154,7 @@ def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
     gable_faces.extend([f_tri_f, f_tri_b, f_tri_l, f_tri_r, f_tri_bot])
 
     # 2. Horizontal Collar Tie Beam across base of front gable
-    create_beveled_box(
+    timber_box(
         bm,
         size=(0.12, width + 0.08, 0.12),
         location=frame.to_world(Vector((tri_x + 0.02, 0.0, z_roof + 0.04))),
@@ -165,7 +165,7 @@ def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
 
     # 3. Vertical King Post Beam in gable center
     king_h = max(0.18, g_roof_h - 0.16)
-    create_beveled_box(
+    timber_box(
         bm,
         size=(0.10, 0.12, king_h),
         location=frame.to_world(Vector((tri_x + 0.02, 0.0, z_roof + 0.10 + king_h * 0.5))),
@@ -190,7 +190,7 @@ def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
         apply_roof_shingle_uvs(bm, [slope_face], scale=shingle_scale, rot_deg=shingle_rot)
 
         # 5. Sloping timber bargeboard along front edge of this slope
-        create_beveled_box(
+        timber_box(
             bm,
             size=(0.08, r_pitch_len + 0.04, 0.14),
             location=frame.to_world(Vector((x_front - 0.02, (roof_half_w * 0.5) * s_sign, z_roof + g_roof_h * 0.5 + 0.03))),
@@ -200,7 +200,7 @@ def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
         )
 
         # 5b. Horizontal timber eave fascia beam capping the low edge of this slope
-        create_beveled_box(
+        timber_box(
             bm,
             size=(roof_len + 0.04, 0.10, 0.14),
             location=frame.to_world(Vector((mid_x, s_sign * (roof_half_w - 0.02), z_roof + 0.04))),
@@ -210,7 +210,7 @@ def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
         )
 
     # 6. Horizontal Timber Ridge Cap Beam along ridge line
-    create_beveled_box(
+    timber_box(
         bm,
         size=(roof_len + 0.02, 0.14, 0.12),
         location=frame.to_world(Vector((mid_x, 0.0, z_roof + g_roof_h + 0.04))),
@@ -220,7 +220,7 @@ def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
     )
 
     # 7. Apex Finial Cap Block at front ridge peak
-    create_beveled_box(
+    timber_box(
         bm,
         size=(0.12, 0.16, 0.18),
         location=frame.to_world(Vector((x_front + 0.01, 0.0, z_roof + g_roof_h + 0.05))),

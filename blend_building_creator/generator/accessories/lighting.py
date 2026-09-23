@@ -87,8 +87,8 @@ def _lantern_cage(bm, cx, cy, cz, size=0.22, height=0.32, rng=None):
                              location=(cx, cy, cz + hh + 0.20), mat_index=MAT_INDEX_IRON)
     faces += create_torus_ring(bm, location=(cx, cy, cz + hh + 0.27),
                                rotation=(math.pi * 0.5, 0.0, 0.0),
-                               major_radius=0.036, minor_radius=0.009,
-                               major_segments=12, minor_segments=6,
+                               major_radius=0.038, minor_radius=0.009,
+                               major_segments=16, minor_segments=8,
                                mat_index=MAT_INDEX_IRON)
     return faces
 
@@ -192,37 +192,87 @@ def build_hanging_lantern(bm, x, y, z_top, arm_ang=0.0, arm_len=0.42,
     """
     s = scale
     faces = []
-    # Wall plate with two forged bolts.
+    # Wall plate (flush against host timber post / wall, no bolts).
     faces += create_beveled_box(bm, size=(0.06, 0.16, 0.30),
                                 location=(0.02, 0.0, -0.12), mat_index=MAT_INDEX_IRON,
                                 bevel_amount=0.008)
-    for bz in (0.0, -0.24):
-        faces += create_cylinder(bm, radius=0.016, height=0.03, segments=6,
-                                 location=(0.05, 0.0, bz), rotation=(0.0, math.pi * 0.5, 0.0),
-                                 mat_index=MAT_INDEX_IRON)
     # Forged arm along +X.
     faces += create_beveled_box(bm, size=(arm_len, 0.038, 0.038),
                                 location=(arm_len * 0.5 + 0.02, 0.0, 0.0),
                                 mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
-    # Diagonal brace from the wall foot up to the arm (outer end higher).
-    brace_l = math.hypot(arm_len * 0.75, 0.32)
-    brace_a = math.atan2(0.32, arm_len * 0.75)
-    faces += create_beveled_box(bm, size=(brace_l, 0.026, 0.026),
-                                location=(arm_len * 0.38, 0.0, -0.16),
+    # Smaller, compact forged diagonal knee brace (meets plate cleanly at Z=-0.18, meets arm at ~45% span).
+    x1, z1_brace = 0.05, -0.18
+    x2, z2_brace = min(0.24, arm_len * 0.48), -0.019
+    dx_brace = x2 - x1
+    dz_brace = z2_brace - z1_brace
+    brace_l = math.hypot(dx_brace, dz_brace)
+    brace_a = math.atan2(dz_brace, dx_brace)
+    faces += create_beveled_box(bm, size=(brace_l, 0.024, 0.024),
+                                location=((x1 + x2) * 0.5, 0.0, (z1_brace + z2_brace) * 0.5),
                                 rotation=(0.0, -brace_a, 0.0),
                                 mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
     # Hook ring at the arm tip (hole axis X, so the arm passes through it).
     faces += create_torus_ring(bm, location=(arm_len, 0.0, -0.03),
                                rotation=(0.0, math.pi * 0.5, 0.0),
                                major_radius=0.038, minor_radius=0.009,
-                               major_segments=12, minor_segments=6,
+                               major_segments=16, minor_segments=8,
                                mat_index=MAT_INDEX_IRON)
-    # Lantern cage with its suspension ring directly under the hook.
+    # Lantern cage with its suspension ring interlocking through the hook ring (Z_ring = -0.084 vs Z_hook = -0.03).
     hh = 0.17 * s
-    cage_cz = -0.11 - hh - 0.27
+    cage_cz = -0.084 - hh - 0.27
     cage = _lantern_cage(bm, arm_len, 0.0, cage_cz, size=0.22 * s, height=0.34 * s)
     faces += cage
     transform_faces(faces, _place(x, y, z_top, arm_ang))
     _uv_faces(cage, bm)
     return faces
+
+
+def build_chain_lantern(bm, x, y, z_ceiling, chain_len=0.55, scale=0.90):
+    """A forged iron lantern hanging straight down from a ceiling/soffit/beam by an unbroken continuous chain."""
+    s = scale
+    w = 0.26 * s
+    h = 0.36 * s
+    hh = h * 0.5
+    faces = []
+
+    # 1. Ceiling mounting plate / boss
+    faces += create_cylinder(bm, radius=0.065 * s, height=0.024, segments=8,
+                             location=(x, y, z_ceiling - 0.012), mat_index=MAT_INDEX_IRON)
+
+    r_maj = 0.032 * s
+    r_min = 0.0075 * s
+
+    z_eyelet = z_ceiling - 0.036
+    # Fixed ceiling eyelet ring (XZ plane)
+    faces += create_torus_ring(bm, location=(x, y, z_eyelet), rotation=(math.pi * 0.5, 0.0, 0.0),
+                               major_radius=r_maj, minor_radius=r_min,
+                               major_segments=12, minor_segments=6, mat_index=MAT_INDEX_IRON)
+
+    # 2. Lantern cage
+    cz = z_ceiling - chain_len - 0.16 * s
+    cage = _lantern_cage(bm, x, y, cz, size=w, height=h)
+    faces += cage
+    _uv_faces(cage, bm)
+
+    # The top suspension ring of _lantern_cage is at cz + hh + 0.27 (XZ plane)
+    z_lantern_ring = cz + hh + 0.27
+
+    # 3. Interlocking chain links bridging z_eyelet down to z_lantern_ring
+    dist = z_eyelet - z_lantern_ring
+    if dist > 0.04:
+        target_step = 0.040 * s
+        n_links = max(1, int(round(dist / target_step)) - 1)
+        # Ensure odd number of links so last link (YZ plane) interlocks with lantern ring (XZ plane)
+        if n_links % 2 == 0:
+            n_links += 1
+        step_z = dist / (n_links + 1)
+        for li in range(1, n_links + 1):
+            lz = z_eyelet - li * step_z
+            rot = (0.0, math.pi * 0.5, 0.0) if (li % 2 == 1) else (math.pi * 0.5, 0.0, 0.0)
+            faces += create_torus_ring(bm, location=(x, y, lz), rotation=rot,
+                                       major_radius=r_maj, minor_radius=r_min,
+                                       major_segments=12, minor_segments=6,
+                                       mat_index=MAT_INDEX_IRON)
+    return faces
+
 

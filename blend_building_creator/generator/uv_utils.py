@@ -7,7 +7,7 @@ walls, shingles and hand-built faces all tile consistently. Keeping these here
 builders in ``mesh_utils``.
 """
 
-from mathutils import Matrix, Vector
+from mathutils import Euler, Matrix, Vector
 
 from .materials import MAT_INDEX_SHINGLES
 
@@ -118,3 +118,63 @@ def apply_roof_shingle_uvs(bm, faces, mat_index=MAT_INDEX_SHINGLES, scale=0.32, 
             elif r == 270:
                 u, v = -v, u
             loop[uv].uv = Vector((u, v))
+
+
+def map_beam_uvs(bm, faces, size, location=(0.0, 0.0, 0.0),
+                 rotation=(0.0, 0.0, 0.0)):
+    """Grain-along-length unwrap for a timber post/beam/pillar box.
+
+    Uses the engine's own convention (wood grain runs along V, V follows the
+    box's longest local axis - the same rule ``create_box`` applies to flat
+    faces) but writes it onto EVERY face of an already built, possibly beveled
+    and arbitrarily rotated box, so the result never depends on bevel-UV
+    interpolation. End caps get a planar map of the two short axes; every
+    side face gets U across the beam and V along it, so the grain always runs
+    down the length of the board.
+    """
+    uv = bm.loops.layers.uv.verify()
+    dx, dy, dz = float(size[0]), float(size[1]), float(size[2])
+    if dz >= dx and dz >= dy:
+        long_ax = 2
+    elif dx >= dy and dx >= dz:
+        long_ax = 0
+    else:
+        long_ax = 1
+    if long_ax == 2:
+        su = sv = 1.0
+        su_end = 1.0
+    else:
+        su = 1.2
+        sv = 0.40
+        su_end = 1.2
+    eul = rotation if isinstance(rotation, Euler) else Euler(rotation, 'XYZ')
+    inv_rot = eul.to_matrix().inverted()
+    inv_tr = (Matrix.Translation(Vector(location)) @ eul.to_matrix().to_4x4()).inverted()
+    shorts = [a for a in range(3) if a != long_ax]
+    bm.normal_update()
+    for face in faces:
+        ln = inv_rot @ face.normal
+        la = (abs(ln.x), abs(ln.y), abs(ln.z))
+        dom = 0 if (la[0] >= la[1] and la[0] >= la[2]) else (1 if la[1] >= la[2] else 2)
+        face.tag = True
+        for loop in face.loops:
+            c = inv_tr @ loop.vert.co
+            if dom == long_ax:
+                loop[uv].uv = (c[shorts[0]] * su_end, c[shorts[1]] * su_end)
+            else:
+                across = shorts[0] if dom == shorts[1] else shorts[1]
+                loop[uv].uv = (c[across] * su, c[long_ax] * sv)
+
+
+def timber_box(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=0,
+               bevel_amount=0.012):
+    """A ``create_beveled_box`` whose faces are all re-unwrapped afterwards so
+    the wood grain provably runs along the beam's length on every face
+    (flat faces and bevel strips alike), at any plan rotation.
+    """
+    from .mesh_utils import create_beveled_box
+    faces = create_beveled_box(bm, size=size, location=location,
+                               rotation=rotation, mat_index=mat_index,
+                               bevel_amount=bevel_amount)
+    map_beam_uvs(bm, faces, size=size, location=location, rotation=rotation)
+    return faces

@@ -20,7 +20,7 @@ from ..materials import (
 )
 from ..walls import create_curved_corbel
 from ..facade import get_facade_frame
-from ..uv_utils import map_local_wall_uv
+from ..uv_utils import map_local_wall_uv, timber_box
 from ..roof.outcrop_roof import build_outcrop_roof
 
 
@@ -363,7 +363,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             bevel_amount=0.010
         ))
         # Wall-anchor timber trim flat at house wall junction
-        create_beveled_box(
+        timber_box(
             bm,
             size=(0.08, col_w, height + 0.04),
             location=frame.to_world(Vector((0.04, (half_w - col_w * 0.5) * s_sign, z_base + height * 0.5))),
@@ -372,7 +372,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             bevel_amount=0.010
         )
         # Outer corner post - thickened + outset to break coplanar
-        create_beveled_box(
+        timber_box(
             bm,
             size=(0.24, 0.24, height + 0.06),
             location=frame.to_world(Vector((depth - col_w * 0.5 + 0.022, (half_w - col_w * 0.5) * s_sign, z_base + height * 0.5))),
@@ -381,7 +381,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             bevel_amount=0.014
         )
         # Heavy horizontal timber sill beam along side wall base (hides interior floor)
-        create_beveled_box(
+        timber_box(
             bm,
             size=(depth + 0.06, col_w + 0.02, 0.18),
             location=frame.to_world(Vector((depth * 0.50, (half_w - col_w * 0.5) * s_sign, z_base + 0.04))),
@@ -390,7 +390,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             bevel_amount=0.012
         )
         # Horizontal timber top plate beam along side wall top (under roof rafter / cheek)
-        create_beveled_box(
+        timber_box(
             bm,
             size=(depth + 0.04, col_w, 0.12),
             location=frame.to_world(Vector((depth * 0.50, (half_w - col_w * 0.5) * s_sign, z_base + height - 0.04))),
@@ -477,7 +477,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                       u_comp=1, v_comp=2, scale=0.55)
 
     # Heavy horizontal timber sill plate across front wall base (hides interior floor)
-    create_beveled_box(
+    timber_box(
         bm,
         size=(col_w + 0.04, width + 0.08, 0.18),
         location=frame.to_world(Vector((depth - col_w * 0.5 + 0.015, 0.0, z_base + 0.04))),
@@ -486,7 +486,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         bevel_amount=0.012
     )
     # Outer top horizontal header beam across front wall top
-    create_beveled_box(
+    timber_box(
         bm,
         size=(col_w + 0.04, width + 0.08, 0.14),
         location=frame.to_world(Vector((depth - col_w * 0.5 + 0.01, 0.0, z_base + height - 0.04))),

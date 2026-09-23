@@ -146,7 +146,8 @@ def _clock_face(bm, center, facing, radius=0.85, frame=True):
 
 def build_clock_tower(bm, cx, cy, z_ground=0.0, size=3.0, shaft_top_z=10.0,
                       tier='TIER_3', roof_flare=0.38, floor_levels=None,
-                      front_y=None, arch_passage=False, deck_portal_z=None):
+                      front_y=None, arch_passage=False, deck_portal_z=None,
+                      include_leaf=True):
     """Attached civic clock/belfry tower integrated into the front corner.
 
     floor_levels: list of deck heights so string courses line up with the
@@ -326,8 +327,9 @@ def build_clock_tower(bm, cx, cy, z_ground=0.0, size=3.0, shaft_top_z=10.0,
     # Base doorway facing front (skipped when the arch tunnel passes through)
     if not arch_passage:
         door_fy = cy - half
-        create_box(bm, size=(1.0, 0.14, 2.1), location=(cx, door_fy - 0.02, base_z + 1.05),
-                   mat_index=MAT_INDEX_DOOR)
+        if include_leaf:
+            create_box(bm, size=(1.0, 0.14, 2.1), location=(cx, door_fy - 0.02, base_z + 1.05),
+                       mat_index=MAT_INDEX_DOOR)
         create_beveled_box(bm, size=(1.24, 0.12, 0.16), location=(cx, door_fy - 0.02, base_z + 2.18),
                            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
         for dsx in (-1.0, 1.0):

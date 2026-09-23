@@ -751,7 +751,24 @@ def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth
             else:
                 loop[uv_layer].uv = Vector((lv.x * 0.85, lv.y * 0.85))
 
-def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level, overhang_dist=0.35, spacing=1.2, include_front=True, include_back=True, include_left=False, include_right=False, front_exclude_x=None, drop=0.10):
+def _is_in_exclude_ranges(val, ranges):
+    if ranges is None:
+        return False
+    if isinstance(ranges, tuple) and len(ranges) == 2 and isinstance(ranges[0], (int, float)):
+        return ranges[0] <= val <= ranges[1]
+    for r in ranges:
+        if r is not None and len(r) == 2:
+            if r[0] <= val <= r[1]:
+                return True
+    return False
+
+
+def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_upper, z_level,
+                             overhang_dist=0.35, spacing=1.2,
+                             include_front=True, include_back=True,
+                             include_left=False, include_right=False,
+                             front_exclude_x=None, drop=0.10,
+                             back_exclude_x=None, left_exclude_y=None, right_exclude_y=None):
     """
     Builds chunky carved wooden support brackets (corbels) underneath
     the overhanging upper floors for that iconic European fantasy silhouette.
@@ -778,7 +795,7 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
         cx = x_min_upper + i * step_x
         # Front corbel
         if include_front:
-            if not (front_exclude_x and front_exclude_x[0] <= cx <= front_exclude_x[1]):
+            if not _is_in_exclude_ranges(cx, front_exclude_x):
                 loc_front = Vector((cx, y_min_upper + overhang_dist + embed, z_mount))
                 create_curved_corbel(
                     bm, loc=loc_front, facing_dir=(0.0, -1.0, 0.0),
@@ -787,12 +804,13 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
                 )
         # Back corbel
         if include_back:
-            loc_back = Vector((cx, y_max_upper - overhang_dist - embed, z_mount))
-            create_curved_corbel(
-                bm, loc=loc_back, facing_dir=(0.0, 1.0, 0.0),
-                width=corbel_w, depth=corbel_d + embed, height=corbel_h,
-                mat_index=MAT_INDEX_TIMBER
-            )
+            if not _is_in_exclude_ranges(cx, back_exclude_x):
+                loc_back = Vector((cx, y_max_upper - overhang_dist - embed, z_mount))
+                create_curved_corbel(
+                    bm, loc=loc_back, facing_dir=(0.0, 1.0, 0.0),
+                    width=corbel_w, depth=corbel_d + embed, height=corbel_h,
+                    mat_index=MAT_INDEX_TIMBER
+                )
 
     # 1b. Left and Right Facade corbels
     total_y = y_max_upper - y_min_upper
@@ -801,19 +819,21 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
     for j in range(1, num_y + 1):
         cy = y_min_upper + j * step_y
         if include_left:
-            loc_left = Vector((x_min_upper + overhang_dist + embed, cy, z_mount))
-            create_curved_corbel(
-                bm, loc=loc_left, facing_dir=(-1.0, 0.0, 0.0),
-                width=corbel_w, depth=corbel_d + embed, height=corbel_h,
-                mat_index=MAT_INDEX_TIMBER
-            )
+            if not _is_in_exclude_ranges(cy, left_exclude_y):
+                loc_left = Vector((x_min_upper + overhang_dist + embed, cy, z_mount))
+                create_curved_corbel(
+                    bm, loc=loc_left, facing_dir=(-1.0, 0.0, 0.0),
+                    width=corbel_w, depth=corbel_d + embed, height=corbel_h,
+                    mat_index=MAT_INDEX_TIMBER
+                )
         if include_right:
-            loc_right = Vector((x_max_upper - overhang_dist - embed, cy, z_mount))
-            create_curved_corbel(
-                bm, loc=loc_right, facing_dir=(1.0, 0.0, 0.0),
-                width=corbel_w, depth=corbel_d + embed, height=corbel_h,
-                mat_index=MAT_INDEX_TIMBER
-            )
+            if not _is_in_exclude_ranges(cy, right_exclude_y):
+                loc_right = Vector((x_max_upper - overhang_dist - embed, cy, z_mount))
+                create_curved_corbel(
+                    bm, loc=loc_right, facing_dir=(1.0, 0.0, 0.0),
+                    width=corbel_w, depth=corbel_d + embed, height=corbel_h,
+                    mat_index=MAT_INDEX_TIMBER
+                )
             
     # 2. 45-degree diagonal corner corbels for structural fantasy silhouette.
     # Each corner respects BOTH facades it touches, so suppressing one facade
@@ -821,26 +841,28 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
     corner_d = corbel_d * 1.15
     if include_front and include_left:
         # Front-Left corner
-        if not (front_exclude_x and front_exclude_x[0] <= x_min_upper <= front_exclude_x[1]):
+        if not _is_in_exclude_ranges(x_min_upper, front_exclude_x) and not _is_in_exclude_ranges(y_min_upper, left_exclude_y):
             loc_fl = Vector((x_min_upper + overhang_dist + embed * 0.707, y_min_upper + overhang_dist + embed * 0.707, z_mount))
             create_curved_corbel(bm, loc=loc_fl, facing_dir=(-0.707, -0.707, 0.0),
                                 width=corbel_w, depth=corner_d + embed, height=corbel_h)
     if include_front and include_right:
         # Front-Right corner
-        if not (front_exclude_x and front_exclude_x[0] <= x_max_upper <= front_exclude_x[1]):
+        if not _is_in_exclude_ranges(x_max_upper, front_exclude_x) and not _is_in_exclude_ranges(y_min_upper, right_exclude_y):
             loc_fr = Vector((x_max_upper - overhang_dist - embed * 0.707, y_min_upper + overhang_dist + embed * 0.707, z_mount))
             create_curved_corbel(bm, loc=loc_fr, facing_dir=(0.707, -0.707, 0.0),
                                 width=corbel_w, depth=corner_d + embed, height=corbel_h)
     if include_back and include_left:
         # Back-Left corner
-        loc_bl = Vector((x_min_upper + overhang_dist + embed * 0.707, y_max_upper - overhang_dist - embed * 0.707, z_mount))
-        create_curved_corbel(bm, loc=loc_bl, facing_dir=(-0.707, 0.707, 0.0),
-                            width=corbel_w, depth=corner_d + embed, height=corbel_h)
+        if not _is_in_exclude_ranges(x_min_upper, back_exclude_x) and not _is_in_exclude_ranges(y_max_upper, left_exclude_y):
+            loc_bl = Vector((x_min_upper + overhang_dist + embed * 0.707, y_max_upper - overhang_dist - embed * 0.707, z_mount))
+            create_curved_corbel(bm, loc=loc_bl, facing_dir=(-0.707, 0.707, 0.0),
+                                width=corbel_w, depth=corner_d + embed, height=corbel_h)
     if include_back and include_right:
         # Back-Right corner
-        loc_br = Vector((x_max_upper - overhang_dist - embed * 0.707, y_max_upper - overhang_dist - embed * 0.707, z_mount))
-        create_curved_corbel(bm, loc=loc_br, facing_dir=(0.707, 0.707, 0.0),
-                            width=corbel_w, depth=corner_d + embed, height=corbel_h)
+        if not _is_in_exclude_ranges(x_max_upper, back_exclude_x) and not _is_in_exclude_ranges(y_max_upper, right_exclude_y):
+            loc_br = Vector((x_max_upper - overhang_dist - embed * 0.707, y_max_upper - overhang_dist - embed * 0.707, z_mount))
+            create_curved_corbel(bm, loc=loc_br, facing_dir=(0.707, 0.707, 0.0),
+                                width=corbel_w, depth=corner_d + embed, height=corbel_h)
 
 def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thick=0.10, front_exclude_x=None,
                             include_front=True, include_back=True, include_left=True, include_right=True):
