@@ -267,6 +267,9 @@ def build_architectural_accessories(bm, props, ctx):
         build_archery_range(bm, props, ctx, tier)
     elif _plot_arch == 'KNIGHTS_MANOR':
         build_tournament_yard(bm, props, ctx, tier)
+    elif _plot_arch == 'QUARRY':
+        from .quarry import build_quarry_yard
+        build_quarry_yard(bm, props, ctx, tier)
 
 
 def _build_estate_grounds(bm, props, ctx):

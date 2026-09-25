@@ -463,12 +463,12 @@ def build_servant_quarters(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='T
 
 def _build_awning_at(bm, kind, cx, cy, z_base, rot_z=0.0, **kw):
     """Place a warehouse yard awning, rotated about its own footprint centre."""
-    from .warehouse import _build_tarp_awning, _build_lean_to_awning
+    from .warehouse import build_tarp_awning, build_lean_to_awning
     before = set(bm.faces)
     if kind == 'TARP':
-        _build_tarp_awning(bm, cx=cx, cy=cy, z_base=z_base, **kw)
+        build_tarp_awning(bm, cx=cx, cy=cy, z_base=z_base, **kw)
     else:
-        _build_lean_to_awning(bm, cx=cx, cy=cy, z_base=z_base, **kw)
+        build_lean_to_awning(bm, cx=cx, cy=cy, z_base=z_base, **kw)
     new_faces = [f for f in bm.faces if f not in before]
     if abs(rot_z) > 1e-6 and new_faces:
         piv = Matrix.Translation((cx, cy, 0.0))

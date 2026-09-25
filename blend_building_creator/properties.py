@@ -313,6 +313,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('FISHERMAN', "Fisherman Pier & Nets", "Raised timber piling pier stilts and outdoor fish drying net frame"),
             ('BAKERY', "Bakery Bread Oven", "Protruding outdoor curved brick bread oven with chimney flue"),
             ('ARCHERY_RANGE', "Archery Range", "Straw target butts, a thatched shooting pavilion, and a marked range field"),
+            ('QUARRY', "Stone Quarry", "Open worksite quarry: benched rock faces, swivel cranes, and cut-stone block stacks (stone only)"),
             ('CHAPEL', "Healers' Chapel", "Rounded apse, stone bell tower, rose window and a quiet herb churchyard"),
             ('KNIGHTS_MANOR', "Knights Manor", "Fortified hall: gatehouse with portcullis, courtyard and training yard"),
             ('MAGE_TOWER', "Mage Tower", "Round wizard tower with a jettied belvedere, ring balcony and tall spire"),

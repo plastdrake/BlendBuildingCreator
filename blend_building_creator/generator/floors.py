@@ -1081,7 +1081,7 @@ def build_floors(bm, props, ctx):
             _dock_x2 = _dock_x1 + (6.0 if _is_t3 else 5.0)
             front_cargo_port_cx = _cp_cx
 
-            if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not is_temporary_stockpile:
+            if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE', 'QUARRY') and not is_temporary_stockpile:
                 front_openings.append({
                     'u_start': _cp_cx - _cp_w * 0.5 - x_min,
                     'u_end': _cp_cx + _cp_w * 0.5 - x_min,

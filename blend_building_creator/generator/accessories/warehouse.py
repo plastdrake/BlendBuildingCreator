@@ -54,7 +54,7 @@ def build_warehouse_cargo(bm, front_x, front_y, z_ground):
         )
 
 
-def _build_tarp_awning(bm, cx, cy, z_base, width=2.9, depth=2.5, front_h=2.15, back_h=2.65):
+def build_tarp_awning(bm, cx, cy, z_base, width=2.9, depth=2.5, front_h=2.15, back_h=2.65):
     """
     Builds a rugged rustic 4-post canvas awning shelter:
     - 4 heavy square timber uprights
@@ -190,7 +190,7 @@ def _build_tarp_awning(bm, cx, cy, z_base, width=2.9, depth=2.5, front_h=2.15, b
 
 
 
-def _build_lean_to_awning(bm, cx, cy, z_base, width=2.5, depth=2.2, front_h=1.85, back_h=2.40):
+def build_lean_to_awning(bm, cx, cy, z_base, width=2.5, depth=2.2, front_h=1.85, back_h=2.40):
     """
     Builds a simple wooden board lean-to shed/awning over sawn lumber:
     - 4 rustic timber posts (tall back, short front)
@@ -419,13 +419,13 @@ def build_supply_depot_yard(bm, min_x, max_x, min_y, max_y, z_floor, seed=42):
 
     # 6. AWNINGS COVERING PARTS OF THE STOCKPILE
     # Awning 1: Rustic Canvas Tarp Canopy covering Pallet 0 (Crates & Sacks)
-    _build_tarp_awning(
+    build_tarp_awning(
         bm, cx=p0x, cy=p0y, z_base=z_floor,
         width=3.0, depth=2.5, front_h=2.15, back_h=2.65
     )
 
     # Awning 2: Rustic Board Lean-To covering Pallet 3 (Sawn Lumber)
-    _build_lean_to_awning(
+    build_lean_to_awning(
         bm, cx=p3x, cy=p3y, z_base=z_floor,
         width=2.5, depth=2.3, front_h=1.85, back_h=2.40
     )
