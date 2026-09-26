@@ -15,6 +15,7 @@ Plot contract (from the user):
 import math
 import random
 
+from mathutils import Matrix, Vector
 from ..mesh_utils import create_beveled_box, create_box, create_cylinder
 from ..materials import (
     MAT_INDEX_TIMBER,
@@ -35,17 +36,33 @@ PLOT_SIZES = {
 # Dressing scale per plot (DRY): bigger sites read busier with no extra
 # properties to learn. Small sites stay quiet; huge sites get full yards.
 LADDER_COUNT = {'AUTO': 1, 'SMALL': 1, 'MEDIUM': 2, 'LARGE': 3, 'HUGE': 4}
-CRANES_INSIDE = {'AUTO': 0, 'SMALL': 0, 'MEDIUM': 0, 'LARGE': 1, 'HUGE': 2}
 PILE_TIER = {'AUTO': 0, 'SMALL': 0, 'MEDIUM': 1, 'LARGE': 2, 'HUGE': 3}
 
+# Pile footprints as (half-x, half-y) for pole threading: poles may stand
+# right beside a stack (threaded around stock reads intentional) but never
+# inside it. Circles would over-cover long thin piles and eat whole bays.
+PILE_FOOTPRINT = {
+    'stone': (1.22, 0.48),   # two ashlar courses side by side
+    'rubble': (1.30, 1.30),  # scattered off-cuts read blobby
+    'timber': (0.20, 0.98),  # plank pile laid along Y
+    'barrel': (0.42, 0.42),
+    'crate': (0.40, 0.40),
+    'iron': (0.38, 0.38),
+}
 
-def scaffold_extents(plot_key, padding, bldg_w, bldg_d):
+
+def scaffold_extents(plot_key, padding, bldg_w, bldg_d, props=None):
     """Return (sx, sy) scaffold footprint for the plot, honouring padding.
 
     Target is ``plot - 2 * padding``. The scaffold always encloses the
     building plus a 1.2 m work margin, but never exceeds ``plot - 0.5`` so
     at least a half-metre walkway survives even on oversized buildings.
+    CUSTOM ignores plots/padding and uses the manual width/depth settings.
     """
+    if plot_key == 'CUSTOM':
+        w = float(getattr(props, 'scaffold_width', 9.0)) if props else 9.0
+        d = float(getattr(props, 'scaffold_depth', 9.0)) if props else 9.0
+        return min(99.0, max(3.0, w)), min(99.0, max(3.0, d))
     pad = min(3.0, max(0.5, float(padding)))
     if plot_key in PLOT_SIZES:
         plot = PLOT_SIZES[plot_key]
@@ -58,6 +75,17 @@ def scaffold_extents(plot_key, padding, bldg_w, bldg_d):
         return min(sx, cap), min(sy, cap)
     # AUTO: just wrap the building with a work margin.
     return float(bldg_w) + 2.4, float(bldg_d) + 2.4
+
+
+def scaffold_height(props, auto_h):
+    """Pole height: manual Scaffold Height wins, 0 means automatic."""
+    try:
+        manual = float(getattr(props, 'scaffold_height', 0.0) or 0.0)
+    except Exception:
+        manual = 0.0
+    if manual > 0.05:
+        return max(2.5, min(30.0, manual))
+    return max(2.5, float(auto_h or 6.0))
 
 
 def _rng(seed, salt=0):
@@ -111,18 +139,29 @@ def _platform(bm, x0, x1, y0, y1, z, plank_w=0.28):
 
 
 def _diagonal(bm, x1, y1, x2, y2, z0, z1, thick=0.07):
+    """Beam between two 3D points (braces, ladder rails).
+
+    Orientation is composed explicitly (yaw about Z, then pitch about Y)
+    instead of an XYZ Euler triple: Blender applies the triple's Z rotation
+    to the raw X axis first, which silently flattened every beam with a
+    Y-run (side braces, ladder rails) into a horizontal floater.
+    """
     dx, dy, dz = x2 - x1, y2 - y1, z1 - z0
-    horiz = math.hypot(dx, dy)
-    length = math.hypot(horiz, dz)
+    length = math.sqrt(dx * dx + dy * dy + dz * dz)
     if length < 1e-6:
         return
-    ang_z = math.atan2(dy, dx)
-    ang_y = math.atan2(dz, horiz)
+    horiz = math.hypot(dx, dy)
+    yaw = math.atan2(dy, dx)
+    pitch = -math.atan2(dz, horiz)
+    mat = (Matrix.Translation(Vector(((x1 + x2) * 0.5,
+                                        (y1 + y2) * 0.5,
+                                        (z0 + z1) * 0.5)))
+           @ Matrix.Rotation(yaw, 4, 'Z')
+           @ Matrix.Rotation(pitch, 4, 'Y'))
     create_beveled_box(
         bm, size=(length, thick, thick),
-        location=((x1 + x2) * 0.5, (y1 + y2) * 0.5, (z0 + z1) * 0.5),
-        rotation=(0.0, -ang_y, ang_z),
         mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006,
+        transform_matrix=mat,
     )
 
 
@@ -135,23 +174,29 @@ def _rope_lashing(bm, x, y, z):
 
 
 def _leaning_ladder(bm, x, y_edge, z_landing, width=0.5):
-    """Access ladder leaning against the walkway platform edge.
+    """Access ladder landing on the walkway platform.
 
-    Feet stand on the ground out from the face, rail tops rest against the
-    platform's outer edge with ~1 m running past as a handhold (like a real
-    site ladder). Rungs stay level while the rails lean at ~70 degrees, so
-    it never reads as a free-standing tower.
+    The rails are aimed straight through the platform's outer edge corner
+    (feet planted below grade, tops running ~1 m past as a handhold), so
+    contact is guaranteed by construction: the rail line contains the
+    corner point. Rungs stay level while the rails lean at ~72 degrees.
     """
-    z_top = z_landing + 1.0
-    run = z_top / 2.75  # ~70-degree lean
-    y_top = y_edge + 0.05
-    y_base = y_edge - run
+    zc = z_landing             # platform top surface
+    ye = y_edge                # platform outer edge
+    z0 = -0.15                 # feet planted below grade
+    run = (zc - z0) / 3.3      # ~72-degree lean to the corner
+    yf = ye - run
+    L1 = math.hypot(run, zc - z0)
+    dy, dz = run / L1, (zc - z0) / L1
+    yt = ye + dy * 1.0         # handhold past the corner
+    zt = zc + dz * 1.0
     for s in (-1.0, 1.0):
-        _diagonal(bm, x + s * width * 0.5, y_base,
-                  x + s * width * 0.5, y_top, 0.0, z_top, thick=0.06)
-    z = 0.3
-    while z < z_top - 0.15:
-        ry = y_base + (y_top - y_base) * (z / z_top)
+        _diagonal(bm, x + s * width * 0.5, yf,
+                  x + s * width * 0.5, yt, z0, zt, thick=0.06)
+    z = 0.25
+    while z < zt - 0.15:
+        f = (z - z0) / (zt - z0)
+        ry = yf + (yt - yf) * f
         create_beveled_box(
             bm, size=(width, 0.05, 0.05),
             location=(x, ry, z),
@@ -165,10 +210,12 @@ def _tarp_roof(bm, cx, cy, sx, sy, pole_h, lifts, seed=42):
 
     Bearer beams sit directly on the pole tops (perimeter rows plus the
     interior pole rows on large sites), rafters cross them every ~2 m, and
-    the canvas is laid in ~9 m segments stepping down 0.05 m per bay like
-    overlapping sheets, each clamped by its own batten and tied with ropes
-    to the top lift. Nothing floats: every sheet sits on rafters that sit
-    on bearers that sit on poles.
+    the canvas is laid in ~9 m segments resting on the rafters (stepped a
+    hair per bay against shimmer). A batten grid clamps the canvas about
+    every 3 m, an eave frame covers all four edges, and perimeter fascia
+    boards hide the whole sandwich from outside. Ropes tie each segment
+    down to the top lift. Nothing floats: sheets on rafters on bearers
+    on poles, edges covered all round.
     """
     rng = _rng(seed, salt=208)
     # Support grid first: bearers on the pole rows, rafters across them.
@@ -178,40 +225,75 @@ def _tarp_roof(bm, cx, cy, sx, sy, pole_h, lifts, seed=42):
             location=(cx, by, pole_h + 0.07),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008,
         )
-    for px in _line_coords(cx - sx * 0.5 - 0.3, cx + sx * 0.5 + 0.3, step=2.0):
+    for px in _line_coords(cx - sx * 0.5, cx + sx * 0.5, step=2.0):
         create_beveled_box(
-            bm, size=(0.09, sy + 0.6, 0.12),
+            bm, size=(0.09, sy + 0.2, 0.12),
             location=(px, cy, pole_h + 0.20),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006,
         )
-    # Canvas in overlapping segments stepping down along +X.
+    # Canvas in overlapping segments resting on the rafters. Sheets step
+    # down a hair per bay (4 mm: kills coplanar shimmer, invisible as a
+    # step) with a slim 0.1 m drip edge past the poles.
     n_seg = max(1, int(round(sx / 9.0)))
     seg_w = sx / n_seg
+    z = pole_h + 0.30
     top = lifts[-1]
     for i in range(n_seg):
         seg_cx = cx - sx * 0.5 + (i + 0.5) * seg_w
-        z = pole_h + 0.28 - i * 0.05
+        zi = z - i * 0.004
         create_box(
-            bm, size=(seg_w + 0.35, sy + 0.6, 0.05),
-            location=(seg_cx, cy, z),
+            bm, size=(seg_w + 0.2, sy + 0.2, 0.05),
+            location=(seg_cx, cy, zi),
             rotation=(0.0, 0.0, (rng.random() - 0.5) * 0.01),
             mat_index=MAT_INDEX_TARP,
         )
-        # Batten clamping this segment's windward edge.
-        create_beveled_box(
-            bm, size=(0.09, sy + 0.6, 0.06),
-            location=(seg_cx - seg_w * 0.5, cy, z + 0.05),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005,
-        )
+        # Seam batten on the windward joint plus two mid-battens: clamping
+        # roughly every 3 m so no wide canvas field ever lies naked.
+        for bx in (seg_cx - seg_w * 0.5, seg_cx - seg_w * 0.5 + seg_w / 3.0,
+                   seg_cx - seg_w * 0.5 + 2.0 * seg_w / 3.0):
+            create_beveled_box(
+                bm, size=(0.09, sy + 0.2, 0.06),
+                location=(bx, cy, zi + 0.05),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005,
+            )
         # Rope ties from the segment corners down to the top lift.
-        drop = max(0.15, z - top)
+        drop = max(0.15, zi - top)
         for qx in (seg_cx - seg_w * 0.5 + 0.15, seg_cx + seg_w * 0.5 - 0.15):
             for qy in (cy - sy * 0.5, cy + sy * 0.5):
                 create_cylinder(
                     bm, radius=0.025, height=drop, segments=6,
-                    location=(qx, qy, z - drop * 0.5),
+                    location=(qx, qy, zi - drop * 0.5),
                     mat_index=MAT_INDEX_ROPE,
                 )
+    # Eave frame: battens exactly along all four canvas edges, on the canvas.
+    for ey in (cy - sy * 0.5 - 0.1, cy + sy * 0.5 + 0.1):
+        create_beveled_box(
+            bm, size=(sx + 0.2, 0.09, 0.06),
+            location=(cx, ey, z + 0.05),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005,
+        )
+    for ex in (cx - sx * 0.5 - 0.1, cx + sx * 0.5 + 0.1):
+        create_beveled_box(
+            bm, size=(0.09, sy + 0.2, 0.06),
+            location=(ex, cy, z + 0.05),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005,
+        )
+    # Fascia boards around the whole roof edge: they hide the bearer /
+    # rafter / canvas sandwich from outside so the roof never reads as
+    # layers floating over the poles.
+    fz = pole_h + 0.15
+    for ey in (cy - sy * 0.5 - 0.1, cy + sy * 0.5 + 0.1):
+        create_beveled_box(
+            bm, size=(sx + 0.32, 0.06, 0.55),
+            location=(cx, ey, fz),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008,
+        )
+    for ex in (cx - sx * 0.5 - 0.1, cx + sx * 0.5 + 0.1):
+        create_beveled_box(
+            bm, size=(0.06, sy + 0.2, 0.55),
+            location=(ex, cy, fz),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008,
+        )
 
 
 def _line_coords(a0, a1, step=2.0):
@@ -224,6 +306,39 @@ def _line_coords(a0, a1, step=2.0):
 def _grid_bays(span):
     """Number of ~6 m bays across ``span`` (capped so huge sites stay bounded)."""
     return min(6, max(1, int(round(span / 6.0))))
+
+
+def _pole_positions(cx, cy, sx, sy):
+    """Every pole coordinate as ``(x, y, interior)``.
+
+    Single source of truth: the frame builds these, and the layout solver
+    treats them as fixed obstacles so stockpiles slide between poles instead
+    of pile positions deleting poles (which read as floating frames).
+    """
+    x0, x1 = cx - sx * 0.5, cx + sx * 0.5
+    y0, y1 = cy - sy * 0.5, cy + sy * 0.5
+    xs = _line_coords(x0, x1)
+    ys = _line_coords(y0, y1)
+    pos = [(px, py, False) for px in xs for py in (y0, y1)]
+    pos += [(px, py, False) for py in ys[1:-1] for px in (x0, x1)]
+    x_rows = _pole_rows(cx, sx, sy)
+    y_rows = _pole_rows(cy, sy, sx)
+    pos += [(px, py, True) for px in x_rows[1:-1] for py in y_rows[1:-1]]
+    return pos
+
+
+def _size_tier(plot_key, sx, sy):
+    """Dressing tier from the actual scaffold size (CUSTOM derives its own)."""
+    if plot_key in LADDER_COUNT:
+        return plot_key
+    m = max(float(sx), float(sy))
+    if m < 14.0:
+        return 'SMALL'
+    if m < 30.0:
+        return 'MEDIUM'
+    if m < 70.0:
+        return 'LARGE'
+    return 'HUGE'
 
 
 def _pole_rows(c, s, other):
@@ -240,7 +355,7 @@ def _pole_rows(c, s, other):
 
 
 def build_scaffold_frame(bm, cx, cy, sx, sy, height, levels=2, seed=42,
-                         ladders=1):
+                         ladders=1, exclude=(), jog=(), keepout=None):
     """Timber pole scaffold rectangle centred on (cx, cy).
 
     Poles every ~2 m around the perimeter (plus interior rows on sites over
@@ -248,6 +363,13 @@ def build_scaffold_frame(bm, cx, cy, sx, sy, height, levels=2, seed=42,
     faces per lift, diagonal braces on alternating bays and leaning access
     ladders climbing the front face onto the first walkway platform.
     Returns ``(pole_height, lifts)`` so callers can seat the tarp roof.
+
+    ``exclude`` skips poles outright (interior crane masts only: the mast
+    visibly replaces them). ``jog`` is a list of ``(x, y, hx, hy)`` stockpile
+    footprint rects: a pole inside one slides along its face (then inward)
+    instead of vanishing, so the frame stays dense and every ledger/brace
+    ties pole to pole. Rects (not circles) so poles can thread right
+    beside a long stack without triggering.
     """
     rng = _rng(seed, salt=913)
     height = max(2.5, float(height))
@@ -255,21 +377,85 @@ def build_scaffold_frame(bm, cx, cy, sx, sy, height, levels=2, seed=42,
     x0, x1 = cx - sx * 0.5, cx + sx * 0.5
     y0, y1 = cy - sy * 0.5, cy + sy * 0.5
 
+    def _skipped(px, py):
+        for ex, ey, er in exclude:
+            if (px - ex) ** 2 + (py - ey) ** 2 < (er + 0.15) ** 2:
+                return True
+        return False
+
+    def _jog(px, py, tangent, inward):
+        """Final pole position: on-grid if clear, else slid around stock.
+
+        Along-face candidates keep the row crisp; inward ones (which also
+        respect the tight building rect) dodge piles sitting on the line.
+        Clearance is measured to the pile footprint rect, so threading
+        beside a stack is allowed and only true overlaps jog.
+        Returns None only when fully hemmed (vanishingly rare).
+        """
+        def _clear(qx, qy):
+            if keepout is not None:
+                kx0, kx1, ky0, ky1 = keepout
+                if kx0 - 0.1 < qx < kx1 + 0.1 and ky0 - 0.1 < qy < ky1 + 0.1:
+                    return False
+            for ex, ey, hx, hy in jog:
+                ox = max(abs(qx - ex) - hx, 0.0)
+                oy = max(abs(qy - ey) - hy, 0.0)
+                if ox * ox + oy * oy < 0.12 * 0.12:
+                    return False
+            return True
+        if _clear(px, py):
+            return (px, py)
+        tx, ty = tangent
+        ix, iy = inward
+        for dx, dy in ((tx * 0.3, ty * 0.3), (tx * -0.3, ty * -0.3),
+                       (tx * 0.6, ty * 0.6), (tx * -0.6, ty * -0.6),
+                       (tx * 0.9, ty * 0.9), (tx * -0.9, ty * -0.9),
+                       (tx * 1.2, ty * 1.2), (tx * -1.2, ty * -1.2),
+                       (ix * 0.5, iy * 0.5), (ix * 0.9, iy * 0.9)):
+            qx, qy = px + dx, py + dy
+            if not (x0 - 1e-6 <= qx <= x1 + 1e-6
+                    and y0 - 1e-6 <= qy <= y1 + 1e-6):
+                continue
+            if _clear(qx, qy):
+                return (qx, qy)
+        return None
+
     xs = _line_coords(x0, x1)
     ys = _line_coords(y0, y1)
-    x_rows = _pole_rows(cx, sx, sy)
-    y_rows = _pole_rows(cy, sy, sx)
 
-    # Perimeter poles, then interior rows on large sites (thinner).
-    for px in xs:
-        for py in (y0, y1):
-            _pole(bm, px, py, height, r=0.055 + rng.random() * 0.015)
+    # Poles per face row ( jogged around stock, never silently dropped ),
+    # plus interior rows. Ledgers/braces below join consecutive ACTUAL
+    # poles so every member lands on timber.
+    front, back, left, right = [], [], [], []
+    corners = []
+    for ix, px in enumerate(xs):
+        for py, row in ((y0, front), (y1, back)):
+            if _skipped(px, py):
+                continue
+            q = _jog(px, py, (1.0, 0.0), (0.0, -1.0 if py < cy else 1.0))
+            if q is None:
+                continue
+            _pole(bm, q[0], q[1], height, r=0.055 + rng.random() * 0.015)
+            row.append(q)
+            if (ix == 0 or ix == len(xs) - 1) and (py == y0 or py == y1):
+                corners.append(q)
     for py in ys[1:-1]:
-        for px in (x0, x1):
-            _pole(bm, px, py, height, r=0.055 + rng.random() * 0.015)
-    for px in x_rows[1:-1]:
-        for py in y_rows[1:-1]:
-            _pole(bm, px, py, height, r=0.05 + rng.random() * 0.01)
+        for px, row, inw in ((x0, left, (1.0, 0.0)), (x1, right, (-1.0, 0.0))):
+            if _skipped(px, py):
+                continue
+            q = _jog(px, py, (0.0, 1.0), inw)
+            if q is None:
+                continue
+            _pole(bm, q[0], q[1], height, r=0.055 + rng.random() * 0.015)
+            row.append(q)
+    for px in _pole_rows(cx, sx, sy)[1:-1]:
+        for py in _pole_rows(cy, sy, sx)[1:-1]:
+            if _skipped(px, py):
+                continue
+            q = _jog(px, py, (1.0, 0.0), (0.0, 1.0))
+            if q is None:
+                continue
+            _pole(bm, q[0], q[1], height, r=0.05 + rng.random() * 0.01)
 
     # Lifts spread from a reachable first lift (~2 m) up to just under the
     # pole tops, so no tall bare cage sticks out above the working level.
@@ -283,30 +469,26 @@ def build_scaffold_frame(bm, cx, cy, sx, sy, height, levels=2, seed=42,
                  for i in range(levels)]
 
     for lv in lifts:
-        # Ledgers along all four faces.
-        for px_a, px_b in zip(xs[:-1], xs[1:]):
-            _ledger(bm, px_a, y0, px_b, y0, lv)
-            _ledger(bm, px_a, y1, px_b, y1, lv)
-        for py_a, py_b in zip(ys[:-1], ys[1:]):
-            _ledger(bm, x0, py_a, x0, py_b, lv)
-            _ledger(bm, x1, py_a, x1, py_b, lv)
+        # Ledgers join consecutive ACTUAL poles so kinked rows stay tied.
+        for row in (front, back, left, right):
+            for (ax, ay), (bx, by) in zip(row[:-1], row[1:]):
+                _ledger(bm, ax, ay, bx, by, lv)
         # Platforms on front/back faces (alternate per lift to save polys).
         _platform(bm, x0, x1, y0 - 0.55, y0 + 0.05, lv + 0.06)
         if lifts.index(lv) % 2 == 1:
             _platform(bm, x0, x1, y1 - 0.05, y1 + 0.55, lv + 0.06)
-        # Lashings at corners.
-        for qx, qy in ((x0, y0), (x1, y0), (x0, y1), (x1, y1)):
-            _rope_lashing(bm, qx, qy, lv)
+        # Lashings on the (possibly jogged) corner poles.
+        for q in corners:
+            _rope_lashing(bm, q[0], q[1], lv)
 
-    # Diagonal braces on alternating bays (front/back + sides).
-    for i, (px_a, px_b) in enumerate(zip(xs[:-1], xs[1:])):
-        if i % 2 == 0:
-            _diagonal(bm, px_a, y0, px_b, y0, 0.2, lifts[0])
-            if len(lifts) > 1:
-                _diagonal(bm, px_b, y1, px_a, y1, lifts[0], lifts[-1])
-    for i, (py_a, py_b) in enumerate(zip(ys[:-1], ys[1:])):
-        if i % 2 == 1:
-            _diagonal(bm, x0, py_a, x0, py_b, 0.2, lifts[0])
+    # Diagonal braces on alternating bays, tied pole to pole.
+    for row, flip in ((front, False), (back, True), (left, False)):
+        for i, ((ax, ay), (bx, by)) in enumerate(zip(row[:-1], row[1:])):
+            if i % 2 == 0:
+                if not flip:
+                    _diagonal(bm, ax, ay, bx, by, 0.2, lifts[0])
+                elif len(lifts) > 1:
+                    _diagonal(bm, bx, by, ax, ay, lifts[0], lifts[-1])
 
     # Leaning access ladders on the front face, rails resting against the
     # walkway platform edge so workers climb straight up onto the first
@@ -319,67 +501,193 @@ def build_scaffold_frame(bm, cx, cy, sx, sy, height, levels=2, seed=42,
     return height, lifts
 
 
-def build_construction_piles(bm, cx, cy, sx, sy, seed=42, plot_key='AUTO'):
-    """Stage stone / timber / prop piles around the scaffold interior (DRY).
+def _pile_plan(cx, cy, sx, sy, plot_key):
+    """Authoritative stockpile layout: one entry per cluster.
 
-    The base set suits a small site; ``PILE_TIER`` adds clusters for larger
-    plots (extra stone courses, timber piles, barrel stores, crates) so big
-    yards read busy instead of empty. Everything hugs the scaffold edges,
-    clear of the centre where the building (or its future walls) stands.
+    Each entry is ``(kind, x, y, radius, data)``. Single source of truth:
+    the builder and the overlap relaxation read this plan, so a cluster can
+    never disagree with itself. The base set suits a small site; ``PILE_TIER``
+    adds clusters for larger plots. Poles are NOT avoided here: the frame
+    jogs standards around stock instead, so the grid stays dense.
+    """
+    hx, hy = sx * 0.5 - 1.0, sy * 0.5 - 1.0
+    tier = PILE_TIER.get(plot_key, 0)
+    plan = [
+        ('stone', cx - hx, cy + hy, 1.4, (6, 11)),
+        ('stone', cx + hx, cy + hy - 1.0, 1.4, (4, 12)),
+        ('rubble', cx - hx + 2.2, cy + hy - 0.5, 1.6, (4, 13)),
+        ('timber', cx - hx + 0.4, cy - hy + 1.0, 1.1, ()),
+        ('barrel', cx + hx - 0.4, cy - hy, 0.6, (0.2,)),
+        ('barrel', cx + hx + 0.3, cy - hy + 0.4, 0.6, (-0.1,)),
+        ('crate', cx + hx - 0.5, cy - hy + 1.3, 0.75, (0.15, 0.62, 0.55, 'DIAGONAL')),
+        ('iron', cx - hx + 1.2, cy - hy + 0.6, 0.5, ()),
+    ]
+    if tier >= 1:
+        # Medium+: second stone course mid-back and timber along the flank.
+        plan += [
+            ('stone', cx, cy + hy, 1.4, (6, 21)),
+            ('timber', cx + hx - 0.4, cy, 1.1, ()),
+            ('crate', cx - hx + 0.3, cy - 1.5, 0.75, (-0.2, 0.55, 0.5, 'CROSS')),
+        ]
+    if tier >= 2:
+        # Large+: barrel store on the left flank and rubble up front.
+        plan += [
+            ('barrel', cx - hx, cy + 0.5, 0.6, (0.5,)),
+            ('barrel', cx - hx + 0.7, cy - 0.2, 0.6, (-0.3,)),
+            ('rubble', cx + hx - 2.0, cy - hy + 0.5, 1.6, (5, 23)),
+            ('crate', cx + hx - 1.4, cy + hy - 0.6, 0.75, (0.3, 0.62, 0.55, 'DIAGONAL')),
+        ]
+    if tier >= 3:
+        # Huge: full working yard - courses on every side, twin timber.
+        plan += [
+            ('stone', cx - hx, cy - hy + 2.2, 1.4, (6, 31)),
+            ('stone', cx + hx, cy - 1.0, 1.4, (5, 32)),
+            ('timber', cx - hx * 0.3, cy + hy - 1.5, 1.1, ()),
+            ('rubble', cx + 1.5, cy + hy - 2.0, 1.6, (5, 33)),
+        ]
+        for k, (ox, oy) in enumerate(((0.4, -0.6), (-0.5, 0.2), (1.2, 0.8))):
+            plan.append(('crate', cx + hx * 0.2 + ox, cy - hy + 2.0 + oy,
+                         0.75, (0.1 * k, 0.58, 0.5, 'DIAGONAL')))
+    return plan
+
+
+def _relax_pile_plan(plan, fixed, cx, cy, sx, sy, keepout, seed):
+    """Push overlapping clusters apart (deterministic, seeded).
+
+    ``fixed`` are immovable obstacles (interior crane spots); ``keepout``
+    is an optional building rect piles may not enter. Everything stays
+    clamped inside the scaffold. Returns resolved ``[(x, y), ...]`` in plan
+    order. Small props (barrels/crates/iron) may kiss at 0.8x radii; stone,
+    rubble and timber demand full clearance.
+    """
+    rng = _rng(seed, salt=552)
+    pts = [[float(x), float(y)] for (_, x, y, _, _) in plan]
+    kinds = [k for (k, _, _, _, _) in plan]
+    radii = [float(r) for (_, _, _, r, _) in plan]
+
+    def _factor(ki, kj):
+        bulky = ('stone', 'rubble', 'timber')
+        if ki in bulky or kj in bulky:
+            return 1.0
+        return 0.8
+
+    x_lo, x_hi = cx - sx * 0.5 + 0.7, cx + sx * 0.5 - 0.7
+    y_lo, y_hi = cy - sy * 0.5 + 0.7, cy + sy * 0.5 - 0.7
+
+    def _clamp(p):
+        # Keep-out first, scaffold bounds last: a pile that cannot satisfy
+        # both (cramped wrap site) ends inside the keep-out and is dropped
+        # by _resolve_piles instead of oscillating forever.
+        if keepout is not None:
+            kx0, kx1, ky0, ky1 = keepout
+            if kx0 < p[0] < kx1 and ky0 < p[1] < ky1:
+                dl, dr = p[0] - kx0, kx1 - p[0]
+                db, dt = p[1] - ky0, ky1 - p[1]
+                m = min(dl, dr, db, dt)
+                if m == dl:
+                    p[0] = kx0
+                elif m == dr:
+                    p[0] = kx1
+                elif m == db:
+                    p[1] = ky0
+                else:
+                    p[1] = ky1
+        p[0] = min(x_hi, max(x_lo, p[0]))
+        p[1] = min(y_hi, max(y_lo, p[1]))
+
+    for p in pts:
+        _clamp(p)
+    for _ in range(30):
+        order = list(range(len(pts)))
+        rng.shuffle(order)
+        for i in order:
+            xi, yi = pts[i]
+            for j in range(len(pts)):
+                if i == j:
+                    continue
+                dx, dy = xi - pts[j][0], yi - pts[j][1]
+                need = (radii[i] + radii[j]) * _factor(kinds[i], kinds[j])
+                d2 = dx * dx + dy * dy
+                if d2 < need * need and d2 > 1e-9:
+                    d = math.sqrt(d2)
+                    push = (need - d) * 0.5
+                    ux, uy = dx / d, dy / d
+                    pts[i][0] += ux * push
+                    pts[i][1] += uy * push
+                    pts[j][0] -= ux * push
+                    pts[j][1] -= uy * push
+                    _clamp(pts[i])
+                    _clamp(pts[j])
+            for fx, fy, fr in fixed:
+                dx, dy = xi - fx, yi - fy
+                # refresh: pts[i] may have moved above; re-read
+                xi, yi = pts[i]
+                dx, dy = xi - fx, yi - fy
+                need = radii[i] + fr
+                d2 = dx * dx + dy * dy
+                if d2 < need * need and d2 > 1e-9:
+                    d = math.sqrt(d2)
+                    pts[i][0] = fx + dx / d * need
+                    pts[i][1] = fy + dy / d * need
+                    _clamp(pts[i])
+                    xi, yi = pts[i]
+    return pts
+
+
+def _resolve_piles(plan, pts, cx, cy, sx, sy, keepout):
+    """Filter relaxed piles down to the ones that genuinely fit.
+
+    A pile survives only if its centre is inside the scaffold interior and
+    fully clear of the building keep-out (grown by its own radius). On a
+    cramped wrap site with no staging room this drops piles instead of
+    burying them in walls or poles: fewer honest piles beat clipping ones.
+    Returns ``[(kind, x, y, radius, data), ...]``.
+    """
+    resolved = []
+    for (kind, _, _, r, data), (x, y) in zip(plan, pts):
+        if abs(x - cx) > sx * 0.5 - 0.7 or abs(y - cy) > sy * 0.5 - 0.7:
+            continue
+        if keepout is not None:
+            kx0, kx1, ky0, ky1 = keepout
+            if kx0 - r < x < kx1 + r and ky0 - r < y < ky1 + r:
+                continue
+        resolved.append((kind, x, y, r, data))
+    return resolved
+
+
+def build_construction_piles(bm, plan, seed=42):
+    """Stage stockpiles from a resolved ``_pile_plan`` (positions + entries).
+
+    ``plan`` is ``[(kind, x, y, radius, data), ...]`` with ``(x, y)`` already
+    de-overlapped by :func:`_relax_pile_plan`.
     """
     from .furniture import build_crate, build_barrel
     from .quarry import build_cut_block_stack, build_rubble_pile
 
-    tier = PILE_TIER.get(plot_key, 0)
     rng = _rng(seed, salt=551)
-    hx, hy = sx * 0.5 - 1.0, sy * 0.5 - 1.0
-    # Cut-stone stacks: the unfinished walls' next courses.
-    build_cut_block_stack(bm, cx - hx, cy + hy, z_ground=0.0,
-                          count=6, seed=seed + 11)
-    build_cut_block_stack(bm, cx + hx, cy + hy - 1.0, z_ground=0.0,
-                          count=4, seed=seed + 12)
-    build_rubble_pile(bm, cx - hx + 2.2, cy + hy - 0.5, count=4,
-                      seed=seed + 13)
-    _timber_pile(bm, cx - hx + 0.4, cy - hy + 1.0, rng)
-    # Barrels + crates: site stores (front-right corner).
-    build_barrel(bm, cx + hx - 0.4, cy - hy, z_ground=0.0, ang=0.2)
-    build_barrel(bm, cx + hx + 0.3, cy - hy + 0.4, z_ground=0.0, ang=-0.1)
-    build_crate(bm, cx + hx - 0.2, cy - hy + 1.2, z_ground=0.0, ang=0.15,
-                size=0.62, height=0.55, brace_style='DIAGONAL')
-    # Hoop iron banding stack beside the timber.
-    create_cylinder(
-        bm, radius=0.30, height=0.5, segments=10,
-        location=(cx - hx + 1.2, cy - hy + 0.6, 0.25),
-        mat_index=MAT_INDEX_IRON,
-    )
-    if tier >= 1:
-        # Medium+: second stone course mid-back and timber along the flank.
-        build_cut_block_stack(bm, cx, cy + hy, z_ground=0.0,
-                              count=6, seed=seed + 21)
-        _timber_pile(bm, cx + hx - 0.4, cy, rng)
-        build_crate(bm, cx - hx + 0.6, cy - hy + 0.4, z_ground=0.0, ang=-0.2,
-                    size=0.55, height=0.5, brace_style='CROSS')
-    if tier >= 2:
-        # Large+: barrel store on the left flank and rubble up front.
-        build_barrel(bm, cx - hx, cy + 0.5, z_ground=0.0, ang=0.5)
-        build_barrel(bm, cx - hx + 0.7, cy - 0.2, z_ground=0.0, ang=-0.3)
-        build_rubble_pile(bm, cx + hx - 2.0, cy - hy + 0.5, count=5,
-                          seed=seed + 23)
-        build_crate(bm, cx + hx - 1.4, cy + hy - 0.6, z_ground=0.0, ang=0.3,
-                    size=0.62, height=0.55, brace_style='DIAGONAL')
-    if tier >= 3:
-        # Huge: full working yard - courses on every side, twin timber.
-        build_cut_block_stack(bm, cx - hx, cy - hy + 2.2, z_ground=0.0,
-                              count=6, seed=seed + 31)
-        build_cut_block_stack(bm, cx + hx, cy - 1.0, z_ground=0.0,
-                              count=5, seed=seed + 32)
-        _timber_pile(bm, cx - hx * 0.3, cy + hy - 1.5, rng)
-        for k, (ox, oy) in enumerate(((0.4, -0.6), (-0.5, 0.2), (1.2, 0.8))):
-            build_crate(bm, cx + hx * 0.2 + ox, cy - hy + 2.0 + oy,
-                        z_ground=0.0, ang=0.1 * k,
-                        size=0.58, height=0.5, brace_style='DIAGONAL')
-        build_rubble_pile(bm, cx + 1.5, cy + hy - 2.0, count=5,
-                          seed=seed + 33)
+    for kind, x, y, _r, data in plan:
+        if kind == 'stone':
+            count, salt = data
+            build_cut_block_stack(bm, x, y, z_ground=0.0,
+                                  count=count, seed=seed + salt)
+        elif kind == 'rubble':
+            count, salt = data
+            build_rubble_pile(bm, x, y, count=count, seed=seed + salt)
+        elif kind == 'timber':
+            _timber_pile(bm, x, y, rng)
+        elif kind == 'barrel':
+            (ang,) = data
+            build_barrel(bm, x, y, z_ground=0.0, ang=ang)
+        elif kind == 'crate':
+            ang, size, height, brace = data
+            build_crate(bm, x, y, z_ground=0.0, ang=ang,
+                        size=size, height=height, brace_style=brace)
+        elif kind == 'iron':
+            create_cylinder(
+                bm, radius=0.30, height=0.5, segments=10,
+                location=(x, y, 0.25),
+                mat_index=MAT_INDEX_IRON,
+            )
 
 
 def _timber_pile(bm, x, y, rng):
@@ -396,29 +704,71 @@ def _timber_pile(bm, x, y, rng):
         )
 
 
-def _build_site_cranes(bm, ccx, ccy, sx, sy, plot_key):
-    """Yard crane outside plus interior cranes on large/huge plots.
+def _crane_plan(ccx, ccy, sx, sy, plot_key, keepout):
+    """Crane spots, preferring inside the scaffold.
 
-    The outside crane serves the plot from the front-right; interior cranes
-    stand at the back inside the scaffold where the long spans leave room,
-    so big sites get the multi-crane bustle the user asked for.
+    The primary crane stands inside at the back with the stockpiles; LARGE
+    adds one interior mate, HUGE two. A spot that would land in the building
+    keep-out (cramped wrap site) falls back to the outside yard position so
+    no mast is ever buried in a wall. Each spot is ``(x, y, rot, mast, jib)``.
+    Spots are resolved before poles go up: stockpiles relax around the masts
+    and the frame punches pole holes under them.
     """
-    from .crane import build_courtyard_crane
-    build_courtyard_crane(bm, yard_x=ccx + sx * 0.5 + 1.5,
-                          yard_y=ccy - sy * 0.5 - 1.0,
-                          z_ground=0.0, rot_angle=0.6)
-    n_inside = CRANES_INSIDE.get(plot_key, 0)
-    if n_inside <= 0:
-        return
-    back_y = ccy + sy * 0.5 - 3.0
-    if n_inside == 1:
-        spots = ((ccx, back_y, 2.6),)
+    outside = (ccx + sx * 0.5 + 1.5, ccy - sy * 0.5 - 1.0, 0.6, 4.0, 3.4)
+    back_y = ccy + sy * 0.5 - 2.2
+
+    def _blocked(x, y, r=1.6):
+        if keepout is None:
+            return False
+        kx0, kx1, ky0, ky1 = keepout
+        return kx0 - r < x < kx1 + r and ky0 - r < y < ky1 + r
+
+    tier = _size_tier(plot_key, sx, sy)
+    if tier == 'HUGE':
+        cands = [(ccx, back_y, 2.6, 5.0, 4.2),
+                 (ccx - sx * 0.25, back_y, 2.6, 5.0, 4.2),
+                 (ccx + sx * 0.25, back_y, -2.6, 5.0, 4.2)]
+    elif tier == 'LARGE':
+        cands = [(ccx, back_y, 2.6, 5.0, 4.2),
+                 (ccx - sx * 0.25, back_y, 2.6, 5.0, 4.2)]
     else:
-        spots = ((ccx - sx * 0.25, back_y, 2.6),
-                 (ccx + sx * 0.25, back_y, -2.6))
-    for qx, qy, rot in spots[:n_inside]:
+        cands = [(ccx, back_y, 0.6, 4.0, 3.4)]
+    spots = [c for c in cands if not _blocked(c[0], c[1])]
+    if not spots:
+        spots = [outside]
+    return spots
+
+
+def _build_site_cranes(bm, spots):
+    """Raise every crane in a ``_crane_plan``."""
+    from .crane import build_courtyard_crane
+    for qx, qy, rot, mast, jib in spots:
         build_courtyard_crane(bm, yard_x=qx, yard_y=qy, z_ground=0.0,
-                              mast_height=5.0, jib_length=4.2, rot_angle=rot)
+                              mast_height=mast, jib_length=jib,
+                              rot_angle=rot)
+
+
+def _building_keepout(ctx, margin=0.8):
+    """Building footprint (main + wings) expanded as a keep-out rect.
+
+    Returns ``(x0, x1, y0, y1)`` in plot space, or ``None`` when there is
+    nothing to avoid (empty sites). Stockpiles use the roomy default
+    margin; pole jogs use a tight one (the scaffold always clears the
+    bare walls, so grid poles never start inside it).
+    """
+    try:
+        bw = float(getattr(ctx, 'base_w', 0.0))
+        bd = float(getattr(ctx, 'base_d', 0.0))
+        x0, x1 = -bw * 0.5 - margin, bw * 0.5 + margin
+        y0, y1 = -bd * 0.5 - margin, bd * 0.5 + margin
+        for w in getattr(ctx, 'wings', []) or []:
+            b = w.get('base', None)
+            if b and len(b) == 4:
+                x0, x1 = min(x0, b[0] - margin), max(x1, b[1] + margin)
+                y0, y1 = min(y0, b[2] - margin), max(y1, b[3] + margin)
+        return (x0, x1, y0, y1)
+    except Exception:
+        return None
 
 
 def build_construction_site(bm, props, ctx, tier):
@@ -455,24 +805,40 @@ def build_construction_site(bm, props, ctx, tier):
     off_x = float(getattr(props, 'plot_offset_x', 0.0) or 0.0)
     ccx, ccy = off_x, setback
 
-    sx, sy = scaffold_extents(plot_key, padding, bldg_w, bldg_d)
+    sx, sy = scaffold_extents(plot_key, padding, bldg_w, bldg_d, props)
+    tier = _size_tier(plot_key, sx, sy)
 
     total_h = float(getattr(ctx, 'total_height', 6.0) or 6.0)
-    scaf_h = total_h + 1.0
+    scaf_h = scaffold_height(props, total_h + 1.0)
+
+    # Layout before lumber: stockpiles relax around the fixed crane masts
+    # (poles jog around piles in the frame, so the grid stays dense).
+    keepout = _building_keepout(ctx)
+    plan = _pile_plan(ccx, ccy, sx, sy, tier)
+    want_cranes = bool(getattr(props, 'construction_crane', False))
+    spots = _crane_plan(ccx, ccy, sx, sy, plot_key, keepout) if want_cranes else []
+    inside = [(qx, qy) for qx, qy, _, _, _ in spots
+              if abs(qx - ccx) <= sx * 0.5 and abs(qy - ccy) <= sy * 0.5]
+    fixed = [(qx, qy, 1.5) for qx, qy in inside]
+    pts = _relax_pile_plan(plan, fixed, ccx, ccy, sx, sy, keepout, seed)
+    resolved = _resolve_piles(plan, pts, ccx, ccy, sx, sy, keepout)
+    jog = [(x, y, *PILE_FOOTPRINT.get(k, (r, r))) for (k, x, y, r, _) in resolved]
+    exclude = [(qx, qy, 1.6) for qx, qy in inside]
 
     _h, lifts = build_scaffold_frame(bm, ccx, ccy, sx, sy, scaf_h,
                                      levels=levels, seed=seed,
-                                     ladders=LADDER_COUNT.get(plot_key, 1))
+                                     ladders=LADDER_COUNT.get(tier, 1),
+                                     exclude=exclude, jog=jog,
+                                     keepout=_building_keepout(ctx, margin=0.15))
 
     if getattr(props, 'scaffold_tarp', True):
         _tarp_roof(bm, ccx, ccy, sx, sy, _h, lifts, seed=seed)
 
     if getattr(props, 'construction_piles', True):
-        build_construction_piles(bm, ccx, ccy, sx, sy, seed=seed,
-                                 plot_key=plot_key)
+        build_construction_piles(bm, resolved, seed)
 
-    if getattr(props, 'construction_crane', False):
-        _build_site_cranes(bm, ccx, ccy, sx, sy, plot_key)
+    if want_cranes:
+        _build_site_cranes(bm, spots)
 
 
 def build_empty_construction_site(bm, props, ctx):
@@ -494,7 +860,9 @@ def build_empty_construction_site(bm, props, ctx):
     off_x = float(getattr(props, 'plot_offset_x', 0.0) or 0.0)
     ccx, ccy = off_x, setback
 
-    if plot_key in PLOT_SIZES:
+    if plot_key == 'CUSTOM':
+        sx, sy = scaffold_extents(plot_key, pad, 0.0, 0.0, props)
+    elif plot_key in PLOT_SIZES:
         plot = PLOT_SIZES[plot_key]
         sx = sy = plot - 2.0 * pad
     else:
@@ -502,22 +870,38 @@ def build_empty_construction_site(bm, props, ctx):
         fw = max(3.0, float(getattr(ctx, 'base_w', 6.0)))
         fd = max(3.0, float(getattr(ctx, 'base_d', 6.0)))
         sx, sy = fw + 2.4, fd + 2.4
+    tier = _size_tier(plot_key, sx, sy)
 
     # Intended scaffold height = future wall height + 1 m working top
     # (roof excluded: nothing is roofed yet, so don't build air).
-    scaf_h = max(2.5, float(getattr(ctx, 'found_h', 0.0) or 0.0)
-                 + max(1, int(getattr(ctx, 'num_floors', 1))) * float(getattr(ctx, 'floor_h', 2.8)) + 1.0)
+    auto_h = (max(2.5, float(getattr(ctx, 'found_h', 0.0) or 0.0)
+              + max(1, int(getattr(ctx, 'num_floors', 1))) * float(getattr(ctx, 'floor_h', 2.8)) + 1.0))
+    scaf_h = scaffold_height(props, auto_h)
+
+    # Same plan-first order as the wrap composer, but with no building
+    # keep-out: the whole interior is a free working yard.
+    plan = _pile_plan(ccx, ccy, sx, sy, tier)
+    want_cranes = bool(getattr(props, 'construction_crane', False))
+    spots = _crane_plan(ccx, ccy, sx, sy, plot_key, None) if want_cranes else []
+    inside = [(qx, qy) for qx, qy, _, _, _ in spots
+              if abs(qx - ccx) <= sx * 0.5 and abs(qy - ccy) <= sy * 0.5]
+    fixed = [(qx, qy, 1.5) for qx, qy in inside]
+    pts = _relax_pile_plan(plan, fixed, ccx, ccy, sx, sy, None, seed)
+    resolved = _resolve_piles(plan, pts, ccx, ccy, sx, sy, None)
+    jog = [(x, y, *PILE_FOOTPRINT.get(k, (r, r))) for (k, x, y, r, _) in resolved]
+    exclude = [(qx, qy, 1.6) for qx, qy in inside]
 
     _h, lifts = build_scaffold_frame(bm, ccx, ccy, sx, sy, scaf_h,
                                      levels=levels, seed=seed,
-                                     ladders=LADDER_COUNT.get(plot_key, 1))
+                                     ladders=LADDER_COUNT.get(tier, 1),
+                                     exclude=exclude, jog=jog,
+                                     keepout=None)
 
     if getattr(props, 'scaffold_tarp', True):
         _tarp_roof(bm, ccx, ccy, sx, sy, _h, lifts, seed=seed)
 
     if getattr(props, 'construction_piles', True):
-        build_construction_piles(bm, ccx, ccy, sx, sy, seed=seed,
-                                 plot_key=plot_key)
+        build_construction_piles(bm, resolved, seed)
 
-    if getattr(props, 'construction_crane', False):
-        _build_site_cranes(bm, ccx, ccy, sx, sy, plot_key)
+    if want_cranes:
+        _build_site_cranes(bm, spots)

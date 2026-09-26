@@ -473,8 +473,33 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('MEDIUM', "Medium 20m x 20m", "Scaffold for a 20m x 20m plot"),
             ('LARGE', "Large 40m x 40m", "Scaffold for a 40m x 40m plot"),
             ('HUGE', "Huge 100m x 100m", "Scaffold for a 100m x 100m plot"),
+            ('CUSTOM', "Custom Size", "Set the scaffold width, depth and height manually below"),
         ],
         default='AUTO',
+        update=on_property_updated
+    )
+
+    scaffold_width: FloatProperty(
+        name="Scaffold Width",
+        description="Scaffold width in meters (only used with Custom Size plot)",
+        min=3.0, max=99.0, default=9.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    scaffold_depth: FloatProperty(
+        name="Scaffold Depth",
+        description="Scaffold depth in meters (only used with Custom Size plot)",
+        min=3.0, max=99.0, default=9.0,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    scaffold_height: FloatProperty(
+        name="Scaffold Height",
+        description="Scaffold pole height in meters (0 = automatic: follows the building or intended storeys)",
+        min=0.0, max=30.0, default=0.0,
+        unit='LENGTH',
         update=on_property_updated
     )
 

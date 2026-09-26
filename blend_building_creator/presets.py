@@ -127,7 +127,8 @@ def base_settings():
         'kit_tournament': False, 'kit_chapel': False, 'kit_stable': False,
         # Construction scaffold (off by default)
         'has_construction': False, 'construction_mode': 'WRAP_BUILDING',
-        'construction_plot': 'AUTO',
+        'construction_plot': 'AUTO', 'scaffold_width': 9.0,
+        'scaffold_depth': 9.0, 'scaffold_height': 0.0,
         'scaffold_padding': 1.5, 'scaffold_levels': 2, 'scaffold_tarp': True,
         'construction_piles': True, 'construction_crane': False,
         # Materials & colours
@@ -5822,6 +5823,7 @@ def apply_preset(props, preset_key):
                 'has_estate_fountain', 'outbuilding_offset_x', 'outbuilding_offset_y',
                 'plot_setback', 'plot_offset_x', 'estate_awnings',
                 'has_construction', 'construction_mode', 'construction_plot', 'scaffold_padding',
+                'scaffold_width', 'scaffold_depth', 'scaffold_height',
                 'scaffold_levels', 'scaffold_tarp', 'construction_piles',
                 'construction_crane',
                 *_ALL_KIT_FLAGS,

@@ -635,8 +635,14 @@ class VIEW3D_PT_fantasy_building_construction(bpy.types.Panel):
         box = layout.box()
         box.label(text="Plot & Walkway", icon='MOD_BUILD')
         box.prop(props, "construction_plot")
-        box.prop(props, "scaffold_padding", slider=True)
+        if props.construction_plot == 'CUSTOM':
+            row = box.row(align=True)
+            row.prop(props, "scaffold_width", text="Width")
+            row.prop(props, "scaffold_depth", text="Depth")
+        else:
+            box.prop(props, "scaffold_padding", slider=True)
         box.prop(props, "scaffold_levels")
+        box.prop(props, "scaffold_height", text="Height (0 = Auto)")
         box = layout.box()
         box.label(text="Site Dressing", icon='HOME')
         box.prop(props, "scaffold_tarp")
