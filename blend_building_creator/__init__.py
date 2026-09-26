@@ -31,11 +31,18 @@ from .operators import (
 )
 from .ui import (
     VIEW3D_PT_fantasy_building_main,
+    VIEW3D_PT_fantasy_building_presets,
     VIEW3D_PT_fantasy_building_dimensions,
+    VIEW3D_PT_fantasy_building_kits,
     VIEW3D_PT_fantasy_building_interior,
     VIEW3D_PT_fantasy_building_openings,
     VIEW3D_PT_fantasy_building_roof,
     VIEW3D_PT_fantasy_building_extensions,
+    VIEW3D_PT_fantasy_building_civic,
+    VIEW3D_PT_fantasy_building_hospitality,
+    VIEW3D_PT_fantasy_building_fortifications,
+    VIEW3D_PT_fantasy_building_estate,
+    VIEW3D_PT_fantasy_building_construction,
     VIEW3D_PT_fantasy_building_materials,
 )
 
@@ -51,11 +58,18 @@ classes = (
     BUILDING_OT_finalize,
     BUILDING_OT_create_door_blade,
     VIEW3D_PT_fantasy_building_main,
+    VIEW3D_PT_fantasy_building_presets,
     VIEW3D_PT_fantasy_building_dimensions,
+    VIEW3D_PT_fantasy_building_kits,
     VIEW3D_PT_fantasy_building_interior,
     VIEW3D_PT_fantasy_building_openings,
     VIEW3D_PT_fantasy_building_roof,
     VIEW3D_PT_fantasy_building_extensions,
+    VIEW3D_PT_fantasy_building_civic,
+    VIEW3D_PT_fantasy_building_hospitality,
+    VIEW3D_PT_fantasy_building_fortifications,
+    VIEW3D_PT_fantasy_building_estate,
+    VIEW3D_PT_fantasy_building_construction,
     VIEW3D_PT_fantasy_building_materials,
 )
 

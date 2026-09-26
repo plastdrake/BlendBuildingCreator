@@ -150,6 +150,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('INDUSTRIAL', "Industrial", "Warehouses, storage, and lumbermills"),
             ('RESIDENTIAL', "Residential", "Houses, cottages, and town residences"),
             ('HOSPITALITY', "Hospitality", "Taverns, inns, and wayside hostelries"),
+            ('CONSTRUCTION', "Construction", "Scaffolded buildings under construction"),
         ],
         default='ALL'
     )
@@ -351,6 +352,164 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     has_upper_cargo_crane: BoolProperty(
         name="Upper Cargo Crane",
         description="Cantilevered timber jib crane mounted on the 2nd floor above the loading dock",
+        default=False,
+        update=on_property_updated
+    )
+
+    # --- Modular purpose kits (reusable on ANY building, no preset required) ---
+    # Each kit below mirrors one building_archetype value. The dispatch layer
+    # builds a kit when EITHER its toggle is on OR the archetype matches, so
+    # old presets (archetype-driven) keep working while new free-builds just
+    # flip toggles. This is what unlocks preset-locked functionality.
+    kit_blacksmith: BoolProperty(
+        name="Blacksmith Forge",
+        description="Outdoor forge lean-to, stone furnace with chimney and anvil (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_windmill: BoolProperty(
+        name="Windmill Sails",
+        description="4-blade lattice timber windmill rotor on the upper facade (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_watchtower: BoolProperty(
+        name="Watchtower Parapet",
+        description="Defensive timber hoarding lookout with corbels and arrow slits (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_fisherman: BoolProperty(
+        name="Fisherman Pier & Nets",
+        description="Raised piling pier stilts and fish-drying net frame (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_bakery: BoolProperty(
+        name="Bakery Bread Oven",
+        description="Protruding curved brick bread oven with chimney flue (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_warehouse: BoolProperty(
+        name="Warehouse Crane & Cargo",
+        description="Courtyard timber swivel crane, loading bays and supply stockpile (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_lumbermill: BoolProperty(
+        name="Lumbermill Workframe",
+        description="Treadwheel sawmill, saw bench, log yard and dock planks (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_quarry: BoolProperty(
+        name="Stone Quarry Worksite",
+        description="Plot-space quarry yard: benched rock faces, cranes and cut-block stacks (stone only)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_archery: BoolProperty(
+        name="Archery Range",
+        description="Straw target butts, thatched shooting pavilion and range fence (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_tournament: BoolProperty(
+        name="Tournament Yard",
+        description="Jousting quintains, weapon racks and banner standards (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_chapel: BoolProperty(
+        name="Chapel Kit",
+        description="Rounded apse, bell tower, rose window and churchyard (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_stable: BoolProperty(
+        name="Stable Yard",
+        description="Open stall row and fenced paddock pen beside the barn (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    # --- Construction / scaffolding (building under construction) ---
+    has_construction: BoolProperty(
+        name="Construction Scaffold",
+        description="Wrap the building in a timber pole scaffold so it reads as under construction",
+        default=False,
+        update=on_property_updated
+    )
+
+    construction_mode: EnumProperty(
+        name="Construction Mode",
+        description="Scaffold around the finished building, or an empty scaffold-only site with no building yet",
+        items=[
+            ('WRAP_BUILDING', "Scaffold + Building", "Build the full building wrapped in a scaffold (renovation / near-complete)"),
+            ('EMPTY_SITE', "Empty Site (No Building)", "Scaffold-only construction site: footing outline, scaffold, piles and crane, no walls or roof"),
+        ],
+        default='WRAP_BUILDING',
+        update=on_property_updated
+    )
+
+    construction_plot: EnumProperty(
+        name="Scaffold Plot",
+        description="Plot the scaffold is sized for. The scaffold stays inside the plot with walk-around padding",
+        items=[
+            ('AUTO', "Auto (Fit Building)", "Size the scaffold to the current building plus a work margin"),
+            ('SMALL', "Small 12m x 12m", "Scaffold for a 12m x 12m plot"),
+            ('MEDIUM', "Medium 20m x 20m", "Scaffold for a 20m x 20m plot"),
+            ('LARGE', "Large 40m x 40m", "Scaffold for a 40m x 40m plot"),
+            ('HUGE', "Huge 100m x 100m", "Scaffold for a 100m x 100m plot"),
+        ],
+        default='AUTO',
+        update=on_property_updated
+    )
+
+    scaffold_padding: FloatProperty(
+        name="Walk-Around Padding",
+        description="Clear walkway left between the scaffold and the plot edge (1-2m recommended for in-game pawns)",
+        min=0.5, max=3.0, default=1.5,
+        unit='LENGTH',
+        update=on_property_updated
+    )
+
+    scaffold_levels: IntProperty(
+        name="Scaffold Levels",
+        description="Number of working lift levels (platforms). Height follows the building; levels space ~2m apart",
+        min=1, max=6, default=2,
+        update=on_property_updated
+    )
+
+    scaffold_tarp: BoolProperty(
+        name="Tarp Roof",
+        description="Stretch a canvas tarp roof over the entire scaffold top as a weather cover",
+        default=True,
+        update=on_property_updated
+    )
+
+    construction_piles: BoolProperty(
+        name="Material Piles",
+        description="Stage cut-stone stacks, plank piles, barrels and tool crates inside the scaffold",
+        default=True,
+        update=on_property_updated
+    )
+
+    construction_crane: BoolProperty(
+        name="Yard Crane",
+        description="Raise timber swivel cranes: one serving the yard, plus interior cranes on large and huge plots",
         default=False,
         update=on_property_updated
     )

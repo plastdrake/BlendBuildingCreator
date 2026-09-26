@@ -27,8 +27,16 @@ def generate_building(obj, props):
     The work is split into phases that share a single mutable :class:`BuildingContext`:
     setup, foundation, per-floor construction, roof/attic, archetype accessories,
     optional outcrops/balconies, then finalization.
+
+    Empty construction sites (scaffold-only, no building yet) take a separate
+    early-out path: scaffold + piles + cranes, no walls, roof or footing.
     """
     bm = bmesh.new()
+
+    if (getattr(props, 'has_construction', False)
+            and getattr(props, 'construction_mode', 'WRAP_BUILDING') == 'EMPTY_SITE'):
+        _build_empty_construction_site(obj, bm, props)
+        return
 
     if getattr(props, 'building_shape', 'RECTANGLE') == 'ROUND_TOWER':
         _build_round_tower_building(obj, bm, props)
@@ -41,6 +49,36 @@ def generate_building(obj, props):
     build_archetype_accessories(bm, props, ctx, loft_spec)
     build_architectural_accessories(bm, props, ctx)
     _finalize_building(obj, bm, props, ctx)
+
+
+def _build_empty_construction_site(obj, bm, props):
+    """Scaffold-only site: no walls, floors, roof or footing, just scaffold + yard.
+
+    Reuses the normal context (intended width/depth/floors define the future
+    building's size and scaffold height) and the scaffold composer, then
+    commits without wonkiness so poles stay straight.
+    """
+    from .accessories.scaffold import build_empty_construction_site
+    ctx = _create_building_context(props)
+    build_empty_construction_site(bm, props, ctx)
+    # Commit without wonkiness: a bent scaffold reads as broken, not busy.
+    # NOTE: auto_update is muted while we park wonkiness, otherwise the
+    # property update callback would re-enter generate_building recursively.
+    old_auto = getattr(props, 'auto_update', True)
+    old_wonk = getattr(props, 'wonkiness', 0.0)
+    try:
+        props.auto_update = False
+        props.wonkiness = 0.0
+        _finalize_building(obj, bm, props, ctx)
+    finally:
+        try:
+            props.wonkiness = old_wonk
+        except Exception:
+            pass
+        try:
+            props.auto_update = old_auto
+        except Exception:
+            pass
 
 
 def _store_building_settings(obj, props):

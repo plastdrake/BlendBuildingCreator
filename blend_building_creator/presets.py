@@ -26,6 +26,7 @@ PRESET_CATEGORIES = [
     ('INDUSTRIAL', "Industrial", "Warehouses, storage, and lumbermills"),
     ('RESIDENTIAL', "Residential", "Houses, cottages, and town residences"),
     ('HOSPITALITY', "Hospitality", "Taverns, inns, and wayside hostelries"),
+    ('CONSTRUCTION', "Construction", "Scaffolded buildings under construction"),
 ]
 
 
@@ -119,6 +120,16 @@ def base_settings():
         'has_servant_quarters': False, 'servant_quarters_side': 'RIGHT',
         'has_estate_fountain': False, 'outbuilding_offset_x': 6.0,
         'outbuilding_offset_y': -4.0, 'plot_setback': 0.0, 'estate_awnings': False,
+        # Modular purpose kits (all off: free-build composes them explicitly)
+        'kit_blacksmith': False, 'kit_windmill': False, 'kit_watchtower': False,
+        'kit_fisherman': False, 'kit_bakery': False, 'kit_warehouse': False,
+        'kit_lumbermill': False, 'kit_quarry': False, 'kit_archery': False,
+        'kit_tournament': False, 'kit_chapel': False, 'kit_stable': False,
+        # Construction scaffold (off by default)
+        'has_construction': False, 'construction_mode': 'WRAP_BUILDING',
+        'construction_plot': 'AUTO',
+        'scaffold_padding': 1.5, 'scaffold_levels': 2, 'scaffold_tarp': True,
+        'construction_piles': True, 'construction_crane': False,
         # Materials & colours
         'material_tier': 'TIER_2', 'physical_siding': True,
         'plank_direction': 'HORIZONTAL', 'plank_jankiness': 0.35,
@@ -5161,6 +5172,177 @@ PRESETS = {
         },
     },
 
+    # =========================================================================
+    # CONSTRUCTION: scaffold shells sized for each plot (walk-around padding
+    # kept clear). Plain timber shells so the scaffold reads on any building.
+    # =========================================================================
+    'SCAFFOLD_SMALL': {
+        'category': 'CONSTRUCTION',
+        'family': 'SCAFFOLD',
+        'tier': 1,
+        'name': "Construction (Small 12m)",
+        'plot': "12m x 12m",
+        'description': "Small-plot construction site: scaffold inside 12m x 12m with walk-around padding, tarps and staged piles.",
+        'settings': {
+            **base_settings(),
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_1',
+            'num_floors': 1, 'floor_height': 2.8,
+            'width': 6.0, 'depth': 6.0,
+            'has_construction': True, 'construction_mode': 'WRAP_BUILDING',
+            'construction_plot': 'SMALL',
+            'scaffold_padding': 1.5, 'scaffold_levels': 2,
+            'scaffold_tarp': True, 'construction_piles': True,
+            'construction_crane': False,
+        },
+    },
+    'SCAFFOLD_MEDIUM': {
+        'category': 'CONSTRUCTION',
+        'family': 'SCAFFOLD',
+        'tier': 2,
+        'name': "Construction (Medium 20m)",
+        'plot': "20m x 20m",
+        'description': "Medium-plot construction site: scaffold inside 20m x 20m with walk-around padding, tarps, piles and crane.",
+        'settings': {
+            **base_settings(),
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_2',
+            'num_floors': 2, 'floor_height': 2.9,
+            'width': 8.0, 'depth': 7.0,
+            'has_construction': True, 'construction_mode': 'WRAP_BUILDING',
+            'construction_plot': 'MEDIUM',
+            'scaffold_padding': 1.5, 'scaffold_levels': 3,
+            'scaffold_tarp': True, 'construction_piles': True,
+            'construction_crane': True,
+        },
+    },
+    'SCAFFOLD_LARGE': {
+        'category': 'CONSTRUCTION',
+        'family': 'SCAFFOLD',
+        'tier': 3,
+        'name': "Construction (Large 40m)",
+        'plot': "40m x 40m",
+        'description': "Large-plot construction site: scaffold inside 40m x 40m with walk-around padding, tarps, piles and crane.",
+        'settings': {
+            **base_settings(),
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_3',
+            'num_floors': 2, 'floor_height': 3.0,
+            'width': 12.0, 'depth': 9.0,
+            'has_construction': True, 'construction_mode': 'WRAP_BUILDING',
+            'construction_plot': 'LARGE',
+            'scaffold_padding': 2.0, 'scaffold_levels': 3,
+            'scaffold_tarp': True, 'construction_piles': True,
+            'construction_crane': True,
+        },
+    },
+    'SCAFFOLD_HUGE': {
+        'category': 'CONSTRUCTION',
+        'family': 'SCAFFOLD',
+        'tier': 3,
+        'name': "Construction (Huge 100m)",
+        'plot': "100m x 100m",
+        'description': "Huge-plot construction site: scaffold inside 100m x 100m with walk-around padding, tarps, piles and crane.",
+        'settings': {
+            **base_settings(),
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_3',
+            'num_floors': 3, 'floor_height': 3.1,
+            'width': 16.0, 'depth': 12.0,
+            'has_construction': True, 'construction_mode': 'WRAP_BUILDING',
+            'construction_plot': 'HUGE',
+            'scaffold_padding': 2.0, 'scaffold_levels': 4,
+            'scaffold_tarp': True, 'construction_piles': True,
+            'construction_crane': True,
+        },
+    },
+    # Empty scaffold-only sites: footing + scaffold + piles, no walls or roof.
+    # Width/depth/floors describe the FUTURE building (footing size + scaffold height).
+    'SCAFFOLD_EMPTY_SMALL': {
+        'category': 'CONSTRUCTION',
+        'family': 'SCAFFOLD_EMPTY',
+        'tier': 1,
+        'name': "Empty Site (Small 12m)",
+        'plot': "12m x 12m",
+        'description': "Empty small-plot site: scaffold-only inside 12m x 12m, footing outline, piles. No building yet.",
+        'settings': {
+            **base_settings(),
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_1',
+            'num_floors': 1, 'floor_height': 2.8,
+            'width': 6.0, 'depth': 6.0,
+            'has_foundation': True, 'foundation_height': 0.4,
+            'has_construction': True, 'construction_mode': 'EMPTY_SITE',
+            'construction_plot': 'SMALL',
+            'scaffold_padding': 1.5, 'scaffold_levels': 2,
+            'scaffold_tarp': True, 'construction_piles': True,
+            'construction_crane': False,
+        },
+    },
+    'SCAFFOLD_EMPTY_MEDIUM': {
+        'category': 'CONSTRUCTION',
+        'family': 'SCAFFOLD_EMPTY',
+        'tier': 2,
+        'name': "Empty Site (Medium 20m)",
+        'plot': "20m x 20m",
+        'description': "Empty medium-plot site: scaffold-only inside 20m x 20m, footing outline, piles and crane. No building yet.",
+        'settings': {
+            **base_settings(),
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_2',
+            'num_floors': 2, 'floor_height': 2.9,
+            'width': 8.0, 'depth': 7.0,
+            'has_foundation': True, 'foundation_height': 0.5,
+            'has_construction': True, 'construction_mode': 'EMPTY_SITE',
+            'construction_plot': 'MEDIUM',
+            'scaffold_padding': 1.5, 'scaffold_levels': 3,
+            'scaffold_tarp': True, 'construction_piles': True,
+            'construction_crane': True,
+        },
+    },
+    'SCAFFOLD_EMPTY_LARGE': {
+        'category': 'CONSTRUCTION',
+        'family': 'SCAFFOLD_EMPTY',
+        'tier': 3,
+        'name': "Empty Site (Large 40m)",
+        'plot': "40m x 40m",
+        'description': "Empty large-plot site: scaffold-only inside 40m x 40m, footing outline, piles and crane. No building yet.",
+        'settings': {
+            **base_settings(),
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_3',
+            'num_floors': 2, 'floor_height': 3.0,
+            'width': 12.0, 'depth': 9.0,
+            'has_foundation': True, 'foundation_height': 0.6,
+            'has_construction': True, 'construction_mode': 'EMPTY_SITE',
+            'construction_plot': 'LARGE',
+            'scaffold_padding': 2.0, 'scaffold_levels': 3,
+            'scaffold_tarp': True, 'construction_piles': True,
+            'construction_crane': True,
+        },
+    },
+    'SCAFFOLD_EMPTY_HUGE': {
+        'category': 'CONSTRUCTION',
+        'family': 'SCAFFOLD_EMPTY',
+        'tier': 3,
+        'name': "Empty Site (Huge 100m)",
+        'plot': "100m x 100m",
+        'description': "Empty huge-plot site: scaffold-only inside 100m x 100m, footing outline, piles and crane. No building yet.",
+        'settings': {
+            **base_settings(),
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_3',
+            'num_floors': 3, 'floor_height': 3.1,
+            'width': 16.0, 'depth': 12.0,
+            'has_foundation': True, 'foundation_height': 0.6,
+            'has_construction': True, 'construction_mode': 'EMPTY_SITE',
+            'construction_plot': 'HUGE',
+            'scaffold_padding': 2.0, 'scaffold_levels': 4,
+            'scaffold_tarp': True, 'construction_piles': True,
+            'construction_crane': True,
+        },
+    },
+
 }
 
 BUILDING_FAMILIES = [
@@ -5515,6 +5697,34 @@ BUILDING_FAMILIES = [
             ('T3', 'MAGE_TOWER_T3', "Tier 3: Stone Archmage Spire + Outcrops"),
         ]
     },
+    {
+        'id': 'SCAFFOLD',
+        'name': "Construction Site",
+        'category': 'CONSTRUCTION',
+        'plot': "12m - 100m",
+        'shape': "Scaffold + Building",
+        'icon': 'MOD_BUILD',
+        'tiers': [
+            ('Small', 'SCAFFOLD_SMALL', "Small 12m plot scaffold + building"),
+            ('Med', 'SCAFFOLD_MEDIUM', "Medium 20m plot scaffold + building"),
+            ('Large', 'SCAFFOLD_LARGE', "Large 40m plot scaffold + building"),
+            ('Huge', 'SCAFFOLD_HUGE', "Huge 100m plot scaffold + building"),
+        ]
+    },
+    {
+        'id': 'SCAFFOLD_EMPTY',
+        'name': "Empty Scaffold Site",
+        'category': 'CONSTRUCTION',
+        'plot': "12m - 100m",
+        'shape': "Scaffold Only",
+        'icon': 'OUTLINER_OB_EMPTY',
+        'tiers': [
+            ('Small', 'SCAFFOLD_EMPTY_SMALL', "Small 12m empty site, no building"),
+            ('Med', 'SCAFFOLD_EMPTY_MEDIUM', "Medium 20m empty site, no building"),
+            ('Large', 'SCAFFOLD_EMPTY_LARGE', "Large 40m empty site, no building"),
+            ('Huge', 'SCAFFOLD_EMPTY_HUGE', "Huge 100m empty site, no building"),
+        ]
+    },
 ]
 
 ARCHETYPE_MAP = {
@@ -5561,6 +5771,27 @@ ARCHETYPE_MAP = {
     'MAGE_TOWER_T3': 'MAGE_TOWER',
 }
 
+KIT_FOR_ARCHETYPE = {
+    'STABLE': 'kit_stable',
+    'WAREHOUSE': 'kit_warehouse',
+    'LUMBERMILL': 'kit_lumbermill',
+    'QUARRY': 'kit_quarry',
+    'BLACKSMITH': 'kit_blacksmith',
+    'WINDMILL': 'kit_windmill',
+    'WATCHTOWER': 'kit_watchtower',
+    'FISHERMAN': 'kit_fisherman',
+    'BAKERY': 'kit_bakery',
+    'ARCHERY_RANGE': 'kit_archery',
+    'KNIGHTS_MANOR': 'kit_tournament',
+    'CHAPEL': 'kit_chapel',
+}
+
+_ALL_KIT_FLAGS = (
+    'kit_blacksmith', 'kit_windmill', 'kit_watchtower', 'kit_fisherman',
+    'kit_bakery', 'kit_warehouse', 'kit_lumbermill', 'kit_quarry',
+    'kit_archery', 'kit_tournament', 'kit_chapel', 'kit_stable',
+)
+
 def apply_preset(props, preset_key):
     """Applies preset dictionary values to the PropertyGroup."""
     if preset_key not in PRESETS:
@@ -5571,8 +5802,8 @@ def apply_preset(props, preset_key):
     old_auto = props.auto_update
     props.auto_update = False
 
-    # Fortification props are optional; clear them first so a preset that omits
-    # them does not inherit the previous building's palisade/banners/battlements.
+    # Optional features are cleared first so a preset that omits
+    # them does not inherit the previous building's state (no leakage).
     for _fk in ('has_palisade', 'palisade_style', 'palisade_height', 'palisade_offset',
                 'palisade_offset_x', 'palisade_offset_y', 'palisade_depth_extra',
                 'has_curtain_wall', 'curtain_wall_height', 'curtain_wall_thickness',
@@ -5580,6 +5811,7 @@ def apply_preset(props, preset_key):
                 'curtain_wall_depth_extra', 'has_portcullis',
                 'has_banners', 'banner_count', 'has_battlements', 'battlement_style',
                 'has_military_props', 'military_props_count',
+                'military_rack_count', 'military_dummy_count', 'military_target_count',
                 'has_mounted_shields', 'shield_placement',
                 'has_gable_crest', 'gable_crest_style', 'gable_crest_scale',
                 'has_bastion_towers', 'bastion_tower_count', 'bastion_tower_size', 'bastion_tower_height',
@@ -5589,6 +5821,10 @@ def apply_preset(props, preset_key):
                 'has_stable', 'stable_side', 'stable_rotate', 'has_servant_quarters', 'servant_quarters_side',
                 'has_estate_fountain', 'outbuilding_offset_x', 'outbuilding_offset_y',
                 'plot_setback', 'plot_offset_x', 'estate_awnings',
+                'has_construction', 'construction_mode', 'construction_plot', 'scaffold_padding',
+                'scaffold_levels', 'scaffold_tarp', 'construction_piles',
+                'construction_crane',
+                *_ALL_KIT_FLAGS,
                 'roof_orientation'):
         if hasattr(props, _fk):
             try:
@@ -5596,10 +5832,17 @@ def apply_preset(props, preset_key):
             except Exception:
                 pass
 
-    # Assign archetype
+    # Assign archetype + mirror it into the modular kit flag so the
+    # dispatch (kit OR archetype) fires exactly once either way.
     arch = ARCHETYPE_MAP.get(preset_key, 'NONE')
     if hasattr(props, 'building_archetype'):
         props.building_archetype = arch
+    _kit_flag = KIT_FOR_ARCHETYPE.get(arch)
+    if _kit_flag and hasattr(props, _kit_flag):
+        try:
+            setattr(props, _kit_flag, True)
+        except Exception:
+            pass
         
     for k, v in data.items():
         if hasattr(props, k):
