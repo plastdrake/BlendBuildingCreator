@@ -28,6 +28,9 @@ from .operators import (
     BUILDING_OT_toggle_door,
     BUILDING_OT_finalize,
     BUILDING_OT_create_door_blade,
+    BUILDING_OT_create_prop,
+    BUILDING_OT_create_all_props,
+    BUILDING_OT_furnish_interior,
 )
 from .ui import (
     VIEW3D_PT_fantasy_building_main,
@@ -44,6 +47,7 @@ from .ui import (
     VIEW3D_PT_fantasy_building_estate,
     VIEW3D_PT_fantasy_building_construction,
     VIEW3D_PT_fantasy_building_materials,
+    VIEW3D_PT_fantasy_building_furnishing,
 )
 
 classes = (
@@ -57,6 +61,9 @@ classes = (
     BUILDING_OT_toggle_door,
     BUILDING_OT_finalize,
     BUILDING_OT_create_door_blade,
+    BUILDING_OT_create_prop,
+    BUILDING_OT_create_all_props,
+    BUILDING_OT_furnish_interior,
     VIEW3D_PT_fantasy_building_main,
     VIEW3D_PT_fantasy_building_presets,
     VIEW3D_PT_fantasy_building_dimensions,
@@ -71,6 +78,7 @@ classes = (
     VIEW3D_PT_fantasy_building_estate,
     VIEW3D_PT_fantasy_building_construction,
     VIEW3D_PT_fantasy_building_materials,
+    VIEW3D_PT_fantasy_building_furnishing,
 )
 
 def register():

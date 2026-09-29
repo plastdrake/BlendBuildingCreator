@@ -17,7 +17,7 @@ import random
 from mathutils import Matrix
 
 from ..mesh_utils import (
-    create_beveled_box, create_cylinder, create_cone, create_torus_ring, transform_faces,
+    create_beveled_box, create_cylinder, create_torus_ring, transform_faces,
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_IRON, MAT_INDEX_WOOD,
@@ -164,9 +164,9 @@ def build_crate(bm, x, y, z_ground=0.0, ang=0.0, size=0.58, height=None, depth=N
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
             )
 
-    # 3. Horizontal Perimeter Rails (Top and Bottom)
-    rail_x_len = max(0.06, sx - b * 2.0)
-    rail_y_len = max(0.06, sy - b * 2.0)
+    # 3. Horizontal Perimeter Rails (Top and Bottom, embedded 10mm into posts)
+    rail_x_len = max(0.06, sx - b * 2.0 + 0.02)
+    rail_y_len = max(0.06, sy - b * 2.0 + 0.02)
     for rz in (b * 0.5, sz - b * 0.5):
         # Front & Back rails (along X)
         for cy in (-sy * 0.5 + b * 0.5, sy * 0.5 - b * 0.5):
@@ -228,13 +228,13 @@ def build_crate(bm, x, y, z_ground=0.0, ang=0.0, size=0.58, height=None, depth=N
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004
             )
 
-    # 5. Chunky Corner Caps with Iron Stud Pins on all 8 corners
+    # 5. Chunky Corner Caps standing 4mm proud (never coplanar with posts)
     for cx_sign in (-1.0, 1.0):
         for cy_sign in (-1.0, 1.0):
             cx = cx_sign * (sx * 0.5 - b * 0.5)
             cy = cy_sign * (sy * 0.5 - b * 0.5)
             for cz_sign in (-1.0, 1.0):
-                cz = sz * 0.5 + cz_sign * (sz * 0.5 - b * 0.16)
+                cz = sz * 0.5 + cz_sign * (sz * 0.5 - b * 0.16 + 0.004)
                 # Corner bracket cap block
                 faces += create_beveled_box(
                     bm, size=(b * 1.15, b * 1.15, b * 0.32),
@@ -328,29 +328,32 @@ def build_clay_pot(bm, x, y, z_ground=0.0, ang=0.0, radius=0.22, height=0.48, po
         rings.append(ring)
 
     uv_layer = bm.loops.layers.uv.verify()
-    circumference = 2.0 * math.pi * r
 
-    # Lathe faces
+    # Lathe faces with normalized 0..1 UVs (no world-scale stretching); the
+    # faces are tagged so the global box-UV pass preserves this unwrap.
     for s in range(len(rings) - 1):
-        z0 = z_profile[s][0] * h
-        z1 = z_profile[s + 1][0] * h
+        v0 = z_profile[s][0]
+        v1 = z_profile[s + 1][0]
         for i in range(segments):
             j = (i + 1) % segments
             f = bm.faces.new([rings[s][i], rings[s][j], rings[s + 1][j], rings[s + 1][i]])
             f.material_index = MAT_INDEX_CLAY
-            u0 = circumference * i / segments
-            u1 = circumference * (i + 1) / segments
-            f.loops[0][uv_layer].uv = (u0, z0)
-            f.loops[1][uv_layer].uv = (u1, z0)
-            f.loops[2][uv_layer].uv = (u1, z1)
-            f.loops[3][uv_layer].uv = (u0, z1)
+            u0 = i / segments
+            u1 = (i + 1) / segments
+            f.loops[0][uv_layer].uv = (u0, v0)
+            f.loops[1][uv_layer].uv = (u1, v0)
+            f.loops[2][uv_layer].uv = (u1, v1)
+            f.loops[3][uv_layer].uv = (u0, v1)
+            f.tag = True
             faces.append(f)
 
-    # Bottom cap
+    # Bottom cap with planar normalized UVs.
     bot = bm.faces.new(list(reversed(rings[0])))
     bot.material_index = MAT_INDEX_CLAY
     for loop in bot.loops:
-        loop[uv_layer].uv = (loop.vert.co.x + r, loop.vert.co.y + r)
+        loop[uv_layer].uv = (loop.vert.co.x / (2 * r) + 0.5,
+                             loop.vert.co.y / (2 * r) + 0.5)
+    bot.tag = True
     faces.append(bot)
 
     # 2. Carved Wooden Lid / Bung Stopper (MAT_INDEX_WOOD)
@@ -363,10 +366,10 @@ def build_clay_pot(bm, x, y, z_ground=0.0, ang=0.0, radius=0.22, height=0.48, po
         location=(0.0, 0.0, h - 0.005),
         mat_index=MAT_INDEX_WOOD
     )
-    # Flanged lid rim over pot mouth
+    # Flanged lid rim overlapping the mouth (embedded, never floating).
     faces += create_cylinder(
         bm, radius=rim_r * 1.05, height=0.035, segments=16,
-        location=(0.0, 0.0, h + 0.02),
+        location=(0.0, 0.0, h + 0.015),
         mat_index=MAT_INDEX_WOOD
     )
     # Turned wooden knob / grip
@@ -393,23 +396,86 @@ def build_clay_pot(bm, x, y, z_ground=0.0, ang=0.0, radius=0.22, height=0.48, po
 
 
 def build_sack(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
-    """A plump burlap sack of grain, tied at the neck with rope cord."""
+    """A plump tied burlap sack: lathe-turned body, cinched neck, rope tie.
+
+    Modelled as a proper sack silhouette (wide belly, gathered neck, frilled
+    mouth) with two stitched patches, matching the stylized bag reference.
+    """
+    from ..materials import MAT_INDEX_ROPE, MAT_INDEX_FABRIC_RED
     s = scale
+    h = 0.55 * s
+    # Squat slouchy silhouette: fat belly, gently gathered neck, wrinkled
+    # mouth pulled nearly shut above the tie (never a flared vase collar).
+    z_profile = [
+        (0.00, 0.78), (0.10, 0.95), (0.30, 1.00), (0.52, 0.94),
+        (0.68, 0.80), (0.80, 0.62), (0.86, 0.55), (0.93, 0.60),
+        (0.97, 0.48), (1.00, 0.22),
+    ]
+    segments = 14
+    base_r = 0.33 * s
+    lean = 0.045 * s  # handmade slouch: the top drifts slightly sideways
+    rings = []
+    for zn, rn in z_profile:
+        ring = []
+        dx = lean * zn * zn
+        for i in range(segments):
+            a = 2.0 * math.pi * i / segments
+            ring.append(bm.verts.new((dx + base_r * rn * math.cos(a),
+                                      base_r * rn * math.sin(a), zn * h)))
+        rings.append(ring)
+    uv_layer = bm.loops.layers.uv.verify()
     faces = []
-    # Smooth curved burlap body (MAT_INDEX_HAY)
-    faces += create_cylinder(bm, radius=0.28 * s, height=0.42 * s, segments=14,
-                             location=(0.0, 0.0, 0.21 * s), mat_index=MAT_INDEX_HAY)
-    faces += create_cylinder(bm, radius=0.32 * s, height=0.18 * s, segments=14,
-                             location=(0.0, 0.0, 0.26 * s), mat_index=MAT_INDEX_HAY)
-    faces += create_cylinder(bm, radius=0.22 * s, height=0.20 * s, segments=12,
-                             location=(0.0, 0.0, 0.48 * s), mat_index=MAT_INDEX_HAY)
-    # Tied neck with rope cord
-    faces += create_torus_ring(bm, location=(0.0, 0.0, 0.58 * s), major_radius=0.10 * s,
-                               minor_radius=0.022 * s, major_segments=12, minor_segments=6,
-                               mat_index=MAT_INDEX_WOOD)
-    # Frilled bag opening
-    faces += create_cone(bm, radius1=0.09 * s, radius2=0.16 * s, height=0.12 * s, segments=10,
-                         location=(0.0, 0.0, 0.65 * s), mat_index=MAT_INDEX_HAY)
+    for si in range(len(rings) - 1):
+        v0 = z_profile[si][0]
+        v1 = z_profile[si + 1][0]
+        for i in range(segments):
+            j = (i + 1) % segments
+            f = bm.faces.new([rings[si][i], rings[si][j],
+                              rings[si + 1][j], rings[si + 1][i]])
+            f.material_index = MAT_INDEX_HAY
+            f.loops[0][uv_layer].uv = (i / segments, v0)
+            f.loops[1][uv_layer].uv = ((i + 1) / segments, v0)
+            f.loops[2][uv_layer].uv = ((i + 1) / segments, v1)
+            f.loops[3][uv_layer].uv = (i / segments, v1)
+            f.tag = True
+            faces.append(f)
+    # Closed bottom + gathered mouth cap.
+    bot = bm.faces.new(list(reversed(rings[0])))
+    bot.material_index = MAT_INDEX_HAY
+    for loop in bot.loops:
+        loop[uv_layer].uv = (loop.vert.co.x / (2 * base_r) + 0.5,
+                             loop.vert.co.y / (2 * base_r) + 0.5)
+    bot.tag = True
+    faces.append(bot)
+    mouth = bm.faces.new(rings[-1])
+    mouth.material_index = MAT_INDEX_HAY
+    for loop in mouth.loops:
+        loop[uv_layer].uv = (loop.vert.co.x / (2 * base_r) + 0.5,
+                             loop.vert.co.y / (2 * base_r) + 0.5)
+    mouth.tag = True
+    faces.append(mouth)
+    # Tied knot nub closing the gathered mouth.
+    faces += create_cylinder(bm, radius=0.045 * s, height=0.05 * s, segments=10,
+                             location=(lean, 0.0, h + 0.015 * s),
+                             mat_index=MAT_INDEX_HAY)
+    # Rope tie cord sunk into the gathered neck below the mouth.
+    tie_z = 0.84 * h
+    tie_r = base_r * 0.575 + 0.008
+    faces += create_torus_ring(bm, location=(lean * 0.84 * 0.84, 0.0, tie_z),
+                               major_radius=tie_r, minor_radius=0.020 * s,
+                               major_segments=12, minor_segments=6,
+                               mat_index=MAT_INDEX_ROPE)
+    # Two stitched patches tangent to the belly, centres sunk 5mm.
+    for ang_off, ph, pr_frac in ((0.3, 0.28 * h, 1.00), (2.6, 0.40 * h, 0.967)):
+        zn = ph / h
+        pr = base_r * pr_frac - 0.005
+        px = lean * zn * zn + math.cos(ang_off) * pr
+        py = math.sin(ang_off) * pr
+        faces += create_beveled_box(bm, size=(0.10 * s, 0.02, 0.08 * s),
+                                    location=(px, py, ph),
+                                    rotation=(0.0, 0.0, ang_off + math.pi / 2),
+                                    mat_index=MAT_INDEX_FABRIC_RED,
+                                    bevel_amount=0.004)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
@@ -425,23 +491,22 @@ def build_stool(bm, x, y, z_ground=0.0, ang=0.0, radius=0.22, height=0.48):
     faces += create_cylinder(bm, radius=radius * 0.92, height=0.035, segments=14,
                              location=(0.0, 0.0, height - 0.04), mat_index=MAT_INDEX_TIMBER)
 
-    # 3 Splayed chunky timber legs
+    # 3 Straight vertical timber legs (no splay: feet directly under the seat).
     for i in range(3):
         a = (2.0 * math.pi * i / 3.0) + 0.4
         lx, ly = math.cos(a) * radius * 0.62, math.sin(a) * radius * 0.62
-        tilt = 0.16
         faces += create_beveled_box(
             bm, size=(0.07, 0.07, height),
             location=(lx, ly, height * 0.5),
-            rotation=(math.sin(a + math.pi * 0.5) * tilt, -math.cos(a + math.pi * 0.5) * tilt, a),
+            rotation=(0.0, 0.0, a),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
-    # Braced cross stretchers with protruding wooden pins
+    # Braced cross stretchers between the leg centres (embedded both ends).
     for i in range(3):
         a0 = (2.0 * math.pi * i / 3.0) + 0.4
         a1 = (2.0 * math.pi * ((i + 1) % 3) / 3.0) + 0.4
-        p0 = (math.cos(a0) * radius * 0.52, math.sin(a0) * radius * 0.52)
-        p1 = (math.cos(a1) * radius * 0.52, math.sin(a1) * radius * 0.52)
+        p0 = (math.cos(a0) * radius * 0.62, math.sin(a0) * radius * 0.62)
+        p1 = (math.cos(a1) * radius * 0.62, math.sin(a1) * radius * 0.62)
         mx, my = (p0[0] + p1[0]) * 0.5, (p0[1] + p1[1]) * 0.5
         seg = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
         faces += create_beveled_box(
@@ -467,46 +532,30 @@ def build_bench(bm, x, y, z_ground=0.0, ang=0.0, length=1.75, with_back=True):
                                 location=(0.0, 0.0, seat_z),
                                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.016, bevel_segments=2)
 
-    # 4 Heavy splayed timber legs (0.10m x 0.10m)
+    # 4 Straight vertical legs (feet on the ground, tops embedded in the seat).
     leg_w = 0.10
     for sx in (-L * 0.5 + 0.20, L * 0.5 - 0.20):
-        for sy, splay in ((-seat_d * 0.30, -0.12), (seat_d * 0.30, 0.12)):
+        for sy in (-seat_d * 0.30, seat_d * 0.30):
             faces += create_beveled_box(
                 bm, size=(leg_w, leg_w, seat_z),
-                location=(sx, sy, seat_z * 0.5 - 0.02),
-                rotation=(splay, 0.0, 0.0),
+                location=(sx, sy, seat_z * 0.5),
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
 
-        # End cross stretchers tying the legs together
-        faces += create_beveled_box(bm, size=(leg_w * 0.8, seat_d * 0.88, 0.07),
+        # End cross stretchers tying the legs together (ends embedded in legs).
+        faces += create_beveled_box(bm, size=(leg_w * 0.8, seat_d * 0.60 + 0.02, 0.07),
                                     location=(sx, 0.0, 0.16),
                                     mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-        # Protruding wooden through-tenon wedge pegs
-        faces += create_beveled_box(bm, size=(leg_w * 1.3, 0.04, 0.04),
-                                    location=(sx, 0.0, 0.16),
-                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
-
-    # Longitudinal center stretcher
-    faces += create_beveled_box(bm, size=(L - 0.36, 0.07, 0.07),
-                                location=(0.0, 0.0, 0.16),
-                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
 
     if with_back:
-        # Tilted backrest posts with forged iron support braces
+        # Tilted backrest posts (all timber, no iron).
         post_h = 0.52
         tilt = 0.16
         for sx in (-L * 0.5 + 0.18, L * 0.5 - 0.18):
             faces += create_beveled_box(
-                bm, size=(0.08, 0.08, post_h),
-                location=(sx, seat_d * 0.42 + 0.04, seat_z + post_h * 0.5),
+                bm, size=(0.08, 0.08, post_h + 0.06),
+                location=(sx, seat_d * 0.42 + 0.04, seat_z + post_h * 0.5 - 0.03),
                 rotation=(-tilt, 0.0, 0.0),
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-            # Forged iron support bracket strap
-            faces += create_beveled_box(
-                bm, size=(0.035, 0.12, 0.22),
-                location=(sx, seat_d * 0.42, seat_z + 0.08),
-                rotation=(-tilt * 0.5, 0.0, 0.0),
-                mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
 
         # Two heavy horizontal backrest planks
         for bz_off, bh in ((0.22, 0.12), (0.40, 0.12)):
@@ -521,25 +570,27 @@ def build_bench(bm, x, y, z_ground=0.0, ang=0.0, length=1.75, with_back=True):
 
 
 def build_picnic_table(bm, x, y, z_ground=0.0, ang=0.0, length=2.05):
-    """A massive hand-hewn fantasy tavern picnic table with heavy trestles, wedge pegs and benches."""
+    """A sturdy tavern picnic table: plank top, bench slabs, A-frame trestles.
+
+    Every joint overlaps (legs embed into the top and bearers, bearers into
+    the benches) so nothing merely touches; no tie beams, pegs or braces.
+    """
     L = length
-    rng = _rng(x, y, 6)
     top_z = 0.78
     seat_z = 0.46
     faces = []
 
-    # 1. Table top: 3 massive timber slabs with hand-carved chamfers and wonky plank seams
+    # 1. Table top: 3 slabs with small gaps (12mm, never touching).
     plank_w = 0.28
     gap = 0.012
     top_thick = 0.085
-    for k, dy in enumerate((-plank_w - gap, 0.0, plank_w + gap)):
-        j = (rng.random() - 0.5) * 0.008
+    for dy in (-plank_w - gap, 0.0, plank_w + gap):
         faces += create_beveled_box(
             bm, size=(L, plank_w, top_thick),
-            location=(0.0, dy, top_z + j),
+            location=(0.0, dy, top_z),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.016, bevel_segments=2)
 
-    # 2. Attached bench seats on both sides (each made of a chunky thick timber slab)
+    # 2. Bench slabs on both sides.
     bench_w = 0.25
     bench_thick = 0.075
     bench_y_dist = 0.65
@@ -549,52 +600,27 @@ def build_picnic_table(bm, x, y, z_ground=0.0, ang=0.0, length=2.05):
             location=(0.0, side_y, seat_z),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
 
-    # 3. Massive timber A-frame trestle leg assemblies at each end
+    # 3. A-frame trestles: splayed legs running from under the top down to
+    # the ground, plus one cross-bearer per trestle carrying the benches.
     leg_w = 0.13
+    top_under = top_z - top_thick / 2
     for sx in (-L * 0.5 + 0.36, L * 0.5 - 0.36):
-        jx = (rng.random() - 0.5) * 0.010
-        splay = 0.68
-        # Splayed trestle legs supporting the table top
         for s in (-1.0, 1.0):
+            # Top end hidden 30mm inside the tabletop, foot sunk 5mm.
+            y_top, y_bot = s * 0.10, s * 0.58
+            z_top, z_bot = top_under + 0.03, -0.005
+            dy, dz = y_bot - y_top, z_bot - z_top
+            leg_len = math.hypot(dy, dz)
             faces += create_beveled_box(
-                bm, size=(leg_w, leg_w, top_z),
-                location=(sx + jx, s * 0.28, top_z * 0.5),
-                rotation=(s * splay, 0.0, 0.0),
+                bm, size=(leg_w, leg_w, leg_len),
+                location=(sx, (y_top + y_bot) / 2, (z_top + z_bot) / 2),
+                rotation=(s * math.atan2(abs(dy), abs(dz)), 0.0, 0.0),
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-
-        # Massive horizontal cross-bearer beam supporting both the table top and side benches
+        # Bearer overlaps 5mm into each bench slab and crosses the legs.
         faces += create_beveled_box(
             bm, size=(leg_w, bench_y_dist * 2.0 + bench_w * 0.6, 0.10),
-            location=(sx + jx, 0.0, seat_z - bench_thick * 0.5),
+            location=(sx, 0.0, seat_z - bench_thick / 2 + 0.005),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
-
-        # Protruding through-tenons with wooden wedge pegs on the trestles
-        for s in (-1.0, 1.0):
-            faces += create_beveled_box(
-                bm, size=(leg_w * 1.35, 0.045, 0.045),
-                location=(sx + jx, s * bench_y_dist, seat_z - bench_thick * 0.5),
-                mat_index=MAT_INDEX_WOOD, bevel_amount=0.005)
-
-        # Diagonal knee-brace supports under the table top
-        for s in (-1.0, 1.0):
-            brace_diag = math.hypot(0.24, 0.22)
-            faces += create_beveled_box(
-                bm, size=(0.07, 0.07, brace_diag),
-                location=(sx + jx, s * 0.16, top_z - 0.14),
-                rotation=(-s * 0.85, 0.0, 0.0),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
-
-    # 4. Heavy longitudinal tie-beam stretcher running under the table
-    faces += create_beveled_box(
-        bm, size=(L - 0.40, 0.09, 0.10),
-        location=(0.0, 0.0, 0.28),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-    # Wooden wedge keys pinning the center tie beam
-    for sx in (-L * 0.5 + 0.22, L * 0.5 - 0.22):
-        faces += create_beveled_box(
-            bm, size=(0.04, 0.15, 0.08),
-            location=(sx, 0.0, 0.28),
-            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces

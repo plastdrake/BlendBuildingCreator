@@ -103,6 +103,8 @@ def _build_round_tower_building(obj, bm, props):
         add_wonkiness(bm, z_min=0.0, z_max=total_h, amount=props.wonkiness, seed=seed)
     apply_box_uvs(bm, scale=1.0)
     setup_building_material_slots(obj, props)
+    from .materials import prune_material_slots_for_bmesh
+    prune_material_slots_for_bmesh(obj, bm)
     bm.to_mesh(obj.data)
     bm.free()
     obj.data.update()
@@ -328,6 +330,8 @@ def _finalize_building(obj, bm, props, ctx):
 
     # 7. Setup Material Slots and procedural node shaders BEFORE transferring bmesh
     setup_building_material_slots(obj, props)
+    from .materials import prune_material_slots_for_bmesh
+    prune_material_slots_for_bmesh(obj, bm)
     
     # 8. Commit bmesh to object mesh data (preserves material slot mapping)
     bm.to_mesh(obj.data)

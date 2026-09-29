@@ -2055,3 +2055,100 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     custom_shutter: PointerProperty(type=bpy.types.Material, name="Shutter Mat", update=on_property_updated)
     custom_wall_brick: PointerProperty(type=bpy.types.Material, name="Exposed Brick Stucco Mat", update=on_property_updated)
     custom_banner: PointerProperty(type=bpy.types.Material, name="Banner Mat", update=on_property_updated)
+
+    # --- Interior furnishing (whole-building, one click) + standalone props ---
+    has_interior_furnishing: BoolProperty(
+        name="Furnish Interior",
+        description="Dress every walkable storey with beds, tables, storage and hearths (role follows the building archetype)",
+        default=False,
+        update=on_property_updated
+    )
+
+    furnishing_style: EnumProperty(
+        name="Furnishing Style",
+        description="How much furniture each room gets",
+        items=[
+            ('AUTO', "Auto (By Archetype)", "Room roles follow the building archetype"),
+            ('SPARSE', "Sparse", "Only the essential pieces per room"),
+            ('COSY', "Cosy / Full", "Full dress: every piece in the recipe"),
+        ],
+        default='AUTO',
+        update=on_property_updated
+    )
+
+    furnishing_density: FloatProperty(
+        name="Furnishing Density",
+        description="Fraction of the room recipe to place (0.2 = few pieces, 1.0 = full set)",
+        min=0.2, max=1.0, default=1.0,
+        update=on_property_updated
+    )
+
+    prop_category: EnumProperty(
+        name="Prop Category",
+        description="Filter standalone props by category",
+        items=[
+            ('ALL', "All Props", "Show every buildable prop"),
+            ('SEATING', "Seating", "Stools, chairs, benches"),
+            ('TABLES', "Tables", "Dining, round and picnic tables"),
+            ('SLEEP', "Sleep", "Beds"),
+            ('STORAGE', "Storage", "Shelves, wardrobes, chests"),
+            ('WORK', "Work & Trade", "Desks, counters"),
+            ('KITCHEN', "Kitchen & Hearth", "Hearths, cauldrons"),
+            ('LIGHT', "Lighting", "Lanterns, chandeliers"),
+            ('YARD', "Yard & Garden", "Barrels, crates, wells, planters"),
+            ('SIGN', "Signs & Boards", "Hanging signs, notice boards, awnings"),
+        ],
+        default='ALL',
+    )
+
+    standalone_prop: EnumProperty(
+        name="Prop",
+        description="Individual furniture/prop piece to create (same builder as interior furnishing)",
+        items=[
+            ('BED', "Bed", "Timber bed with straw mattress + blanket"),
+            ('CHAIR', "Chair", "High-back tavern chair"),
+            ('INDOOR_TABLE', "Dining Table", "Rectangular indoor table"),
+            ('ROUND_TABLE', "Round Table", "Round pedestal table"),
+            ('SHELF', "Shelf", "Open goods shelf with jars + cloth"),
+            ('WARDROBE', "Wardrobe", "Double-door cupboard"),
+            ('CHEST', "Chest", "Low iron-strapped storage chest"),
+            ('DESK', "Desk", "Writing desk with drawers"),
+            ('COUNTER', "Bar Counter", "Tavern serving counter"),
+            ('HEARTH', "Hearth", "Stone fireplace with mantel"),
+            ('BOOKSHELF', "Bookshelf", "Tall shelf with book rows"),
+            ('BOOKSHELF_NEAT', "Bookshelf (Ordered)", "Ordered bookcase, even runs"),
+            ('BOOK_SINGLE', "Book (Single)", "One book, spine out"),
+            ('BOOK_PILE_SMALL', "Book Pile (Small)", "Small pile of flat books"),
+            ('BOOK_PILE_LARGE', "Book Pile (Large)", "Large pile of flat books"),
+            ('CAULDRON', "Stove Pot", "Lidded stove pot with top handle"),
+            ('CHANDELIER', "Chandelier", "Hanging candle-ring chandelier"),
+            ('BARREL', "Barrel", "Staved ale barrel"),
+            ('CRATE', "Crate", "Braced shipping crate"),
+            ('SACK', "Grain Sack", "Tied burlap grain sack"),
+            ('CLAY_POT', "Clay Pot", "Earthenware storage jar with lid"),
+            ('STOOL', "Stool", "Three-legged taproom stool"),
+            ('BENCH', "Bench", "Heavy timber bench"),
+            ('PICNIC_TABLE', "Picnic Table", "A-frame tavern table + benches"),
+            ('POST_LANTERN', "Post Lantern", "Standing yard lantern post"),
+            ('HANGING_LANTERN', "Wall Lantern", "Bracket lantern"),
+            ('CHAIN_LANTERN', "Chain Lantern", "Ceiling-hung chain lantern"),
+            ('WELL', "Well", "Stone well with windlass and bucket"),
+            ('FLOWER_BOX', "Flower Box", "Soil-filled window planter"),
+            ('HANGING_SIGN', "Hanging Sign", "Bracket trade sign"),
+            ('NOTICE_BOARD', "Notice Board", "Roofed notice board"),
+            ('AWNING', "Cloth Awning", "Wall-mounted cloth awning"),
+        ],
+        default='CHAIR',
+    )
+
+    standalone_prop_scale: FloatProperty(
+        name="Prop Scale",
+        description="Uniform scale for the standalone prop",
+        min=0.25, max=4.0, default=1.0,
+    )
+
+    standalone_prop_variant: StringProperty(
+        name="Prop Options",
+        description="Optional builder overrides, e.g. length=2.2 or radius=0.5 (comma separated key=value)",
+        default="",
+    )

@@ -59,7 +59,7 @@ def _load_image_texture(tree, filename, coord, loc_x=-800, loc_y=120, scale=(1.0
     return tex_node
 
 # ---------------------------------------------------------------------------
-# Material slot index constants (20 canonical slots for UE optimization)
+# Material slot index constants (30 canonical slots for UE optimization)
 # ---------------------------------------------------------------------------
 MAT_INDEX_STONE        = 0
 MAT_INDEX_PLASTER      = 1
@@ -91,6 +91,14 @@ MAT_INDEX_ROPE          = 18
 MAT_INDEX_LANTERN       = 19
 MAT_INDEX_TARP          = 20
 MAT_INDEX_CLAY          = 21
+MAT_INDEX_FABRIC_WHITE  = 22
+MAT_INDEX_FABRIC_RED    = 23
+MAT_INDEX_FABRIC_STITCHED = 24
+MAT_INDEX_LEATHER       = 25
+MAT_INDEX_BOOK_PAPER    = 26
+MAT_INDEX_WAX           = 27
+MAT_INDEX_LEATHER_2     = 28
+MAT_INDEX_LEATHER_3     = 29
 
 
 # ---------------------------------------------------------------------------
@@ -1871,10 +1879,59 @@ def create_stylized_clay(name="M_Building_Clay", color=(0.82, 0.52, 0.36, 1.0)):
     return mat
 
 
+def create_stylized_fabric(name, texture_filename, color=(1.0, 1.0, 1.0, 1.0), roughness=0.92):
+    """Woven cloth from a packaged fabric texture with a painterly finish.
+
+    Generic helper so each fabric colour/pattern is one call (DRY): the
+    weave texture carries the detail, ``color`` only tints it.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1400)
+    c = _coord(tree, loc_x=-1100)
+
+    tex_node = _load_image_texture(tree, texture_filename, c, loc_x=-800, loc_y=120,
+                                   scale=(1.2, 1.2, 1.2))
+    if tex_node is not None:
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-250, 120)
+        tint.inputs["Factor"].default_value = 0.25
+        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = color
+        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260,
+                                       strength=0.06, scale=1.6)
+        _apply_ao(tree, bsdf, painted, strength=0.45, distance=0.14)
+        _setup_pbr(tree, bsdf, out, roughness=roughness)
+        return mat
+
+    # Missing texture: plain tinted BSDF (never pass a tuple into _apply_ao).
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=roughness)
+    return mat
+
+
 # Backward compatibility aliases
 create_stylized_log_walls = create_stylized_log
 create_stylized_plank_siding = create_stylized_interior_planks
 create_stylized_floor = create_stylized_floorboards
+
+
+def create_stylized_leather(name="M_Building_Leather", color=(0.45, 0.26, 0.15, 1.0),
+                            texture="leather_1.jpg"):
+    """Tooled book-binding leather with a painterly finish (two variants)."""
+    return create_stylized_fabric(name, texture, color=color, roughness=0.72)
+
+
+def create_stylized_book_paper(name="M_Building_Book_Paper",
+                               color=(0.92, 0.86, 0.72, 1.0)):
+    """Page-block paper (book_side_paper.png): horizontal page lines."""
+    return create_stylized_fabric(name, "book_side_paper.png", color=color, roughness=0.95)
+
+
+def create_stylized_wax(name="M_Building_Wax", color=(0.94, 0.88, 0.76, 1.0)):
+    """Candle wax (wax.jpg) with a soft low-roughness finish."""
+    return create_stylized_fabric(name, "wax.jpg", color=color, roughness=0.55)
 
 
 # ---------------------------------------------------------------------------
@@ -1883,7 +1940,7 @@ create_stylized_floor = create_stylized_floorboards
 
 def setup_building_material_slots(obj, props):
     """
-    Populates all 20 canonical material slots on obj.
+    Populates all 30 canonical material slots on obj.
     Slot indices match MAT_INDEX_* constants.
     Material names are generic and consistent across all tiers (no _T1, _T2, etc.)
     for seamless, reusable master materials in Unreal Engine.
@@ -2003,7 +2060,32 @@ def setup_building_material_slots(obj, props):
     # 21. Clay / Terracotta (clay_diffuse.png) - earthenware jars, pots and urns
     mat_clay = getattr(props, 'custom_clay', None) or create_stylized_clay("M_Building_Clay")
 
-    # Assemble all 22 canonical slots in strict order
+    # 22-24. Woven fabrics - bedding, folded cloth, soft goods
+    mat_fabric_white = (getattr(props, 'custom_fabric_white', None)
+                        or create_stylized_fabric("M_Building_Fabric_White", "white_fabric.jpg"))
+    mat_fabric_red = (getattr(props, 'custom_fabric_red', None)
+                      or create_stylized_fabric("M_Building_Fabric_Red", "red_fabric.jpg"))
+    mat_fabric_stitched = (getattr(props, 'custom_fabric_stitched', None)
+                           or create_stylized_fabric("M_Building_Fabric_Stitched",
+                                                     "white_fabric_stitched.jpg"))
+
+    # 25-27. Bookbinding + candles - bookshelf books and chandelier candles
+    mat_leather = (getattr(props, 'custom_leather', None)
+                   or create_stylized_leather("M_Building_Leather", texture="leather_1.jpg"))
+    mat_book_paper = (getattr(props, 'custom_book_paper', None)
+                      or create_stylized_book_paper("M_Building_Book_Paper"))
+    mat_wax = (getattr(props, 'custom_wax', None)
+               or create_stylized_wax("M_Building_Wax"))
+    mat_leather_2 = (getattr(props, 'custom_leather_2', None)
+                     or create_stylized_leather("M_Building_Leather_2",
+                                                color=(0.32, 0.30, 0.34, 1.0),
+                                                texture="leather_2.png"))
+    mat_leather_3 = (getattr(props, 'custom_leather_3', None)
+                     or create_stylized_leather("M_Building_Leather_3",
+                                                color=(0.50, 0.32, 0.20, 1.0),
+                                                texture="leather_3.jpg"))
+
+    # Assemble all 30 canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
         mat_plaster,        # 1  MAT_INDEX_PLASTER
@@ -2027,8 +2109,46 @@ def setup_building_material_slots(obj, props):
         mat_lantern,        # 19 MAT_INDEX_LANTERN
         mat_tarp,           # 20 MAT_INDEX_TARP
         mat_clay,           # 21 MAT_INDEX_CLAY
+        mat_fabric_white,   # 22 MAT_INDEX_FABRIC_WHITE
+        mat_fabric_red,     # 23 MAT_INDEX_FABRIC_RED
+        mat_fabric_stitched,  # 24 MAT_INDEX_FABRIC_STITCHED
+        mat_leather,        # 25 MAT_INDEX_LEATHER
+        mat_book_paper,     # 26 MAT_INDEX_BOOK_PAPER
+        mat_wax,            # 27 MAT_INDEX_WAX
+        mat_leather_2,      # 28 MAT_INDEX_LEATHER_2
+        mat_leather_3,      # 29 MAT_INDEX_LEATHER_3
     ]
     obj.data.materials.clear()
     for m in required_mats:
         obj.data.materials.append(m)
+
+
+def prune_material_slots_for_bmesh(obj, bm):
+    """Drop unused slots and remap bmesh face indices BEFORE ``to_mesh``.
+
+    Slot surgery happens while the mesh still has no polygons, and the
+    remap touches only bmesh face indices (plain ints with no Blender slot
+    coupling), so no live mesh behavior can collapse the assignment. Call
+    after :func:`setup_building_material_slots` and before ``bm.to_mesh``.
+    Keeps canonical order for surviving slots (stable Unreal slots).
+    """
+    try:
+        n_slots = len(obj.data.materials)
+    except Exception:
+        return
+    try:
+        used = sorted({f.material_index for f in bm.faces
+                       if f.is_valid and 0 <= f.material_index < n_slots})
+    except Exception:
+        return
+    if not used or len(used) == n_slots:
+        return
+    kept = [obj.data.materials[i] for i in used]
+    remap = {old: new for new, old in enumerate(used)}
+    obj.data.materials.clear()
+    for m in kept:
+        obj.data.materials.append(m)
+    for f in bm.faces:
+        if f.is_valid:
+            f.material_index = remap.get(f.material_index, 0)
 

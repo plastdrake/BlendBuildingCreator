@@ -99,6 +99,9 @@ def base_settings():
         # Hospitality / yard props
         'has_veranda': False, 'has_trade_sign': False, 'has_flower_boxes': False,
         'has_outdoor_decor': False, 'has_well': False,
+        # Interior furnishing (off: one-click opt-in, never leaks between presets)
+        'has_interior_furnishing': False, 'furnishing_style': 'AUTO',
+        'furnishing_density': 1.0,
         # Fortifications
         'has_palisade': False, 'palisade_style': 'STAKES', 'palisade_height': 2.3,
         'palisade_offset': 3.0, 'palisade_offset_x': 0.0, 'palisade_offset_y': 0.0, 'palisade_depth_extra': 0.0,

@@ -248,6 +248,12 @@ def build_architectural_accessories(bm, props, ctx):
     _build_civic_landmarks(bm, props, ctx, tier)
     # Manor-borne fortifications (mounted shields, gable crests) travel with it.
     _build_manor_fortifications(bm, props, ctx)
+    # Whole-room interior furnishing travels with the manor (before setback).
+    try:
+        from .furnishing import furnish_building_interior
+        furnish_building_interior(bm, props, ctx)
+    except Exception:
+        pass
 
     setback = _prop(props, 'plot_setback', 0.0)
     off_x = _prop(props, 'plot_offset_x', 0.0)

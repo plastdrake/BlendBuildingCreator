@@ -300,7 +300,7 @@ def create_flared_post(bm, size=(0.28, 0.28, 3.0), location=(0.0, 0.0, 0.0), rot
 
     return faces
 
-def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, transform_matrix=None):
+def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, transform_matrix=None, u_repeats=None):
     """Creates a stylized faceted cylinder with end caps."""
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
@@ -320,9 +320,10 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
         top_verts.append(bm.verts.new(tr_mat @ Vector((x, y, half_h))))
         
     # Cylindrical UV unwrap so textured materials (wood grain, iron) map correctly
-    # instead of sampling a single texel. World-scale: U spans the circumference.
+    # instead of sampling a single texel. World-scale or integer repeats for seamless tiling.
     uv_layer = bm.loops.layers.uv.verify()
     circumference = 2.0 * math.pi * radius
+    total_u = float(u_repeats) if u_repeats is not None else circumference
 
     faces = []
     # Side faces
@@ -330,9 +331,10 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
         nxt = (i + 1) % segments
         f = bm.faces.new([bottom_verts[i], bottom_verts[nxt], top_verts[nxt], top_verts[i]])
         f.material_index = mat_index
+        f.tag = True
         faces.append(f)
-        u0 = circumference * i / segments
-        u1 = circumference * (i + 1) / segments
+        u0 = total_u * i / segments
+        u1 = total_u * (i + 1) / segments
         f.loops[0][uv_layer].uv = Vector((u0, 0.0))
         f.loops[1][uv_layer].uv = Vector((u1, 0.0))
         f.loops[2][uv_layer].uv = Vector((u1, height))
@@ -342,10 +344,12 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
     # any direction gets a real 2D unwrap instead of a collapsed line).
     f_bot = bm.faces.new(list(reversed(bottom_verts)))
     f_bot.material_index = mat_index
+    f_bot.tag = True
     faces.append(f_bot)
 
     f_top = bm.faces.new(top_verts)
     f_top.material_index = mat_index
+    f_top.tag = True
     faces.append(f_top)
 
     axis = (tr_mat.to_3x3() @ Vector((0.0, 0.0, 1.0))).normalized()
@@ -551,13 +555,14 @@ def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=
         
     return faces
 
-def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 17, 18)):
+def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29)):
     """Calculates clean cubic / triplanar style UVs for bmesh faces.
     Skips faces whose materials already have specialized local unwraps
     (timber frames 2, roof shingles 4, forged iron 6, wood facade/accessories 7,
     logs 9, log end caps 10, clock face 12, banner 13, archery target 14, sign
-    decal 17, rope 18). Stone (0), plaster (1), floor (3), cut stone (8), hay (15)
-    and dirt (16) receive continuous world-space meter-scaled UVs.
+    decal 17, rope 18, fabrics 22-24, book leathers 25,28,29, book paper 26, wax 27).
+    Stone (0), plaster (1), floor (3), cut stone (8), hay (15), dirt (16), lantern (19),
+    tarp (20), and clay (21) receive continuous world-space meter-scaled UVs.
     Tagged faces (face.tag == True) are also preserved, but note bmesh.ops.bevel
     clears the generic face tag, so material-index skips are the reliable guard.
     """
@@ -606,26 +611,31 @@ def create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055
             v = bm.verts.new(tr_mat @ (center + off))
             ring.append(v)
         verts.append(ring)
-    # Ring UV unwrap: U follows the major circumference (world-scale), V the tube.
+    # Ring UV unwrap: V flows longitudinally along the major circumference (wood grain / iron curve),
+    # U wraps around the minor tube cross-section. Tagged to prevent triplanar overwrite.
     uv_layer = bm.loops.layers.uv.verify()
     major_circ = 2.0 * math.pi * major_radius
+    minor_circ = 2.0 * math.pi * minor_radius
+    su = 1.2
+    sv = 0.45
     faces = []
     for i in range(major_segments):
         ni = (i + 1) % major_segments
-        u0 = major_circ * i / major_segments
-        u1 = major_circ * (i + 1) / major_segments
+        v0 = major_circ * (i / major_segments) * sv
+        v1 = major_circ * ((i + 1) / major_segments) * sv
         for j in range(minor_segments):
             nj = (j + 1) % minor_segments
             f = bm.faces.new([verts[i][j], verts[ni][j], verts[ni][nj], verts[i][nj]])
             f.material_index = mat_index
             f.smooth = True
+            f.tag = True
             faces.append(f)
-            v0 = j / minor_segments
-            v1 = (j + 1) / minor_segments
+            u0 = minor_circ * (j / minor_segments) * su
+            u1 = minor_circ * ((j + 1) / minor_segments) * su
             f.loops[0][uv_layer].uv = Vector((u0, v0))
-            f.loops[1][uv_layer].uv = Vector((u1, v0))
+            f.loops[1][uv_layer].uv = Vector((u0, v1))
             f.loops[2][uv_layer].uv = Vector((u1, v1))
-            f.loops[3][uv_layer].uv = Vector((u0, v1))
+            f.loops[3][uv_layer].uv = Vector((u1, v0))
     return faces
 
 def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=2, bevel_amount=0.004, bevel_segments=2):

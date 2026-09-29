@@ -404,3 +404,103 @@ class BUILDING_OT_create_door_blade(bpy.types.Operator):
         self.report({'INFO'}, f"Created '{obj.name}' (Width: {self.width:.2f}m, Hinge & Pivot at 0,0)")
         return {'FINISHED'}
 
+
+class BUILDING_OT_create_prop(bpy.types.Operator):
+    """Create a single furniture/prop piece (same builder as interior furnishing)"""
+    bl_idname = "building.create_prop"
+    bl_label = "Create Prop"
+    bl_description = "Create one catalogue prop as its own object at the 3D cursor"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    prop_key: bpy.props.StringProperty(name="Prop Key", default="")
+    prop_scale: bpy.props.FloatProperty(name="Scale", default=1.0, min=0.25, max=4.0)
+    prop_variant: bpy.props.StringProperty(name="Options", default="")
+
+    def execute(self, context):
+        from .generator.accessories.prop_registry import PROP_REGISTRY
+        from .generator.accessories.standalone import create_standalone_prop_mesh
+        sprops = context.scene.fantasy_building_settings
+        key = self.prop_key or getattr(sprops, 'standalone_prop', 'CHAIR')
+        if key not in PROP_REGISTRY:
+            self.report({'ERROR'}, f"Unknown prop: {key}")
+            return {'CANCELLED'}
+        scale = self.prop_scale or getattr(sprops, 'standalone_prop_scale', 1.0)
+        variant = self.prop_variant or getattr(sprops, 'standalone_prop_variant', '')
+        spec = PROP_REGISTRY[key]
+        mesh = bpy.data.meshes.new(name=f"Prop_{spec.key}")
+        obj = bpy.data.objects.new(name=f"Prop_{spec.label.replace(' ', '_')}", object_data=mesh)
+        cursor_loc = context.scene.cursor.location
+        obj.location = cursor_loc.copy() if cursor_loc.length > 0.05 else (0.0, 0.0, 0.0)
+        context.collection.objects.link(obj)
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        context.view_layer.objects.active = obj
+        create_standalone_prop_mesh(obj, sprops, key, scale=scale, variant=variant)
+        obj["is_fantasy_prop"] = True
+        obj["prop_key"] = key
+        self.report({'INFO'}, f"Created prop '{obj.name}' ({spec.label})")
+        return {'FINISHED'}
+
+
+class BUILDING_OT_create_all_props(bpy.types.Operator):
+    """Create every catalogue prop at once, spread on a grid for quick testing"""
+    bl_idname = "building.create_all_props"
+    bl_label = "Create All Props"
+    bl_description = "Spawn one of every catalogue prop on a grid at the 3D cursor"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    columns: bpy.props.IntProperty(name="Columns", default=7, min=1, max=14)
+    spacing: bpy.props.FloatProperty(name="Spacing", default=3.0, min=1.5, max=6.0)
+
+    def execute(self, context):
+        from .generator.accessories.prop_registry import list_props
+        from .generator.accessories.standalone import create_standalone_prop_mesh
+        sprops = context.scene.fantasy_building_settings
+        specs = list_props('ALL')
+        cursor_loc = context.scene.cursor.location
+        base = cursor_loc.copy() if cursor_loc.length > 0.05 else (0.0, 0.0, 0.0)
+        try:
+            base_x, base_y, base_z = base[0], base[1], base[2]
+        except Exception:
+            base_x, base_y, base_z = 0.0, 0.0, 0.0
+        bpy.ops.object.select_all(action='DESELECT')
+        created = []
+        for i, spec in enumerate(specs):
+            row, col = divmod(i, max(1, self.columns))
+            mesh = bpy.data.meshes.new(name=f"Prop_{spec.key}")
+            obj = bpy.data.objects.new(
+                name=f"Prop_{spec.label.replace(' ', '_')}", object_data=mesh)
+            obj.location = (base_x + col * self.spacing,
+                            base_y - row * self.spacing, base_z)
+            context.collection.objects.link(obj)
+            create_standalone_prop_mesh(obj, sprops, spec.key)
+            obj["is_fantasy_prop"] = True
+            obj["prop_key"] = spec.key
+            obj.select_set(True)
+            created.append(obj)
+        if created:
+            context.view_layer.objects.active = created[0]
+        self.report({'INFO'}, f"Created {len(created)} test props on a grid")
+        return {'FINISHED'}
+
+
+class BUILDING_OT_furnish_interior(bpy.types.Operator):
+    """Furnish the interior of the active building in one click"""
+    bl_idname = "building.furnish_interior"
+    bl_label = "Furnish Interior Now"
+    bl_description = "Enable interior furnishing and regenerate the active building"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj is not None and obj.get("is_fantasy_building", False)
+
+    def execute(self, context):
+        from .generator.building import generate_building
+        sprops = context.scene.fantasy_building_settings
+        sprops.has_interior_furnishing = True
+        generate_building(context.active_object, sprops)
+        self.report({'INFO'}, "Interior furnished!")
+        return {'FINISHED'}
+

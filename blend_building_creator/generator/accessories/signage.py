@@ -20,7 +20,7 @@ from ..mesh_utils import (
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_IRON, MAT_INDEX_WOOD,
-    MAT_INDEX_PLASTER_EXT, MAT_INDEX_BANNER, MAT_INDEX_SIGN,
+    MAT_INDEX_TARP, MAT_INDEX_SIGN,
     MAT_INDEX_CLOCK_FACE,
 )
 
@@ -77,14 +77,17 @@ def _create_sign_decal_quad(bm, cx, dy, cz, w, h, is_back=False):
 
 
 def build_hanging_sign(bm, x, y, z_top, run_ang=0.0, bracket_len=0.60,
-                       board_w=0.88, board_h=0.74, light_board=True):
+                       board_w=0.88, board_h=0.74, light_board=True, ang=None):
     """A compact blacksmith-forged hanging trade sign with a painted icon decal.
 
     ``run_ang`` yaws the bracket in the XY plane (0 = +X). Local +X is the
     bracket projection away from the wall; the board hangs in the local XZ plane
     under the arm (faces local +/-Y) so it reads along the street, and sits close
     to the wall on a short bracket.
+    ``ang`` is an alias for ``run_ang`` for the generic prop registry.
     """
+    if ang is not None:
+        run_ang = ang
     rng = _rng(x, y, 31)
     faces = []
 
@@ -191,28 +194,29 @@ def build_awning(bm, x, y, z_top, ang=0.0, width=1.45, depth=1.10, drop=0.50):
     """A cloth awning projecting from a wall over a door or window.
 
     Local frame: the wall plane is XZ at y=0 and the awning reaches toward -Y.
+    A single thin tarp sheet on a slim iron frame (wall bar, two side rails
+    and a front bar) reads as stretched cloth without bulky valance geometry.
     """
     slope_len = math.hypot(depth, drop)
     tilt = math.atan2(drop, depth)
     faces = []
-    faces += create_beveled_box(bm, size=(width, slope_len, 0.03),
+    # One thin cloth sheet.
+    faces += create_beveled_box(bm, size=(width, slope_len, 0.012),
                                 location=(0.0, -depth * 0.5, -drop * 0.5),
                                 rotation=(tilt, 0.0, 0.0),
-                                mat_index=MAT_INDEX_BANNER, bevel_amount=0.0)
-    # Scalloped valance.
-    n = max(3, int(width / 0.36))
-    for i in range(n):
-        vx = -width * 0.5 + width * (i + 0.5) / n
-        faces += create_beveled_box(bm, size=(width / n - 0.01, 0.10, 0.13),
-                                    location=(vx, -depth, -drop - 0.04),
-                                    mat_index=MAT_INDEX_BANNER, bevel_amount=0.01)
+                                mat_index=MAT_INDEX_TARP, bevel_amount=0.0)
+    # Slim forged iron frame: wall bar, two raked side rails, front bar.
+    edge_z = -drop - 0.012
+    faces += create_beveled_box(bm, size=(width + 0.05, 0.035, 0.035),
+                                location=(0.0, 0.0, 0.0),
+                                mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
     for sx in (-width * 0.5, width * 0.5):
-        faces += create_beveled_box(bm, size=(0.05, depth, 0.05),
-                                    location=(sx, -depth * 0.5, -drop * 0.5 - 0.02),
+        faces += create_beveled_box(bm, size=(0.032, slope_len + 0.03, 0.032),
+                                    location=(sx, -depth * 0.5, -drop * 0.5 - 0.006),
                                     rotation=(tilt, 0.0, 0.0),
                                     mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
-        faces += create_beveled_box(bm, size=(0.05, 0.05, 0.16),
-                                    location=(sx, -0.02, -0.06),
-                                    mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
+    faces += create_beveled_box(bm, size=(width + 0.05, 0.032, 0.032),
+                                location=(0.0, -depth - 0.012, edge_z),
+                                mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
     transform_faces(faces, _place(x, y, z_top, ang))
     return faces

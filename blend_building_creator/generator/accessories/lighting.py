@@ -95,37 +95,36 @@ def _lantern_cage(bm, cx, cy, cz, size=0.22, height=0.32, rng=None):
 
 def build_post_lantern(bm, x, y, z_ground=0.0, ang=0.0, height=2.55,
                        arm_len=0.55, scale=1.0):
-    """A stout chamfered timber post with cut-stone plinth, forged scroll arm and lantern."""
+    """A stout chamfered timber post with cut-stone plinth and a hanging cage.
+
+    The cage hangs from the arm tip on a short link chain exactly like the
+    wall-hung lantern (shared ``_lantern_cage`` geometry, DRY): two
+    interlocking vertical links with the cage ring overlapping the last one.
+    """
     s = scale
     rng = _rng(x, y, 11)
     faces = []
 
-    # 1. Stepped cut-stone foundation plinth
+    # 1. Stepped cut-stone foundation plinth (upper step overlaps 20mm).
     faces += create_beveled_box(bm, size=(0.44 * s, 0.44 * s, 0.16),
                                 location=(0.0, 0.0, 0.08), mat_index=MAT_INDEX_CUT_STONE,
                                 bevel_amount=0.020, bevel_segments=2)
-    faces += create_beveled_box(bm, size=(0.32 * s, 0.32 * s, 0.12),
-                                location=(0.0, 0.0, 0.20), mat_index=MAT_INDEX_CUT_STONE,
+    faces += create_beveled_box(bm, size=(0.32 * s, 0.32 * s, 0.14),
+                                location=(0.0, 0.0, 0.16 - 0.02 + 0.07), mat_index=MAT_INDEX_CUT_STONE,
                                 bevel_amount=0.015, bevel_segments=2)
 
-    # 4 Iron corner bracket shoes clamping the timber post into the stone
-    for sx in (-0.11 * s, 0.11 * s):
-        for sy in (-0.11 * s, 0.11 * s):
-            faces += create_beveled_box(bm, size=(0.04, 0.04, 0.18),
-                                        location=(sx, sy, 0.26),
-                                        mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
-
-    # 2. Chunky hand-carved chamfered timber post
+    # 2. Chunky hand-carved chamfered timber post, foot embedded 30mm.
     post_w = 0.18 * s
     post_h = height - 0.26
+    post_base = 0.23
     faces += create_beveled_box(bm, size=(post_w, post_w, post_h),
-                                location=(0.0, 0.0, 0.26 + post_h * 0.5),
+                                location=(0.0, 0.0, post_base + post_h * 0.5),
                                 rotation=(0.0, 0.0, (rng.random() - 0.5) * 0.02),
                                 mat_index=MAT_INDEX_TIMBER,
                                 bevel_amount=0.016, bevel_segments=2)
 
     # Decorative carved timber capital / collar below the iron arm
-    arm_base_z = 0.26 + post_h - 0.02
+    arm_base_z = post_base + post_h - 0.02
     faces += create_beveled_box(bm, size=(post_w + 0.06, post_w + 0.06, 0.09),
                                 location=(0.0, 0.0, arm_base_z),
                                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
@@ -133,48 +132,40 @@ def build_post_lantern(bm, x, y, z_ground=0.0, ang=0.0, height=2.55,
                                 location=(0.0, 0.0, arm_base_z + 0.06),
                                 mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
 
-    # 3. Forged iron crossarm reaching out along local +X
-    faces += create_beveled_box(bm, size=(arm_len, 0.042, 0.042),
-                                location=(arm_len * 0.5 + 0.04, 0.0, arm_base_z + 0.04),
+    # 3. Straight forged iron arm reaching out along local +X.
+    arm_z = arm_base_z + 0.04
+    faces += create_beveled_box(bm, size=(arm_len, 0.045, 0.045),
+                                location=(arm_len * 0.5 + 0.04, 0.0, arm_z),
                                 mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
 
-    # Ornate forged terminal curl at the end of the crossarm
-    faces += create_torus_ring(bm, location=(arm_len + 0.08, 0.0, arm_base_z + 0.09),
-                               major_radius=0.065, minor_radius=0.012,
-                               major_segments=12, minor_segments=6,
-                               mat_index=MAT_INDEX_IRON)
-
-    # Curved forged scroll brace underneath
-    brace_l = math.hypot(arm_len * 0.70, 0.38)
-    brace_a = math.atan2(0.38, arm_len * 0.70)
+    # Knee brace rising from the post up to the arm underside (embedded ends).
+    bx0, bz0 = 0.05, arm_z - 0.36
+    bx1, bz1 = arm_len * 0.62, arm_z - 0.025
+    brace_l = math.hypot(bx1 - bx0, bz1 - bz0) + 0.04
+    brace_a = math.atan2(bz1 - bz0, bx1 - bx0)
     faces += create_beveled_box(bm, size=(brace_l, 0.030, 0.030),
-                                location=(arm_len * 0.36, 0.0, arm_base_z - 0.16),
-                                rotation=(0.0, brace_a, 0.0),
+                                location=((bx0 + bx1) * 0.5, 0.0, (bz0 + bz1) * 0.5),
+                                rotation=(0.0, -brace_a, 0.0),
                                 mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
-    # Scroll ring in the crook of the brace
-    faces += create_torus_ring(bm, location=(arm_len * 0.28, 0.0, arm_base_z - 0.12),
-                               major_radius=0.065, minor_radius=0.012,
-                               major_segments=12, minor_segments=6,
-                               mat_index=MAT_INDEX_IRON)
 
-    # 4. Suspension chains: 2 interlocking links hanging down
-    tip_x = arm_len * 0.92
-    faces += create_torus_ring(bm, location=(tip_x, 0.0, arm_base_z + 0.01),
-                               major_radius=0.030, minor_radius=0.008,
-                               mat_index=MAT_INDEX_IRON)
-    faces += create_torus_ring(bm, location=(tip_x, 0.0, arm_base_z - 0.05),
-                               rotation=(0.0, math.pi * 0.5, 0.0),
-                               major_radius=0.032, minor_radius=0.008,
-                               mat_index=MAT_INDEX_IRON)
-    faces += create_torus_ring(bm, location=(tip_x, 0.0, arm_base_z - 0.10),
-                               rotation=(math.pi * 0.5, 0.0, 0.0),
-                               major_radius=0.032, minor_radius=0.008,
-                               mat_index=MAT_INDEX_IRON)
+    # 4. Two interlocking vertical links hung straight off the arm tip:
+    # link 1 overlaps the arm underside, link 2 overlaps link 1, and the
+    # cage ring below overlaps link 2. Nothing floats.
+    tip_x = arm_len - 0.02
+    for i in range(2):
+        lz = arm_z - 0.035 - i * 0.05
+        rot = (math.pi * 0.5, 0.0, 0.0) if i % 2 == 0 else (0.0, math.pi * 0.5, 0.0)
+        faces += create_torus_ring(bm, location=(tip_x, 0.0, lz), rotation=rot,
+                                   major_radius=0.030, minor_radius=0.008,
+                                   major_segments=12, minor_segments=6,
+                                   mat_index=MAT_INDEX_IRON)
 
-    # 5. Lantern cage hanging cleanly beneath the chain
-    cage_z = arm_base_z - 0.38 * s
-    cage = _lantern_cage(bm, tip_x, 0.0, cage_z, size=0.28 * s,
-                         height=0.38 * s, rng=rng)
+    # 5. Lantern cage hung so its suspension ring overlaps the last link.
+    cage_h = 0.36 * s
+    ring_off = cage_h * 0.5 + 0.27
+    cage_z = arm_z - 0.12 - ring_off
+    cage = _lantern_cage(bm, tip_x, 0.0, cage_z, size=0.26 * s,
+                         height=cage_h, rng=rng)
     faces += cage
 
     transform_faces(faces, _place(x, y, z_ground, ang))
@@ -183,13 +174,17 @@ def build_post_lantern(bm, x, y, z_ground=0.0, ang=0.0, height=2.55,
 
 
 def build_hanging_lantern(bm, x, y, z_top, arm_ang=0.0, arm_len=0.42,
-                          drop=0.0, scale=1.0):
+                          drop=0.0, scale=1.0, ang=None):
     """A wall bracket whose lantern hangs from an interlocking hook and ring.
 
     ``arm_ang`` yaws the bracket arm (0 = +X, pointing away from the wall). The
     lantern cage's top ring is seated just below the arm's hook ring so the two
     actually link, and the arm sits high enough for the cage to clear the floor.
+    ``ang`` is an alias for ``arm_ang`` so the generic prop registry can drive
+    this builder with one yaw convention.
     """
+    if ang is not None:
+        arm_ang = ang
     s = scale
     faces = []
     # Wall plate (flush against host timber post / wall, no bolts).
@@ -227,8 +222,12 @@ def build_hanging_lantern(bm, x, y, z_top, arm_ang=0.0, arm_len=0.42,
     return faces
 
 
-def build_chain_lantern(bm, x, y, z_ceiling, chain_len=0.55, scale=0.90):
-    """A forged iron lantern hanging straight down from a ceiling/soffit/beam by an unbroken continuous chain."""
+def build_chain_lantern(bm, x, y, z_ceiling, chain_len=0.55, scale=0.90, ang=None):
+    """A forged iron lantern hanging straight down from a ceiling/soffit/beam by an unbroken continuous chain.
+
+    ``ang`` is accepted and ignored (a hanging chain is radially symmetric)
+    so the generic prop registry can pass one yaw convention to every builder.
+    """
     s = scale
     w = 0.26 * s
     h = 0.36 * s

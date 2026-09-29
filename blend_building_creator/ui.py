@@ -724,3 +724,57 @@ class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
         col.prop(props, "custom_railing", text="Railing Mat")
         col.prop(props, "custom_window_frame", text="Window Frame Mat")
         col.prop(props, "custom_shutter", text="Shutter Mat")
+
+
+# ---------------------------------------------------------------------------
+# 15. Interior furnishing + standalone prop catalogue
+# ---------------------------------------------------------------------------
+
+class VIEW3D_PT_fantasy_building_furnishing(bpy.types.Panel):
+    """One-click whole-building interiors + single-piece prop browser."""
+    bl_label = "Interior Furnishing & Props"
+    bl_idname = "VIEW3D_PT_fantasy_building_furnishing"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Fantasy Building"
+    bl_parent_id = "VIEW3D_PT_fantasy_building_main"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.fantasy_building_settings
+        obj = context.active_object
+        is_bldg = obj and obj.get("is_fantasy_building", False)
+
+        box = layout.box()
+        box.label(text="Whole-Building Interior", icon='HOME')
+        box.prop(props, "has_interior_furnishing", text="Furnish Interior")
+        box.prop(props, "furnishing_style", text="Style")
+        box.prop(props, "furnishing_density", slider=True)
+        if is_bldg:
+            box.operator("building.furnish_interior", text="Furnish Interior Now", icon='CHECKMARK')
+        else:
+            box.label(text="Select a building to furnish.", icon='INFO')
+
+        box2 = layout.box()
+        box2.label(text="Single Prop Catalogue", icon='MESH_CUBE')
+        box2.prop(props, "prop_category", text="Category")
+        # Filter the prop dropdown by category without breaking stored value.
+        cat = props.prop_category
+        try:
+            from .generator.accessories.prop_registry import list_props
+            items = [(s.key, s.label, s.description) for s in list_props(cat)]
+            keys = {k for k, _, _ in items}
+            if props.standalone_prop not in keys and items:
+                box2.label(text=f"{len(items)} props — pick one below:", icon='DOT')
+        except Exception:
+            pass
+        box2.prop(props, "standalone_prop", text="Prop")
+        row = box2.row(align=True)
+        row.prop(props, "standalone_prop_scale", text="Scale")
+        box2.prop(props, "standalone_prop_variant", text="Options")
+        op = box2.operator("building.create_prop", text="Create Prop", icon='ADD')
+        op.prop_key = props.standalone_prop
+        op.prop_scale = props.standalone_prop_scale
+        op.prop_variant = props.standalone_prop_variant
+        box2.operator("building.create_all_props", text="Create All Props (Test Grid)", icon='GRID')
