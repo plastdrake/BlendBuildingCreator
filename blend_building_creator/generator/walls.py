@@ -45,8 +45,8 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     if is_y_wall is None:
         is_y_wall = abs(dy) > abs(dx)
     
-    # Consistent global log height grid (0.36m) matching roof gable logs
-    log_h = 0.36
+    # Consistent global log height grid (0.44m) for bold chunky stylized Warcraft-inspired proportions
+    log_h = 0.44
 
     # 1. Solid Interior Core (sealed flat interior surface). Only a hair below
     # the floor line - enough to meet the floor slab, but not so low that the
@@ -80,17 +80,19 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     k_start = int(math.floor((z_bottom - z_shift) / log_h))
     k_end = int(math.ceil((z_top - z_shift) / log_h))
 
-    # Optional crown removal (multi-floor Tier-1 eave sides): drop the topmost
-    # row only when it rides on/above the wall top line (redundant cap crowding
-    # the eave). Recessed crowns are kept so no slit opens under the eave.
+    # Optional crown removal (multi-floor Tier-1 eave sides or jettied storeys):
+    # Drop the topmost row whenever it would poke up past the ceiling/floor slab.
     skip_k = None
-    if omit_top_row:
+    if omit_top_row or force_omit_top_row:
         valid_ks = [kk for kk in range(k_start, k_end + 1)
                     if z_bottom - 0.05 <= (kk + 0.5) * log_h + z_shift <= z_top + 0.05]
         if len(valid_ks) >= 2:
             top_z = (valid_ks[-1] + 0.5) * log_h + z_shift
-            if force_omit_top_row or top_z > z_top - 0.02:
+            top_log_top = top_z + log_h * 0.49
+            if force_omit_top_row or top_log_top > z_top - 0.04 or top_z > z_top - 0.02:
                 skip_k = valid_ks[-1]
+        elif len(valid_ks) == 1 and force_omit_top_row:
+            skip_k = valid_ks[-1]
 
     for k in range(k_start, k_end + 1):
         if k == skip_k:
@@ -99,6 +101,9 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         # Ensure log center falls within current wall vertical slice
         if log_z < z_bottom - 0.05 or log_z > z_top + 0.05:
             continue
+        # In lower floor wall beneath a jettied upper storey, ensure no log breaches ceiling
+        if (omit_top_row or force_omit_top_row) and (log_z + log_h * 0.49 > z_top + 0.01):
+            continue
             
         # Handcrafted organic jitter per log
         h_val = ((seed * 37 + k * 193 + int(abs(x1) * 17) + int(abs(y1) * 31)) % 1000) / 1000.0
@@ -106,7 +111,7 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         d_jitter = ((h_val * 7.1) % 1.0 - 0.5) * 0.024
         tilt_j = ((h_val * 11.3) % 1.0 - 0.5) * 0.020
         
-        log_ry = min(thickness * 0.65, log_h * 0.56) + d_jitter
+        log_ry = min(thickness * 0.68, log_h * 0.56) + d_jitter
         log_rz = (log_h * 0.49) + r_jitter
         
         # Check openings that intersect this log row's vertical span
@@ -142,7 +147,7 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         else:
             spans = [(0.0, seg_len)]
             
-        ext_len = 0.38
+        ext_len = 0.52
         if is_y_wall:
             row_extends = (k % 2 == 0)
         else:
@@ -315,11 +320,16 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                        plank_direction='HORIZONTAL', plank_jankiness=0.35,
                        stone_block_scale=1.0, stone_disorder=0.35,
                        is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0, v_offset=0.0,
-                       has_exposed_brick=False, exposed_brick_freq=0.25):
+                       has_exposed_brick=False, exposed_brick_freq=0.25,
+                       inner_mat=None):
     """
     Constructs a single wall section between p_start and p_end:
     rounded logs (Tier 1), overlapping/batten planks (Tier 2), chunky stone blocks (Tier 3),
     or smooth plaster/stone core boxes with optional exposed terracotta brick accents.
+
+    Faces pointing inward (against ``normal_vec``) use ``inner_mat`` when
+    given, else the usual warm wood lining. Freestanding outer walls (curtain
+    walls) pass their exterior material so both faces match.
     """
     if physical_siding and tier == 'TIER_1':
         build_log_wall_segment(
@@ -365,7 +375,7 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             f.normal_update()
             # If face normal points opposite to outward normal_vec (facing into the room)
             if (f.normal.x * nv_x + f.normal.y * nv_y) < -0.5:
-                f.material_index = MAT_INDEX_WOOD
+                f.material_index = inner_mat if inner_mat is not None else MAT_INDEX_WOOD
 
 def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                             openings=[], mat_ext=MAT_INDEX_PLASTER_EXT,
@@ -375,12 +385,14 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                             is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0,
                             omit_top_log_row=False,
                             force_omit_top_log_row=False,
-                            has_exposed_brick=False, exposed_brick_freq=0.25):
+                            has_exposed_brick=False, exposed_brick_freq=0.25,
+                            inner_mat=None):
     """
     Builds a wall along the line p_start -> p_end, cleanly cutting around
     one or more openings (e.g. door or windows) without destructive booleans.
     Each opening is a dict: {'u_start': float, 'u_end': float, 'z_start': float, 'z_end': float}
     where u is distance from p_start.
+    ``inner_mat`` is forwarded to every segment (see build_wall_segment).
     """
     x1, y1 = p_start
     x2, y2 = p_end
@@ -404,7 +416,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end, seed=seed,
             u_offset=u_offset,
-            has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq
+            has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq,
+            inner_mat=inner_mat
         )
         return
 
@@ -451,7 +464,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
             is_corner_start=seg_is_start, is_corner_end=seg_is_end, seed=seed,
             u_offset=u_offset + ua, v_offset=za - z_bottom,
-            has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq
+            has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq,
+            inner_mat=inner_mat
         )
 
     for i in range(len(edges) - 1):
@@ -645,10 +659,9 @@ def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
     Builds classic stylized Tudor half-timbering with corner posts, top/bottom plates,
     mid-rails, and diagonal braces, cleanly cutting around all openings.
     """
-    beam_w = 0.22
-    # Corner posts read visually thin at typical wall thicknesses — bulk them up so they
-    # look like load-bearing timbers rather than the same thin rails used for mid-framing.
-    corner_w = max(0.34, wall_thickness * 1.05)
+    beam_w = 0.26
+    # Chunkier, bolder stylized fantasy corner posts (Warcraft style)
+    corner_w = max(0.38, wall_thickness * 1.18)
     h = z_top - z_bottom
     
     # 4 Vertical Corner Posts
@@ -681,7 +694,7 @@ def build_timber_framing(bm, x_min, x_max, y_min, y_max, z_bottom, z_top,
     build_facade_timber(bm, (x_min, y_min), (x_min, y_max), z_bottom, z_top, wall_thickness,
                          (-1.0, 0.0), left_ops, has_diagonals)
 
-def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.18, depth=0.62, height=0.68, mat_index=MAT_INDEX_TIMBER):
+def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.28, depth=0.76, height=0.82, mat_index=MAT_INDEX_TIMBER):
     """
     Builds a stylized carved wooden console corbel bracket with:
     - Top horizontal beveled bolster block
@@ -783,9 +796,9 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
     if overhang_dist < 0.05:
         return
         
-    corbel_w = 0.20
-    corbel_h = 0.52
-    corbel_d = overhang_dist + 0.16
+    corbel_w = 0.28
+    corbel_h = 0.72
+    corbel_d = overhang_dist + 0.22
     # Drop the corbel's mounting point below the upper floor's timber top-plate beam
     # so the bracket sits under it instead of poking up through it.
     z_mount = z_level - drop

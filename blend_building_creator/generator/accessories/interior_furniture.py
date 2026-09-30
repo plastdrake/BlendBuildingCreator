@@ -437,7 +437,92 @@ def build_bed(bm, x, y, z_ground=0.0, ang=0.0, length=2.0, width=1.2):
     return faces
 
 
-def build_chair(bm, x, y, z_ground=0.0, ang=0.0, seat_h=0.46, **kwargs):
+def build_bunk_bed(bm, x, y, z_ground=0.0, ang=0.0, length=2.0, width=1.1):
+    """Sturdy military bunk bed: four tall posts, two dressed sleeping berths
+    (mattress + pillow + draped quilt each), an upper safety rail and a
+    climbing ladder on the +Y side. Local frame matches build_bed
+    (length along X, headboard end at -X)."""
+    faces = []
+    post_w = 0.10
+    post_h = 1.85
+    hx = -length / 2 + post_w * 0.5
+    fx = length / 2 - post_w * 0.5
+    hy = width / 2 - post_w / 2
+    rail_len = (fx - post_w * 0.5) - (hx + post_w * 0.5)
+    rail_cx = (hx + fx) * 0.5
+    mat_w = width - post_w * 2 - 0.02
+
+    # 4 tall corner posts
+    for sx in (hx, fx):
+        for sy in (-hy, hy):
+            faces += create_beveled_box(bm, size=(post_w, post_w, post_h),
+                                        location=(sx, sy, post_h * 0.5),
+                                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+    # Full-height head & foot panels
+    panel_w = width - post_w * 2 + 0.02
+    for px in (hx, fx):
+        faces += create_beveled_box(bm, size=(0.05, panel_w, post_h - 0.15),
+                                    location=(px, 0.0, (post_h - 0.15) * 0.5 + 0.05),
+                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.008)
+
+    # Two dressed berths (lower + upper)
+    for lvl_z, skirt_z, seed in ((0.32, 0.13, 3.0), (1.22, 0.95, 11.0)):
+        for sy in (-hy, hy):
+            faces += create_beveled_box(bm, size=(rail_len, 0.07, 0.20),
+                                        location=(rail_cx, sy, lvl_z),
+                                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+        for k in range(5):
+            u = (k + 0.5) / 5
+            sx = rail_cx - rail_len * 0.40 + u * rail_len * 0.80
+            faces += create_beveled_box(bm, size=(0.10, mat_w, 0.022),
+                                        location=(sx, 0.0, lvl_z - 0.085),
+                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
+        mat_top = lvl_z + 0.10
+        faces += create_beveled_box(bm, size=(rail_len - 0.02, mat_w, 0.16),
+                                    location=(rail_cx, 0.0, lvl_z + 0.02),
+                                    mat_index=MAT_INDEX_FABRIC_STITCHED,
+                                    bevel_amount=0.035, bevel_segments=3)
+        pil_x = hx + post_w * 0.5 + 0.22
+        faces += _create_pillow(bm, pil_x, 0.0, mat_top + 0.02,
+                                length=0.36, width=max(0.30, mat_w - 0.08), height=0.11,
+                                tilt_deg=22.0, seed=seed)
+        # Quilt stops shy of the end posts so no cover clips the frame.
+        faces += _create_quilt_and_cuff(bm, x_start=pil_x + 0.16, x_end=fx - post_w - 0.03,
+                                        w_mat=mat_w * 0.5 + 0.01, w_rail=width * 0.5 + 0.015,
+                                        z_mat_top=mat_top, z_skirt=skirt_z, thick=0.024,
+                                        cuff_length=0.16)
+
+    # Upper safety rail on the open (+Y) side, carried by the tall corner
+    # posts alone (no mid balusters for the quilt to swallow).
+    faces += create_beveled_box(bm, size=(length - 0.10, 0.06, 0.07),
+                                location=(0.0, hy + 0.02, 1.68),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+    # Climbing ladder: leans from the floor onto the upper side rail so it
+    # reads as hooked over the frame instead of balancing beside it.
+    lad_y_bot, lad_y_top, lad_h = hy + 0.30, hy + 0.06, 1.75
+    lad_tilt = math.atan2(lad_y_bot - lad_y_top, lad_h)
+    lad_y_mid = (lad_y_bot + lad_y_top) * 0.5
+    for lx in (fx - 0.42, fx - 0.10):
+        faces += create_beveled_box(bm, size=(0.06, 0.06, lad_h),
+                                    location=(lx, lad_y_mid, lad_h * 0.5),
+                                    rotation=(lad_tilt, 0.0, 0.0),
+                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.006)
+    for r in range(4):
+        rz = 0.35 + r * 0.38
+        ry = lad_y_bot + (lad_y_top - lad_y_bot) * (rz / lad_h)
+        faces += create_cylinder(bm, radius=0.020, height=0.32, segments=6,
+                                 location=((fx - 0.42 + fx - 0.10) * 0.5, ry, rz),
+                                 rotation=(0.0, 1.5708, 0.0),
+                                 mat_index=MAT_INDEX_WOOD)
+    # Hook blocks tying the ladder top into the upper side rail.
+    for lx in (fx - 0.42, fx - 0.10):
+        faces += create_beveled_box(bm, size=(0.06, 0.16, 0.06),
+                                    location=(lx, hy + 0.02, 1.30),
+                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.006)
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
     """Simple high-back tavern chair."""
     faces = []
     seat_z, seat_s = seat_h, 0.44
@@ -1353,9 +1438,14 @@ def build_kitchen_stove(bm, x, y, z_ground=0.0, ang=0.0, width=0.95, depth=0.75,
     return faces
 
 
-def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=1.8, length=2.8, rug_style=1, z_floor=None):
+def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=2.4, length=3.6, rug_style=1, z_floor=None):
     """Woven carpet with transparent alpha tassels cutout.
     rug_style: 1 = Crimson Ornate, 2 = Sapphire Royal, 3 = Forest Woven.
+
+    The rug textures are painted with the tassel fringe on the V ends of the
+    image, while a rug plane is portrait (length > width). The UVs are
+    therefore rotated 90 degrees so texture-U runs along the rug's long axis
+    and the fringe lands on the short ends.
     """
     if z_floor is not None:
         z_ground = z_floor
@@ -1376,8 +1466,12 @@ def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=1.8, length=2.8, rug_style=
     f.material_index = mat_idx
 
     for loop in f.loops:
-        u = 0.0 if loop.vert.co.x < 0 else 1.0
-        v = 0.0 if loop.vert.co.y < 0 else 1.0
+        # Texture-U follows the rug's long (local Y) axis and texture-V follows
+        # the short (local X) axis. The painted tassel fringe sits on the
+        # texture's V ends, so this puts the fringe on the rug's SHORT ends and
+        # runs the long decorative borders down the length of the rug.
+        u = 0.0 if loop.vert.co.y < 0 else 1.0
+        v = 0.0 if loop.vert.co.x < 0 else 1.0
         loop[uv_layer].uv = Vector((u, v))
     f.tag = True
 

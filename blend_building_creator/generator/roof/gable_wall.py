@@ -47,7 +47,7 @@ def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm
         return x_l, x_r
 
     # Stacked physical rounded horizontal logs matching lower walls identically
-    target_diam = 0.36
+    target_diam = 0.44
     log_h = target_diam
     wall_t = half_wt * 2.0
     log_ry = min(wall_t * 0.65, log_h * 0.56)

@@ -286,7 +286,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             size=(found_depth, found_width, found_h),
             location=frame.to_world(Vector((depth * 0.5 + 0.05, 0.0, found_h * 0.5))),
             rotation=(0.0, 0.0, frame.rot_z),
-            mat_index=MAT_INDEX_STONE,
+            mat_index=MAT_INDEX_WOOD if tier == 'TIER_1' else MAT_INDEX_STONE,
             bevel_amount=0.02
         )
     else:  # UPPER floor oriel bay

@@ -2159,6 +2159,46 @@ def setup_building_material_slots(obj, props):
         obj.data.materials.append(m)
 
 
+# Canonical slot names in strict MAT_INDEX_* order. Outbuilding merges use
+# this to translate a temp build's pruned slot table back to canonical
+# indices (by material name) before appending into the host mesh.
+CANONICAL_SLOT_NAMES = (
+    "M_Building_Stone",         # 0
+    "M_Building_Plaster",       # 1
+    "M_Building_Timber",        # 2
+    "M_Building_Floor",         # 3
+    "M_Building_Shingles",      # 4
+    "M_Building_Glass",         # 5
+    "M_Building_Iron",          # 6
+    "M_Building_Wood",          # 7
+    "M_Building_Cut_Stone",     # 8
+    "M_Building_Log",           # 9
+    "M_Building_Log_End",       # 10
+    "M_Building_Plaster_Brick",  # 11
+    "M_Building_Clock_Face",    # 12
+    "M_Building_Banner",        # 13
+    "M_Building_Target",        # 14
+    "M_Building_Hay",           # 15
+    "M_Building_Dirt",          # 16
+    "M_Building_Sign",          # 17
+    "M_Building_Rope",          # 18
+    "LanternEmissive",          # 19
+    "M_Building_Tarp",          # 20
+    "M_Building_Clay",          # 21
+    "M_Building_Fabric_White",  # 22
+    "M_Building_Fabric_Red",    # 23
+    "M_Building_Fabric_Stitched",  # 24
+    "M_Building_Leather",       # 25
+    "M_Building_Book_Paper",    # 26
+    "M_Building_Wax",           # 27
+    "M_Building_Leather_2",     # 28
+    "M_Building_Leather_3",     # 29
+    "M_Building_Rug_1",         # 30
+    "M_Building_Rug_2",         # 31
+    "M_Building_Rug_3",         # 32
+)
+
+
 def prune_material_slots_for_bmesh(obj, bm):
     """Drop unused slots and remap bmesh face indices BEFORE ``to_mesh``.
 

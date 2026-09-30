@@ -206,7 +206,6 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
 
     frame_thick = 0.12
     is_arched = (door_shape == 'ARCHED') or (door_shape == 'AUTO' and ground_floor_stone and door_w < 1.6)
-    door_h = min(door_h, 2.30 if is_arched else 2.45)
     frame_depth = wall_thickness + 0.04
     
     if is_arched:
@@ -358,12 +357,13 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.016
         )
-        # Ground stone sill threshold
+        # Ground sill threshold (timber for wood/T1, cut stone for masonry)
+        sill_mat = MAT_INDEX_CUT_STONE if ground_floor_stone else MAT_INDEX_TIMBER
         create_beveled_box(
             bm,
             size=(door_w + frame_thick * 2.0, timber_frame_d + 0.08, 0.08),
             location=(center_x, yf_timber, z_base + 0.04),
-            mat_index=MAT_INDEX_CUT_STONE,
+            mat_index=sill_mat,
             bevel_amount=0.015
         )
         # Interior casing frame flush along room wall
@@ -840,18 +840,22 @@ def build_arrow_slit(bm, center=(0.0, 0.0, 0.0), normal_axis='-Y', wall_thicknes
                            location=loc, rotation=rot, mat_index=mat_index, bevel_amount=0.006)
 
 
-def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, step_d=0.35, step_h=0.18, normal_axis='-Y'):
+def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, step_d=0.35, step_h=0.18, normal_axis='-Y', mat_index=None):
     """
-    Creates solid grounded fantasy stone steps leading up to the front door.
+    Creates solid grounded fantasy steps leading up to the front door.
     Each step extends solidly down to ground level (Z=0) so no steps float.
     Steps start in front of the door threshold and lower than z_base so the threshold
     and jamb bases remain cleanly visible above the stairs.
-    Supports '-Y', '+Y', '-X', '+X'.
+    Supports '-Y', '+Y', '-X', '+X'. Supports wood/timber steps in Tier 1 and stone in Tier 2/3.
     """
+    if mat_index is None:
+        mat_index = MAT_INDEX_CUT_STONE
+
     if normal_axis != '-Y':
         steps_bm = bmesh.new()
         build_front_steps(steps_bm, center_x=0.0, y_front=0.0, z_base=z_base,
-                          num_steps=num_steps, step_w=step_w, step_d=step_d, step_h=step_h, normal_axis='-Y')
+                          num_steps=num_steps, step_w=step_w, step_d=step_d, step_h=step_h,
+                          normal_axis='-Y', mat_index=mat_index)
         if normal_axis == '+Y':
             ang = math.pi
         elif normal_axis == '+X':
@@ -892,20 +896,31 @@ def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, st
             bm,
             size=(cur_w, step_d + 0.02, step_total_h - 0.005),
             location=(center_x, cur_y, cz),
-            mat_index=MAT_INDEX_CUT_STONE,
+            mat_index=mat_index,
             bevel_amount=0.025
         )
+        is_wood = mat_index in (MAT_INDEX_TIMBER, MAT_INDEX_WOOD)
         uv_layer = bm.loops.layers.uv.verify()
         for f in step_faces:
             nx, ny, nz = abs(f.normal.x), abs(f.normal.y), abs(f.normal.z)
             for loop in f.loops:
                 co = loop.vert.co
-                if nz >= nx and nz >= ny:
-                    u, v = co.x * 0.85, co.y * 0.85
-                elif nx >= ny:
-                    u, v = co.y * 0.85, co.z * 0.85
+                if is_wood:
+                    # Wood grain runs along V in material shaders.
+                    # Align V with the step length (X) so grain runs down the length of the step.
+                    if nz >= nx and nz >= ny:
+                        u, v = co.y * 0.85, co.x * 0.40
+                    elif ny >= nx:
+                        u, v = co.z * 0.85, co.x * 0.40
+                    else:
+                        u, v = co.y * 0.85, co.z * 0.85
                 else:
-                    u, v = co.x * 0.85, co.z * 0.85
+                    if nz >= nx and nz >= ny:
+                        u, v = co.x * 0.85, co.y * 0.85
+                    elif nx >= ny:
+                        u, v = co.y * 0.85, co.z * 0.85
+                    else:
+                        u, v = co.x * 0.85, co.z * 0.85
                 loop[uv_layer].uv = Vector((u, v))
 
 def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thickness=0.25,

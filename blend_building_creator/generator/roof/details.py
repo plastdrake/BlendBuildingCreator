@@ -7,6 +7,7 @@ so the orchestrating roof builder reads as a sequence of named steps.
 import math
 from . import build_dormer, build_roof_turret, build_fantasy_chimney
 from ..accessories.tower import build_roof_clock_spire
+from ..materials import MAT_INDEX_STONE, MAT_INDEX_WOOD
 
 
 def build_roof_dormers(bm, props, effective_archetype, roof_style,
@@ -135,8 +136,13 @@ def build_roof_chimney(bm, props, effective_archetype,
                        dormer_placements, wing_dormer_placements,
                        top_cx, top_cy, top_hx, top_hy,
                        top_x_min, top_x_max, top_y_min, top_y_max, total_height,
-                       annex_band=None):
-    """Stylized crooked stone chimney that dodges pillared overhangs and dormers."""
+                       annex_band=None, attic_z=None):
+    """Stylized crooked stone chimney that dodges pillared overhangs and dormers.
+
+    The shaft starts at the attic floor (``attic_z``) and rises through the roof,
+    so it never cuts through the furnished living storeys below. ``chimney_pos``
+    (the XY return) is still used to anchor hearths/stoves to that wall spot.
+    """
     # Bakery builds its own dedicated bake-oven flue in the accessories phase, so
     # it must not also receive this generic (unrelated) chimney.
     if not (props.has_chimney and effective_archetype not in ('WATCHTOWER', 'BAKERY')):
@@ -208,13 +214,18 @@ def build_roof_chimney(bm, props, effective_archetype,
                     chim_y = _ay1 + 0.65
                 chim_y = max(top_y_min + 1.10, min(top_y_max - 1.10, chim_y))
 
-    chim_total_h = total_height + 0.85
+    # The shaft starts at the attic floor and rises through the roof, so it
+    # never cuts through the furnished living storeys below. The top of the
+    # stack stays where it always was (roof top + cap allowance).
+    z_base = (attic_z - 0.15) if attic_z is not None else 0.0
+    chim_total_h = (total_height - z_base) + 0.85
     build_fantasy_chimney(
         bm,
         pos_xy=(chim_x, chim_y),
-        z_start=0.0,
+        z_start=z_base,
         total_height=chim_total_h,
         width=chim_w, depth=chim_d,
-        crooked_angle=0.02
+        crooked_angle=0.02,
+        mat_index=MAT_INDEX_STONE
     )
     return (chim_x, chim_y)

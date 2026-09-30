@@ -491,6 +491,10 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
     levels = list(floor_levels) if floor_levels else [z_ground + floor_h, z_ground + 2.0 * floor_h]
     ox, oy = out_dir
     px, py = -oy, ox                       # width (perpendicular) direction
+    # Wall thickness the turret must match: the caller passes the main
+    # building's wall thickness so the shell lines up exactly and the wall
+    # ends flush INTO the turret footprint (no penetration, no floating gap).
+    t = max(0.18, float(attach_tuck)) if attach_tuck else t
 
     def pt(d_out, d_perp):
         return (cx + ox * d_out + px * d_perp, cy + oy * d_out + py * d_perp)
@@ -513,17 +517,19 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
 
     o_line = half - t * 0.5
     i_line = -(half - t * 0.5)
-    reach = -half - attach_tuck
+    # Side faces run from the OUTER wall end to the far side; the near end is
+    # left open so the main wall can run straight INTO the turret footprint
+    # and die against the far wall (tower-as-part-of-wall, no penetration).
+    reach = -half
 
-    # (p_start, p_end, normal, z_from). The open (inner) side only gets a wall
-    # above the eave, where the hall wall/gable no longer backs the tower.
+    # (p_start, p_end, normal, z_from). Only the three exposed faces are built
+    # as walls; the near (hall) side is closed by the main wall itself and the
+    # far face gets the storey doorways.
     face_defs = [
         (pt(o_line, -half), pt(o_line, half), (ox, oy), shaft_base),
         (pt(reach, o_line), pt(half, o_line), (px, py), shaft_base),
         (pt(reach, -o_line), pt(half, -o_line), (-px, -py), shaft_base),
     ]
-    if main_wall_top is not None:
-        face_defs.append((pt(i_line, -half), pt(i_line, half), (-ox, -oy), main_wall_top))
 
     ww = 0.72
     wh = min(1.15, floor_h * 0.46)
@@ -577,6 +583,29 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
         if shaft_base - 0.01 <= fz < wall_top_z - 0.10:
             create_box(bm, size=(span, span, 0.12), location=(_sz[0], _sz[1], fz + 0.07),
                        mat_index=MAT_INDEX_FLOOR)
+
+    # Doorways through the MAIN wall into the tower: a wall plank band is built
+    # on the centre line (matching the main wall thickness, nudge-reversing the
+    # window trick) with one opening per storey, so the hall wall visibly ends
+    # into the turret and each floor connects to it.
+    if main_wall_top is not None:
+        from ..walls import build_wall_with_opening
+        _dw = min(1.0, half * 0.9)
+        _dh = min(2.15, floor_h - 0.35)
+        _ops = []
+        for fz in levels:
+            _z0 = max(fz, shaft_base)
+            _z1 = min(fz + _dh, wall_top_z - 0.25)
+            if _z1 - _z0 > 0.6:
+                _ops.append({'u_start': -_dw * 0.5, 'u_end': _dw * 0.5,
+                             'z_start': _z0, 'z_end': _z1})
+        if _ops:
+            _l0 = pt(-o_line, 0.0)
+            _l1 = pt(o_line, 0.0)
+            build_wall_with_opening(
+                bm, _l0, _l1, shaft_base, main_wall_top, t, _ops,
+                mat_ext=wall_mat, normal_vec=(-ox, -oy), tier=tier,
+                physical_siding=False, plank_direction=plank_direction, seed=seed)
 
     # No timber collar at the eave: the tall shaft now runs straight through the
     # main roof, and the old skirt ring read as a stray slab mid-tower.

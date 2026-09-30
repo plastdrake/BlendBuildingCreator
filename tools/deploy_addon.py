@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import zipfile
 
@@ -6,6 +7,22 @@ repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 appdata = os.environ.get("APPDATA", "")
 blender_root = os.path.join(appdata, "Blender Foundation", "Blender")
 src_dir = os.path.join(repo_root, "blend_building_creator")
+
+# Bump the extension version on every deploy. Blender keeps already-imported
+# extension modules in memory when the version string is unchanged, so a
+# same-version file copy can silently keep serving stale Python until a full
+# restart. A new version makes the update unambiguous.
+_manifest = os.path.join(src_dir, "blender_manifest.toml")
+try:
+    _text = open(_manifest, "r", encoding="utf-8").read()
+    _m = re.search(r'(?m)^version\s*=\s*"(\d+)\.(\d+)\.(\d+)"', _text)
+    if _m:
+        _new = "%s.%s.%d" % (_m.group(1), _m.group(2), int(_m.group(3)) + 1)
+        _text = _text[:_m.start()] + 'version = "%s"' % _new + _text[_m.end():]
+        open(_manifest, "w", encoding="utf-8").write(_text)
+        print("Bumped extension version to %s" % _new)
+except Exception as _e:
+    print("Version bump skipped:", _e)
 
 targets = [
     os.path.join(blender_root, "5.2", "extensions", "user_default", "blend_building_creator"),

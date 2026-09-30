@@ -319,6 +319,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('KNIGHTS_MANOR', "Knights Manor", "Fortified hall: gatehouse with portcullis, courtyard and training yard"),
             ('MAGE_TOWER', "Mage Tower", "Round wizard tower with a jettied belvedere, ring balcony and tall spire"),
             ('TENEMENT', "Tenement Row / Complex", "Multi-apartment residential complex with separate apartment suites"),
+            ('BARRACKS', "Barracks / Garrison", "Military dormitories with bunk beds, armory, mess hall and drill yard"),
+            ('TOWN_HALL', "Town Hall / Civic", "Civic great hall with council chambers and archives"),
+            ('BREWERY', "Brewery", "Brewhouse with vats, store and taproom"),
+            ('BUTCHER', "Butcher Shop", "Butcher block workroom with cold store and storefront"),
+            ('TAILOR', "Tailor Shop", "Clothier workroom with fitting area and storefront"),
+            ('JEWELER', "Jeweler Shop", "Goldsmith workbench with display counter and strongroom"),
+            ('FURNITURE_MAKER', "Furniture Workshop", "Joinery workshop with lumber racks and showroom"),
         ],
         default='AUTO',
         update=on_property_updated
@@ -607,6 +614,24 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         unit='LENGTH',
         update=on_property_updated
     )
+
+    has_exterior_stairs: BoolProperty(
+        name="Exterior Stairs",
+        description="Heavy timber exterior staircase and landing providing outdoor access to upper floor apartments",
+        default=False,
+        update=on_property_updated
+    )
+
+    exterior_stairs_side: EnumProperty(
+        name="Exterior Stairs Side",
+        description="Facade side where the exterior staircase and upper entrance landing are built",
+        items=[
+            ('LEFT', 'Left Side (-X)', 'Build exterior staircase alongside left wall'),
+            ('RIGHT', 'Right Side (+X)', 'Build exterior staircase alongside right wall'),
+        ],
+        default='LEFT',
+        update=on_property_updated
+    )
     
     has_ceiling_beams: BoolProperty(
         name="Ceiling Beams",
@@ -730,7 +755,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     include_door_leaves: BoolProperty(
         name="Include Door Leaves",
         description="Generate door leaves inside doorway frames. Turn off to keep door openings/frames open for interactive Unreal Engine doors",
-        default=True,
+        default=False,
         update=on_property_updated
     )
 
@@ -896,7 +921,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     roof_overhang: FloatProperty(
         name="Roof Overhang",
         description="Eaves overhang distance beyond walls",
-        min=0.2, max=1.0, default=0.45,
+        min=0.2, max=1.4, default=0.65,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -911,14 +936,14 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     roof_sway: FloatProperty(
         name="Sway Curvature",
         description="Depth of curve sag in the roof ridge line",
-        min=0.0, max=0.8, default=0.28,
+        min=0.0, max=1.0, default=0.35,
         update=on_property_updated
     )
     
     roof_flare: FloatProperty(
         name="Bell-Cast Flare",
         description="Concave swooping curve flare at the roof eaves",
-        min=0.0, max=0.8, default=0.35,
+        min=0.0, max=1.0, default=0.42,
         update=on_property_updated
     )
     
@@ -2089,7 +2114,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     has_interior_furnishing: BoolProperty(
         name="Furnish Interior",
         description="Dress every walkable storey with beds, tables, storage and hearths (role follows the building archetype)",
-        default=False,
+        default=True,
         update=on_property_updated
     )
 

@@ -336,12 +336,12 @@ def build_round_tower(bm, props, seed):
             create_cylinder(bm, radius=0.045, height=1.0, segments=6,
                             location=(0.0, 0.0, apex + 0.5), mat_index=MAT_INDEX_IRON)
 
-    # ---- Chimney ----
+    # ---- Chimney (attic-only shaft: starts at the attic floor, never inside rooms) ----
     if props.has_chimney and archetype != 'WATCHTOWER':
         from .roof import build_fantasy_chimney
         build_fantasy_chimney(
-            bm, pos_xy=(top_r * 0.62, top_r * 0.42), z_start=0.0,
-            total_height=top_z + 0.8, width=0.72, depth=0.72,
+            bm, pos_xy=(top_r * 0.62, top_r * 0.42), z_start=top_z - 0.15,
+            total_height=0.95, width=0.72, depth=0.72,
             crooked_angle=0.05,
         )
 

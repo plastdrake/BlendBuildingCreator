@@ -49,5 +49,5 @@ def build_conical_turret_roof(bm, center_pos, radius=2.2, height=3.8, segments=1
         height=1.0,
         segments=8,
         location=(cx, cy, z_base + height + 0.5),
-        mat_index=MAT_INDEX_STONE
+        mat_index=MAT_INDEX_TIMBER
     )

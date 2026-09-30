@@ -31,10 +31,11 @@ class RoomOccupancyTracker:
         self.ry1 = ry1
         self.occupied_boxes: List[Tuple[float, float, float, float]] = []
 
-        # 1. Reserve stairwell clearance
+        # Reserve stairwell clearance (generous: covers the flight below and its
+        # approach so props never block the stairs, not just the bare opening).
         if stair_hole is not None:
             sx0, sx1, sy0, sy1 = stair_hole
-            self.occupied_boxes.append((sx0 - 0.45, sx1 + 0.45, sy0 - 0.55, sy1 + 0.55))
+            self.occupied_boxes.append((sx0 - 0.90, sx1 + 0.90, sy0 - 1.20, sy1 + 1.20))
 
         # 2. Reserve walking corridors around all doorways (interior, front, wing, annex)
         if doorways:
@@ -342,6 +343,196 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
     return None
 
 
+def _area_rug_size(rw, rd, coverage=0.82, max_w=4.50, max_l=5.50,
+                   min_w=1.60, min_l=2.00, inset=0.25):
+    """Standard oversized area rug footprint: covers `coverage` of the room."""
+    rug_w = min(max_w, max(min_w, rw * coverage))
+    rug_l = min(max_l, max(min_l, rd * coverage))
+    rug_w = min(rug_w, max(0.9, rw - inset))
+    rug_l = min(rug_l, max(1.2, rd - inset))
+    return rug_w, rug_l
+
+
+def _lay_rug(bm, tracker, rm, rng, key, cx, cy, z_floor, w, l, yaw_max=0.12,
+             allow_overlap=True):
+    """Lay one rug with organic imperfection and zero clipping/flicker.
+
+    - Slight random yaw so rugs never sit perfectly square (``yaw_max`` rad).
+    - Rotated bbox is shrunk to fit inside the room so corners clear walls.
+    - Slides/shrinks clear of ``rm.stair_hole`` (there is no floor over it).
+    - Each rug in the room gets +6mm height stagger so layered rugs that
+      overlap never z-fight on the same plane.
+    - With ``allow_overlap=False`` (secondary/accent rugs) the rug is nudged
+      to a free spot when it would cover another rug, and skipped entirely
+      when the room has no free patch — one room never hoards stacked rugs
+      while others go bare.
+    Returns the placed rect or None when skipped.
+    """
+    yaw = rng.uniform(-yaw_max, yaw_max)
+    rx0, rx1, ry0, ry1 = tracker.rx0, tracker.rx1, tracker.ry0, tracker.ry1
+    ca, sa = abs(math.cos(yaw)), abs(math.sin(yaw))
+    ew, el = w * ca + l * sa, w * sa + l * ca
+    avail_w = max(0.6, rx1 - rx0)
+    avail_l = max(0.6, ry1 - ry0)
+    s = min(1.0, avail_w / max(ew, 1e-3), avail_l / max(el, 1e-3))
+    w, l = w * s, l * s
+    ew, el = ew * s, el * s
+
+    # Grown-to-fit minimum: tiny rugs read as misplaced bath mats in a room
+    # this size, so when there is space, expand toward a proper area rug
+    # (never past the free floor or the rotated bbox).
+    _min_w, _min_l = 2.00, 2.80
+    if avail_w >= _min_w + 0.30 and avail_l >= _min_l + 0.30:
+        grow = min((_min_w + 0.30) / max(w, 1e-3), (_min_l + 0.30) / max(l, 1e-3), 1.9)
+        if grow > 1.0:
+            w, l = w * grow, l * grow
+            ew = w * ca + l * sa
+            el = w * sa + l * ca
+            s2 = min(1.0, avail_w / max(ew, 1e-3), avail_l / max(el, 1e-3))
+            w, l = w * s2, l * s2
+            ew, el = ew * s2, el * s2
+
+    hole = getattr(rm, 'stair_hole', None)
+
+    def _hits_hole(px, py, pw, pl):
+        if hole is None:
+            return False
+        hx0, hx1 = hole[0] - 0.15, hole[1] + 0.15
+        hy0, hy1 = hole[2] - 0.15, hole[3] + 0.15
+        return not (px + pw * 0.5 < hx0 or px - pw * 0.5 > hx1 or
+                    py + pl * 0.5 < hy0 or py - pl * 0.5 > hy1)
+
+    def _overlap_frac(px, py, pw, pl):
+        worst = 0.0
+        for ox0, ox1, oy0, oy1 in getattr(tracker, 'rug_rects', []):
+            ix = min(px + pw * 0.5, ox1) - max(px - pw * 0.5, ox0)
+            iy = min(py + pl * 0.5, oy1) - max(py - pl * 0.5, oy0)
+            if ix > 0 and iy > 0:
+                worst = max(worst, (ix * iy) / max(pw * pl, 1e-3))
+        return worst
+
+    if _hits_hole(cx, cy, ew, el):
+        along_y = el >= ew
+        lo, hi = (ry0, ry1) if along_y else (rx0, rx1)
+        h0, h1 = (hole[2] - 0.15, hole[3] + 0.15) if along_y else (hole[0] - 0.15, hole[1] + 0.15)
+        segs = [(a, b) for a, b in ((lo, h0), (h1, hi)) if b - a >= 1.0]
+        if segs:
+            a, b = max(segs, key=lambda sg: sg[1] - sg[0])
+            if along_y:
+                l = min(l, b - a)
+                el = min(el, b - a)
+                cy = a + (b - a) * 0.5
+            else:
+                w = min(w, b - a)
+                ew = min(ew, b - a)
+                cx = a + (b - a) * 0.5
+
+    if ew < avail_w:
+        cx = min(max(cx, rx0 + ew * 0.5), rx1 - ew * 0.5)
+    else:
+        cx = (rx0 + rx1) * 0.5
+    if el < avail_l:
+        cy = min(max(cy, ry0 + el * 0.5), ry1 - el * 0.5)
+    else:
+        cy = (ry0 + ry1) * 0.5
+
+    if not allow_overlap and _overlap_frac(cx, cy, ew, el) > 0.03:
+        placed = False
+        for radius in (0.6, 1.2, 1.8, 2.4):
+            for k in range(8):
+                ang = k * math.pi / 4.0 + rng.uniform(-0.2, 0.2)
+                px = min(max(cx + radius * math.cos(ang), rx0 + ew * 0.5), rx1 - ew * 0.5)
+                py = min(max(cy + radius * math.sin(ang), ry0 + el * 0.5), ry1 - el * 0.5)
+                if _hits_hole(px, py, ew, el):
+                    continue
+                if _overlap_frac(px, py, ew, el) <= 0.03:
+                    cx, cy = px, py
+                    placed = True
+                    break
+            if placed:
+                break
+        if not placed:
+            return None
+
+    lift = 0.006 * getattr(tracker, 'rug_count', 0)
+    tracker.rug_count = getattr(tracker, 'rug_count', 0) + 1
+    rects = getattr(tracker, 'rug_rects', None)
+    if rects is None:
+        tracker.rug_rects = rects = []
+    rects.append((cx - ew * 0.5, cx + ew * 0.5, cy - el * 0.5, cy + el * 0.5))
+    build_prop(bm, key, cx, cy, z_floor + lift, yaw, width=w, length=l)
+    return (cx, cy, w, l)
+
+
+def _try_place_bunk(bm, tracker: RoomOccupancyTracker, z_floor: float,
+                    length: float = 2.0, width: float = 1.1,
+                    only_wall: Optional[str] = None) -> Optional[Tuple[float, float, float]]:
+    """Places a military bunk bed with headboard end against a wall.
+
+    The climbing ladder overhangs the +Y local side, so the reservation box
+    is deeper than the frame and the build is shifted toward the wall.
+    ``only_wall`` ('WEST'/'EAST'/'NORTH'/'SOUTH') restricts placement to a
+    single wall - used in narrow rooms so bunks line one side and leave a
+    clear walking aisle instead of blocking the doorway.
+    """
+    # The climbing ladder is mounted on the frame and overhangs the +Y local
+    # side by only ~0.3m, so the reservation box is just a little deeper than
+    # the frame - keeping it tight lets a row of bunks line one wall.
+    lad_extra = 0.35
+    box_w = width + lad_extra
+    shift = lad_extra * 0.5
+    rx0, rx1 = tracker.rx0, tracker.rx1
+    ry0, ry1 = tracker.ry0, tracker.ry1
+    rcx = (rx0 + rx1) * 0.5
+    rcy = (ry0 + ry1) * 0.5
+
+    def _wall_allowed(name):
+        return only_wall is None or only_wall == name
+
+    min_y = ry0 + box_w * 0.5 + 0.10
+    max_y = ry1 - box_w * 0.5 - 0.10
+    min_x = rx0 + box_w * 0.5 + 0.10
+    max_x = rx1 - box_w * 0.5 - 0.10
+
+    # 1. West wall (head at -X, ladder spilling +Y into the room)
+    if _wall_allowed('WEST'):
+        cx = rx0 + length * 0.5 + 0.03
+        for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
+            if tracker.is_free(cx - length * 0.5, cx + length * 0.5, cy - box_w * 0.5, cy + box_w * 0.5):
+                tracker.occupy(cx - length * 0.5, cx + length * 0.5, cy - box_w * 0.5, cy + box_w * 0.5)
+                build_prop(bm, 'BUNK_BED', cx, cy - shift, z_floor, 0.0, length=length, width=width)
+                return (cx, cy - shift, 0.0)
+
+    # 2. East wall (head at +X, ladder spilling -Y into the room)
+    if _wall_allowed('EAST'):
+        cx = rx1 - length * 0.5 - 0.03
+        for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
+            if tracker.is_free(cx - length * 0.5, cx + length * 0.5, cy - box_w * 0.5, cy + box_w * 0.5):
+                tracker.occupy(cx - length * 0.5, cx + length * 0.5, cy - box_w * 0.5, cy + box_w * 0.5)
+                build_prop(bm, 'BUNK_BED', cx, cy + shift, z_floor, math.pi, length=length, width=width)
+                return (cx, cy + shift, math.pi)
+
+    # 3. North wall (head at +Y, ladder spilling +X into the room)
+    if _wall_allowed('NORTH'):
+        cy = ry1 - length * 0.5 - 0.03
+        for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
+            if tracker.is_free(cx - box_w * 0.5, cx + box_w * 0.5, cy - length * 0.5, cy + length * 0.5):
+                tracker.occupy(cx - box_w * 0.5, cx + box_w * 0.5, cy - length * 0.5, cy + length * 0.5)
+                build_prop(bm, 'BUNK_BED', cx - shift, cy, z_floor, -math.pi / 2, length=length, width=width)
+                return (cx - shift, cy, -math.pi / 2)
+
+    # 4. South wall (head at -Y)
+    if _wall_allowed('SOUTH'):
+        cy = ry0 + length * 0.5 + 0.03
+        for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
+            if tracker.is_free(cx - box_w * 0.5, cx + box_w * 0.5, cy - length * 0.5, cy + length * 0.5):
+                tracker.occupy(cx - box_w * 0.5, cx + box_w * 0.5, cy - length * 0.5, cy + length * 0.5)
+                build_prop(bm, 'BUNK_BED', cx + shift, cy, z_floor, math.pi / 2, length=length, width=width)
+                return (cx + shift, cy, math.pi / 2)
+
+    return None
+
+
 def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                      rng, density: float, is_master: bool = False):
     """Furnishes a comfortable bedroom with bed, wardrobe, chest, stool, and lantern."""
@@ -384,12 +575,35 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     _try_place_wall_prop(bm, 'WARDROBE', 1.20, 0.60, tracker, z_floor,
                          candidate_walls=('EAST', 'NORTH', 'SOUTH', 'WEST'))
 
-    # 4. Cozy floor area rug
+    # 4. Cozy floor area rug (oversized to cover most of the room floor)
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rug_choice = rng.choice(['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST'])
-    rug_w, rug_l = (min(1.50, rw - 0.5), min(2.20, rd - 0.5)) if is_master else (min(1.20, rw - 0.4), min(1.80, rd - 0.4))
-    build_prop(bm, rug_choice, rcx, rcy, z_floor, 0.0, width=max(0.8, rug_w), length=max(1.2, rug_l))
+    if is_master:
+        rug_w, rug_l = _area_rug_size(rw, rd, coverage=0.84, max_w=4.60, max_l=5.80,
+                                      min_w=2.40, min_l=3.00)
+    else:
+        rug_w, rug_l = _area_rug_size(rw, rd, coverage=0.80, max_w=3.80, max_l=4.80,
+                                      min_w=2.00, min_l=2.60)
+    _lay_rug(bm, tracker, rm, rng, rug_choice, rcx, rcy, z_floor, rug_w, rug_l)
+
+    # 4b. Layered bedside + dressing runner rugs in any reasonably sized bedroom
+    if (rw >= 3.4 or rd >= 3.4) and density >= 0.4:
+        sub_rug = 'RUG_SAPPHIRE' if rug_choice != 'RUG_SAPPHIRE' else 'RUG_FOREST'
+        run_w = min(1.60, max(1.00, rw * 0.38))
+        run_l = min(3.40, max(2.00, rd * 0.50))
+        off_y = rcy - min(rd * 0.28, 1.4)
+        _lay_rug(bm, tracker, rm, rng, sub_rug, rcx, off_y, z_floor, run_w, run_l,
+                 allow_overlap=False)
+    # 4c. Third accent rug at the foot of the bed in large masters
+    if is_master and rw >= 4.6 and rd >= 4.6 and density >= 0.6:
+        accent = 'RUG_FOREST' if rug_choice == 'RUG_CRIMSON' else 'RUG_CRIMSON'
+        acc_w, acc_l = _area_rug_size(rw, rd, coverage=0.45, max_w=2.60, max_l=3.00,
+                                      min_w=1.40, min_l=1.80)
+        _lay_rug(bm, tracker, rm, rng, accent, rcx, rcy + rd * 0.22, z_floor, acc_w, acc_l,
+                 allow_overlap=False)
 
     # 5. Optional desk or shelf if room is roomy
     if (rw >= 3.6 or rd >= 3.6) and density >= 0.6:
@@ -452,7 +666,21 @@ def _furnish_study_library(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
     _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
                          candidate_walls=('WEST', 'SOUTH', 'EAST'))
 
-    # Ceiling lantern
+    # 6. Scholar's cozy study rug framing desk and reading zone (oversized)
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    rug_w, rug_l = _area_rug_size(rw, rd, coverage=0.82, max_w=4.00, max_l=5.00,
+                                  min_w=2.20, min_l=2.80)
+    _lay_rug(bm, tracker, rm, rng, 'RUG_FOREST', rcx, rcy, z_floor, rug_w, rug_l)
+
+    # 6b. Layered reading-nook runner in roomy studies
+    if (rw >= 3.6 or rd >= 3.6) and density >= 0.4:
+        run_w = min(1.60, max(1.00, rw * 0.36))
+        run_l = min(3.20, max(1.80, rd * 0.46))
+        _lay_rug(bm, tracker, rm, rng, 'RUG_SAPPHIRE', rcx, rcy - rd * 0.22, z_floor,
+                 run_w, run_l, allow_overlap=False)
+
+    # 7. Ceiling lantern
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
@@ -507,7 +735,8 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
             # Tableware scatter on counter
             build_prop(bm, 'SCATTER_TABLEWARE', cx + tang_dx * 0.4, cy + tang_dy * 0.4, z_floor + 1.02, yaw)
             # Runner rug in front of counter
-            build_prop(bm, 'RUG_CRIMSON', cx + front_dx * 0.75, cy + front_dy * 0.75, z_floor, yaw, width=0.80, length=counter_len + 0.2)
+            _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', cx + front_dx * 0.75, cy + front_dy * 0.75,
+                     z_floor, 0.80, counter_len + 0.2, yaw_max=0.08)
             break
 
     # 2. Hearth fireplace directly attached to chimney flue or on clear wall
@@ -555,10 +784,26 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
                     build_prop(bm, 'BARREL', cx, cy, z_floor, 0.0)
                     break
 
-    # 5. Taproom woven rug framed with dining lounge area
+    # 5. Taproom woven rugs framed with dining lounge area (oversized)
     rug_choice = rng.choice(['RUG_SAPPHIRE', 'RUG_FOREST', 'RUG_CRIMSON'])
     rug_x, rug_y = first_table_pos if first_table_pos else (rcx, rcy + 0.20)
-    build_prop(bm, rug_choice, rug_x, rug_y, z_floor, 0.0, width=min(2.0, rw * 0.45), length=min(2.6, rd * 0.50))
+    rug_w, rug_l = _area_rug_size(rw, rd, coverage=0.82, max_w=5.40, max_l=6.60,
+                                  min_w=3.00, min_l=3.60)
+    _lay_rug(bm, tracker, rm, rng, rug_choice, rug_x, rug_y, z_floor, rug_w, rug_l)
+
+    # 5b. Secondary + tertiary seating rugs in roomy taprooms
+    if (rw >= 5.0 or rd >= 5.0) and density >= 0.4:
+        sub_rug = 'RUG_CRIMSON' if rug_choice != 'RUG_CRIMSON' else 'RUG_SAPPHIRE'
+        s_rx = rcx - rw * 0.22 if rug_x >= rcx else rcx + rw * 0.22
+        s_ry = rcy - rd * 0.18
+        s_w, s_l = _area_rug_size(rw, rd, coverage=0.48, max_w=3.60, max_l=4.60,
+                                  min_w=1.80, min_l=2.20)
+        _lay_rug(bm, tracker, rm, rng, sub_rug, s_rx, s_ry, z_floor, s_w, s_l,
+                 allow_overlap=False)
+    if rw >= 6.5 and rd >= 6.0 and density >= 0.6:
+        third = 'RUG_FOREST' if rug_choice != 'RUG_FOREST' else 'RUG_SAPPHIRE'
+        _lay_rug(bm, tracker, rm, rng, third, rcx, rcy + rd * 0.26, z_floor,
+                 min(2.60, rw * 0.40), min(3.20, rd * 0.40), allow_overlap=False)
 
     # 6. Hanging Chandelier at room center
     build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.46)
@@ -598,7 +843,23 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                 prop = 'BARREL' if rng.random() < 0.5 else 'CRATE'
                 build_prop(bm, prop, cx, cy, z_floor, 0.0)
 
-    # 5. Ceiling light
+    # 5. Kitchen hearth / prep floor rugs (oversized + layered)
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    k_rug_choice = rng.choice(['RUG_FOREST', 'RUG_CRIMSON'])
+    k_rug_w, k_rug_l = _area_rug_size(rw, rd, coverage=0.78, max_w=3.40, max_l=4.40,
+                                      min_w=1.60, min_l=2.20)
+    _lay_rug(bm, tracker, rm, rng, k_rug_choice, rcx, rcy, z_floor, k_rug_w, k_rug_l)
+
+    # 5b. Secondary hearth-side runner so kitchens get two rugs
+    if (rw >= 3.0 or rd >= 3.0) and density >= 0.4:
+        sub = 'RUG_CRIMSON' if k_rug_choice != 'RUG_CRIMSON' else 'RUG_SAPPHIRE'
+        run_w = min(1.50, max(0.90, rw * 0.36))
+        run_l = min(3.00, max(1.60, rd * 0.48))
+        _lay_rug(bm, tracker, rm, rng, sub, rcx, rm.bounds[2] + run_l * 0.5 + 0.20, z_floor,
+                 run_w, run_l, allow_overlap=False)
+
+    # 6. Ceiling light
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
@@ -635,8 +896,140 @@ def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
                          candidate_walls=('WEST', 'SOUTH', 'EAST'))
 
-    # 5. Hanging Chandelier
+    # 4b. Second seating cluster in grand halls so big floors never read as
+    # one lonely table (round table + 3 stools opposite the main table).
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    if rw * rd >= 30.0 and density >= 0.5:
+        for sx, sy in [(rcx - rw * 0.22, rcy + rd * 0.18),
+                       (rcx + rw * 0.22, rcy + rd * 0.18)]:
+            if tracker.is_free(sx - 0.95, sx + 0.95, sy - 0.95, sy + 0.95):
+                tracker.occupy(sx - 0.95, sx + 0.95, sy - 0.95, sy + 0.95)
+                build_prop(bm, 'ROUND_TABLE', sx, sy, z_floor, 0.0, radius=0.55)
+                build_prop(bm, 'SCATTER_TABLEWARE', sx, sy, z_floor + 0.76, 0.0)
+                for ci in range(3):
+                    ca = ci * (math.pi * 2.0 / 3.0) + 0.5
+                    chx = sx + 0.78 * math.cos(ca)
+                    chy = sy + 0.78 * math.sin(ca)
+                    if tracker.rx0 <= chx <= tracker.rx1 and tracker.ry0 <= chy <= tracker.ry1:
+                        build_prop(bm, 'CHAIR', chx, chy, z_floor, ca - math.pi * 0.5, seat_h=0.48)
+                break
+
+    # 5. Grand central living & dining area rugs (oversized + layered)
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    rug_choice = rng.choice(['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST'])
+    rug_w, rug_l = _area_rug_size(rw, rd, coverage=0.84, max_w=5.20, max_l=6.40,
+                                  min_w=2.80, min_l=3.40)
+    _lay_rug(bm, tracker, rm, rng, rug_choice, rcx, rcy, z_floor, rug_w, rug_l)
+
+    # 5b. Secondary hearth / entry runner rug (now in most halls, not just huge ones)
+    if (rw >= 4.0 or rd >= 4.0) and density >= 0.4:
+        sub_choice = 'RUG_SAPPHIRE' if rug_choice != 'RUG_SAPPHIRE' else 'RUG_CRIMSON'
+        run_w = min(1.80, max(1.10, rw * 0.36))
+        run_l = min(3.80, max(2.20, rd * 0.46))
+        run_y = rm.bounds[2] + 0.85
+        _lay_rug(bm, tracker, rm, rng, sub_choice, rcx, run_y, z_floor, run_w, run_l,
+                 allow_overlap=False)
+
+    # 6. Hanging Chandelier
     build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.42)
+
+
+def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                        rng, density: float, chimney_pos: Optional[Tuple[float, float]] = None):
+    """Furnishes a civic Great Hall / Council Chamber with council table, magistrate chairs, and banners."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+
+    # 1. Warm stone hearth if chimney exists
+    _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+
+    # 2. Grand Council Table with Magistrate Chairs
+    tw = min(3.0, max(1.80, rw * 0.45))
+    td = 1.05
+    if tracker.is_free(rcx - tw * 0.5 - 0.40, rcx + tw * 0.5 + 0.40, rcy - td * 0.5 - 0.40, rcy + td * 0.5 + 0.40):
+        tracker.occupy(rcx - tw * 0.5 - 0.40, rcx + tw * 0.5 + 0.40, rcy - td * 0.5 - 0.40, rcy + td * 0.5 + 0.40)
+        build_prop(bm, 'INDOOR_TABLE', rcx, rcy, z_floor, 0.0, length=tw, width=td)
+        n_chairs = max(2, int(tw / 0.85))
+        chair_step = tw / n_chairs
+        for ci in range(n_chairs):
+            chx = rcx - tw * 0.5 + (ci + 0.5) * chair_step
+            build_prop(bm, 'CHAIR', chx, rcy - (td * 0.5 + 0.32), z_floor, math.pi, seat_h=0.50)
+            build_prop(bm, 'CHAIR', chx, rcy + (td * 0.5 + 0.32), z_floor, 0.0, seat_h=0.50)
+        build_prop(bm, 'CHAIR', rcx - (tw * 0.5 + 0.38), rcy, z_floor, math.pi * 0.5, seat_h=0.54)
+
+    # 3. Perimeter benches along walls
+    _try_place_wall_prop(bm, 'BENCH', 1.60, 0.45, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'), length=1.60)
+
+    # 4. Storage chests for civic records
+    _try_place_wall_prop(bm, 'CHEST', 1.00, 0.55, tracker, z_floor,
+                         candidate_walls=('WEST', 'EAST', 'SOUTH'))
+
+    # 5. Grand ceremonial royal aisle carpet runner down the center of the hall
+    runner_w = min(3.40, max(2.20, rw * 0.48))
+    runner_l = min(12.00, max(5.20, rd * 0.86))
+    runner_w = min(runner_w, max(1.4, rw - 0.40))
+    runner_l = min(runner_l, max(2.5, rd - 0.40))
+    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor, runner_w, runner_l,
+             yaw_max=0.06)
+
+    # 5b. Flanking council chamber carpets (now in most halls, not just very wide ones)
+    if rw >= 5.5 and density >= 0.4:
+        side_w = min(2.80, max(1.60, rw * 0.30))
+        side_l = min(6.50, max(3.40, rd * 0.62))
+        for sgn in (-1.0, 1.0):
+            fx = rcx + sgn * (rw * 0.28)
+            _lay_rug(bm, tracker, rm, rng, 'RUG_SAPPHIRE', fx, rcy, z_floor, side_w, side_l,
+                     yaw_max=0.06, allow_overlap=False)
+
+    # 6. Grand Chandelier
+    build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.52)
+
+
+def _furnish_office(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                    rng, density: float):
+    """Furnishes an administrative office (Mayor's Office / Clerk Study) with desk, bookcases, and records."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+
+    # 1. Executive Desk placed facing into the room
+    desk_w, desk_d = 1.55, 0.80
+    _try_place_wall_prop(bm, 'DESK', desk_w, desk_d, tracker, z_floor,
+                         candidate_walls=('NORTH', 'WEST', 'EAST'))
+
+    # 2. Tall Bookshelves / Archive cupboards
+    _try_place_wall_prop(bm, 'BOOKSHELF', 1.30, 0.42, tracker, z_floor,
+                         candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'))
+
+    # 3. File / Record Chest
+    _try_place_wall_prop(bm, 'CHEST', 0.95, 0.50, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'WEST', 'EAST'))
+
+    # 4. Small visitor table or bench if room allows
+    if rw >= 3.6 and rd >= 3.6:
+        _try_place_wall_prop(bm, 'BENCH', 1.20, 0.42, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'EAST', 'WEST'), length=1.20)
+
+    # 5. Executive ornate office area rugs (oversized + layered)
+    rug_choice = rng.choice(['RUG_SAPPHIRE', 'RUG_CRIMSON'])
+    rug_w, rug_l = _area_rug_size(rw, rd, coverage=0.82, max_w=4.20, max_l=5.20,
+                                  min_w=2.40, min_l=2.80)
+    _lay_rug(bm, tracker, rm, rng, rug_choice, rcx, rcy, z_floor, rug_w, rug_l)
+
+    # 5b. Visitor-side runner so offices get two rugs
+    if (rw >= 3.4 or rd >= 3.4) and density >= 0.4:
+        sub = 'RUG_FOREST' if rug_choice != 'RUG_FOREST' else 'RUG_CRIMSON'
+        _lay_rug(bm, tracker, rm, rng, sub, rcx, rm.bounds[2] + rd * 0.20, z_floor,
+                 min(1.60, rw * 0.40), min(3.00, rd * 0.46), allow_overlap=False)
+
+    # 6. Ceiling light
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
 def _furnish_workshop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -665,29 +1058,56 @@ def _furnish_workshop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
     _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
                          candidate_walls=('SOUTH', 'WEST', 'EAST'))
 
+    # 5. Worn work-floor rug under the bench zone
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    _lay_rug(bm, tracker, rm, rng, 'RUG_FOREST', rcx, rcy, z_floor,
+             min(2.40, rw * 0.55), min(3.20, rd * 0.55), yaw_max=0.10)
+
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
 def _furnish_chapel(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                     rng, density: float):
-    """Furnishes a chapel hall with altar counter and seating benches."""
+    """Furnishes a chapel hall laid out right-to-left: altar counter on the
+    EAST wall, congregation benches facing east, and the ceremonial aisle
+    runner leading along X up to the altar."""
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
 
-    # 1. Altar Counter along North wall
-    _try_place_wall_prop(bm, 'COUNTER', 1.80, 0.60, tracker, z_floor,
-                         candidate_walls=('NORTH',), length=1.80)
+    # 1. Altar Counter along the East wall (falls back to West)
+    placed_altar = _try_place_wall_prop(bm, 'COUNTER', 1.80, 0.60, tracker, z_floor,
+                                        candidate_walls=('EAST',), length=1.80)
+    if not placed_altar:
+        _try_place_wall_prop(bm, 'COUNTER', 1.80, 0.60, tracker, z_floor,
+                             candidate_walls=('WEST',), length=1.80)
 
-    # 2. Rows of Benches
-    for by in [rcy + 0.3, rcy - 0.7]:
+    # 2. Columns of benches west of the aisle facing east (+X, backrest west).
+    for bx in [rcx - rw * 0.05, rcx - rw * 0.30]:
         for sgn in (-1.0, 1.0):
-            bx = rcx + sgn * (rw * 0.28)
-            blen = min(1.8, rw * 0.35)
-            if tracker.is_free(bx - blen * 0.5, bx + blen * 0.5, by - 0.25, by + 0.25):
-                tracker.occupy(bx - blen * 0.5, bx + blen * 0.5, by - 0.25, by + 0.25)
-                build_prop(bm, 'BENCH', bx, by, z_floor, 0.0, length=blen)
+            blen = min(2.2, rd * 0.36)
+            by = rcy + sgn * (blen * 0.5 + 0.35)
+            if tracker.is_free(bx - 0.25, bx + 0.25, by - blen * 0.5, by + blen * 0.5):
+                tracker.occupy(bx - 0.25, bx + 0.25, by - blen * 0.5, by + blen * 0.5)
+                build_prop(bm, 'BENCH', bx, by, z_floor, math.pi / 2, length=blen)
+
+    # 2b. Ceremonial aisle runner leading along X up to the altar
+    runner_l = min(12.00, max(4.60, rw * 0.86))
+    runner_w = min(2.80, max(1.70, rd * 0.42))
+    runner_l = min(runner_l, max(2.2, rw - 0.35))
+    runner_w = min(runner_w, max(1.2, rd - 0.35))
+    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor, runner_w, runner_l,
+             yaw_max=0.06)
+
+    # 2c. Side chapel rugs flanking the aisle to the north and south
+    if rd >= 4.5 and density >= 0.4:
+        side_l = min(2.20, max(1.30, rd * 0.28))
+        side_w = min(5.00, max(2.60, rw * 0.55))
+        for sgn in (-1.0, 1.0):
+            _lay_rug(bm, tracker, rm, rng, 'RUG_SAPPHIRE', rcx, rcy + sgn * rd * 0.27, z_floor,
+                     side_w, side_l, yaw_max=0.06, allow_overlap=False)
 
     # 3. Chandelier
     build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.48)
@@ -723,13 +1143,40 @@ def _furnish_corridor(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
 
-    # 1. Hallway runner rug
+    # 1. Hallway runner rugs (kept off the stair opening, staggered, slight yaw)
     rug_choice = rng.choice(['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST'])
-    rug_w = min(1.20, max(0.8, rw * 0.5))
-    rug_l = min(2.40, max(1.2, rd * 0.7))
-    if tracker.is_free(rcx - rug_w * 0.5, rcx + rug_w * 0.5, rcy - rug_l * 0.5, rcy + rug_l * 0.5):
-        tracker.occupy(rcx - rug_w * 0.5, rcx + rug_w * 0.5, rcy - rug_l * 0.5, rcy + rug_l * 0.5)
-        build_prop(bm, rug_choice, rcx, rcy, z_floor, 0.0, width=rug_w, length=rug_l)
+    is_vertical = rd >= rw
+    if is_vertical:
+        rug_w = min(2.40, max(1.20, rw * 0.75))
+        rug_w = min(rug_w, max(0.9, rw - 0.25))
+        if rd >= 5.5:
+            # Place multiple runner rugs along the long corridor
+            half_l = min(4.50, max(2.20, rd * 0.38))
+            _lay_rug(bm, tracker, rm, rng, rug_choice, rcx, rcy - rd * 0.22, z_floor,
+                     rug_w, half_l, yaw_max=0.05)
+            sub_choice = 'RUG_CRIMSON' if rug_choice != 'RUG_CRIMSON' else 'RUG_SAPPHIRE'
+            _lay_rug(bm, tracker, rm, rng, sub_choice, rcx, rcy + rd * 0.22, z_floor,
+                     rug_w, half_l, yaw_max=0.05, allow_overlap=False)
+        else:
+            rug_l = min(8.00, max(2.60, rd * 0.80))
+            rug_l = min(rug_l, max(1.4, rd - 0.30))
+            _lay_rug(bm, tracker, rm, rng, rug_choice, rcx, rcy, z_floor, rug_w, rug_l,
+                     yaw_max=0.05)
+    else:
+        rug_l = min(2.40, max(1.20, rd * 0.75))
+        rug_l = min(rug_l, max(0.9, rd - 0.25))
+        if rw >= 5.5:
+            half_w = min(4.50, max(2.20, rw * 0.38))
+            _lay_rug(bm, tracker, rm, rng, rug_choice, rcx - rw * 0.22, rcy, z_floor,
+                     half_w, rug_l, yaw_max=0.05)
+            sub_choice = 'RUG_CRIMSON' if rug_choice != 'RUG_CRIMSON' else 'RUG_SAPPHIRE'
+            _lay_rug(bm, tracker, rm, rng, sub_choice, rcx + rw * 0.22, rcy, z_floor,
+                     half_w, rug_l, yaw_max=0.05, allow_overlap=False)
+        else:
+            rug_w = min(8.00, max(2.60, rw * 0.80))
+            rug_w = min(rug_w, max(1.4, rw - 0.30))
+            _lay_rug(bm, tracker, rm, rng, rug_choice, rcx, rcy, z_floor, rug_w, rug_l,
+                     yaw_max=0.05)
 
     # 2. Bench or chest along clear wall
     _try_place_wall_prop(bm, 'BENCH', 1.40, 0.45, tracker, z_floor,
@@ -741,22 +1188,47 @@ def _furnish_corridor(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
 
 def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                            rng, density: float):
-    """Furnishes a military dormitory with sturdy soldier beds, footlockers, and a weapon rack."""
+    """Furnishes a military dormitory: stacked bunk beds with footlockers,
+    a weapon rack, and a single austere runner rug. No double beds."""
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
 
-    # 1. Beds placed along walls with foot chests
-    num_beds = max(2, min(4, int(rw * rd / 8.0)))
-    for _ in range(num_beds):
-        binfo = _try_place_bed(bm, tracker, z_floor, length=1.95, width=1.05)
-        if binfo is not None:
+    # 1. Bunk beds along walls (each sleeps two) with footlocker chests.
+    # Narrow dorms line their LONG wall only so a clear walking aisle stays
+    # open through the room (and the doorway is never blocked). Bigger dorms
+    # keep filling along that wall so large empty stretches get extra berths.
+    narrow = min(rw, rd) < 4.2
+    if narrow:
+        only_wall = 'WEST' if rw <= rd else 'SOUTH'
+    else:
+        only_wall = None
+    num_bunks = max(1, min(5, int(rw * rd / 8.0)))
+    for _ in range(num_bunks):
+        binfo = _try_place_bunk(bm, tracker, z_floor, length=2.0, width=1.1,
+                                only_wall=only_wall)
+        if binfo is None:
+            continue
+        bcx, bcy, bang = binfo
+        fwd_x = math.cos(bang)
+        fwd_y = math.sin(bang)
+        fcx = bcx + fwd_x * 1.45
+        fcy = bcy + fwd_y * 1.45
+        if tracker.is_free(fcx - 0.4, fcx + 0.4, fcy - 0.4, fcy + 0.4):
+            tracker.occupy(fcx - 0.4, fcx + 0.4, fcy - 0.4, fcy + 0.4)
+            build_prop(bm, 'CHEST', fcx, fcy, z_floor, bang + math.pi / 2, width=0.8)
+
+    # 1b. In a roomy dorm with wall space left, keep placing bunks (a second
+    # rank on the facing wall) so the floor is not one big empty area.
+    if not narrow and (rw * rd) >= 26.0:
+        for _ in range(2):
+            binfo = _try_place_bunk(bm, tracker, z_floor, length=2.0, width=1.1)
+            if binfo is None:
+                break
             bcx, bcy, bang = binfo
-            fwd_x = math.cos(bang)
-            fwd_y = math.sin(bang)
-            fcx = bcx + fwd_x * 1.35
-            fcy = bcy + fwd_y * 1.35
+            fcx = bcx + math.cos(bang) * 1.45
+            fcy = bcy + math.sin(bang) * 1.45
             if tracker.is_free(fcx - 0.4, fcx + 0.4, fcy - 0.4, fcy + 0.4):
                 tracker.occupy(fcx - 0.4, fcx + 0.4, fcy - 0.4, fcy + 0.4)
                 build_prop(bm, 'CHEST', fcx, fcy, z_floor, bang + math.pi / 2, width=0.8)
@@ -765,7 +1237,129 @@ def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
     _try_place_wall_prop(bm, 'WEAPON_RACK', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('NORTH', 'WEST', 'EAST', 'SOUTH'))
 
-    # 3. Ceiling lantern
+    # 3. Single austere dorm runner rug along the walking aisle (kept clear of
+    # walls/other rugs; skipped entirely if the dorm is too tight).
+    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor,
+             min(1.60, rw * 0.40), min(3.20, rd * 0.55), yaw_max=0.06,
+             allow_overlap=False)
+
+    # 4. Ceiling lantern
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _furnish_mess_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                       rng, density: float):
+    """Furnishes a military mess / refectory: long communal tables with bench
+    seating both sides, tableware, a supply barrel and one runner rug."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+
+    # 1. Big central refectory table with chairs around it (plus a second
+    # table with benches in wide halls).
+    table_spots = [(rcx, rcy, True)]
+    if rw >= 5.0:
+        table_spots.append((rcx + rw * 0.24 if rw >= 6.5 else rcx - rw * 0.24, rcy, False))
+    for tx, ty, is_main in table_spots:
+        if is_main:
+            tw, td = 2.60, 1.15
+            need = 0.55
+        else:
+            tw, td = 2.00, 1.00
+            need = 0.55
+        if not tracker.is_free(tx - tw * 0.5 - 0.30, tx + tw * 0.5 + 0.30,
+                               ty - td * 0.5 - need, ty + td * 0.5 + need):
+            continue
+        tracker.occupy(tx - tw * 0.5 - 0.30, tx + tw * 0.5 + 0.30,
+                       ty - td * 0.5 - need, ty + td * 0.5 + need)
+        build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, 0.0, length=tw, width=td)
+        build_prop(bm, 'SCATTER_TABLEWARE', tx - 0.45, ty, z_floor + 0.76, 0.0)
+        build_prop(bm, 'SCATTER_TABLEWARE', tx + 0.45, ty, z_floor + 0.76, 0.0)
+        if is_main:
+            # Chairs all around the big table, facing inward.
+            for ci in range(6):
+                ca = ci * (math.pi * 2.0 / 6.0)
+                chx = tx + (tw * 0.5 + 0.32) * math.cos(ca)
+                chy = ty + (td * 0.5 + 0.32) * math.sin(ca)
+                if tracker.rx0 <= chx <= tracker.rx1 and tracker.ry0 <= chy <= tracker.ry1:
+                    build_prop(bm, 'CHAIR', chx, chy, z_floor, ca - math.pi * 0.5, seat_h=0.48)
+        else:
+            for sgn in (-1.0, 1.0):
+                bx, by = tx, ty + sgn * (td * 0.5 + 0.32)
+                if tracker.rx0 <= bx - tw * 0.45 and bx + tw * 0.45 <= tracker.rx1:
+                    build_prop(bm, 'BENCH', bx, by, z_floor, 0.0, length=min(tw - 0.2, 2.0))
+
+    # 2. Supply barrel in a free corner
+    for cx in (rm.bounds[0] + 0.45, rm.bounds[1] - 0.45):
+        for cy in (rm.bounds[2] + 0.45, rm.bounds[3] - 0.45):
+            if tracker.is_free(cx - 0.3, cx + 0.3, cy - 0.3, cy + 0.3):
+                tracker.occupy(cx - 0.3, cx + 0.3, cy - 0.3, cy + 0.3)
+                build_prop(bm, 'BARREL', cx, cy, z_floor, 0.0)
+                break
+
+    # 3. Big rug under the tables plus a runner down the serving aisle
+    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor,
+             min(4.20, rw * 0.70), min(4.60, rd * 0.70), yaw_max=0.08)
+    _lay_rug(bm, tracker, rm, rng, 'RUG_FOREST', rcx, rm.bounds[2] + rd * 0.18, z_floor,
+             min(1.60, rw * 0.35), min(3.60, rd * 0.50), yaw_max=0.06,
+             allow_overlap=False)
+
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _furnish_archery_range(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                           rng, density: float, role: str = 'RANGE'):
+    """Purpose-fit archery interiors. RANGE: butt at the far end with a clear
+    shooting lane, rack and marker. FLETCHER_WORKSHOP: workbench, arrow
+    barrels, shelf and bow rack."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+
+    if role == 'FLETCHER_WORKSHOP':
+        # Workbench along a wall with stool, arrow-shaft barrels, shelf, rack
+        if _try_place_wall_prop(bm, 'DESK', 1.60, 0.68, tracker, z_floor,
+                                candidate_walls=('NORTH', 'WEST', 'EAST')):
+            pass
+        _try_place_wall_prop(bm, 'STOOL', 0.45, 0.45, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'EAST', 'WEST'))
+        for cx in (rm.bounds[0] + 0.40, rm.bounds[1] - 0.40):
+            for cy in (rm.bounds[2] + 0.40, rm.bounds[3] - 0.40):
+                if tracker.is_free(cx - 0.28, cx + 0.28, cy - 0.28, cy + 0.28):
+                    tracker.occupy(cx - 0.28, cx + 0.28, cy - 0.28, cy + 0.28)
+                    build_prop(bm, 'BARREL', cx, cy, z_floor, 0.0)
+                    break
+        _try_place_wall_prop(bm, 'SHELF', 1.30, 0.40, tracker, z_floor,
+                             candidate_walls=('EAST', 'WEST', 'SOUTH'))
+        _try_place_wall_prop(bm, 'WEAPON_RACK', 1.40, 0.40, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'EAST', 'WEST'))
+        rw = rm.bounds[1] - rm.bounds[0]
+        rd = rm.bounds[3] - rm.bounds[2]
+        _lay_rug(bm, tracker, rm, rng, 'RUG_FOREST', rcx, rcy, z_floor,
+                 min(2.20, rw * 0.50), min(3.00, rd * 0.50), yaw_max=0.10)
+        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+        return
+
+    # RANGE: straw butt against the far (north) wall facing down the lane.
+    # Keep the whole lane (butt + arrow flight + shooting line) walkway-clear.
+    lane_x = rcx
+    butt_y = rm.bounds[3] - 0.95
+    if tracker.is_free(lane_x - 0.55, lane_x + 0.55, butt_y - 0.60, butt_y + 0.60):
+        tracker.occupy(lane_x - 0.70, lane_x + 0.70, rm.bounds[2], rm.bounds[3] - 0.30)
+        build_prop(bm, 'ARCHERY_TARGET', lane_x, butt_y, z_floor, 0.0)
+        # Shooting-line marker rug at the near end of the lane
+        _lay_rug(bm, tracker, rm, rng, 'RUG_FOREST', lane_x, rm.bounds[2] + 1.05, z_floor,
+                 1.30, 1.30, yaw_max=0.05)
+    _try_place_wall_prop(bm, 'WEAPON_RACK', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'EAST', 'WEST'))
+    for cx in (rm.bounds[0] + 0.40, rm.bounds[1] - 0.40):
+        for cy in (rm.bounds[2] + 0.40, rm.bounds[3] - 0.40):
+            if tracker.is_free(cx - 0.28, cx + 0.28, cy - 0.28, cy + 0.28):
+                tracker.occupy(cx - 0.28, cx + 0.28, cy - 0.28, cy + 0.28)
+                build_prop(bm, 'BARREL', cx, cy, z_floor, 0.0)
+                break
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
@@ -785,13 +1379,18 @@ def _furnish_armory(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
     _try_place_wall_prop(bm, 'CHEST', 1.00, 0.55, tracker, z_floor,
                          candidate_walls=('SOUTH', 'WEST', 'EAST'))
 
-    # 3. Training dummy or target in free area
-    for dx, dy in [(0.8, 0.0), (-0.8, 0.0), (0.0, 0.8)]:
-        tx, ty = rcx + dx, rcy + dy
-        if tracker.is_free(tx - 0.4, tx + 0.4, ty - 0.4, ty + 0.4):
-            tracker.occupy(tx - 0.4, tx + 0.4, ty - 0.4, ty + 0.4)
-            build_prop(bm, 'TRAINING_DUMMY', tx, ty, z_floor, 0.0)
+    # 3. Training pell pushed into a corner, clear of the drill floor and
+    # doorways (never standing in the middle of the room).
+    _pell_placed = False
+    for _px in (rm.bounds[0] + 0.60, rm.bounds[1] - 0.60):
+        if _pell_placed:
             break
+        for _py in (rm.bounds[2] + 0.60, rm.bounds[3] - 0.60):
+            if tracker.is_free(_px - 0.40, _px + 0.40, _py - 0.40, _py + 0.40):
+                tracker.occupy(_px - 0.40, _px + 0.40, _py - 0.40, _py + 0.40)
+                build_prop(bm, 'TRAINING_DUMMY', _px, _py, z_floor, 0.0)
+                _pell_placed = True
+                break
 
     # 4. Storage crates and barrels
     for cx in (rm.bounds[0] + 0.45, rm.bounds[1] - 0.45):
@@ -799,6 +1398,12 @@ def _furnish_armory(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
             if tracker.is_free(cx - 0.3, cx + 0.3, cy - 0.3, cy + 0.3):
                 tracker.occupy(cx - 0.3, cx + 0.3, cy - 0.3, cy + 0.3)
                 build_prop(bm, 'CRATE', cx, cy, z_floor, 0.0)
+
+    # 5. Single austere drill-hall runner rug
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor,
+             min(1.70, rw * 0.38), min(3.40, rd * 0.52), yaw_max=0.06)
 
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
@@ -809,6 +1414,7 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
 
     # 1. Storefront counter
     counter_len = min(2.0, rw * 0.45)
@@ -829,11 +1435,13 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
                 prop = 'CRATE' if rng.random() < 0.6 else 'BARREL'
                 build_prop(bm, prop, cx, cy, z_floor, 0.0)
 
-    # 4. Area rug in customer browse zone
+    # 4. Area rug in customer browse zone (generous scale)
     rug_choice = rng.choice(['RUG_SAPPHIRE', 'RUG_FOREST'])
-    if tracker.is_free(rcx - 0.7, rcx + 0.7, rcy - 1.0, rcy + 1.0):
-        tracker.occupy(rcx - 0.7, rcx + 0.7, rcy - 1.0, rcy + 1.0)
-        build_prop(bm, rug_choice, rcx, rcy, z_floor, 0.0, width=1.2, length=1.8)
+    rug_w = min(3.00, max(1.80, rw * 0.58))
+    rug_l = min(4.20, max(2.40, rd * 0.58))
+    rug_w = min(rug_w, max(1.2, rw - 0.40))
+    rug_l = min(rug_l, max(1.5, rd - 0.40))
+    _lay_rug(bm, tracker, rm, rng, rug_choice, rcx, rcy, z_floor, rug_w, rug_l)
 
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
@@ -859,10 +1467,14 @@ def _furnish_infirmary(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
     _try_place_wall_prop(bm, 'CHEST', 0.85, 0.48, tracker, z_floor,
                          candidate_walls=('SOUTH', 'WEST', 'EAST'))
 
-    # 5. Soothing clean royal rug
-    if tracker.is_free(rcx - 0.65, rcx + 0.65, rcy - 0.95, rcy + 0.95):
-        tracker.occupy(rcx - 0.65, rcx + 0.65, rcy - 0.95, rcy + 0.95)
-        build_prop(bm, 'RUG_SAPPHIRE', rcx, rcy, z_floor, 0.0, width=1.2, length=1.8)
+    # 5. Soothing clean royal rug (generous scale)
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    rug_w = min(2.80, max(1.80, rw * 0.58))
+    rug_l = min(3.80, max(2.40, rd * 0.58))
+    rug_w = min(rug_w, max(1.2, rw - 0.35))
+    rug_l = min(rug_l, max(1.5, rd - 0.35))
+    _lay_rug(bm, tracker, rm, rng, 'RUG_SAPPHIRE', rcx, rcy, z_floor, rug_w, rug_l)
 
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
@@ -916,15 +1528,23 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         _furnish_corridor(bm, rm, tracker, z_floor, z_ceil, rng, density)
     elif role in ('TAVERN_TAPROOM', 'COMMON'):
         _furnish_tavern_taproom(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_pos)
-    elif role in ('KITCHEN', 'PANTRY', 'TENEMENT_KITCHEN'):
+    elif role in ('GREAT_HALL', 'COUNCIL_CHAMBER'):
+        _furnish_great_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_pos)
+    elif role in ('MAYOR_OFFICE', 'OFFICE'):
+        _furnish_office(bm, rm, tracker, z_floor, z_ceil, rng, density)
+    elif role in ('KITCHEN', 'TENEMENT_KITCHEN'):
         _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_pos)
-    elif role in ('MASTER_BED',):
+    elif role in ('MASTER_BED', 'OFFICER_QUARTERS'):
         _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, density, is_master=True)
+    elif role in ('MESS_HALL',):
+        _furnish_mess_hall(bm, rm, tracker, z_floor, z_ceil, rng, density)
+    elif role in ('RANGE', 'FLETCHER_WORKSHOP'):
+        _furnish_archery_range(bm, rm, tracker, z_floor, z_ceil, rng, density, role=role)
     elif role in ('BEDROOM', 'GUEST_ROOM', 'LODGE', 'TENEMENT_BEDROOM'):
         _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, density, is_master=False)
     elif role in ('BARRACKS_DORM', 'OFFICER_QUARTERS'):
         _furnish_barracks_dorm(bm, rm, tracker, z_floor, z_ceil, rng, density)
-    elif role in ('ARMORY', 'DRILL_HALL', 'RANGE', 'FLETCHER_WORKSHOP'):
+    elif role in ('ARMORY', 'DRILL_HALL'):
         _furnish_armory(bm, rm, tracker, z_floor, z_ceil, rng, density)
     elif role in ('STORE',):
         _furnish_shop(bm, rm, tracker, z_floor, z_ceil, rng, density)
@@ -936,7 +1556,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         _furnish_workshop(bm, rm, tracker, z_floor, z_ceil, rng, density)
     elif role in ('CHAPEL_HALL',):
         _furnish_chapel(bm, rm, tracker, z_floor, z_ceil, rng, density)
-    elif role in ('STORAGE', 'CELLAR'):
+    elif role in ('STORAGE', 'CELLAR', 'PANTRY'):
         _furnish_storage(bm, rm, tracker, z_floor, z_ceil, rng, density)
     else:  # HOUSE_HALL, DINING, PARLOR, default
         _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_pos)

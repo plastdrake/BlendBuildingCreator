@@ -56,13 +56,13 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
         py = wy + oy * (outer_d - header_w * 0.5) + ty * t_offset
 
         if pillar_style == 'TIMBER_STONE':
-            # Grounded stone plinth
+            # Grounded plinth
             create_beveled_box(
                 bm,
                 size=(plinth_w, plinth_w, plinth_h),
                 location=(px, py, z_ground + plinth_h * 0.5),
                 rotation=(0.0, 0.0, rot_z),
-                mat_index=MAT_INDEX_STONE,
+                mat_index=MAT_INDEX_WOOD if tier == 'TIER_1' else MAT_INDEX_STONE,
                 bevel_amount=0.02
             )
             # Timber pillar post (embedded 1cm into plinth: no coplanar bottom face)
@@ -97,7 +97,7 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
                 bm,
                 radius=0.18, height=plinth_h, segments=12,
                 location=(px, py, z_ground + plinth_h * 0.5),
-                mat_index=MAT_INDEX_STONE
+                mat_index=MAT_INDEX_WOOD if tier == 'TIER_1' else MAT_INDEX_STONE
             )
             shaft_h = total_col_h - plinth_h - header_h
             create_cylinder(
@@ -107,13 +107,13 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
                 mat_index=MAT_INDEX_TIMBER_FRAME
             )
         else:  # STONE_COLUMN
-            # Full chunky masonry pier
+            # Full chunky masonry pier (or heavy wooden pier in T1)
             create_beveled_box(
                 bm,
                 size=(0.32, 0.32, total_col_h - header_h),
                 location=(px, py, z_ground + (total_col_h - header_h) * 0.5),
                 rotation=(0.0, 0.0, rot_z),
-                mat_index=MAT_INDEX_STONE,
+                mat_index=MAT_INDEX_WOOD if tier == 'TIER_1' else MAT_INDEX_STONE,
                 bevel_amount=0.02
             )
 
@@ -216,12 +216,12 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
     fascia_x = wx + ox * 0.06
     fascia_y = wy + oy * 0.06
     create_beveled_box(bm, size=(0.14, total_w + 0.18, 0.16), location=(fascia_x, fascia_y, z_ceiling - 0.08), rotation=(0.0, 0.0, rot_z), mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
-    # Ground flagstone platform
+    # Ground platform (timber decking in Tier 1, flagstone in Tier 2/3)
     create_beveled_box(
         bm,
         size=(depth + 0.20, total_w + 0.35, 0.12),
         location=(cx, cy, z_ground + 0.06),
         rotation=(0.0, 0.0, rot_z),
-        mat_index=MAT_INDEX_STONE,
+        mat_index=MAT_INDEX_WOOD if tier == 'TIER_1' else MAT_INDEX_STONE,
         bevel_amount=0.015
     )

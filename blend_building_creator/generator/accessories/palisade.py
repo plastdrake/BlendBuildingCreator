@@ -286,37 +286,21 @@ def build_palisade_enclosure(bm, props, ctx, height=2.3, style='STAKES', offset=
     gate_half = max(1.1, (getattr(props, 'door_width', 1.2) + 1.0) * 0.5)
     g0, g1 = gate_cx - gate_half, gate_cx + gate_half
 
-    has_towers = getattr(props, 'has_bastion_towers', False)
-    t_size = getattr(props, 'bastion_tower_size', 3.2)
-    t_half = t_size * 0.5
-    # Towers are now placed with their outer wall on x_min/x_max (centers are shifted inward by t_half)
-    # so front palisade clearance = full tower width + buffer, side = half tower + buffer
-    t_clear_front = (t_size + 0.50) if has_towers else 0.0
-    t_clear_side  = (t_half  + 0.45) if has_towers else 0.0
+    # Towers stand fully inside the enclosure (see bastion.courtyard_tower_centers),
+    # so runs go corner to corner with only the gate gap - no tower cutouts.
 
-    px_min = x_min + t_clear_front
-    px_max = x_max - t_clear_front
-    py_min = y_min + t_clear_side
-    has_back_towers = has_towers and getattr(props, 'bastion_tower_count', 2) >= 4
-    py_max = y_max - (t_clear_side if has_back_towers else 0.0)
-
-    build_palisade_run(bm, (px_min, y_min), (px_max, y_min), 0.0, height, style, gaps=[(g0, g1)], seed=ctx.seed)
-    build_palisade_run(bm, (px_min if has_back_towers else x_min, y_max),
-                           (px_max if has_back_towers else x_max, y_max),
-                           0.0, height, style, seed=ctx.seed + 1)
-    build_palisade_run(bm, (x_min, py_min), (x_min, py_max if has_back_towers else y_max),
+    build_palisade_run(bm, (x_min, y_min), (x_max, y_min), 0.0, height, style, gaps=[(g0, g1)], seed=ctx.seed)
+    build_palisade_run(bm, (x_min, y_max), (x_max, y_max),
+                       0.0, height, style, seed=ctx.seed + 1)
+    build_palisade_run(bm, (x_min, y_min), (x_min, y_max),
                        0.0, height, style, seed=ctx.seed + 2)
-    build_palisade_run(bm, (x_max, py_min), (x_max, py_max if has_back_towers else y_max),
+    build_palisade_run(bm, (x_max, y_min), (x_max, y_max),
                        0.0, height, style, seed=ctx.seed + 3)
 
-    # Corner posts (only placed where no bastion tower stands)
-    if not has_towers:
-        for cx in (x_min, x_max):
-            for cy in (y_min, y_max):
-                _gate_post(bm, cx, cy, 0.0, height)
-    elif not has_back_towers:
-        for cx in (x_min, x_max):
-            _gate_post(bm, cx, y_max, 0.0, height)
+    # Corner posts terminate every run.
+    for cx in (x_min, x_max):
+        for cy in (y_min, y_max):
+            _gate_post(bm, cx, cy, 0.0, height)
     _gate_post(bm, g0, y_min, 0.0, height)
     _gate_post(bm, g1, y_min, 0.0, height)
     return (x_min, x_max, y_min, y_max, g0, g1)

@@ -50,26 +50,39 @@ def build_range_fence(bm, p0, p1, z_ground=0.0, post_spacing=1.8, height=1.05):
 
 
 def build_archery_range(bm, props, ctx, tier):
-    """Lay out the range on the -X half of the plot, facing the +X lodge.
+    """Lay out the range on the -X half of the plot, running PARALLEL to the housing along Y.
 
-    All coordinates are in plot space and kept inside a +/-19 m plot. Targets
-    face +X (toward the shooting line and the lodge) so the arrows fly leftward
-    across the field.
+    All coordinates are in plot space. The lodge sits on the +X half of the plot.
+    The shooting lane runs from the front shooting line (Y = -14.0) to the far back (Y = +15.5),
+    providing a long ~30-meter target practice field parallel to the building.
+    Targets face -Y (toward the archers at the front shooting line).
     """
-    # Shooting-line fence running front-to-back, well clear of the lodge.
-    build_range_fence(bm, (0.0, -13.0), (0.0, 13.0), z_ground=0.0,
-                      post_spacing=2.0, height=1.05)
+    # 1. Long boundary fence running along Y separating the archery field from the lodge walkway
+    build_range_fence(bm, (-1.8, -15.0), (-1.8, 16.5), z_ground=0.0,
+                      post_spacing=2.2, height=1.10)
 
-    # Target butts: a far column of three, plus two inner markers. No hay or
-    # dirt piles - just the painted targets on their stands.
-    target_ang = math.radians(-90.0)   # painted face points +X
-    for ty in (-9.0, 0.0, 9.0):
-        build_archery_target(bm, -15.5, ty, z_ground=0.0, ang=target_ang)
-    for ty in (-4.5, 4.5):
-        build_archery_target(bm, -10.5, ty, z_ground=0.0, ang=target_ang)
+    # 2. Outer boundary fence along the far -X plot edge
+    build_range_fence(bm, (-16.5, -15.0), (-16.5, 16.5), z_ground=0.0,
+                      post_spacing=2.2, height=1.10)
 
-    # A pair of slim range posts at the far corners to frame the field.
-    for py in (-12.5, 12.5):
-        create_beveled_box(bm, size=(0.12, 0.12, 2.2),
-                           location=(-16.5, py, 1.1),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+    # 3. Rear safety barrier fence behind the far targets
+    build_range_fence(bm, (-16.5, 16.5), (-1.8, 16.5), z_ground=0.0,
+                      post_spacing=2.0, height=1.20)
+
+    # 4. Front shooting line rail where archers stand
+    build_range_fence(bm, (-16.5, -14.0), (-1.8, -14.0), z_ground=0.0,
+                      post_spacing=2.2, height=0.95)
+
+    # 5. Far target butts (Y = 15.2): 3 championship targets across the lane, facing -Y (ang=0.0)
+    for tx in (-13.5, -9.2, -4.8):
+        build_archery_target(bm, tx, 15.2, z_ground=0.0, ang=0.0)
+
+    # 6. Mid-distance practice targets (Y = 5.5) for short-range training
+    for tx in (-11.5, -6.8):
+        build_archery_target(bm, tx, 5.5, z_ground=0.0, ang=0.0)
+
+    # 7. Corner marker posts framing the field
+    for px, py in ((-16.5, -15.0), (-1.8, -15.0), (-16.5, 16.5), (-1.8, 16.5)):
+        create_beveled_box(bm, size=(0.18, 0.18, 2.4),
+                           location=(px, py, 1.2),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015)

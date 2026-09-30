@@ -297,8 +297,9 @@ def build_weapon_rack(bm, x, y, z_ground=0.0, ang=0.0):
             for f in br_f:
                 f.tag = True
 
-    # 2. Bottom Weapon Rest Runner with Socket Cups
-    bot_y = 0.18  # forward offset for spear butts
+    # 2. Bottom Weapon Rest Runner with Socket Cups.
+    # Display/front face is local -Y (house convention, backs go to walls).
+    bot_y = -0.18  # forward offset for spear butts
     bot_z = 0.06
     bot_rail_pos = to_world(0.0, bot_y, bot_z)
     bot_rail = create_beveled_box(bm, size=(rack_len, 0.22, 0.12),
@@ -308,7 +309,7 @@ def build_weapon_rack(bm, x, y, z_ground=0.0, ang=0.0):
         f.tag = True
 
     # 3. Top Rest Board - front face is precisely at ly = 0.0
-    top_y = -0.03
+    top_y = 0.03
     top_z = 1.22
     top_rail_pos = to_world(0.0, top_y, top_z)
     top_rail = create_beveled_box(bm, size=(rack_len, 0.06, 0.14),
@@ -337,7 +338,7 @@ def build_weapon_rack(bm, x, y, z_ground=0.0, ang=0.0):
 
         # Twin wooden retaining pegs on top rest board flanking the spear shaft
         for s_peg in (-0.045, 0.045):
-            peg_pos = to_world(slot_x + s_peg, 0.035, top_z)
+            peg_pos = to_world(slot_x + s_peg, -0.035, top_z)
             peg_f = create_cylinder(bm, radius=0.010, height=0.07, segments=6,
                                     location=peg_pos, rotation=(math.radians(90.0), 0.0, ang),
                                     mat_index=MAT_INDEX_TIMBER)
@@ -345,11 +346,11 @@ def build_weapon_rack(bm, x, y, z_ground=0.0, ang=0.0):
                 f.tag = True
 
         # Spear shaft geometry:
-        # Butt rests in bottom cup at (slot_x, 0.18, 0.12)
+        # Butt rests in bottom cup at (slot_x, -0.18, 0.12)
         # At top board z = 1.22, front face of board is at y = 0.0.
-        # Shaft center at y = r_shaft (0.021) places back surface of shaft at y = 0.0 (flush physical contact).
+        # Shaft center at y = -r_shaft places back surface of shaft at y = 0.0 (flush physical contact).
         p_butt = Vector((slot_x, bot_y, 0.12))
-        p_rest = Vector((slot_x, r_shaft, top_z))
+        p_rest = Vector((slot_x, -r_shaft, top_z))
         local_dir = (p_rest - p_butt).normalized()
 
         butt_pos = tr @ p_butt
@@ -542,14 +543,20 @@ def build_military_props(bm, props, ctx):
         for i in range(n_dummies):
             build_training_dummy(bm, right_wall - stand, ys[min(i, len(ys) - 1)], 0.0,
                                  ang=math.radians(90.0))
-        # Weapon racks flank the gate against the front enclosure wall (which has
-        # no windows) and face into the courtyard, so they cannot intersect the
-        # wing windows the way wall-mounted racks did.
+        # Weapon racks flank the gate against the front enclosure wall and face into the courtyard,
+        # never blocking the central entrance corridor.
         _x0, _x1, enclosure_y, _y1 = compound_bounds(ctx, fortification_offset(props))
         rack_y = enclosure_y + 0.85
-        for rx in _spread_positions(n_racks, ctx.main_door_cx - 3.3,
-                                    ctx.main_door_cx + 3.3):
-            build_weapon_rack(bm, rx, rack_y, 0.0, ang=0.0)
+        if n_racks == 1:
+            rack_xs = [ctx.main_door_cx - 3.2]
+        elif n_racks == 2:
+            rack_xs = [ctx.main_door_cx - 3.2, ctx.main_door_cx + 3.2]
+        else:
+            rack_xs = _spread_positions(n_racks, ctx.main_door_cx - 4.5, ctx.main_door_cx + 4.5)
+            # Ensure no rack sits within 2.0m of the main entrance center
+            rack_xs = [rx if abs(rx - ctx.main_door_cx) >= 2.0 else (ctx.main_door_cx - 2.5 if rx < ctx.main_door_cx else ctx.main_door_cx + 2.5) for rx in rack_xs]
+        for rx in rack_xs:
+            build_weapon_rack(bm, rx, rack_y, 0.0, ang=math.pi)
     else:
         court_x0 = -ctx.base_w * 0.5 + 1.2
         court_x1 = ctx.base_w * 0.5 - 1.2
@@ -562,9 +569,15 @@ def build_military_props(bm, props, ctx):
             build_training_dummy(bm, dx, main_front_y - pal_off * 0.48, 0.0,
                                  ang=math.radians(180.0))
         rack_y = main_front_y - pal_off + 0.85
-        for rx in _spread_positions(n_racks, ctx.main_door_cx - 3.0,
-                                    ctx.main_door_cx + 3.0):
-            build_weapon_rack(bm, rx, rack_y, 0.0, ang=0.0)
+        if n_racks == 1:
+            rack_xs = [ctx.main_door_cx - 3.0]
+        elif n_racks == 2:
+            rack_xs = [ctx.main_door_cx - 3.0, ctx.main_door_cx + 3.0]
+        else:
+            rack_xs = _spread_positions(n_racks, ctx.main_door_cx - 4.2, ctx.main_door_cx + 4.2)
+            rack_xs = [rx if abs(rx - ctx.main_door_cx) >= 1.8 else (ctx.main_door_cx - 2.2 if rx < ctx.main_door_cx else ctx.main_door_cx + 2.2) for rx in rack_xs]
+        for rx in rack_xs:
+            build_weapon_rack(bm, rx, rack_y, 0.0, ang=math.pi)
 
     # Mounted heraldic wall shield above the main entrance (never over a window).
     # Shrink it to the headroom between the door head and the storey above, and

@@ -10,7 +10,8 @@ import math
 from .mesh_utils import create_beveled_box, create_flared_post
 from .materials import (
     MAT_INDEX_STONE, MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER,
-    MAT_INDEX_FLOOR, MAT_INDEX_WOOD, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_DIRT
+    MAT_INDEX_FLOOR, MAT_INDEX_WOOD, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_DIRT,
+    MAT_INDEX_CUT_STONE
 )
 from .walls import (
     build_wall_with_opening, build_facade_timber,
@@ -356,7 +357,8 @@ def build_floors(bm, props, ctx):
         if is_temporary_stockpile:
             pass
         else:
-            floor_mat = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone) else MAT_INDEX_FLOOR
+            tier_val = getattr(props, 'material_tier', 'TIER_3')
+            floor_mat = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone and tier_val != 'TIER_1') else MAT_INDEX_FLOOR
             # Lumbermill Tier 1: lower ground floor slab down 3cm (z_floor + 0.02 instead of z_floor + 0.05)
             is_lumbermill_t1 = (effective_archetype == 'LUMBERMILL' and fl_idx == 0
                                 and getattr(props, 'material_tier', 'TIER_1') == 'TIER_1')
@@ -542,7 +544,7 @@ def build_floors(bm, props, ctx):
             # Row 1 (sill log) top is at 2.0 * log_diam (0.72)
             # Row 5 (lintel log) bottom is at 5.0 * log_diam (1.80)
             # Opening cutout height = 1.08m
-            log_diam = 0.36
+            log_diam = 0.44
             win_cz = z_floor + 3.5 * log_diam
             win_z1 = z_floor + 2.0 * log_diam
             win_z2 = z_floor + 5.0 * log_diam
@@ -556,22 +558,23 @@ def build_floors(bm, props, ctx):
         # Doorway placement on Ground Floor (Front, Rear/Back, and Side Entrances)
         if fl_idx == 0:
             tier_val = getattr(props, 'material_tier', 'TIER_3')
-            dw = props.door_width
-            dh = props.door_height
-            if tier_val == 'TIER_1':
-                log_diam = 0.36
-                dh = 2.02
-                door_top_z = z_floor + 6.0 * log_diam
-                frame_margin = 0.08
-            else:
-                frame_margin = 0.12
-                door_top_z = z_floor + dh + frame_margin
+            dw = getattr(props, 'door_width', 1.45)
+            dh = getattr(props, 'door_height', 2.80)
+            frame_margin = 0.08 if tier_val == 'TIER_1' else 0.12
+            door_top_z = z_floor + dh + frame_margin
 
             # 1. Front Entrance
             if props.has_front_door and not open_timber:
                 if shape == 'RECTANGLE':
                     door_offset = getattr(props, 'front_door_offset_x', 0.0)
-                    door_cx = 0.0 + door_offset
+                    if effective_archetype == 'TENEMENT' and (getattr(props, 'has_stairs', False) or getattr(props, 'stair_style', 'NONE') != 'NONE'):
+                        # Tenement with interior stairs: entrance belongs in the common stair corridor on the left.
+                        # Align the door inside the hallway (between x_min + wall_t and the hallway demising wall),
+                        # clear of the exterior corner and staircase foot.
+                        default_door_cx = x_min + wall_t + 0.32 + dw * 0.5
+                        door_cx = default_door_cx + door_offset
+                    else:
+                        door_cx = 0.0 + door_offset
                     door_yf = y_min
                     door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
                     door_u2 = (door_cx + dw * 0.5 + frame_margin) - x_min
@@ -609,14 +612,17 @@ def build_floors(bm, props, ctx):
                 main_door_yf = door_yf
                 ctx.floor_doorways.setdefault(0, []).append({'x': door_cx, 'y': door_yf, 'axis': 'X', 'w': dw})
 
+                door_gf_stone = props.ground_floor_stone and tier_val != 'TIER_1'
+                steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') == 'WOOD') else MAT_INDEX_CUT_STONE
+
                 build_door_assembly(
                     bm, center_x=door_cx, y_front=door_yf, z_base=z_floor,
                     wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
-                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone,
+                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=door_gf_stone,
                     normal_axis='-Y', include_leaf=getattr(props, 'include_door_leaves', True)
                 )
                 if props.has_front_steps and props.has_foundation:
-                    build_front_steps(bm, center_x=door_cx, y_front=door_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='-Y')
+                    build_front_steps(bm, center_x=door_cx, y_front=door_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='-Y', mat_index=steps_mat)
 
             # 2. Rear / Back Door
             if getattr(props, 'has_back_door', False) and not open_timber:
@@ -632,11 +638,11 @@ def build_floors(bm, props, ctx):
                 build_door_assembly(
                     bm, center_x=b_cx, y_front=b_yf, z_base=z_floor,
                     wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
-                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone,
+                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=door_gf_stone,
                     normal_axis='+Y', include_leaf=getattr(props, 'include_door_leaves', True)
                 )
                 if props.has_front_steps and props.has_foundation:
-                    build_front_steps(bm, center_x=b_cx, y_front=b_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+Y')
+                    build_front_steps(bm, center_x=b_cx, y_front=b_yf, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+Y', mat_index=steps_mat)
 
             # 2b. Open rear portal (framed opening, no door leaf). Used to join
             # the nave to an attached chancel apse.
@@ -682,11 +688,11 @@ def build_floors(bm, props, ctx):
                     build_door_assembly(
                         bm, center_x=s_xf, y_front=s_cy, z_base=z_floor,
                         wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
-                        door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone,
+                        door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=door_gf_stone,
                         normal_axis='-X', include_leaf=getattr(props, 'include_door_leaves', True)
                     )
                     if props.has_front_steps and props.has_foundation:
-                        build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='-X')
+                        build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='-X', mat_index=steps_mat)
                 else: # RIGHT
                     s_cy = (y_min + y_max) * 0.5
                     s_xf = x_max
@@ -697,11 +703,11 @@ def build_floors(bm, props, ctx):
                     build_door_assembly(
                         bm, center_x=s_xf, y_front=s_cy, z_base=z_floor,
                         wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
-                        door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=props.ground_floor_stone,
+                        door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=door_gf_stone,
                         normal_axis='+X', include_leaf=getattr(props, 'include_door_leaves', True)
                     )
                     if props.has_front_steps and props.has_foundation:
-                        build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+X')
+                        build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+X', mat_index=steps_mat)
 
         # Upper side door onto the side rampart deck (Tier 3 town halls)
         if fl_idx == 1 and getattr(props, 'has_side_rampart', False) and not open_timber:
@@ -743,6 +749,37 @@ def build_floors(bm, props, ctx):
                         door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
                         normal_axis='+X', include_leaf=getattr(props, 'include_door_leaves', True)
                     )
+
+        # Upper exterior door for exterior apartment staircase (tenements)
+        if fl_idx == 1 and getattr(props, 'has_exterior_stairs', False) and not open_timber:
+            ext_side = getattr(props, 'exterior_stairs_side', 'LEFT')
+            edw = min(1.20, getattr(props, 'door_width', 1.20))
+            edh = min(2.40, getattr(props, 'door_height', 2.40))
+            e_margin = 0.12
+            e_top_z = z_floor + edh + e_margin
+            e_cy = (y_min + y_max) * 0.5
+            if ext_side == 'LEFT':
+                left_openings.append({'u_start': (e_cy - edw * 0.5 - e_margin) - y_min,
+                                      'u_end': (e_cy + edw * 0.5 + e_margin) - y_min,
+                                      'z_start': z_floor, 'z_end': e_top_z})
+                ctx.floor_doorways.setdefault(1, []).append({'x': x_min, 'y': e_cy, 'axis': 'Y', 'w': edw})
+                build_door_assembly(
+                    bm, center_x=x_min, y_front=e_cy, z_base=z_floor,
+                    wall_thickness=wall_t, door_w=edw, door_h=edh, door_angle_deg=props.door_angle,
+                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
+                    normal_axis='-X', include_leaf=getattr(props, 'include_door_leaves', True)
+                )
+            else:
+                right_openings.append({'u_start': (e_cy - edw * 0.5 - e_margin) - y_min,
+                                       'u_end': (e_cy + edw * 0.5 + e_margin) - y_min,
+                                       'z_start': z_floor, 'z_end': e_top_z})
+                ctx.floor_doorways.setdefault(1, []).append({'x': x_max, 'y': e_cy, 'axis': 'Y', 'w': edw})
+                build_door_assembly(
+                    bm, center_x=x_max, y_front=e_cy, z_base=z_floor,
+                    wall_thickness=wall_t, door_w=edw, door_h=edh, door_angle_deg=props.door_angle,
+                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
+                    normal_axis='+X', include_leaf=getattr(props, 'include_door_leaves', True)
+                )
 
         # Town-Hall annex portal: a plain walk-through opening into the side annex
         # (opposite the clock tower) on every floor the annex spans, so its upper
@@ -1139,7 +1176,8 @@ def build_floors(bm, props, ctx):
             fl_wings_bounds=fl_wings_bounds if fl_has_wing else None,
             effective_archetype=effective_archetype,
             props=props,
-            seed=seed + fl_idx * 17
+            seed=seed + fl_idx * 17,
+            doorways=ctx.floor_doorways.get(fl_idx, [])
         )
         floor_rooms[fl_idx] = fl_rooms
         floor_interior_walls[fl_idx] = fl_interior_walls
@@ -1642,7 +1680,7 @@ def build_floors(bm, props, ctx):
 
         # 4 Main Solid Walls with Openings
         tier_val = getattr(props, 'material_tier', 'TIER_3')
-        if fl_idx == 0 and props.ground_floor_stone:
+        if fl_idx == 0 and props.ground_floor_stone and tier_val != 'TIER_1':
             mat_w = MAT_INDEX_STONE
         elif tier_val == 'TIER_1':
             mat_w = MAT_INDEX_WOOD
@@ -1652,7 +1690,7 @@ def build_floors(bm, props, ctx):
             mat_w = MAT_INDEX_PLASTER_EXT
 
         phys_siding = getattr(props, 'physical_siding', True)
-        if fl_idx == 0 and props.ground_floor_stone and tier_val in ('TIER_1', 'TIER_2'):
+        if fl_idx == 0 and props.ground_floor_stone and tier_val == 'TIER_2':
             phys_siding = False
         plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
         plank_jank = getattr(props, 'plank_jankiness', 0.35)
@@ -1763,6 +1801,7 @@ def build_floors(bm, props, ctx):
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
                 omit_top_log_row=omit_front or jetty_next,
+                force_omit_top_log_row=jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
             )
             build_wall_with_opening(
@@ -1771,6 +1810,7 @@ def build_floors(bm, props, ctx):
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
                 omit_top_log_row=omit_back or jetty_next,
+                force_omit_top_log_row=jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
             )
             build_wall_with_opening(
@@ -1779,6 +1819,7 @@ def build_floors(bm, props, ctx):
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
                 omit_top_log_row=omit_left or jetty_next,
+                force_omit_top_log_row=jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
             )
             build_wall_with_opening(
@@ -1787,24 +1828,29 @@ def build_floors(bm, props, ctx):
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
                 omit_top_log_row=omit_right or jetty_next,
+                force_omit_top_log_row=jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
             )
             
             # Wing Solid Walls.
             # Logs must NOT over-run at an end that dies into a main-hall wall,
             # otherwise their cut log ends poke through into the interior rooms.
+            # NOTE: test against the main footprint, not mere plane alignment:
+            # U-shaped side wings sit flush with the main facades, and a pure
+            # plane test wrongly classified their outer corners as junctions,
+            # killing the interleaved log ends there.
             if fl_has_wing:
-                def _on_main_plane(pt):
-                    return (abs(pt[0] - x_min) < 0.03 or abs(pt[0] - x_max) < 0.03 or
-                            abs(pt[1] - y_min) < 0.03 or abs(pt[1] - y_max) < 0.03)
+                def _inside_main(pt):
+                    return (x_min - 0.05 <= pt[0] <= x_max + 0.05 and
+                            y_min - 0.05 <= pt[1] <= y_max + 0.05)
                 for p1, p2, w_ops, norm_v in wing_wall_openings:
                     build_wall_with_opening(
                         bm, p1, p2, z_floor, wall_top_z, wall_t, w_ops,
                         mat_ext=mat_w, normal_vec=norm_v, tier=tier_val, physical_siding=phys_siding,
                         plank_direction=plank_dir, plank_jankiness=plank_jank,
                         stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
-                        is_corner_start=not _on_main_plane(p1),
-                        is_corner_end=not _on_main_plane(p2),
+                        is_corner_start=not _inside_main(p1),
+                        is_corner_end=not _inside_main(p2),
                         has_exposed_brick=has_brick, exposed_brick_freq=brick_freq
                     )
 

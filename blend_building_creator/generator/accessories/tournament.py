@@ -19,7 +19,7 @@ from ..materials import (
 )
 from .shield import build_round_shield
 from .military_props import (
-    build_weapon_rack, build_archery_target, build_training_dummy,
+    build_archery_target, build_training_dummy,
 )
 from .palisade import (
     compound_bounds, fortification_offset, fortification_depth_extra,
@@ -123,7 +123,6 @@ def build_tournament_yard(bm, props, ctx, tier):
     # A lane against the flank wall, clear of the corner.
     x_wall = abs(x_min) if side > 0 else abs(x_max)
     lane_x = side * min(x_wall - 2.4, 15.5)
-    rack_x = side * min(x_wall - 5.2, 12.5)
 
     def _spread(n, lo, hi):
         if n <= 1:
@@ -138,7 +137,5 @@ def build_tournament_yard(bm, props, ctx, tier):
     for ty in _spread(2, y_lo + 1.2, y_hi - 1.2):
         build_archery_target(bm, lane_x - side * 3.2, ty, 0.0, ang=facing)
 
-    # 3. Weapon racks closer to the hall, facing across the yard.
-    for ry in (y_lo + 0.6, y_hi - 0.6):
-        build_weapon_rack(bm, rack_x, ry, 0.0,
-                          ang=(math.pi * 0.5 if side > 0 else -math.pi * 0.5))
+    # NOTE: no weapon/spear racks in the training ground itself (they belong
+    # in the armory indoors); the yard keeps dummies + targets only.

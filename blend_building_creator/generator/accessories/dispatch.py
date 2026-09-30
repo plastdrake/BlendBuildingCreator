@@ -33,6 +33,7 @@ from .palisade import (
 )
 from .banner import build_banner_pole
 from .military_props import build_military_props
+from .exterior_stairs import build_exterior_stairs
 from ..openings import build_front_steps
 
 
@@ -148,23 +149,29 @@ def _build_civic_landmarks(bm, props, ctx, tier):
             include_leaf=_prop(props, 'include_door_leaves', True),
         )
     if _prop(props, 'has_corner_turrets', False):
-        # Square corner towers, ~30% taller than before, mounted on the BACK
-        # wall (so the hall stairs never block their doorway). They sit just
-        # outside the back wall plane and connect via a doorway per storey.
+        # Square corner turrets built INTO the back corners. Each turret is
+        # centred on the wall corner, its shell matches the wall thickness and
+        # its outer faces sit flush with both exterior walls, so the two walls
+        # run into the turret footprint and terminate there instead of crossing
+        # the interior. No floating slab, no overlapping interior wall.
         _eave = ctx.found_h + ctx.num_floors * ctx.floor_h
         tur_top = (_eave + ctx.floor_h * 0.95) * 1.30
         tur_half = max(1.0, min(2.0, _prop(props, 'corner_turret_size', 1.35)))
         _levels = [ctx.found_h + i * ctx.floor_h for i in range(ctx.num_floors)]
-        _wt = ctx.wall_t
-        _t_cx = base_hx - tur_half
+        _fb = ctx.floor_wall_bounds.get(ctx.num_floors - 1) or ctx.floor_wall_bounds.get(1)
+        if _fb is not None:
+            _cx = abs(_fb[0]) if abs(_fb[0]) > abs(_fb[1]) else abs(_fb[1])
+        else:
+            _cx = base_hx
+        _cy = abs(_fb[2]) if _fb is not None and abs(_fb[2]) > abs(_fb[3]) else base_hy
         for _sx in (-1.0, 1.0):
             build_corner_turret(
                 bm,
-                cx=_sx * _t_cx, cy=base_hy + _wt * 0.5 + tur_half,
+                cx=_sx * _cx, cy=_cy,
                 z_ground=0.0, half=tur_half, wall_top_z=tur_top, tier=tier,
                 out_dir=(0.0, 1.0), floor_levels=_levels,
                 floor_h=ctx.floor_h, main_wall_top=_eave,
-                attach_tuck=max(0.30, _wt),
+                attach_tuck=ctx.wall_t,
                 plank_direction=ctx.plank_dir, seed=ctx.seed)
     if (_prop(props, 'has_arched_porch', False)
             and getattr(ctx, 'effective_archetype', None) != 'STABLE'):
@@ -176,12 +183,22 @@ def _build_civic_landmarks(bm, props, ctx, tier):
         _ptop = ctx.floor_wall_bounds.get(ctx.num_floors - 1)
         if _ptop is not None and _ptop[2] < _porch_front:
             _porch_front = _ptop[2]
+        _dw = getattr(props, 'door_width', 1.45)
+        _dh = getattr(props, 'door_height', 2.80)
+        _half_span = max(1.5, _dw * 0.5 + 0.45)
+        _porch_h = max(2.9, _dh + 0.25)
         build_arched_porch(bm, door_x=ctx.main_door_cx, front_y=_porch_front,
                            z_ground=0.0, z_floor=ctx.found_h,
+                           half_span=_half_span, height=_porch_h,
                            tier=tier, plank_direction=ctx.plank_dir)
     if _prop(props, 'has_entry_ramp', False):
+        _tw = []
+        if _prop(props, 'has_bastion_towers', False):
+            from .bastion import courtyard_tower_footprints
+            _tw = courtyard_tower_footprints(props, ctx)
         build_entry_ramp(bm, door_x=ctx.main_door_cx, front_y=ctx.main_door_yf,
-                         z_floor=ctx.found_h, width=1.6, side_offset=2.2)
+                         z_floor=ctx.found_h, width=1.6, side_offset=2.2,
+                         towers=_tw)
     # Town Hall composer: annex volume + forecourt ramparts (tower arch above)
     if _prop(props, 'town_hall_composer', False) and ctx.shape == 'T_SHAPE':
         build_town_hall_composer(bm, props, {
@@ -197,6 +214,8 @@ def _build_civic_landmarks(bm, props, ctx, tier):
     # Rampart walk for any other footprint (the T-shaped composer owns its own).
     elif _prop(props, 'has_side_rampart', False):
         build_side_rampart_for_shape(bm, props, ctx)
+    if _prop(props, 'has_exterior_stairs', False):
+        build_exterior_stairs(bm, props, ctx, tier)
 
 
 def _build_generic_annex(bm, props, ctx, tier):
@@ -288,10 +307,12 @@ def _build_estate_grounds(bm, props, ctx):
 
 
 def _place_banners(bm, props, ctx):
-    """Raise banner poles around the compound (on the palisade line if present).
+    """Raise banner poles around the compound, just OUTSIDE the enclosure line.
 
-    When bastion towers are present the front corner slots are shifted inward to
-    sit between the gate and the tower, not on top of the tower itself.
+    Poles never stand inside the yard or embedded in the palisade/curtain
+    wall itself: each candidate is pushed outward along its facing normal.
+    When bastion towers are present the front corner slots sit between the
+    gate and the tower, not on top of the tower itself.
     """
     count = max(2, int(_prop(props, 'banner_count', 4)))
     has_enclosure = (_prop(props, 'has_palisade', False)
@@ -323,8 +344,8 @@ def _place_banners(bm, props, ctx):
     cands = [
         (front_left_x,           y_min, (0.0, -1.0)),               # Front-left mid
         (front_right_x,          y_min, (0.0, -1.0)),               # Front-right mid
-        (gate_cx - 1.8,          y_min, (0.0, -1.0)),               # Front gate left
-        (gate_cx + 1.8,          y_min, (0.0, -1.0)),               # Front gate right
+        (gate_cx - 3.4,          y_min, (0.0, -1.0)),               # Front gate left
+        (gate_cx + 3.4,          y_min, (0.0, -1.0)),               # Front gate right
         (x_max,                  y_max, (0.0,  1.0)),               # Back-right corner
         (x_min,                  y_max, (0.0,  1.0)),               # Back-left corner
         (x_min, (y_min + y_max) * 0.5, (-1.0, 0.0)),               # Left side flank
@@ -332,6 +353,10 @@ def _place_banners(bm, props, ctx):
     ]
     for i in range(count):
         bx, by, d = cands[i % len(cands)]
+        if has_enclosure:
+            # Step outside the wall line so the pole never lands inside the
+            # yard or inside the palisade/wall mass.
+            bx, by = bx + d[0] * 0.55, by + d[1] * 0.55
         build_banner_pole(bm, bx, by, 0.0, height=height, flag_dir=d)
 
 
@@ -385,6 +410,10 @@ def _build_plot_fortifications(bm, props, ctx):
             style=_prop(props, 'palisade_style', 'STAKES'),
             offset=None)
 
+    # NOTE: no spur walls stitching the towers to the runs - the towers already
+    # stand inside the enclosure line, and the short connecting stubs read as
+    # awkward extra palisade bits. The tower simply sits inside the wall.
+
     # 4. Military drill yard apparatus (archery targets, weapon rack, quintain)
     if _prop(props, 'has_military_props', False):
         build_military_props(bm, props, ctx)
@@ -437,7 +466,10 @@ def _build_gable_crests(bm, props, ctx):
             bm, (ctx.main_door_cx, _fb[3] + _off, crest_z),
             normal=(0.0, 1.0, 0.0), scale=c_scale, style=c_style)
 
-    # Wing gables (outer face only).
+    # Wing gables (outer face only). The wing gable triangle is much shorter
+    # than the main one, so the crest is shrunk to fit and seated low on the
+    # gable face instead of floating up in the roof slope. Main-gable formula
+    # above is untouched.
     if not ctx.has_wing:
         return
     w_top_fl = min(ctx.wing_floors, num_fl)
@@ -445,11 +477,15 @@ def _build_gable_crests(bm, props, ctx):
     w_top_z = found_h + w_top_fl * fl_h
     _wr_scale = getattr(props, 'wing_roof_scale', 0.88)
     w_roof_h = roof_h if ctx.wing_floors == num_fl else roof_h * _wr_scale
-    w_crest_z = w_top_z + w_roof_h * 0.40 + 1.25
     for w in ctx.wings:
         wb = (w.get('bounds_fl') or {}).get(w_fl_idx)
         if wb is None:
             continue
+        # Fit the 1.05m-tall plaque inside the lower half of the gable.
+        w_scale = min(c_scale, max(0.0, w_roof_h * 0.55) / 1.05)
+        if w_scale < 0.45:
+            continue
+        w_crest_z = w_top_z + 0.12 + (1.05 * w_scale) * 0.5
         wx0, wx1, wy0, wy1 = wb
         wall = w.get('wall')
         if wall == 'FRONT':
@@ -464,7 +500,7 @@ def _build_gable_crests(bm, props, ctx):
         else:  # RIGHT
             loc = (wx1 + _off, (wy0 + wy1) * 0.5, w_crest_z)
             nrm = (1.0, 0.0, 0.0)
-        build_gable_heraldic_crest(bm, loc, normal=nrm, scale=c_scale, style=c_style)
+        build_gable_heraldic_crest(bm, loc, normal=nrm, scale=w_scale, style=c_style)
 
 
 def _kit_on(props, ctx, kit_name, arch_name):

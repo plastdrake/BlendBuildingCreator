@@ -125,7 +125,8 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
     build_wall_with_opening(bm, p_start, p_end, ground_z, walk_top, thickness,
                             open_ops, mat_ext=MAT_INDEX_STONE,
                             normal_vec=(ox, oy), tier='TIER_3',
-                            physical_siding=False, seed=seed)
+                            physical_siding=False, seed=seed,
+                            inner_mat=MAT_INDEX_STONE)
 
     # 3. Cut-stone string course at the wall head (full thickness).
     for u0, u1 in walk_spans:
@@ -193,16 +194,19 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
     for s in (-1.0, 1.0):
         px = cx + tx * (s * half_outer) + ox * push
         py = cy + ty * (s * half_outer) + oy * push
-        pier_h = gate_h + 0.20
+        # Pillars stop exactly where the beam starts so the lintel rests ON
+        # the pillars with no interpenetration (which z-fought on the shared
+        # front faces).
+        pier_h = gate_h
         create_beveled_box(bm, size=(0.62, frame_depth, pier_h),
                            location=(px, py, ground_z + pier_h * 0.5),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
 
-    # Deep lintel band across the opening, seated proud of the wall face and
-    # reaching back through the wall so it hides the stone head of the opening.
-    create_beveled_box(bm, size=(gap_w + 0.52, frame_depth, 0.32),
-                       location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.16),
+    # Deep lintel band across the opening, seated 2cm into the pillar tops and
+    # wide enough to cap the full pillar width on both ends.
+    create_beveled_box(bm, size=(gap_w + 1.20, frame_depth, 0.32),
+                       location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.14),
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
 
@@ -216,8 +220,9 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
                                  offset=None):
     """Enclose the whole compound with a stone curtain wall and front gatehouse.
 
-    Corner bastion towers are stitched in by starting every run at the tower
-    footprint, mirroring :func:`palisade.build_palisade_enclosure`.
+    Corner towers stand fully inside the enclosure (see
+    :func:`bastion.courtyard_tower_centers`), so every run goes corner to
+    corner with only the gate opening.
     Returns (x_min, x_max, y_min, y_max, gate_u0_world, gate_u1_world).
     """
     off = offset if offset is not None else fortification_offset(props)
@@ -227,47 +232,26 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
     gate_half = max(1.35, (getattr(props, 'door_width', 1.2) + 1.6) * 0.5)
     g0, g1 = gate_cx - gate_half, gate_cx + gate_half
 
-    has_towers = getattr(props, 'has_bastion_towers', False)
-    t_size = getattr(props, 'bastion_tower_size', 3.2) if has_towers else 0.0
-    t_half = t_size * 0.5
-    has_back = has_towers and getattr(props, 'bastion_tower_count', 2) >= 4
-    # Bastion towers straddle the boundary: centred ON the front/back line, they
-    # occupy a full t_size across X but only t_half inward in Y. Clear the
-    # matching footprint per axis (with a small overlap) so the runs meet the
-    # tower walls cleanly instead of leaving a gap at the side corners.
-    ov = 0.12
-    clear_x_f = (t_size - ov) if has_towers else 0.0
-    clear_x_b = (t_size - ov) if has_back else 0.0
-    clear_y_f = (t_half - ov) if has_towers else 0.0
-    clear_y_b = (t_half - ov) if has_back else 0.0
-
     H = height if height is not None else getattr(props, 'curtain_wall_height', 3.2)
     T = thickness if thickness is not None else getattr(props, 'curtain_wall_thickness', 0.55)
     gate_h = max(2.2, min(3.0, H - 0.55))
 
     # Front run with the gate opening.
-    front_u0 = x_min + clear_x_f
-    # Where a run buries its head inside a bastion footprint, run the plinth a
-    # little further in as well so its end face sits well under the tower's own
-    # plinth band instead of stopping flush against it (which read as a notch).
-    p_ext = 0.12
-    pt_f = -p_ext if has_towers else 0.0
-    pt_b = -p_ext if has_back else 0.0
     build_curtain_wall_run(
-        bm, (front_u0, y_min), (x_max - clear_x_f, y_min), (0.0, -1.0), 0.0, H, T,
-        gate={'u0': g0 - front_u0, 'u1': g1 - front_u0, 'h': gate_h},
-        plinth_end=(pt_f, pt_f), seed=ctx.seed)
+        bm, (x_min, y_min), (x_max, y_min), (0.0, -1.0), 0.0, H, T,
+        gate={'u0': g0 - x_min, 'u1': g1 - x_min, 'h': gate_h},
+        seed=ctx.seed)
     # Back run.
     build_curtain_wall_run(
-        bm, (x_min + clear_x_b, y_max), (x_max - clear_x_b, y_max), (0.0, 1.0), 0.0, H, T,
-        plinth_end=(pt_b, pt_b), seed=ctx.seed + 1)
-    # Left and right runs, clearing the tower footprints at front and back.
+        bm, (x_min, y_max), (x_max, y_max), (0.0, 1.0), 0.0, H, T,
+        seed=ctx.seed + 1)
+    # Left and right runs.
     build_curtain_wall_run(
-        bm, (x_min, y_min + clear_y_f), (x_min, y_max - clear_y_b), (-1.0, 0.0), 0.0, H, T,
-        plinth_end=(pt_f, pt_b), seed=ctx.seed + 2)
+        bm, (x_min, y_min), (x_min, y_max), (-1.0, 0.0), 0.0, H, T,
+        seed=ctx.seed + 2)
     build_curtain_wall_run(
-        bm, (x_max, y_min + clear_y_f), (x_max, y_max - clear_y_b), (1.0, 0.0), 0.0, H, T,
-        plinth_end=(pt_f, pt_b), seed=ctx.seed + 3)
+        bm, (x_max, y_min), (x_max, y_max), (1.0, 0.0), 0.0, H, T,
+        seed=ctx.seed + 3)
 
     # Gatehouse dressing over the front opening.
     build_gate_house(bm, gate_cx, y_min, (0.0, -1.0), g1 - g0, 0.0, T,

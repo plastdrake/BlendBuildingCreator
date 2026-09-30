@@ -19,6 +19,50 @@ from .accessories.dispatch import build_architectural_accessories, build_archety
 from .config import BuildingContext
 
 
+def _ensure_door_floor_clearance(props):
+    """Raise ``floor_height`` just enough that tall entrance portals fit.
+
+    The arched stone portal stacks ~0.41m of trim above the opening and the
+    square timber header ~0.16m; both run full wall depth, so when the floor
+    is too short they poke through the slab into the storey above (visible
+    as trim bands on the upstairs interior walls). Per preference the floor
+    grows slightly instead of shrinking the door. The update callback is
+    muted while adjusting so generation does not recurse.
+    """
+    has_door = (getattr(props, 'has_front_door', False)
+                or getattr(props, 'has_back_door', False)
+                or getattr(props, 'has_side_door', False)
+                or getattr(props, 'has_back_portal', False))
+    if not has_door:
+        return
+    door_h = float(getattr(props, 'door_height', 2.8))
+    shape = getattr(props, 'door_shape', 'AUTO')
+    tier = getattr(props, 'material_tier', 'TIER_3')
+    door_w = float(getattr(props, 'door_width', 1.45))
+    ground_stone = bool(getattr(props, 'ground_floor_stone', False))
+    is_arched = (shape == 'ARCHED') or (shape == 'AUTO' and ground_stone and door_w < 1.6)
+    crown = 0.41 if is_arched else 0.16
+    # Crown trim + floor slab (0.15) + ceiling beams (0.18) + small air gap.
+    needed = door_h + crown + 0.40
+    needed = min(8.0, max(2.4, needed))
+    try:
+        cur = float(getattr(props, 'floor_height', 3.6))
+    except Exception:
+        return
+    if cur + 1e-6 < needed:
+        old_auto = getattr(props, 'auto_update', True)
+        try:
+            props.auto_update = False
+            props.floor_height = needed
+        except Exception:
+            pass
+        finally:
+            try:
+                props.auto_update = old_auto
+            except Exception:
+                pass
+
+
 def generate_building(obj, props):
     """
     Main generator function called when properties change or generate button is clicked.
@@ -31,6 +75,9 @@ def generate_building(obj, props):
     Empty construction sites (scaffold-only, no building yet) take a separate
     early-out path: scaffold + piles + cranes, no walls, roof or footing.
     """
+    # Tall doors must fit inside the ground storey: grow short floors
+    # slightly rather than clipping the portal through the slab above.
+    _ensure_door_floor_clearance(props)
     bm = bmesh.new()
 
     if (getattr(props, 'has_construction', False)
@@ -298,6 +345,9 @@ def _build_foundation(bm, props, ctx):
         return
     found_h = ctx.found_h
     found_type = getattr(props, 'foundation_type', 'STONE')
+    tier = getattr(props, 'material_tier', 'TIER_3')
+    if tier == 'TIER_1':
+        found_type = 'WOOD'
     fw = ctx.base_w + 0.35
     fd = ctx.base_d + 0.35
     fcx = 0.0

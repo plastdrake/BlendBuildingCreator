@@ -277,40 +277,42 @@ def build_roof_turret(bm, center_pos, z_base, turret_w=1.3, turret_h=1.9, spire_
     )
 
 
-def build_fantasy_chimney(bm, pos_xy, z_start, total_height, width=0.85, depth=0.85, crooked_angle=0.0):
+def build_fantasy_chimney(bm, pos_xy, z_start, total_height, width=0.85, depth=0.85, crooked_angle=0.0, mat_index=MAT_INDEX_STONE):
     """
-    Builds a stylized fantasy stone chimney with tapered profile, stone cap, and smoke pot.
+    Builds a stylized fantasy chimney with tapered profile, overhanging cap, and smoke pot.
+    Uses stone in T2/T3, and rustic timber/wood box chute in T1.
     """
     cx, cy = pos_xy
+    trim_mat = MAT_INDEX_TIMBER if mat_index == MAT_INDEX_WOOD else MAT_INDEX_STONE
     
-    # 1. Main stone chimney trunk
+    # 1. Main chimney trunk
     create_beveled_box(
         bm,
         size=(width, depth, total_height),
         location=(cx, cy, z_start + total_height * 0.5),
-        mat_index=MAT_INDEX_STONE,
+        mat_index=mat_index,
         bevel_amount=0.03
     )
-    # 2. Projecting stone collar trim
+    # 2. Projecting collar trim
     collar_z = z_start + total_height - 0.16
     create_beveled_box(
         bm,
         size=(width + 0.10, depth + 0.10, 0.12),
         location=(cx, cy, collar_z),
-        mat_index=MAT_INDEX_STONE,
+        mat_index=trim_mat,
         bevel_amount=0.02
     )
-    # 3. Overhanging stone cap with subtle tilt for organic handmade feel
+    # 3. Overhanging cap with subtle tilt for organic handmade feel
     cap_z = z_start + total_height + 0.05
     create_beveled_box(
         bm,
         size=(width + 0.18, depth + 0.18, 0.12),
         location=(cx, cy, cap_z),
         rotation=(0.0, 0.025, 0.0),
-        mat_index=MAT_INDEX_STONE,
+        mat_index=trim_mat,
         bevel_amount=0.025
     )
-    # 4. Terracotta/clay smoke pot on top, centered
+    # 4. Terracotta/clay/iron smoke pot on top, centered
     create_cone(
         bm,
         radius1=0.20,

@@ -30,10 +30,15 @@ from .palisade import (
 
 def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
                         roof_style='MERLONS',
-                        mat_index=MAT_INDEX_STONE, door_dir=(0.0, 1.0)):
+                        mat_index=MAT_INDEX_STONE, door_dir=(0.0, 1.0),
+                        trim_mat=None):
     """A heavy fortified bastion tower with walk-in hollow interior, courtyard entrance,
-    open rooftop stone platform with crenellated merlons, and chamfered quoin corners.
+    open rooftop platform with crenellated merlons, and chamfered quoin corners.
+    Supports wooden towers (Tier 2) and stone towers (Tier 3).
     """
+    if trim_mat is None:
+        trim_mat = MAT_INDEX_TIMBER if mat_index == MAT_INDEX_WOOD else MAT_INDEX_CUT_STONE
+    deck_mat = MAT_INDEX_WOOD if mat_index == MAT_INDEX_WOOD else MAT_INDEX_CUT_STONE
     half_s = base_size * 0.5
     wall_t = 0.38
     int_half = max(0.6, half_s - wall_t)
@@ -91,7 +96,7 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
         pf = create_beveled_box(bm, size=(sx, sy, plinth_h),
                                 location=to_world(lx, ly, plinth_h * 0.5),
                                 rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+                                mat_index=trim_mat, bevel_amount=0.02)
         for f in pf:
             f.tag = False
     door_w_pl = 1.05
@@ -101,7 +106,7 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
                                 location=to_world(s_p * (door_w_pl * 0.5 + pl_jamb * 0.5),
                                                   half_s, plinth_h * 0.5),
                                 rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+                                mat_index=trim_mat, bevel_amount=0.02)
         for f in pf:
             f.tag = False
 
@@ -249,33 +254,33 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     slit_specs.append((0.0, _cw_y, _cw_lz, (d_fwd.x, d_fwd.y)))
 
     # -----------------------------------------------------------------------
-    # 3. Arched Cut-Stone Doorway Trimmings & Open Inward Timber Door Leaf
+    # 3. Arched Doorway Trimmings & Open Inward Timber Door Leaf
     # -----------------------------------------------------------------------
     door_front_y = half_s
 
-    # Cut-stone threshold step
+    # Threshold step
     th_f = create_beveled_box(bm, size=(door_w + 0.28, wall_t + 0.22, 0.14),
                              location=to_world(0.0, door_front_y, 0.07),
                              rotation=(0.0, 0.0, door_yaw),
-                             mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                             mat_index=trim_mat, bevel_amount=0.015)
     for f in th_f:
         f.tag = False
 
-    # Heavy cut-stone jamb pilasters framing the opening
+    # Heavy jamb pilasters framing the opening
     for s_j in (-1.0, 1.0):
         jx = s_j * (door_w * 0.5 + 0.11)
         jamb_f = create_beveled_box(bm, size=(0.22, wall_t + 0.12, door_h),
                                    location=to_world(jx, door_front_y, door_cz),
                                    rotation=(0.0, 0.0, door_yaw),
-                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                   mat_index=trim_mat, bevel_amount=0.015)
         for f in jamb_f:
             f.tag = False
 
-    # Heavy arched cut-stone lintel header above door
+    # Heavy arched lintel header above door
     lintel_f = create_beveled_box(bm, size=(door_w + 0.44, wall_t + 0.16, 0.32),
                                  location=to_world(0.0, door_front_y, door_h + 0.16),
                                  rotation=(0.0, 0.0, door_yaw),
-                                 mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+                                 mat_index=trim_mat, bevel_amount=0.02)
     for f in lintel_f:
         f.tag = False
 
@@ -331,7 +336,6 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     # -----------------------------------------------------------------------
     # 4. Interior Furnishings (Access Ladder & Wall Torch)
     # -----------------------------------------------------------------------
-    # Sturdy timber access ladder climbing through the hatch in the upper floor.
     lad_bottom = to_world(hole_c_lx + 0.24, hole_c_ly + int_half * 0.72, 0.02)
     lad_top = to_world(hole_c_lx, hole_c_ly, floor_lz + 0.50)
     lad_vec = lad_top - lad_bottom
@@ -340,7 +344,6 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     lad_rot = Vector((0.0, 0.0, 1.0)).rotation_difference(lad_vec.normalized()).to_euler()
 
     for s_rail in (-0.20, 0.20):
-        # Tangent vector across ladder width
         rail_offset = d_right * s_rail
         r_f = create_beveled_box(bm, size=(0.05, 0.08, lad_len),
                                 location=lad_mid + rail_offset, rotation=lad_rot,
@@ -370,7 +373,7 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     # -----------------------------------------------------------------------
     # 5. Softening Blockiness: Chamfered Quoin Corners & String Courses
     # -----------------------------------------------------------------------
-    # Stacked alternating cut-stone quoin blocks along the 4 vertical corners
+    # Stacked alternating quoin blocks along the 4 vertical corners
     quoin_step = 0.65
     n_quoins = max(3, int(shaft_wall_h / quoin_step))
     for i_q in range(n_quoins):
@@ -383,37 +386,37 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
             q_loc = to_world(s_x * (half_s - qw * 0.45), s_y * (half_s - qd * 0.45), q_z)
             q_faces = create_beveled_box(bm, size=(qw, qd, 0.30), location=q_loc,
                                          rotation=(0.0, 0.0, door_yaw),
-                                         mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.018)
+                                         mat_index=trim_mat, bevel_amount=0.018)
             for f in q_faces:
                 f.tag = False
 
-    # Mid-height cut-stone drip stringer course (water table)
+    # Mid-height drip stringer course (water table)
     mid_lz = shaft_bot_lz + shaft_wall_h * 0.46
     mid_belt = create_beveled_box(bm, size=(base_size + 0.12, base_size + 0.12, 0.12),
                                   location=to_world(0.0, 0.0, mid_lz),
                                   rotation=(0.0, 0.0, door_yaw),
-                                  mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                  mat_index=trim_mat, bevel_amount=0.015)
     for f in mid_belt:
         f.tag = False
 
     # -----------------------------------------------------------------------
-    # 6. Real Window Slits: cut-stone reveals dressing the through-holes
+    # 6. Real Window Slits: reveals dressing the through-holes
     # -----------------------------------------------------------------------
     for lx, ly, lz, out_n in slit_specs:
         c = to_world(lx, ly, lz)
         build_arrow_slit(bm, center=(c.x, c.y, c.z), normal_axis=out_n,
                          wall_thickness=wall_t, slit_w=slit_w, slit_h=slit_h,
-                         has_transom=True)
+                         mat_index=trim_mat, has_transom=True)
 
     # -----------------------------------------------------------------------
-    # 7. Stepped Corbels & Open Rooftop Stone Platform (Fighting Deck)
+    # 7. Stepped Corbels & Open Rooftop Platform (Fighting Deck)
     # -----------------------------------------------------------------------
     # Tier 1 stepped corbel course
     c1_lz = deck_lz - 0.22
     c1_f = create_beveled_box(bm, size=(base_size + 0.24, base_size + 0.24, 0.18),
                              location=to_world(0.0, 0.0, c1_lz),
                              rotation=(0.0, 0.0, door_yaw),
-                             mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
+                             mat_index=trim_mat, bevel_amount=0.025)
     for f in c1_f:
         f.tag = False
 
@@ -422,41 +425,41 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     c2_f = create_beveled_box(bm, size=(base_size + 0.44, base_size + 0.44, 0.18),
                              location=to_world(0.0, 0.0, c2_lz),
                              rotation=(0.0, 0.0, door_yaw),
-                             mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
+                             mat_index=trim_mat, bevel_amount=0.025)
     for f in c2_f:
         f.tag = False
 
-    # Individual cantilevered stone machicolation brackets under the overhang
+    # Individual cantilevered machicolation brackets under the overhang
     b_offsets = [-0.95, 0.0, 0.95]
     for b_off in b_offsets:
         bk_f1 = create_beveled_box(bm, size=(0.22, 0.32, 0.38),
                                   location=to_world(b_off, -half_s - 0.06, c1_lz - 0.10),
                                   rotation=(0.0, 0.0, door_yaw),
-                                  mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                  mat_index=trim_mat, bevel_amount=0.015)
         for f in bk_f1: f.tag = False
         bk_f2 = create_beveled_box(bm, size=(0.22, 0.32, 0.38),
                                   location=to_world(b_off, half_s + 0.06, c1_lz - 0.10),
                                   rotation=(0.0, 0.0, door_yaw),
-                                  mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                  mat_index=trim_mat, bevel_amount=0.015)
         for f in bk_f2: f.tag = False
         bk_f3 = create_beveled_box(bm, size=(0.32, 0.22, 0.38),
                                   location=to_world(-half_s - 0.06, b_off, c1_lz - 0.10),
                                   rotation=(0.0, 0.0, door_yaw),
-                                  mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                  mat_index=trim_mat, bevel_amount=0.015)
         for f in bk_f3: f.tag = False
         bk_f4 = create_beveled_box(bm, size=(0.32, 0.22, 0.38),
                                   location=to_world(half_s + 0.06, b_off, c1_lz - 0.10),
                                   rotation=(0.0, 0.0, door_yaw),
-                                  mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                  mat_index=trim_mat, bevel_amount=0.015)
         for f in bk_f4: f.tag = False
 
-    # Open rooftop fighting deck flagstone platform (open to sky - NO ROOF)
+    # Open rooftop fighting deck platform (open to sky - NO ROOF)
     deck_slab_pos = to_world(0.0, 0.0, deck_lz + 0.07)
     plat_w = base_size + 0.44
     d_f = create_beveled_box(bm, size=(plat_w, plat_w, 0.14),
                             location=deck_slab_pos,
                             rotation=(0.0, 0.0, door_yaw),
-                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+                            mat_index=deck_mat, bevel_amount=0.02)
     for f in d_f:
         f.tag = False
 
@@ -476,7 +479,7 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
             f.tag = True
 
     # -----------------------------------------------------------------------
-    # 8. Fortified Crenellated Merlons with Sloped Coping Caps
+    # 8. Fortified Crenellated Merlons with Coping Caps
     # -----------------------------------------------------------------------
     half_p = plat_w * 0.5
     merlon_h = 0.72
@@ -489,13 +492,13 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
         cp_pos = to_world(s_x * corner_inset, s_y * corner_inset, merlon_cz)
         cpf = create_beveled_box(bm, size=(merlon_t * 1.7, merlon_t * 1.7, merlon_h),
                                 location=cp_pos, rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                mat_index=trim_mat, bevel_amount=0.015)
         for f in cpf:
             f.tag = False
         cap_f = create_beveled_box(bm, size=(merlon_t * 1.9, merlon_t * 1.9, 0.09),
                                   location=cp_pos + d_up * (merlon_h * 0.5 + 0.045),
                                   rotation=(0.0, 0.0, door_yaw),
-                                  mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.018)
+                                  mat_index=trim_mat, bevel_amount=0.018)
         for f in cap_f:
             f.tag = False
 
@@ -509,80 +512,402 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
         m1_pos = to_world(im_x, -m_edge_inset, merlon_cz)
         mf1 = create_beveled_box(bm, size=(im_w, merlon_t, merlon_h), location=m1_pos,
                                 rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+                                mat_index=trim_mat, bevel_amount=0.012)
         for f in mf1: f.tag = False
         c1 = create_beveled_box(bm, size=(im_w + 0.08, merlon_t + 0.08, 0.08),
                                 location=m1_pos + d_up * (merlon_h * 0.5 + 0.04),
                                 rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                mat_index=trim_mat, bevel_amount=0.015)
         for f in c1: f.tag = False
 
         # Front edge merlons (+ly)
         m2_pos = to_world(im_x, m_edge_inset, merlon_cz)
         mf2 = create_beveled_box(bm, size=(im_w, merlon_t, merlon_h), location=m2_pos,
                                 rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+                                mat_index=trim_mat, bevel_amount=0.012)
         for f in mf2: f.tag = False
         c2 = create_beveled_box(bm, size=(im_w + 0.08, merlon_t + 0.08, 0.08),
                                 location=m2_pos + d_up * (merlon_h * 0.5 + 0.04),
                                 rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                mat_index=trim_mat, bevel_amount=0.015)
         for f in c2: f.tag = False
 
         # Left edge merlons (-lx)
         m3_pos = to_world(-m_edge_inset, im_x, merlon_cz)
         mf3 = create_beveled_box(bm, size=(merlon_t, im_w, merlon_h), location=m3_pos,
                                 rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+                                mat_index=trim_mat, bevel_amount=0.012)
         for f in mf3: f.tag = False
         c3 = create_beveled_box(bm, size=(merlon_t + 0.08, im_w + 0.08, 0.08),
                                 location=m3_pos + d_up * (merlon_h * 0.5 + 0.04),
                                 rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                mat_index=trim_mat, bevel_amount=0.015)
         for f in c3: f.tag = False
 
         # Right edge merlons (+lx)
         m4_pos = to_world(m_edge_inset, im_x, merlon_cz)
         mf4 = create_beveled_box(bm, size=(merlon_t, im_w, merlon_h), location=m4_pos,
                                 rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+                                mat_index=trim_mat, bevel_amount=0.012)
         for f in mf4: f.tag = False
         c4 = create_beveled_box(bm, size=(merlon_t + 0.08, im_w + 0.08, 0.08),
                                 location=m4_pos + d_up * (merlon_h * 0.5 + 0.04),
                                 rotation=(0.0, 0.0, door_yaw),
-                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                                mat_index=trim_mat, bevel_amount=0.015)
         for f in c4: f.tag = False
 
 
-def build_bastion_courtyard_towers(bm, props, ctx):
-    """Place heavy corner bastion towers with walk-in hollow interiors, courtyard arched entrances,
-    and open fighting decks with crenellated merlons (no roof).
+def build_rickety_frame_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
+                              door_dir=(0.0, 1.0)):
+    """A rickety open-timber watchtower for palisade (wood-tier) forts.
 
-    Tower outer walls align flush with the compound X boundary (tower center shifted inward by half_s)
-    so the courtyard-facing door is never blocked by the side palisades.
+    Freestanding battered frame in the spirit of a classic timber lookout:
+    splayed corner posts on stone footings, girt levels with X-cross braces
+    on every face, an overhanging railed deck, a plank watch-hut with a
+    pitched roof, round shields, and a full-height exterior ladder with
+    horizontal rungs. No masonry shaft, no merlons, no arrow slits.
+
+    Tilted members use exact ``rotation_difference`` orientation (Euler order
+    cannot express yaw-then-pitch), so braces and rungs are correct on every
+    facing.
     """
+    import random
+    from .shield import build_round_shield
+    half_b = base_size * 0.5
+    half_t = half_b - 0.55
+    deck_lz = height - 2.40
+    rng = random.Random((int(round(x * 13.7)) * 73856093) ^ (int(round(y * 13.7)) * 19349663))
+
+    ddx, ddy = door_dir
+    d_len = math.hypot(ddx, ddy) or 1.0
+    ddx, ddy = ddx / d_len, ddy / d_len
+    d_fwd = Vector((ddx, ddy, 0.0))
+    d_right = Vector((-ddy, ddx, 0.0))
+    d_up = Vector((0.0, 0.0, 1.0))
+    door_yaw = math.atan2(ddy, ddx) - math.pi * 0.5
+    zup = Vector((0.0, 0.0, 1.0))
+
+    def to_world(lx, ly, lz):
+        return Vector((x, y, z_ground)) + d_right * lx + d_fwd * ly + d_up * lz
+
+    def _beam(p0, p1, thick, mat, bevel=0.008, tag=True):
+        """One timber between two local points, exactly oriented."""
+        v0, v1 = to_world(*p0), to_world(*p1)
+        dv = v1 - v0
+        ln = max(dv.length, 0.05)
+        e = zup.rotation_difference(dv.normalized()).to_euler()
+        bf = create_beveled_box(bm, size=(thick, thick, ln),
+                                location=(v0 + v1) * 0.5,
+                                rotation=(e.x, e.y, e.z),
+                                mat_index=mat, bevel_amount=bevel)
+        for f in bf:
+            f.tag = tag
+        return bf
+
+    def _hbox(sx, sy, sz, loc, mat, bevel=0.010, tag=True):
+        hf = create_beveled_box(bm, size=(sx, sy, sz),
+                                location=to_world(*loc),
+                                rotation=(0.0, 0.0, door_yaw),
+                                mat_index=mat, bevel_amount=bevel)
+        for f in hf:
+            f.tag = tag
+        return hf
+
+    def _half(z):
+        return half_b + (half_t - half_b) * (z / deck_lz)
+
+    # -- Stone footings + 4 battered corner posts --------------------------------
+    for s_x in (-1.0, 1.0):
+        for s_y in (-1.0, 1.0):
+            _hbox(0.55, 0.55, 0.35, (s_x * half_b, s_y * half_b, 0.17),
+                  MAT_INDEX_STONE, bevel=0.02, tag=False)
+            _beam((s_x * half_b, s_y * half_b, 0.25),
+                  (s_x * (half_t + rng.uniform(-0.03, 0.03)),
+                   s_y * (half_t + rng.uniform(-0.03, 0.03)), deck_lz),
+                  0.17, MAT_INDEX_TIMBER, bevel=0.012)
+
+    # -- Girt levels ---------------------------------------------------------------
+    levels = [deck_lz * 0.36 + rng.uniform(-0.06, 0.06),
+              deck_lz * 0.62 + rng.uniform(-0.06, 0.06),
+              deck_lz * 0.87]
+    for lz in levels:
+        h = _half(lz)
+        _hbox(h * 2.0 + 0.13, 0.13, 0.13, (0.0, h, lz), MAT_INDEX_TIMBER)
+        _hbox(h * 2.0 + 0.13, 0.13, 0.13, (0.0, -h, lz), MAT_INDEX_TIMBER)
+        _hbox(0.13, h * 2.0 + 0.13, 0.13, (h, 0.0, lz), MAT_INDEX_TIMBER)
+        _hbox(0.13, h * 2.0 + 0.13, 0.13, (-h, 0.0, lz), MAT_INDEX_TIMBER)
+
+    # -- X-cross braces on every face, every span ------------------------------------
+    spans = [(deck_lz * 0.10, levels[0]), (levels[0], levels[1]),
+             (levels[1], levels[2]), (levels[2], deck_lz - 0.05)]
+    for z0, z1 in spans:
+        if z1 - z0 < 0.4:
+            continue
+        h0, h1 = _half(z0), _half(z1)
+        for axis, sgn in (('y', 1.0), ('y', -1.0), ('x', 1.0), ('x', -1.0)):
+            if axis == 'y':
+                def _pt(u, h, z):
+                    return (u * h, sgn * h, z)
+            else:
+                def _pt(u, h, z):
+                    return (sgn * h, u * h, z)
+            _beam(_pt(-1.0, h0, z0), _pt(1.0, h1, z1), 0.09, MAT_INDEX_TIMBER, bevel=0.006)
+            _beam(_pt(1.0, h0, z0), _pt(-1.0, h1, z1), 0.09, MAT_INDEX_TIMBER, bevel=0.006)
+
+    # -- Overhanging deck on cross-beams, railed parapet --------------------------------
+    _hbox(half_t * 2.0 + 0.30, 0.18, 0.18, (0.0, 0.0, deck_lz - 0.09), MAT_INDEX_TIMBER)
+    _hbox(0.18, half_t * 2.0 + 0.30, 0.18, (0.0, 0.0, deck_lz - 0.09), MAT_INDEX_TIMBER)
+    plat = half_t * 2.0 + 1.00
+    _deck_p = plat * 0.5
+    # Deck floor with a ladder hatch: open band at the hatch x-range from
+    # mid-deck to the edge so the ladder arrives through the floor.
+    _hatch_x0, _hatch_x1 = 0.55 - 0.30, 0.55 + 0.30
+    _hatch_y0 = 0.85
+    _hbox(plat, (_deck_p + _hatch_y0), 0.12,
+          (0.0, (_hatch_y0 - _deck_p) * 0.5, deck_lz + 0.06),
+          MAT_INDEX_WOOD, bevel=0.012, tag=False)
+    if _deck_p - _hatch_y0 > 0.05:
+        _hbox((_hatch_x0 + _deck_p), (_deck_p - _hatch_y0), 0.12,
+              ((_hatch_x0 - _deck_p) * 0.5, (_hatch_y0 + _deck_p) * 0.5, deck_lz + 0.06),
+              MAT_INDEX_WOOD, bevel=0.012, tag=False)
+        _hbox((_deck_p - _hatch_x1), (_deck_p - _hatch_y0), 0.12,
+              ((_hatch_x1 + _deck_p) * 0.5, (_hatch_y0 + _deck_p) * 0.5, deck_lz + 0.06),
+              MAT_INDEX_WOOD, bevel=0.012, tag=False)
+    rail_h = 1.00
+    half_p = plat * 0.5 - 0.07
+    for s_x in (-1.0, 1.0):
+        for s_y in (-1.0, 1.0):
+            _hbox(0.11, 0.11, rail_h,
+                  (s_x * half_p, s_y * half_p, deck_lz + 0.12 + rail_h * 0.5),
+                  MAT_INDEX_TIMBER)
+    for rz in (deck_lz + 0.12 + rail_h - 0.06, deck_lz + 0.12 + rail_h * 0.45):
+        _hbox(plat - 0.06, 0.09, 0.09, (0.0, half_p, rz), MAT_INDEX_TIMBER)
+        _hbox(plat - 0.06, 0.09, 0.09, (0.0, -half_p, rz), MAT_INDEX_TIMBER)
+        _hbox(0.09, plat - 0.06, 0.09, (half_p, 0.0, rz), MAT_INDEX_TIMBER)
+        _hbox(0.09, plat - 0.06, 0.09, (-half_p, 0.0, rz), MAT_INDEX_TIMBER)
+
+    # -- Watch-hut: plank walls with window bands, open courtyard front ---------------
+    fz = deck_lz + 0.12
+    huh = half_t - 0.12
+    wall_top = fz + 1.60
+    _hbox(0.13, 0.13, 1.60, (huh, huh, fz + 0.80), MAT_INDEX_TIMBER)
+    _hbox(0.13, 0.13, 1.60, (-huh, huh, fz + 0.80), MAT_INDEX_TIMBER)
+    _hbox(0.13, 0.13, 1.60, (huh, -huh, fz + 0.80), MAT_INDEX_TIMBER)
+    _hbox(0.13, 0.13, 1.60, (-huh, -huh, fz + 0.80), MAT_INDEX_TIMBER)
+    # Front header over the open doorway (sits on the front posts, clear of
+    # the roof slabs above).
+    _hbox(huh * 2.0 + 0.13, 0.14, 0.16, (0.0, huh, fz + 1.55), MAT_INDEX_TIMBER)
+
+    # Back wall: solid low band, slatted window band, header plate.
+    _plank_lo = huh * 2.0
+    nz = max(1, int(round(0.80 / 0.24)))
+    for i in range(nz):
+        za = fz + 0.80 * i / nz
+        zb = fz + 0.80 * (i + 1) / nz
+        _hbox(_plank_lo, 0.07, (zb - za) * 0.94, (0.0, -huh, (za + zb) * 0.5),
+              MAT_INDEX_WOOD, bevel=0.006)
+    _hbox(_plank_lo, 0.07, 0.18, (0.0, -huh, wall_top - 0.09), MAT_INDEX_WOOD, bevel=0.006)
+    for _u in (-huh * 0.66, -huh * 0.22, huh * 0.22, huh * 0.66):
+        _hbox(0.12, 0.07, wall_top - 0.18 - (fz + 0.80),
+              (_u, -huh, (fz + 0.80 + wall_top - 0.18) * 0.5),
+              MAT_INDEX_WOOD, bevel=0.006)
+    # Side walls: same pattern turned 90 degrees.
+    for _sx in (-huh, huh):
+        for i in range(nz):
+            za = fz + 0.80 * i / nz
+            zb = fz + 0.80 * (i + 1) / nz
+            _hbox(0.07, huh * 2.0, (zb - za) * 0.94, (_sx, 0.0, (za + zb) * 0.5),
+                  MAT_INDEX_WOOD, bevel=0.006)
+        _hbox(0.07, huh * 2.0, 0.18, (_sx, 0.0, wall_top - 0.09), MAT_INDEX_WOOD, bevel=0.006)
+        for _u in (-huh * 0.55, 0.0, huh * 0.55):
+            _hbox(0.07, 0.12, wall_top - 0.18 - (fz + 0.80),
+                  (_sx, _u, (fz + 0.80 + wall_top - 0.18) * 0.5),
+                  MAT_INDEX_WOOD, bevel=0.006)
+
+    # -- Pitched plank roof, ridge along local X -----------------------------------------
+    ridge_z = fz + 2.30
+    eave_y = huh + 0.42
+    eave_z = fz + 1.50
+    hut_w = huh * 2.0
+    for sgn in (-1.0, 1.0):
+        p_top = to_world(0.0, 0.0, ridge_z)
+        p_eave = to_world(0.0, sgn * eave_y, eave_z)
+        dv = p_eave - p_top
+        # Slabs meet exactly at the ridge (no overshoot crossing); overhang
+        # at the eave only.
+        _dir = dv.normalized()
+        p_eave_ext = p_eave + _dir * 0.18
+        ln = (p_eave_ext - p_top).length
+        e = zup.rotation_difference(_dir).to_euler()
+        mid = (p_top + p_eave_ext) * 0.5
+        rf = create_beveled_box(bm, size=(hut_w + 0.60, 0.07, ln),
+                                location=mid, rotation=(e.x, e.y, e.z),
+                                mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
+        for f in rf:
+            f.tag = False
+    _hbox(hut_w + 0.62, 0.20, 0.12, (0.0, 0.0, ridge_z + 0.03), MAT_INDEX_TIMBER)
+    # Stepped gable infills under both ridge ends. Each board is sized to the
+    # slope width at its TOP edge (the narrowest point of that band) so it can
+    # never poke out through the roof plane, and stops short of the ridge.
+    _gable_top = ridge_z - 0.18
+    for gx in (-huh - 0.02, huh + 0.02):
+        for gi in range(3):
+            gz0 = wall_top + (_gable_top - wall_top) * gi / 3
+            gz1 = wall_top + (_gable_top - wall_top) * (gi + 1) / 3
+            _span_at_top = 2.0 * eave_y * (ridge_z - gz1) / max(ridge_z - wall_top, 0.01)
+            _span_at_top = max(0.15, _span_at_top - 0.06)
+            _hbox(0.07, _span_at_top, (gz1 - gz0) * 0.90, (gx, 0.0, (gz0 + gz1) * 0.5),
+                  MAT_INDEX_WOOD, bevel=0.006)
+
+    # -- Round shields on the hut front -----------------------------------------------------
+    for _sx, _pat in ((-huh + 0.02, 'QUARTERED'), (huh - 0.02, 'SOLID')):
+        _sp = to_world(_sx, huh + 0.12, fz + 1.10)
+        build_round_shield(bm, (_sp.x, _sp.y, _sp.z),
+                           normal=(d_fwd.x, d_fwd.y, 0.0), radius=0.30, pattern=_pat)
+
+    # -- Exterior ladder hugging the battered courtyard face: the rails run
+    # parallel to the taper (feet just off the base, top tucked against the
+    # deck edge) so it reads as resting on the tower, not floating.
+    lad_lx = 0.55
+    _lad_bot_out = half_b + 0.16
+    _lad_top_out = min(half_t + 0.12, _deck_p - 0.05)
+    lad_bot = to_world(lad_lx, _lad_bot_out, 0.0)
+    lad_top = to_world(lad_lx, _lad_top_out, deck_lz + 1.00)
+    for s_r in (-0.26, 0.26):
+        _beam((lad_lx + s_r, _lad_bot_out, 0.0),
+              (lad_lx + s_r, _lad_top_out, deck_lz + 1.00),
+              0.07, MAT_INDEX_WOOD, bevel=0.006)
+    n_rungs = max(5, int((deck_lz + 1.0) / 0.40))
+    e_rung = zup.rotation_difference(d_right).to_euler()
+    for ir in range(n_rungs):
+        t_r = (ir + 0.75) / n_rungs
+        rp = lad_bot + (lad_top - lad_bot) * t_r
+        rf = create_cylinder(bm, radius=0.020, height=0.52, segments=6,
+                             location=rp, rotation=(e_rung.x, e_rung.y, e_rung.z),
+                             mat_index=MAT_INDEX_WOOD)
+        for f in rf:
+            f.tag = True
+
+
+_TOWER_INSET_EXTRA = 0.35
+
+
+def courtyard_tower_centers(props, ctx):
+    """Corner centers for courtyard towers, fully INSIDE the enclosure.
+
+    Towers stand just inside the palisade/curtain line (outer face clears it
+    by ``_TOWER_INSET_EXTRA``) so enclosure runs stay unbroken and the
+    rampart walk is never blocked. Doors/ladders face the courtyard.
+    """
+    from .palisade import compound_bounds, fortification_offset, fortification_depth_extra
     off = fortification_offset(props)
     x_min, x_max, y_min, y_max = compound_bounds(ctx, off, fortification_depth_extra(props))
+    t = getattr(props, 'bastion_tower_size', 3.2)
+    ins = t * 0.5 + _TOWER_INSET_EXTRA
+    centers = [(x_min + ins, y_min + ins, (0.0, 1.0)),
+               (x_max - ins, y_min + ins, (0.0, 1.0))]
+    if getattr(props, 'bastion_tower_count', 2) >= 4:
+        centers += [(x_max - ins, y_max - ins, (0.0, -1.0)),
+                    (x_min + ins, y_max - ins, (0.0, -1.0))]
+    return centers
+
+
+def courtyard_tower_footprints(props, ctx):
+    """Tower ground footprints (with margin) for collision checks elsewhere."""
+    t = getattr(props, 'bastion_tower_size', 3.2)
+    h = t * 0.5 + 0.20
+    return [(cx - h, cx + h, cy - h, cy + h)
+            for cx, cy, _ in courtyard_tower_centers(props, ctx)]
+
+
+def build_tower_spur_walls(bm, props, ctx):
+    """Stitch each inset courtyard tower to the enclosure with short spur walls.
+
+    Towers stand just inside the line, so without spurs a slot of daylight
+    shows between the tower faces and the runs. Two stubs per tower (one to
+    the nearest front/back run, one to the nearest side run) close the corner
+    pocket in matching construction: stakes for palisades, masonry for
+    curtain walls.
+    """
+    if not bool(getattr(props, 'has_bastion_towers', False)):
+        return
+    is_curtain = bool(getattr(props, 'has_curtain_wall', False))
+    if not (is_curtain or bool(getattr(props, 'has_palisade', False))):
+        return
+    from .palisade import compound_bounds, fortification_offset, fortification_depth_extra
+    off = fortification_offset(props)
+    x_min, x_max, y_min, y_max = compound_bounds(ctx, off, fortification_depth_extra(props))
+    t = getattr(props, 'bastion_tower_size', 3.2)
+    th = t * 0.5
+    embed = 0.30
+
+    if is_curtain:
+        from .curtain_wall import build_curtain_wall_run
+        H = getattr(props, 'curtain_wall_height', 3.2)
+        T = getattr(props, 'curtain_wall_thickness', 0.55)
+
+        def _masonry(p0, p1, outward):
+            if math.hypot(p1[0] - p0[0], p1[1] - p0[1]) < 0.35:
+                return
+            build_curtain_wall_run(bm, p0, p1, outward, 0.0, H, T, seed=ctx.seed + 9)
+
+        for cx, cy, _ in courtyard_tower_centers(props, ctx):
+            fx = x_min if cx < (x_min + x_max) * 0.5 else x_max
+            fy = y_min if cy < (y_min + y_max) * 0.5 else y_max
+            if fy == y_min:
+                _masonry((cx, fy), (cx, cy - th + embed), (0.0, -1.0))
+            else:
+                _masonry((cx, fy), (cx, cy + th - embed), (0.0, 1.0))
+            if fx == x_min:
+                _masonry((fx, cy), (cx - th + embed, cy), (-1.0, 0.0))
+            else:
+                _masonry((fx, cy), (cx + th - embed, cy), (1.0, 0.0))
+    else:
+        from .palisade import build_palisade_run
+        height = getattr(props, 'palisade_height', 2.3)
+        style = getattr(props, 'palisade_style', 'STAKES')
+
+        def _stakes(p0, p1):
+            if math.hypot(p1[0] - p0[0], p1[1] - p0[1]) < 0.30:
+                return
+            build_palisade_run(bm, p0, p1, 0.0, height, style, seed=ctx.seed + 9)
+
+        for cx, cy, _ in courtyard_tower_centers(props, ctx):
+            fx = x_min if cx < (x_min + x_max) * 0.5 else x_max
+            fy = y_min if cy < (y_min + y_max) * 0.5 else y_max
+            if fy == y_min:
+                _stakes((cx, fy), (cx, cy - th + embed))
+            else:
+                _stakes((cx, fy), (cx, cy + th - embed))
+            if fx == x_min:
+                _stakes((fx, cy), (cx - th + embed, cy))
+            else:
+                _stakes((fx, cy), (cx + th - embed, cy))
+
+
+def build_bastion_courtyard_towers(bm, props, ctx):
+    """Place corner towers fully inside the enclosure line.
+
+    Palisade tiers get open rickety frame watchtowers (tapered X-braced
+    frame, deck hut, exterior ladder); curtain-wall tiers get heavy stone
+    bastions with walk-in interiors and crenellated decks.
+    """
     t_size = getattr(props, 'bastion_tower_size', 3.2)
     t_height = getattr(props, 'bastion_tower_height', 8.2)
-    t_half = t_size * 0.5
 
-    # Shift tower centers inward by t_half so the outer wall aligns with x_min/x_max.
-    # Door faces North (0.0, 1.0) into courtyard — side palisades start at py_min = y_min+t_half+0.45
-    # which is comfortably above the door face at y_min+t_half.
-    corners = [
-        (x_min + t_half, y_min, (0.0, 1.0)),  # front-left: outer wall on x_min
-        (x_max - t_half, y_min, (0.0, 1.0)),  # front-right: outer wall on x_max
-    ]
-    # If 4 towers configured, add back corners (entrance doors face South into courtyard)
-    if getattr(props, 'bastion_tower_count', 2) >= 4:
-        corners.extend([
-            (x_max - t_half, y_max, (0.0, -1.0)),
-            (x_min + t_half, y_max, (0.0, -1.0)),
-        ])
+    t_tier = getattr(props, 'material_tier', 'TIER_3')
+    is_wood_tower = (t_tier in ('TIER_1', 'TIER_2') or (getattr(props, 'has_palisade', False) and not getattr(props, 'has_curtain_wall', False)))
+    t_mat = MAT_INDEX_WOOD if is_wood_tower else MAT_INDEX_STONE
+    t_trim = MAT_INDEX_TIMBER if is_wood_tower else MAT_INDEX_CUT_STONE
 
-    for cx, cy, d_dir in corners:
-        build_bastion_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,
-                            height=t_height, mat_index=MAT_INDEX_STONE,
-                            door_dir=d_dir)
+    for cx, cy, d_dir in courtyard_tower_centers(props, ctx):
+        if is_wood_tower:
+            # Palisade tiers get an open rickety frame watchtower, never a
+            # wooden clone of the stone bastion.
+            build_rickety_frame_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,
+                                      height=t_height, door_dir=d_dir)
+        else:
+            build_bastion_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,
+                                height=t_height, mat_index=t_mat,
+                                door_dir=d_dir, trim_mat=t_trim)
 

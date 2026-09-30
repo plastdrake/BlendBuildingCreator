@@ -180,8 +180,11 @@ def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, pre
 
     Builds a genuine miniature building using :func:`generate_building` (same walls,
     floors, openings, roof and materials as the main manor), bakes the placement
-    transform into a temporary mesh, then appends it to the shared bmesh. Material
-    slot indices line up because both meshes use the same canonical slot order.
+    transform into a temporary mesh, then appends it to the shared bmesh. The
+    temp build prunes its slots to its own used set while the host mesh speaks
+    canonical indices, so polygon indices are translated back to canonical (by
+    material name) before merging — otherwise every merged outbuilding wears
+    scrambled materials.
 
     When ``preset_key`` names a real style preset the outhouse is generated from that
     preset (e.g. the dedicated STABLE barn presets), with ``overrides`` then tuning the
@@ -227,6 +230,23 @@ def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, pre
                     pass
 
         generate_building(obj, op)
+
+        # Translate the temp mesh's pruned slot indices back to canonical.
+        try:
+            from ..materials import CANONICAL_SLOT_NAMES
+            _src_names = [m.name if m is not None else '' for m in obj.data.materials]
+            _remap = {}
+            for _si, _nm in enumerate(_src_names):
+                try:
+                    _remap[_si] = CANONICAL_SLOT_NAMES.index(_nm)
+                except ValueError:
+                    pass
+            if _remap:
+                for _poly in mesh.polygons:
+                    if _poly.material_index in _remap:
+                        _poly.material_index = _remap[_poly.material_index]
+        except Exception:
+            pass
 
         mat = (Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z'))
         mesh.transform(mat)
