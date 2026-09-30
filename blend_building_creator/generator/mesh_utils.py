@@ -367,6 +367,75 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
 
     return faces
 
+
+def create_cone(bm, radius1=0.5, radius2=0.0, height=1.0, segments=8,
+                location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
+                mat_index=0, transform_matrix=None):
+    """Creates a stylized truncated or pointed cone with end caps and cylindrical UVs."""
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector(location))
+    tr_mat = loc_mat @ rot_mat
+    if transform_matrix is not None:
+        tr_mat = transform_matrix @ tr_mat
+
+    half_h = height * 0.5
+    bottom_verts = []
+    top_verts = []
+
+    for i in range(segments):
+        angle = (2.0 * math.pi * i) / segments
+        ca = math.cos(angle)
+        sa = math.sin(angle)
+        bottom_verts.append(bm.verts.new(tr_mat @ Vector((radius1 * ca, radius1 * sa, -half_h))))
+        if radius2 > 1e-4:
+            top_verts.append(bm.verts.new(tr_mat @ Vector((radius2 * ca, radius2 * sa, half_h))))
+
+    uv_layer = bm.loops.layers.uv.verify()
+    faces = []
+
+    if radius2 <= 1e-4:
+        tip_vert = bm.verts.new(tr_mat @ Vector((0.0, 0.0, half_h)))
+        for i in range(segments):
+            nxt = (i + 1) % segments
+            f = bm.faces.new([bottom_verts[i], bottom_verts[nxt], tip_vert])
+            f.material_index = mat_index
+            f.tag = True
+            faces.append(f)
+            u0 = i / segments
+            u1 = (i + 1) / segments
+            f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+            f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+            f.loops[2][uv_layer].uv = Vector(((u0 + u1) * 0.5, height))
+    else:
+        for i in range(segments):
+            nxt = (i + 1) % segments
+            f = bm.faces.new([bottom_verts[i], bottom_verts[nxt], top_verts[nxt], top_verts[i]])
+            f.material_index = mat_index
+            f.tag = True
+            faces.append(f)
+            u0 = i / segments
+            u1 = (i + 1) / segments
+            f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+            f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+            f.loops[2][uv_layer].uv = Vector((u1, height))
+            f.loops[3][uv_layer].uv = Vector((u0, height))
+
+    # Bottom cap
+    f_bot = bm.faces.new(list(reversed(bottom_verts)))
+    f_bot.material_index = mat_index
+    f_bot.tag = True
+    faces.append(f_bot)
+
+    # Top cap if truncated
+    if radius2 > 1e-4:
+        f_top = bm.faces.new(top_verts)
+        f_top.material_index = mat_index
+        f_top.tag = True
+        faces.append(f_top)
+
+    return faces
+
+
 def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, segments=16,
                                location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
                                mat_index=9, mat_index_cap=10, smooth=True, seam_offset=-1.5707963267948966, uv_offset=0.0,
@@ -555,12 +624,13 @@ def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=
         
     return faces
 
-def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29)):
+def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32)):
     """Calculates clean cubic / triplanar style UVs for bmesh faces.
     Skips faces whose materials already have specialized local unwraps
     (timber frames 2, roof shingles 4, forged iron 6, wood facade/accessories 7,
     logs 9, log end caps 10, clock face 12, banner 13, archery target 14, sign
-    decal 17, rope 18, fabrics 22-24, book leathers 25,28,29, book paper 26, wax 27).
+    decal 17, rope 18, fabrics 22-24, book leathers 25,28,29, book paper 26, wax 27,
+    rugs 30-32).
     Stone (0), plaster (1), floor (3), cut stone (8), hay (15), dirt (16), lantern (19),
     tarp (20), and clay (21) receive continuous world-space meter-scaled UVs.
     Tagged faces (face.tag == True) are also preserved, but note bmesh.ops.bevel

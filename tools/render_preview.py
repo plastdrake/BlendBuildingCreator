@@ -48,13 +48,14 @@ if bg_node:
     bg_node.inputs["Color"].default_value = (0.55, 0.70, 0.88, 1.0)
     bg_node.inputs["Strength"].default_value = 1.0
 
-# Render settings (Cycles on CPU works 100% headlessly without GPU window server)
-bpy.context.scene.render.engine = 'CYCLES'
-bpy.context.scene.cycles.device = 'CPU'
-bpy.context.scene.cycles.samples = 16
-bpy.context.scene.cycles.use_denoising = False
-bpy.context.scene.render.resolution_x = 800
-bpy.context.scene.render.resolution_y = 600
+# Render settings: EEVEE on GPU for ultra-fast previews in 1-2 seconds
+bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+bpy.context.scene.render.resolution_x = 960
+bpy.context.scene.render.resolution_y = 540
+try:
+    bpy.context.scene.eevee.taa_render_samples = 32
+except Exception:
+    pass
 
 # 1. Exterior Camera (Frame the entire building from roof to foundation)
 cam_data = bpy.data.cameras.new(name="ExtCamera")

@@ -46,7 +46,7 @@ SEGMENTS = 24
 
 # Walkable stairwell geometry. The curved staircase hugs the inner wall and the
 # floor opening above matches it exactly.
-STAIR_W = 1.50            # radial width of the stair treads and floor cutout (m)
+STAIR_W = 1.85            # radial width of the stair treads and floor cutout (m)
 STAIR_ARC = 135.0         # angular climb of each flight (deg)
 STAIR_OPEN = 75.0         # floor opening span behind the top landing (deg) -
                           # big enough that a ~1.9 m character sprinting up the
@@ -848,16 +848,28 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
         sy = r_mid * math.sin(mid_ang)
         chord_w = 2.0 * r_mid * math.tan(step_ang_rad * 0.5) * chord_mult
 
-        # Step wedge plank (UVs shifted per tread so the wood grain never repeats).
+        # Step wedge plank (UVs aligned along radial length so wood fibers flow along the tread).
         tread_faces = create_beveled_box(
             bm, size=(stair_w, max(0.24, chord_w), tread_thick),
             location=(sx, sy, cur_z - tread_thick * 0.5),
             rotation=(0.0, 0.0, mid_ang),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
         )
-        _shift_uvs(bm, tread_faces,
-                   (i * 0.318 + start_ang_rad * 1.3) % 1.0,
-                   (i * 0.211 + start_ang_rad * 0.7) % 1.0)
+        cos_a = math.cos(mid_ang)
+        sin_a = math.sin(mid_ang)
+        uv_layer = bm.loops.layers.uv.verify()
+        for f in tread_faces:
+            if not f.is_valid:
+                continue
+            for loop in f.loops:
+                co = loop.vert.co
+                dx = co.x - sx
+                dy = co.y - sy
+                lx = dx * cos_a + dy * sin_a
+                ly = -dx * sin_a + dy * cos_a
+                v = lx * 0.45 + (i * 0.318)
+                u = ly * 1.6 + (co.z - cur_z) * 1.4 + (i * 0.211)
+                loop[uv_layer].uv = Vector((u, v))
 
     # 2. Continuous 3D helical banister railing along the inner edge
     rail_h = 0.92
@@ -1662,8 +1674,8 @@ def build_mage_tower(bm, props, seed):
     """Build the authentic whimsical fantasy Mage Tower."""
     wall_t = props.wall_thickness
     found_h = props.foundation_height if props.has_foundation else 0.5
-    R = max(3.8, props.width * 0.46)
-    level_h = max(4.6, props.floor_height)
+    R = max(4.6, props.width * 0.48)
+    level_h = max(4.8, props.floor_height)
     levels = max(3, props.num_floors)
 
     # Material progression: the tall shaft is always dressed stone, while the

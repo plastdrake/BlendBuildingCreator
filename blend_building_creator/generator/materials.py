@@ -99,6 +99,9 @@ MAT_INDEX_BOOK_PAPER    = 26
 MAT_INDEX_WAX           = 27
 MAT_INDEX_LEATHER_2     = 28
 MAT_INDEX_LEATHER_3     = 29
+MAT_INDEX_RUG_1         = 30
+MAT_INDEX_RUG_2         = 31
+MAT_INDEX_RUG_3         = 32
 
 
 # ---------------------------------------------------------------------------
@@ -1934,6 +1937,31 @@ def create_stylized_wax(name="M_Building_Wax", color=(0.94, 0.88, 0.76, 1.0)):
     return create_stylized_fabric(name, "wax.jpg", color=color, roughness=0.55)
 
 
+def create_stylized_rug(name="M_Building_Rug", texture_name="rug_crimson_ornate.png"):
+    """Stylized woven carpet with transparent alpha fringe/tassels cutout."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    c = _coord(tree, loc_x=-1000)
+
+    tex_node = _load_image_texture(tree, texture_name, c, loc_x=-700, loc_y=120)
+    if tex_node is not None:
+        tex_node.extension = 'CLIP'
+        tree.links.new(tex_node.outputs["Color"], bsdf.inputs["Base Color"])
+        if "Alpha" in bsdf.inputs and "Alpha" in tex_node.outputs:
+            tree.links.new(tex_node.outputs["Alpha"], bsdf.inputs["Alpha"])
+        _setup_pbr(tree, bsdf, out, roughness=0.88, metallic=0.0)
+        try:
+            mat.blend_method = 'CLIP'
+            mat.shadow_method = 'CLIP'
+        except Exception:
+            pass
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", (0.55, 0.12, 0.15, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.88, metallic=0.0)
+    return mat
+
+
 # ---------------------------------------------------------------------------
 # Material slot setup
 # ---------------------------------------------------------------------------
@@ -2085,7 +2113,12 @@ def setup_building_material_slots(obj, props):
                                                 color=(0.50, 0.32, 0.20, 1.0),
                                                 texture="leather_3.jpg"))
 
-    # Assemble all 30 canonical slots in strict order
+    # 30-32. Woven carpets / rugs with alpha cutout tassels
+    mat_rug_1 = getattr(props, 'custom_rug_1', None) or create_stylized_rug("M_Building_Rug_1", "rug_crimson_ornate.png")
+    mat_rug_2 = getattr(props, 'custom_rug_2', None) or create_stylized_rug("M_Building_Rug_2", "rug_sapphire_royal.png")
+    mat_rug_3 = getattr(props, 'custom_rug_3', None) or create_stylized_rug("M_Building_Rug_3", "rug_forest_woven.png")
+
+    # Assemble canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
         mat_plaster,        # 1  MAT_INDEX_PLASTER
@@ -2117,6 +2150,9 @@ def setup_building_material_slots(obj, props):
         mat_wax,            # 27 MAT_INDEX_WAX
         mat_leather_2,      # 28 MAT_INDEX_LEATHER_2
         mat_leather_3,      # 29 MAT_INDEX_LEATHER_3
+        mat_rug_1,          # 30 MAT_INDEX_RUG_1
+        mat_rug_2,          # 31 MAT_INDEX_RUG_2
+        mat_rug_3,          # 32 MAT_INDEX_RUG_3
     ]
     obj.data.materials.clear()
     for m in required_mats:

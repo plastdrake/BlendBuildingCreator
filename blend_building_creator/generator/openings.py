@@ -205,8 +205,9 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         return
 
     frame_thick = 0.12
-    frame_depth = wall_thickness + 0.06
     is_arched = (door_shape == 'ARCHED') or (door_shape == 'AUTO' and ground_floor_stone and door_w < 1.6)
+    door_h = min(door_h, 2.30 if is_arched else 2.45)
+    frame_depth = wall_thickness + 0.04
     
     if is_arched:
         R_in = door_w * 0.5
@@ -365,8 +366,8 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             mat_index=MAT_INDEX_CUT_STONE,
             bevel_amount=0.015
         )
-        # Interior casing frame sticking into room
-        in_door_y = y_front + wall_thickness + 0.02
+        # Interior casing frame flush along room wall
+        in_door_y = y_front + wall_thickness
         create_beveled_box(
             bm, size=(frame_thick * 0.85, 0.05, door_h + frame_thick),
             location=(center_x - (door_w * 0.5 + frame_thick * 0.42), in_door_y, z_base + (door_h + frame_thick) * 0.5),

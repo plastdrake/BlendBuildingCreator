@@ -143,60 +143,78 @@ def build_roof_chimney(bm, props, effective_archetype,
         return
     cpx = getattr(props, 'chimney_pos_x', 0.55)
     cpy = getattr(props, 'chimney_pos_y', 0.55)
+    wall_t = float(getattr(props, 'wall_thickness', 0.28))
+    chim_w = 0.80
+    chim_d = 0.80
+
     # If pillared overhang active, force chimney to opposite side
     if getattr(props, 'has_pillared_overhang', False):
         p_side = getattr(props, 'pillared_overhang_side', 'FRONT')
-        if p_side == 'FRONT' and cpy < 0.15:
-            cpy = 0.65
-        if p_side == 'BACK' and cpy > -0.15:
+        if p_side == 'BACK':
             cpy = -0.65
-        if p_side == 'LEFT' and cpx < 0.15:
-            cpx = 0.65
-        if p_side == 'RIGHT' and cpx > -0.15:
-            cpx = -0.65
-    chim_x = top_cx + cpx * top_hx * 0.75
-    chim_y = top_cy + cpy * top_hy * 0.75
-    # Clamp inside roof
-    chim_x = max(top_x_min + 0.9, min(top_x_max - 0.9, chim_x))
-    chim_y = max(top_y_min + 0.9, min(top_y_max - 0.9, chim_y))
-    # Nudge away from dormer placements - push along whichever axis is tightest so
-    # collisions purely in X (dormers sit far left/right on the roof slope) actually
-    # get resolved instead of only ever shifting Y.
-    clearance = 1.0
+        elif p_side == 'FRONT':
+            cpy = 0.65
+
+    # Always place firmly against an outer wall (never in room center).
+    # Default is the Back Wall (+Y) which keeps front street facades and doors clean.
+    # Side walls are used when chimney_pos_x is pushed strongly to the flank.
+    if abs(cpx) > 0.70 and abs(cpy) < 0.40:
+        along_axis = 'Y'
+        if cpx > 0:
+            chim_x = top_x_max - wall_t * 0.45 - chim_w * 0.5
+        else:
+            chim_x = top_x_min + wall_t * 0.45 + chim_w * 0.5
+        chim_y = top_cy + cpy * (top_hy - 1.30)
+        chim_y = max(top_y_min + 1.10, min(top_y_max - 1.10, chim_y))
+    else:
+        along_axis = 'X'
+        chim_y = top_y_max - wall_t * 0.45 - chim_d * 0.5
+        chim_x = top_cx + cpx * (top_hx - 1.30)
+        chim_x = max(top_x_min + 1.10, min(top_x_max - 1.10, chim_x))
+
+    # Nudge away from dormer placements purely along the wall axis so the chimney
+    # stays permanently seated flush against the outer wall.
+    clearance = 1.05
     for _pass in range(4):
         moved = False
         for dp in (dormer_placements + wing_dormer_placements):
             dx = chim_x - dp['pos'][0]
             dy = chim_y - dp['pos'][1]
             if abs(dx) < clearance and abs(dy) < clearance:
-                if abs(dx) <= abs(dy):
-                    chim_x += (clearance - abs(dx) + 0.05) * (1.0 if dx >= 0 else -1.0)
-                    chim_x = max(top_x_min + 0.9, min(top_x_max - 0.9, chim_x))
+                if along_axis == 'X':
+                    sgn = 1.0 if dx >= 0 else -1.0
+                    chim_x += (clearance - abs(dx) + 0.08) * sgn
+                    chim_x = max(top_x_min + 1.10, min(top_x_max - 1.10, chim_x))
                 else:
-                    chim_y += (clearance - abs(dy) + 0.05) * (1.0 if dy >= 0 else -1.0)
-                    chim_y = max(top_y_min + 0.9, min(top_y_max - 0.9, chim_y))
+                    sgn = 1.0 if dy >= 0 else -1.0
+                    chim_y += (clearance - abs(dy) + 0.08) * sgn
+                    chim_y = max(top_y_min + 1.10, min(top_y_max - 1.10, chim_y))
                 moved = True
         if not moved:
             break
+
     # Keep the chimney out of a full-height annex's roof band (its valley
     # extension sweeps across that part of the main slope).
     if annex_band is not None:
         _as, _ay0, _ay1 = annex_band
         if (chim_x - top_cx) * _as > -0.2 and _ay0 <= chim_y <= _ay1:
-            if chim_y - _ay0 < _ay1 - chim_y:
-                chim_y = _ay0 - 0.60
-            else:
-                chim_y = _ay1 + 0.60
-            chim_y = max(top_y_min + 0.9, min(top_y_max - 0.9, chim_y))
-            if _ay0 <= chim_y <= _ay1:
+            if along_axis == 'X':
                 chim_x = top_cx - _as * abs(chim_x - top_cx)
-                chim_x = max(top_x_min + 0.9, min(top_x_max - 0.9, chim_x))
-    chim_total_h = total_height + 0.8
+                chim_x = max(top_x_min + 1.10, min(top_x_max - 1.10, chim_x))
+            else:
+                if chim_y - _ay0 < _ay1 - chim_y:
+                    chim_y = _ay0 - 0.65
+                else:
+                    chim_y = _ay1 + 0.65
+                chim_y = max(top_y_min + 1.10, min(top_y_max - 1.10, chim_y))
+
+    chim_total_h = total_height + 0.85
     build_fantasy_chimney(
         bm,
         pos_xy=(chim_x, chim_y),
         z_start=0.0,
         total_height=chim_total_h,
-        width=0.75, depth=0.75,
-        crooked_angle=0.03
+        width=chim_w, depth=chim_d,
+        crooked_angle=0.02
     )
+    return (chim_x, chim_y)

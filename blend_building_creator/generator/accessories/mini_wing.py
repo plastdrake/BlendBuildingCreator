@@ -342,6 +342,29 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         bevel_amount=0.008
     )
 
+    # Fitted oriel window bench with warm cushioned seat pad
+    bench_w = max(0.8, width - 0.45)
+    bench_d = min(0.48, depth * 0.42)
+    bench_h = 0.42
+    bench_x = depth - bench_d * 0.5 - 0.12
+    create_beveled_box(
+        bm,
+        size=(bench_d, bench_w, bench_h),
+        location=frame.to_world(Vector((bench_x, 0.0, z_base + bench_h * 0.5))),
+        rotation=(0.0, 0.0, frame.rot_z),
+        mat_index=MAT_INDEX_WOOD,
+        bevel_amount=0.010
+    )
+    from ..materials import MAT_INDEX_FABRIC_RED
+    create_beveled_box(
+        bm,
+        size=(bench_d + 0.03, bench_w + 0.03, 0.06),
+        location=frame.to_world(Vector((bench_x, 0.0, z_base + bench_h + 0.03))),
+        rotation=(0.0, 0.0, frame.rot_z),
+        mat_index=MAT_INDEX_FABRIC_RED,
+        bevel_amount=0.012
+    )
+
     # 3. Hollow Walls: Front Wall & Side Walls (Leaving Rear Open into Main Room)
     wall_mat = MAT_INDEX_WOOD if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_PLASTER_EXT
     col_w = 0.16

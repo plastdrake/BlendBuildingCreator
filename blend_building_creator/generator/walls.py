@@ -349,7 +349,7 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     cz = (z_bottom + z_top) * 0.5
     height = z_top - z_bottom
     
-    create_box(
+    faces = create_box(
         bm,
         size=(seg_len, thickness, height),
         location=(cx, cy, cz),
@@ -359,6 +359,13 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         u_offset=u_offset,
         v_offset=v_offset
     )
+    if normal_vec is not None and faces:
+        nv_x, nv_y = normal_vec
+        for f in faces:
+            f.normal_update()
+            # If face normal points opposite to outward normal_vec (facing into the room)
+            if (f.normal.x * nv_x + f.normal.y * nv_y) < -0.5:
+                f.material_index = MAT_INDEX_WOOD
 
 def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                             openings=[], mat_ext=MAT_INDEX_PLASTER_EXT,

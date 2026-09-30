@@ -15,12 +15,12 @@ import bmesh
 from mathutils import Matrix, Vector
 
 from ..mesh_utils import (
-    create_box, create_beveled_box, create_cylinder, create_torus_ring,
+    create_box, create_beveled_box, create_cylinder, create_cone, create_torus_ring,
     transform_faces,
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON,
-    MAT_INDEX_CLAY,
+    MAT_INDEX_CLAY, MAT_INDEX_WAX, MAT_INDEX_LANTERN,
     MAT_INDEX_FABRIC_WHITE, MAT_INDEX_FABRIC_RED, MAT_INDEX_FABRIC_STITCHED,
 )
 
@@ -437,10 +437,10 @@ def build_bed(bm, x, y, z_ground=0.0, ang=0.0, length=2.0, width=1.2):
     return faces
 
 
-def build_chair(bm, x, y, z_ground=0.0, ang=0.0):
+def build_chair(bm, x, y, z_ground=0.0, ang=0.0, seat_h=0.46, **kwargs):
     """Simple high-back tavern chair."""
     faces = []
-    seat_z, seat_s = 0.46, 0.44
+    seat_z, seat_s = seat_h, 0.44
     faces += create_beveled_box(bm, size=(seat_s, seat_s, 0.06),
                                 location=(0.0, 0.0, seat_z),
                                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
@@ -1173,15 +1173,16 @@ def build_chandelier(bm, x, y, z_top=2.4, ang=0.0, radius=0.45):
     """Wagon-wheel chandelier: open timber ring, wax candles, link chain.
 
     An open ring (torus + spokes) lets the candlelight fall through instead
-    of pooling on a solid disc. ``z_top`` anchors the ceiling mount.
+    of pooling on a solid disc. ``z_top`` anchors the ceiling mount, and all
+    parts hang downward into the room.
     """
     from ..materials import MAT_INDEX_LANTERN, MAT_INDEX_WAX
     faces = []
     # Ceiling mount + three interlocking vertical links down to the stem.
     faces += create_cylinder(bm, radius=0.06, height=0.03, segments=10,
-                             location=(0.0, 0.0, 0.85), mat_index=MAT_INDEX_IRON)
+                             location=(0.0, 0.0, -0.015), mat_index=MAT_INDEX_IRON)
     for i in range(3):
-        lz = 0.80 - i * 0.055
+        lz = -0.05 - i * 0.055
         rot = (math.pi * 0.5, 0.0, 0.0) if i % 2 == 0 else (0.0, math.pi * 0.5, 0.0)
         faces += create_torus_ring(bm, location=(0.0, 0.0, lz), rotation=rot,
                                    major_radius=0.032, minor_radius=0.008,
@@ -1189,8 +1190,8 @@ def build_chandelier(bm, x, y, z_top=2.4, ang=0.0, radius=0.45):
                                    mat_index=MAT_INDEX_IRON)
     # Iron stem from the last link down to the hub.
     faces += create_cylinder(bm, radius=0.022, height=0.42, segments=8,
-                             location=(0.0, 0.0, 0.44), mat_index=MAT_INDEX_IRON)
-    wheel_cz = 0.22
+                             location=(0.0, 0.0, -0.41), mat_index=MAT_INDEX_IRON)
+    wheel_cz = -0.63
     # Open timber wheel ring + hub + spokes (light falls through the middle).
     faces += create_torus_ring(bm, location=(0.0, 0.0, wheel_cz),
                                major_radius=radius, minor_radius=0.055,
@@ -1206,7 +1207,7 @@ def build_chandelier(bm, x, y, z_top=2.4, ang=0.0, radius=0.45):
                                     rotation=(0.0, 0.0, a),
                                     mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
     # Hanger rods from the stem to the ring (embedded both ends).
-    rod_top_z = 0.55
+    rod_top_z = -0.30
     for i in range(3):
         a = 2.0 * math.pi * i / 3 + 0.5
         px, py = math.cos(a) * radius * 0.94, math.sin(a) * radius * 0.94
@@ -1238,4 +1239,281 @@ def build_chandelier(bm, x, y, z_top=2.4, ang=0.0, radius=0.45):
                                  location=(cx, cy, candle_z0 + 0.15 + 0.008),
                                  mat_index=MAT_INDEX_LANTERN)
     transform_faces(faces, _place(x, y, z_top, ang))
+    return faces
+
+
+def build_kitchen_stove(bm, x, y, z_ground=0.0, ang=0.0, width=0.95, depth=0.75, height=1.05):
+    """Cast-iron kitchen cookstove with heavy firebox, oven doors, cooking rings, and rear flue pipe."""
+    faces = []
+    leg_h = 0.22
+    leg_w = 0.07
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            lx = sx * (width * 0.5 - 0.08)
+            ly = sy * (depth * 0.5 - 0.08)
+            faces += create_beveled_box(
+                bm, size=(leg_w, leg_w, leg_h),
+                location=(lx, ly, leg_h * 0.5),
+                mat_index=MAT_INDEX_IRON, bevel_amount=0.01
+            )
+            faces += create_beveled_box(
+                bm, size=(leg_w + 0.04, leg_w + 0.04, 0.03),
+                location=(lx, ly, 0.015),
+                mat_index=MAT_INDEX_IRON, bevel_amount=0.005
+            )
+
+    body_h = 0.65
+    body_cz = leg_h + body_h * 0.5
+    faces += create_beveled_box(
+        bm, size=(width, depth, body_h),
+        location=(0.0, 0.0, body_cz),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.02
+    )
+
+    top_t = 0.05
+    top_w = width + 0.08
+    top_d = depth + 0.08
+    top_cz = leg_h + body_h + top_t * 0.5
+    faces += create_beveled_box(
+        bm, size=(top_w, top_d, top_t),
+        location=(0.0, 0.0, top_cz),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.01
+    )
+
+    ring_r = 0.16
+    for rx in (-width * 0.24, width * 0.24):
+        faces += create_cylinder(
+            bm, radius=ring_r, height=0.015, segments=16,
+            location=(rx, 0.0, leg_h + body_h + top_t + 0.005),
+            mat_index=MAT_INDEX_IRON
+        )
+        faces += create_torus_ring(
+            bm, location=(rx, 0.0, leg_h + body_h + top_t + 0.02),
+            rotation=(math.pi * 0.5, 0.0, 0.0),
+            major_radius=0.025, minor_radius=0.006,
+            major_segments=10, minor_segments=6,
+            mat_index=MAT_INDEX_IRON
+        )
+
+    door_w = width * 0.75
+    door_h = body_h * 0.45
+    faces += create_beveled_box(
+        bm, size=(door_w, 0.04, door_h),
+        location=(0.0, -depth * 0.5 - 0.015, leg_h + body_h * 0.65),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.008
+    )
+    faces += create_beveled_box(
+        bm, size=(0.14, 0.03, 0.03),
+        location=(door_w * 0.35, -depth * 0.5 - 0.04, leg_h + body_h * 0.65),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+    )
+
+    ash_h = body_h * 0.22
+    faces += create_beveled_box(
+        bm, size=(door_w, 0.03, ash_h),
+        location=(0.0, -depth * 0.5 - 0.012, leg_h + ash_h * 0.5 + 0.04),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.006
+    )
+
+    pipe_r = 0.09
+    pipe_h = height - (leg_h + body_h + top_t) + 0.60
+    pipe_cz = leg_h + body_h + top_t + pipe_h * 0.5
+    pipe_y = depth * 0.5 - pipe_r - 0.04
+    faces += create_cylinder(
+        bm, radius=pipe_r, height=pipe_h, segments=16,
+        location=(0.0, pipe_y, pipe_cz),
+        mat_index=MAT_INDEX_IRON
+    )
+    faces += create_torus_ring(
+        bm, location=(0.0, pipe_y, leg_h + body_h + top_t + 0.04),
+        major_radius=pipe_r + 0.01, minor_radius=0.012,
+        major_segments=16, minor_segments=8,
+        mat_index=MAT_INDEX_IRON
+    )
+
+    # Simmering pot on left burner
+    pot_faces = create_cylinder(
+        bm, radius=0.13, height=0.16, segments=14,
+        location=(-width * 0.24, 0.0, leg_h + body_h + top_t + 0.08),
+        mat_index=MAT_INDEX_IRON
+    )
+    pot_faces += create_cylinder(
+        bm, radius=0.135, height=0.02, segments=14,
+        location=(-width * 0.24, 0.0, leg_h + body_h + top_t + 0.17),
+        mat_index=MAT_INDEX_IRON
+    )
+    pot_faces += create_cylinder(
+        bm, radius=0.02, height=0.03, segments=8,
+        location=(-width * 0.24, 0.0, leg_h + body_h + top_t + 0.19),
+        mat_index=MAT_INDEX_TIMBER
+    )
+    faces += pot_faces
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=1.8, length=2.8, rug_style=1, z_floor=None):
+    """Woven carpet with transparent alpha tassels cutout.
+    rug_style: 1 = Crimson Ornate, 2 = Sapphire Royal, 3 = Forest Woven.
+    """
+    if z_floor is not None:
+        z_ground = z_floor
+    from ..materials import MAT_INDEX_RUG_1, MAT_INDEX_RUG_2, MAT_INDEX_RUG_3
+    mat_map = {1: MAT_INDEX_RUG_1, 2: MAT_INDEX_RUG_2, 3: MAT_INDEX_RUG_3}
+    mat_idx = mat_map.get(rug_style, MAT_INDEX_RUG_1)
+
+    hw = width * 0.5
+    hl = length * 0.5
+    z = z_ground + 0.008
+
+    uv_layer = bm.loops.layers.uv.verify()
+    v1 = bm.verts.new((-hw, -hl, z))
+    v2 = bm.verts.new((hw, -hl, z))
+    v3 = bm.verts.new((hw, hl, z))
+    v4 = bm.verts.new((-hw, hl, z))
+    f = bm.faces.new((v1, v2, v3, v4))
+    f.material_index = mat_idx
+
+    for loop in f.loops:
+        u = 0.0 if loop.vert.co.x < 0 else 1.0
+        v = 0.0 if loop.vert.co.y < 0 else 1.0
+        loop[uv_layer].uv = Vector((u, v))
+    f.tag = True
+
+    transform_faces([f], Matrix.Translation((x, y, 0.0)) @ Matrix.Rotation(ang, 4, 'Z'))
+    return [f]
+
+
+def build_table_scatter(bm, x, y, z_ground=0.0, ang=0.0, clutter_type='AUTO', rng=None, z_table=None):
+    """Authentic medieval tavern tabletop clutter: pewter tankards, stoneware jugs, wood trenchers with bread, chamber candlestick."""
+    from ..materials import (
+        MAT_INDEX_IRON, MAT_INDEX_CLAY, MAT_INDEX_WOOD,
+        MAT_INDEX_TIMBER, MAT_INDEX_WAX, MAT_INDEX_LANTERN
+    )
+    if z_table is not None:
+        z_ground = z_table
+    if rng is None:
+        rng = random.Random(42)
+
+    faces = []
+    # 1. Pewter tankard with authentic upright ear handle and flared bands
+    faces += create_cylinder(
+        bm, radius=0.052, height=0.13, segments=14,
+        location=(0.08, 0.05, 0.065),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Bottom base ring
+    faces += create_cylinder(
+        bm, radius=0.058, height=0.016, segments=14,
+        location=(0.08, 0.05, 0.008),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Top rim band
+    faces += create_cylinder(
+        bm, radius=0.056, height=0.014, segments=14,
+        location=(0.08, 0.05, 0.123),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Upright ear handle on the side
+    faces += create_torus_ring(
+        bm, location=(0.08 + 0.056, 0.05, 0.068),
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        major_radius=0.032, minor_radius=0.008,
+        major_segments=10, minor_segments=6,
+        mat_index=MAT_INDEX_IRON
+    )
+
+    # 2. Wooden trencher plate with crusty golden bread roll & cheese wedge
+    faces += create_cylinder(
+        bm, radius=0.12, height=0.014, segments=16,
+        location=(-0.10, -0.05, 0.007),
+        mat_index=MAT_INDEX_WOOD
+    )
+    # Raised outer plate rim
+    faces += create_cylinder(
+        bm, radius=0.125, height=0.008, segments=16,
+        location=(-0.10, -0.05, 0.014),
+        mat_index=MAT_INDEX_TIMBER
+    )
+    # Bread roll (rounded golden loaf)
+    faces += create_cylinder(
+        bm, radius=0.052, height=0.032, segments=12,
+        location=(-0.11, -0.04, 0.026),
+        mat_index=MAT_INDEX_CLAY
+    )
+    # Bread scoring crust slit
+    faces += create_beveled_box(
+        bm, size=(0.06, 0.012, 0.012),
+        location=(-0.11, -0.04, 0.040),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.003
+    )
+    # Cheese wedge
+    faces += create_cone(
+        bm, radius1=0.038, radius2=0.005, height=0.026, segments=5,
+        location=(-0.05, -0.08, 0.023),
+        mat_index=MAT_INDEX_WAX
+    )
+
+    # 3. Stoneware Tavern Ale / Wine Flagon (warm glazed ceramic body, neck, cork stopper & loop handle)
+    faces += create_cylinder(
+        bm, radius=0.048, height=0.13, segments=14,
+        location=(-0.06, 0.11, 0.065),
+        mat_index=MAT_INDEX_CLAY
+    )
+    # Flagon shoulder taper
+    faces += create_cone(
+        bm, radius1=0.048, radius2=0.022, height=0.042, segments=12,
+        location=(-0.06, 0.11, 0.141),
+        mat_index=MAT_INDEX_CLAY
+    )
+    # Bottle neck with lip
+    faces += create_cylinder(
+        bm, radius=0.022, height=0.045, segments=10,
+        location=(-0.06, 0.11, 0.174),
+        mat_index=MAT_INDEX_CLAY
+    )
+    # Cork stopper
+    faces += create_cylinder(
+        bm, radius=0.016, height=0.025, segments=10,
+        location=(-0.06, 0.11, 0.204),
+        mat_index=MAT_INDEX_WOOD
+    )
+    # Small finger loop handle on the flagon neck
+    faces += create_torus_ring(
+        bm, location=(-0.06 - 0.036, 0.11, 0.145),
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        major_radius=0.022, minor_radius=0.006,
+        major_segments=8, minor_segments=5,
+        mat_index=MAT_INDEX_CLAY
+    )
+
+    # 4. Chamber candlestick on saucer with finger ring and glowing flame
+    faces += create_cylinder(
+        bm, radius=0.048, height=0.010, segments=12,
+        location=(0.12, -0.09, 0.005),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Finger ring on saucer edge
+    faces += create_torus_ring(
+        bm, location=(0.12 + 0.048, -0.09, 0.012),
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        major_radius=0.016, minor_radius=0.004,
+        major_segments=8, minor_segments=5,
+        mat_index=MAT_INDEX_IRON
+    )
+    # Wax candle column
+    faces += create_cylinder(
+        bm, radius=0.016, height=0.068, segments=10,
+        location=(0.12, -0.09, 0.042),
+        mat_index=MAT_INDEX_WAX
+    )
+    # Glowing teardrop flame
+    faces += create_cone(
+        bm, radius1=0.007, radius2=0.001, height=0.020, segments=8,
+        location=(0.12, -0.09, 0.084),
+        mat_index=MAT_INDEX_LANTERN
+    )
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
     return faces

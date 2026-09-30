@@ -54,6 +54,8 @@ class BuildingContext:
     wing_side: str = 'RIGHT'
     total_height: float = 0.0
     floor_stair_holes: Dict[int, Any] = field(default_factory=dict)
+    floor_rooms: Dict[int, List[Any]] = field(default_factory=dict)
+    floor_interior_walls: Dict[int, List[Any]] = field(default_factory=dict)
     # World-space window sill centres: {floor: {facade: [(x, y, sill_z), ...]}}
     # recorded by the wall phase so accessories can align to real windows.
     window_centers: Dict[int, Any] = field(default_factory=dict)
@@ -64,6 +66,8 @@ class BuildingContext:
     top_z: float = 0.0
     top_hx: float = 0.0
     top_hy: float = 0.0
+    chimney_pos: Any = None
+    floor_doorways: Dict[int, List[Dict[str, Any]]] = field(default_factory=dict)
     is_rotated_roof: bool = False
 
     def bounds_for(self, floor_idx: int) -> Bounds:

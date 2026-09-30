@@ -166,7 +166,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     floor_height: FloatProperty(
         name="Floor Height",
         description="Height per storey in meters (Mage Towers use very tall levels)",
-        min=2.2, max=8.0, default=2.8,
+        min=2.4, max=8.0, default=3.6,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -318,6 +318,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('CHAPEL', "Healers' Chapel", "Rounded apse, stone bell tower, rose window and a quiet herb churchyard"),
             ('KNIGHTS_MANOR', "Knights Manor", "Fortified hall: gatehouse with portcullis, courtyard and training yard"),
             ('MAGE_TOWER', "Mage Tower", "Round wizard tower with a jettied belvedere, ring balcony and tall spire"),
+            ('TENEMENT', "Tenement Row / Complex", "Multi-apartment residential complex with separate apartment suites"),
         ],
         default='AUTO',
         update=on_property_updated
@@ -602,7 +603,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     stair_width: FloatProperty(
         name="Stair Width",
         description="Width of interior staircase and floor cutout",
-        min=0.7, max=1.5, default=0.95,
+        min=0.8, max=3.5, default=1.45,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -611,6 +612,34 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Ceiling Beams",
         description="Rustic exposed wooden ceiling beams in rooms",
         default=True,
+        update=on_property_updated
+    )
+    
+    has_interior_walls: BoolProperty(
+        name="Interior Partition Walls",
+        description="Add interior partition walls with open walkthrough doorways dividing storeys into rooms",
+        default=True,
+        update=on_property_updated
+    )
+
+    interior_partition_style: EnumProperty(
+        name="Room Layout",
+        description="How rooms are partitioned within each storey",
+        items=[
+            ('AUTO', 'Auto (By Floor & Size)', 'Intelligently partition rooms based on floor dimensions and level'),
+            ('HALL_CHAMBERS', 'Hall & Chambers', 'Main hall with partitioned side or back chambers'),
+            ('TWO_ROOMS', 'Two Rooms', 'Divide floor into two rooms along the longer axis'),
+            ('OPEN', 'Open Floor Plan', 'Single open room per floor with no dividing walls'),
+        ],
+        default='AUTO',
+        update=on_property_updated
+    )
+
+    interior_wall_thickness: FloatProperty(
+        name="Interior Wall Thickness",
+        description="Thickness of interior partition walls",
+        min=0.10, max=0.30, default=0.16,
+        unit='LENGTH',
         update=on_property_updated
     )
     
@@ -666,7 +695,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     door_width: FloatProperty(
         name="Door Width",
         description="Width of door opening in meters",
-        min=0.8, max=2.4, default=1.05,
+        min=0.8, max=3.5, default=1.45,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -674,7 +703,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     door_height: FloatProperty(
         name="Door Height",
         description="Height of door opening in meters",
-        min=1.9, max=2.8, default=2.2,
+        min=1.9, max=4.5, default=2.80,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -2121,7 +2150,12 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('BOOK_PILE_SMALL', "Book Pile (Small)", "Small pile of flat books"),
             ('BOOK_PILE_LARGE', "Book Pile (Large)", "Large pile of flat books"),
             ('CAULDRON', "Stove Pot", "Lidded stove pot with top handle"),
+            ('KITCHEN_STOVE', "Kitchen Stove", "Cast-iron cookstove with burners and oven"),
             ('CHANDELIER', "Chandelier", "Hanging candle-ring chandelier"),
+            ('RUG_CRIMSON', "Rug (Crimson Ornate)", "Ornate woven carpet with medallion and tassels"),
+            ('RUG_SAPPHIRE', "Rug (Sapphire Royal)", "Royal blue damask carpet with tassels"),
+            ('RUG_FOREST', "Rug (Forest Woven)", "Sage and terracotta woven geometric carpet with tassels"),
+            ('SCATTER_TABLEWARE', "Table Clutter", "Pewter tankards, ceramic plates, bottles, and candles"),
             ('BARREL', "Barrel", "Staved ale barrel"),
             ('CRATE', "Crate", "Braced shipping crate"),
             ('SACK', "Grain Sack", "Tied burlap grain sack"),

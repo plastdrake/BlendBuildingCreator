@@ -118,8 +118,18 @@ for _s in (
           'interior_furniture', 'build_book_pile_large', 0.40),
     _spec('CAULDRON', "Stove Pot", 'KITCHEN', "Lidded stove pot with top handle",
           'interior_furniture', 'build_cauldron', 0.35),
+    _spec('KITCHEN_STOVE', "Kitchen Stove", 'KITCHEN', "Cast-iron cookstove with burners and oven",
+          'interior_furniture', 'build_kitchen_stove', 0.85, width=0.95, depth=0.75, height=1.05),
     _spec('CHANDELIER', "Chandelier", 'LIGHT', "Hanging candle-ring chandelier",
           'interior_furniture', 'build_chandelier', 0.60, radius=0.45),
+    _spec('RUG_CRIMSON', "Rug (Crimson Ornate)", 'SLEEP', "Ornate woven carpet with medallion and tassels",
+          'interior_furniture', 'build_rug', 1.40, width=1.8, length=2.8, rug_style=1),
+    _spec('RUG_SAPPHIRE', "Rug (Sapphire Royal)", 'SLEEP', "Royal blue damask carpet with tassels",
+          'interior_furniture', 'build_rug', 1.40, width=1.8, length=2.8, rug_style=2),
+    _spec('RUG_FOREST', "Rug (Forest Woven)", 'SLEEP', "Sage and terracotta woven geometric carpet with tassels",
+          'interior_furniture', 'build_rug', 1.40, width=1.8, length=2.8, rug_style=3),
+    _spec('SCATTER_TABLEWARE', "Table Clutter", 'TABLES', "Pewter tankards, ceramic plates, bottles, and candles",
+          'interior_furniture', 'build_table_scatter', 0.40),
 ):
     PROP_REGISTRY[_s.key] = _s
 

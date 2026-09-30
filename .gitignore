@@ -21,8 +21,7 @@ exterior_*.png
 floor_*.png
 renders/
 renders_*/
-scratch/*.png
-scratch/*.jpg
+scratch/
 
 # Operating System files
 Thumbs.db

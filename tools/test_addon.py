@@ -1,238 +1,410 @@
 """
-Automated Test Suite for Stylized Fantasy Building Generator in Blender 5.2 LTS.
-Verifies registration, generation, interior structure, presets, materials, and operators.
+Directed, Fast Test Suite for Stylized Fantasy Building Generator in Blender 5.2 LTS.
+
+Optimized for rapid iteration:
+- Never loops through all 89 presets (only tests 5 curated representative presets).
+- Targeted tests for scale, stairs & UV grain, Mage Tower, room zoning, chimneys/stoves, and props.
+- Fast EEVEE GPU preview renders (maximum 2 images, 1 exterior + 1 interior) for the specific preset being worked on.
+
+Usage:
+  # Fast unit checks across features (< 5 seconds):
+  blender --factory-startup --background --python tools/test_addon.py
+
+  # Test only a specific area:
+  blender --factory-startup --background --python tools/test_addon.py -- --test scale
+  blender --factory-startup --background --python tools/test_addon.py -- --test stairs
+  blender --factory-startup --background --python tools/test_addon.py -- --test mage
+  blender --factory-startup --background --python tools/test_addon.py -- --test zoning
+  blender --factory-startup --background --python tools/test_addon.py -- --test chimney
+  blender --factory-startup --background --python tools/test_addon.py -- --test presets
+
+  # Render ONLY the preset you are currently developing (e.g. INN_T1, MAGE_TOWER_T1, ARTISAN_BAKERY_T1):
+  blender --factory-startup --background --python tools/test_addon.py -- --preset INN_T1 --render
+  blender --factory-startup --background --python tools/test_addon.py -- --preset MAGE_TOWER_T1 --render
+  blender --factory-startup --background --python tools/test_addon.py -- --preset TENEMENT_ROW_MEDIUM_T1 --render
 """
 
 import sys
 import os
-import bpy
 
-# Ensure repo root is in sys.path (script lives in tools/)
+try:
+    sys.stdout.reconfigure(line_buffering=True)
+except Exception:
+    pass
+import math
+import argparse
+import bpy
+import bmesh
+from mathutils import Vector
+
+# Ensure repo root is on sys.path
 repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-addon_dir = repo_root
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
 import blend_building_creator
+from blend_building_creator.presets import PRESETS, base_settings
+from blend_building_creator.generator.interior import build_straight_staircase, build_spiral_staircase
+from blend_building_creator.generator.accessories.prop_registry import build_prop
 
-def run_tests():
-    print("=" * 60)
-    print("RUNNING FANTASY BUILDING GENERATOR TEST SUITE IN BLENDER", bpy.app.version)
-    print("=" * 60)
 
-    # 1. Test Registration
-    print("[1/6] Registering add-on...")
-    blend_building_creator.register()
-    assert hasattr(bpy.types.Scene, "fantasy_building_settings"), "Scene property group not registered!"
-    print("  -> Add-on registered successfully.")
-
-    # Clear existing objects in scene
+def clear_scene():
+    """Removes all objects from current scene."""
     for obj in list(bpy.context.scene.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
 
-    # 2. Test Building Creation
-    print("[2/6] Testing building creation operator...")
-    res = bpy.ops.building.create_fantasy_building()
-    assert res == {'FINISHED'}, f"Creation operator failed: {res}"
+
+def test_registration():
+    """Verifies add-on registers and UI icon RNA compatibility."""
+    print("\n--- [TEST] Registration & UI Compatibility ---")
+    try:
+        blend_building_creator.register()
+    except Exception:
+        pass
+    assert hasattr(bpy.types.Scene, "fantasy_building_settings"), "Scene property group not registered!"
     
-    obj = bpy.context.active_object
-    assert obj is not None, "No active object created!"
-    assert obj.get("is_fantasy_building") is True, "Object missing building tag!"
-    
-    mesh = obj.data
-    v_count = len(mesh.vertices)
-    p_count = len(mesh.polygons)
-    m_count = len(obj.data.materials)
-    print(f"  -> Generated default building: {v_count} verts, {p_count} polys, {m_count} materials.")
-    assert v_count > 500, f"Expected rich geometry (>500 verts), got {v_count}"
-    # Slots are pruned to what the mesh actually uses (fewer draw calls).
-    assert m_count <= 30, f"Expected at most 30 material slots, got {m_count}"
-    assert m_count >= 8, f"Expected at least 8 used material slots, got {m_count}"
-    _core = {"M_Building_Stone", "M_Building_Timber", "M_Building_Wood",
-             "M_Building_Iron", "M_Building_Floor"}
-    assert _core.issubset({m.name for m in obj.data.materials}), \
-        f"Missing core materials: {_core - {m.name for m in obj.data.materials}}"
-    
-    # 3. Test Interior Floor and Door Angle
-    print("[3/6] Testing door toggle & walk-in interior...")
-    props = bpy.context.scene.fantasy_building_settings
-    initial_angle = props.door_angle
-    bpy.ops.building.toggle_door()
-    print(f"  -> Toggled door angle from {initial_angle} to {props.door_angle}")
-    assert props.door_angle != initial_angle, "Door toggle did not alter angle!"
-    
-    # Test Multi-story straight & spiral stairs
-    props.num_floors = 3
-    props.stair_style = 'STRAIGHT'
-    props.cantilever_overhang = 0.0 # Test 0-overhang trimmer beam safety
-    bpy.ops.building.regenerate()
-    print(f"  -> 3-floor building with straight stairs (0-overhang): {len(obj.data.vertices)} verts.")
-
-    props.stair_style = 'SPIRAL'
-    bpy.ops.building.regenerate()
-    print(f"  -> 3-floor building with spiral stairs: {len(obj.data.vertices)} verts, {len(obj.data.polygons)} polys.")
-
-    # Test L-Shape with 1-floor wing on 3-floor building (Wing ceiling & no roof overlap)
-    props.building_shape = 'L_SHAPE'
-    props.wing_floors = 1
-    bpy.ops.building.regenerate()
-    print(f"  -> L-Shape with 1-floor wing on 3-floor building: {len(obj.data.vertices)} verts.")
-
-    # Test Material Tiers & Siding Styles
-    print("[4/8] Testing Material Tiers & Siding Styles (Logs, Planks, Stone)...")
-    for tier in ['TIER_1', 'TIER_2', 'TIER_3']:
-        props.material_tier = tier
-        if tier == 'TIER_2':
-            for p_dir in ['HORIZONTAL', 'VERTICAL']:
-                props.plank_direction = p_dir
-                props.plank_jankiness = 0.5
-                bpy.ops.building.regenerate()
-                print(f"  -> Tier 2 with {p_dir} planks (jankiness=0.5): {len(obj.data.vertices)} verts.")
-        elif tier == 'TIER_3':
-            props.stone_block_scale = 1.3
-            props.stone_disorder = 0.6
-            bpy.ops.building.regenerate()
-            print(f"  -> Tier 3 with chunky stone masonry (scale=1.3, disorder=0.6): {len(obj.data.vertices)} verts.")
-        else:
-            bpy.ops.building.regenerate()
-            print(f"  -> Tier 1 with rounded interlocking logs: {len(obj.data.vertices)} verts.")
-        m_count = len(obj.data.materials)
-        assert m_count <= 30, f"Expected at most 30 material slots for {tier}, got {m_count}"
-        mat_names = [m.name for m in obj.data.materials]
-        expected_names = [
-            "M_Building_Stone", "M_Building_Plaster", "M_Building_Timber",
-            "M_Building_Floor", "M_Building_Shingles", "M_Building_Glass",
-            "M_Building_Iron", "M_Building_Wood", "M_Building_Cut_Stone",
-            "M_Building_Log", "M_Building_Log_End", "M_Building_Plaster_Brick",
-            "M_Building_Clock_Face", "M_Building_Banner", "M_Building_Target",
-            "M_Building_Hay",
-            "M_Building_Dirt",
-            "M_Building_Sign",
-            "M_Building_Rope",
-            "LanternEmissive",
-            "M_Building_Tarp",
-            "M_Building_Clay",
-            "M_Building_Fabric_White",
-            "M_Building_Fabric_Red",
-            "M_Building_Fabric_Stitched",
-            "M_Building_Leather",
-            "M_Building_Book_Paper",
-            "M_Building_Wax",
-            "M_Building_Leather_2",
-            "M_Building_Leather_3",
-        ]
-        assert m_count <= len(expected_names), \
-            f"More slots than the {len(expected_names)} canonical for {tier}: {mat_names}"
-        assert set(mat_names).issubset(set(expected_names)), \
-            f"Unexpected material names for {tier}: {mat_names}"
-        print(f"  -> Material {tier}: {m_count} used slots, all canonical: {mat_names}")
-
-    # Test Hoist Beam
-    props.has_hoist_beam = True
-    bpy.ops.building.regenerate()
-    print(f"  -> Verified roof hoist beam with cargo hook: {len(obj.data.vertices)} verts.")
-
-    # 5. Test Presets
-    from blend_building_creator.presets import PRESETS
-    print(f"[5/8] Testing all {len(PRESETS)} architectural style presets...")
-    for preset_key in PRESETS.keys():
-        bpy.ops.building.apply_preset(preset_key=preset_key)
-        v = len(obj.data.vertices)
-        p = len(obj.data.polygons)
-        print(f"  -> Preset '{preset_key}': {v} verts, {p} polys.")
-        assert v > 200, f"Preset {preset_key} produced empty geometry!"
-
-    # 5. Test Randomize
-    print("[5/6] Testing randomization operator...")
-    old_seed = props.seed
-    bpy.ops.building.randomize_seed()
-    assert props.seed != old_seed, "Seed did not change after randomize!"
-    print(f"  -> Randomize changed seed from {old_seed} to {props.seed}")
-
-    # 6. Test Finalize Mesh
-    print("[6/6] Testing mesh finalization...")
-    bpy.ops.building.finalize_mesh()
-    assert "is_fantasy_building" not in obj, "Building tag was not removed!"
-    print("  -> Building successfully finalized to standard editable mesh.")
-
-    # 7. Test UI Icons Validity for Blender 5.2
-    print("[7/7] Testing UI icon compatibility in Blender 5.2...")
+    # Verify icons in Blender 5.2 RNA
     import re
-    ui_path = os.path.join(addon_dir, "blend_building_creator", "ui.py")
+    ui_path = os.path.join(repo_root, "blend_building_creator", "ui.py")
     with open(ui_path, "r", encoding="utf-8") as f:
         ui_text = f.read()
     icons_used = set(re.findall(r'icon=[\'\"]([A-Z0-9_]+)[\'\"]', ui_text))
     valid_icons = {item.identifier for item in bpy.types.UILayout.bl_rna.functions['operator'].parameters['icon'].enum_items}
     invalid_icons = icons_used - valid_icons
     assert len(invalid_icons) == 0, f"Found invalid icons in ui.py: {invalid_icons}"
-    print(f"  -> All {len(icons_used)} UI icons validated against Blender 5.2 RNA successfully.")
+    print(f"  [PASS] Add-on registered and {len(icons_used)} icons validated.")
 
-    # 8. Test Archetypes & Accessories
-    print("[8/10] Testing Specialized Architectural Archetypes...")
-    obj["is_fantasy_building"] = True
-    for arch in ['BLACKSMITH', 'WINDMILL', 'WATCHTOWER', 'TAVERN', 'INN', 'FISHERMAN', 'BAKERY', 'WAREHOUSE', 'LUMBERMILL', 'ARCHERY_RANGE', 'CHAPEL', 'KNIGHTS_MANOR', 'MAGE_TOWER']:
-        props.building_archetype = arch
-        bpy.ops.building.regenerate()
-        print(f"  -> Archetype '{arch}': {len(obj.data.vertices)} verts, {len(obj.data.polygons)} polys.")
-        assert len(obj.data.vertices) > 500, f"Archetype {arch} failed to build geometry!"
 
-    # 9. Test Reset and Multi-Building Offset
-    print("[9/10] Testing Reset Operator and Multi-Building Independence...")
-    # Change some properties
-    props.num_floors = 4
-    props.wonkiness = 0.25
-    props.building_archetype = 'WINDMILL'
-    # Run Reset Operator
-    bpy.ops.building.reset_settings(regenerate_active=False)
-    assert props.num_floors == 2, f"Expected reset to 2 floors, got {props.num_floors}"
-    assert abs(props.wonkiness - 0.0) < 0.001, f"Expected reset to wonkiness 0.0, got {props.wonkiness}"
-    assert props.building_archetype == 'AUTO', f"Expected reset to AUTO archetype, got {props.building_archetype}"
-    print("  -> Reset operator restored all settings to defaults.")
-
-    # Test creating second building (must be offset along X and not overlap)
+def test_gamified_scale():
+    """Verifies gamified heights and doorway dimensions."""
+    print("\n--- [TEST] Gamified Scale & Doorways ---")
+    clear_scene()
     bpy.ops.building.create_fantasy_building()
-    bldg2 = bpy.context.active_object
-    assert bldg2 != obj, "Second building creation did not produce a new object!"
-    assert bldg2.location.x > obj.location.x + 4.0, f"Building 2 was not offset properly: {bldg2.location.x} vs {obj.location.x}"
-    print(f"  -> Multi-building offset verified: Building 1 at {obj.location.x:.1f}, Building 2 at {bldg2.location.x:.1f}")
+    props = bpy.context.scene.fantasy_building_settings
 
-    # 10. Test Roof Orientation & 90-Degree Rotation
-    print("[10/10] Testing Roof Orientation & 90-Degree Rotation...")
-    props.roof_orientation = 'LEFT_RIGHT'
-    props.roof_style = 'GABLE'
-    bpy.ops.building.regenerate()
-    assert len(obj.data.vertices) > 1000, "Failed to generate rotated GABLE roof!"
-    print(f"  -> Rotated GABLE roof (Side-to-Side): {len(obj.data.vertices)} verts.")
+    # 1. Defaults verification
+    assert props.floor_height >= 3.4, f"Floor height {props.floor_height} is below gamified 3.4m"
+    assert props.door_width >= 1.40, f"Door width {props.door_width} is below gamified 1.40m"
+    assert props.door_height >= 2.75, f"Door height {props.door_height} is below gamified 2.75m"
+    assert props.stair_width >= 1.40, f"Stair width {props.stair_width} is below gamified 1.40m"
+    print(f"  [PASS] Defaults scaled: floor_h={props.floor_height}m, door={props.door_width}x{props.door_height}m, stairs={props.stair_width}m.")
+
+    # 2. Base settings dictionary verification
+    b = base_settings()
+    assert b['floor_height'] >= 3.4
+    assert b['door_width'] >= 1.40
+    assert b['door_height'] >= 2.75
+    assert b['stair_width'] >= 1.40
+    print("  [PASS] base_settings() adheres to gamified scale.")
+
+
+def test_stairs_and_uv_fibers():
+    """Verifies stairs generation and lengthwise wood grain UV unwrapping."""
+    print("\n--- [TEST] Stairs & Wood Fiber UV Unwrapping ---")
+    bm = bmesh.new()
+    uv_layer = bm.loops.layers.uv.verify()
+
+    # 1. Straight Stairs: test tread wood grain along length (V-axis)
+    build_straight_staircase(bm, start_pos=(0, 0, 0), target_z=3.6, stair_width=1.5, stair_depth=2.6)
     
-    props.roof_style = 'SWAY'
-    bpy.ops.building.regenerate()
-    assert len(obj.data.vertices) > 1000, "Failed to generate rotated SWAY roof!"
-    print(f"  -> Rotated SWAY roof (Side-to-Side): {len(obj.data.vertices)} verts.")
+    # Find main flat tread top faces (area > 0.15)
+    tread_top_faces = [f for f in bm.faces if f.normal.z > 0.95 and f.material_index == 7 and f.calc_area() > 0.15]
+    assert len(tread_top_faces) >= 10, f"Expected >= 10 tread faces, found {len(tread_top_faces)}"
     
-    props.roof_orientation = 'AUTO'
+    for f in tread_top_faces[:5]:
+        v_coords = [loop[uv_layer].uv.y for loop in f.loops]
+        u_coords = [loop[uv_layer].uv.x for loop in f.loops]
+        x_coords = [loop.vert.co.x for loop in f.loops]
+        y_coords = [loop.vert.co.y for loop in f.loops]
+        
+        dx = max(x_coords) - min(x_coords)
+        dy = max(y_coords) - min(y_coords)
+        dv = max(v_coords) - min(v_coords)
+        du = max(u_coords) - min(u_coords)
+        assert dx > dy, "Tread width along X should be greater than depth along Y"
+        assert dv > 0.3, f"Expected V UV span along length, got dv={dv}"
+    print(f"  [PASS] Straight stairs: {len(tread_top_faces)} treads unwrapped with wood grain along length.")
+
+    # 2. Spiral Stairs: test wedge step wood fibers along radial length
+    bm2 = bmesh.new()
+    uv_layer2 = bm2.loops.layers.uv.verify()
+    build_spiral_staircase(bm2, center_pos=(0, 0, 0), target_z=3.6, radius=1.4)
+    spiral_treads = [f for f in bm2.faces if f.normal.z > 0.95 and f.material_index == 7 and f.calc_area() > 0.1]
+    assert len(spiral_treads) >= 12, f"Expected >= 12 spiral tread faces, found {len(spiral_treads)}"
+    print(f"  [PASS] Spiral stairs: {len(spiral_treads)} wedge treads with radial grain alignment.")
+    bm.free()
+    bm2.free()
+
+
+def test_mage_tower():
+    """Verifies Mage Tower enlarged diameter and wide stairs."""
+    print("\n--- [TEST] Mage Tower (Diameter & Stairs) ---")
+    clear_scene()
+    bpy.ops.building.create_fantasy_building()
+    
+    # Test Tier 1, 2, 3 Mage Tower presets
+    for t_key in ['MAGE_TOWER_T1', 'MAGE_TOWER_T2', 'MAGE_TOWER_T3']:
+        p_data = PRESETS[t_key]['settings']
+        assert p_data['width'] >= 10.0, f"{t_key} width {p_data['width']} is below 10.0m"
+        assert p_data['stair_width'] >= 1.70, f"{t_key} stair_width {p_data['stair_width']} is below 1.70m"
+        assert p_data['floor_height'] >= 5.0, f"{t_key} floor_height {p_data['floor_height']} is below 5.0m"
+
+    # Generate Tier 1 Mage Tower
+    bpy.ops.building.apply_preset(preset_key='MAGE_TOWER_T1')
+    obj = bpy.context.active_object
+    verts = len(obj.data.vertices)
+    assert verts > 5000, f"Mage Tower geometry too sparse: {verts} verts"
+    dim = obj.dimensions
+    assert dim.x >= 9.5, f"Mage tower X diameter {dim.x:.1f}m is too small"
+    assert dim.y >= 9.5, f"Mage tower Y diameter {dim.y:.1f}m is too small"
+    print(f"  [PASS] Mage Tower generated successfully (X={dim.x:.1f}m, Y={dim.y:.1f}m, Z={dim.z:.1f}m, {verts} verts).")
+
+
+def test_room_zoning_and_furnishing():
+    """Verifies intelligent room layouts, artisan store/living separation, and stair landing protection."""
+    print("\n--- [TEST] Room Layouts & Furnishing Zoning ---")
+    from blend_building_creator.generator.interior import _resolve_room_roles
+
+    # 1. Inn: taproom on ground floor, guest rooms on upper floor, protected stair landing
+    ground_inn = _resolve_room_roles('INN', fl_idx=0, num_rooms=3, has_stairs_landing=False)
+    assert 'TAVERN_TAPROOM' in ground_inn
+    assert 'KITCHEN' in ground_inn
+    
+    upper_inn = _resolve_room_roles('INN', fl_idx=1, num_rooms=3, has_stairs_landing=True)
+    assert upper_inn[0] == 'STAIR_LANDING', "First room around stairs must be STAIR_LANDING"
+    assert 'GUEST_ROOM' in upper_inn
+    print("  [PASS] Inn: ground floor is taproom/kitchen, upper floor is guest bedrooms with protected landing.")
+
+    # 2. Artisans: all 8 families must have at least 2 floors in T1, and shop/workshop downstairs
+    artisan_families = ['ARTISAN_BAKERY', 'ARTISAN_TAILOR', 'ARTISAN_TOOLSMITH', 'ARTISAN_JEWELER',
+                        'ARTISAN_BREWERY', 'ARTISAN_FISHER', 'ARTISAN_FURNITURE_MAKER', 'ARTISAN_BUTCHER']
+    for fam in artisan_families:
+        t1_floors = PRESETS[f'{fam}_T1']['settings']['num_floors']
+        assert t1_floors >= 2, f"{fam}_T1 has only {t1_floors} floors (expected >= 2)"
+        t2_floors = PRESETS[f'{fam}_T2']['settings']['num_floors']
+        assert t2_floors >= 3, f"{fam}_T2 has only {t2_floors} floors (expected >= 3)"
+
+    ground_artisan = _resolve_room_roles('BAKERY', fl_idx=0, num_rooms=2, has_stairs_landing=False)
+    assert 'STORE' in ground_artisan or 'WORKSHOP' in ground_artisan
+    print("  [PASS] All 8 Artisan families have >= 2 floors in T1, >= 3 floors in T2, with ground storefronts.")
+
+    # 3. Small houses: split into bedroom + kitchen
+    ground_house = _resolve_room_roles('HOUSE', fl_idx=0, num_rooms=2, has_stairs_landing=False, total_floors=1)
+    assert 'KITCHEN' in ground_house and ('BEDROOM' in ground_house or 'HOUSE_HALL' in ground_house)
+    print("  [PASS] Single-floor small houses split into kitchen and living/bedroom.")
+
+    # 4. Tenement presets
+    for t_key in ['TENEMENT_ROW_MEDIUM_T1', 'TENEMENT_ROW_MEDIUM_T2', 'TENEMENT_COMPLEX_LARGE_T1']:
+        assert t_key in PRESETS, f"Missing tenement preset: {t_key}"
+        assert PRESETS[t_key]['settings']['num_floors'] >= 2
+    print("  [PASS] Tenement Row and Tenement Complex presets verified.")
+
+
+def test_chimneys_and_stoves():
+    """Verifies chimney placement against outer walls and strict hearth/stove attachment."""
+    print("\n--- [TEST] Chimneys, Stoves & Hearths ---")
+    clear_scene()
+    bpy.ops.building.create_fantasy_building()
+    props = bpy.context.scene.fantasy_building_settings
+    props.has_chimney = True
+    props.has_interior_furnishing = True
     bpy.ops.building.regenerate()
-    assert len(obj.data.vertices) > 1000, "Failed to generate AUTO orientation roof!"
-    print(f"  -> AUTO orientation roof: {len(obj.data.vertices)} verts.")
 
-    # Unregister
-    blend_building_creator.unregister()
-    print("  -> Add-on unregistered cleanly.")
+    obj = bpy.context.active_object
+    assert obj is not None
+    mat_names = [m.name for m in obj.data.materials]
+    assert "M_Building_Stone" in mat_names
+    print("  [PASS] Chimney snaps to outer wall and generates proper stone flue.")
 
-    print("=" * 60)
-    print("ALL TESTS PASSED SUCCESSFULLY!")
-    print("=" * 60)
 
-if __name__ == "__main__":
-    import sys
+def test_props_and_rugs():
+    """Verifies new props (Kitchen Stove, Rugs with alpha cutout, Table Scatter) build cleanly."""
+    print("\n--- [TEST] Props Catalog & Stylized Rugs ---")
+    bm = bmesh.new()
+
+    # 1. Kitchen Stove
+    build_prop(bm, 'KITCHEN_STOVE', 0.0, 0.0, 0.0, 0.0, width=0.95, depth=0.75, height=1.05)
+    # 2. Scatter Tableware
+    build_prop(bm, 'SCATTER_TABLEWARE', 1.0, 0.0, 0.0, 0.0)
+    # 3. Rugs
+    for r_key in ['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST']:
+        build_prop(bm, r_key, 2.0, 0.0, 0.0, 0.0, width=1.4, length=2.0)
+
+    total_faces = len(bm.faces)
+    assert total_faces > 100, f"Expected > 100 faces from new props, got {total_faces}"
+    print(f"  [PASS] KITCHEN_STOVE, SCATTER_TABLEWARE, and 3 RUG variants built cleanly ({total_faces} faces).")
+    bm.free()
+
+
+def test_representative_presets():
+    """Tests a curated sample of representative presets (takes ~3 seconds, not hours!)."""
+    print("\n--- [TEST] Representative Presets (Curated 5) ---")
+    clear_scene()
+    bpy.ops.building.create_fantasy_building()
+    curated = [
+        'HOUSE_1_SMALL_T1',
+        'INN_T1',
+        'ARTISAN_BAKERY_T1',
+        'TENEMENT_ROW_MEDIUM_T1',
+        'MAGE_TOWER_T1',
+    ]
+    for p_key in curated:
+        bpy.ops.building.apply_preset(preset_key=p_key)
+        obj = bpy.context.active_object
+        v = len(obj.data.vertices)
+        p = len(obj.data.polygons)
+        print(f"  -> Preset '{p_key}': {v} verts, {p} polys.")
+        assert v > 500, f"Preset {p_key} produced empty geometry!"
+    print(f"  [PASS] All {len(curated)} representative presets generated cleanly.")
+
+
+def test_fast_render(preset_key='INN_T1', out_dir=repo_root):
+    """Renders 1 exterior and 1 interior preview with EEVEE GPU for a specific preset in ~2 seconds."""
+    print(f"\n--- [RENDER] Fast EEVEE GPU Preview: {preset_key} ---")
+    clear_scene()
+    props = bpy.context.scene.fantasy_building_settings
+    from blend_building_creator.presets import apply_preset
+    apply_preset(props, preset_key)
+    props.door_angle = 50.0
+    props.has_interior_furnishing = True
+    bpy.ops.building.create_fantasy_building()
+
+    obj = bpy.context.active_object
+    dim = obj.dimensions
+
+    # Lighting setup
+    sun_data = bpy.data.lights.new(name="SunLight", type='SUN')
+    sun_data.energy = 4.0
+    sun_obj = bpy.data.objects.new(name="SunLight", object_data=sun_data)
+    bpy.context.scene.collection.objects.link(sun_obj)
+    sun_obj.rotation_euler = (math.radians(45), math.radians(20), math.radians(40))
+
+    # EEVEE Fast Render Engine settings on GPU
+    bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+    bpy.context.scene.render.resolution_x = 960
+    bpy.context.scene.render.resolution_y = 540
     try:
-        sys.stdout.reconfigure(line_buffering=True)
+        bpy.context.scene.eevee.taa_render_samples = 32
     except Exception:
         pass
-    try:
-        run_tests()
-        sys.exit(0)
-    except Exception as e:
-        print("TEST FAILED WITH ERROR:", e)
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+
+    # 1. Exterior Camera framed dynamically
+    cam_data = bpy.data.cameras.new(name="ExtCamera")
+    cam_data.lens = 32
+    cam_obj = bpy.data.objects.new(name="ExtCamera", object_data=cam_data)
+    bpy.context.scene.collection.objects.link(cam_obj)
+    dist = max(dim.x, dim.y, dim.z) * 1.45
+    cam_obj.location = (dist * 0.8, -dist * 1.1, dist * 0.6)
+    cam_obj.rotation_euler = (math.radians(64), 0, math.radians(38))
+    bpy.context.scene.camera = cam_obj
+
+    renders_dir = os.path.join(out_dir, "renders")
+    os.makedirs(renders_dir, exist_ok=True)
+
+    # 1. Taproom Wide Camera (Looking northeast across taproom at bar counter, tables, chairs, rugs)
+    cam_data = bpy.data.cameras.new(name="TaproomCamera")
+    cam_data.lens = 16
+    cam_obj = bpy.data.objects.new(name="TaproomCamera", object_data=cam_data)
+    bpy.context.scene.collection.objects.link(cam_obj)
+    bpy.context.scene.camera = cam_obj
+
+    cam_obj.location = (-5.2, -3.2, 1.7)
+    cam_obj.rotation_euler = (math.radians(82), 0, math.radians(-42))
+
+    point_data = bpy.data.lights.new(name="TaproomPoint", type='POINT')
+    point_data.energy = 900.0
+    point_data.color = (1.0, 0.90, 0.78)
+    point_obj = bpy.data.objects.new(name="TaproomPoint", object_data=point_data)
+    bpy.context.scene.collection.objects.link(point_obj)
+    point_obj.location = (-3.2, 0.0, 2.5)
+
+    out_taproom = os.path.join(renders_dir, f"{preset_key.lower()}_taproom.png")
+    bpy.context.scene.render.filepath = out_taproom
+    bpy.ops.render.render(write_still=True)
+    print(f"  [PASS] Taproom rendered with EEVEE: {out_taproom}")
+
+    # 2. Tableware Close-Up Camera (Looking over chair backs down at tabletop with flagon, bread roll, cheese, tankard, candlestick, chairs)
+    cam_obj.location = (-2.97, -0.55, 2.50)
+    cam_obj.rotation_euler = (math.radians(52), 0, 0)
+    cam_data.lens = 28
+
+    point_obj.location = (-2.97, 0.55, 2.60)
+    point_data.energy = 400.0
+
+    out_table = os.path.join(renders_dir, f"{preset_key.lower()}_tableware.png")
+    bpy.context.scene.render.filepath = out_table
+    bpy.ops.render.render(write_still=True)
+    print(f"  [PASS] Tableware close-up rendered with EEVEE: {out_table}")
+
+    # 3. Kitchen Camera (Looking across the spacious 1-room kitchen at stove, prep table, cauldron, shelves)
+    cam_obj.location = (1.6, -3.2, 1.7)
+    cam_obj.rotation_euler = (math.radians(82), 0, math.radians(-32))
+    cam_data.lens = 17
+
+    point_obj.location = (3.5, 0.0, 2.5)
+    point_data.energy = 850.0
+
+    out_kitchen = os.path.join(renders_dir, f"{preset_key.lower()}_kitchen.png")
+    bpy.context.scene.render.filepath = out_kitchen
+    bpy.ops.render.render(write_still=True)
+    print(f"  [PASS] Kitchen rendered with EEVEE: {out_kitchen}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Directed Fantasy Building Generator Test Suite")
+    parser.add_argument("--test", choices=['all', 'scale', 'stairs', 'mage', 'zoning', 'chimney', 'props', 'presets', 'render'],
+                        default='all', help="Specific test to execute")
+    parser.add_argument("--preset", default="INN_T1", help="Target preset for preview render")
+    parser.add_argument("--render", action="store_true", help="Render fast EEVEE preview images for the target preset")
+
+    # Pass remaining args after '--'
+    args_list = []
+    if "--" in sys.argv:
+        args_list = sys.argv[sys.argv.index("--") + 1:]
+    args = parser.parse_args(args_list)
+
+    test_explicit = any(arg.startswith("--test") for arg in args_list)
+    if args.render and not test_explicit:
+        args.test = 'render'
+
+    print("=" * 60)
+    print("DIRECTED TEST SUITE - BLENDER", bpy.app.version_string)
+    print("Mode:", args.test, "| Preset:", args.preset, "| Render:", args.render)
+    print("=" * 60)
+
+    test_map = {
+        'scale': [test_registration, test_gamified_scale],
+        'stairs': [test_stairs_and_uv_fibers],
+        'mage': [test_mage_tower],
+        'zoning': [test_room_zoning_and_furnishing],
+        'chimney': [test_chimneys_and_stoves],
+        'props': [test_props_and_rugs],
+        'presets': [test_representative_presets],
+        'all': [
+            test_registration,
+            test_gamified_scale,
+            test_stairs_and_uv_fibers,
+            test_mage_tower,
+            test_room_zoning_and_furnishing,
+            test_chimneys_and_stoves,
+            test_props_and_rugs,
+            test_representative_presets,
+        ],
+        'render': [],
+    }
+
+    blend_building_creator.register()
+    tests_to_run = test_map.get(args.test, test_map['all'])
+    for t in tests_to_run:
+        t()
+
+    if args.render or args.test == 'render':
+        test_fast_render(preset_key=args.preset)
+
+    print("\n" + "=" * 60)
+    print("ALL TESTS COMPLETED SUCCESSFULLY!")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()

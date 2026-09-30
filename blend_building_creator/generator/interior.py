@@ -7,10 +7,15 @@ staircases (straight/L or fantasy spiral), and roof rafters.
 import bpy
 import bmesh
 import math
+from dataclasses import dataclass, field
+from typing import List, Tuple, Dict, Any, Optional
 from mathutils import Vector, Euler, Matrix
 from .mesh_utils import create_box, create_beveled_box, create_cylinder
 from .railing import build_railing, build_railing_post
-from .materials import MAT_INDEX_FLOOR, MAT_INDEX_STONE, MAT_INDEX_WOOD, MAT_INDEX_TIMBER, MAT_INDEX_STAIRS, MAT_INDEX_RAILING
+from .materials import (
+    MAT_INDEX_FLOOR, MAT_INDEX_STONE, MAT_INDEX_WOOD, MAT_INDEX_TIMBER,
+    MAT_INDEX_STAIRS, MAT_INDEX_RAILING, MAT_INDEX_PLASTER_EXT
+)
 
 
 def _add_floorboard_finish(bm, x_min, x_max, y_min, y_max, z_top, seed=0, thickness=0.10):
@@ -325,7 +330,7 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, retu
         build_railing(bm, (x_start, return_y), (rail_x, return_y), floor_z,
                       height=rail_h, braces=False, post_spacing=1.0)
 
-def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_depth=2.2, num_steps=14, direction_y=1):
+def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_depth=2.6, num_steps=14, direction_y=1):
     """
     Generates a wooden straight/run staircase with chunky treads, grounded stringers,
     solid base and top anchor plates, and stylized handrails on BOTH SIDES.
@@ -366,14 +371,14 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
             mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.01
         )
-        # Wood grain oriented along length (X) of each stair step
+        # Wood grain oriented strictly ALONG LENGTH (V axis) of each stair step board
         for f in tread_faces:
             if not f.is_valid:
                 continue
             for loop in f.loops:
                 co = loop.vert.co
-                u = (co.x - (sx - stair_width * 0.5)) * 0.65 + (i * 0.37)
-                v = (co.y - (sy - tread_d * 0.5)) * 1.5 + (co.z - sz) * 1.2 + (i * 0.19)
+                v = (co.x - (sx - stair_width * 0.5)) * 0.45 + (i * 0.37)
+                u = (co.y - (sy - tread_d * 0.5)) * 1.6 + (co.z - sz) * 1.4 + (i * 0.19)
                 loop[uv_layer].uv = Vector((u, v))
 
         # Riser plank beneath tread (down to step below or floor)
@@ -388,8 +393,8 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
                 continue
             for loop in f.loops:
                 co = loop.vert.co
-                u = (co.x - (sx - stair_width * 0.5)) * 1.5 + (i * 0.37 + 0.15)
-                v = (co.z - (sz - step_h * 0.5)) * 0.65 + (i * 0.19)
+                v = (co.x - (sx - stair_width * 0.5)) * 0.45 + (i * 0.37 + 0.15)
+                u = (co.z - (sz - step_h * 0.5)) * 1.6 + (co.y - sy) * 1.2 + (i * 0.19)
                 loop[uv_layer].uv = Vector((u, v))
         
     # 3. Side Stringer Boards (anchored from starter base to upper landing)
@@ -438,7 +443,7 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=0.9, stair_dep
             post_spacing=1.1, baluster_spacing=0.20, braces=False,
         )
 
-def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, start_ang_deg=-90.0, total_angle_deg=360.0):
+def build_spiral_staircase(bm, center_pos, target_z, radius=1.35, num_steps=18, start_ang_deg=-90.0, total_angle_deg=360.0):
     """
     Generates a continuous multi-floor fantasy spiral staircase.
     Rotates a full 360 degrees per storey so each floor arrives and departs
@@ -452,7 +457,7 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
     base_ang = math.radians(start_ang_deg)
     
     # 1. Central wooden column segment for this storey
-    col_r = 0.14
+    col_r = 0.16
     create_cylinder(
         bm,
         radius=col_r,
@@ -462,9 +467,10 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
         mat_index=MAT_INDEX_WOOD
     )
     
-    # 2. Wedge steps
+    # 2. Wedge steps with wood fibers running along radial length (V axis)
     step_len = radius - col_r
     posts = []
+    uv_layer = bm.loops.layers.uv.verify()
     
     for i in range(num_steps):
         cur_ang = base_ang + i * step_ang
@@ -478,14 +484,29 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
         
         # Step wedge plank
         step_w = 2.0 * mid_r * math.tan(step_ang * 0.5) * 1.15
-        create_beveled_box(
+        tread_faces = create_beveled_box(
             bm,
-            size=(step_len + 0.04, max(0.20, step_w), 0.065),
+            size=(step_len + 0.04, max(0.24, step_w), 0.065),
             location=(sx, sy, cur_z - 0.032),
             rotation=(0.0, 0.0, mid_ang),
             mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.01
         )
+        cos_ang = math.cos(mid_ang)
+        sin_ang = math.sin(mid_ang)
+        for f in tread_faces:
+            if not f.is_valid:
+                continue
+            for loop in f.loops:
+                co = loop.vert.co
+                dx = co.x - sx
+                dy = co.y - sy
+                # Local coordinates: lx along radial length of step board, ly across width
+                lx = dx * cos_ang + dy * sin_ang
+                ly = -dx * sin_ang + dy * cos_ang
+                v = lx * 0.45 + (i * 0.31)
+                u = ly * 1.6 + (co.z - cur_z) * 1.4 + (i * 0.17)
+                loop[uv_layer].uv = Vector((u, v))
         
         # Outer banister point on every step (post added after the loop)
         px = cx + (radius - 0.04) * math.cos(mid_ang)
@@ -494,12 +515,12 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
         
     # 3. Dedicated Top Landing Platform (flushes perfectly with upper floor level at target_z)
     land_len = step_len + 0.35
-    land_w = max(0.42, 2.0 * (col_r + land_len * 0.5) * math.tan(step_ang * 0.5) * 1.5)
+    land_w = max(0.50, 2.0 * (col_r + land_len * 0.5) * math.tan(step_ang * 0.5) * 1.5)
     land_r = col_r + land_len * 0.5
     land_ang = base_ang + ang_rad
     land_x = cx + land_r * math.cos(land_ang)
     land_y = cy + land_r * math.sin(land_ang)
-    create_beveled_box(
+    land_faces = create_beveled_box(
         bm,
         size=(land_len, land_w, 0.065),
         location=(land_x, land_y, target_z - 0.032),
@@ -507,6 +528,20 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.0, num_steps=16, s
         mat_index=MAT_INDEX_WOOD,
         bevel_amount=0.012
     )
+    cos_lang = math.cos(land_ang)
+    sin_lang = math.sin(land_ang)
+    for f in land_faces:
+        if not f.is_valid:
+            continue
+        for loop in f.loops:
+            co = loop.vert.co
+            dx = co.x - land_x
+            dy = co.y - land_y
+            lx = dx * cos_lang + dy * sin_lang
+            ly = -dx * sin_lang + dy * cos_lang
+            v = lx * 0.45
+            u = ly * 1.6 + (co.z - target_z) * 1.4
+            loop[uv_layer].uv = Vector((u, v))
     
     # Top landing banister point
     top_px = cx + (radius + 0.15) * math.cos(land_ang)
@@ -586,4 +621,600 @@ def build_attic_trusses(bm, x_min, x_max, y_min, y_max, z_base, ridge_z, spacing
             location=(cx, ty, collar_z),
             mat_index=MAT_INDEX_WOOD
         )
+
+
+# ---------------------------------------------------------------------------
+# Discrete Room Planning & Interior Partition Walls
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Room:
+    """Represents a discrete functional room on a floor."""
+    id: str
+    floor_idx: int
+    role: str
+    bounds: Tuple[float, float, float, float]  # (ix_min, ix_max, iy_min, iy_max)
+    is_wing: bool = False
+    wing_id: int = 0
+    doorways: List[Dict[str, Any]] = field(default_factory=list)
+    stair_hole: Optional[Tuple[float, float, float, float]] = None
+    exterior_facades: Dict[str, Tuple[float, float]] = field(default_factory=dict)
+
+
+def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
+                        doorway=None, mat_index=MAT_INDEX_PLASTER_EXT,
+                        casing_mat=MAT_INDEX_WOOD):
+    """
+    Builds a double-sided stylized interior partition wall running from p1=(x1,y1) to p2=(x2,y2).
+    Includes an open cased walkthrough doorway (with timber jambs and lintel, but NO door blade).
+    Also generates interior baseboard and crown moulding trims on both sides of the wall.
+    doorway: optional dict with keys 'cx', 'cy', 'w', 'h' or tuple (u_cx, door_w, door_h).
+    """
+    x1, y1 = p1
+    x2, y2 = p2
+    dx = x2 - x1
+    dy = y2 - y1
+    length = math.hypot(dx, dy)
+    if length < 0.20:
+        return
+
+    ux = dx / length
+    uy = dy / length
+    nx, ny = -uy, ux
+    ang = math.atan2(dy, dx)
+    H = z_ceil - z_floor
+
+    trim_h_floor = 0.11
+    trim_d = 0.028
+    trim_h_ceil = 0.09
+    trim_ceil_d = 0.026
+
+    # Resolve doorway
+    has_door = False
+    u_door_cx = 0.0
+    door_w = 1.30
+    door_h = min(2.65, H - 0.30)
+
+    if doorway is not None:
+        if isinstance(doorway, dict):
+            dw_x = doorway.get('x', (x1 + x2) * 0.5)
+            dw_y = doorway.get('y', (y1 + y2) * 0.5)
+            u_door_cx = (dw_x - x1) * ux + (dw_y - y1) * uy
+            door_w = doorway.get('w', 1.30)
+            door_h = min(doorway.get('h', 2.65), H - 0.30)
+        elif isinstance(doorway, (tuple, list)) and len(doorway) >= 3:
+            u_door_cx, door_w, door_h = doorway[0], doorway[1], min(doorway[2], H - 0.30)
+        has_door = True
+
+    jamb_w = 0.09
+    jamb_margin = jamb_w + 0.09
+    if has_door:
+        if length < door_w + jamb_margin * 2.0:
+            if length > 1.4:
+                door_w = length - jamb_margin * 2.0
+                u_door_cx = length * 0.5
+            else:
+                has_door = False
+        else:
+            u_door_cx = max(jamb_margin + door_w * 0.5, min(length - jamb_margin - door_w * 0.5, u_door_cx))
+
+    if not has_door:
+        cx = (x1 + x2) * 0.5
+        cy = (y1 + y2) * 0.5
+        cz = z_floor + H * 0.5
+        create_box(
+            bm, size=(length, thickness, H),
+            location=(cx, cy, cz),
+            rotation=(0.0, 0.0, ang),
+            mat_index=mat_index
+        )
+        for sgn in (-1.0, 1.0):
+            off = sgn * (thickness * 0.5 + trim_d * 0.5)
+            create_beveled_box(
+                bm, size=(length, trim_d, trim_h_floor),
+                location=(cx + nx * off, cy + ny * off, z_floor + trim_h_floor * 0.5),
+                rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.008
+            )
+            off_c = sgn * (thickness * 0.5 + trim_ceil_d * 0.5)
+            create_beveled_box(
+                bm, size=(length, trim_ceil_d, trim_h_ceil),
+                location=(cx + nx * off_c, cy + ny * off_c, z_ceil - trim_h_ceil * 0.5 - 0.008),
+                rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.008
+            )
+        return
+
+    # Wall with open doorway
+    u_start = u_door_cx - door_w * 0.5
+    u_end = u_door_cx + door_w * 0.5
+
+    # Recess rough plaster opening slightly so the timber casing cleanly laps and caps it,
+    # preventing any coplanar z-fighting or wonkiness tearing.
+    jamb_w = 0.10
+    overlap = 0.035
+    rough_start = u_start - overlap
+    rough_end = u_end + overlap
+    casing_d = thickness + 0.065  # Proud of plaster by ~3.2cm on both sides
+
+    # 1. Left segment
+    len1 = rough_start
+    if len1 > 0.02:
+        c1 = len1 * 0.5
+        create_box(
+            bm, size=(len1, thickness, H),
+            location=(x1 + ux * c1, y1 + uy * c1, z_floor + H * 0.5),
+            rotation=(0.0, 0.0, ang),
+            mat_index=mat_index
+        )
+        for sgn in (-1.0, 1.0):
+            off = sgn * (thickness * 0.5 + trim_d * 0.5)
+            t_len = max(0.04, len1 - 0.04)
+            t_c = t_len * 0.5
+            create_beveled_box(
+                bm, size=(t_len, trim_d, trim_h_floor),
+                location=(x1 + ux * t_c + nx * off, y1 + uy * t_c + ny * off, z_floor + trim_h_floor * 0.5),
+                rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.008
+            )
+
+    # 2. Header segment above doorway (raised slightly so lintel caps it from below)
+    top_pad = 0.03
+    top_h = H - (door_h + top_pad)
+    if top_h > 0.02:
+        c2 = (rough_start + rough_end) * 0.5
+        header_len = rough_end - rough_start
+        create_box(
+            bm, size=(header_len, thickness, top_h),
+            location=(x1 + ux * c2, y1 + uy * c2, z_floor + door_h + top_pad + top_h * 0.5),
+            rotation=(0.0, 0.0, ang),
+            mat_index=mat_index
+        )
+
+    # 3. Right segment
+    len3 = length - rough_end
+    if len3 > 0.02:
+        c3 = rough_end + len3 * 0.5
+        create_box(
+            bm, size=(len3, thickness, H),
+            location=(x1 + ux * c3, y1 + uy * c3, z_floor + H * 0.5),
+            rotation=(0.0, 0.0, ang),
+            mat_index=mat_index
+        )
+        for sgn in (-1.0, 1.0):
+            off = sgn * (thickness * 0.5 + trim_d * 0.5)
+            t_len = max(0.04, len3 - 0.04)
+            t_c = rough_end + 0.04 + t_len * 0.5
+            create_beveled_box(
+                bm, size=(t_len, trim_d, trim_h_floor),
+                location=(x1 + ux * t_c + nx * off, y1 + uy * t_c + ny * off, z_floor + trim_h_floor * 0.5),
+                rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.008
+            )
+
+    # 4. Continuous crown moulding at ceiling
+    for sgn in (-1.0, 1.0):
+        off_c = sgn * (thickness * 0.5 + trim_ceil_d * 0.5)
+        create_beveled_box(
+            bm, size=(length, trim_ceil_d, trim_h_ceil),
+            location=((x1 + x2) * 0.5 + nx * off_c, (y1 + y2) * 0.5 + ny * off_c, z_ceil - trim_h_ceil * 0.5 - 0.008),
+            rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.008
+        )
+
+    # 5. Cased Doorway Frame (walkthrough opening without door blade)
+    # Jambs centered over the rough plaster boundary so they swallow the rough edge and form smooth reveals
+    jamb_x = x1 + ux * (u_start - jamb_w * 0.5 + overlap * 0.4)
+    jamb_y = y1 + uy * (u_start - jamb_w * 0.5 + overlap * 0.4)
+    create_beveled_box(
+        bm, size=(jamb_w, casing_d, door_h),
+        location=(jamb_x, jamb_y, z_floor + door_h * 0.5),
+        rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.010
+    )
+    jamb_rx = x1 + ux * (u_end + jamb_w * 0.5 - overlap * 0.4)
+    jamb_ry = y1 + uy * (u_end + jamb_w * 0.5 - overlap * 0.4)
+    create_beveled_box(
+        bm, size=(jamb_w, casing_d, door_h),
+        location=(jamb_rx, jamb_ry, z_floor + door_h * 0.5),
+        rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.010
+    )
+    head_w = door_w + jamb_w * 2.0 + 0.06
+    head_h = 0.15
+    head_d = casing_d + 0.02
+    head_x = x1 + ux * u_door_cx
+    head_y = y1 + uy * u_door_cx
+    create_beveled_box(
+        bm, size=(head_w, head_d, head_h),
+        location=(head_x, head_y, z_floor + door_h + head_h * 0.5 - 0.015),
+        rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.012
+    )
+
+    # Beveled timber threshold board spanning the floor opening
+    create_beveled_box(
+        bm, size=(door_w + jamb_w * 2.0 + 0.04, casing_d + 0.02, 0.028),
+        location=(head_x, head_y, z_floor + 0.014),
+        rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.006
+    )
+
+
+def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, total_floors=1):
+    """Assigns functional roles to rooms on a floor based on building archetype and stair presence."""
+    if has_stairs_landing:
+        # On upper floors with stairs, Room 0 (around stair hole) is the protected landing/corridor.
+        # Bedrooms and private suites are strictly placed in the separate partitioned chambers.
+        if archetype in ('TAVERN', 'INN'):
+            pool = ['STAIR_LANDING', 'GUEST_ROOM', 'GUEST_ROOM', 'GUEST_ROOM', 'MASTER_BED', 'STUDY']
+            return pool[:num_rooms]
+        elif archetype in ('BLACKSMITH', 'WAREHOUSE', 'LUMBERMILL', 'BAKERY', 'FISHERMAN', 'BREWERY',
+                          'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER') or archetype.startswith('ARTISAN'):
+            if fl_idx == 1:
+                pool = ['STAIR_LANDING', 'HOUSE_HALL', 'BEDROOM', 'KITCHEN']
+            else:
+                pool = ['STAIR_LANDING', 'MASTER_BED', 'STUDY', 'BEDROOM']
+            return pool[:num_rooms]
+        elif archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):
+            pool = ['STAIR_LANDING', 'BARRACKS_DORM', 'BARRACKS_DORM', 'OFFICER_QUARTERS']
+            return pool[:num_rooms]
+        elif archetype in ('ARCHERY', 'ARCHERY_RANGE'):
+            pool = ['STAIR_LANDING', 'LODGE', 'BEDROOM', 'STUDY']
+            return pool[:num_rooms]
+        elif archetype in ('CHAPEL', 'HEALERS_CHAPEL'):
+            pool = ['STAIR_LANDING', 'HEALER_QUARTERS', 'STUDY', 'BEDROOM']
+            return pool[:num_rooms]
+        elif archetype in ('TENEMENT',):
+            pool = ['STAIR_LANDING', 'TENEMENT_KITCHEN', 'TENEMENT_BEDROOM', 'TENEMENT_KITCHEN', 'TENEMENT_BEDROOM']
+            return pool[:num_rooms]
+        else:  # HOUSE, MANOR, default
+            pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'STUDY', 'GUEST_ROOM']
+            return pool[:num_rooms]
+
+    # Ground floor (or single floor without stair landing)
+    if archetype in ('TAVERN', 'INN'):
+        pool = ['TAVERN_TAPROOM', 'KITCHEN', 'PANTRY', 'CELLAR']
+        return pool[:num_rooms]
+
+    if archetype in ('BLACKSMITH', 'WAREHOUSE', 'LUMBERMILL', 'BAKERY', 'FISHERMAN', 'BREWERY',
+                     'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER') or archetype.startswith('ARTISAN'):
+        pool = ['STORE', 'WORKSHOP', 'STORAGE', 'PANTRY']
+        return pool[:num_rooms]
+
+    if archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):
+        pool = ['DRILL_HALL', 'ARMORY', 'MESS_HALL', 'STORAGE']
+        return pool[:num_rooms]
+
+    if archetype in ('ARCHERY', 'ARCHERY_RANGE'):
+        pool = ['FLETCHER_WORKSHOP', 'RANGE', 'STORAGE', 'LODGE']
+        return pool[:num_rooms]
+
+    if archetype in ('CHAPEL', 'HEALERS_CHAPEL'):
+        pool = ['CHAPEL_HALL', 'INFIRMARY', 'APOTHECARY', 'STUDY']
+        return pool[:num_rooms]
+
+    if archetype in ('TENEMENT',):
+        pool = ['TENEMENT_KITCHEN', 'TENEMENT_BEDROOM', 'TENEMENT_KITCHEN', 'TENEMENT_BEDROOM']
+        return pool[:num_rooms]
+
+    # Default HOUSE / MANOR
+    if total_floors == 1:
+        pool = ['KITCHEN', 'BEDROOM', 'HOUSE_HALL', 'PANTRY']
+        return pool[:num_rooms]
+    else:
+        pool = ['HOUSE_HALL', 'KITCHEN', 'PANTRY', 'STORAGE']
+        return pool[:num_rooms]
+
+
+def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
+                     front_door_info=None, fl_wings_bounds=None,
+                     effective_archetype='NONE', props=None, seed=0):
+    """
+    Intelligently partitions a floor storey into rooms with open cased doorways.
+    Returns:
+        rooms: List[Room]
+        interior_walls: List[Dict[str, Any]]
+    """
+    ix_min, ix_max, iy_min, iy_max = bounds
+    W = ix_max - ix_min
+    D = iy_max - iy_min
+
+    has_interior_walls = bool(getattr(props, 'has_interior_walls', True))
+    partition_style = getattr(props, 'interior_partition_style', 'AUTO')
+    wall_t = float(getattr(props, 'interior_wall_thickness', 0.16))
+    floor_h = float(getattr(props, 'floor_height', 3.6))
+    total_floors = int(getattr(props, 'num_floors', 1))
+    has_stairs_landing = (fl_idx > 0 and stair_hole is not None)
+
+    dw_w = 1.30
+    dw_h = min(2.65, floor_h - 0.35)
+
+    # Single open room fallback (only when explicitly requested or plot is tiny < 4.2m)
+    if not has_interior_walls or partition_style == 'OPEN' or (W < 4.2 and D < 4.2):
+        roles = _resolve_room_roles(effective_archetype, fl_idx, 1, has_stairs_landing, total_floors)
+        main_room = Room(
+            id=f"fl{fl_idx}_main",
+            floor_idx=fl_idx,
+            role=roles[0],
+            bounds=(ix_min, ix_max, iy_min, iy_max),
+            doorways=[],
+            stair_hole=stair_hole,
+            exterior_facades={
+                'FRONT': (ix_min, ix_max),
+                'BACK': (ix_min, ix_max),
+                'LEFT': (iy_min, iy_max),
+                'RIGHT': (iy_min, iy_max),
+            }
+        )
+        rooms = [main_room]
+        # Attach any wing rooms
+        if fl_wings_bounds:
+            for wi, wb in enumerate(fl_wings_bounds):
+                w_role = 'DINING' if effective_archetype in ('TAVERN', 'INN') else ('STORAGE' if fl_idx == 0 else 'GUEST_ROOM')
+                w_rm = Room(
+                    id=f"fl{fl_idx}_wing{wi}",
+                    floor_idx=fl_idx,
+                    role=w_role,
+                    bounds=wb,
+                    is_wing=True,
+                    wing_id=wi,
+                    doorways=[],
+                    stair_hole=None,
+                    exterior_facades={}
+                )
+                rooms.append(w_rm)
+        return rooms, []
+
+    # Safe boundaries around stairs (left side)
+    stair_safe_x = ix_min + 2.6
+    stair_safe_y_bot = iy_max - 3.4
+    if stair_pos_info:
+        stair_safe_x = max(stair_safe_x, stair_pos_info.get('cx', stair_safe_x) + stair_pos_info.get('w', 1.2) * 0.5 + 0.40)
+        stair_safe_y_bot = min(stair_safe_y_bot, stair_pos_info.get('y_bot', stair_safe_y_bot))
+
+    door_cx = front_door_info[0] if (front_door_info and fl_idx == 0) else None
+
+    # Decide layout mode
+    is_deep = D > W * 1.25 and D >= 6.5
+    can_3_rooms = (partition_style in ('AUTO', 'HALL_CHAMBERS')) and (W >= 7.2 and D >= 5.4)
+    can_4_rooms = can_3_rooms and (D >= 8.0 or effective_archetype in ('INN', 'TENEMENT'))
+
+    rooms = []
+    interior_walls = []
+
+    if not is_deep:
+        # Partition along Y (vertical wall at X = split_x, running from iy_min to iy_max)
+        min_split_x = stair_safe_x + 0.60
+        if door_cx is not None:
+            min_split_x = max(min_split_x, door_cx + 0.95)
+
+        split_x = min(ix_max - 2.2, max(min_split_x, ix_min + W * 0.50))
+
+        if effective_archetype in ('INN', 'TAVERN') and fl_idx == 0:
+            # Ground floor of Inn/Tavern: Great Taproom on Left + ONE big spacious Kitchen on Right
+            dw_y = (iy_min + iy_max) * 0.5
+            interior_walls.append({
+                'p1': (split_x, iy_min), 'p2': (split_x, iy_max),
+                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                'doorway': {'x': split_x, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+            })
+            rm0 = Room(
+                id=f"fl{fl_idx}_taproom", floor_idx=fl_idx, role='TAVERN_TAPROOM',
+                bounds=(ix_min, split_x, iy_min, iy_max),
+                doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                stair_hole=stair_hole,
+                exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
+            )
+            rm1 = Room(
+                id=f"fl{fl_idx}_kitchen", floor_idx=fl_idx, role='KITCHEN',
+                bounds=(split_x, ix_max, iy_min, iy_max),
+                doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                stair_hole=None,
+                exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
+            )
+            rooms = [rm0, rm1]
+
+        elif can_4_rooms and (ix_max - split_x >= 2.4):
+            # 4 Rooms (Corridor/Landing Hall on Left + 3 separate chambers on Right)
+            roles = _resolve_room_roles(effective_archetype, fl_idx, 4, has_stairs_landing, total_floors)
+            split_y1 = iy_min + D * 0.35
+            split_y2 = iy_min + D * 0.68
+
+            dw_y1 = (iy_min + split_y1) * 0.5
+            dw_y2 = (split_y1 + split_y2) * 0.5
+            dw_y3 = (split_y2 + iy_max) * 0.5
+
+            interior_walls.append({
+                'p1': (split_x, iy_min), 'p2': (split_x, split_y1),
+                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                'doorway': {'x': split_x, 'y': dw_y1, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+            })
+            interior_walls.append({
+                'p1': (split_x, split_y1), 'p2': (split_x, split_y2),
+                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                'doorway': {'x': split_x, 'y': dw_y2, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+            })
+            interior_walls.append({
+                'p1': (split_x, split_y2), 'p2': (split_x, iy_max),
+                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                'doorway': {'x': split_x, 'y': dw_y3, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+            })
+            interior_walls.append({
+                'p1': (split_x, split_y1), 'p2': (ix_max, split_y1),
+                'axis': 'X', 'pos': split_y1, 'thickness': wall_t, 'doorway': None
+            })
+            interior_walls.append({
+                'p1': (split_x, split_y2), 'p2': (ix_max, split_y2),
+                'axis': 'X', 'pos': split_y2, 'thickness': wall_t, 'doorway': None
+            })
+
+            rm0 = Room(
+                id=f"fl{fl_idx}_hall", floor_idx=fl_idx, role=roles[0],
+                bounds=(ix_min, split_x, iy_min, iy_max),
+                doorways=[
+                    {'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w},
+                    {'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w},
+                    {'x': split_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w},
+                ],
+                stair_hole=stair_hole,
+                exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
+            )
+            rm1 = Room(
+                id=f"fl{fl_idx}_chamber_1", floor_idx=fl_idx, role=roles[1],
+                bounds=(split_x, ix_max, iy_min, split_y1),
+                doorways=[{'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w}],
+                stair_hole=None,
+                exterior_facades={'FRONT': (split_x, ix_max), 'RIGHT': (iy_min, split_y1)}
+            )
+            rm2 = Room(
+                id=f"fl{fl_idx}_chamber_2", floor_idx=fl_idx, role=roles[2],
+                bounds=(split_x, ix_max, split_y1, split_y2),
+                doorways=[{'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w}],
+                stair_hole=None,
+                exterior_facades={'RIGHT': (split_y1, split_y2)}
+            )
+            rm3 = Room(
+                id=f"fl{fl_idx}_chamber_3", floor_idx=fl_idx, role=roles[3],
+                bounds=(split_x, ix_max, split_y2, iy_max),
+                doorways=[{'x': split_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w}],
+                stair_hole=None,
+                exterior_facades={'BACK': (split_x, ix_max), 'RIGHT': (split_y2, iy_max)}
+            )
+            rooms = [rm0, rm1, rm2, rm3]
+
+        elif can_3_rooms and (D >= 5.4) and (ix_max - split_x >= 2.2):
+            # 3 Rooms total (Landing/Corridor on Left + 2 Chambers on Right)
+            roles = _resolve_room_roles(effective_archetype, fl_idx, 3, has_stairs_landing, total_floors)
+            split_y = (iy_min + iy_max) * 0.5
+
+            dw_y1 = (iy_min + split_y) * 0.5
+            dw_y2 = (split_y + iy_max) * 0.5
+
+            interior_walls.append({
+                'p1': (split_x, iy_min), 'p2': (split_x, split_y),
+                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                'doorway': {'x': split_x, 'y': dw_y1, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+            })
+            interior_walls.append({
+                'p1': (split_x, split_y), 'p2': (split_x, iy_max),
+                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                'doorway': {'x': split_x, 'y': dw_y2, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+            })
+            interior_walls.append({
+                'p1': (split_x, split_y), 'p2': (ix_max, split_y),
+                'axis': 'X', 'pos': split_y, 'thickness': wall_t, 'doorway': None
+            })
+
+            rm0 = Room(
+                id=f"fl{fl_idx}_hall", floor_idx=fl_idx, role=roles[0],
+                bounds=(ix_min, split_x, iy_min, iy_max),
+                doorways=[
+                    {'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w},
+                    {'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w}
+                ],
+                stair_hole=stair_hole,
+                exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
+            )
+            rm1 = Room(
+                id=f"fl{fl_idx}_chamber_se", floor_idx=fl_idx, role=roles[1],
+                bounds=(split_x, ix_max, iy_min, split_y),
+                doorways=[{'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w}],
+                stair_hole=None,
+                exterior_facades={'FRONT': (split_x, ix_max), 'RIGHT': (iy_min, split_y)}
+            )
+            rm2 = Room(
+                id=f"fl{fl_idx}_chamber_ne", floor_idx=fl_idx, role=roles[2],
+                bounds=(split_x, ix_max, split_y, iy_max),
+                doorways=[{'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w}],
+                stair_hole=None,
+                exterior_facades={'BACK': (split_x, ix_max), 'RIGHT': (split_y, iy_max)}
+            )
+            rooms = [rm0, rm1, rm2]
+
+        else:
+            # 2 Rooms along Y (Left Room + Right Room)
+            roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors)
+            dw_y = (iy_min + iy_max) * 0.5
+            interior_walls.append({
+                'p1': (split_x, iy_min), 'p2': (split_x, iy_max),
+                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                'doorway': {'x': split_x, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+            })
+            rm0 = Room(
+                id=f"fl{fl_idx}_hall", floor_idx=fl_idx, role=roles[0],
+                bounds=(ix_min, split_x, iy_min, iy_max),
+                doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                stair_hole=stair_hole,
+                exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
+            )
+            rm1 = Room(
+                id=f"fl{fl_idx}_chamber", floor_idx=fl_idx, role=roles[1],
+                bounds=(split_x, ix_max, iy_min, iy_max),
+                doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                stair_hole=None,
+                exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
+            )
+            rooms = [rm0, rm1]
+
+    else:
+        # Deep building: Partition along X (horizontal wall at Y = split_y, running from ix_min to ix_max)
+        roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors)
+        split_y = min(stair_safe_y_bot - 0.65, iy_min + D * 0.48)
+        split_y = max(iy_min + 2.3, split_y)
+
+        dw_x = (ix_min + ix_max) * 0.5
+        if abs(dw_x - (door_cx or 0.0)) < 0.4:
+            dw_x += 0.85
+
+        interior_walls.append({
+            'p1': (ix_min, split_y), 'p2': (ix_max, split_y),
+            'axis': 'X', 'pos': split_y, 'thickness': wall_t,
+            'doorway': {'x': dw_x, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
+        })
+        # If stairs are in back room, protect it with landing role
+        front_role = roles[1] if has_stairs_landing else roles[0]
+        back_role = 'STAIR_LANDING' if has_stairs_landing else roles[1]
+
+        rm0 = Room(
+            id=f"fl{fl_idx}_front", floor_idx=fl_idx, role=front_role,
+            bounds=(ix_min, ix_max, iy_min, split_y),
+            doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
+            stair_hole=None,
+            exterior_facades={'FRONT': (ix_min, ix_max), 'LEFT': (iy_min, split_y), 'RIGHT': (iy_min, split_y)}
+        )
+        rm1 = Room(
+            id=f"fl{fl_idx}_back", floor_idx=fl_idx, role=back_role,
+            bounds=(ix_min, ix_max, split_y, iy_max),
+            doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
+            stair_hole=stair_hole,
+            exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (split_y, iy_max), 'RIGHT': (split_y, iy_max)}
+        )
+        rooms = [rm0, rm1]
+
+    # Add any wing rooms
+    if fl_wings_bounds:
+        for wi, wb in enumerate(fl_wings_bounds):
+            w_role = 'DINING' if effective_archetype in ('TAVERN', 'INN') else ('STORAGE' if fl_idx == 0 else 'GUEST_ROOM')
+            w_rm = Room(
+                id=f"fl{fl_idx}_wing{wi}",
+                floor_idx=fl_idx,
+                role=w_role,
+                bounds=wb,
+                is_wing=True,
+                wing_id=wi,
+                doorways=[],
+                stair_hole=None,
+                exterior_facades={}
+            )
+            rooms.append(w_rm)
+
+    return rooms, interior_walls
+
+
+def build_floor_interior_walls(bm, interior_walls, z_floor, z_ceil,
+                               mat_index=MAT_INDEX_FLOOR, casing_mat=MAT_INDEX_TIMBER):
+    """Constructs physical 3D geometry for all planned interior partition walls on a floor."""
+    for w in interior_walls:
+        p1 = w['p1']
+        p2 = w['p2']
+        thick = w.get('thickness', 0.16)
+        doorway = w.get('doorway')
+        build_interior_wall(
+            bm, p1, p2, z_floor, z_ceil,
+            thickness=thick, doorway=doorway,
+            mat_index=mat_index, casing_mat=casing_mat
+        )
+
 

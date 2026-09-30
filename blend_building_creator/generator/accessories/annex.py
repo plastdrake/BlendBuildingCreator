@@ -165,6 +165,40 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                 build_facade_timber(bm, (inner_x, wy), (outer_x, wy), fz0, fz1, wall_t,
                                     nvec, list(_fb_ops), diagonals,
                                     is_top_floor=(f == floors - 1))
+
+        # Furnish annex interior space on each floor
+        try:
+            from .prop_registry import build_prop
+            _annex_w = max(0.1, (y1 - wall_t) - (y0 + wall_t))
+            _annex_d = max(0.1, _fx_max - _fx_min)
+            _annex_cx = (_fx_min + _fx_max) * 0.5
+            _annex_cy = cy
+            _z_fl = fz0 + 0.05
+            _z_cl = fz0 + floor_h - 0.08
+            
+            if f == 0:
+                # Ground floor: parlor / dining nook
+                build_prop(bm, 'RUG_CRIMSON', _annex_cx, _annex_cy, _z_fl, 0.0,
+                           width=min(1.4, _annex_d * 0.75), length=min(2.0, _annex_w * 0.75))
+                if _annex_d >= 1.8 and _annex_w >= 1.8:
+                    build_prop(bm, 'ROUND_TABLE', _annex_cx, _annex_cy, _z_fl, 0.0, radius=0.48)
+                    build_prop(bm, 'CHAIR', _annex_cx - 0.65, _annex_cy, _z_fl, math.pi * 0.5)
+                    build_prop(bm, 'CHAIR', _annex_cx + 0.65, _annex_cy, _z_fl, -math.pi * 0.5)
+                    build_prop(bm, 'SCATTER_TABLEWARE', _annex_cx, _annex_cy, _z_fl + 0.76, 0.0)
+                build_prop(bm, 'CHEST', _annex_cx, y1 - wall_t - 0.35, _z_fl, 0.0, width=0.85)
+                build_prop(bm, 'CHAIN_LANTERN', _annex_cx, _annex_cy, _z_cl, 0.0)
+            else:
+                # Upper floor: cozy private bedroom
+                build_prop(bm, 'RUG_SAPPHIRE', _annex_cx, _annex_cy, _z_fl, 0.0,
+                           width=min(1.4, _annex_d * 0.75), length=min(1.8, _annex_w * 0.75))
+                bed_x = outer_x - side_sgn * 1.15
+                build_prop(bm, 'BED', bed_x, _annex_cy, _z_fl, 0.0 if side_sgn > 0 else math.pi,
+                           length=1.90, width=1.05)
+                build_prop(bm, 'WARDROBE', _annex_cx, y0 + wall_t + 0.35, _z_fl, math.pi * 0.5,
+                           width=1.05, height=1.75)
+                build_prop(bm, 'CHAIN_LANTERN', _annex_cx, _annex_cy, _z_cl, 0.0)
+        except Exception:
+            pass
     top_inner = floor_inner[floors - 1]
     # Timber belt course between ground and upper lifts, built as a ring of
     # boards rather than one solid slab: it dresses the outside without filling

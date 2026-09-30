@@ -66,89 +66,47 @@ def _beam(bm, p0, p1, z0, z1, cross_w, cross_t, mat, bevel=0.012):
 
 def build_railing_post(bm, x, y, base_z, height=1.05,
                        rail_mat=MAT_INDEX_TIMBER, cap_mat=MAT_INDEX_WOOD,
-                       iron_pin=True):
+                       iron_pin=False, jankiness=0.0, index=0, seed=0):
     """A single capped newel post matching build_railing's joinery."""
-    create_beveled_box(bm, size=(POST_W, POST_W, height),
-                       location=(x, y, base_z + height * 0.5),
-                       mat_index=rail_mat, bevel_amount=0.014)
-    create_beveled_box(bm, size=(POST_CAP_W, POST_CAP_W, POST_CAP_T),
-                       location=(x, y, base_z + height + POST_CAP_T * 0.35),
-                       mat_index=cap_mat, bevel_amount=0.012)
-    if iron_pin:
-        create_cylinder(bm, radius=0.022, height=0.05, segments=6,
-                        location=(x, y, base_z + height + POST_CAP_T * 0.72),
-                        mat_index=MAT_INDEX_IRON)
-
-
-def build_railing_post(bm, x, y, base_z, height=1.05,
-                       rail_mat=MAT_INDEX_TIMBER, cap_mat=MAT_INDEX_WOOD,
-                       iron_pin=True, jankiness=0.0, index=0, seed=0):
-    """A single capped newel post matching build_railing's joinery.
-
-    jankiness tilts and nudges the post for a hand-built fantasy look.
-    """
-    tilt_x = _jitter(jankiness, index, 1.7, seed, 0.055)
-    tilt_y = _jitter(jankiness, index, 4.1, seed, 0.055)
-    ox = _jitter(jankiness, index, 7.3, seed, 0.035)
-    oy = _jitter(jankiness, index, 9.9, seed, 0.035)
+    tilt_x = _jitter(jankiness, index, 1.7, seed, 0.035)
+    tilt_y = _jitter(jankiness, index, 4.1, seed, 0.035)
+    ox = _jitter(jankiness, index, 7.3, seed, 0.020)
+    oy = _jitter(jankiness, index, 9.9, seed, 0.020)
     px, py = x + ox, y + oy
     create_beveled_box(bm, size=(POST_W, POST_W, height),
                        location=(px, py, base_z + height * 0.5),
                        rotation=(tilt_x, tilt_y, 0.0),
-                       mat_index=rail_mat, bevel_amount=0.014)
+                       mat_index=rail_mat, bevel_amount=0.012)
     create_beveled_box(bm, size=(POST_CAP_W, POST_CAP_W, POST_CAP_T),
                        location=(px + tilt_x * height * 0.35,
                                  py + tilt_y * height * 0.35,
-                                 base_z + height + POST_CAP_T * 0.35),
+                                 base_z + height + POST_CAP_T * 0.40),
                        rotation=(tilt_x, tilt_y, 0.0),
-                       mat_index=cap_mat, bevel_amount=0.012)
+                       mat_index=cap_mat, bevel_amount=0.010)
     if iron_pin:
-        create_cylinder(bm, radius=0.022, height=0.05, segments=6,
+        create_cylinder(bm, radius=0.020, height=0.04, segments=6,
                         location=(px + tilt_x * height * 0.35,
                                   py + tilt_y * height * 0.35,
-                                  base_z + height + POST_CAP_T * 0.72),
+                                  base_z + height + POST_CAP_T * 0.75),
                         mat_index=MAT_INDEX_IRON)
 
 
-def _wonky_rail(bm, x0, y0, x1, y1, za0, za1, cross_w, cross_t, mat,
-                jankiness, salt, seed, bevel=0.012):
-    """A rail built as a few slightly mis-aligned boards so it reads hand-hewn."""
-    n = 4 if jankiness > 0.02 else 1
-    dx, dy = x1 - x0, y1 - y0
-    run = math.hypot(dx, dy)
-    nx, ny = (-dy / run, dx / run) if run > 1e-5 else (0.0, 0.0)
-    pts = []
-    for i in range(n + 1):
-        t = i / n
-        x = x0 + dx * t
-        y = y0 + dy * t
-        z = za0 + (za1 - za0) * t
-        if 0 < i < n:
-            k = _hash01(i, salt, seed)
-            z += (k - 0.5) * 0.05 * jankiness
-            lat = _jitter(jankiness, i, salt + 11.0, seed, 0.030)
-            x += nx * lat
-            y += ny * lat
-        pts.append((x, y, z))
-    for a, b in zip(pts[:-1], pts[1:]):
-        _beam(bm, (a[0], a[1]), (b[0], b[1]), a[2], b[2],
-              cross_w, cross_t, mat, bevel=bevel)
+def _rail_beam(bm, x0, y0, x1, y1, z0, z1, cross_w, cross_t, mat, bevel=0.010):
+    """A clean single continuous beam spanning (x0, y0, z0) to (x1, y1, z1)."""
+    _beam(bm, (x0, y0), (x1, y1), z0, z1, cross_w, cross_t, mat, bevel=bevel)
 
 
 def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
                   rail_mat=MAT_INDEX_TIMBER, baluster_mat=MAT_INDEX_WOOD,
-                  end_overhang=0.10, post_spacing=1.45, baluster_spacing=0.20,
-                  braces=True, iron_pins=True, posts=True, jankiness=0.45,
+                  end_overhang=0.08, post_spacing=1.60, baluster_spacing=0.25,
+                  braces=False, iron_pins=False, posts=True, jankiness=0.15,
                   seed=0):
-    """Build a detailed guard railing from p_start to p_end at floor level base_z.
+    """Build a clean, optimized guard railing from p_start to p_end at floor level base_z.
 
-    height is measured vertically from the underside of the sill to the top of the
-    handrail. Pass base_z_end to make the railing follow a straight slope (ramps);
-    the rail and sill tilt with it while posts and balusters stay vertical.
-    Set posts=False to lay only the rails/balusters between externally placed
-    newels (used by the spiral stair, which already has a post per step).
-    jankiness (0 = machined, ~0.45 = hand-built fantasy) adds the crooked,
-    slightly askew character the rest of the building's joinery has.
+    height is measured vertically from the underside of the sill to the top of the handrail.
+    Pass base_z_end to make the railing follow a straight slope (ramps).
+    Uses clean single-span beams and evenly spaced vertical balusters without
+    unnecessary polygon bloat, nested collars, or redundant intersecting rails.
     """
     x0, y0 = p_start
     x1, y1 = p_end
@@ -163,35 +121,26 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
     def at(t):
         return (x0 + dx * t, y0 + dy * t, z0 + (z1 - z0) * t)
 
-    # 1. Grounded sill (base rail), following the slope.
-    _wonky_rail(bm, x0, y0, x1, y1,
-                z0 + SILL_T * 0.5, z1 + SILL_T * 0.5,
-                SILL_W, SILL_T, rail_mat, jankiness, 2.0, seed)
+    # 1. Grounded base sill rail, following slope
+    _rail_beam(bm, x0, y0, x1, y1,
+               z0 + SILL_T * 0.5, z1 + SILL_T * 0.5,
+               SILL_W, SILL_T, rail_mat, bevel=0.010)
 
-    # 2. Handrail + its wide cap board, with a little overhang past the ends.
-    _wonky_rail(bm,
-                x0 - ux * end_overhang, y0 - uy * end_overhang,
-                x1 + ux * end_overhang, y1 + uy * end_overhang,
-                z0 + height - RAIL_T * 0.5, z1 + height - RAIL_T * 0.5,
-                RAIL_W, RAIL_T, rail_mat, jankiness, 5.0, seed)
-    _wonky_rail(bm,
-                x0 - ux * end_overhang, y0 - uy * end_overhang,
-                x1 + ux * end_overhang, y1 + uy * end_overhang,
-                z0 + height + CAP_T * 0.5, z1 + height + CAP_T * 0.5,
-                CAP_W, CAP_T, baluster_mat, jankiness * 0.6, 8.0, seed)
+    # 2. Handrail and cap board
+    rx0 = x0 - ux * end_overhang
+    ry0 = y0 - uy * end_overhang
+    rx1 = x1 + ux * end_overhang
+    ry1 = y1 + uy * end_overhang
 
-    # 3. Mid + lower string rails between the bays (only on taller rails).
-    if height > 0.7:
-        _wonky_rail(bm, x0, y0, x1, y1,
-                    z0 + height * 0.56, z1 + height * 0.56,
-                    MID_W, MID_T, rail_mat, jankiness, 12.0, seed)
-    if height > 0.85:
-        _wonky_rail(bm, x0, y0, x1, y1,
-                    z0 + height * 0.26, z1 + height * 0.26,
-                    LOW_W, LOW_T, rail_mat, jankiness, 15.0, seed)
+    _rail_beam(bm, rx0, ry0, rx1, ry1,
+               z0 + height - RAIL_T * 0.5, z1 + height - RAIL_T * 0.5,
+               RAIL_W, RAIL_T, rail_mat, bevel=0.010)
+    _rail_beam(bm, rx0, ry0, rx1, ry1,
+               z0 + height + CAP_T * 0.5, z1 + height + CAP_T * 0.5,
+               CAP_W, CAP_T, baluster_mat, bevel=0.008)
 
-    # 4. Posts: both ends plus evenly spaced in between, each with a capped head.
-    n_post = max(1, int(round(run / max(0.4, post_spacing))))
+    # 3. Newel posts: both ends plus evenly spaced in between
+    n_post = max(1, int(round(run / max(0.6, post_spacing))))
     posts_t = [i / n_post for i in range(n_post + 1)]
     if posts:
         for i, t in enumerate(posts_t):
@@ -201,13 +150,13 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
     elif len(posts_t) < 2:
         posts_t = [0.0, 1.0]
 
-    # 5. Balusters inside every bay, plus an optional turned collar.
+    # 4. Clean vertical balusters inside every bay
     for bi in range(len(posts_t) - 1):
         ta, tb = posts_t[bi], posts_t[bi + 1]
         bay = (tb - ta) * run
-        if bay < 0.24:
+        if bay < 0.28:
             continue
-        n_bal = max(1, int(round(bay / max(0.12, baluster_spacing))) - 1)
+        n_bal = max(1, int(round(bay / max(0.16, baluster_spacing))) - 1)
         for k in range(1, n_bal + 1):
             t = ta + (tb - ta) * (k / (n_bal + 1))
             px, py, pz = at(t)
@@ -215,25 +164,10 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
             if bal_h < 0.12:
                 continue
             idx = bi * 100 + k
-            px += _jitter(jankiness, idx, 21.0, seed, 0.028)
-            py += _jitter(jankiness, idx, 24.0, seed, 0.028)
-            t_x = _jitter(jankiness, idx, 27.0, seed, 0.05)
-            t_y = _jitter(jankiness, idx, 30.0, seed, 0.05)
-            create_beveled_box(bm, size=(0.058, 0.058, bal_h),
+            t_x = _jitter(jankiness, idx, 27.0, seed, 0.02)
+            t_y = _jitter(jankiness, idx, 30.0, seed, 0.02)
+            create_beveled_box(bm, size=(0.055, 0.055, bal_h),
                                location=(px, py, pz + SILL_T + bal_h * 0.5),
                                rotation=(t_x, t_y, 0.0),
-                               mat_index=baluster_mat, bevel_amount=0.010)
-            if braces:
-                # Small turned collar on each baluster for a hand-carved feel.
-                create_beveled_box(bm, size=(0.088, 0.088, 0.045),
-                                   location=(px, py, pz + SILL_T + bal_h * 0.5),
-                                   rotation=(t_x, t_y, 0.0),
-                                   mat_index=rail_mat, bevel_amount=0.008)
-        if braces and bay > 0.55:
-            # Diagonal brace across the bay, sill corner up to the mid rail.
-            t0, t1 = ta + (tb - ta) * 0.08, ta + (tb - ta) * 0.92
-            ax, ay, az = at(t0)
-            bx, by, bz = at(t1)
-            _beam(bm, (ax, ay), (bx, by),
-                  az + SILL_T + 0.06, bz + height * 0.50,
-                  0.055, 0.05, rail_mat, bevel=0.008)
+                               mat_index=baluster_mat, bevel_amount=0.006)
+

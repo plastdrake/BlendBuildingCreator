@@ -243,9 +243,15 @@ class VIEW3D_PT_fantasy_building_interior(bpy.types.Panel):
             box.prop(props, "stair_width")
 
         box2 = layout.box()
-        box2.prop(props, "ground_floor_stone")
-        box2.prop(props, "has_ceiling_beams")
-        box2.prop(props, "has_attic_trusses")
+        box2.prop(props, "has_interior_walls", text="Interior Partition Walls")
+        if props.has_interior_walls:
+            box2.prop(props, "interior_partition_style", text="Layout")
+            box2.prop(props, "interior_wall_thickness", text="Thickness")
+
+        box3 = layout.box()
+        box3.prop(props, "ground_floor_stone")
+        box3.prop(props, "has_ceiling_beams")
+        box3.prop(props, "has_attic_trusses")
 
 
 # ---------------------------------------------------------------------------
