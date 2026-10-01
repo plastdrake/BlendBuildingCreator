@@ -575,35 +575,26 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     _try_place_wall_prop(bm, 'WARDROBE', 1.20, 0.60, tracker, z_floor,
                          candidate_walls=('EAST', 'NORTH', 'SOUTH', 'WEST'))
 
-    # 4. Cozy floor area rug (oversized to cover most of the room floor)
+    # 4. Cozy floor area rug, smartly placed alongside and at the foot of the bed
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rug_choice = rng.choice(['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST'])
-    if is_master:
-        rug_w, rug_l = _area_rug_size(rw, rd, coverage=0.84, max_w=4.60, max_l=5.80,
-                                      min_w=2.40, min_l=3.00)
-    else:
-        rug_w, rug_l = _area_rug_size(rw, rd, coverage=0.80, max_w=3.80, max_l=4.80,
-                                      min_w=2.00, min_l=2.60)
-    _lay_rug(bm, tracker, rm, rng, rug_choice, rcx, rcy, z_floor, rug_w, rug_l)
+    rug_w = min(2.40, max(1.60, rw * 0.50))
+    rug_l = min(3.20, max(2.20, rd * 0.55))
 
-    # 4b. Layered bedside + dressing runner rugs in any reasonably sized bedroom
-    if (rw >= 3.4 or rd >= 3.4) and density >= 0.4:
-        sub_rug = 'RUG_SAPPHIRE' if rug_choice != 'RUG_SAPPHIRE' else 'RUG_FOREST'
-        run_w = min(1.60, max(1.00, rw * 0.38))
-        run_l = min(3.40, max(2.00, rd * 0.50))
-        off_y = rcy - min(rd * 0.28, 1.4)
-        _lay_rug(bm, tracker, rm, rng, sub_rug, rcx, off_y, z_floor, run_w, run_l,
-                 allow_overlap=False)
-    # 4c. Third accent rug at the foot of the bed in large masters
-    if is_master and rw >= 4.6 and rd >= 4.6 and density >= 0.6:
-        accent = 'RUG_FOREST' if rug_choice == 'RUG_CRIMSON' else 'RUG_CRIMSON'
-        acc_w, acc_l = _area_rug_size(rw, rd, coverage=0.45, max_w=2.60, max_l=3.00,
-                                      min_w=1.40, min_l=1.80)
-        _lay_rug(bm, tracker, rm, rng, accent, rcx, rcy + rd * 0.22, z_floor, acc_w, acc_l,
-                 allow_overlap=False)
+    if bed_info is not None:
+        bcx, bcy, bang = bed_info
+        fwd_x = math.cos(bang)
+        fwd_y = math.sin(bang)
+        # Position rug adjacent to bed where occupant steps down
+        rug_cx = bcx + fwd_x * 0.35
+        rug_cy = bcy + fwd_y * 0.35
+    else:
+        rug_cx, rug_cy = rcx, rcy
+
+    _lay_rug(bm, tracker, rm, rng, rug_choice, rug_cx, rug_cy, z_floor, rug_w, rug_l)
 
     # 5. Optional desk or shelf if room is roomy
     if (rw >= 3.6 or rd >= 3.6) and density >= 0.6:
@@ -815,6 +806,9 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
 
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+
     # 1. Cooking Stove (cast-iron) or Hearth (strictly attached to chimney or wall)
     placed_stove = _try_place_kitchen_stove(bm, tracker, z_floor, chimney_pos=chimney_pos)
     if not placed_stove:
@@ -824,40 +818,61 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('EAST', 'NORTH', 'WEST', 'SOUTH'))
 
-    # 3. Food prep table with cauldron and table scatter
+    # 3. Food prep / dining table with cauldron, tableware, and chairs
     prep_placed = False
-    for tx, ty in [(rcx, rcy), (rcx, rm.bounds[2] + 0.85)]:
-        if tracker.is_free(tx - 0.6, tx + 0.6, ty - 0.45, ty + 0.45):
-            tracker.occupy(tx - 0.6, tx + 0.6, ty - 0.45, ty + 0.45)
-            build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, 0.0, length=1.2, width=0.8)
+    table_pos = None
+    candidate_tables = [
+        (rcx, rcy),
+        (rcx, rm.bounds[2] + min(1.4, rd * 0.35)),
+        (rcx, rm.bounds[3] - min(1.4, rd * 0.35)),
+    ]
+    tw, td = 1.30, 0.85
+    for tx, ty in candidate_tables:
+        if tracker.is_free(tx - tw * 0.5 - 0.20, tx + tw * 0.5 + 0.20, ty - td * 0.5 - 0.45, ty + td * 0.5 + 0.45):
+            tracker.occupy(tx - tw * 0.5 - 0.20, tx + tw * 0.5 + 0.20, ty - td * 0.5 - 0.45, ty + td * 0.5 + 0.45)
+            build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, 0.0, length=tw, width=td)
             build_prop(bm, 'CAULDRON', tx + 0.35, ty, z_floor + 0.76, 0.0)
             build_prop(bm, 'SCATTER_TABLEWARE', tx - 0.25, ty, z_floor + 0.76, 0.0)
+            # Add 2 chairs tucked into table facing inward
+            for chy, chang in [(ty - (td * 0.5 + 0.30), math.pi), (ty + (td * 0.5 + 0.30), 0.0)]:
+                if tracker.rx0 <= tx <= tracker.rx1 and tracker.ry0 <= chy <= tracker.ry1:
+                    build_prop(bm, 'CHAIR', tx, chy, z_floor, chang, seat_h=0.48)
             prep_placed = True
+            table_pos = (tx, ty)
             break
 
-    # 4. Storage barrels, sacks and crates
-    for cx in (rm.bounds[0] + 0.40, rm.bounds[1] - 0.40):
-        for cy in (rm.bounds[2] + 0.40, rm.bounds[3] - 0.40):
+    if not prep_placed:
+        for tx, ty in candidate_tables:
+            if tracker.is_free(tx - 0.65, tx + 0.65, ty - 0.45, ty + 0.45):
+                tracker.occupy(tx - 0.65, tx + 0.65, ty - 0.45, ty + 0.45)
+                build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, 0.0, length=1.2, width=0.8)
+                build_prop(bm, 'CAULDRON', tx + 0.30, ty, z_floor + 0.76, 0.0)
+                build_prop(bm, 'SCATTER_TABLEWARE', tx - 0.25, ty, z_floor + 0.76, 0.0)
+                prep_placed = True
+                table_pos = (tx, ty)
+                break
+
+    # 4. Storage barrels, sacks and crates in corners (pantry storage)
+    for cx in (rm.bounds[0] + 0.45, rm.bounds[1] - 0.45):
+        for cy in (rm.bounds[2] + 0.45, rm.bounds[3] - 0.45):
             if tracker.is_free(cx - 0.25, cx + 0.25, cy - 0.25, cy + 0.25):
                 tracker.occupy(cx - 0.25, cx + 0.25, cy - 0.25, cy + 0.25)
                 prop = 'BARREL' if rng.random() < 0.5 else 'CRATE'
                 build_prop(bm, prop, cx, cy, z_floor, 0.0)
 
-    # 5. Kitchen hearth / prep floor rugs (oversized + layered)
-    rw = rm.bounds[1] - rm.bounds[0]
-    rd = rm.bounds[3] - rm.bounds[2]
+    # 5. Smart kitchen rug placement:
+    # Anchor the dining set with a clean, proportioned area rug directly under table & chairs
     k_rug_choice = rng.choice(['RUG_FOREST', 'RUG_CRIMSON'])
-    k_rug_w, k_rug_l = _area_rug_size(rw, rd, coverage=0.78, max_w=3.40, max_l=4.40,
-                                      min_w=1.60, min_l=2.20)
-    _lay_rug(bm, tracker, rm, rng, k_rug_choice, rcx, rcy, z_floor, k_rug_w, k_rug_l)
-
-    # 5b. Secondary hearth-side runner so kitchens get two rugs
-    if (rw >= 3.0 or rd >= 3.0) and density >= 0.4:
-        sub = 'RUG_CRIMSON' if k_rug_choice != 'RUG_CRIMSON' else 'RUG_SAPPHIRE'
-        run_w = min(1.50, max(0.90, rw * 0.36))
-        run_l = min(3.00, max(1.60, rd * 0.48))
-        _lay_rug(bm, tracker, rm, rng, sub, rcx, rm.bounds[2] + run_l * 0.5 + 0.20, z_floor,
-                 run_w, run_l, allow_overlap=False)
+    if table_pos is not None:
+        tx, ty = table_pos
+        rug_w = min(tw + 0.70, rw - 0.40)
+        rug_l = min(td + 1.20, rd - 0.40)
+        if rug_w >= 1.20 and rug_l >= 1.40:
+            _lay_rug(bm, tracker, rm, rng, k_rug_choice, tx, ty, z_floor, rug_w, rug_l)
+    else:
+        k_rug_w, k_rug_l = _area_rug_size(rw, rd, coverage=0.55, max_w=2.60, max_l=3.20,
+                                          min_w=1.40, min_l=1.80)
+        _lay_rug(bm, tracker, rm, rng, k_rug_choice, rcx, rcy, z_floor, k_rug_w, k_rug_l)
 
     # 6. Ceiling light
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)

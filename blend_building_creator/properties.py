@@ -628,6 +628,8 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('LEFT', 'Left Side (-X)', 'Build exterior staircase alongside left wall'),
             ('RIGHT', 'Right Side (+X)', 'Build exterior staircase alongside right wall'),
+            ('BOTH', 'Both Sides (Dual)', 'Build exterior staircases on both left and right sides for separate apartment access'),
+            ('COURTYARD', 'Courtyard Gallery (U-Shape)', 'Central courtyard dual stair-system and gallery landing accessing each apartment'),
         ],
         default='LEFT',
         update=on_property_updated

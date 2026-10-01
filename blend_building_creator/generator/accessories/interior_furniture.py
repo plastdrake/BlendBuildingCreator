@@ -1465,17 +1465,17 @@ def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=2.4, length=3.6, rug_style=
     f.material_index = mat_idx
 
     for loop in f.loops:
-        # The rug art is painted landscape (1024x640) with the pattern's long
-        # axis along texture-U. Always give texture-U the rug's LONGER local
-        # axis, so the design keeps its proportions whichever way the rug is
-        # laid. (A fixed mapping mirrors/rotates on whichever rugs happen to be
-        # wider than they are long.)
+        # The rug art is painted portrait (aspect 2:3) with the pattern's long
+        # axis and fringe tassels along texture-V (top & bottom short ends) and
+        # width along texture-U.
+        # Align texture-U to the narrower dimension and texture-V to the longer dimension
+        # so tassels always sit on the shorter ends and patterns stay upright.
         if length >= width:
-            u = 0.0 if loop.vert.co.y < 0 else 1.0
-            v = 0.0 if loop.vert.co.x < 0 else 1.0
-        else:
             u = 0.0 if loop.vert.co.x < 0 else 1.0
             v = 0.0 if loop.vert.co.y < 0 else 1.0
+        else:
+            u = 0.0 if loop.vert.co.y < 0 else 1.0
+            v = 0.0 if loop.vert.co.x < 0 else 1.0
         loop[uv_layer].uv = Vector((u, v))
     f.tag = True
 

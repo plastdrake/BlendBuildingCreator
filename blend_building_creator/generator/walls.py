@@ -60,7 +60,7 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     # Interior planks (wood), matching the core the opening path builds, so a
     # wall that happens to get no windows/doors still reads as a log-cabin room
     # instead of exposing the shared plaster material on the inside.
-    if not openings:
+    if not openings and not flat_ranges:
         core_thick = thickness * 0.40
         core_cx = (x1 + x2) * 0.5 - nx * (thickness * 0.28)
         core_cy = (y1 + y2) * 0.5 - ny * (thickness * 0.28)
@@ -334,7 +334,7 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                        stone_block_scale=1.0, stone_disorder=0.35,
                        is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0, v_offset=0.0,
                        has_exposed_brick=False, exposed_brick_freq=0.25,
-                       inner_mat=None):
+                       inner_mat=None, flat_ranges=None):
     """
     Constructs a single wall section between p_start and p_end:
     rounded logs (Tier 1), overlapping/batten planks (Tier 2), chunky stone blocks (Tier 3),
@@ -348,8 +348,17 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         build_log_wall_segment(
             bm, p_start, p_end, z_bottom, z_top, thickness,
             normal_vec=normal_vec, is_corner_start=is_corner_start, is_corner_end=is_corner_end,
-            seed=seed
+            seed=seed, flat_ranges=flat_ranges
         )
+        if flat_ranges:
+            # Build sealed interior core across the flat range in warm wood planks
+            build_wall_with_opening(
+                bm, p_start, p_end, max(0.0, z_bottom - 0.06), z_top, thickness,
+                openings=[], mat_ext=MAT_INDEX_WOOD, normal_vec=normal_vec,
+                tier='TIER_3', physical_siding=False,
+                is_corner_start=is_corner_start, is_corner_end=is_corner_end,
+                seed=seed, u_offset=u_offset
+            )
         return
 
     if tier == 'TIER_1' and mat_ext in (MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER):
@@ -424,7 +433,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
     def pt_at(u):
         return (x1 + ux * u, y1 + uy * u)
 
-    if not openings:
+    if not openings and not flat_ranges:
         build_wall_segment(
             bm, p_start, p_end, z_bottom, z_top, thickness, mat_ext=mat_ext,
             normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
@@ -433,7 +442,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end, seed=seed,
             u_offset=u_offset,
             has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq,
-            inner_mat=inner_mat
+            inner_mat=inner_mat, flat_ranges=flat_ranges
         )
         return
 
@@ -444,7 +453,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             openings=openings, normal_vec=normal_vec,
             is_corner_start=is_corner_start, is_corner_end=is_corner_end,
             seed=seed, omit_top_row=omit_top_log_row,
-            force_omit_top_row=force_omit_top_log_row
+            force_omit_top_row=force_omit_top_log_row,
+            flat_ranges=flat_ranges
         )
         # Build sealed interior core around openings in matching warm wood planks.
         # Kept just below the floor line so it meets the floor slab without

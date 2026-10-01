@@ -318,30 +318,37 @@ def build_roof_and_attic(bm, props, ctx):
                 if tight_n_x > 1:
                     main_dormer_w = min(1.2, max(0.85, (x_span / tight_n_x) - 0.35))
 
-                if n_front == 1 and n_back == 1 and x_span >= 1.6:
-                    fx = top_cx - x_span * 0.22
-                    dormer_placements.append({'pos': (fx, top_cy - roof_half_w * dormer_u), 'facing': (0, -1), 'side': 1, 'loc_y': fx - top_cx})
-                    bx = top_cx + x_span * 0.22
-                    dormer_placements.append({'pos': (bx, top_cy + roof_half_w * dormer_u), 'facing': (0, 1), 'side': -1, 'loc_y': bx - top_cx})
+                # Check if wings attach to the FRONT facade (e.g. U-shaped or L-shaped courtyard)
+                front_wings = []
+                if has_wing and wings:
+                    w_idx = min(wing_floors, num_floors) - 1
+                    for w_elem in wings:
+                        if w_elem.get('wall') == 'FRONT':
+                            if 'bounds_fl' in w_elem and w_idx in w_elem['bounds_fl']:
+                                front_wings.append(w_elem['bounds_fl'][w_idx])
+                            else:
+                                front_wings.append(w_elem.get('base', (0.0, 0.0, 0.0, 0.0)))
+
+                if front_wings:
+                    left_wing_max_x = max([wb[1] for wb in front_wings if wb[1] <= top_cx + 0.1], default=x_start)
+                    right_wing_min_x = min([wb[0] for wb in front_wings if wb[0] >= top_cx - 0.1], default=x_end)
+                    f_start = left_wing_max_x + 0.60
+                    f_end = right_wing_min_x - 0.60
+                    f_span = max(0.0, f_end - f_start)
                 else:
+                    f_start, f_end, f_span = x_start, x_end, x_span
+
+                # Front slope dormers (only in clear span outside wings)
+                if f_span >= 1.20 and n_front >= 1:
                     for i in range(n_front):
-                        fx = top_cx if n_front == 1 else (x_start + ((i + 0.5) / n_front) * x_span)
+                        fx = (f_start + f_end) * 0.5 if n_front == 1 else (f_start + ((i + 0.5) / n_front) * f_span)
                         dormer_placements.append({'pos': (fx, top_cy - roof_half_w * dormer_u), 'facing': (0, -1), 'side': 1, 'loc_y': fx - top_cx})
+
+                # Back slope dormers (spans full back ridge)
+                if n_back >= 1:
                     for i in range(n_back):
                         bx = top_cx if n_back == 1 else (x_start + ((i + 0.5) / n_back) * x_span)
                         dormer_placements.append({'pos': (bx, top_cy + roof_half_w * dormer_u), 'facing': (0, 1), 'side': -1, 'loc_y': bx - top_cx})
-
-                # Roof deck is kept solid under dormers (no cell skipping) so small roofs
-                # never open gap holes; cheeks penetrate the slope for a watertight seam.
-                ap_half = max(0.24, main_dormer_w * 0.5 - 0.18)
-                for dp in dormer_placements:
-                    dormer_apertures.append({
-                        'side': dp['side'],
-                        'y_min': dp['loc_y'] - ap_half,
-                        'y_max': dp['loc_y'] + ap_half,
-                        'u_min': max(0.25, u_intersect + 0.04),
-                        'u_max': min(0.70, dormer_u + 0.08)
-                    })
             else:
                 roof_half_w = top_hx + props.roof_overhang
                 reach_to_slope = (dormer_u - u_intersect) * roof_half_w
@@ -386,25 +393,89 @@ def build_roof_and_attic(bm, props, ctx):
                     t_front_margin = top_y_min + 3.4
                     dormer_placements = [dp for dp in dormer_placements if dp['pos'][1] >= t_front_margin]
 
-                ap_half = max(0.24, main_dormer_w * 0.5 - 0.18)
-                for dp in dormer_placements:
-                    d_cx, d_cy = dp['pos']
-                    dormer_apertures.append({
-                        'side': dp['side'],
-                        'y_min': d_cy - ap_half,
-                        'y_max': d_cy + ap_half,
-                        'u_min': max(0.25, u_intersect + 0.04),
-                        'u_max': min(0.70, dormer_u + 0.08)
-                    })
+        # Drop dormers that would sit in the band a full-height annex roof ties into
+        if _annex_band is not None:
+            if not is_rotated_roof:
+                _as, _ay0, _ay1 = _annex_band
+                dormer_placements = [
+                    dp for dp in dormer_placements
+                    if not (dp['side'] == _as and _ay0 <= dp['pos'][1] <= _ay1)
+                ]
+            else:
+                _as, _ay0, _ay1 = _annex_band
+                dormer_placements = [
+                    dp for dp in dormer_placements
+                    if not (_as < 0 and dp['pos'][0] < top_x_min + 1.40 or _as > 0 and dp['pos'][0] > top_x_max - 1.40)
+                ]
 
-        # Drop dormers that would sit in the band a full-height annex roof ties
-        # into (its valley extension covers that part of the main slope).
-        if _annex_band is not None and not is_rotated_roof:
-            _as, _ay0, _ay1 = _annex_band
-            dormer_placements = [
-                dp for dp in dormer_placements
-                if not (dp['side'] == _as and _ay0 <= dp['pos'][1] <= _ay1)
-            ]
+        # Drop main-roof dormers that fall inside wing roof attachments / valley intersections
+        if has_wing and wings:
+            w_idx = min(wing_floors, num_floors) - 1
+            for w_elem in wings:
+                ww = w_elem.get('wall', '')
+                if 'bounds_fl' in w_elem and w_idx in w_elem['bounds_fl']:
+                    wb = w_elem['bounds_fl'][w_idx]
+                else:
+                    wb = (w_elem.get('x_min', 0.0), w_elem.get('x_max', 0.0), w_elem.get('y_min', 0.0), w_elem.get('y_max', 0.0))
+                wx1, wx2, wy1, wy2 = wb
+                w_margin = 0.50
+
+                if is_rotated_roof:
+                    # Ridge runs along X. Front slope is -Y (pos[1] < top_cy), Back slope is +Y (pos[1] > top_cy).
+                    if ww == 'FRONT':
+                        dormer_placements = [
+                            dp for dp in dormer_placements
+                            if not (dp['pos'][1] < top_cy and (wx1 - w_margin <= dp['pos'][0] <= wx2 + w_margin))
+                        ]
+                    elif ww == 'BACK':
+                        dormer_placements = [
+                            dp for dp in dormer_placements
+                            if not (dp['pos'][1] > top_cy and (wx1 - w_margin <= dp['pos'][0] <= wx2 + w_margin))
+                        ]
+                    elif ww == 'LEFT':
+                        dormer_placements = [
+                            dp for dp in dormer_placements
+                            if not (dp['pos'][0] < top_x_min + 1.20)
+                        ]
+                    elif ww == 'RIGHT':
+                        dormer_placements = [
+                            dp for dp in dormer_placements
+                            if not (dp['pos'][0] > top_x_max - 1.20)
+                        ]
+                else:
+                    # Ridge runs along Y. Left slope is -X (pos[0] < top_cx), Right slope is +X (pos[0] > top_cx).
+                    if ww == 'LEFT':
+                        dormer_placements = [
+                            dp for dp in dormer_placements
+                            if not (dp['pos'][0] < top_cx and (wy1 - w_margin <= dp['pos'][1] <= wy2 + w_margin))
+                        ]
+                    elif ww == 'RIGHT':
+                        dormer_placements = [
+                            dp for dp in dormer_placements
+                            if not (dp['pos'][0] > top_cx and (wy1 - w_margin <= dp['pos'][1] <= wy2 + w_margin))
+                        ]
+                    elif ww == 'FRONT':
+                        dormer_placements = [
+                            dp for dp in dormer_placements
+                            if not (dp['pos'][1] < top_y_min + 1.20)
+                        ]
+                    elif ww == 'BACK':
+                        dormer_placements = [
+                            dp for dp in dormer_placements
+                            if not (dp['pos'][1] > top_y_max - 1.20)
+                        ]
+
+        # Build dormer apertures for all surviving dormers
+        ap_half = max(0.24, main_dormer_w * 0.5 - 0.18)
+        for dp in dormer_placements:
+            loc_y = dp.get('loc_y', dp['pos'][1])
+            dormer_apertures.append({
+                'side': dp['side'],
+                'y_min': loc_y - ap_half,
+                'y_max': loc_y + ap_half,
+                'u_min': max(0.25, u_intersect + 0.04),
+                'u_max': min(0.70, dormer_u + 0.08)
+            })
 
         # Eave exclusions for equal-floor wings so eave fascia beams don't slice through wing roofs
         eave_ex = {'min': [], 'max': []}

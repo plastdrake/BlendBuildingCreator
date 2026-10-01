@@ -77,18 +77,6 @@ def build_railing_post(bm, x, y, base_z, height=1.05,
                        location=(px, py, base_z + height * 0.5),
                        rotation=(tilt_x, tilt_y, 0.0),
                        mat_index=rail_mat, bevel_amount=0.012)
-    create_beveled_box(bm, size=(POST_CAP_W, POST_CAP_W, POST_CAP_T),
-                       location=(px + tilt_x * height * 0.35,
-                                 py + tilt_y * height * 0.35,
-                                 base_z + height + POST_CAP_T * 0.40),
-                       rotation=(tilt_x, tilt_y, 0.0),
-                       mat_index=cap_mat, bevel_amount=0.010)
-    if iron_pin:
-        create_cylinder(bm, radius=0.020, height=0.04, segments=6,
-                        location=(px + tilt_x * height * 0.35,
-                                  py + tilt_y * height * 0.35,
-                                  base_z + height + POST_CAP_T * 0.75),
-                        mat_index=MAT_INDEX_IRON)
 
 
 def _rail_beam(bm, x0, y0, x1, y1, z0, z1, cross_w, cross_t, mat, bevel=0.010):

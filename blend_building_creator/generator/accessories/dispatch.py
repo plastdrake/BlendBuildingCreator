@@ -81,6 +81,7 @@ def _build_balconies(bm, props, ctx, tier):
             continue
         bounds = ctx.bounds_for(fl_idx)
         lower = ctx.bounds_for(max(0, fl_idx - 1))
+        offset = getattr(ctx, 'floor_balc_offset', {}).get(fl_idx, 0.0)
         build_balcony(
             bm, side=side,
             wall_x_min=bounds[0], wall_x_max=bounds[1],
@@ -91,6 +92,7 @@ def _build_balconies(bm, props, ctx, tier):
             width=width, depth=depth, tier=tier,
             door_angle_deg=_prop(props, 'door_angle', 0.0),
             include_leaf=_prop(props, 'include_door_leaves', True),
+            along_wall_offset=offset,
         )
 
 
