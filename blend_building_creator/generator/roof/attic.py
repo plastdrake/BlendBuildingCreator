@@ -466,16 +466,17 @@ def build_roof_and_attic(bm, props, ctx):
                         ]
 
         # Build dormer apertures for all surviving dormers
-        ap_half = max(0.24, main_dormer_w * 0.5 - 0.18)
-        for dp in dormer_placements:
-            loc_y = dp.get('loc_y', dp['pos'][1])
-            dormer_apertures.append({
-                'side': dp['side'],
-                'y_min': loc_y - ap_half,
-                'y_max': loc_y + ap_half,
-                'u_min': max(0.25, u_intersect + 0.04),
-                'u_max': min(0.70, dormer_u + 0.08)
-            })
+        if dormer_placements:
+            ap_half = max(0.24, main_dormer_w * 0.5 - 0.18)
+            for dp in dormer_placements:
+                loc_y = dp.get('loc_y', dp['pos'][1])
+                dormer_apertures.append({
+                    'side': dp['side'],
+                    'y_min': loc_y - ap_half,
+                    'y_max': loc_y + ap_half,
+                    'u_min': max(0.25, u_intersect + 0.04),
+                    'u_max': min(0.70, dormer_u + 0.08)
+                })
 
         # Eave exclusions for equal-floor wings so eave fascia beams don't slice through wing roofs
         eave_ex = {'min': [], 'max': []}
