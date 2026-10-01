@@ -536,13 +536,26 @@ def _try_place_bunk(bm, tracker: RoomOccupancyTracker, z_floor: float,
 def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                      rng, density: float, is_master: bool = False):
     """Furnishes a comfortable bedroom with bed, wardrobe, chest, stool, and lantern."""
-    # 1. Bed
-    bed_w = 1.30 if is_master else 1.10
-    bed_len = 2.05 if is_master else 1.95
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    narrow_room = min(rw, rd) < 3.4  # too narrow for full bedroom set
+
+    # 1. Bed — scale down for small/narrow tenement rooms
+    if narrow_room:
+        bed_w = 0.95
+        bed_len = 1.90
+    elif is_master:
+        bed_w = 1.30
+        bed_len = 2.05
+    else:
+        bed_w = 1.10
+        bed_len = 1.95
     bed_info = _try_place_bed(bm, tracker, z_floor, length=bed_len, width=bed_w)
 
-    # 2. Bedside chest or nightstand stool
-    if bed_info is not None:
+    # 2. Bedside chest at foot of bed — only if room is wide enough
+    if bed_info is not None and not narrow_room:
         bcx, bcy, bang = bed_info
         fwd_x = math.cos(bang)
         fwd_y = math.sin(bang)
@@ -571,18 +584,33 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                 build_prop(bm, 'STOOL', scx, scy, z_floor, 0.0)
                 break
 
-    # 3. Wardrobe against another wall
-    _try_place_wall_prop(bm, 'WARDROBE', 1.20, 0.60, tracker, z_floor,
-                         candidate_walls=('EAST', 'NORTH', 'SOUTH', 'WEST'))
+    elif bed_info is not None and narrow_room:
+        # In narrow rooms: just a small chest directly beside the bed head (not at foot)
+        bcx, bcy, bang = bed_info
+        side_x = -math.sin(bang)
+        side_y = math.cos(bang)
+        for side_sign in (1.0, -1.0):
+            scx = bcx + side_sign * side_x * (bed_w * 0.5 + 0.30)
+            scy = bcy + side_sign * side_y * (bed_w * 0.5 + 0.30)
+            if tracker.is_free(scx - 0.25, scx + 0.25, scy - 0.25, scy + 0.25):
+                tracker.occupy(scx - 0.25, scx + 0.25, scy - 0.25, scy + 0.25)
+                build_prop(bm, 'STOOL', scx, scy, z_floor, 0.0)
+                break
+
+    # 3. Wardrobe against the wall opposite or beside the bed
+    # Prefer whichever long wall is freer — wider rooms get the wardrobe on a side wall
+    if not narrow_room or max(rw, rd) >= 3.2:
+        if rw >= rd:
+            wall_order = ('NORTH', 'SOUTH', 'EAST', 'WEST')
+        else:
+            wall_order = ('EAST', 'WEST', 'NORTH', 'SOUTH')
+        _try_place_wall_prop(bm, 'WARDROBE', 1.20, 0.60, tracker, z_floor,
+                             candidate_walls=wall_order)
 
     # 4. Cozy floor area rug, smartly placed alongside and at the foot of the bed
-    rw = rm.bounds[1] - rm.bounds[0]
-    rd = rm.bounds[3] - rm.bounds[2]
-    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
-    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rug_choice = rng.choice(['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST'])
-    rug_w = min(2.40, max(1.60, rw * 0.50))
-    rug_l = min(3.20, max(2.20, rd * 0.55))
+    rug_w = min(2.40, max(1.20, rw * 0.50))
+    rug_l = min(3.20, max(1.60, rd * 0.55))
 
     if bed_info is not None:
         bcx, bcy, bang = bed_info
@@ -599,11 +627,8 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     # 5. Optional desk or shelf if room is roomy
     if (rw >= 3.6 or rd >= 3.6) and density >= 0.6:
         if is_master:
-            placed_desk = _try_place_wall_prop(bm, 'DESK', 1.30, 0.65, tracker, z_floor,
-                                               candidate_walls=('SOUTH', 'EAST', 'NORTH'))
-            if placed_desk:
-                # Add chair facing desk
-                pass
+            _try_place_wall_prop(bm, 'DESK', 1.30, 0.65, tracker, z_floor,
+                                 candidate_walls=('SOUTH', 'EAST', 'NORTH'))
         else:
             _try_place_wall_prop(bm, 'SHELF', 1.20, 0.40, tracker, z_floor,
                                  candidate_walls=('SOUTH', 'NORTH', 'EAST'))
@@ -814,14 +839,18 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     if not placed_stove:
         _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
 
-    # 2. Food / Plate Shelf along wall
+    # 2. Food / Plate Shelf along wall opposite or adjacent to stove
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
-                         candidate_walls=('EAST', 'NORTH', 'WEST', 'SOUTH'))
+                         candidate_walls=('NORTH', 'EAST', 'WEST', 'SOUTH'))
 
-    # 3. Food prep / dining table with cauldron, tableware, and chairs
+    # 3. Food prep / dining table: bias toward the center or front of the kitchen
+    # so stove+shelf stay on one wall, table in the social area of the room
     prep_placed = False
     table_pos = None
+    # Bias the table toward the door side (iy_min = front/courtyard side)
+    front_bias_y = rm.bounds[2] + min(rd * 0.45, 2.0)
     candidate_tables = [
+        (rcx, front_bias_y),
         (rcx, rcy),
         (rcx, rm.bounds[2] + min(1.4, rd * 0.35)),
         (rcx, rm.bounds[3] - min(1.4, rd * 0.35)),
@@ -860,6 +889,11 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                 prop = 'BARREL' if rng.random() < 0.5 else 'CRATE'
                 build_prop(bm, prop, cx, cy, z_floor, 0.0)
 
+    # 4b. Second worktable / shelving in large kitchens to fill space sensibly
+    if rw >= 4.0 or rd >= 4.5:
+        _try_place_wall_prop(bm, 'SHELF', 1.20, 0.40, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'WEST', 'EAST', 'NORTH'))
+
     # 5. Smart kitchen rug placement:
     # Anchor the dining set with a clean, proportioned area rug directly under table & chairs
     k_rug_choice = rng.choice(['RUG_FOREST', 'RUG_CRIMSON'])
@@ -873,6 +907,7 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         k_rug_w, k_rug_l = _area_rug_size(rw, rd, coverage=0.55, max_w=2.60, max_l=3.20,
                                           min_w=1.40, min_l=1.80)
         _lay_rug(bm, tracker, rm, rng, k_rug_choice, rcx, rcy, z_floor, k_rug_w, k_rug_l)
+
 
     # 6. Ceiling light
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)

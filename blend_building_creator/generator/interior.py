@@ -1186,7 +1186,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             # doors, so each floor keeps the fully separated two-apartment suites.
             use_common_hall = has_internal_stairs or (
                 bool(getattr(props, 'has_exterior_stairs', False)) and not has_courtyard_or_dual and fl_idx >= 1)
-            split_y = _clear_doorway_span((iy_min + iy_max) * 0.5, axis='Y')
+            # For tenements with courtyard entrance, cap the front kitchen to at most 4.5m
+            # so the room is residential-scaled. The remaining depth is the bedroom.
+            # For common-hall layouts, keep ~50/50 within the apartment sub-area.
+            if not use_common_hall and has_courtyard_or_dual:
+                _max_kitchen_d = 4.5
+                _min_bed_d = 3.0
+                _raw_split = iy_min + min(_max_kitchen_d, max(3.2, (D - _min_bed_d) * 0.45))
+                split_y = _clear_doorway_span(_raw_split, axis='Y',
+                                             lo=iy_min + 3.0, hi=iy_max - _min_bed_d)
+            else:
+                split_y = _clear_doorway_span((iy_min + iy_max) * 0.5, axis='Y')
             dw_y_s = (iy_min + split_y) * 0.5
             dw_y_n = (split_y + iy_max) * 0.5
 
