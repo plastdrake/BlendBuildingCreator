@@ -516,15 +516,12 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
     shaft_h = max(1.5, wall_top_z - shaft_base)
 
     o_line = half - t * 0.5
-    i_line = -(half - t * 0.5)
-    # Side faces run from the OUTER wall end to the far side; the near end is
-    # left open so the main wall can run straight INTO the turret footprint
-    # and die against the far wall (tower-as-part-of-wall, no penetration).
+    # The tower's near (building) side is left open: the main wall runs into
+    # the turret footprint and supplies that face, with one doorway per storey.
     reach = -half
 
-    # (p_start, p_end, normal, z_from). Only the three exposed faces are built
-    # as walls; the near (hall) side is closed by the main wall itself and the
-    # far face gets the storey doorways.
+    # (p_start, p_end, normal, z_from). Three exposed faces are walled; the
+    # near (building) side is closed by the main wall (with its doorways).
     face_defs = [
         (pt(o_line, -half), pt(o_line, half), (ox, oy), shaft_base),
         (pt(reach, o_line), pt(half, o_line), (px, py), shaft_base),
@@ -589,7 +586,6 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
     # window trick) with one opening per storey, so the hall wall visibly ends
     # into the turret and each floor connects to it.
     if main_wall_top is not None:
-        from ..walls import build_wall_with_opening
         _dw = min(1.0, half * 0.9)
         _dh = min(2.15, floor_h - 0.35)
         _ops = []

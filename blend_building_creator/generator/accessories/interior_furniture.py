@@ -1442,10 +1442,9 @@ def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=2.4, length=3.6, rug_style=
     """Woven carpet with transparent alpha tassels cutout.
     rug_style: 1 = Crimson Ornate, 2 = Sapphire Royal, 3 = Forest Woven.
 
-    The rug textures are painted with the tassel fringe on the V ends of the
-    image, while a rug plane is portrait (length > width). The UVs are
-    therefore rotated 90 degrees so texture-U runs along the rug's long axis
-    and the fringe lands on the short ends.
+    The rug art is painted landscape (1024 x 640) with the pattern's long axis
+    along texture-U, so the UVs are chosen per-rug: texture-U always follows
+    the rug's longer local axis and texture-V the shorter one.
     """
     if z_floor is not None:
         z_ground = z_floor
@@ -1466,12 +1465,17 @@ def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=2.4, length=3.6, rug_style=
     f.material_index = mat_idx
 
     for loop in f.loops:
-        # Texture-U follows the rug's long (local Y) axis and texture-V follows
-        # the short (local X) axis. The painted tassel fringe sits on the
-        # texture's V ends, so this puts the fringe on the rug's SHORT ends and
-        # runs the long decorative borders down the length of the rug.
-        u = 0.0 if loop.vert.co.y < 0 else 1.0
-        v = 0.0 if loop.vert.co.x < 0 else 1.0
+        # The rug art is painted landscape (1024x640) with the pattern's long
+        # axis along texture-U. Always give texture-U the rug's LONGER local
+        # axis, so the design keeps its proportions whichever way the rug is
+        # laid. (A fixed mapping mirrors/rotates on whichever rugs happen to be
+        # wider than they are long.)
+        if length >= width:
+            u = 0.0 if loop.vert.co.y < 0 else 1.0
+            v = 0.0 if loop.vert.co.x < 0 else 1.0
+        else:
+            u = 0.0 if loop.vert.co.x < 0 else 1.0
+            v = 0.0 if loop.vert.co.y < 0 else 1.0
         loop[uv_layer].uv = Vector((u, v))
     f.tag = True
 

@@ -236,21 +236,42 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
     T = thickness if thickness is not None else getattr(props, 'curtain_wall_thickness', 0.55)
     gate_h = max(2.2, min(3.0, H - 0.55))
 
+    # Towers ARE the corners: runs stop at the tower faces so the wall
+    # terminates into the bastion (its outer faces continue the wall plane).
+    if getattr(props, 'has_bastion_towers', False):
+        from .bastion import courtyard_tower_rects
+        _r = courtyard_tower_rects(props, ctx)
+        _fl, _fr = _r[0], _r[1]
+        front_x0, front_x1 = _fl[1], _fr[0]
+        side_y0 = _fl[3]
+        if len(_r) >= 4:
+            _br, _bl = _r[2], _r[3]
+            back_x0, back_x1 = _bl[1], _br[0]
+            side_y1_left, side_y1_right = _bl[2], _br[2]
+        else:
+            back_x0, back_x1 = x_min, x_max
+            side_y1_left = side_y1_right = y_max
+    else:
+        front_x0, front_x1 = x_min, x_max
+        back_x0, back_x1 = x_min, x_max
+        side_y0 = y_min
+        side_y1_left = side_y1_right = y_max
+
     # Front run with the gate opening.
     build_curtain_wall_run(
-        bm, (x_min, y_min), (x_max, y_min), (0.0, -1.0), 0.0, H, T,
-        gate={'u0': g0 - x_min, 'u1': g1 - x_min, 'h': gate_h},
+        bm, (front_x0, y_min), (front_x1, y_min), (0.0, -1.0), 0.0, H, T,
+        gate={'u0': g0 - front_x0, 'u1': g1 - front_x0, 'h': gate_h},
         seed=ctx.seed)
     # Back run.
     build_curtain_wall_run(
-        bm, (x_min, y_max), (x_max, y_max), (0.0, 1.0), 0.0, H, T,
+        bm, (back_x0, y_max), (back_x1, y_max), (0.0, 1.0), 0.0, H, T,
         seed=ctx.seed + 1)
     # Left and right runs.
     build_curtain_wall_run(
-        bm, (x_min, y_min), (x_min, y_max), (-1.0, 0.0), 0.0, H, T,
+        bm, (x_min, side_y0), (x_min, side_y1_left), (-1.0, 0.0), 0.0, H, T,
         seed=ctx.seed + 2)
     build_curtain_wall_run(
-        bm, (x_max, y_min), (x_max, y_max), (1.0, 0.0), 0.0, H, T,
+        bm, (x_max, side_y0), (x_max, side_y1_right), (1.0, 0.0), 0.0, H, T,
         seed=ctx.seed + 3)
 
     # Gatehouse dressing over the front opening.

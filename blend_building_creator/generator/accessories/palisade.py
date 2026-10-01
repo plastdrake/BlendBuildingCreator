@@ -286,15 +286,35 @@ def build_palisade_enclosure(bm, props, ctx, height=2.3, style='STAKES', offset=
     gate_half = max(1.1, (getattr(props, 'door_width', 1.2) + 1.0) * 0.5)
     g0, g1 = gate_cx - gate_half, gate_cx + gate_half
 
-    # Towers stand fully inside the enclosure (see bastion.courtyard_tower_centers),
-    # so runs go corner to corner with only the gate gap - no tower cutouts.
+    has_towers = getattr(props, 'has_bastion_towers', False)
+    # Towers ARE the corners: the runs stop at the tower faces (the tower's
+    # outer faces continue the wall plane) so the wall terminates into them
+    # instead of passing through.
+    if has_towers:
+        from .bastion import courtyard_tower_rects
+        _rects = courtyard_tower_rects(props, ctx)
+        _fl, _fr = _rects[0], _rects[1]
+        front_x0, front_x1 = _fl[1], _fr[0]
+        side_y0 = _fl[3]
+        if len(_rects) >= 4:
+            _br, _bl = _rects[2], _rects[3]
+            back_x0, back_x1 = _bl[1], _br[0]
+            side_y1_left, side_y1_right = _bl[2], _br[2]
+        else:
+            back_x0, back_x1 = x_min, x_max
+            side_y1_left = side_y1_right = y_max
+    else:
+        front_x0, front_x1 = x_min, x_max
+        back_x0, back_x1 = x_min, x_max
+        side_y0 = y_min
+        side_y1_left = side_y1_right = y_max
 
-    build_palisade_run(bm, (x_min, y_min), (x_max, y_min), 0.0, height, style, gaps=[(g0, g1)], seed=ctx.seed)
-    build_palisade_run(bm, (x_min, y_max), (x_max, y_max),
+    build_palisade_run(bm, (front_x0, y_min), (front_x1, y_min), 0.0, height, style, gaps=[(g0, g1)], seed=ctx.seed)
+    build_palisade_run(bm, (back_x0, y_max), (back_x1, y_max),
                        0.0, height, style, seed=ctx.seed + 1)
-    build_palisade_run(bm, (x_min, y_min), (x_min, y_max),
+    build_palisade_run(bm, (x_min, side_y0), (x_min, side_y1_left),
                        0.0, height, style, seed=ctx.seed + 2)
-    build_palisade_run(bm, (x_max, y_min), (x_max, y_max),
+    build_palisade_run(bm, (x_max, side_y0), (x_max, side_y1_right),
                        0.0, height, style, seed=ctx.seed + 3)
 
     # Corner posts terminate every run.

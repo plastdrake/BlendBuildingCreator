@@ -15,12 +15,18 @@ from .materials import (
 
 def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                            openings=[], normal_vec=None, is_corner_start=False, is_corner_end=False,
-                           is_y_wall=None, seed=42, omit_top_row=False, force_omit_top_row=False):
+                           is_y_wall=None, seed=42, omit_top_row=False, force_omit_top_row=False,
+                           flat_ranges=None):
     """
     Builds authentic rustic 3D rounded logs with staggered interlocking saddle-notched
     projecting ends and organic handcrafted variation for Tier 1 architecture.
     Perpendicular walls are vertically staggered by half a log height so log ends
     interleave cleanly in an authentic saddle-notch joint without colliding.
+
+    ``flat_ranges``: optional list of (u0, u1) spans (wall-local coords) where
+    the wall backs directly onto a wing interior. No round logs are built
+    there - the sealed flat core (built by the caller on both faces) forms the
+    wing room's back wall instead, so no log bellies intrude into the wing.
     """
     x1, y1 = p_start
     x2, y2 = p_end
@@ -114,7 +120,9 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
         log_ry = min(thickness * 0.68, log_h * 0.56) + d_jitter
         log_rz = (log_h * 0.49) + r_jitter
         
-        # Check openings that intersect this log row's vertical span
+        # Check openings that intersect this log row's vertical span.
+        # flat_ranges (wing-backed spans) are merged in as well so no round
+        # logs are built where the wall faces a wing interior.
         cut_intervals = []
         for op in openings:
             op_z1 = op.get('z_start', z_bottom)
@@ -124,6 +132,11 @@ def build_log_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                 u2 = max(0.0, min(seg_len, op.get('u_end', seg_len)))
                 if u2 > u1 + 0.01:
                     cut_intervals.append((u1, u2))
+        for fr0, fr1 in (flat_ranges or []):
+            fu1 = max(0.0, min(seg_len, fr0))
+            fu2 = max(0.0, min(seg_len, fr1))
+            if fu2 > fu1 + 0.01:
+                cut_intervals.append((fu1, fu2))
         
         if cut_intervals:
             cut_intervals.sort(key=lambda x: x[0])
@@ -386,13 +399,16 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                             omit_top_log_row=False,
                             force_omit_top_log_row=False,
                             has_exposed_brick=False, exposed_brick_freq=0.25,
-                            inner_mat=None):
+                            inner_mat=None, flat_ranges=None):
     """
     Builds a wall along the line p_start -> p_end, cleanly cutting around
     one or more openings (e.g. door or windows) without destructive booleans.
     Each opening is a dict: {'u_start': float, 'u_end': float, 'z_start': float, 'z_end': float}
     where u is distance from p_start.
     ``inner_mat`` is forwarded to every segment (see build_wall_segment).
+    ``flat_ranges``: (u0, u1) spans where a wing interior backs the wall -
+    no round logs there (see build_log_wall_segment); the flat core sealed on
+    both faces forms the wing room's wall instead.
     """
     x1, y1 = p_start
     x2, y2 = p_end

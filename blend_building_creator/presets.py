@@ -180,7 +180,7 @@ PRESETS = {
             'wing_width': 6.5,
             'wing_depth': 5.5,
             'wall_thickness': 0.28,
-            'has_cantilever': True,
+            'has_cantilever': False,
             'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.35,
             'wonkiness': 0.0,
@@ -1836,7 +1836,7 @@ PRESETS = {
             'depth': 16.5,
             'wall_thickness': 0.30,
             'has_cantilever': True,
-            'overhang_mode': 'ALL_FLOORS',
+            'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.32,
             'wonkiness': 0.0,
             'has_foundation': True,
@@ -2059,7 +2059,7 @@ PRESETS = {
             'width': 10.5,
             'depth': 9.0,
             'wall_thickness': 0.28,
-            'has_cantilever': True,
+            'has_cantilever': False,
             'cantilever_overhang': 0.38,
             'wonkiness': 0.0,
             'has_foundation': True, 'foundation_type': 'WOOD',
@@ -2262,7 +2262,7 @@ PRESETS = {
             'width': 7.5,
             'depth': 14.5,
             'wall_thickness': 0.28,
-            'has_cantilever': True,
+            'has_cantilever': False,
             'cantilever_overhang': 0.35,
             'wonkiness': 0.0,
             'has_foundation': True, 'foundation_type': 'WOOD',
@@ -2476,7 +2476,7 @@ PRESETS = {
             'wing_width': 6.5,
             'wing_depth': 6.0,
             'wall_thickness': 0.28,
-            'has_cantilever': True,
+            'has_cantilever': False,
             'cantilever_overhang': 0.38,
             'wonkiness': 0.0,
             'has_foundation': True, 'foundation_type': 'WOOD',
@@ -2733,7 +2733,7 @@ PRESETS = {
             'wing_width': 12.0,
             'wing_depth': 9.0,
             'wall_thickness': 0.32,
-            'has_cantilever': True,
+            'has_cantilever': False,
             'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.38,
             'wonkiness': 0.0,
@@ -3326,7 +3326,7 @@ PRESETS = {
             'depth': 15.5,
             'wall_thickness': 0.30,
             'has_cantilever': True,
-            'overhang_mode': 'ALL_FLOORS',
+            'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.32,
             'wonkiness': 0.0,
             'has_foundation': True,
@@ -4310,7 +4310,7 @@ PRESETS = {
             'depth': 16.0,
             'wall_thickness': 0.30,
             'has_cantilever': True,
-            'overhang_mode': 'ALL_FLOORS',
+            'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.32,
             'wonkiness': 0.0,
             'has_foundation': True,
@@ -4850,7 +4850,7 @@ PRESETS = {
             'num_floors': 2, 'floor_height': 4.6,
             'width': 14.0, 'depth': 9.0, 'wall_thickness': 0.30,
             'plot_setback': 10.5,
-            'has_cantilever': True, 'overhang_mode': 'SECOND_FLOOR_ONLY',
+            'has_cantilever': False, 'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.36,
             'has_foundation': True, 'foundation_type': 'WOOD', 'foundation_height': 0.6, 'ground_floor_stone': False,
             'has_front_steps': True, 'has_stairs': True, 'stair_style': 'STRAIGHT',
@@ -5375,7 +5375,7 @@ PRESETS = {
             'material_tier': 'TIER_1',
             'num_floors': 2, 'floor_height': 3.6,
             'width': 11.8, 'depth': 14.5, 'wall_thickness': 0.28,
-            'has_cantilever': True, 'overhang_mode': 'SECOND_FLOOR_ONLY',
+            'has_cantilever': False, 'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.35,
             'has_foundation': True, 'foundation_type': 'WOOD', 'foundation_height': 0.45, 'ground_floor_stone': False,
             'has_front_steps': True, 'has_stairs': False, 'has_exterior_stairs': True, 'exterior_stairs_side': 'LEFT',
@@ -5401,10 +5401,10 @@ PRESETS = {
             'material_tier': 'TIER_2',
             'num_floors': 3, 'floor_height': 3.6,
             'width': 11.8, 'depth': 15.5, 'wall_thickness': 0.28,
-            'has_cantilever': True, 'overhang_mode': 'ALL_FLOORS',
+            'has_cantilever': True, 'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.38,
             'has_foundation': True, 'foundation_height': 0.55, 'ground_floor_stone': True,
-            'has_front_steps': True, 'has_stairs': True, 'stair_style': 'STRAIGHT',
+            'has_front_steps': True, 'has_stairs': False, 'stair_style': 'STRAIGHT', 'has_exterior_stairs': True, 'exterior_stairs_side': 'LEFT',
             'stair_width': 1.45, 'has_ceiling_beams': True,
             'has_interior_walls': True, 'interior_partition_style': 'AUTO',
             'has_front_door': True, 'door_width': 1.50, 'door_height': 2.85,
@@ -5427,10 +5427,10 @@ PRESETS = {
             'material_tier': 'TIER_3',
             'num_floors': 4, 'floor_height': 3.7,
             'width': 19.6, 'depth': 16.5, 'wall_thickness': 0.32,
-            'has_cantilever': True, 'overhang_mode': 'ALL_FLOORS',
+            'has_cantilever': True, 'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.40,
             'has_foundation': True, 'foundation_height': 0.70, 'ground_floor_stone': True,
-            'has_front_steps': True, 'has_stairs': True, 'stair_style': 'STRAIGHT',
+            'has_front_steps': True, 'has_stairs': False, 'stair_style': 'STRAIGHT', 'has_exterior_stairs': True, 'exterior_stairs_side': 'LEFT',
             'stair_width': 1.50, 'has_ceiling_beams': True,
             'has_interior_walls': True, 'interior_partition_style': 'AUTO',
             'has_front_door': True, 'door_width': 1.60, 'door_height': 2.90,
@@ -5460,10 +5460,10 @@ PRESETS = {
             'num_floors': 2, 'wing_floors': 2, 'floor_height': 3.6,
             'width': 32.0, 'depth': 18.0, 'wing_width': 8.5, 'wing_depth': 12.0,
             'courtyard_width': 15.0, 'wall_thickness': 0.30,
-            'has_cantilever': True, 'overhang_mode': 'SECOND_FLOOR_ONLY',
+            'has_cantilever': False, 'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.35,
             'has_foundation': True, 'foundation_type': 'WOOD', 'foundation_height': 0.50, 'ground_floor_stone': False,
-            'has_front_steps': True, 'has_stairs': True, 'stair_style': 'STRAIGHT',
+            'has_front_steps': True, 'has_stairs': False, 'stair_style': 'STRAIGHT', 'has_exterior_stairs': True, 'exterior_stairs_side': 'LEFT',
             'stair_width': 1.45, 'has_ceiling_beams': True,
             'has_interior_walls': True, 'interior_partition_style': 'AUTO',
             'has_front_door': True, 'door_width': 1.55, 'door_height': 2.85,
@@ -5471,7 +5471,7 @@ PRESETS = {
             'roof_style': 'SWAY', 'roof_height': 4.2, 'has_roof_shingles': True,
             'has_dormers': True, 'dormer_count': 4, 'dormer_sides': 'BOTH',
             'has_chimney': True, 'chimney_pos_x': 0.65, 'chimney_pos_y': 0.65,
-            'has_well': True,
+            'has_well': False,
         },
     },
     'TENEMENT_COMPLEX_LARGE_T2': {
@@ -5489,10 +5489,10 @@ PRESETS = {
             'num_floors': 3, 'wing_floors': 3, 'floor_height': 3.7,
             'width': 35.0, 'depth': 20.0, 'wing_width': 9.5, 'wing_depth': 14.0,
             'courtyard_width': 16.0, 'wall_thickness': 0.30,
-            'has_cantilever': True, 'overhang_mode': 'ALL_FLOORS',
+            'has_cantilever': True, 'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.40,
             'has_foundation': True, 'foundation_height': 0.65, 'ground_floor_stone': True,
-            'has_front_steps': True, 'has_stairs': True, 'stair_style': 'STRAIGHT',
+            'has_front_steps': True, 'has_stairs': False, 'stair_style': 'STRAIGHT', 'has_exterior_stairs': True, 'exterior_stairs_side': 'LEFT',
             'stair_width': 1.50, 'has_ceiling_beams': True,
             'has_interior_walls': True, 'interior_partition_style': 'AUTO',
             'has_front_door': True, 'door_width': 1.60, 'door_height': 2.90,
@@ -5500,7 +5500,7 @@ PRESETS = {
             'roof_style': 'SWAY', 'roof_height': 4.5, 'has_roof_shingles': True,
             'has_dormers': True, 'dormer_count': 6, 'dormer_sides': 'BOTH',
             'has_chimney': True, 'chimney_pos_x': 0.70, 'chimney_pos_y': 0.70,
-            'has_well': True,
+            'has_well': False,
         },
     },
     'TENEMENT_COMPLEX_LARGE_T3': {
@@ -5518,10 +5518,10 @@ PRESETS = {
             'num_floors': 4, 'wing_floors': 4, 'floor_height': 3.8,
             'width': 38.0, 'depth': 22.0, 'wing_width': 10.5, 'wing_depth': 15.0,
             'courtyard_width': 17.0, 'wall_thickness': 0.34,
-            'has_cantilever': True, 'overhang_mode': 'ALL_FLOORS',
+            'has_cantilever': True, 'overhang_mode': 'SECOND_FLOOR_ONLY',
             'cantilever_overhang': 0.42,
             'has_foundation': True, 'foundation_height': 0.85, 'ground_floor_stone': True,
-            'has_front_steps': True, 'has_stairs': True, 'stair_style': 'STRAIGHT',
+            'has_front_steps': True, 'has_stairs': False, 'stair_style': 'STRAIGHT', 'has_exterior_stairs': True, 'exterior_stairs_side': 'LEFT',
             'stair_width': 1.55, 'has_ceiling_beams': True,
             'has_interior_walls': True, 'interior_partition_style': 'AUTO',
             'has_front_door': True, 'door_width': 1.70, 'door_height': 2.95,
@@ -5530,7 +5530,7 @@ PRESETS = {
             'has_dormers': True, 'dormer_count': 6, 'dormer_sides': 'BOTH',
             'has_chimney': True, 'chimney_pos_x': 0.75, 'chimney_pos_y': 0.75,
             'has_balcony': True, 'balcony_side': 'FRONT', 'balcony_floor': 2,
-            'has_well': True, 'has_roof_clock_spire': True,
+            'has_well': False, 'has_roof_clock_spire': True,
         },
     },
 
@@ -6102,6 +6102,28 @@ def apply_preset(props, preset_key):
         props.include_door_leaves = False
     if 'has_interior_furnishing' not in data and hasattr(props, 'has_interior_furnishing'):
         props.has_interior_furnishing = True
+
+    # Structural rules applied to every preset:
+    #  * Tier 1 log walls never carry a jettying overhang (the log crowns and
+    #    the cantilever fight each other).
+    #  * Any remaining overhang is second-floor only, so upper storeys never
+    #    stack jetty on jetty.
+    try:
+        if getattr(props, 'material_tier', '') == 'TIER_1':
+            props.has_cantilever = False
+        if getattr(props, 'has_cantilever', False):
+            props.overhang_mode = 'SECOND_FLOOR_ONLY'
+    except Exception:
+        pass
+
+    # An exterior apartment staircase and an interior staircase are mutually
+    # exclusive: with exterior stairs the flights replace the indoor ones.
+    try:
+        if getattr(props, 'has_exterior_stairs', False):
+            props.has_stairs = False
+    except Exception:
+        pass
+
     props.auto_update = old_auto
     
     # Trigger final regeneration

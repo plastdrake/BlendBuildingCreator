@@ -329,12 +329,12 @@ def _place_banners(bm, props, ctx):
     height = max(4.2, wall_h + 2.2 + (1.15 if _is_curtain else 0.0))
 
     has_towers = _prop(props, 'has_bastion_towers', False)
-    t_size = _prop(props, 'bastion_tower_size', 3.2) if has_towers else 0.0
-    t_half = t_size * 0.5
-    # Front palisade clear zone starts at x_min + t_size + 0.5 from each side
-    t_clear_front = t_size + 0.5 if has_towers else 0.0
-    px_min = x_min + t_clear_front   # leftmost safe banner X on front run
-    px_max = x_max - t_clear_front   # rightmost safe banner X on front run
+    if has_towers:
+        from .bastion import courtyard_tower_rects
+        _r = courtyard_tower_rects(props, ctx)
+        px_min, px_max = _r[0][1], _r[1][0]
+    else:
+        px_min, px_max = x_min, x_max
     gate_cx = ctx.main_door_cx
 
     # Candidate positions — front corners shift to midpoint between tower and gate

@@ -789,100 +789,54 @@ def build_rickety_frame_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
             f.tag = True
 
 
-_TOWER_INSET_EXTRA = 0.35
-
-
-def courtyard_tower_centers(props, ctx):
-    """Corner centers for courtyard towers, fully INSIDE the enclosure.
-
-    Towers stand just inside the palisade/curtain line (outer face clears it
-    by ``_TOWER_INSET_EXTRA``) so enclosure runs stay unbroken and the
-    rampart walk is never blocked. Doors/ladders face the courtyard.
-    """
+def _tower_geom(props, ctx):
+    """Enclosure line, tower size, wall thickness and outward projection."""
     from .palisade import compound_bounds, fortification_offset, fortification_depth_extra
     off = fortification_offset(props)
     x_min, x_max, y_min, y_max = compound_bounds(ctx, off, fortification_depth_extra(props))
-    t = getattr(props, 'bastion_tower_size', 3.2)
-    ins = t * 0.5 + _TOWER_INSET_EXTRA
-    centers = [(x_min + ins, y_min + ins, (0.0, 1.0)),
-               (x_max - ins, y_min + ins, (0.0, 1.0))]
-    if getattr(props, 'bastion_tower_count', 2) >= 4:
-        centers += [(x_max - ins, y_max - ins, (0.0, -1.0)),
-                    (x_min + ins, y_max - ins, (0.0, -1.0))]
-    return centers
+    t = float(getattr(props, 'bastion_tower_size', 3.2))
+    if getattr(props, 'has_curtain_wall', False):
+        T = float(getattr(props, 'curtain_wall_thickness', 0.55))
+    elif getattr(props, 'has_palisade', False):
+        T = 0.30
+    else:
+        T = 0.55
+    proj = 0.06          # small proud step so tower and wall never z-fight
+    return x_min, x_max, y_min, y_max, t, T, proj
+
+
+def courtyard_tower_rects(props, ctx):
+    """Corner tower footprints (x0, x1, y0, y1, door_dir), corner-anchored.
+
+    Each tower IS the corner of the defensive wall: its outer two faces lie
+    flush with the enclosure line (continuing the wall's outer plane) and it
+    extends inward, so the wall runs terminate against the tower's inner faces
+    instead of passing through it. This is the classic castle corner bastion.
+    """
+    x_min, x_max, y_min, y_max, t, T, proj = _tower_geom(props, ctx)
+    h = T * 0.5 + proj
+    rects = []
+    # Front-left
+    rects.append((x_min - h, x_min - h + t, y_min - h, y_min - h + t, (0.0, 1.0)))
+    # Front-right
+    rects.append((x_max + h - t, x_max + h, y_min - h, y_min - h + t, (0.0, 1.0)))
+    if int(getattr(props, 'bastion_tower_count', 2)) >= 4:
+        rects.append((x_max + h - t, x_max + h, y_max + h - t, y_max + h, (0.0, -1.0)))
+        rects.append((x_min - h, x_min - h + t, y_max + h - t, y_max + h, (0.0, -1.0)))
+    return rects
+
+
+def courtyard_tower_centers(props, ctx):
+    """Corner centers for courtyard towers (derived from the footprints)."""
+    return [((r[0] + r[1]) * 0.5, (r[2] + r[3]) * 0.5, r[4])
+            for r in courtyard_tower_rects(props, ctx)]
 
 
 def courtyard_tower_footprints(props, ctx):
     """Tower ground footprints (with margin) for collision checks elsewhere."""
-    t = getattr(props, 'bastion_tower_size', 3.2)
-    h = t * 0.5 + 0.20
-    return [(cx - h, cx + h, cy - h, cy + h)
-            for cx, cy, _ in courtyard_tower_centers(props, ctx)]
-
-
-def build_tower_spur_walls(bm, props, ctx):
-    """Stitch each inset courtyard tower to the enclosure with short spur walls.
-
-    Towers stand just inside the line, so without spurs a slot of daylight
-    shows between the tower faces and the runs. Two stubs per tower (one to
-    the nearest front/back run, one to the nearest side run) close the corner
-    pocket in matching construction: stakes for palisades, masonry for
-    curtain walls.
-    """
-    if not bool(getattr(props, 'has_bastion_towers', False)):
-        return
-    is_curtain = bool(getattr(props, 'has_curtain_wall', False))
-    if not (is_curtain or bool(getattr(props, 'has_palisade', False))):
-        return
-    from .palisade import compound_bounds, fortification_offset, fortification_depth_extra
-    off = fortification_offset(props)
-    x_min, x_max, y_min, y_max = compound_bounds(ctx, off, fortification_depth_extra(props))
-    t = getattr(props, 'bastion_tower_size', 3.2)
-    th = t * 0.5
-    embed = 0.30
-
-    if is_curtain:
-        from .curtain_wall import build_curtain_wall_run
-        H = getattr(props, 'curtain_wall_height', 3.2)
-        T = getattr(props, 'curtain_wall_thickness', 0.55)
-
-        def _masonry(p0, p1, outward):
-            if math.hypot(p1[0] - p0[0], p1[1] - p0[1]) < 0.35:
-                return
-            build_curtain_wall_run(bm, p0, p1, outward, 0.0, H, T, seed=ctx.seed + 9)
-
-        for cx, cy, _ in courtyard_tower_centers(props, ctx):
-            fx = x_min if cx < (x_min + x_max) * 0.5 else x_max
-            fy = y_min if cy < (y_min + y_max) * 0.5 else y_max
-            if fy == y_min:
-                _masonry((cx, fy), (cx, cy - th + embed), (0.0, -1.0))
-            else:
-                _masonry((cx, fy), (cx, cy + th - embed), (0.0, 1.0))
-            if fx == x_min:
-                _masonry((fx, cy), (cx - th + embed, cy), (-1.0, 0.0))
-            else:
-                _masonry((fx, cy), (cx + th - embed, cy), (1.0, 0.0))
-    else:
-        from .palisade import build_palisade_run
-        height = getattr(props, 'palisade_height', 2.3)
-        style = getattr(props, 'palisade_style', 'STAKES')
-
-        def _stakes(p0, p1):
-            if math.hypot(p1[0] - p0[0], p1[1] - p0[1]) < 0.30:
-                return
-            build_palisade_run(bm, p0, p1, 0.0, height, style, seed=ctx.seed + 9)
-
-        for cx, cy, _ in courtyard_tower_centers(props, ctx):
-            fx = x_min if cx < (x_min + x_max) * 0.5 else x_max
-            fy = y_min if cy < (y_min + y_max) * 0.5 else y_max
-            if fy == y_min:
-                _stakes((cx, fy), (cx, cy - th + embed))
-            else:
-                _stakes((cx, fy), (cx, cy + th - embed))
-            if fx == x_min:
-                _stakes((fx, cy), (cx - th + embed, cy))
-            else:
-                _stakes((fx, cy), (cx + th - embed, cy))
+    h = 0.20
+    return [(r[0] - h, r[1] + h, r[2] - h, r[3] + h)
+            for r in courtyard_tower_rects(props, ctx)]
 
 
 def build_bastion_courtyard_towers(bm, props, ctx):
