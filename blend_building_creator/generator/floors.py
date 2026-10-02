@@ -109,40 +109,7 @@ def build_floors(bm, props, ctx):
                         door_cx = 0.0
                 elif shape == 'U_SHAPE':
                     door_cx = 0.0
-                else: # T_SHAPE
-                    if wing_placement == 'FRONT':
-                        door_cx = None
-                    else:
-                        door_cx = 0.0
-                if door_cx is not None:
-                    f_margin = door_margin
-                    if getattr(props, 'has_arched_porch', False):
-                        f_margin = max(f_margin, 1.65)
-                    front_ex.append((door_cx - f_margin, door_cx + f_margin))
-
-            # 2. Back entrance
-            if getattr(props, 'has_back_door', False) and not open_timber:
-                b_cx = 0.0
-                if shape == 'L_SHAPE' and wing_placement == 'BACK' and len(wings) > 0:
-                    b_cx = (lx_min + wings[0]['base'][0]) * 0.5 if wing_side == 'RIGHT' else (wings[0]['base'][1] + lx_max) * 0.5
-                back_ex.append((b_cx - door_margin, b_cx + door_margin))
-
-            # 2b. Open rear portal
-            if (getattr(props, 'has_back_portal', False) and not open_timber
-                    and not getattr(props, 'has_back_door', False)):
-                p_w = max(dw, 1.7)
-                p_margin = p_w * 0.5 + 0.50
-                back_ex.append((-p_margin, p_margin))
-
-            # 3. Side door
-            if getattr(props, 'has_side_door', False) and not open_timber:
-                s_facade = getattr(props, 'side_door_facade', 'LEFT')
-                if s_facade == 'LEFT':
-                    s_cy = (ly_min + stair_y_bot) * 0.5 if (props.has_stairs and (stair_y_bot - ly_min) > 2.0) else (ly_min + ly_max) * 0.5
-                    left_ex.append((s_cy - door_margin, s_cy + door_margin))
-                else:
-                    s_cy = (ly_min + ly_max) * 0.5
-                    right_ex.append((s_cy - door_margin, s_cy + door_margin))
+                front_ex.append((door_cx - door_margin, door_cx + door_margin))
 
         elif f_idx == 1:
             # Upper side door onto rampart deck
@@ -169,12 +136,65 @@ def build_floors(bm, props, ctx):
 
     stair_w = props.stair_width
     landing_depth = max(1.10, stair_w * 0.75)
-    stair_cx_0 = fl0_ix_min + 0.08 + stair_w * 0.5
-    stair_cx_1 = stair_cx_0 + stair_w + 0.20
+    # TENEMENT SWITCHBACK.  Only the shared common stairwells of the tenement
+    # archetype switch to a two-lane layout: two flights side by side inside
+    # the hall, and each storey climbs the lane the storey below did NOT use.
+    # An upper flight therefore sits BESIDE the one below instead of stacked
+    # directly over it, so no run steals the headroom of the run beneath, and
+    # the strip alongside the open well stays clear as a walking area.
+    # TENEMENT TANDEM STAIRS: All flights run along the SAME wall (single lane).
+    # The hallway is narrow (~2.5m wide) and flights run in-line sequentially:
+    # Floor 0: South flight climbs North (+Y)
+    # Floor 1: North flight climbs North (+Y) along the SAME wall
+    # Floor 2: Turned 180 degrees and moved to South half (solid floor), climbing South (-Y)
+    # Floor 3: North flight climbing South (-Y), etc.
+    stair_w = props.stair_width
+    landing_depth = max(1.10, stair_w * 0.75)
+    stair_switchback = False
+    lane_gap = 0.0
+    stair_cx = fl0_ix_min + 0.08 + stair_w * 0.5
+    lane_cx_0 = lane_cx_1 = stair_cx
 
-    stair_y_top = fl0_iy_max - landing_depth
-    stair_len = min(3.8, max(2.6, (fl0_iy_max - fl0_iy_min) - landing_depth - 1.2))
-    stair_y_bot = stair_y_top - stair_len
+    is_tenement_stairs = (
+        effective_archetype == 'TENEMENT'
+        and getattr(props, 'has_stairs', False)
+        and getattr(props, 'stair_style', 'STRAIGHT') != 'SPIRAL'
+    )
+
+    D_interior = fl0_iy_max - fl0_iy_min
+    end_landing = max(1.10, stair_w * 0.75)
+    mid_landing = max(1.20, stair_w * 0.85)
+
+    if is_tenement_stairs and D_interior >= 7.4:
+        if D_interior >= 12.0:
+            end_landing = 2.50
+            mid_landing = 2.50
+        else:
+            end_landing = max(1.50, min(2.50, (D_interior - 2.0 * 2.6) / 3.0))
+            mid_landing = end_landing
+        run_avail = D_interior - 2.0 * end_landing - mid_landing
+        stair_len = min(3.8, max(2.6, run_avail * 0.5))
+
+        # South flight (half 0)
+        stair_y_s0 = fl0_iy_min + end_landing
+        stair_y_s1 = stair_y_s0 + stair_len
+
+        # North flight (half 1)
+        stair_y_n1 = fl0_iy_max - end_landing
+        stair_y_n0 = stair_y_n1 - stair_len
+
+        stair_y_bot = min(stair_y_s0, stair_y_n0)
+        stair_y_top = max(stair_y_s1, stair_y_n1)
+        stair_y_head = stair_y_s1
+        stair_y_foot = stair_y_s0
+        stair_ascend_sign = 1.0
+    else:
+        stair_len = min(3.8, max(2.6, D_interior - landing_depth - 1.2))
+        stair_y_head = fl0_iy_min + landing_depth
+        stair_ascend_sign = -1.0
+        stair_y_foot = stair_y_head - stair_ascend_sign * stair_len
+        stair_y_bot = min(stair_y_head, stair_y_foot)
+        stair_y_top = max(stair_y_head, stair_y_foot)
 
     prev_fl_overhang = 0.0
     prev_x_min, prev_x_max = -base_w * 0.5, base_w * 0.5
@@ -386,11 +406,40 @@ def build_floors(bm, props, ctx):
             if props.stair_style == 'SPIRAL':
                 build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
                                       return_y=sh_y1, x_start=sh_x1 + 0.20)
+            elif is_tenement_stairs and D_interior >= 7.4:
+                # Single-wall tandem stairwell: guard the walking aisle edge (+X)
+                # and close off the foot end of the hole, keeping arrival end open
+                arr_cycle = (fl_idx - 1) % 4
+                ret_y = sh_y1 if arr_cycle in (0, 1) else sh_y2
+                build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
+                                      return_y=ret_y, x_start=sh_x1)
+            elif stair_switchback:
+                # Switchback floor: this storey's opening is the lane the flight
+                # below climbed, and the sibling lane is solid floor carrying the
+                # next flight.  Guard the edge shared with that walkable lane and
+                # the end of the run nobody steps off, leaving the arrival end
+                # open so you can walk across the landing onto the next flight.
+                if (fl_idx - 1) % 2 == 0:
+                    # Void over the WEST lane: walkable floor lies to its east,
+                    # and that flight's foot is the NORTH end of the run.
+                    build_stair_guardrail(bm, sh_x2 + 0.05, sh_y1, sh_y2, z_floor + 0.05,
+                                          return_y=sh_y2, x_start=sh_x1)
+                else:
+                    # Void over the EAST lane: walkable floor on BOTH sides, and
+                    # that flight's foot is the SOUTH end of the run.
+                    build_stair_guardrail(bm, sh_x1 - 0.05, sh_y1, sh_y2, z_floor + 0.05,
+                                          return_y=sh_y1, x_start=sh_x2)
+                    build_stair_guardrail(bm, min(slab_xmax - 0.10, sh_x2 + 0.05),
+                                          sh_y1, sh_y2, z_floor + 0.05)
             else:
                 # Straight stairs: only guard open void on the top floor where no more stairs ascend
                 # On intermediate floors, the ascending flight's own handrail protects the opening
                 if fl_idx == num_floors - 1:
-                    ret_y = sh_y1 if (fl_idx % 2 == 1) else sh_y2
+                    # The void runs from the arriving flight's foot, so the
+                    # return rail closes that end: track-0 arrivals (odd floors)
+                    # land at the north end, track-1 arrivals (even floors) at
+                    # the south end after the 180 degree rotation.
+                    ret_y = sh_y2 if (fl_idx % 2 == 1) else sh_y1
                     # Guardrail along the right side and across the void edge
                     build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
                                           return_y=ret_y, x_start=sh_x1)
@@ -485,22 +534,49 @@ def build_floors(bm, props, ctx):
                 next_stair_hole = (spiral_hole_xmin, spiral_hole_xmax,
                                    spiral_cy - spiral_r - 0.06, min(iy_max, spiral_cy + spiral_r + 0.06))
             else:
-                # Straight stairs: Floor 0 -> 1 runs front to back (+Y) on track 0
-                # Floor 1 -> 2 runs back to front (-Y) on adjacent track 1 (switchback)
-                if fl_idx % 2 == 0:
-                    stair_start = (stair_cx_0, stair_y_bot, z_floor + 0.05)
+                if is_tenement_stairs and D_interior >= 7.4:
+                    # Single-wall tandem stair for tenements: all flights hug the same wall
+                    cycle = fl_idx % 4
+                    if cycle == 0:
+                        # Floor 0: South flight climbs North (+Y)
+                        y_foot, y_head = stair_y_s0, stair_y_s1
+                        dir_y = 1
+                    elif cycle == 1:
+                        # Floor 1: North flight climbs North (+Y) (in-line continuation along SAME wall!)
+                        y_foot, y_head = stair_y_n0, stair_y_n1
+                        dir_y = 1
+                    elif cycle == 2:
+                        # Floor 2: South flight climbs South (-Y) (turned 180° and moved to South solid floor!)
+                        y_foot, y_head = stair_y_s1, stair_y_s0
+                        dir_y = -1
+                    else: # cycle == 3
+                        # Floor 3: North flight climbs South (-Y)
+                        y_foot, y_head = stair_y_n1, stair_y_n0
+                        dir_y = -1
+
+                    stair_start = (stair_cx, y_foot, z_floor + 0.05)
                     build_straight_staircase(bm, stair_start, z_ceil + 0.05,
-                                             stair_width=stair_w, stair_depth=stair_len, direction_y=1)
-                    # Opening on upper floor only spans this active track, leaving any overhang and adjacent track as solid floor
-                    next_stair_hole = (stair_cx_0 - stair_w * 0.5 - 0.08, stair_cx_0 + stair_w * 0.5 + 0.12,
-                                       stair_y_bot - 0.15, stair_y_top + 0.05)
+                                             stair_width=stair_w, stair_depth=stair_len,
+                                             direction_y=dir_y)
+                    sh_y0 = min(y_foot, y_head) - 0.10
+                    sh_y1 = max(y_foot, y_head) + 0.10
+                    next_stair_hole = (stair_cx - stair_w * 0.5 - 0.08,
+                                       stair_cx + stair_w * 0.5 + 0.12,
+                                       sh_y0, sh_y1)
                 else:
-                    stair_start = (stair_cx_1, stair_y_top, z_floor + 0.05)
+                    if fl_idx % 2 == 0:
+                        lane_cx = lane_cx_0
+                        stair_start = (lane_cx, stair_y_foot, z_floor + 0.05)
+                        direction_y = int(stair_ascend_sign)
+                    else:
+                        lane_cx = lane_cx_1 if stair_switchback else lane_cx_0
+                        stair_start = (lane_cx, stair_y_head, z_floor + 0.05)
+                        direction_y = int(-stair_ascend_sign)
                     build_straight_staircase(bm, stair_start, z_ceil + 0.05,
-                                             stair_width=stair_w, stair_depth=stair_len, direction_y=-1)
-                    # Opening on upper floor only spans this active track, leaving adjacent track as solid floor
-                    next_stair_hole = (stair_cx_1 - stair_w * 0.5 - 0.08, stair_cx_1 + stair_w * 0.5 + 0.12,
-                                       stair_y_bot - 0.05, stair_y_top + 0.15)
+                                             stair_width=stair_w, stair_depth=stair_len,
+                                             direction_y=direction_y)
+                    next_stair_hole = (lane_cx - stair_w * 0.5 - 0.08, lane_cx + stair_w * 0.5 + 0.12,
+                                       stair_y_bot - 0.10, stair_y_top + 0.10)
             
             floor_stair_holes[fl_idx + 1] = next_stair_hole
 
@@ -567,18 +643,37 @@ def build_floors(bm, props, ctx):
             dh = getattr(props, 'door_height', 2.80)
             frame_margin = 0.08 if tier_val == 'TIER_1' else 0.12
             door_top_z = z_floor + dh + frame_margin
+            door_cx = 0.0
             extra_front_doors = []
 
             # 1. Front Entrance
-            if props.has_front_door and not open_timber:
+            side_entry_tenement = (
+                effective_archetype == 'TENEMENT' and shape == 'RECTANGLE'
+                and getattr(props, 'has_exterior_stairs', False)
+                and getattr(props, 'exterior_stairs_side', 'LEFT') in ('LEFT', 'RIGHT')
+            )
+            if props.has_front_door and not open_timber and not side_entry_tenement:
                 if shape == 'RECTANGLE':
                     door_offset = getattr(props, 'front_door_offset_x', 0.0)
                     if effective_archetype == 'TENEMENT' and getattr(props, 'has_stairs', False):
                         # Tenement with a real interior staircase: the entrance
                         # belongs in the common stair corridor on the left.
-                        # Align the door inside the hallway (between x_min + wall_t and the hallway demising wall),
-                        # clear of the exterior corner and staircase foot.
-                        default_door_cx = x_min + wall_t + 0.32 + dw * 0.5
+                        if stair_switchback:
+                            # ...but NOT face-first into the bottom flight.  The
+                            # switchback well is two lanes deep, so the door
+                            # opens into the walkway strip beside it: you step in
+                            # with a clear walking area ahead and the climb
+                            # starts off to one side.
+                            well_x1 = lane_cx_1 + stair_w * 0.5
+                            # Centre the entrance in the walkway beside the well,
+                            # leaving a clear margin of wall between the casing
+                            # and the stairwell's east edge.
+                            default_door_cx = min(well_x1 + dw * 0.5 + 0.15,
+                                                  x_max - wall_t - dw * 0.5 - 0.25)
+                        else:
+                            # Align the door inside the hallway's 2.5m walking corridor,
+                            # clear of the staircase and exterior corner.
+                            default_door_cx = x_min + wall_t + 1.50 + dw * 0.5
                         door_cx = default_door_cx + door_offset
                     elif effective_archetype == 'TENEMENT':
                         _w = x_max - x_min
@@ -611,20 +706,18 @@ def build_floors(bm, props, ctx):
                 elif shape == 'U_SHAPE':
                     door_yf = y_min
                     if effective_archetype == 'TENEMENT' and len(wings) >= 2:
-                        # Tenement: one street door per ground-floor apartment in courtyard gap
-                        gap0 = max(wings[0]['base'][1], x_min)
-                        gap1 = min(wings[1]['base'][0], x_max)
-                        gap_w = max(0.8, gap1 - gap0)
-                        if gap_w >= 9.0:
-                            door_cx = gap0 + gap_w * 0.125
-                            extra_front_doors = [
-                                gap0 + gap_w * 0.375,
-                                gap0 + gap_w * 0.625,
-                                gap0 + gap_w * 0.875,
-                            ]
+                        # One street/courtyard door per back-block flat, at the
+                        # same positions the upper floors use.
+                        from .tenement import apartment_layout
+                        _apts = apartment_layout((ix_min, ix_max, iy_min, iy_max),
+                                                 'U_SHAPE', fl_wings_bounds, props)
+                        _main_e = sorted(a['entry']['x'] for a in _apts
+                                         if a['id'].startswith('main'))
+                        if _main_e:
+                            door_cx = _main_e[0]
+                            extra_front_doors = list(_main_e[1:])
                         else:
-                            door_cx = gap0 + gap_w * 0.25
-                            extra_front_doors = [gap0 + gap_w * 0.75]
+                            door_cx = 0.0
                     else:
                         door_cx = 0.0  # Center of front courtyard
                     door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
@@ -1022,39 +1115,45 @@ def build_floors(bm, props, ctx):
                                        location=(_wc_x, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
 
-        # Balcony Doorway Cutout (per-floor facade resolved above)
+        # Balcony Doorway Cutouts
+        balconies_on_fl = getattr(ctx, 'floor_balconies', {}).get(fl_idx, [])
+        if not balconies_on_fl and floor_balc_side.get(fl_idx) is not None:
+            balconies_on_fl = [{'side': floor_balc_side[fl_idx], 'offset': getattr(ctx, 'floor_balc_offset', {}).get(fl_idx, 0.0)}]
         b_side = floor_balc_side.get(fl_idx)
         b_side_next = floor_balc_side.get(fl_idx + 1)
         b_width = getattr(props, 'balcony_width', 2.4)
 
-        if b_side is not None:
-            balc_door_w = 0.95
-            balc_door_h = min(2.15, floor_h * 0.76)
-            b_off = getattr(ctx, 'floor_balc_offset', {}).get(fl_idx, 0.0)
-            if b_side in ('FRONT', 'BACK'):
+        balc_door_w = 0.95
+        balc_door_h = min(2.15, floor_h * 0.76)
+        for b_entry in balconies_on_fl:
+            bs = b_entry.get('side')
+            if bs is None:
+                continue
+            b_off = b_entry.get('offset', 0.0)
+            if bs in ('FRONT', 'BACK'):
                 b_cx = (x_min + x_max) * 0.5 + b_off
-                b_cy = y_min if b_side == 'FRONT' else y_max
+                b_cy = y_min if bs == 'FRONT' else y_max
                 b_u_mid = b_cx - x_min
                 b_axis = 'X'
             else:
-                b_cx = x_min if b_side == 'LEFT' else x_max
+                b_cx = x_min if bs == 'LEFT' else x_max
                 b_cy = (y_min + y_max) * 0.5 + b_off
                 b_u_mid = b_cy - y_min
                 b_axis = 'Y'
-            
+
             b_op = {
                 'u_start': b_u_mid - balc_door_w * 0.5,
                 'u_end': b_u_mid + balc_door_w * 0.5,
                 'z_start': z_floor,
                 'z_end': z_floor + balc_door_h
             }
-            if b_side == 'FRONT':
+            if bs == 'FRONT':
                 front_openings.append(b_op)
-            elif b_side == 'BACK':
+            elif bs == 'BACK':
                 back_openings.append(b_op)
-            elif b_side == 'LEFT':
+            elif bs == 'LEFT':
                 left_openings.append(b_op)
-            elif b_side == 'RIGHT':
+            elif bs == 'RIGHT':
                 right_openings.append(b_op)
 
             # Register balcony doorway in ctx so room planning partitions & furnishings avoid it
@@ -1086,6 +1185,23 @@ def build_floors(bm, props, ctx):
         def get_shutter_info(wx_val, wy_val, wz_val):
             if not props.has_shutters:
                 return False, False
+            if effective_archetype == 'TENEMENT' and getattr(props, 'has_exterior_stairs', False):
+                stair_side = getattr(props, 'exterior_stairs_side', 'LEFT')
+                if stair_side == 'LEFT' and abs(wx_val - x_min) < 0.08:
+                    return False, False
+                if stair_side == 'RIGHT' and abs(wx_val - x_max) < 0.08:
+                    return False, False
+                if stair_side == 'COURTYARD' and shape == 'U_SHAPE':
+                    if abs(wy_val - y_min) < 0.08:
+                        gap_lo = max(wings[0]['base'][1], x_min)
+                        gap_hi = min(wings[1]['base'][0], x_max)
+                        if gap_lo <= wx_val <= gap_hi:
+                            return False, False
+                    for wing, wing_bounds in zip(wings, fl_wings_bounds):
+                        wx1, wx2, wy1, wy2 = wing_bounds
+                        inner_x = wx2 if wing.get('id', 0) == 0 else wx1
+                        if abs(wx_val - inner_x) < 0.08 and wy1 <= wy_val <= wy2:
+                            return False, False
             st = getattr(props, 'shutter_state', 'OPEN')
             if st == 'CLOSED':
                 return True, True
@@ -1225,11 +1341,22 @@ def build_floors(bm, props, ctx):
             fl_idx, (ix_min, ix_max, iy_min, iy_max),
             stair_hole=cur_stair_hole or next_stair_hole,
             stair_pos_info={
-                'cx': stair_cx_0 if fl_idx % 2 == 0 else stair_cx_1,
-                'w': stair_w, 'y_bot': stair_y_bot, 'y_top': stair_y_top,
-                'has_stairs': props.has_stairs, 'style': props.stair_style
+                # For a tenement switchback `cx`/`w` describe the WHOLE well (both
+                # lanes), so the hall clears both flights and still keeps a
+                # walkway beside them; otherwise they describe the single lane.
+                'cx': stair_cx,
+                'w': (stair_w * 2.0 + lane_gap) if stair_switchback else stair_w,
+                'y_bot': stair_y_bot, 'y_top': stair_y_top,
+                'y_ascend': stair_ascend_sign,
+                'has_stairs': props.has_stairs, 'style': props.stair_style,
+                'switchback': stair_switchback, 'walk_w': 1.05
             },
-            front_door_info=(door_cx, getattr(props, 'door_width', 1.0)) if (fl_idx == 0 and props.has_front_door and not open_timber) else None,
+            front_door_info=(door_cx, getattr(props, 'door_width', 1.0)) if (
+                fl_idx == 0 and props.has_front_door and not open_timber
+                and not (effective_archetype == 'TENEMENT' and shape == 'RECTANGLE'
+                         and getattr(props, 'has_exterior_stairs', False)
+                         and getattr(props, 'exterior_stairs_side', 'LEFT') in ('LEFT', 'RIGHT'))
+            ) else None,
             fl_wings_bounds=fl_wings_bounds if fl_has_wing else None,
             effective_archetype=effective_archetype,
             props=props,
@@ -1249,7 +1376,7 @@ def build_floors(bm, props, ctx):
             left_openings, right_openings, front_openings, back_openings)
 
         # Dynamic Windows - Front Wall
-        if props.has_windows and not open_timber:
+        if props.has_windows and getattr(props, 'window_front', True) and not open_timber:
             front_excludes = list(get_facade_wing_exclusions('FRONT')) + get_turret_exclusions('FRONT')
             front_excludes += ext_stair_excl.get('FRONT', [])
             balcony_overhead = (b_side_next == 'FRONT')
@@ -1260,8 +1387,20 @@ def build_floors(bm, props, ctx):
                     wx_p = iw['pos']
                     front_excludes.append((wx_p - 0.50, wx_p + 0.50))
             
+            # Doorway exclusions on Front facade (ALL floors): entrance doors, exterior stair doors, balcony doors
+            for d in ctx.floor_doorways.get(fl_idx, []):
+                if d.get('axis') == 'X' and abs(d.get('y', y_min) - y_min) < 0.8:
+                    _dw = d.get('w', getattr(props, 'door_width', 1.0))
+                    _dclr = (_dw + win_w) * 0.5 + (0.50 if props.has_shutters else 0.30)
+                    front_excludes.append((d['x'] - _dclr, d['x'] + _dclr))
+            for spot in _stair_door_spots.get(fl_idx, []):
+                if spot.get('axis', 'X') == 'X' and abs(spot.get('y', y_min) - y_min) < 0.8:
+                    _dw = spot.get('w', getattr(props, 'door_width', 1.0))
+                    _dclr = (_dw + win_w) * 0.5 + (0.50 if props.has_shutters else 0.30)
+                    front_excludes.append((spot['x'] - _dclr, spot['x'] + _dclr))
+
             # Door exclusion zone calculation on floor 0
-            if fl_idx == 0 and props.has_front_door:
+            if fl_idx == 0 and props.has_front_door and not side_entry_tenement:
                 door_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 d_ex1 = door_cx - door_clr
                 d_ex2 = door_cx + door_clr
@@ -1278,15 +1417,18 @@ def build_floors(bm, props, ctx):
                     mw_cx = (x_min + x_max) * 0.5 + _off
                     front_excludes.append((mw_cx - (_mw_pw * 0.5 + win_w_clr), mw_cx + (_mw_pw * 0.5 + win_w_clr)))
                 
-            if b_side == 'FRONT':
-                b_cx = (x_min + x_max) * 0.5 + getattr(ctx, 'floor_balc_offset', {}).get(fl_idx, 0.0)
-                front_excludes.append((b_cx - (b_width * 0.5 + 0.85), b_cx + (b_width * 0.5 + 0.85)))
-            elif b_side_next == 'FRONT':
+            for b_ent in balconies_on_fl:
+                if b_ent.get('side') == 'FRONT':
+                    b_cx = (x_min + x_max) * 0.5 + b_ent.get('offset', 0.0)
+                    front_excludes.append((b_cx - (b_width * 0.5 + 0.85), b_cx + (b_width * 0.5 + 0.85)))
+            if b_side_next == 'FRONT':
                 b_cx = (x_min + x_max) * 0.5 + getattr(ctx, 'floor_balc_offset', {}).get(fl_idx + 1, 0.0)
                 front_excludes.append((b_cx - (b_width * 0.5 + 0.45), b_cx + (b_width * 0.5 + 0.45)))
 
             front_win_xs = []
-            front_rooms = [rm for rm in fl_rooms if 'FRONT' in rm.exterior_facades]
+            front_rooms = [rm for rm in fl_rooms if 'FRONT' in rm.exterior_facades
+                           and not getattr(rm, 'is_wing', False)
+                           and (x_min - 0.05 <= rm.exterior_facades['FRONT'][0] and rm.exterior_facades['FRONT'][1] <= x_max + 0.05)]
             if front_rooms:
                 for rm in front_rooms:
                     rx0, rx1 = rm.exterior_facades['FRONT']
@@ -1323,13 +1465,25 @@ def build_floors(bm, props, ctx):
                 )
 
         # Dynamic Windows - Back Wall
-        if props.has_windows and not open_timber:
+        if props.has_windows and getattr(props, 'window_back', True) and not open_timber:
             back_excludes = list(get_facade_wing_exclusions('BACK')) + get_turret_exclusions('BACK')
             back_excludes += ext_stair_excl.get('BACK', [])
             for iw in fl_interior_walls:
                 if iw['axis'] == 'Y':
                     wx_p = iw['pos']
                     back_excludes.append((wx_p - 0.50, wx_p + 0.50))
+
+            # Doorway exclusions on Back facade (ALL floors)
+            for d in ctx.floor_doorways.get(fl_idx, []):
+                if d.get('axis') == 'X' and abs(d.get('y', y_max) - y_max) < 0.8:
+                    _dw = d.get('w', getattr(props, 'door_width', 1.0))
+                    _dclr = (_dw + win_w) * 0.5 + (0.50 if props.has_shutters else 0.30)
+                    back_excludes.append((d['x'] - _dclr, d['x'] + _dclr))
+            for spot in _stair_door_spots.get(fl_idx, []):
+                if spot.get('axis', 'X') == 'X' and abs(spot.get('y', y_max) - y_max) < 0.8:
+                    _dw = spot.get('w', getattr(props, 'door_width', 1.0))
+                    _dclr = (_dw + win_w) * 0.5 + (0.50 if props.has_shutters else 0.30)
+                    back_excludes.append((spot['x'] - _dclr, spot['x'] + _dclr))
 
             if effective_archetype == 'CHAPEL' or getattr(props, 'has_back_portal', False):
                 apse_r = max(1.8, min(3.2, cur_w * 0.32))
@@ -1345,12 +1499,15 @@ def build_floors(bm, props, ctx):
                     mw_cx = (x_min + x_max) * 0.5 + _off
                     back_excludes.append((mw_cx - (_mw_pw * 0.5 + win_w_clr), mw_cx + (_mw_pw * 0.5 + win_w_clr)))
                 
-            if b_side == 'BACK':
-                b_cx = (x_min + x_max) * 0.5 + getattr(ctx, 'floor_balc_offset', {}).get(fl_idx, 0.0)
-                back_excludes.append((b_cx - (b_width * 0.5 + 0.85), b_cx + (b_width * 0.5 + 0.85)))
+            for b_ent in balconies_on_fl:
+                if b_ent.get('side') == 'BACK':
+                    b_cx = (x_min + x_max) * 0.5 + b_ent.get('offset', 0.0)
+                    back_excludes.append((b_cx - (b_width * 0.5 + 0.85), b_cx + (b_width * 0.5 + 0.85)))
 
             back_win_xs = []
-            back_rooms = [rm for rm in fl_rooms if 'BACK' in rm.exterior_facades]
+            back_rooms = [rm for rm in fl_rooms if 'BACK' in rm.exterior_facades
+                          and not getattr(rm, 'is_wing', False)
+                          and (x_min - 0.05 <= rm.exterior_facades['BACK'][0] and rm.exterior_facades['BACK'][1] <= x_max + 0.05)]
             if back_rooms:
                 for rm in back_rooms:
                     rx0, rx1 = rm.exterior_facades['BACK']
@@ -1410,14 +1567,22 @@ def build_floors(bm, props, ctx):
                     left_excludes.append((mw_cy - (_mw_pw * 0.5 + win_w_clr), mw_cy + (_mw_pw * 0.5 + win_w_clr)))
             if _annex_side == 'LEFT' and fl_idx <= _annex_floors:
                 left_excludes.append(_annex_y_span)
+            # Doorway exclusions on Left facade (ALL floors)
+            for d in ctx.floor_doorways.get(fl_idx, []):
+                if d.get('axis') == 'Y' and abs(d.get('x', x_min) - x_min) < 0.8:
+                    _dw = d.get('w', getattr(props, 'door_width', 1.0))
+                    _dclr = (_dw + win_w) * 0.5 + (0.50 if props.has_shutters else 0.30)
+                    left_excludes.append((d['y'] - _dclr, d['y'] + _dclr))
+
             if (fl_idx == 1 and getattr(props, 'has_side_rampart', False)
                     and getattr(props, 'rampart_side', 'RIGHT') == 'LEFT'):
                 _rc = (y_min + y_max) * 0.5
                 _rclr = min(props.door_width, 1.30) * 0.5 + win_w * 0.5 + 0.35
                 left_excludes.append((_rc - _rclr, _rc + _rclr))
-            if b_side == 'LEFT':
-                b_cy = (y_min + y_max) * 0.5 + getattr(ctx, 'floor_balc_offset', {}).get(fl_idx, 0.0)
-                left_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
+            for b_ent in balconies_on_fl:
+                if b_ent.get('side') == 'LEFT':
+                    b_cy = (y_min + y_max) * 0.5 + b_ent.get('offset', 0.0)
+                    left_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
 
             # Rectangular main building cargo dock / freight opening (Left)
             if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not is_temporary_stockpile and not fl_has_wing and rec_cargo_side == 'LEFT':
@@ -1436,9 +1601,11 @@ def build_floors(bm, props, ctx):
                 from .accessories.crane import build_wall_jib_crane
                 build_wall_jib_crane(bm, wall_x=x_min, wall_y=_cp_cy, z_mount=z_floor, outward_dir=(-1.0, 0.0), jib_len=2.8)
 
-            if props.has_windows:
+            if props.has_windows and getattr(props, 'window_left', True):
                 left_win_ys = []
-                left_rooms = [rm for rm in fl_rooms if 'LEFT' in rm.exterior_facades]
+                left_rooms = [rm for rm in fl_rooms if 'LEFT' in rm.exterior_facades
+                              and not getattr(rm, 'is_wing', False)
+                              and (y_min - 0.05 <= rm.exterior_facades['LEFT'][0] and rm.exterior_facades['LEFT'][1] <= y_max + 0.05)]
                 if left_rooms:
                     for rm in left_rooms:
                         ry0, ry1 = rm.exterior_facades['LEFT']
@@ -1492,14 +1659,22 @@ def build_floors(bm, props, ctx):
                     right_excludes.append((mw_cy - (_mw_pw * 0.5 + win_w_clr), mw_cy + (_mw_pw * 0.5 + win_w_clr)))
             if _annex_side == 'RIGHT' and fl_idx <= _annex_floors:
                 right_excludes.append(_annex_y_span)
+            # Doorway exclusions on Right facade (ALL floors)
+            for d in ctx.floor_doorways.get(fl_idx, []):
+                if d.get('axis') == 'Y' and abs(d.get('x', x_max) - x_max) < 0.8:
+                    _dw = d.get('w', getattr(props, 'door_width', 1.0))
+                    _dclr = (_dw + win_w) * 0.5 + (0.50 if props.has_shutters else 0.30)
+                    right_excludes.append((d['y'] - _dclr, d['y'] + _dclr))
+
             if (fl_idx == 1 and getattr(props, 'has_side_rampart', False)
                     and getattr(props, 'rampart_side', 'RIGHT') == 'RIGHT'):
                 _rc = (y_min + y_max) * 0.5
                 _rclr = min(props.door_width, 1.30) * 0.5 + win_w * 0.5 + 0.35
                 right_excludes.append((_rc - _rclr, _rc + _rclr))
-            if b_side == 'RIGHT':
-                b_cy = (y_min + y_max) * 0.5 + getattr(ctx, 'floor_balc_offset', {}).get(fl_idx, 0.0)
-                right_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
+            for b_ent in balconies_on_fl:
+                if b_ent.get('side') == 'RIGHT':
+                    b_cy = (y_min + y_max) * 0.5 + b_ent.get('offset', 0.0)
+                    right_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
 
             # Rectangular main building cargo dock / freight opening (Right)
             if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not is_temporary_stockpile and not fl_has_wing and rec_cargo_side == 'RIGHT':
@@ -1518,9 +1693,11 @@ def build_floors(bm, props, ctx):
                 from .accessories.crane import build_wall_jib_crane
                 build_wall_jib_crane(bm, wall_x=x_max, wall_y=_cp_cy, z_mount=z_floor, outward_dir=(1.0, 0.0), jib_len=2.8)
 
-            if props.has_windows:
+            if props.has_windows and getattr(props, 'window_right', True):
                 right_win_ys = []
-                right_rooms = [rm for rm in fl_rooms if 'RIGHT' in rm.exterior_facades]
+                right_rooms = [rm for rm in fl_rooms if 'RIGHT' in rm.exterior_facades
+                               and not getattr(rm, 'is_wing', False)
+                               and (y_min - 0.05 <= rm.exterior_facades['RIGHT'][0] and rm.exterior_facades['RIGHT'][1] <= y_max + 0.05)]
                 if right_rooms:
                     for rm in right_rooms:
                         ry0, ry1 = rm.exterior_facades['RIGHT']
@@ -1574,10 +1751,26 @@ def build_floors(bm, props, ctx):
                         'u_end': _pc + _pw * 0.5 - wy1,
                         'z_start': z_floor, 'z_end': z_floor + _ph})
                 
+                _is_u_tenement = (shape == 'U_SHAPE' and (
+                    effective_archetype == 'TENEMENT' or
+                    getattr(props, 'exterior_stairs_side', '') == 'COURTYARD' or
+                    'TENEMENT' in getattr(props, 'building_family', '')
+                ))
+                _w_id = w_elem.get('id', 0)
+
                 if w_wall == 'FRONT':
+                    _w_margin_x = max(1.10, win_w * 0.5 + 0.65) if props.has_shutters else 1.0
+                    _w_margin_y = max(1.10, win_w * 0.5 + 0.65) if props.has_shutters else 0.85
+                    _part_clr = win_w * 0.5 + (0.50 if props.has_shutters else 0.30)
+                    _w_part_ys = [iw['pos'] for iw in fl_interior_walls if iw.get('axis') == 'X' and (wy1 + 0.3 <= iw.get('pos', 0.0) <= wy2 - 0.3)]
+
                     # Face 1: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
-                    if props.has_windows and not open_timber and not (fl_idx == 0 and shape == 'T_SHAPE' and wing_placement == 'FRONT'):
-                        w_win_xs = get_facade_window_positions(wx1, wx2, target_spacing=eff_spacing, min_margin=1.0)
+                    if (props.has_windows and getattr(props, 'window_front', True) and not open_timber
+                            and not (fl_idx == 0 and shape == 'T_SHAPE' and wing_placement == 'FRONT')):
+                        w_win_xs = get_facade_window_positions(wx1, wx2, target_spacing=eff_spacing, min_margin=_w_margin_x)
+                        if _is_u_tenement and _w_id == 0 and fl_idx == 0:
+                            # Ground floor left wing entrance is moved to this gable; exclude doorway area from windows
+                            w_win_xs = [wwx for wwx in w_win_xs if abs(wwx - (wx1 + wx2) * 0.5) >= dw * 0.5 + 0.70]
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
                             w_ops_1.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1586,23 +1779,36 @@ def build_floors(bm, props, ctx):
                                                   wall_thickness=wall_t, normal_axis='-Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
                             window_centers.setdefault(fl_idx, {}).setdefault('FRONT', []).append((wwx, wy1, win_cz))
+
+                    # Ground entrance for Left Wing of U-shaped tenement moved to the front gable (wy1)
+                    if _is_u_tenement and _w_id == 0 and fl_idx == 0:
+                        _cx_gable = (wx1 + wx2) * 0.5
+                        _u_cg = _cx_gable - wx1
+                        door_gf_stone = props.ground_floor_stone and tier_val != 'TIER_1'
+                        steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') == 'WOOD') else MAT_INDEX_CUT_STONE
+                        w_ops_1.append({'u_start': _u_cg - dw * 0.5 - frame_margin, 'u_end': _u_cg + dw * 0.5 + frame_margin,
+                                        'z_start': z_floor, 'z_end': door_top_z})
+                        build_door_assembly(bm, center_x=_cx_gable, y_front=wy1, z_base=z_floor,
+                                            wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
+                                            door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=door_gf_stone,
+                                            normal_axis='-Y', include_leaf=getattr(props, 'include_door_leaves', True))
+                        if props.has_front_steps and props.has_foundation:
+                            build_front_steps(bm, center_x=_cx_gable, y_front=wy1, z_base=z_floor,
+                                              num_steps=max(2, int(found_h / 0.18)), normal_axis='-Y', mat_index=steps_mat)
+                        ctx.floor_doorways.setdefault(0, []).append({'x': _cx_gable, 'y': wy1, 'axis': 'X', 'w': dw})
+
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
                     # Buffered inside corner at wy2 (main building junction) by 1.25m
                     # (skipped when the cargo port occupies this face)
-                    _is_u_tenement = (shape == 'U_SHAPE' and (
-                        effective_archetype == 'TENEMENT' or
-                        getattr(props, 'exterior_stairs_side', '') == 'COURTYARD' or
-                        'TENEMENT' in getattr(props, 'building_family', '')
-                    ))
-                    _w_id = w_elem.get('id', 0)
                     _port_here_2 = cargo_port is not None and cargo_port['face'] == 2
-                    if props.has_windows and not open_timber and not _port_here_2 and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
-                        w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.85)
+                    if (props.has_windows and getattr(props, 'window_left', True) and not open_timber
+                            and not _port_here_2 and ((wy2 - 1.25) - (wy1 + _w_margin_y) >= win_w * 0.7)):
+                        w_win_ys = get_facade_window_positions(wy1, wy2 - 1.25, target_spacing=eff_spacing, min_margin=_w_margin_y)
                         if _is_u_tenement and _w_id == 1:
-                            _d_ex = [wy1 + max(2.2, (wy2 - wy1) * 0.22)]
-                            if fl_idx >= 1 and props.has_exterior_stairs:
-                                _d_ex.append(wy2 - 0.96)
+                            _d_ex = [wy1 + max(1.3, (wy2 - wy1) * 0.26)]
                             w_win_ys = [wy for wy in w_win_ys if not any(abs(wy - dy) < dw * 0.5 + 0.70 for dy in _d_ex)]
+                        if _w_part_ys:
+                            w_win_ys = [wy for wy in w_win_ys if not any(abs(wy - py) < _part_clr for py in _w_part_ys)]
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_2.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1616,13 +1822,14 @@ def build_floors(bm, props, ctx):
                     # Buffered inside corner at wy2 (main building junction) by 1.25m
                     # (skipped when the cargo port occupies this face)
                     _port_here_3 = cargo_port is not None and cargo_port['face'] == 3
-                    if props.has_windows and not open_timber and not _port_here_3 and ((wy2 - 1.25) - (wy1 + 0.85) >= win_w * 0.7):
-                        w_win_ys = get_facade_window_positions(wy1 + 0.85, wy2 - 1.25, target_spacing=eff_spacing, min_margin=0.85)
+                    if (props.has_windows and getattr(props, 'window_right', True) and not open_timber
+                            and not _port_here_3 and ((wy2 - 1.25) - (wy1 + _w_margin_y) >= win_w * 0.7)):
+                        w_win_ys = get_facade_window_positions(wy1, wy2 - 1.25, target_spacing=eff_spacing, min_margin=_w_margin_y)
                         if _is_u_tenement and _w_id == 0:
-                            _d_ex = [wy1 + max(2.2, (wy2 - wy1) * 0.22)]
-                            if fl_idx >= 1 and props.has_exterior_stairs:
-                                _d_ex.append(wy2 - 0.96)
+                            _d_ex = [wy1 + max(1.3, (wy2 - wy1) * 0.26)]
                             w_win_ys = [wy for wy in w_win_ys if not any(abs(wy - dy) < dw * 0.5 + 0.70 for dy in _d_ex)]
+                        if _w_part_ys:
+                            w_win_ys = [wy for wy in w_win_ys if not any(abs(wy - py) < _part_clr for py in _w_part_ys)]
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
                             w_ops_3.append({'u_start': wu - win_w * 0.5, 'u_end': wu + win_w * 0.5, 'z_start': win_z1, 'z_end': win_z2})
@@ -1633,24 +1840,15 @@ def build_floors(bm, props, ctx):
                             window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((wx2, wwy, win_cz))
 
                     # Courtyard apartment entrance doors for U-shaped tenements:
-                    # Left wing gets courtyard door on Face 3 (+X), Right wing gets courtyard door on Face 2 (-X).
+                    # Left wing ground door is on Face 1 (front gable). Right wing ground door is on Face 2 (-X).
                     if _is_u_tenement:
                         door_gf_stone = props.ground_floor_stone and tier_val != 'TIER_1'
                         steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') == 'WOOD') else MAT_INDEX_CUT_STONE
                         if fl_idx == 0:
-                            _dy = wy1 + max(2.2, (wy2 - wy1) * 0.22)
+                            _dy = wy1 + max(1.3, (wy2 - wy1) * 0.26)
                             _u_c = _dy - wy1
-                            if _w_id == 0:  # Left Wing courtyard door (Face 3)
-                                w_ops_3.append({'u_start': _u_c - dw * 0.5 - frame_margin, 'u_end': _u_c + dw * 0.5 + frame_margin,
-                                                'z_start': z_floor, 'z_end': door_top_z})
-                                build_door_assembly(bm, center_x=wx2, y_front=_dy, z_base=z_floor,
-                                                    wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
-                                                    door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=door_gf_stone,
-                                                    normal_axis='+X', include_leaf=getattr(props, 'include_door_leaves', True))
-                                if props.has_front_steps and props.has_foundation:
-                                    build_front_steps(bm, center_x=wx2, y_front=_dy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='+X', mat_index=steps_mat)
-                                ctx.floor_doorways.setdefault(0, []).append({'x': wx2, 'y': _dy, 'axis': 'Y', 'w': dw})
-                            elif _w_id == 1:  # Right Wing courtyard door (Face 2)
+                            # Note: Left Wing (_w_id == 0) ground door is on Face 1 (front gable) above!
+                            if _w_id == 1:  # Right Wing courtyard door (Face 2)
                                 w_ops_2.append({'u_start': _u_c - dw * 0.5 - frame_margin, 'u_end': _u_c + dw * 0.5 + frame_margin,
                                                 'z_start': z_floor, 'z_end': door_top_z})
                                 build_door_assembly(bm, center_x=wx1, y_front=_dy, z_base=z_floor,
@@ -1663,7 +1861,7 @@ def build_floors(bm, props, ctx):
                         elif fl_idx >= 1 and props.has_exterior_stairs:
                             dw_apt = min(1.10, float(getattr(props, 'door_width', 1.10)))
                             dh_apt = min(2.20, float(getattr(props, 'door_height', 2.20)))
-                            _dy_up = wy2 - 0.96
+                            _dy_up = wy1 + max(1.3, (wy2 - wy1) * 0.26)
                             _u_cup = _dy_up - wy1
                             if _w_id == 0:  # Left Wing upper gallery door (Face 3)
                                 w_ops_3.append({'u_start': _u_cup - dw_apt * 0.5 - frame_margin, 'u_end': _u_cup + dw_apt * 0.5 + frame_margin,
@@ -1699,7 +1897,7 @@ def build_floors(bm, props, ctx):
 
                 elif w_wall == 'BACK':
                     # Face 1: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
-                    if props.has_windows and not open_timber:
+                    if props.has_windows and getattr(props, 'window_back', True) and not open_timber:
                         w_win_xs = get_facade_window_positions(wx1, wx2, target_spacing=eff_spacing, min_margin=1.0)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -1713,7 +1911,8 @@ def build_floors(bm, props, ctx):
                     # Buffered inside corner at wy1 (main building junction) by 1.25m
                     # (skipped when the cargo port occupies this face)
                     _port_here_2 = cargo_port is not None and cargo_port['face'] == 2
-                    if props.has_windows and not open_timber and not _port_here_2 and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
+                    if (props.has_windows and getattr(props, 'window_left', True) and not open_timber
+                            and not _port_here_2 and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7)):
                         w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.85)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1727,7 +1926,8 @@ def build_floors(bm, props, ctx):
                     # Buffered inside corner at wy1 (main building junction) by 1.25m
                     # (skipped when the cargo port occupies this face)
                     _port_here_3 = cargo_port is not None and cargo_port['face'] == 3
-                    if props.has_windows and not open_timber and not _port_here_3 and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7):
+                    if (props.has_windows and getattr(props, 'window_right', True) and not open_timber
+                            and not _port_here_3 and ((wy2 - 0.85) - (wy1 + 1.25) >= win_w * 0.7)):
                         w_win_ys = get_facade_window_positions(wy1 + 1.25, wy2 - 0.85, target_spacing=eff_spacing, min_margin=0.85)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1752,7 +1952,7 @@ def build_floors(bm, props, ctx):
 
                 elif w_wall == 'LEFT':
                     # Face 1: Left End (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
-                    if props.has_windows and not open_timber:
+                    if props.has_windows and getattr(props, 'window_left', True) and not open_timber:
                         w_win_ys = get_facade_window_positions(wy1, wy2, target_spacing=eff_spacing, min_margin=1.0)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1764,7 +1964,8 @@ def build_floors(bm, props, ctx):
                             window_centers.setdefault(fl_idx, {}).setdefault('LEFT', []).append((wx1, wwy, win_cz))
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     # Buffered inside corner at wx2 (main building junction) by 1.25m
-                    if props.has_windows and not open_timber and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
+                    if (props.has_windows and getattr(props, 'window_front', True) and not open_timber
+                            and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7)):
                         w_win_xs = get_facade_window_positions(wx1 + 0.85, wx2 - 1.25, target_spacing=eff_spacing, min_margin=0.85)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -1776,7 +1977,8 @@ def build_floors(bm, props, ctx):
                             window_centers.setdefault(fl_idx, {}).setdefault('FRONT', []).append((wwx, wy1, win_cz))
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     # Buffered inside corner at wx2 (main building junction) by 1.25m
-                    if props.has_windows and not open_timber and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7):
+                    if (props.has_windows and getattr(props, 'window_back', True) and not open_timber
+                            and ((wx2 - 1.25) - (wx1 + 0.85) >= win_w * 0.7)):
                         w_win_xs = get_facade_window_positions(wx1 + 0.85, wx2 - 1.25, target_spacing=eff_spacing, min_margin=0.85)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -1793,7 +1995,7 @@ def build_floors(bm, props, ctx):
 
                 elif w_wall == 'RIGHT':
                     # Face 1: Right End (wx2, wy1) -> (wx2, wy2) normal (1, 0)
-                    if props.has_windows and not open_timber:
+                    if props.has_windows and getattr(props, 'window_right', True) and not open_timber:
                         w_win_ys = get_facade_window_positions(wy1, wy2, target_spacing=eff_spacing, min_margin=1.0)
                         for wwy in w_win_ys:
                             wu = (wwy - wy1)
@@ -1805,7 +2007,8 @@ def build_floors(bm, props, ctx):
                             window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((wx2, wwy, win_cz))
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     # Buffered inside corner at wx1 (main building junction) by 1.25m
-                    if props.has_windows and not open_timber and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
+                    if (props.has_windows and getattr(props, 'window_front', True) and not open_timber
+                            and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7)):
                         w_win_xs = get_facade_window_positions(wx1 + 1.25, wx2 - 0.85, target_spacing=eff_spacing, min_margin=0.85)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -1817,7 +2020,8 @@ def build_floors(bm, props, ctx):
                             window_centers.setdefault(fl_idx, {}).setdefault('FRONT', []).append((wwx, wy1, win_cz))
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     # Buffered inside corner at wx1 (main building junction) by 1.25m
-                    if props.has_windows and not open_timber and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7):
+                    if (props.has_windows and getattr(props, 'window_back', True) and not open_timber
+                            and ((wx2 - 0.85) - (wx1 + 1.25) >= win_w * 0.7)):
                         w_win_xs = get_facade_window_positions(wx1 + 1.25, wx2 - 0.85, target_spacing=eff_spacing, min_margin=0.85)
                         for wwx in w_win_xs:
                             wu = (wwx - wx1)
@@ -2251,12 +2455,47 @@ def _place_exterior_stair_doors(bm, props, ctx, fl_idx, z_floor,
                                 left_openings, right_openings,
                                 front_openings, back_openings):
     """One exterior door per storey landing, nudged clear of interior walls."""
-    if fl_idx < 1 or not getattr(props, 'has_exterior_stairs', False):
+    if fl_idx < 0 or not getattr(props, 'has_exterior_stairs', False):
         return
     if getattr(props, 'open_timber_frame', False):
         return
     plan = _ext_stair_plan(props, ctx)
     if not plan:
+        return
+
+    if fl_idx == 0:
+        if not plan.get('is_walkway'):
+            return
+        side = plan['wall']['name']
+        xf = x_min if side == 'LEFT' else x_max
+        ops = left_openings if side == 'LEFT' else right_openings
+        edw = min(1.20, float(getattr(props, 'door_width', 1.20)))
+        edh = min(2.40, float(getattr(props, 'door_height', 2.40)))
+        margin = 0.12
+        for spot in (_ext_stair_door_spots(props, ctx) or {}).get(0, []):
+            along = spot['y'] if side in ('LEFT', 'RIGHT') else spot['x']
+            ops.append({'u_start': (along - edw * 0.5 - margin) - y_min,
+                        'u_end': (along + edw * 0.5 + margin) - y_min,
+                        'z_start': z_floor, 'z_end': z_floor + edh + margin})
+            ctx.floor_doorways.setdefault(0, []).append(
+                {'x': xf, 'y': along, 'axis': 'Y', 'w': edw})
+            build_door_assembly(
+                bm, center_x=xf, y_front=along, z_base=z_floor,
+                wall_thickness=wall_t, door_w=edw, door_h=edh,
+                door_angle_deg=props.door_angle,
+                door_shape=getattr(props, 'door_shape', 'AUTO'),
+                ground_floor_stone=False,
+                normal_axis=('-X' if side == 'LEFT' else '+X'),
+                include_leaf=getattr(props, 'include_door_leaves', True))
+            if getattr(props, 'has_front_steps', False) and getattr(props, 'has_foundation', False):
+                steps_mat = MAT_INDEX_TIMBER if (
+                    getattr(props, 'material_tier', 'TIER_3') == 'TIER_1'
+                    or getattr(props, 'foundation_type', 'STONE') == 'WOOD'
+                ) else MAT_INDEX_CUT_STONE
+                build_front_steps(
+                    bm, center_x=xf, y_front=along, z_base=z_floor,
+                    num_steps=max(2, int(float(getattr(ctx, 'found_h', 0.4)) / 0.18)),
+                    normal_axis=('-X' if side == 'LEFT' else '+X'), mat_index=steps_mat)
         return
 
     # Where interior partitions meet each facade, plus doors already on it
@@ -2296,15 +2535,13 @@ def _place_exterior_stair_doors(bm, props, ctx, fl_idx, z_floor,
     e_margin = 0.12
     e_top_z = z_floor + edh + e_margin
 
-    for ld in plan['landings']:
-        if ld.get('corner') or ld.get('floor') != fl_idx:
-            continue
-        wall = ld['wall']
-        a = ld.get('door_along', ld['along'])
-        if wall in ('LEFT', 'RIGHT'):
-            a = _nudge_along(a, _blockers(wall), y_min, y_max)
-            xf = x_min if wall == 'LEFT' else x_max
-            ops = left_openings if wall == 'LEFT' else right_openings
+    for spot in (_ext_stair_door_spots(props, ctx) or {}).get(fl_idx, []):
+        sax = spot.get('axis', 'X')
+        if sax == 'Y':
+            facade = 'LEFT' if spot.get('x', 0.0) < 0.0 else 'RIGHT'
+            xf = x_min if facade == 'LEFT' else x_max
+            a = _nudge_along(spot['y'], _blockers(facade), y_min, y_max)
+            ops = left_openings if facade == 'LEFT' else right_openings
             ops.append({'u_start': (a - edw * 0.5 - e_margin) - y_min,
                         'u_end': (a + edw * 0.5 + e_margin) - y_min,
                         'z_start': z_floor, 'z_end': e_top_z})
@@ -2316,12 +2553,13 @@ def _place_exterior_stair_doors(bm, props, ctx, fl_idx, z_floor,
                 door_angle_deg=props.door_angle,
                 door_shape=getattr(props, 'door_shape', 'AUTO'),
                 ground_floor_stone=False,
-                normal_axis=('-X' if wall == 'LEFT' else '+X'),
+                normal_axis=('-X' if facade == 'LEFT' else '+X'),
                 include_leaf=getattr(props, 'include_door_leaves', True))
         else:
-            a = _nudge_along(a, _blockers(wall), x_min, x_max)
-            yf = y_max if wall == 'BACK' else y_min
-            ops = back_openings if wall == 'BACK' else front_openings
+            facade = 'FRONT' if spot.get('y', 0.0) < 0.0 else 'BACK'
+            a = _nudge_along(spot['x'], _blockers(facade), x_min, x_max)
+            yf = y_max if facade == 'BACK' else y_min
+            ops = back_openings if facade == 'BACK' else front_openings
             ops.append({'u_start': (a - edw * 0.5 - e_margin) - x_min,
                         'u_end': (a + edw * 0.5 + e_margin) - x_min,
                         'z_start': z_floor, 'z_end': e_top_z})
@@ -2333,5 +2571,5 @@ def _place_exterior_stair_doors(bm, props, ctx, fl_idx, z_floor,
                 door_angle_deg=props.door_angle,
                 door_shape=getattr(props, 'door_shape', 'AUTO'),
                 ground_floor_stone=False,
-                normal_axis=('+Y' if wall == 'BACK' else '-Y'),
+                normal_axis=('+Y' if facade == 'BACK' else '-Y'),
                 include_leaf=getattr(props, 'include_door_leaves', True))

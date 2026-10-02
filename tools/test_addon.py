@@ -33,6 +33,7 @@ except Exception:
     pass
 import math
 import argparse
+from types import SimpleNamespace
 import bpy
 import bmesh
 from mathutils import Vector
@@ -200,6 +201,131 @@ def test_room_zoning_and_furnishing():
     print("  [PASS] Tenement Row and Tenement Complex presets verified.")
 
 
+def test_tenement_layouts():
+    """Checks apartment division, single entrances, and one-route stairs."""
+    from blend_building_creator.generator.accessories.exterior_stairs import (
+        exterior_stair_plan, exterior_stair_door_spots,
+    )
+    from blend_building_creator.generator.building import _create_building_context
+    from blend_building_creator.generator.floors import build_floors
+    from blend_building_creator.generator.interior import plan_floor_rooms
+    from blend_building_creator.generator.tenement import STAIR_W
+
+    def _layout(preset_key):
+        settings = dict(PRESETS[preset_key]['settings'])
+        settings.setdefault('seed', 1)
+        props = SimpleNamespace(**settings)
+        ctx = _create_building_context(props)
+        half_w = props.width * 0.5
+        half_d = props.depth * 0.5
+        bounds = (-half_w + props.wall_thickness * 0.5,
+                  half_w - props.wall_thickness * 0.5,
+                  -half_d + props.wall_thickness * 0.5,
+                  half_d - props.wall_thickness * 0.5)
+        wings = [wing['base'] for wing in ctx.wings]
+        stair_plan = exterior_stair_plan(props, ctx)
+        rooms, _walls = plan_floor_rooms(
+            0, bounds, fl_wings_bounds=wings or None,
+            effective_archetype='TENEMENT', props=props, doorways=[])
+        return props, bounds, rooms, stair_plan
+
+    def _assert_no_overlap(rooms, label):
+        for i, first in enumerate(rooms):
+            for second in rooms[i + 1:]:
+                xo = min(first.bounds[1], second.bounds[1]) - max(first.bounds[0], second.bounds[0])
+                yo = min(first.bounds[3], second.bounds[3]) - max(first.bounds[2], second.bounds[2])
+                assert xo <= 0.001 or yo <= 0.001, (
+                    f"{label} rooms overlap: {first.id} {second.id}")
+
+    # --- Side-walkway row tenement: two small flats, one door each ---------
+    row_props, row_bounds, row_rooms, row_stairs = _layout('TENEMENT_ROW_MEDIUM_T2')
+    row_ix_min = row_bounds[0]
+    row_kitchens = [r for r in row_rooms if r.role == 'TENEMENT_KITCHEN']
+    row_bedrooms = [r for r in row_rooms if r.role == 'TENEMENT_BEDROOM']
+    assert len(row_kitchens) == len(row_bedrooms) == 2, [(r.id, r.role) for r in row_rooms]
+    for room in row_kitchens:
+        entrances = [d for d in room.doorways
+                     if d.get('axis') == 'Y' and abs(d.get('x', 0.0) - row_ix_min) < 0.05]
+        assert len(entrances) == 1, f"{room.id} must have exactly one gallery entrance"
+    assert row_stairs['is_walkway']
+    assert len(row_stairs['flights']) == row_props.num_floors - 1
+    assert row_stairs['u_outer'] == row_stairs['u_inner']
+    assert all(f['lane'] == 'SINGLE' for f in row_stairs['flights'])
+    for first, second in zip(row_stairs['flights'], row_stairs['flights'][1:]):
+        assert abs(first['a1'] - second['a0']) < 0.01, (
+            "consecutive flights must meet at their landing"
+        )
+    _assert_no_overlap(row_rooms, 'row')
+
+    # --- Courtyard tenement: small back-block flats + one flat per wing -----
+    court_props, court_bounds, court_rooms, court_stairs = _layout('TENEMENT_COMPLEX_LARGE_T1')
+    court_y_min = court_bounds[2]
+    court_kitchens = [r for r in court_rooms if r.role == 'TENEMENT_KITCHEN']
+    court_bedrooms = [r for r in court_rooms if r.role == 'TENEMENT_BEDROOM']
+    assert len(court_kitchens) == len(court_bedrooms) == 5, [
+        (r.id, r.role, r.bounds) for r in court_rooms]
+    main_k = [r for r in court_kitchens if r.id.startswith('fl0_main')]
+    wing_k = [r for r in court_kitchens if r.id.startswith('fl0_wing')]
+    assert len(main_k) == 3 and len(wing_k) == 2
+    for room in main_k:
+        entrances = [d for d in room.doorways
+                     if d.get('axis') == 'X' and abs(d.get('y', 0.0) - court_y_min) < 0.05]
+        assert len(entrances) == 1, f"{room.id} must have one courtyard entrance"
+    for room in wing_k:
+        entrances = [d for d in room.doorways if d.get('axis') == 'Y']
+        assert len(entrances) == 1, f"{room.id} must have one wing entrance"
+    _assert_no_overlap(court_rooms, 'court')
+    assert court_stairs['is_courtyard']
+    assert len(court_stairs['flights']) == court_props.num_floors - 1
+    # One staircase only: at most two lanes, all on the same (left) side.
+    xs = sorted({round(f['x'], 2) for f in court_stairs['flights']})
+    assert len(xs) <= 2, f"courtyard must have a single stair path, got lanes {xs}"
+    assert all(x < 0 for x in xs), f"courtyard stair must be one-sided, got {xs}"
+
+    city_keys = (
+        'TENEMENT_TOWER_20M_T1', 'TENEMENT_TOWER_20M_T2', 'TENEMENT_TOWER_20M_T3',
+        'TENEMENT_CITY_ROW_20M_T1', 'TENEMENT_CITY_ROW_20M_T2', 'TENEMENT_CITY_ROW_20M_T3',
+    )
+    for key in city_keys:
+        settings = PRESETS[key]['settings']
+        assert PRESETS[key]['plot'] == '20m x 20m'
+        assert settings['window_front'] and settings['window_back']
+        assert not settings['window_left'] and not settings['window_right']
+        assert not settings['has_exterior_stairs']
+        assert settings['has_front_door'] and not settings['has_back_door'] and not settings['has_side_door']
+    tower_floors = [PRESETS[f'TENEMENT_TOWER_20M_T{tier}']['settings']['num_floors'] for tier in (1, 2, 3)]
+    row_floors = [PRESETS[f'TENEMENT_CITY_ROW_20M_T{tier}']['settings']['num_floors'] for tier in (1, 2, 3)]
+    assert tower_floors == sorted(tower_floors) and tower_floors[0] >= 4
+    assert row_floors == sorted(row_floors)
+
+    window_settings = dict(PRESETS['TENEMENT_CITY_ROW_20M_T1']['settings'])
+    window_settings['seed'] = 1
+    window_settings['building_archetype'] = 'TENEMENT'
+    window_props = SimpleNamespace(**window_settings)
+    window_ctx = _create_building_context(window_props)
+    window_bm = bmesh.new()
+    try:
+        build_floors(window_bm, window_props, window_ctx)
+        for floor_windows in window_ctx.window_centers.values():
+            assert floor_windows.get('FRONT')
+            assert floor_windows.get('BACK')
+            assert 'LEFT' not in floor_windows and 'RIGHT' not in floor_windows
+    finally:
+        window_bm.free()
+
+    clear_scene()
+    bpy.ops.building.create_fantasy_building()
+    generated_sizes = {}
+    for key in ('TENEMENT_TOWER_20M_T1', 'TENEMENT_CITY_ROW_20M_T1'):
+        bpy.ops.building.apply_preset(preset_key=key)
+        dimensions = bpy.context.active_object.dimensions
+        generated_sizes[key] = (dimensions.x, dimensions.y, dimensions.z)
+        assert dimensions.x <= 20.0 and dimensions.y <= 20.0, (
+            f"{key} does not fit its 20m plot: {tuple(dimensions)}")
+    assert generated_sizes['TENEMENT_TOWER_20M_T1'][2] > generated_sizes['TENEMENT_CITY_ROW_20M_T1'][2]
+    print("  [PASS] Tenement apartments, single-route stairs, six city presets, blank party walls, and 20m bounds verified.")
+
+
 def test_chimneys_and_stoves():
     """Verifies chimney placement against outer walls and strict hearth/stove attachment."""
     print("\n--- [TEST] Chimneys, Stoves & Hearths ---")
@@ -352,7 +478,7 @@ def test_fast_render(preset_key='INN_T1', out_dir=repo_root):
 
 def main():
     parser = argparse.ArgumentParser(description="Directed Fantasy Building Generator Test Suite")
-    parser.add_argument("--test", choices=['all', 'scale', 'stairs', 'mage', 'zoning', 'chimney', 'props', 'presets', 'render'],
+    parser.add_argument("--test", choices=['all', 'scale', 'stairs', 'mage', 'zoning', 'tenements', 'chimney', 'props', 'presets', 'render'],
                         default='all', help="Specific test to execute")
     parser.add_argument("--preset", default="INN_T1", help="Target preset for preview render")
     parser.add_argument("--render", action="store_true", help="Render fast EEVEE preview images for the target preset")
@@ -377,6 +503,7 @@ def main():
         'stairs': [test_stairs_and_uv_fibers],
         'mage': [test_mage_tower],
         'zoning': [test_room_zoning_and_furnishing],
+        'tenements': [test_tenement_layouts],
         'chimney': [test_chimneys_and_stoves],
         'props': [test_props_and_rugs],
         'presets': [test_representative_presets],
@@ -386,6 +513,7 @@ def main():
             test_stairs_and_uv_fibers,
             test_mage_tower,
             test_room_zoning_and_furnishing,
+            test_tenement_layouts,
             test_chimneys_and_stoves,
             test_props_and_rugs,
             test_representative_presets,

@@ -985,7 +985,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     # In U-shape tenements, each wing is an independent apartment with its own entrance.
                     # In other shapes, it is an extra bedroom connected via portal.
                     w_role = 'TENEMENT_KITCHEN' if shape == 'U_SHAPE' else 'TENEMENT_BEDROOM'
-                    w_doorways = [] if shape == 'U_SHAPE' else _wing_portals(wb, doorways)
+                    if shape == 'U_SHAPE':
+                        wx1, wx2, wy1, wy2 = wb
+                        door_x = wx2 if wi == 0 else wx1
+                        door_y = (wy1 + max(2.2, (wy2 - wy1) * 0.22)
+                                  if fl_idx == 0 else wy2 - 0.96)
+                        w_doorways = [{'x': door_x, 'y': door_y, 'axis': 'Y', 'w': 1.10}]
+                    else:
+                        w_doorways = _wing_portals(wb, doorways)
                 elif effective_archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL'):
                     w_role = 'COUNCIL_CHAMBER' if fl_idx == 0 else 'MAYOR_OFFICE'
                     w_doorways = []
@@ -1011,16 +1018,24 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         return rooms, []
 
     # Safe boundaries around stairs (left side)
-    stair_safe_x = ix_min + 2.6
-    stair_safe_y_bot = iy_max - 3.4
+    stair_switchback = bool((stair_pos_info or {}).get('switchback', False))
+    walk_w = float((stair_pos_info or {}).get('walk_w', 1.05) or 1.05)
     if stair_pos_info:
-        stair_safe_x = max(stair_safe_x, stair_pos_info.get('cx', stair_safe_x) + stair_pos_info.get('w', 1.2) * 0.5 + 0.40)
-        stair_safe_y_bot = min(stair_safe_y_bot, stair_pos_info.get('y_bot', stair_safe_y_bot))
+        stair_safe_x = stair_pos_info.get('cx', ix_min + 1.4) + stair_pos_info.get('w', 1.2) * 0.5 + 0.20
+        stair_safe_y_bot = min(iy_max - 3.4, stair_pos_info.get('y_bot', iy_max - 3.4))
+        stair_safe_y_top = max(iy_min + 3.4, stair_pos_info.get('y_top', iy_min + 3.4))
+        stair_guards_north = float(stair_pos_info.get('y_ascend', 1.0) or 1.0) > 0.0
+    else:
+        stair_safe_x = ix_min + 1.8
+        stair_safe_y_bot = iy_max - 3.4
+        stair_safe_y_top = iy_min + 3.4
+        stair_guards_north = True
 
     door_cx = front_door_info[0] if (front_door_info and fl_idx == 0) else None
 
     # Decide layout mode
-    is_deep = D > W * 1.25 and D >= 6.5
+    is_deep = (D > W * 1.25 and D >= 6.5
+               and effective_archetype != 'TENEMENT')
     can_3_rooms = (partition_style in ('AUTO', 'HALL_CHAMBERS')) and (W >= 7.2 and D >= 5.4)
     can_4_rooms = can_3_rooms and (D >= 8.0 or effective_archetype in ('INN', 'TENEMENT'))
 
@@ -1184,14 +1199,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             # When exterior stairs / walkways are present, circulation is via
             # the exterior gallery deck with direct apartment entrances.
             use_common_hall = has_internal_stairs
-            # For tenements with exterior gallery/courtyard entrance, cap front kitchen to <= 4.5m
-            # so the suite is human-scaled with a comfortable bedroom behind it.
+            # Exterior gallery entrance: South/North apartments split the depth
+            # evenly so both suites stay the same size (the old 4.5m cap made
+            # the south suite a shallow strip and the north suite huge).
+            # Room proportions are kept chunky by the preset footprint
+            # (each room about W/2 x D/2, both sides in the 3.2m..6.0m band).
             if not use_common_hall:
-                _max_kitchen_d = 4.5
-                _min_bed_d = 3.0
-                _raw_split = iy_min + min(_max_kitchen_d, max(3.2, (D - _min_bed_d) * 0.45))
-                split_y = _clear_doorway_span(_raw_split, axis='Y',
-                                             lo=iy_min + 3.0, hi=iy_max - _min_bed_d)
+                split_y = _clear_doorway_span((iy_min + iy_max) * 0.5, axis='Y',
+                                             lo=iy_min + 3.2, hi=iy_max - 3.2)
             else:
                 split_y = _clear_doorway_span((iy_min + iy_max) * 0.5, axis='Y')
             dw_y_s = (iy_min + split_y) * 0.5
@@ -1199,22 +1214,32 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
             if use_common_hall:
                 # Dedicated common stairwell / hallway corridor along the left side.
-                # Strictly sized so the hallway/stairwell NEVER consumes more than 28-30% of footprint,
-                # leaving >= 70-75% of the square footage for private residential apartment suites.
-                min_hw = max(2.40, (stair_safe_x - ix_min) + 0.35)
-                if door_cx is not None:
-                    min_hw = max(min_hw, (door_cx + dw_w * 0.5 + 0.30) - ix_min)
-                # Keep common hallway under 30% of interior width (leaving >=70% for private apartment living)
-                hall_w = min(max(min_hw, 2.50), min(3.20, W * 0.30))
-                # Absolute guardrail: even on compact footprints, hallway cannot exceed 35% of W
-                hall_w = min(hall_w, W * 0.35)
+                # Floor-to-floor the demising wall keeps the SAME X, so the
+                # route up through the building is continuous.
+                if stair_switchback:
+                    # Two-lane (switchback) tenement well: the hall has to
+                    # swallow BOTH flights plus the walkway beside them, so it is
+                    # sized from the stair geometry first.  The percentage
+                    # guardrails still apply wherever they can reach that far,
+                    # but never squeeze the stairwell into the apartments.
+                    min_hw = max(2.40, (stair_safe_x - ix_min) + walk_w)
+                    if door_cx is not None:
+                        min_hw = max(min_hw, (door_cx + dw_w * 0.5 + 0.30) - ix_min)
+                    hall_w = min(max(min_hw, 2.50), max(W * 0.36, min_hw))
+                else:
+                    # Single-lane corridor: stair lane (~1.55m from wall) + clear walking aisle of at least 2.5m
+                    # (2.5m is the smallest walkable area in game)
+                    min_hw = max(4.10, (stair_safe_x - ix_min) + 2.50)
+                    if door_cx is not None:
+                        min_hw = max(min_hw, (door_cx + dw_w * 0.5 + 0.30) - ix_min)
+                    hall_w = max(min_hw, min(W * 0.36, max(min_hw, 4.10)))
                 hall_x = ix_min + hall_w
                 # The hallway wall meets the front/back walls: keep it clear of
                 # street doors and wing portals there (without squeezing the
                 # stairs or an entrance door out of the hallway).
                 hall_x = _clear_doorway_span(
-                    hall_x, axis='X', lo=max(ix_min + 2.0, ix_min + min_hw),
-                    hi=min(ix_max - 2.0, ix_min + max(W * 0.35, 2.6)))
+                    hall_x, axis='X', lo=max(ix_min + 1.8, ix_min + min_hw),
+                    hi=min(ix_max - 2.5, ix_min + max(W * 0.38, min_hw + 0.50)))
 
                 # 1. Hallway demising wall at X = hall_x (spans full depth iy_min to iy_max)
                 # Two cased entrance doors leading into Apartment 1 (South) and Apartment 2 (North)
@@ -1318,251 +1343,46 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     )
                     rooms.extend([rm_s, rm_n])
             else:
-                # Exterior Entrance Tenement (no interior staircase):
-                # When building courtyard gap is wide (gap_w >= 9.0m), partition into 4 compact 2-room suites
-                # so rooms are cozy, human-scaled (3.5m-5m wide) and EVERY apartment has an exterior entrance door.
-                # When narrower (< 9.0m), partition into 2 suites.
-                if shape == 'U_SHAPE' and fl_wings_bounds and len(fl_wings_bounds) >= 2:
-                    gap0 = fl_wings_bounds[0][1]
-                    gap1 = fl_wings_bounds[1][0]
-                    gap_w = max(2.0, gap1 - gap0)
-                else:
-                    gap0 = ix_min
-                    gap1 = ix_max
-                    gap_w = W
+                # Exterior-entrance tenement: split the floor into the small
+                # apartments described by the shared layout (generator/tenement),
+                # so the rooms, the single exterior door per flat and the outside
+                # staircase always agree.  No common corridor is needed because
+                # circulation happens on the exterior gallery.
+                from .tenement import apartment_layout, demising_walls
+                _tb = (ix_min, ix_max, iy_min, iy_max)
+                _apts = apartment_layout(_tb, shape, fl_wings_bounds, props, fl_idx=fl_idx)
+                for _dwr in demising_walls(_tb, shape, fl_wings_bounds, props):
+                    interior_walls.append({
+                        'p1': _dwr['p1'], 'p2': _dwr['p2'],
+                        'axis': _dwr['axis'], 'pos': _dwr['pos'],
+                        'thickness': wall_t, 'doorway': None,
+                    })
 
-                # Only divide into 4 suites when the building span is very wide (gap_w >= 16.0m),
-                # so every apartment has at least 4m width and bedrooms remain spacious and walkable.
-                if gap_w >= 16.0:
-                    d1 = gap0 + gap_w * 0.125
-                    d2 = gap0 + gap_w * 0.375
-                    d3 = gap0 + gap_w * 0.625
-                    d4 = gap0 + gap_w * 0.875
+                def _touches(b, d):
+                    _x0, _x1, _y0, _y1 = b
+                    return (_x0 - 0.15 <= d.get('x', 0.0) <= _x1 + 0.15
+                            and _y0 - 0.15 <= d.get('y', 0.0) <= _y1 + 0.15)
 
-                    x1 = _clear_doorway_span(gap0 + gap_w * 0.25, axis='X', lo=d1 + 0.65, hi=d2 - 0.65)
-                    x2 = _clear_doorway_span(gap0 + gap_w * 0.50, axis='X', lo=d2 + 0.65, hi=d3 - 0.65)
-                    x3 = _clear_doorway_span(gap0 + gap_w * 0.75, axis='X', lo=d3 + 0.65, hi=d4 - 0.65)
-
-                    # Solid demising walls between distinct apartment residences
-                    for sx in (x1, x2, x3):
+                for _apt in _apts:
+                    _doors = [w['doorway'] for w in _apt['walls'] if w.get('doorway')]
+                    _doors.append(_apt['entry'])
+                    _is_w = _apt['id'].startswith('wing')
+                    _w_id = (int(_apt['id'].replace('wing', '')) - 1) if _is_w else None
+                    for _ri, _rd in enumerate(_apt['rooms']):
+                        _b = _rd['bounds']
+                        _rdws = [dict(d) for d in _doors if d and _touches(_b, d)]
+                        rooms.append(Room(
+                            id=f"fl{fl_idx}_{_apt['id']}_r{_ri}",
+                            floor_idx=fl_idx, role=_rd['role'], bounds=_b,
+                            is_wing=_is_w, wing_id=_w_id,
+                            doorways=_rdws, stair_hole=None,
+                            exterior_facades=dict(_rd['facades'])))
+                    for _w in _apt['walls']:
                         interior_walls.append({
-                            'p1': (sx, iy_min), 'p2': (sx, iy_max),
-                            'axis': 'Y', 'pos': sx, 'thickness': wall_t, 'doorway': None
+                            'p1': _w['p1'], 'p2': _w['p2'],
+                            'axis': _w['axis'], 'pos': _w['pos'],
+                            'thickness': wall_t, 'doorway': _w.get('doorway'),
                         })
-
-                    # Internal partition walls dividing each suite into front kitchen and back bedroom
-                    interior_walls.append({
-                        'p1': (ix_min, split_y), 'p2': (x1, split_y),
-                        'axis': 'X', 'pos': split_y, 'thickness': wall_t,
-                        'doorway': {'x': (gap0 + x1) * 0.5, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
-                    })
-                    interior_walls.append({
-                        'p1': (x1, split_y), 'p2': (x2, split_y),
-                        'axis': 'X', 'pos': split_y, 'thickness': wall_t,
-                        'doorway': {'x': (x1 + x2) * 0.5, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
-                    })
-                    interior_walls.append({
-                        'p1': (x2, split_y), 'p2': (x3, split_y),
-                        'axis': 'X', 'pos': split_y, 'thickness': wall_t,
-                        'doorway': {'x': (x2 + x3) * 0.5, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
-                    })
-                    interior_walls.append({
-                        'p1': (x3, split_y), 'p2': (ix_max, split_y),
-                        'axis': 'X', 'pos': split_y, 'thickness': wall_t,
-                        'doorway': {'x': (x3 + gap1) * 0.5, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
-                    })
-
-                    rm_k1 = Room(id=f"fl{fl_idx}_apt1_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                                 bounds=(gap0, x1, iy_min, split_y),
-                                 doorways=[{'x': (gap0 + x1) * 0.5, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                                 stair_hole=None, exterior_facades={'FRONT': (gap0, x1)})
-                    rm_b1 = Room(id=f"fl{fl_idx}_apt1_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                                 bounds=(ix_min, x1, split_y, iy_max),
-                                 doorways=[{'x': (gap0 + x1) * 0.5, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                                 stair_hole=None, exterior_facades={'BACK': (ix_min, x1)})
-
-                    rm_k2 = Room(id=f"fl{fl_idx}_apt2_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                                 bounds=(x1, x2, iy_min, split_y),
-                                 doorways=[{'x': (x1 + x2) * 0.5, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                                 stair_hole=None, exterior_facades={'FRONT': (x1, x2)})
-                    rm_b2 = Room(id=f"fl{fl_idx}_apt2_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                                 bounds=(x1, x2, split_y, iy_max),
-                                 doorways=[{'x': (x1 + x2) * 0.5, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                                 stair_hole=None, exterior_facades={'BACK': (x1, x2)})
-
-                    rm_k3 = Room(id=f"fl{fl_idx}_apt3_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                                 bounds=(x2, x3, iy_min, split_y),
-                                 doorways=[{'x': (x2 + x3) * 0.5, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                                 stair_hole=None, exterior_facades={'FRONT': (x2, x3)})
-                    rm_b3 = Room(id=f"fl{fl_idx}_apt3_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                                 bounds=(x2, x3, split_y, iy_max),
-                                 doorways=[{'x': (x2 + x3) * 0.5, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                                 stair_hole=None, exterior_facades={'BACK': (x2, x3)})
-
-                    rm_k4 = Room(id=f"fl{fl_idx}_apt4_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                                 bounds=(x3, gap1, iy_min, split_y),
-                                 doorways=[{'x': (x3 + gap1) * 0.5, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                                 stair_hole=None, exterior_facades={'FRONT': (x3, gap1)})
-                    rm_b4 = Room(id=f"fl{fl_idx}_apt4_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                                 bounds=(x3, ix_max, split_y, iy_max),
-                                 doorways=[{'x': (x3 + gap1) * 0.5, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                                 stair_hole=None, exterior_facades={'BACK': (x3, ix_max)})
-
-                    rooms = [rm_k1, rm_b1, rm_k2, rm_b2, rm_k3, rm_b3, rm_k4, rm_b4]
-                elif not has_courtyard_or_dual and shape != 'U_SHAPE':
-                    # Single-flank exterior walkway (on LEFT or RIGHT wall):
-                    # Partition into South (front) and North (rear) apartments so BOTH
-                    # suites border the walkway wall and have direct exterior entrance doors!
-                    walk_side = ext_stairs_side if ext_stairs_side in ('LEFT', 'RIGHT') else 'LEFT'
-                    # Demising wall between South and North apartments along X (at Y = split_y, NO doorway)
-                    interior_walls.append({
-                        'p1': (ix_min, split_y), 'p2': (ix_max, split_y),
-                        'axis': 'X', 'pos': split_y, 'thickness': wall_t, 'doorway': None
-                    })
-
-                    apt_split_x = _clear_doorway_span((ix_min + ix_max) * 0.5, axis='X',
-                                                      lo=ix_min + 2.2, hi=ix_max - 2.2)
-                    dw_y_s = (iy_min + split_y) * 0.5
-                    dw_y_n = (split_y + iy_max) * 0.5
-
-                    # Internal partition dividing each apartment into a kitchen/living area
-                    # (on the walkway side) and a private bedroom (on the far side).
-                    interior_walls.append({
-                        'p1': (apt_split_x, iy_min), 'p2': (apt_split_x, split_y),
-                        'axis': 'Y', 'pos': apt_split_x, 'thickness': wall_t,
-                        'doorway': {'x': apt_split_x, 'y': dw_y_s, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
-                    })
-                    interior_walls.append({
-                        'p1': (apt_split_x, split_y), 'p2': (apt_split_x, iy_max),
-                        'axis': 'Y', 'pos': apt_split_x, 'thickness': wall_t,
-                        'doorway': {'x': apt_split_x, 'y': dw_y_n, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
-                    })
-
-                    if walk_side == 'LEFT':
-                        rm_s_k = Room(
-                            id=f"fl{fl_idx}_apt_south_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                            bounds=(ix_min, apt_split_x, iy_min, split_y),
-                            doorways=[
-                                {'x': ix_min, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
-                                {'x': apt_split_x, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
-                            ],
-                            stair_hole=None,
-                            exterior_facades={'LEFT': (iy_min, split_y), 'FRONT': (ix_min, apt_split_x)}
-                        )
-                        rm_s_b = Room(
-                            id=f"fl{fl_idx}_apt_south_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                            bounds=(apt_split_x, ix_max, iy_min, split_y),
-                            doorways=[{'x': apt_split_x, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w}],
-                            stair_hole=None,
-                            exterior_facades={'FRONT': (apt_split_x, ix_max), 'RIGHT': (iy_min, split_y)}
-                        )
-                        rm_n_k = Room(
-                            id=f"fl{fl_idx}_apt_north_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                            bounds=(ix_min, apt_split_x, split_y, iy_max),
-                            doorways=[
-                                {'x': ix_min, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
-                                {'x': apt_split_x, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
-                            ],
-                            stair_hole=None,
-                            exterior_facades={'LEFT': (split_y, iy_max), 'BACK': (ix_min, apt_split_x)}
-                        )
-                        rm_n_b = Room(
-                            id=f"fl{fl_idx}_apt_north_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                            bounds=(apt_split_x, ix_max, split_y, iy_max),
-                            doorways=[{'x': apt_split_x, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w}],
-                            stair_hole=None,
-                            exterior_facades={'BACK': (apt_split_x, ix_max), 'RIGHT': (split_y, iy_max)}
-                        )
-                    else:
-                        rm_s_b = Room(
-                            id=f"fl{fl_idx}_apt_south_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                            bounds=(ix_min, apt_split_x, iy_min, split_y),
-                            doorways=[{'x': apt_split_x, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w}],
-                            stair_hole=None,
-                            exterior_facades={'FRONT': (ix_min, apt_split_x), 'LEFT': (iy_min, split_y)}
-                        )
-                        rm_s_k = Room(
-                            id=f"fl{fl_idx}_apt_south_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                            bounds=(apt_split_x, ix_max, iy_min, split_y),
-                            doorways=[
-                                {'x': ix_max, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
-                                {'x': apt_split_x, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
-                            ],
-                            stair_hole=None,
-                            exterior_facades={'RIGHT': (iy_min, split_y), 'FRONT': (apt_split_x, ix_max)}
-                        )
-                        rm_n_b = Room(
-                            id=f"fl{fl_idx}_apt_north_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                            bounds=(ix_min, apt_split_x, split_y, iy_max),
-                            doorways=[{'x': apt_split_x, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w}],
-                            stair_hole=None,
-                            exterior_facades={'BACK': (ix_min, apt_split_x), 'LEFT': (split_y, iy_max)}
-                        )
-                        rm_n_k = Room(
-                            id=f"fl{fl_idx}_apt_north_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                            bounds=(apt_split_x, ix_max, split_y, iy_max),
-                            doorways=[
-                                {'x': ix_max, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
-                                {'x': apt_split_x, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
-                            ],
-                            stair_hole=None,
-                            exterior_facades={'RIGHT': (split_y, iy_max), 'BACK': (apt_split_x, ix_max)}
-                        )
-                    rooms = [rm_s_k, rm_s_b, rm_n_k, rm_n_b]
-                else:
-                    d1 = gap0 + gap_w * 0.25
-                    d2 = gap0 + gap_w * 0.75
-                    split_x = _clear_doorway_span((gap0 + gap1) * 0.5, axis='X', lo=d1 + 0.65, hi=d2 - 0.65)
-                    dw_x_w = (gap0 + split_x) * 0.5
-                    dw_x_e = (split_x + gap1) * 0.5
-
-                    # Demising wall between East and West apartments (X = split_x, NO doorway)
-                    interior_walls.append({
-                        'p1': (split_x, iy_min), 'p2': (split_x, iy_max),
-                        'axis': 'Y', 'pos': split_x, 'thickness': wall_t, 'doorway': None
-                    })
-                    # Internal partition walls (Y = split_y) with internal suite doorways
-                    interior_walls.append({
-                        'p1': (ix_min, split_y), 'p2': (split_x, split_y),
-                        'axis': 'X', 'pos': split_y, 'thickness': wall_t,
-                        'doorway': {'x': dw_x_w, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
-                    })
-                    interior_walls.append({
-                        'p1': (split_x, split_y), 'p2': (ix_max, split_y),
-                        'axis': 'X', 'pos': split_y, 'thickness': wall_t,
-                        'doorway': {'x': dw_x_e, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
-                    })
-
-                    rm_w_k = Room(
-                        id=f"fl{fl_idx}_apt_west_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                        bounds=(gap0, split_x, iy_min, split_y),
-                        doorways=[{'x': dw_x_w, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                        stair_hole=None,
-                        exterior_facades={'FRONT': (gap0, split_x), 'LEFT': (iy_min, split_y)}
-                    )
-                    rm_w_b = Room(
-                        id=f"fl{fl_idx}_apt_west_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                        bounds=(ix_min, split_x, split_y, iy_max),
-                        doorways=[{'x': dw_x_w, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                        stair_hole=None,
-                        exterior_facades={'BACK': (ix_min, split_x), 'LEFT': (split_y, iy_max)}
-                    )
-                    rm_e_k = Room(
-                        id=f"fl{fl_idx}_apt_east_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                        bounds=(split_x, gap1, iy_min, split_y),
-                        doorways=[{'x': dw_x_e, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                        stair_hole=None,
-                        exterior_facades={'FRONT': (split_x, gap1), 'RIGHT': (iy_min, split_y)}
-                    )
-                    rm_e_b = Room(
-                        id=f"fl{fl_idx}_apt_east_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                        bounds=(split_x, ix_max, split_y, iy_max),
-                        doorways=[{'x': dw_x_e, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                        stair_hole=None,
-                        exterior_facades={'BACK': (split_x, ix_max), 'RIGHT': (split_y, iy_max)}
-                    )
-
-                    rooms = [rm_w_k, rm_w_b, rm_e_k, rm_e_b]
 
         elif can_4_rooms and (ix_max - split_x >= 2.4):
             # 4 Rooms (Corridor/Landing Hall on Left + 3 separate chambers on Right)
@@ -1717,8 +1537,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     else:
         # Deep building: Partition along X (horizontal wall at Y = split_y, running from ix_min to ix_max)
         roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors)
-        split_y = min(stair_safe_y_bot - 0.65, iy_min + D * 0.48)
-        split_y = max(iy_min + 2.3, split_y)
+        # Keep the cross partition clear of the stair band on whichever side
+        # the switchback actually occupies, so it never bisects the flights.
+        if stair_guards_north:
+            split_y = min(stair_safe_y_bot - 0.65, iy_min + D * 0.48)
+            split_y = max(iy_min + 2.3, split_y)
+        else:
+            split_y = max(stair_safe_y_top + 0.65, iy_min + D * 0.48)
+            split_y = min(iy_max - 2.3, split_y)
         split_y = _clear_doorway_span(split_y, axis='Y',
                                       lo=iy_min + 2.3, hi=iy_max - 1.8)
 
@@ -1731,28 +1557,32 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             'axis': 'X', 'pos': split_y, 'thickness': wall_t,
             'doorway': {'x': dw_x, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
         })
-        # If stairs are in back room, protect it with landing role
-        front_role = roles[1] if has_stairs_landing else roles[0]
-        back_role = 'STAIR_LANDING' if has_stairs_landing else roles[1]
+        # The stairs sit in whichever room the partition left them in.
+        front_role = ('STAIR_LANDING' if (has_stairs_landing and not stair_guards_north)
+                      else (roles[1] if has_stairs_landing else roles[0]))
+        back_role = ('STAIR_LANDING' if (has_stairs_landing and stair_guards_north)
+                     else (roles[0] if has_stairs_landing else roles[1]))
 
         rm0 = Room(
             id=f"fl{fl_idx}_front", floor_idx=fl_idx, role=front_role,
             bounds=(ix_min, ix_max, iy_min, split_y),
             doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-            stair_hole=None,
+            stair_hole=stair_hole if (has_stairs_landing and not stair_guards_north) else None,
             exterior_facades={'FRONT': (ix_min, ix_max), 'LEFT': (iy_min, split_y), 'RIGHT': (iy_min, split_y)}
         )
         rm1 = Room(
             id=f"fl{fl_idx}_back", floor_idx=fl_idx, role=back_role,
             bounds=(ix_min, ix_max, split_y, iy_max),
             doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-            stair_hole=stair_hole,
+            stair_hole=stair_hole if (has_stairs_landing and stair_guards_north) else None,
             exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (split_y, iy_max), 'RIGHT': (split_y, iy_max)}
         )
         rooms = [rm0, rm1]
 
-    # Add any wing rooms
-    if fl_wings_bounds:
+    # Add any wing rooms (the exterior-entrance tenement layout above already
+    # created its own wing apartments, so never add duplicates).
+    if fl_wings_bounds and not (effective_archetype == 'TENEMENT'
+                                and getattr(props, 'has_exterior_stairs', False)):
         for wi, wb in enumerate(fl_wings_bounds):
             if effective_archetype in ('TAVERN', 'INN'):
                 w_role = 'DINING'

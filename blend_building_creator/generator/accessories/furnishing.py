@@ -640,6 +640,28 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
             _try_place_wall_prop(bm, 'SHELF', 1.20, 0.40, tracker, z_floor,
                                  candidate_walls=('SOUTH', 'NORTH', 'EAST'))
 
+    if rm.role == 'TENEMENT_BEDROOM' and rw * rd >= 30.0 and density >= 1.2:
+        desk_w, desk_d = 1.05, 0.65
+        for desk_x, desk_y in (
+            (rcx + rw * 0.24, rcy + rd * 0.24),
+            (rcx - rw * 0.24, rcy + rd * 0.24),
+            (rcx + rw * 0.24, rcy - rd * 0.24),
+            (rcx - rw * 0.24, rcy - rd * 0.24),
+        ):
+            if not tracker.is_free(desk_x - desk_w * 0.5, desk_x + desk_w * 0.5,
+                                   desk_y - desk_d * 0.5, desk_y + desk_d * 0.5):
+                continue
+            tracker.occupy(desk_x - desk_w * 0.5, desk_x + desk_w * 0.5,
+                           desk_y - desk_d * 0.5, desk_y + desk_d * 0.5)
+            build_prop(bm, 'INDOOR_TABLE', desk_x, desk_y, z_floor, 0.0,
+                       length=desk_w, width=desk_d)
+            build_prop(bm, 'BOOK_PILE_SMALL', desk_x, desk_y, z_floor + 0.76, 0.0)
+            chair_y = desk_y - desk_d * 0.5 - 0.30
+            if tracker.is_free(desk_x - 0.24, desk_x + 0.24, chair_y - 0.24, chair_y + 0.24):
+                tracker.occupy(desk_x - 0.24, desk_x + 0.24, chair_y - 0.24, chair_y + 0.24)
+                build_prop(bm, 'CHAIR', desk_x, chair_y, z_floor, math.pi)
+            break
+
     # 6. Ceiling light
     if is_master and (rw * rd >= 16.0):
         build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.42)
@@ -867,7 +889,13 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         (rcx - (rw * 0.20), rcy - (rd * 0.20)),
     ]
     tw, td = 1.30, 0.85
+    target_tables = 2 if (
+        rm.role == 'TENEMENT_KITCHEN' and rw * rd >= 30.0 and density >= 1.2
+    ) else 1
+    placed_tables = 0
     for tx, ty in candidate_tables:
+        if placed_tables >= target_tables:
+            break
         # Guarantee at least 1.6m clearance from any door threshold
         if any(math.hypot(tx - d.get('x', rcx), ty - d.get('y', rcy)) < 1.60 for d in tracker.doorways):
             continue
@@ -881,8 +909,9 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                 if tracker.rx0 <= tx <= tracker.rx1 and tracker.ry0 <= chy <= tracker.ry1:
                     build_prop(bm, 'CHAIR', tx, chy, z_floor, chang, seat_h=0.48)
             prep_placed = True
-            table_pos = (tx, ty)
-            break
+            if table_pos is None:
+                table_pos = (tx, ty)
+            placed_tables += 1
 
     if not prep_placed:
         for tx, ty in candidate_tables:

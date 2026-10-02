@@ -71,29 +71,34 @@ def _build_mini_wing(bm, props, ctx, tier):
 
 
 def _build_balconies(bm, props, ctx, tier):
-    if not _prop(props, 'has_balcony', False) or ctx.num_floors < 2 or not ctx.floor_balc_side:
+    if not _prop(props, 'has_balcony', False) or ctx.num_floors < 2:
         return
     width = _prop(props, 'balcony_width', 2.4)
     depth = _prop(props, 'balcony_depth', 1.3)
+    balc_dict = getattr(ctx, 'floor_balconies', {})
     for fl_idx in ctx.active_balc_floors:
-        side = ctx.floor_balc_side.get(fl_idx)
-        if side is None:
-            continue
-        bounds = ctx.bounds_for(fl_idx)
-        lower = ctx.bounds_for(max(0, fl_idx - 1))
-        offset = getattr(ctx, 'floor_balc_offset', {}).get(fl_idx, 0.0)
-        build_balcony(
-            bm, side=side,
-            wall_x_min=bounds[0], wall_x_max=bounds[1],
-            wall_y_min=bounds[2], wall_y_max=bounds[3],
-            lower_wall_x_min=lower[0], lower_wall_x_max=lower[1],
-            lower_wall_y_min=lower[2], lower_wall_y_max=lower[3],
-            z_floor=ctx.found_h + fl_idx * ctx.floor_h,
-            width=width, depth=depth, tier=tier,
-            door_angle_deg=_prop(props, 'door_angle', 0.0),
-            include_leaf=_prop(props, 'include_door_leaves', True),
-            along_wall_offset=offset,
-        )
+        b_list = balc_dict.get(fl_idx, [])
+        if not b_list and ctx.floor_balc_side and ctx.floor_balc_side.get(fl_idx):
+            b_list = [{'side': ctx.floor_balc_side[fl_idx], 'offset': getattr(ctx, 'floor_balc_offset', {}).get(fl_idx, 0.0)}]
+        for b in b_list:
+            side = b.get('side')
+            if side is None:
+                continue
+            bounds = ctx.bounds_for(fl_idx)
+            lower = ctx.bounds_for(max(0, fl_idx - 1))
+            offset = b.get('offset', 0.0)
+            build_balcony(
+                bm, side=side,
+                wall_x_min=bounds[0], wall_x_max=bounds[1],
+                wall_y_min=bounds[2], wall_y_max=bounds[3],
+                lower_wall_x_min=lower[0], lower_wall_x_max=lower[1],
+                lower_wall_y_min=lower[2], lower_wall_y_max=lower[3],
+                z_floor=ctx.found_h + fl_idx * ctx.floor_h,
+                width=width, depth=depth, tier=tier,
+                door_angle_deg=_prop(props, 'door_angle', 0.0),
+                include_leaf=_prop(props, 'include_door_leaves', True),
+                along_wall_offset=offset,
+            )
 
 
 def _build_pillared_overhang(bm, props, ctx, tier):

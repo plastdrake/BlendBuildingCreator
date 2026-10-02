@@ -812,6 +812,34 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    window_front: BoolProperty(
+        name="Front Windows",
+        description="Generate windows on the front facade",
+        default=True,
+        update=on_property_updated
+    )
+
+    window_back: BoolProperty(
+        name="Back Windows",
+        description="Generate windows on the back facade",
+        default=True,
+        update=on_property_updated
+    )
+
+    window_left: BoolProperty(
+        name="Left Windows",
+        description="Generate windows on the left facade",
+        default=True,
+        update=on_property_updated
+    )
+
+    window_right: BoolProperty(
+        name="Right Windows",
+        description="Generate windows on the right facade",
+        default=True,
+        update=on_property_updated
+    )
+
     window_spacing: FloatProperty(
         name="Window Spacing",
         description="Horizontal spacing between windows. Lower values = more windows, higher values = fewer windows",

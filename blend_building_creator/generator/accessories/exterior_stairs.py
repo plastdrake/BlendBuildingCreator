@@ -1,12 +1,22 @@
-"""
-Exterior wooden staircase system for multi-apartment tenements.
+"""Exterior timber staircase system for multi-apartment tenements.
 
-Builds an external timber stair that climbs the outside of the building with a
-railed landing at EVERY upper storey (so each floor's apartment entrance is
-reachable from outside), wrapping around the corners when a storey's flight no
-longer fits the current wall. The plan is computed once and shared by the
-geometry builder, the per-floor door placement and the window exclusions, so
-the stair, the doors and the windows can never overlap each other.
+Two clean, fully walkable routes are built here:
+
+* **Side walkway** (rectangular row tenements): a 1.6 m gallery runs the full
+  length of the chosen side wall at every upper storey.  A single switchback
+  staircase sits outboard of the gallery at the front of the building - odd
+  storeys climb on the inner lane, even storeys on the outer lane - so no two
+  flights ever share a footprint.  Every apartment door opens straight onto the
+  gallery.
+
+* **Courtyard** (U-shaped tenements): one switchback staircase only, standing
+  in the courtyard against the left wing, serving a gallery that wraps the
+  courtyard facade and runs along each wing wall.  There is deliberately no
+  mirrored second staircase.
+
+The plan is computed once and shared by the geometry builder, the per-floor
+door placement and the window exclusions, so stair, doors and windows can never
+overlap.
 """
 
 import math
@@ -16,44 +26,24 @@ from ..railing import build_railing
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_STAIRS, MAT_INDEX_TIMBER_FRAME,
 )
+from ..tenement import (
+    GAL_D, STAIR_W, LANE_GAP, STEP_D, STEP_H,
+    stair_geometry, flight_steps, courtyard_gap,
+)
 
-
-# Proportions shared by the plan, the geometry and the exclusion helper.
-_STAIR_W = 1.10          # stair tread width — one person plus handrail clearance
-_LANE_GAP = 0.06         # gap between inner and outer stair lanes
-_LAND_LEN = 1.30          # along the wall (corner landing length)
-_LAND_DEPTH = 1.35        # outward from the wall (small landing, legacy/BOTH mode)
-_WALK_DEPTH = 1.20        # walkway gallery depth (perpendicular to wall) — narrower than before
-_STEP_D = 0.28            # tread depth — slightly deeper for walkable gradient
-_STEP_H_MAX = 0.205       # riser height cap — slightly lower for easier climbing
 _RAIL_H = 0.95
-_EDGE = 0.85              # wall run kept clear at each corner
+_EDGE = 0.70              # wall run kept clear at each corner
+_LAND_LEN = 2.50          # landing depth along the wall (2.5m wide turn-around room)
+DW_HALF = 0.60            # rough entrance half-width used for railing gaps
 
 
 def _stair_clearance(props):
-    """Distance from the wall CENTRELINE the stair structure stands off.
-
-    Tier 1 walls are stacks of bulging round logs, so the stair clears well
-    past the log crest; planked and masonry walls need only a hair.
-    """
-    wall_t = float(getattr(props, 'wall_thickness', 0.28))
-    tier = getattr(props, 'material_tier', 'TIER_3')
-    bulge = 0.26 if tier == 'TIER_1' else 0.06
-    return wall_t * 0.5 + bulge
+    """Distance from the wall centreline the stair structure stands off."""
+    return stair_geometry(props, type('C', (), {'found_h': 0.4, 'floor_h': 3.6}))['clearance']
 
 
 def _wall_ring(props, ctx):
-    """The four walls as an ordered walk around the building.
-
-    Uses the BASE footprint (plus any cantilever) rather than the per-floor
-    wall bounds: the stair plan is built during the wall phase, before the
-    context's floor bounds exist, and a stable footprint keeps the doors, the
-    stairs and the window exclusions all agreeing.
-
-    Each wall: dict(name, axis, fixed, outward, dir, lo, hi) where 'fixed' is
-    the wall line coordinate, 'outward' the sign away from the building, 'dir'
-    the walk direction along the axis and lo/hi the usable span.
-    """
+    """The four walls as an ordered walk around the building (base footprint)."""
     hw = float(getattr(ctx, 'base_w', 8.0)) * 0.5
     hd = float(getattr(ctx, 'base_d', 8.0)) * 0.5
     if getattr(props, 'has_cantilever', False):
@@ -62,898 +52,719 @@ def _wall_ring(props, ctx):
         hd += _c
     x_min, x_max = -hw, hw
     y_min, y_max = -hd, hd
-
     side = getattr(props, 'exterior_stairs_side', 'LEFT')
     m = _EDGE
-
     left = dict(name='LEFT', axis='Y', fixed=x_min, outward=-1.0, dir=1.0,
                 lo=y_min + m, hi=y_max - m)
     front = dict(name='FRONT', axis='X', fixed=y_min, outward=-1.0, dir=-1.0,
                  lo=x_min + m, hi=x_max - m)
     right = dict(name='RIGHT', axis='X', fixed=x_max, outward=1.0, dir=-1.0,
                  lo=y_min + m, hi=y_max - m)
-    back = dict(name='BACK', axis='Y', fixed=y_max, outward=1.0, dir=1.0,
+    back = dict(name='BACK', axis='X', fixed=y_max, outward=1.0, dir=1.0,
                 lo=x_min + m, hi=x_max - m)
-
-    # NOTE: wings project OUTWARD from the base footprint, while every stair
-    # run and landing sits alongside the base edges (|along| within the base
-    # span), so projecting wings can never overlap the stair - no clamping.
-
-    if side == 'LEFT':
-        return [left, back, right, front]
-    return [right, back, left, front]
+    if side == 'RIGHT':
+        return [right, back, left, front]
+    return [left, back, right, front]
 
 
-def _courtyard_stair_plan(props, ctx):
-    """Symmetrical courtyard dual-stair system and elevated gallery for U-shape buildings."""
-    wings = getattr(ctx, 'wings', [])
-    if len(wings) < 2:
-        return None
-    w0, w1 = wings[0], wings[1]
-    wx1_l, wx2_l, wy1_l, wy2_l = w0['base']
-    wx1_r, wx2_r, wy1_r, wy2_r = w1['base']
+def _wall_point(wall, along, u):
+    """World XY for a point 'along' a wall and 'u' outward from its centreline."""
+    if wall['axis'] == 'Y':
+        return (wall['fixed'] + wall['outward'] * u, along)
+    return (along, wall['fixed'] + wall['outward'] * u)
 
+
+# ---------------------------------------------------------------------------
+# Plans
+# ---------------------------------------------------------------------------
+
+def _side_plan(props, ctx):
+    """Side-walkway switchback plan for rectangular tenements."""
     n_floors = max(1, int(getattr(props, 'num_floors', 2)))
-    floor_h = float(getattr(ctx, 'floor_h', 3.6))
-    found_h = float(getattr(ctx, 'found_h', 0.4))
+    geom = stair_geometry(props, ctx)
+    found_h, floor_h = geom['found_h'], geom['floor_h']
+    clearance = geom['clearance']
+    ring = _wall_ring(props, ctx)
+    wall = ring[0]
 
-    base_w = float(getattr(ctx, 'base_w', getattr(props, 'width', 32.0)))
-    hx = base_w * 0.5
-    gap0 = max(wx2_l, -hx)
-    gap1 = min(wx1_r, hx)
-    gap_w = max(2.0, gap1 - gap0)
-    y_min = wy2_l  # main building front wall
+    walk_lo, walk_hi = wall['lo'], wall['hi']
+    walk_span = walk_hi - walk_lo
+    flen, _ = flight_steps(found_h + floor_h)
+    flen = min(flen, max(3.0, walk_span - 3.6))
 
-    stair_w = max(2.50, float(getattr(props, 'stair_width', 2.50)))
-    gal_depth = max(2.60, stair_w + 0.10)
-    wall_clearance = 0.20
+    # Landings extend all the way to walk_lo and walk_hi so they align with walkway ends
+    land_len = max(1.80, (walk_span - flen) * 0.5)
+    stair_lo = walk_lo + land_len
+    stair_hi = walk_hi - land_len
 
-    # Ground flight climbs from courtyard grade z=0.0 up to second-floor gallery
-    climb_h = found_h + floor_h
-    steps = max(3, int(math.ceil(climb_h / _STEP_H_MAX)))
-    flight_len = steps * _STEP_D
-
-    y_gal_edge = y_min - gal_depth
-    y_bot = y_gal_edge - flight_len
-
-    if gap_w >= 9.0:
-        apt_doors = [
-            gap0 + gap_w * 0.125,
-            gap0 + gap_w * 0.375,
-            gap0 + gap_w * 0.625,
-            gap0 + gap_w * 0.875,
-        ]
-    else:
-        apt_doors = [
-            gap0 + gap_w * 0.25,
-            gap0 + gap_w * 0.75,
-        ]
-
-    lane_w = min(stair_w, max(1.80, (gap_w - 1.6) * 0.25))
-    cx_in_l = gap0 + wall_clearance + lane_w * 0.5
-    cx_out_l = gap0 + wall_clearance + lane_w + 0.12 + lane_w * 0.5
-    cx_in_r = gap1 - wall_clearance - lane_w * 0.5
-    cx_out_r = gap1 - wall_clearance - lane_w - 0.12 - lane_w * 0.5
+    u_deck_in = clearance
+    u_deck_out = clearance + GAL_D
+    u_inner = u_deck_out + LANE_GAP + STAIR_W * 0.5
+    u_outer = u_inner + STAIR_W + LANE_GAP
+    u_out_edge = u_outer + STAIR_W * 0.5 + 0.10
 
     flights = []
-    landings = []
-    rects = []
-
     for i in range(1, n_floors):
-        z_target = found_h + i * floor_h
-        z_prev = 0.0 if i == 1 else (found_h + (i - 1) * floor_h)
-
-        # Alternating stepped lanes (all climbing +Y with full open headroom):
-        # i == 1 (Gr -> Fl 2): Inner lane climbs +Y (y_bot -> y_gal_edge)
-        # i == 2 (Fl 2 -> Fl 3): Outer lane climbs +Y (y_bot -> y_gal_edge)
-        # i == 3 (Fl 3 -> Fl 4): Inner lane climbs +Y (y_bot -> y_gal_edge)
-        if i % 2 == 1:
-            a0, a1 = y_bot, y_gal_edge
-            x_l, x_r = cx_in_l, cx_in_r
-            lane_name = 'INNER'
-        else:
-            a0, a1 = y_gal_edge, y_bot
-            x_l, x_r = cx_out_l, cx_out_r
-            lane_name = 'OUTER'
-
+        z0 = 0.0 if i == 1 else found_h + (i - 1) * floor_h
+        z1 = found_h + i * floor_h
+        odd = (i % 2 == 1)
+        lane_u = u_outer if odd else u_inner
         flights.append({
-            'wall': 'COURTYARD_LEFT',
-            'a0': a0, 'a1': a1,
-            'z0': z_prev, 'z1': z_target,
-            'x': x_l, 'stair_w': lane_w, 'side': 'LEFT',
-            'lane': lane_name, 'floor': i
+            'floor': i, 'lane': 'OUTER' if odd else 'INNER',
+            'u': lane_u,
+            'a0': stair_lo if odd else stair_hi,
+            'a1': stair_hi if odd else stair_lo,
+            'z0': z0, 'z1': z1,
         })
-        flights.append({
-            'wall': 'COURTYARD_RIGHT',
-            'a0': a0, 'a1': a1,
-            'z0': z_prev, 'z1': z_target,
-            'x': x_r, 'stair_w': lane_w, 'side': 'RIGHT',
-            'lane': lane_name, 'floor': i
-        })
-
-        for dx in apt_doors:
-            landings.append({
-                'floor': i, 'wall': 'FRONT',
-                'along': dx,
-                'door_along': dx,
-                'z': z_target, 'axis': 'X', 'fixed': y_min,
-                'outward': -1.0, 'corner': False
-            })
-            rects.append(('FRONT', i, (dx - 1.10, dx + 1.10)))
-
-        rects.append(('LEFT', i, (y_bot - 0.3, y_min + 0.2)))
-        rects.append(('RIGHT', i, (y_bot - 0.3, y_min + 0.2)))
 
     return {
-        'is_courtyard': True,
-        'gap0': gap0, 'gap1': gap1, 'gap_w': gap_w,
-        'y_min': y_min, 'wy1': wy1_l,
-        'gal_depth': gal_depth, 'stair_w': stair_w, 'lane_w': lane_w,
-        'cx_in_l': cx_in_l, 'cx_out_l': cx_out_l,
-        'cx_in_r': cx_in_r, 'cx_out_r': cx_out_r,
-        'wall_clearance': wall_clearance,
-        'flight_len': flight_len,
-        'flights': flights, 'landings': landings, 'rects': rects,
-        'ring': [
-            {'name': 'FRONT', 'axis': 'X', 'fixed': y_min, 'outward': -1.0, 'dir': -1.0, 'lo': gap0, 'hi': gap1}
-        ]
+        'is_walkway': True,
+        'wall': wall, 'ring': ring,
+        'walk_lo': walk_lo, 'walk_hi': walk_hi, 'walk_span': walk_span,
+        'stair_lo': stair_lo, 'stair_hi': stair_hi, 'flight_len': flen,
+        'land_len': land_len,
+        'u_deck_in': u_deck_in, 'u_deck_out': u_deck_out,
+        'u_inner': u_inner, 'u_outer': u_outer, 'u_out_edge': u_out_edge,
+        'flights': flights,
+        'rects': [(wall['name'], None, (walk_lo - 0.20, walk_hi + 0.20))],
     }
 
 
-def _dual_side_stair_plan(props, ctx):
-    """Dual exterior staircases on Left and Right sides for rectangular buildings."""
+def _courtyard_plan(props, ctx):
+    """Single courtyard switchback against the left wing, with a wrap gallery."""
+    wings = getattr(ctx, 'wings', [])
+    if len(wings) < 2:
+        return None
+    wb0, wb1 = wings[0]['base'], wings[1]['base']
+    # Use the wing bounds the floor planner will use (interior frame).
+    gap0 = float(wb0[1])
+    gap1 = float(wb1[0])
+    y_attach = float(wb0[3])          # main courtyard facade (wing attach line)
+    y_tip = min(float(wb0[2]), float(wb1[2]))
+
+    n_floors = max(1, int(getattr(props, 'num_floors', 2)))
+    geom = stair_geometry(props, ctx)
+    found_h, floor_h = geom['found_h'], geom['floor_h']
+
+    flen, _ = flight_steps(found_h + floor_h)
+    y_gal_edge = y_attach - GAL_D
+    y_bot = y_gal_edge - flen
+    if y_bot < y_tip + 0.40:
+        y_bot = y_tip + 0.40
+        flen = max(1.9, y_gal_edge - y_bot)
+
+    u_wing_gal = GAL_D                          # spur depth off the wing wall
+    x_inner = gap0 + u_wing_gal + LANE_GAP + STAIR_W * 0.5
+    x_outer = x_inner + STAIR_W + LANE_GAP
+    u_out_edge = x_outer + STAIR_W * 0.5 + 0.10
+
+    flights = []
+    for i in range(1, n_floors):
+        z0 = 0.0 if i == 1 else found_h + (i - 1) * floor_h
+        z1 = found_h + i * floor_h
+        odd = (i % 2 == 1)
+        flights.append({
+            'floor': i, 'lane': 'INNER' if odd else 'OUTER',
+            'x': x_inner if odd else x_outer,
+            'a0': y_bot if odd else y_gal_edge,
+            'a1': y_gal_edge if odd else y_bot,
+            'z0': z0, 'z1': z1,
+        })
+
+    return {
+        'is_courtyard': True,
+        'gap0': gap0, 'gap1': gap1, 'gap_w': max(2.0, gap1 - gap0),
+        'y_attach': y_attach, 'y_tip': y_tip,
+        'y_gal_edge': y_gal_edge, 'y_bot': y_bot,
+        'x_inner': x_inner, 'x_outer': x_outer,
+        'u_wing_gal': u_wing_gal, 'u_out_edge': u_out_edge,
+        'flight_len': flen, 'flights': flights,
+        'rects': [('FRONT', None, (gap0, min(gap1, x_inner + STAIR_W * 0.5 + 0.2)))],
+    }
+
+
+def exterior_stair_plan(props, ctx):
+    """Compute the whole exterior stair plan, or ``None`` when there is none."""
+    if not getattr(props, 'has_exterior_stairs', False):
+        return None
+    n_floors = max(1, int(getattr(props, 'num_floors', 2)))
+    if n_floors < 2:
+        return None
+    side = getattr(props, 'exterior_stairs_side', 'LEFT')
+    shape = getattr(ctx, 'shape', getattr(props, 'building_shape', 'RECTANGLE'))
+    if shape == 'U_SHAPE' or side == 'COURTYARD':
+        return _courtyard_plan(props, ctx)
+    return _side_plan(props, ctx)
+
+
+def exterior_stairs_y_span(props, ctx):
+    """Back-compat helper: (a0, a1) span on the selected side wall, or None."""
+    plan = exterior_stair_plan(props, ctx)
+    if not plan or not plan.get('is_walkway'):
+        return None
+    alen = plan.get('along_len', 2.40)
+    return (plan['stair_lo'] - alen - 0.30, plan['stair_hi'] + alen + 0.30)
+
+
+def exterior_stair_door_spots(props, ctx):
+    """Apartment entrance positions per floor, in world coordinates.
+
+    Pure geometry (no bm): the floor planner registers these before rooms are
+    planned so a partition can never land across an apartment's single door.
+    The builder re-derives the same positions afterwards.
+    """
+    plan = exterior_stair_plan(props, ctx)
+    if not plan:
+        return {}
+    from ..tenement import apartment_layout, DW
+    from ..shapes import compute_fl_wing_bounds
+
+    n_floors = max(1, int(getattr(props, 'num_floors', 2)))
+    wall_t = float(getattr(props, 'wall_thickness', 0.28))
     hw = float(getattr(ctx, 'base_w', 8.0)) * 0.5
     hd = float(getattr(ctx, 'base_d', 8.0)) * 0.5
     if getattr(props, 'has_cantilever', False):
         _c = float(getattr(props, 'cantilever_overhang', 0.35))
         hw += _c
         hd += _c
-    x_min, x_max = -hw, hw
-    y_min, y_max = -hd, hd
-    m = _EDGE
+    bounds = (-hw + wall_t * 0.5, hw - wall_t * 0.5,
+              -hd + wall_t * 0.5, hd - wall_t * 0.5)
+    shape = getattr(ctx, 'shape', 'RECTANGLE')
 
-    n_floors = max(1, int(getattr(props, 'num_floors', 2)))
-    floor_h = float(getattr(ctx, 'floor_h', 3.6))
-    found_h = float(getattr(ctx, 'found_h', 0.4))
-
-    steps = max(3, int(math.ceil(floor_h / _STEP_H_MAX)))
-    flight_len = steps * _STEP_D
-
-    flights, landings, rects = [], [], []
-    ring = [
-        dict(name='LEFT', axis='Y', fixed=x_min, outward=-1.0, dir=1.0, lo=y_min + m, hi=y_max - m),
-        dict(name='RIGHT', axis='Y', fixed=x_max, outward=1.0, dir=1.0, lo=y_min + m, hi=y_max - m),
-    ]
-
-    for i in range(1, n_floors):
-        z_target = found_h + i * floor_h
-        z_prev = 0.0 if i == 1 else (found_h + (i - 1) * floor_h)
-        climb = z_target - z_prev
-        steps_i = max(3, int(math.ceil(climb / _STEP_H_MAX)))
-        flight_len_i = steps_i * _STEP_D
-
-        # Left side
-        pos_l = y_min + m + (i - 1) * (flight_len_i + _LAND_LEN)
-        pos_l = min(pos_l, y_max - m - flight_len_i - _LAND_LEN)
-        a0_l = pos_l
-        a1_l = pos_l + flight_len_i
-        flights.append({'wall': 'LEFT', 'a0': a0_l, 'a1': a1_l, 'z0': z_prev, 'z1': z_target})
-        landings.append({
-            'floor': i, 'wall': 'LEFT', 'along': a1_l,
-            'door_along': a1_l + _LAND_LEN * 0.5,
-            'z': z_target, 'axis': 'Y', 'fixed': x_min,
-            'outward': -1.0, 'corner': False
-        })
-        rects.append(('LEFT', i, (a0_l - 0.35, a1_l + _LAND_LEN + 0.2)))
-
-        # Right side
-        pos_r = y_min + m + (i - 1) * (flight_len_i + _LAND_LEN)
-        pos_r = min(pos_r, y_max - m - flight_len_i - _LAND_LEN)
-        a0_r = pos_r
-        a1_r = pos_r + flight_len_i
-        flights.append({'wall': 'RIGHT', 'a0': a0_r, 'a1': a1_r, 'z0': z_prev, 'z1': z_target})
-        landings.append({
-            'floor': i, 'wall': 'RIGHT', 'along': a1_r,
-            'door_along': a1_r + _LAND_LEN * 0.5,
-            'z': z_target, 'axis': 'Y', 'fixed': x_max,
-            'outward': 1.0, 'corner': False
-        })
-        rects.append(('RIGHT', i, (a0_r - 0.35, a1_r + _LAND_LEN + 0.2)))
-
-    return {'flights': flights, 'landings': landings, 'rects': rects, 'ring': ring}
-
-
-def exterior_stair_plan(props, ctx):
-    """Compute the whole stair: flights, per-storey landings and footprints.
-
-    For single-side (LEFT/RIGHT) tenements this generates:
-      - A narrow gallery/walkway (1.2m deep) along the building side wall at every upper floor
-      - A two-lane switchback stair at the front end: odd flights climb +Y on the inner lane,
-        even flights climb -Y on the outer lane. Consecutive flights never share the same
-        XY footprint so the stair is always walkable.
-    Returns a dict or None when there is no exterior stair.
-    """
-    if not getattr(props, 'has_exterior_stairs', False):
-        return None
-    n_floors = max(1, int(getattr(props, 'num_floors', 2)))
-    if n_floors < 2:
-        return None
-
-    side = getattr(props, 'exterior_stairs_side', 'LEFT')
-    shape = getattr(ctx, 'shape', getattr(props, 'building_shape', 'RECTANGLE'))
-
-    if shape == 'U_SHAPE' or side == 'COURTYARD':
-        cp = _courtyard_stair_plan(props, ctx)
-        if cp:
-            return cp
-    if side == 'BOTH':
-        return _dual_side_stair_plan(props, ctx)
-
-    floor_h = float(getattr(ctx, 'floor_h', 3.6))
-    found_h = float(getattr(ctx, 'found_h', 0.4))
-    ring = _wall_ring(props, ctx)
-    wall = ring[0]  # primary wall (LEFT or RIGHT)
-
-    steps = max(3, int(math.ceil(floor_h / _STEP_H_MAX)))
-    flight_len = steps * _STEP_D
-
-    walk_depth = _WALK_DEPTH
-    walk_lo = wall['lo']  # start of walkway along-wall (front of building)
-    walk_hi = wall['hi']  # end of walkway along-wall (back of building)
-
-    # Switchback stair: two parallel lanes just outboard of the walkway.
-    # Inner lane: adjacent to walkway outer edge, runs +Y (lo -> hi)
-    # Outer lane: one stair-width further out, runs -Y (hi -> lo)
-    # Odd floor transitions (1, 3, ...): inner lane, lo -> hi
-    # Even floor transitions (2, 4, ...): outer lane, hi -> lo
-    # Each flight occupies [a0, a1] = [stair_lo, stair_lo + flight_len]  (inner)
-    #                               or [stair_hi, stair_hi - flight_len]  (outer, reversed)
-    stair_lo = walk_lo             # front anchor of stair span
-    stair_hi = walk_lo + flight_len  # rear anchor of stair span
-
-    flights, landings, rects = [], [], []
-    z_prev = 0.0
-
-    for i in range(1, n_floors):
-        z_target = found_h + i * floor_h
-        odd = (i % 2 == 1)
-        # Inner lane (+Y): a0=stair_lo, a1=stair_hi
-        # Outer lane (-Y): a0=stair_hi, a1=stair_lo  (negative span)
-        a0 = stair_lo if odd else stair_hi
-        a1 = stair_hi if odd else stair_lo
-        lane = 'INNER' if odd else 'OUTER'
-
-        flights.append({
-            'wall': wall['name'],
-            'a0': a0, 'a1': a1,
-            'z0': z_prev, 'z1': z_target,
-            'is_walkway_stair': True,
-            'lane': lane,
-        })
-
-        # The stair top arrives at: stair_hi (inner lane) or stair_lo (outer lane)
-        arr = stair_hi if odd else stair_lo
-        # Apartment doors along the gallery walkway deck: provide entrance for both
-        # South and North apartments so every upper floor residence is accessible.
-        walk_span = walk_hi - walk_lo
-        if walk_span >= 6.5:
-            door_positions = [walk_lo + walk_span * 0.28, walk_lo + walk_span * 0.72]
-        else:
-            door_positions = [(walk_lo + walk_hi) * 0.5]
-
-        for idx, door_a in enumerate(door_positions):
-            landings.append({
-                'floor': i, 'wall': wall['name'],
-                'along': arr if idx == 0 else door_a,
-                'door_along': door_a,
-                'z': z_target,
-                'axis': wall['axis'], 'fixed': wall['fixed'],
-                'outward': wall['outward'],
-                'corner': False,
-                'is_walkway': True,
-                'walk_lo': walk_lo, 'walk_hi': walk_hi,
-                'walk_depth': walk_depth,
-                'stair_lo': stair_lo, 'stair_hi': stair_hi,
-                'lane': lane,
-            })
-        z_prev = z_target
-
-    # Exclusion footprints
-    rects.append((wall['name'], None, (stair_lo - 0.30, stair_hi + 0.20)))
-    for i in range(1, n_floors):
-        rects.append((wall['name'], i, (walk_lo - 0.20, walk_hi + 0.20)))
-
-    return {
-        'flights': flights, 'landings': landings, 'rects': rects,
-        'ring': ring,
-        'is_walkway': True,
-        'wall': wall,
-        'walk_lo': walk_lo, 'walk_hi': walk_hi,
-        'walk_depth': walk_depth,
-        'stair_lo': stair_lo, 'stair_hi': stair_hi,
-        'flight_len': flight_len,
-    }
-
-
-def _wall_point(wall, along, u):
-    """World XY for a point 'along' the wall and 'u' outward from its centreline."""
-    if wall['axis'] == 'Y':
-        return (wall['fixed'] + wall['outward'] * u, along)
-    return (along, wall['fixed'] + wall['outward'] * u)
-
-
-def exterior_stairs_y_span(props, ctx):
-    """Back-compat helper: (a0, a1) span on the selected side wall, or None."""
-    plan = exterior_stair_plan(props, ctx)
-    if not plan:
-        return None
-    side = getattr(props, 'exterior_stairs_side', 'LEFT')
-    lo, hi = None, None
-    for wall_name, _fl, (a0, a1) in plan['rects']:
-        if wall_name != side:
-            continue
-        lo = a0 if lo is None else min(lo, a0)
-        hi = a1 if hi is None else max(hi, a1)
-    return None if lo is None else (lo, hi)
-
-
-def exterior_stair_door_spots(props, ctx):
-    """Landing-door positions per floor, in world coordinates.
-
-    Pure geometry (no bm): floors.py registers these into the planning
-    doorways BEFORE rooms are planned, so partitions never land where a
-    landing door must go. The builder re-derives the same spots afterwards.
-    Returns {floor_idx: [{'x','y','axis','w'}]}.
-    """
-    plan = exterior_stair_plan(props, ctx)
-    if not plan:
-        return {}
-    ring = {w['name']: w for w in plan['ring']}
-    edw = min(1.20, float(getattr(props, 'door_width', 1.20)))
     out = {}
 
+    def _add(fl, x, y, axis):
+        bucket = out.setdefault(fl, [])
+        for prev in bucket:
+            if abs(prev['x'] - x) < 0.30 and abs(prev['y'] - y) < 0.30:
+                return
+        bucket.append({'x': x, 'y': y, 'axis': axis, 'w': DW})
+
     if plan.get('is_walkway'):
-        # For walkway plans: apartments are split at mid-depth of the walkway span.
-        # Place two entrance doors per floor: one in each half of the wall span.
+        # Side-walkway flats: one door on the walkway wall per flat, every floor
+        # including ground (the street door is suppressed for these presets).
         wall = plan['wall']
-        walk_lo = plan['walk_lo']
-        walk_hi = plan['walk_hi']
-        mid = (walk_lo + walk_hi) * 0.5
-        door_s = (walk_lo + mid) * 0.5   # south/front apartment door
-        door_n = (mid + walk_hi) * 0.5   # north/back apartment door
-        for ld in plan['landings']:
-            if ld.get('corner'):
-                continue
-            fl = ld['floor']
-            if wall['axis'] == 'Y':
-                x = wall['fixed']
-                out.setdefault(fl, []).append({'x': x, 'y': door_s, 'axis': 'Y', 'w': edw})
-                out.setdefault(fl, []).append({'x': x, 'y': door_n, 'axis': 'Y', 'w': edw})
-            else:
-                y = wall['fixed']
-                out.setdefault(fl, []).append({'x': door_s, 'y': y, 'axis': 'X', 'w': edw})
-                out.setdefault(fl, []).append({'x': door_n, 'y': y, 'axis': 'X', 'w': edw})
+        for fl in range(n_floors):
+            apts = apartment_layout(bounds, shape, [], props)
+            for apt in apts:
+                e = apt['entry']
+                if wall['axis'] == 'Y':
+                    _add(fl, wall['fixed'], e['y'], 'Y')
+                else:
+                    _add(fl, e['x'], wall['fixed'], 'X')
         return out
 
-    for ld in plan['landings']:
-        if ld.get('corner'):
+    # Courtyard: the wing flats own their own wall doors (built in floors.py),
+    # so only the back-block flats' courtyard doors are reported here.
+    fl_wings = []
+    for fl in range(n_floors):
+        fl_overhang = 0.0
+        if getattr(props, 'has_cantilever', False) and fl >= 1:
+            fl_overhang = float(getattr(props, 'cantilever_overhang', 0.0))
+        fl_wings = [compute_fl_wing_bounds(w, fl, fl_overhang,
+                                           -hw, hw, -hd, hd)
+                    for w in getattr(ctx, 'wings', [])]
+        if len(fl_wings) < 2:
             continue
-        wall = ring[ld['wall']]
-        a = ld.get('door_along', ld['along'])
-        if wall['axis'] == 'Y':
-            x = wall['fixed']
-            out.setdefault(ld['floor'], []).append(
-                {'x': x, 'y': a, 'axis': 'Y', 'w': edw})
-        else:
-            y = wall['fixed']
-            out.setdefault(ld['floor'], []).append(
-                {'x': a, 'y': y, 'axis': 'X', 'w': edw})
+        apts = apartment_layout(bounds, shape, fl_wings, props)
+        for apt in apts:
+            if apt['id'].startswith('main'):
+                e = apt['entry']
+                if fl == 0:
+                    continue  # ground doors are built by floors.py
+                _add(fl, e['x'], bounds[2], 'X')
     return out
 
 
-def _build_courtyard_flight(bm, cx, y_start, y_end, z_start, z_end, stair_w,
-                            railing_courtyard_side=+1.0):
-    """Builds a single straight timber flight with treads, risers, stringers, center beam and railing."""
-    run_len = y_end - y_start
-    total_h = z_end - z_start
-    steps = max(3, int(math.ceil(abs(total_h) / _STEP_H_MAX)))
-    step_h = total_h / steps
-    step_d = run_len / steps
-    sgn_d = 1.0 if run_len > 0 else -1.0
-    diag = math.hypot(abs(run_len), abs(total_h))
-    pitch = math.atan2(abs(total_h), abs(run_len))
+# ---------------------------------------------------------------------------
+# Geometry builders
+# ---------------------------------------------------------------------------
 
-    # Treads and risers
-    for s in range(steps):
-        sy = y_start + (s + 0.5) * step_d
-        sz = z_start + (s + 0.5) * step_h
-        create_beveled_box(
-            bm, size=(stair_w, abs(step_d) + 0.04, 0.06),
-            location=(cx, sy, sz),
-            mat_index=MAT_INDEX_WOOD, bevel_amount=0.010
-        )
-        create_box(
-            bm, size=(stair_w - 0.02, 0.04, abs(step_h)),
-            location=(cx, sy - step_d * 0.5 + 0.02 * sgn_d, sz - step_h * 0.5),
-            mat_index=MAT_INDEX_STAIRS
-        )
-
-    # Stringers and carriage beam rotation
-    # If run_len > 0 (climbing +Y): pitch around X
-    # If run_len < 0 (climbing -Y): pitch around X and pi around Z so beam slants along -Y and +Z
-    rot = (pitch, 0.0, 0.0) if sgn_d > 0 else (pitch, 0.0, math.pi)
-
-    # Center carriage beam
-    create_box(
-        bm, size=(0.10, diag, 0.20),
-        location=(cx, (y_start + y_end) * 0.5, (z_start + z_end) * 0.5 - 0.03),
-        rotation=rot,
-        mat_index=MAT_INDEX_TIMBER
-    )
-
-    # Outer and inner stringers
-    u_l = cx - stair_w * 0.5 - 0.04
-    u_r = cx + stair_w * 0.5 + 0.04
-    for u_str in (u_l, u_r):
-        create_box(
-            bm, size=(0.08, diag, 0.22),
-            location=(u_str, (y_start + y_end) * 0.5, (z_start + z_end) * 0.5),
-            rotation=rot,
-            mat_index=MAT_INDEX_TIMBER
-        )
-
-    # Railing on exposed courtyard side
-    u_rail = cx + railing_courtyard_side * (stair_w * 0.5 + 0.04)
-    p0 = (u_rail, y_start + 0.08 * sgn_d)
-    p1 = (u_rail, y_end - 0.08 * sgn_d)
-    build_railing(
-        bm, p0, p1,
-        z_start + 0.06, height=_RAIL_H, base_z_end=z_end + 0.06,
-        post_spacing=1.1, baluster_spacing=0.22, braces=False
-    )
-
-
-def _build_courtyard_stairs(bm, props, ctx, plan, tier='TIER_1'):
-    """Constructs the physical 3D geometry of the U-shaped tenement courtyard switchback stair-system and galleries."""
-    gap0 = plan['gap0']
-    gap1 = plan['gap1']
-    gap_w = plan['gap_w']
-    y_min = plan['y_min']
-    gal_depth = plan['gal_depth']
-    stair_w = plan['stair_w']
-    lane_w = plan.get('lane_w', min(stair_w, max(1.80, (gap_w - 1.6) * 0.25)))
-    cx_in_l = plan.get('cx_in_l', gap0 + 0.20 + lane_w * 0.5)
-    cx_out_l = plan.get('cx_out_l', cx_in_l + lane_w + 0.12)
-    cx_in_r = plan.get('cx_in_r', gap1 - 0.20 - lane_w * 0.5)
-    cx_out_r = plan.get('cx_out_r', cx_in_r - lane_w - 0.12)
-
-    wall_clearance = plan.get('wall_clearance', 0.20)
-    flight_len = plan['flight_len']
-
-    n_floors = max(1, int(getattr(props, 'num_floors', 2)))
-    floor_h = float(getattr(ctx, 'floor_h', 3.6))
-    found_h = float(getattr(ctx, 'found_h', 0.4))
-
-    y_top = y_min - gal_depth + 0.08
-    y_bot = y_top - flight_len
-
-    z_walkways = {}
-    for fl_idx in range(1, n_floors):
-        z_walkways[fl_idx] = found_h + fl_idx * floor_h - 0.02
-
-    top_walkway_z = z_walkways[n_floors - 1]
-
-    cantilever = float(getattr(props, 'cantilever_overhang', 0.35)) if getattr(props, 'has_cantilever', False) else 0.0
-    overhang_mode = getattr(props, 'overhang_mode', 'ALL_FLOORS')
-
-    # 1. Main Front Gallery Decks for every upper floor (flush to exterior facade)
-    deck_cx = (gap0 + gap1) * 0.5
-    for fl_idx in range(1, n_floors):
-        zw = z_walkways[fl_idx]
-        fov = cantilever if overhang_mode == 'SECOND_FLOOR_ONLY' else (fl_idx * cantilever) if cantilever > 0.0 else 0.0
-        y_facade = y_min - fov
-        gal_cy = y_facade - gal_depth * 0.5
-
-        create_beveled_box(
-            bm, size=(gap_w + 0.04, gal_depth, 0.07),
-            location=(deck_cx, gal_cy, zw + 0.035),
-            mat_index=MAT_INDEX_WOOD, bevel_amount=0.010
-        )
-        # Heavy Timber Ledger, Center, and Front Support Beams
-        create_box(bm, size=(gap_w + 0.04, 0.16, 0.24),
-                   location=(deck_cx, y_facade - 0.08, zw - 0.12),
-                   mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, size=(gap_w + 0.04, 0.16, 0.24),
-                   location=(deck_cx, y_facade - gal_depth * 0.5, zw - 0.12),
-                   mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, size=(gap_w + 0.04, 0.16, 0.24),
-                   location=(deck_cx, y_facade - gal_depth + 0.08, zw - 0.12),
-                   mat_index=MAT_INDEX_TIMBER)
-
-    # 2. Continuous Vertical Heavy Timber Columns for the Front Gallery
-    post_l = cx_out_l + lane_w * 0.5 + 0.04 if n_floors > 2 else cx_in_l + lane_w * 0.5 + 0.04
-    post_r = cx_out_r - lane_w * 0.5 - 0.04 if n_floors > 2 else cx_in_r - lane_w * 0.5 - 0.04
-    post_xs = [post_l, gap0 + gap_w * 0.38, gap0 + gap_w * 0.62, post_r]
-    post_y = y_min - gal_depth + 0.08
-    for px in post_xs:
-        create_beveled_box(
-            bm, size=(0.20, 0.20, top_walkway_z),
-            location=(px, post_y, top_walkway_z * 0.5),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
-        )
-        for sgn in (-1.0, 1.0):
-            if px <= post_l + 0.05 and sgn < 0:
-                continue
-            if px >= post_r - 0.05 and sgn > 0:
-                continue
-            if gap0 + 0.3 < px + sgn * 0.4 < gap1 - 0.3:
-                for fl_idx in range(1, n_floors):
-                    zw = z_walkways[fl_idx]
-                    create_box(
-                        bm, size=(0.60, 0.12, 0.12),
-                        location=(px + sgn * 0.24, post_y, zw - 0.26),
-                        rotation=(0.0, -sgn * 0.785, 0.0),
-                        mat_index=MAT_INDEX_TIMBER
-                    )
-
-    # 3. Front Edge Guard Railings along the exposed gallery span
-    for fl_idx in range(1, n_floors):
-        zw = z_walkways[fl_idx]
-        fov = cantilever if overhang_mode == 'SECOND_FLOOR_ONLY' else (fl_idx * cantilever) if cantilever > 0.0 else 0.0
-        y_facade = y_min - fov
-        rail_y = y_facade - gal_depth + 0.05
-        rx0 = post_l + 0.08
-        rx1 = post_r - 0.08
-        if rx1 > rx0 + 0.6:
-            build_railing(
-                bm, (rx0, rail_y), (rx1, rail_y),
-                zw + 0.07, height=_RAIL_H,
-                post_spacing=1.2, baluster_spacing=0.22, braces=False
-            )
-
-        # On upper floors where no stair flight ascends from y_top, the outer lane above
-        # the stair below must also have front guard railings so there is no drop-off gap:
-        has_flight_at_top = (n_floors >= fl_idx + 2)
-        if not has_flight_at_top and fl_idx >= 2:
-            lx0 = cx_in_l + lane_w * 0.5 + 0.04
-            lx1 = post_l + 0.08
-            if lx1 > lx0 + 0.4:
-                build_railing(
-                    bm, (lx0, rail_y), (lx1, rail_y),
-                    zw + 0.07, height=_RAIL_H,
-                    post_spacing=1.1, baluster_spacing=0.22, braces=False
-                )
-            rx0_out = post_r - 0.08
-            rx1_out = cx_in_r - lane_w * 0.5 - 0.04
-            if rx1_out > rx0_out + 0.4:
-                build_railing(
-                    bm, (rx0_out, rail_y), (rx1_out, rail_y),
-                    zw + 0.07, height=_RAIL_H,
-                    post_spacing=1.1, baluster_spacing=0.22, braces=False
-                )
-
-    # 4. Multi-Floor Switchback Landings and Connecting Walkways
-    if n_floors > 2:
-        tot_w = (cx_out_l + lane_w * 0.5 + 0.08) - (gap0 + wall_clearance - 0.05)
-        cx_land_l = ((gap0 + wall_clearance - 0.05) + (cx_out_l + lane_w * 0.5 + 0.08)) * 0.5
-        cx_land_r = ((gap1 - wall_clearance + 0.05) + (cx_out_r - lane_w * 0.5 - 0.08)) * 0.5
-
-        land_len = max(1.60, lane_w)
-        land_bot_cy = y_bot - land_len * 0.5 + 0.04
-        y_land_front = y_bot - land_len + 0.04
-        ww_len = flight_len + 0.10
-        ww_cy = (y_bot + y_top) * 0.5
-
-        top_zw = z_walkways[n_floors - 1]
-
-        # Structural support columns under the outer landing at y_bot down to grade (built once up to highest walkway)
-        for px in (cx_out_l + lane_w * 0.5 + 0.04, cx_out_l - lane_w * 0.5 - 0.04):
-            create_beveled_box(bm, size=(0.20, 0.20, top_zw),
-                               location=(px, land_bot_cy, top_zw * 0.5),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015)
-        for px in (cx_out_r - lane_w * 0.5 - 0.04, cx_out_r + lane_w * 0.5 + 0.04):
-            create_beveled_box(bm, size=(0.20, 0.20, top_zw),
-                               location=(px, land_bot_cy, top_zw * 0.5),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015)
-
-        for fl_idx in range(2, n_floors):
-            zw = z_walkways[fl_idx]
-
-            # Switchback Landing at y_bot bridging outer arrival to inner walkway
-            create_beveled_box(
-                bm, size=(tot_w, land_len, 0.07),
-                location=(cx_land_l, land_bot_cy, zw + 0.035),
-                mat_index=MAT_INDEX_WOOD, bevel_amount=0.010
-            )
-            build_railing(bm, (cx_out_l + lane_w * 0.5 + 0.04, y_bot),
-                          (cx_out_l + lane_w * 0.5 + 0.04, y_land_front),
-                          zw + 0.07, height=_RAIL_H, post_spacing=1.0, baluster_spacing=0.22)
-            build_railing(bm, (cx_out_l + lane_w * 0.5 + 0.04, y_land_front),
-                          (gap0 + wall_clearance, y_land_front),
-                          zw + 0.07, height=_RAIL_H, post_spacing=1.0, baluster_spacing=0.22)
-
-            create_beveled_box(
-                bm, size=(tot_w, land_len, 0.07),
-                location=(cx_land_r, land_bot_cy, zw + 0.035),
-                mat_index=MAT_INDEX_WOOD, bevel_amount=0.010
-            )
-            build_railing(bm, (cx_out_r - lane_w * 0.5 - 0.04, y_bot),
-                          (cx_out_r - lane_w * 0.5 - 0.04, y_land_front),
-                          zw + 0.07, height=_RAIL_H, post_spacing=1.0, baluster_spacing=0.22)
-            build_railing(bm, (cx_out_r - lane_w * 0.5 - 0.04, y_land_front),
-                          (gap1 - wall_clearance, y_land_front),
-                          zw + 0.07, height=_RAIL_H, post_spacing=1.0, baluster_spacing=0.22)
-
-            # Connecting Wing Walkway along the INNER lane (next to wing wall)
-            fov_i = cantilever if overhang_mode == 'SECOND_FLOOR_ONLY' else (fl_idx * cantilever) if cantilever > 0.0 else 0.0
-            rail_y_i = (y_min - fov_i) - gal_depth + 0.05
-            y_top_inner = min(y_top, rail_y_i)
-
-            # Left inner wing walkway
-            create_beveled_box(
-                bm, size=(lane_w + 0.08, ww_len, 0.07),
-                location=(cx_in_l, ww_cy, zw + 0.035),
-                mat_index=MAT_INDEX_WOOD, bevel_amount=0.010
-            )
-            build_railing(bm, (cx_in_l + lane_w * 0.5 + 0.04, y_bot),
-                          (cx_in_l + lane_w * 0.5 + 0.04, y_top_inner),
-                          zw + 0.07, height=_RAIL_H, post_spacing=1.2, baluster_spacing=0.22)
-
-            # Right inner wing walkway
-            create_beveled_box(
-                bm, size=(lane_w + 0.08, ww_len, 0.07),
-                location=(cx_in_r, ww_cy, zw + 0.035),
-                mat_index=MAT_INDEX_WOOD, bevel_amount=0.010
-            )
-            build_railing(bm, (cx_in_r - lane_w * 0.5 - 0.04, y_bot),
-                          (cx_in_r - lane_w * 0.5 - 0.04, y_top_inner),
-                          zw + 0.07, height=_RAIL_H, post_spacing=1.2, baluster_spacing=0.22)
-
-    # 5. Stair Flights (All open to the sky with complete headroom!)
-    # Flight 1: Ground (z = 0.0) -> Floor 2 (zw2), Inner Lane, climbing +Y
-    zw2 = z_walkways[1]
-    _build_courtyard_flight(bm, cx_in_l, y_bot, y_top, 0.0, zw2, lane_w, railing_courtyard_side=+1.0)
-    _build_courtyard_flight(bm, cx_in_r, y_bot, y_top, 0.0, zw2, lane_w, railing_courtyard_side=-1.0)
-
-    # Upper Flights: Floor 2 -> Floor 3, Floor 3 -> Floor 4, etc. Outer Lane, switchback climbing -Y (open sky!)
-    for fl_idx in range(2, n_floors):
-        z_start = z_walkways[fl_idx - 1]
-        z_end = z_walkways[fl_idx]
-        _build_courtyard_flight(bm, cx_out_l, y_top, y_bot, z_start, z_end, lane_w, railing_courtyard_side=+1.0)
-        _build_courtyard_flight(bm, cx_out_r, y_top, y_bot, z_start, z_end, lane_w, railing_courtyard_side=-1.0)
-
-
-def _build_walkway_flight(bm, wall, a0, a1, z0, z1, u_lane_cx, stair_w):
-    """Build one stair flight along the wall at u_lane_cx (outboard), climbing from z0 to z1.
-
-    a0..a1 is the along-wall span (may be negative for reversed direction).
-    """
+def _build_side_flight(bm, wall, a0, a1, z0, z1, u_cx, stair_w):
+    """Straight flight along a wall at ``u_cx``, climbing ``z0`` -> ``z1``."""
+    sgn = 1.0 if (a1 - a0) > 0 else -1.0
     span = a1 - a0
     rise = z1 - z0
-    n = max(3, int(math.ceil(abs(rise) / _STEP_H_MAX)))
+    n = max(3, int(math.ceil(abs(rise) / STEP_H)))
     step_h = rise / n
     step_d = span / n
-    sgn_d = 1.0 if span > 0 else -1.0
-
     for i in range(n):
         a = a0 + step_d * (i + 0.5)
         sz = z0 + (i + 0.5) * step_h
-        cx, cy = _wall_point(wall, a, u_lane_cx)
+        cx, cy = _wall_point(wall, a, u_cx)
         if wall['axis'] == 'Y':
-            create_beveled_box(bm, size=(stair_w, abs(step_d) + 0.04, 0.06),
-                               location=(cx, cy, sz),
-                               mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
-            rx, ry = _wall_point(wall, a - step_d * 0.5 + 0.02 * sgn_d, u_lane_cx)
+            create_beveled_box(bm, size=(stair_w, abs(step_d) + 0.03, 0.06),
+                               location=(cx, cy, sz), mat_index=MAT_INDEX_WOOD,
+                               bevel_amount=0.010)
+            rx, ry = _wall_point(wall, a - step_d * 0.5 + 0.02 * sgn, u_cx)
             create_box(bm, size=(stair_w - 0.02, 0.04, abs(step_h)),
                        location=(rx, ry, sz - step_h * 0.5),
                        mat_index=MAT_INDEX_STAIRS)
         else:
-            create_beveled_box(bm, size=(abs(step_d) + 0.04, stair_w, 0.06),
-                               location=(cx, cy, sz),
-                               mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
-            rx, ry = _wall_point(wall, a - step_d * 0.5 + 0.02 * sgn_d, u_lane_cx)
+            create_beveled_box(bm, size=(abs(step_d) + 0.03, stair_w, 0.06),
+                               location=(cx, cy, sz), mat_index=MAT_INDEX_WOOD,
+                               bevel_amount=0.010)
+            rx, ry = _wall_point(wall, a - step_d * 0.5 + 0.02 * sgn, u_cx)
             create_box(bm, size=(0.04, stair_w - 0.02, abs(step_h)),
                        location=(rx, ry, sz - step_h * 0.5),
                        mat_index=MAT_INDEX_STAIRS)
 
-    # Diagonal stringers (both sides)
-    run_len = abs(span)
-    diag = math.hypot(run_len, abs(rise))
-    pitch = math.atan2(abs(rise), run_len)
-    for sign in (-1, +1):
-        u_str = u_lane_cx + sign * (stair_w * 0.5 + 0.06)
+    # Stringers under both edges
+    run = abs(span)
+    diag = math.hypot(run, abs(rise))
+    pitch = math.atan2(abs(rise), run)
+    for side in (-1, 1):
+        u_str = u_cx + side * (stair_w * 0.5 + 0.05)
         sx, sy = _wall_point(wall, (a0 + a1) * 0.5, u_str)
         if wall['axis'] == 'Y':
-            rot = (pitch * sgn_d, 0.0, 0.0)
-            ssize = (0.10, diag, 0.22)
+            rot = (pitch * sgn, 0.0, 0.0)
+            size = (0.09, diag, 0.20)
         else:
-            rot = (0.0, -pitch * sgn_d, 0.0)
-            ssize = (diag, 0.10, 0.22)
-        create_box(bm, size=ssize, location=(sx, sy, (z0 + z1) * 0.5),
+            rot = (0.0, -pitch * sgn, 0.0)
+            size = (diag, 0.09, 0.20)
+        create_box(bm, size=size, location=(sx, sy, (z0 + z1) * 0.5),
                    rotation=rot, mat_index=MAT_INDEX_TIMBER)
 
-    # Outer railing (on the side away from the building wall)
-    u_rail = u_lane_cx + stair_w * 0.5 + 0.06
-    p_start = _wall_point(wall, a0 + 0.08 * sgn_d, u_rail)
-    p_end = _wall_point(wall, a1 - 0.05 * sgn_d, u_rail)
-    build_railing(bm, p_start, p_end, z0 + 0.06, height=_RAIL_H,
-                  base_z_end=z1 + 0.06, post_spacing=1.1,
-                  baluster_spacing=0.22, braces=False)
+    # Handrails along both sides of the flight
+    for side in (-1, 1):
+        u_rail = u_cx + side * (stair_w * 0.5 - 0.04)
+        p0 = _wall_point(wall, a0 + 0.12 * sgn, u_rail)
+        p1 = _wall_point(wall, a1 - 0.12 * sgn, u_rail)
+        build_railing(bm, p0, p1, z0 + 0.06, height=_RAIL_H,
+                      base_z_end=z1 + 0.06, post_spacing=1.1,
+                      baluster_spacing=0.24, braces=False)
 
 
-def _build_switchback_landing(bm, wall, a_pos, z, u_inner_cx, u_outer_cx, stair_w, side='LO'):
-    """Build a small switchback landing platform at stair_lo or stair_hi position.
+def _build_side_landing(bm, wall, a_lo, a_hi, z, u_deck_out, u_out_edge,
+                        facing_side, is_top=False, active_lane='OUTER',
+                        u_inner=None, u_outer=None, stair_w=STAIR_W):
+    """A turn landing platform bridging between the gallery walkway and stair flights.
 
-    The landing bridges between the inner lane top (or bottom) and the outer lane bottom (or top).
-    side='LO' means we are at the stair_lo end (front of building).
-    side='HI' means we are at the stair_hi end (rear of stair span).
+    The landing sits OUTBOARD of the gallery walkway deck (from u_deck_out to u_out_edge)
+    so there is ZERO coplanar overlap with the gallery deck slab.
     """
-    gap = _LANE_GAP
-    # Platform spans from inner lane inner edge to outer lane outer edge
-    u_in_edge = u_inner_cx - stair_w * 0.5 - 0.05
-    u_out_edge = u_outer_cx + stair_w * 0.5 + 0.10
-    u_cx = (u_in_edge + u_out_edge) * 0.5
-    land_depth = u_out_edge - u_in_edge
-    land_len = stair_w + 0.20   # platform is slightly wider than one lane
+    if z <= 0.01:
+        return
+    along_span = abs(a_hi - a_lo)
+    a_center = (a_lo + a_hi) * 0.5
+    u_cx = (u_deck_out + u_out_edge) * 0.5
+    depth = u_out_edge - u_deck_out
 
-    lx, ly = _wall_point(wall, a_pos, u_cx)
+    # Deck slab
+    lx, ly = _wall_point(wall, a_center, u_cx)
     if wall['axis'] == 'Y':
-        lsize = (land_depth, land_len, 0.07)
+        size = (depth, along_span, 0.07)
     else:
-        lsize = (land_len, land_depth, 0.07)
-    create_beveled_box(bm, size=lsize, location=(lx, ly, z + 0.035),
+        size = (along_span, depth, 0.07)
+    create_beveled_box(bm, size=size, location=(lx, ly, z + 0.035),
                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
 
-    # Outer edge railing (perpendicular to wall direction)
-    rp0 = _wall_point(wall, a_pos - land_len * 0.5, u_out_edge - 0.06)
-    rp1 = _wall_point(wall, a_pos + land_len * 0.5, u_out_edge - 0.06)
-    build_railing(bm, rp0, rp1, z + 0.07, height=_RAIL_H,
-                  post_spacing=1.5, baluster_spacing=0.22, braces=False)
+    # Rim fascia under outer edge (centered at u_out_edge - 0.08 so outer face is flush with u_out_edge)
+    fx, fy = _wall_point(wall, a_center, u_out_edge - 0.08)
+    if wall['axis'] == 'Y':
+        create_box(bm, size=(0.16, along_span, 0.20), location=(fx, fy, z - 0.10),
+                   mat_index=MAT_INDEX_TIMBER)
+    else:
+        create_box(bm, size=(along_span, 0.16, 0.20), location=(fx, fy, z - 0.10),
+                   mat_index=MAT_INDEX_TIMBER)
 
-    # Support post at the outer corner
-    ppx, ppy = _wall_point(wall, a_pos, u_out_edge - 0.12)
-    create_beveled_box(bm, size=(0.18, 0.18, z),
-                       location=(ppx, ppy, z * 0.5),
-                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
+    # Rim beam under far end (away from stairs)
+    far_beam_a = (a_hi - 0.08) if facing_side == -1 else (a_lo + 0.08)
+    ex, ey = _wall_point(wall, far_beam_a, u_cx)
+    if wall['axis'] == 'Y':
+        create_box(bm, size=(depth, 0.16, 0.20), location=(ex, ey, z - 0.10),
+                   mat_index=MAT_INDEX_TIMBER)
+    else:
+        create_box(bm, size=(0.16, depth, 0.20), location=(ex, ey, z - 0.10),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    base_z = z + 0.07
+
+    # 1. Outer railing overlooking yard
+    r0 = _wall_point(wall, a_lo + 0.06, u_out_edge - 0.06)
+    r1 = _wall_point(wall, a_hi - 0.06, u_out_edge - 0.06)
+    build_railing(bm, r0, r1, base_z, height=_RAIL_H,
+                  post_spacing=1.2, baluster_spacing=0.24, braces=False)
+
+    # 2. Far end-cap railing (away from stairs)
+    # Aligns perfectly with the walkway end cap at the exact same along coordinate
+    far_a = (a_hi - 0.06) if facing_side == -1 else (a_lo + 0.06)
+    c0 = _wall_point(wall, far_a, u_deck_out - 0.04)
+    c1 = _wall_point(wall, far_a, u_out_edge - 0.06)
+    build_railing(bm, c0, c1, base_z, height=_RAIL_H,
+                  post_spacing=1.4, baluster_spacing=0.24, braces=False)
+
+    # 3. Near end facing stairs:
+    # If this is the top floor, guard the inactive lane void so nobody falls off
+    if is_top and u_inner is not None and u_outer is not None:
+        near_a = (a_lo + 0.06) if facing_side == -1 else (a_hi - 0.06)
+        if active_lane == 'OUTER':
+            # Arrived via outer lane; guard inner lane edge
+            ic0 = _wall_point(wall, near_a, u_deck_out + 0.04)
+            ic1 = _wall_point(wall, near_a, u_inner + stair_w * 0.5 - 0.05)
+            build_railing(bm, ic0, ic1, base_z, height=_RAIL_H,
+                          post_spacing=1.2, baluster_spacing=0.24, braces=False)
+        else:
+            # Arrived via inner lane; guard outer lane edge
+            ic0 = _wall_point(wall, near_a, u_outer - stair_w * 0.5 + 0.05)
+            ic1 = _wall_point(wall, near_a, u_out_edge - 0.06)
+            build_railing(bm, ic0, ic1, base_z, height=_RAIL_H,
+                          post_spacing=1.2, baluster_spacing=0.24, braces=False)
 
 
-def _build_single_side_walkway_stairs(bm, props, ctx, plan):
-    """Build a narrow gallery walkway along one building side with a two-lane switchback stair.
-
-    Architecture:
-    - Narrow gallery deck (1.2m deep) runs the full building depth at each upper floor
-    - Two-lane switchback stair at the front end (outboard of the gallery):
-        Odd floor transitions  (1→2, 3→4, ...): inner lane, running +Y (lo→hi)
-        Even floor transitions (2→3, 4→5, ...): outer lane, running -Y (hi→lo)
-    - Connecting landing at stair_hi-end bridges inner→outer transition
-    - Connecting landing at stair_lo-end bridges outer→inner transition
-    - Railing on outer edge of gallery only; wall side is open for apartment doors
-    """
+def _build_side_stairs(bm, props, ctx, plan):
     wall = plan['wall']
-    walk_lo = plan['walk_lo']
-    walk_hi = plan['walk_hi']
-    walk_depth = plan['walk_depth']
-    stair_lo = plan['stair_lo']
-    stair_hi = plan['stair_hi']
-
     n_floors = max(1, int(getattr(props, 'num_floors', 2)))
-    floor_h = float(getattr(ctx, 'floor_h', 3.6))
-    found_h = float(getattr(ctx, 'found_h', 0.4))
-    clear = _stair_clearance(props)
+    geom = stair_geometry(props, ctx)
+    found_h, floor_h = geom['found_h'], geom['floor_h']
+    walk_lo, walk_hi = plan['walk_lo'], plan['walk_hi']
+    u_deck_in, u_deck_out = plan['u_deck_in'], plan['u_deck_out']
+    u_inner, u_outer = plan['u_inner'], plan['u_outer']
+    u_out_edge = plan['u_out_edge']
+    stair_lo, stair_hi = plan['stair_lo'], plan['stair_hi']
 
-    walk_len = walk_hi - walk_lo  # building depth (along-wall)
-
-    # u-coordinates from wall centreline:
-    u_deck_in  = clear                     # inner gallery edge (near wall face)
-    u_deck_out = clear + walk_depth         # outer gallery edge
-    u_deck_cx  = (u_deck_in + u_deck_out) * 0.5
-
-    stair_w = _STAIR_W
-    gap = _LANE_GAP
-    # Inner stair lane: directly outboard of gallery
-    u_inner = u_deck_out + gap + stair_w * 0.5
-    # Outer stair lane: one stair-width further out
-    u_outer = u_inner + stair_w + gap
-
-    # Support post positions along the gallery (every ~2.2m)
-    post_spacing = 2.20
-    n_posts = max(2, int(math.ceil(walk_len / post_spacing)))
-    post_positions = [walk_lo + walk_len * k / (n_posts - 1) for k in range(n_posts)]
-
-    # Stair support posts at the lo end (under switchback landing)
-    stair_post_a = stair_lo
+    walk_len = walk_hi - walk_lo
+    deck_cx_along = (walk_lo + walk_hi) * 0.5
     top_z = found_h + (n_floors - 1) * floor_h
-    for u_p in (u_inner, u_outer):
-        ppx, ppy = _wall_point(wall, stair_post_a, u_p)
+
+    # Support posts under outer corners of landings (from ground to top_z)
+    for pa in (walk_lo + 0.08, stair_lo - 0.12, stair_hi + 0.12, walk_hi - 0.08):
+        px, py = _wall_point(wall, pa, u_out_edge - 0.08)
+        create_beveled_box(bm, size=(0.16, 0.16, top_z),
+                           location=(px, py, top_z * 0.5),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
+
+    # Support posts under the gallery deck (at u_deck_out - 0.08)
+    n_posts = max(2, int(math.ceil(walk_len / 2.4)))
+    for k in range(n_posts):
+        pa = walk_lo + walk_len * k / (n_posts - 1)
+        # Avoid blocking doorways to landings
+        if (stair_hi - 0.20 <= pa <= walk_hi - 0.30) or \
+           (walk_lo + 0.30 <= pa <= stair_lo + 0.20):
+            continue
+        px, py = _wall_point(wall, pa, u_deck_out - 0.08)
+        create_beveled_box(bm, size=(0.16, 0.16, top_z),
+                           location=(px, py, top_z * 0.5),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
+
+    # Upper storeys: gallery decks, rim beams, railings, and turn landings
+    for fl_idx in range(1, n_floors):
+        zw = found_h + fl_idx * floor_h
+        odd = (fl_idx % 2 == 1)
+        is_top = (fl_idx == n_floors - 1)
+
+        # 1. Gallery deck (runs full walk_len, from u_deck_in to u_deck_out)
+        dcx, dcy = _wall_point(wall, deck_cx_along, (u_deck_in + u_deck_out) * 0.5)
+        gal_depth = u_deck_out - u_deck_in
+        if wall['axis'] == 'Y':
+            dsize = (gal_depth, walk_len, 0.07)
+        else:
+            dsize = (walk_len, gal_depth, 0.07)
+        create_beveled_box(bm, size=dsize, location=(dcx, dcy, zw + 0.035),
+                           mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
+
+        # Ledger + fascia beams under the gallery deck:
+        # Ledger beam against the wall (outer face flush with wall at u_deck_in):
+        lx, ly = _wall_point(wall, deck_cx_along, u_deck_in + 0.08)
+        # Fascia beam under outer gallery edge (outer face flush with u_deck_out):
+        fx, fy = _wall_point(wall, deck_cx_along, u_deck_out - 0.08)
+        if wall['axis'] == 'Y':
+            create_box(bm, size=(0.16, walk_len, 0.20), location=(lx, ly, zw - 0.10),
+                       mat_index=MAT_INDEX_TIMBER)
+            create_box(bm, size=(0.16, walk_len, 0.20), location=(fx, fy, zw - 0.10),
+                       mat_index=MAT_INDEX_TIMBER)
+        else:
+            create_box(bm, size=(walk_len, 0.16, 0.20), location=(lx, ly, zw - 0.10),
+                       mat_index=MAT_INDEX_TIMBER)
+            create_box(bm, size=(walk_len, 0.16, 0.20), location=(fx, fy, zw - 0.10),
+                       mat_index=MAT_INDEX_TIMBER)
+
+        # End rim beams under the walkway deck at walk_lo and walk_hi ("the ends are missing beams"):
+        for end_a, sgn_end in [(walk_lo, 1.0), (walk_hi, -1.0)]:
+            bx, by = _wall_point(wall, end_a + 0.08 * sgn_end, (u_deck_in + u_deck_out) * 0.5)
+            if wall['axis'] == 'Y':
+                create_box(bm, size=(gal_depth, 0.16, 0.20), location=(bx, by, zw - 0.10),
+                           mat_index=MAT_INDEX_TIMBER)
+            else:
+                create_box(bm, size=(0.16, gal_depth, 0.20), location=(bx, by, zw - 0.10),
+                           mat_index=MAT_INDEX_TIMBER)
+
+        # Determine active landing for this floor:
+        # High landing at [stair_hi, walk_hi] on odd floors
+        # Low landing at [walk_lo, stair_lo] on even floors
+        if odd:
+            land_lo = stair_hi
+            land_hi = walk_hi
+            facing_side = -1  # flights connect at land_lo
+            active_lane = 'OUTER'
+        else:
+            land_lo = walk_lo
+            land_hi = stair_lo
+            facing_side = +1  # flights connect at land_hi
+            active_lane = 'INNER'
+
+        # End caps for the gallery deck at walk_lo and walk_hi:
+        # Both end caps sit at walk_lo + 0.06 and walk_hi - 0.06.
+        # At the active landing end, this segment perfectly connects to the landing end cap!
+        for end_a, sgn_end in [(walk_lo, 1.0), (walk_hi, -1.0)]:
+            cap0 = _wall_point(wall, end_a + 0.06 * sgn_end, u_deck_in + 0.04)
+            cap1 = _wall_point(wall, end_a + 0.06 * sgn_end, u_deck_out - 0.04)
+            build_railing(bm, cap0, cap1, zw + 0.07, height=_RAIL_H,
+                          post_spacing=1.4, baluster_spacing=0.24, braces=False)
+
+        # Outer gallery railing along u_deck_out - 0.06, with a gap for the landing opening
+        if wall['axis'] == 'Y':
+            fixed_gal_rail = wall['fixed'] + wall['outward'] * (u_deck_out - 0.06)
+            _rail_gapped(bm, 'Y', fixed_gal_rail, walk_lo + 0.10, walk_hi - 0.10,
+                         [(land_lo, land_hi)], zw + 0.07, spacing=1.2)
+        else:
+            fixed_gal_rail = wall['fixed'] + wall['outward'] * (u_deck_out - 0.06)
+            _rail_gapped(bm, 'X', fixed_gal_rail, walk_lo + 0.10, walk_hi - 0.10,
+                         [(land_lo, land_hi)], zw + 0.07, spacing=1.2)
+
+        # Turn landing platform outboard of the gallery (zero overlap with gallery deck)
+        _build_side_landing(bm, wall, land_lo, land_hi, zw, u_deck_out, u_out_edge,
+                            facing_side=facing_side, is_top=is_top,
+                            active_lane=active_lane, u_inner=u_inner,
+                            u_outer=u_outer, stair_w=STAIR_W)
+
+    # 3. Flights (straight flights on separate outer and inner lanes)
+    for f in plan['flights']:
+        zw0 = 0.0 if f['floor'] == 1 else found_h + (f['floor'] - 1) * floor_h
+        zw1 = found_h + f['floor'] * floor_h
+        _build_side_flight(bm, wall, f['a0'], f['a1'], zw0, zw1, f['u'], STAIR_W)
+
+
+def _build_courtyard_flight(bm, x_cx, y0, y1, z0, z1, stair_w):
+    """Straight flight running along Y at a fixed X (courtyard lanes)."""
+    sgn = 1.0 if (y1 - y0) > 0 else -1.0
+    y0e = y0 - 0.18 * sgn
+    y1e = y1 + 0.18 * sgn
+    span = y1e - y0e
+    rise = z1 - z0
+    n = max(3, int(math.ceil(abs(rise) / STEP_H)))
+    step_h = rise / n
+    step_d = span / n
+    for i in range(n):
+        y = y0e + step_d * (i + 0.5)
+        sz = z0 + (i + 0.5) * step_h
+        create_beveled_box(bm, size=(stair_w, abs(step_d) + 0.03, 0.06),
+                           location=(x_cx, y, sz), mat_index=MAT_INDEX_WOOD,
+                           bevel_amount=0.010)
+        create_box(bm, size=(stair_w - 0.02, 0.04, abs(step_h)),
+                   location=(x_cx, y - step_d * 0.5 + 0.02 * sgn, sz - step_h * 0.5),
+                   mat_index=MAT_INDEX_STAIRS)
+    if z0 <= 0.45:
+        create_beveled_box(
+            bm, size=(stair_w + 0.16, 0.28, 0.08),
+            location=(x_cx, y0e + 0.05 * sgn, z0 + 0.04),
+            mat_index=MAT_INDEX_STAIRS, bevel_amount=0.012
+        )
+    run = abs(span)
+    diag = math.hypot(run, abs(rise))
+    pitch = math.atan2(abs(rise), run)
+    rot = (pitch, 0.0, 0.0) if sgn > 0 else (pitch, 0.0, math.pi)
+    for side in (-1, 1):
+        create_box(bm, size=(0.09, diag, 0.20),
+                   location=(x_cx + side * (stair_w * 0.5 + 0.05),
+                             (y0e + y1e) * 0.5, (z0 + z1) * 0.5),
+                   rotation=rot, mat_index=MAT_INDEX_TIMBER)
+    for side in (-1, 1):
+        u_rail = x_cx + side * (stair_w * 0.5 + 0.05)
+        build_railing(bm, (u_rail, y0e + 0.10 * sgn), (u_rail, y1e - 0.30 * sgn),
+                      z0 + 0.06, height=_RAIL_H, base_z_end=z1 + 0.06,
+                      post_spacing=1.1, baluster_spacing=0.24, braces=False)
+
+
+def _build_courtyard_deck(bm, x0, x1, y0, y1, z, mat=MAT_INDEX_WOOD, thick=0.07):
+    dx = abs(x1 - x0)
+    dy = abs(y1 - y0)
+    if dx < 0.05 or dy < 0.05:
+        return
+    create_beveled_box(bm, size=(dx, dy, thick),
+                       location=((x0 + x1) * 0.5, (y0 + y1) * 0.5, z + thick * 0.5),
+                       mat_index=mat, bevel_amount=0.010)
+    # Ledger/fascia under the long edges - exact size without overlap to prevent coplanar z-fighting
+    if dx >= dy:
+        create_box(bm, size=(dx, 0.16, 0.22),
+                   location=((x0 + x1) * 0.5, min(y0, y1) + 0.08, z - 0.11),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, size=(dx, 0.16, 0.22),
+                   location=((x0 + x1) * 0.5, max(y0, y1) - 0.08, z - 0.11),
+                   mat_index=MAT_INDEX_TIMBER)
+    else:
+        create_box(bm, size=(0.16, dy, 0.22),
+                   location=(min(x0, x1) + 0.08, (y0 + y1) * 0.5, z - 0.11),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, size=(0.16, dy, 0.22),
+                   location=(max(x0, x1) - 0.08, (y0 + y1) * 0.5, z - 0.11),
+                   mat_index=MAT_INDEX_TIMBER)
+
+
+def _rail_gapped(bm, axis, fixed, lo, hi, gaps, z, spacing=1.2):
+    """A railing along an axis-aligned line, skipping the listed gaps."""
+    segs = [(min(lo, hi), max(lo, hi))]
+    for g0, g1 in gaps:
+        g0, g1 = min(g0, g1), max(g0, g1)
+        nxt = []
+        for s0, s1 in segs:
+            if g1 <= s0 or g0 >= s1:
+                nxt.append((s0, s1))
+                continue
+            if g0 - s0 > 0.25:
+                nxt.append((s0, g0))
+            if s1 - g1 > 0.25:
+                nxt.append((g1, s1))
+        segs = nxt
+    for s0, s1 in segs:
+        if s1 - s0 < 0.25:
+            continue
+        p0 = (s0, fixed) if axis == 'X' else (fixed, s0)
+        p1 = (s1, fixed) if axis == 'X' else (fixed, s1)
+        build_railing(bm, p0, p1, z, height=_RAIL_H, post_spacing=spacing,
+                      baluster_spacing=0.24, braces=False)
+
+
+def _build_courtyard_landing(bm, plan, gap0, u_out_edge, y_bot, z, abut_hi=False,
+                             ground=False):
+    """Turn platform at y_bot bridging the courtyard lanes and the left-wing gallery."""
+    if ground or z <= 0.01:
+        return
+    along_len = _LAND_LEN
+    x0 = gap0 + plan['u_wing_gal']
+    x1 = u_out_edge
+    y_lo = y_bot - along_len
+    y_hi = y_bot
+
+    # Build turn platform deck cleanly in front of the stair run (from y_lo to y_bot)
+    _build_courtyard_deck(bm, x0, x1, y_lo, y_hi, z)
+    base_z = z + 0.07
+
+    # Outer perimeter railings only:
+    # 1. Outer right edge (X = x1 - 0.06)
+    build_railing(bm, (x1 - 0.06, y_lo + 0.06), (x1 - 0.06, y_hi - 0.06), base_z,
+                  height=_RAIL_H, post_spacing=1.2, baluster_spacing=0.24, braces=False)
+
+    # 2. Front outer edge (Y = y_lo + 0.06) from left wing edge x0 to outer edge x1
+    build_railing(bm, (x0, y_lo + 0.06), (x1 - 0.06, y_lo + 0.06), base_z,
+                  height=_RAIL_H, post_spacing=1.4, baluster_spacing=0.24, braces=False)
+
+    # 3. Back edge (Y = y_hi - 0.06 = y_bot - 0.06):
+    # The stairs attach between (x_inner - STAIR_W * 0.5) and x1.
+    # That region MUST stay 100% open so stairs are completely walkable!
+    # If there is a small gap between x0 and the inner stair edge, close it with safety rail:
+    stair_x_start = plan['x_inner'] - STAIR_W * 0.5
+    if stair_x_start - x0 > 0.35:
+        build_railing(bm, (x0, y_hi - 0.06), (stair_x_start, y_hi - 0.06), base_z,
+                      height=_RAIL_H, post_spacing=1.2, baluster_spacing=0.24, braces=False)
+
+    # Note: Left edge (X = x0) is 100% OPEN so people walk freely between the
+    # Left Wing walkway and the landing!
+
+    # Support posts under landing:
+    if z > 0.01:
+        for px in (x0 + 0.14, x1 - 0.14):
+            for py in (y_lo + 0.14, y_hi - 0.14):
+                create_beveled_box(bm, size=(0.18, 0.18, z),
+                                   location=(px, py, z * 0.5),
+                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
+
+
+def _build_courtyard_stairs(bm, props, ctx, plan, tier='TIER_1'):
+    wings = getattr(ctx, 'wings', [])
+    if len(wings) < 2:
+        return
+    n_floors = max(1, int(getattr(props, 'num_floors', 2)))
+    geom = stair_geometry(props, ctx)
+    found_h, floor_h = geom['found_h'], geom['floor_h']
+    gap0, gap1 = plan['gap0'], plan['gap1']
+    y_attach, y_gal_edge, y_bot = plan['y_attach'], plan['y_gal_edge'], plan['y_bot']
+    x_inner, x_outer, u_out_edge = plan['x_inner'], plan['x_outer'], plan['u_out_edge']
+    sg = plan['u_wing_gal']
+
+    # Wing inner-wall geometry: the spurs run the wing's full depth so every
+    # turn landing is reachable, and the wing doors sit in the front kitchen.
+    wing_info = []
+    for wi, w in enumerate(wings):
+        wx0, wx1, wy0, wy1 = (float(w['base'][0]), float(w['base'][1]),
+                              float(w['base'][2]), float(w['base'][3]))
+        inner_x = wx1 if wi == 0 else wx0
+        e_y = wy0 + max(1.3, (wy1 - wy0) * 0.26)
+        sx0, sx1 = (inner_x, inner_x + sg) if wi == 0 else (inner_x - sg, inner_x)
+        wing_info.append({'inner_x': inner_x, 'tip': wy0, 'attach': wy1,
+                          'e_y': e_y, 'sx0': sx0, 'sx1': sx1})
+
+    left, right = wing_info[0], wing_info[1]
+    top_z = found_h + (n_floors - 1) * floor_h
+
+    # Support posts around the wrap gallery / landings (placed on outside corners, never blocking paths).
+    # Note: intermediate turn landings create their own support posts sized up to landing level z.
+    # We do NOT create full-height posts for the landing here to prevent them from shooting through upper stairs.
+    landing_lo = gap0 + sg
+    post_spots = [
+        (left['sx0'] + 0.16, y_attach - 0.20),
+        (right['sx1'] - 0.16, y_attach - 0.20),
+        (gap0 + sg + 0.16, y_gal_edge - 0.18),
+        (gap1 - sg - 0.16, y_gal_edge - 0.18),
+        (left['sx0'] + 0.16, left['tip'] + 0.20),
+        (right['sx1'] - 0.16, right['tip'] + 0.20),
+    ]
+    for px, py in post_spots:
         create_beveled_box(bm, size=(0.18, 0.18, top_z),
-                           location=(ppx, ppy, top_z * 0.5),
+                           location=(px, py, top_z * 0.5),
                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
 
     for fl_idx in range(1, n_floors):
-        z_floor = found_h + fl_idx * floor_h
-        z_prev  = 0.0 if fl_idx == 1 else (found_h + (fl_idx - 1) * floor_h)
-        odd     = (fl_idx % 2 == 1)
+        zw = found_h + fl_idx * floor_h
+        odd = (fl_idx % 2 == 1)
 
-        # ---- 1. Full gallery walkway deck ----
-        deck_cx_along = (walk_lo + walk_hi) * 0.5
-        deck_cx, deck_cy = _wall_point(wall, deck_cx_along, u_deck_cx)
-        if wall['axis'] == 'Y':
-            deck_size = (walk_depth, walk_len, 0.07)
-        else:
-            deck_size = (walk_len, walk_depth, 0.07)
-        create_beveled_box(bm, size=deck_size,
-                           location=(deck_cx, deck_cy, z_floor + 0.035),
-                           mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
+        # Decks: main facade strip between the spurs, plus full-depth spurs.
+        # Cleanly abutted at gap0 + sg and gap1 - sg with zero coplanar overlap!
+        _build_courtyard_deck(bm, gap0 + sg, gap1 - sg, y_gal_edge, y_attach, zw)
+        _build_courtyard_deck(bm, left['sx0'], left['sx1'], left['tip'], y_attach, zw)
+        _build_courtyard_deck(bm, right['sx0'], right['sx1'], right['tip'], y_attach, zw)
 
-        # Ledger beam on wall side
-        lx, ly = _wall_point(wall, deck_cx_along, u_deck_in - 0.04)
-        if wall['axis'] == 'Y':
-            create_box(bm, size=(0.20, walk_len, 0.22),
-                       location=(lx, ly, z_floor - 0.11),
-                       mat_index=MAT_INDEX_TIMBER)
-        else:
-            create_box(bm, size=(walk_len, 0.20, 0.22),
-                       location=(lx, ly, z_floor - 0.11),
-                       mat_index=MAT_INDEX_TIMBER)
+        # 1. Left spur outer railing:
+        # Runs along X = left['sx1'] - 0.06.
+        # CRITICAL: stops at y_gal_edge - 0.06 so the 2.5m walkway into the Main Gallery is 100% UNBLOCKED!
+        # On even floors (e.g. Floor 2), open the passage where the turn landing connects at y_bot:
+        left_gaps = []
+        if not odd:
+            left_gaps.append((y_bot - _LAND_LEN - 0.10, y_bot + 0.10))
+        _rail_gapped(bm, 'Y', left['sx1'] - 0.06, left['tip'] + 0.06, y_gal_edge - 0.06,
+                     left_gaps, zw + 0.07)
 
-        # Fascia beam on outer edge
-        fx, fy = _wall_point(wall, deck_cx_along, u_deck_out + 0.04)
-        if wall['axis'] == 'Y':
-            create_box(bm, size=(0.18, walk_len + 0.06, 0.20),
-                       location=(fx, fy, z_floor - 0.10),
-                       mat_index=MAT_INDEX_TIMBER)
-        else:
-            create_box(bm, size=(walk_len + 0.06, 0.18, 0.20),
-                       location=(fx, fy, z_floor - 0.10),
-                       mat_index=MAT_INDEX_TIMBER)
+        # 2. Right spur outer railing:
+        # Runs along X = right['sx0'] + 0.06 from tip up to y_gal_edge - 0.06.
+        # CRITICAL: stops at y_gal_edge - 0.06 so the 2.5m corner into the Main Gallery is 100% UNBLOCKED!
+        _rail_gapped(bm, 'Y', right['sx0'] + 0.06, right['tip'] + 0.06,
+                     y_gal_edge - 0.06, [], zw + 0.07)
 
-        # ---- 2. Outer railing along the full gallery length ----
-        # Leave the stair end open so people can step from stair to gallery.
-        # Inner lane arrives at stair_hi (odd) or stair_lo (even).
-        gap_lo = stair_lo if not odd else stair_hi   # stair opening at lo end
-        gap_hi = stair_hi if not odd else stair_lo   # stair opening at hi end
-        # Actually: gallery railing should leave gap at the stair arrival point.
-        arrival = stair_hi if odd else stair_lo
-        # Rail the full outer edge EXCEPT ±0.8m around the stair arrival
-        rl0 = _wall_point(wall, walk_lo + 0.10, u_deck_out - 0.06)
-        rl1 = _wall_point(wall, arrival - 0.80, u_deck_out - 0.06)
-        if (arrival - 0.80) > (walk_lo + 0.20):
-            build_railing(bm, rl0, rl1, z_floor + 0.07, height=_RAIL_H,
-                          post_spacing=1.20, baluster_spacing=0.22, braces=False)
-        rl2 = _wall_point(wall, arrival + 0.80, u_deck_out - 0.06)
-        rl3 = _wall_point(wall, walk_hi - 0.10, u_deck_out - 0.06)
-        if (walk_hi - 0.10) > (arrival + 0.90):
-            build_railing(bm, rl2, rl3, z_floor + 0.07, height=_RAIL_H,
-                          post_spacing=1.20, baluster_spacing=0.22, braces=False)
+        # 3. Wing-tip end caps:
+        for wf in wing_info:
+            _rail_gapped(bm, 'X', wf['tip'] + 0.06, wf['sx0'] + 0.04, wf['sx1'] - 0.04, [], zw + 0.07)
 
-        # Back-end cap railing (perpendicular, at walk_hi end)
-        ep_in  = _wall_point(wall, walk_hi - 0.06, u_deck_in)
-        ep_out = _wall_point(wall, walk_hi - 0.06, u_deck_out - 0.06)
-        build_railing(bm, ep_in, ep_out, z_floor + 0.07, height=_RAIL_H,
-                      braces=False, post_spacing=2.0)
+        # 4. Main facade outer railing along Y = y_gal_edge - 0.06:
+        # On odd floors, leave clear openings for the stairs arriving at x_inner and departing at x_outer:
+        main_gaps = []
+        if odd:
+            half_open = STAIR_W * 0.5 + 0.15
+            main_gaps.append((x_inner - half_open, x_inner + half_open))
+            if fl_idx < n_floors - 1:
+                main_gaps.append((x_outer - half_open, x_outer + half_open))
+        _rail_gapped(bm, 'X', y_gal_edge - 0.06, gap0 + sg, gap1 - sg,
+                     main_gaps, zw + 0.07)
 
-        # ---- 3. Vertical support posts along gallery outer edge ----
-        for pa in post_positions:
-            px, py = _wall_point(wall, pa, u_deck_out - 0.10)
-            create_beveled_box(bm, size=(0.16, 0.16, z_floor),
-                               location=(px, py, z_floor * 0.5),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
+        # 5. Turn landing at y_bot for even storeys (e.g. Floor 2):
+        if not odd:
+            _build_courtyard_landing(bm, plan, gap0, u_out_edge, y_bot, zw,
+                                     abut_hi=False, ground=False)
 
-        # ---- 4. Stair flight (this floor's transition) ----
-        a0 = stair_lo if odd else stair_hi
-        a1 = stair_hi if odd else stair_lo
-        u_lane = u_inner if odd else u_outer
-        _build_walkway_flight(bm, wall, a0, a1, z_prev, z_floor, u_lane, stair_w)
+    # NO ground pad/platform at floor level (z=0)! (per user request)
 
-        # ---- 5. Switchback landing at the arrival end of THIS flight ----
-        # (where the stair top meets the gallery, and also the next flight's base)
-        _build_switchback_landing(bm, wall, arrival, z_floor, u_inner, u_outer, stair_w)
+    for f in plan['flights']:
+        _build_courtyard_flight(bm, f['x'], f['a0'], f['a1'], f['z0'], f['z1'], STAIR_W)
 
-        # ---- 6. For the first flight only: also add a bottom landing at grade ----
-        if fl_idx == 1:
-            # Ground-level landing where the stair departs from grade
-            depart = stair_lo  # inner lane starts from lo
-            _build_switchback_landing(bm, wall, depart, 0.0, u_inner, u_outer, stair_w)
 
 def build_exterior_stairs(bm, props, ctx, tier='TIER_1'):
     """Build the planned external stair (flights + a landing per storey)."""
@@ -963,115 +774,4 @@ def build_exterior_stairs(bm, props, ctx, tier='TIER_1'):
     if plan.get('is_courtyard'):
         _build_courtyard_stairs(bm, props, ctx, plan, tier)
         return
-    if plan.get('is_walkway'):
-        _build_single_side_walkway_stairs(bm, props, ctx, plan)
-        return
-
-    # Fallback: legacy small-landing single-flight build (BOTH/dual side)
-    ring = {w['name']: w for w in plan['ring']}
-    clear = _stair_clearance(props)
-    wall_t = float(getattr(props, 'wall_thickness', 0.28))
-
-    def wp(wall, along, u):
-        return _wall_point(wall, along, u)
-
-    # ---- Flights -----------------------------------------------------------
-    for f in plan['flights']:
-        wall = ring[f['wall']]
-        a0, a1 = f['a0'], f['a1']
-        z0, z1 = f['z0'], f['z1']
-        span = a1 - a0
-        n = max(3, int(round((z1 - z0) / _STEP_H_MAX)))
-        step_h = (z1 - z0) / n
-        step_d = span / n
-        sgn_d = 1.0 if span > 0 else -1.0
-        u_c = clear + _STAIR_W * 0.5
-        for i in range(n):
-            a = a0 + step_d * (i + 0.5)
-            sz = z0 + (i + 0.5) * step_h
-            cx, cy = wp(wall, a, u_c)
-            if wall['axis'] == 'Y':
-                size = (_STAIR_W, abs(step_d) + 0.04)
-            else:
-                size = (abs(step_d) + 0.04, _STAIR_W)
-            create_beveled_box(
-                bm, size=(size[0], size[1], 0.06),
-                location=(cx, cy, sz),
-                mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
-            rx, ry = wp(wall, a - step_d * 0.5 + 0.02 * sgn_d, u_c)
-            if wall['axis'] == 'Y':
-                rsize = (_STAIR_W - 0.02, 0.04)
-            else:
-                rsize = (0.04, _STAIR_W - 0.02)
-            create_box(bm, size=(rsize[0], rsize[1], step_h),
-                       location=(rx, ry, sz - step_h * 0.5),
-                       mat_index=MAT_INDEX_STAIRS)
-
-        # Outer stringer + handrail
-        u_str = clear + _STAIR_W + 0.06
-        sx, sy = wp(wall, (a0 + a1) * 0.5, u_str)
-        run_len = abs(span)
-        rise = z1 - z0
-        diag = math.hypot(run_len, rise)
-        pitch = math.atan2(rise, run_len)
-        if wall['axis'] == 'Y':
-            rot = (pitch * sgn_d, 0.0, 0.0)
-            size = (0.10, diag, 0.22)
-        else:
-            rot = (0.0, -pitch * sgn_d, 0.0)
-            size = (diag, 0.10, 0.22)
-        create_box(bm, size=size, location=(sx, sy, (z0 + z1) * 0.5),
-                   rotation=rot, mat_index=MAT_INDEX_TIMBER)
-        p_start = wp(wall, a0 + 0.08 * sgn_d, u_str)
-        p_end = wp(wall, a1, u_str)
-        build_railing(bm, p_start, p_end, z0 + 0.06, height=_RAIL_H,
-                      base_z_end=z1 + 0.06, post_spacing=1.1,
-                      baluster_spacing=0.22, braces=False)
-
-    # ---- Landings -----------------------------------------------------------
-    for ld in plan['landings']:
-        wall = ring[ld['wall']]
-        a = ld['along']
-        z = ld['z']
-        u_in = clear - 0.10
-        u_out = clear + _LAND_DEPTH
-        length_along = _LAND_LEN + (0.20 if ld.get('corner') else 0.0)
-        cx, cy = wp(wall, a + length_along * 0.5 * (1.0 if wall['dir'] > 0 else -1.0),
-                    (u_in + u_out) * 0.5)
-        if wall['axis'] == 'Y':
-            deck = (abs(u_out - u_in), length_along)
-        else:
-            deck = (length_along, abs(u_out - u_in))
-        create_beveled_box(bm, size=(deck[0], deck[1], 0.06),
-                           location=(cx, cy, z + 0.03),
-                           mat_index=MAT_INDEX_WOOD, bevel_amount=0.008)
-        p0 = wp(wall, a, u_out - 0.06)
-        _dir = 1.0 if wall['dir'] > 0 else -1.0
-        p1 = wp(wall, a + length_along * _dir, u_out - 0.06)
-        build_railing(bm, p0, p1, z + 0.06, height=_RAIL_H,
-                      post_spacing=1.0, braces=False)
-        _end = a + length_along * _dir
-        _departs = any(f['wall'] == ld['wall'] and abs(f['a0'] - _end) < 0.06
-                       for f in plan['flights'])
-        if not _departs:
-            _r0 = wp(wall, _end, u_in)
-            _r1 = wp(wall, _end, u_out - 0.06)
-            build_railing(bm, _r0, _r1, z + 0.06, height=_RAIL_H,
-                          braces=False, post_spacing=1.0)
-        u_face = wall_t * 0.5
-        if clear > u_face + 0.02:
-            la, lb = wp(wall, a, u_face), wp(wall, a, u_in)
-            mx, my = (la[0] + lb[0]) * 0.5, (la[1] + lb[1]) * 0.5
-            if wall['axis'] == 'Y':
-                lsize = (abs(u_in - u_face) + 0.06, 1.30)
-            else:
-                lsize = (1.30, abs(u_in - u_face) + 0.06)
-            create_beveled_box(bm, size=(lsize[0], lsize[1], 0.10),
-                               location=(mx, my, z + 0.02),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-        if not ld.get('corner'):
-            px, py = wp(wall, a + 0.10 * (1.0 if wall['dir'] > 0 else -1.0), u_out - 0.12)
-            create_beveled_box(bm, size=(0.16, 0.16, z),
-                               location=(px, py, z * 0.5),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
-
+    _build_side_stairs(bm, props, ctx, plan)

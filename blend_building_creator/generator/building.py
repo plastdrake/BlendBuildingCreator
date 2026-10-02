@@ -221,9 +221,17 @@ def _create_building_context(props):
     # Active balcony floor levels
     active_balc_floors = []
     has_balc = getattr(props, 'has_balcony', False) and num_floors >= 2
+    is_u_tenement = (shape == 'U_SHAPE' and (
+        effective_archetype == 'TENEMENT' or
+        getattr(props, 'exterior_stairs_side', '') == 'COURTYARD' or
+        'TENEMENT' in getattr(props, 'building_family', '')
+    ))
     if has_balc:
         b_mode = getattr(props, 'balcony_mode', 'SINGLE')
-        if b_mode == 'SINGLE':
+        if is_u_tenement and b_mode == 'SINGLE':
+            # Tenement complexes have multiple flats per storey; balconies grace all upper floors.
+            active_balc_floors = list(range(1, num_floors))
+        elif b_mode == 'SINGLE':
             fl = min(num_floors, max(2, getattr(props, 'balcony_floor', 2)))
             active_balc_floors = [fl - 1]
         elif b_mode == 'ALL_UPPER':
@@ -239,7 +247,11 @@ def _create_building_context(props):
     # independently so a free upper facade can still take a balcony, and skip a
     # floor entirely when nothing is free.
     balc_side_eff = getattr(props, 'balcony_side', 'FRONT')
+    if is_u_tenement and balc_side_eff == 'FRONT':
+        balc_side_eff = 'BACK'
+
     floor_balc_side = {}
+    floor_balconies = {}
     if has_balc:
         _annex_on = (getattr(props, 'has_side_annex', False)
                      and (not getattr(props, 'town_hall_composer', False)
@@ -266,9 +278,15 @@ def _create_building_context(props):
         _gable_f = ['LEFT', 'RIGHT'] if is_rotated_roof else ['FRONT', 'BACK']
         _eave_f = ['FRONT', 'BACK'] if is_rotated_roof else ['LEFT', 'RIGHT']
         _order = []
-        for _s in (*_eave_f, balc_side_eff, *_gable_f):
-            if _s not in _order:
-                _order.append(_s)
+        if is_u_tenement:
+            # Courtyard is on FRONT; balconies belong on BACK or exterior flanks
+            for _s in (balc_side_eff, 'BACK', 'LEFT', 'RIGHT'):
+                if _s not in _order:
+                    _order.append(_s)
+        else:
+            for _s in (*_eave_f, balc_side_eff, *_gable_f):
+                if _s not in _order:
+                    _order.append(_s)
         _order = tuple(_order)
         for _bf in active_balc_floors:
             _blocked_f = set()
@@ -280,9 +298,22 @@ def _create_building_context(props):
                 _blocked_f.add(_rampart_side)
             if _has_veranda:
                 _blocked_f.add('FRONT')
-            # Mini-wing outcrops pick their slots after this and keep clear of
-            # whatever facade the balcony ends up on.
-            floor_balc_side[_bf] = next((_s for _s in _order if _s not in _blocked_f), None)
+            chosen_side = next((_s for _s in _order if _s not in _blocked_f), None)
+            floor_balc_side[_bf] = chosen_side
+
+            # For U-shaped tenements (or wide tenements), place multiple balconies spaced across apartments
+            if is_u_tenement and chosen_side == 'BACK' and len(wings) >= 2 and base_w >= 14.0:
+                from .tenement import courtyard_cut_x
+                ix_min = -base_w * 0.5 + wall_t * 0.5
+                ix_max = base_w * 0.5 - wall_t * 0.5
+                cuts = courtyard_cut_x(ix_min, ix_max, wings)
+                b_entries = []
+                for k in range(len(cuts) - 1):
+                    cx_mid = (cuts[k] + cuts[k + 1]) * 0.5
+                    b_entries.append({'side': 'BACK', 'offset': cx_mid})
+                floor_balconies[_bf] = b_entries
+            elif chosen_side is not None:
+                floor_balconies[_bf] = [{'side': chosen_side, 'offset': 0.0}]
 
     return BuildingContext(
         num_floors=num_floors, floor_h=floor_h, found_h=found_h,
@@ -290,7 +321,8 @@ def _create_building_context(props):
         base_w=base_w, base_d=base_d, raw_wing_d=raw_wing_d,
         main_door_cx=main_door_cx, main_door_yf=main_door_yf,
         shape=shape, seed=seed, plank_dir=getattr(props, 'plank_direction', 'HORIZONTAL'),
-        floor_balc_side=floor_balc_side, active_balc_floors=active_balc_floors,
+        floor_balc_side=floor_balc_side, floor_balconies=floor_balconies,
+        active_balc_floors=active_balc_floors,
         wall_t=wall_t, cantilever=cantilever, open_timber=open_timber,
         effective_archetype=effective_archetype,         wings=wings, has_wing=has_wing,
         wing_floors=wing_floors, raw_wing_w=raw_wing_w,

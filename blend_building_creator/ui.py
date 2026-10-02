@@ -308,6 +308,12 @@ class VIEW3D_PT_fantasy_building_openings(bpy.types.Panel):
         box_w.prop(props, "has_windows")
         if props.has_windows:
             col = box_w.column(align=True)
+            col.label(text="Window Facades")
+            grid = col.grid_flow(columns=2, align=True)
+            grid.prop(props, "window_front", text="Front", toggle=True)
+            grid.prop(props, "window_back", text="Back", toggle=True)
+            grid.prop(props, "window_left", text="Left", toggle=True)
+            grid.prop(props, "window_right", text="Right", toggle=True)
             col.prop(props, "window_density", slider=True)
             col.prop(props, "window_spacing")
             col.prop(props, "window_width")
