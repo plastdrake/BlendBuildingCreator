@@ -368,6 +368,389 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
     return faces
 
 
+def create_hollow_cylinder(bm, radius=0.05, inner_radius=0.042, height=0.12, inner_depth=0.10,
+                           segments=14, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
+                           mat_index=0, inner_mat_index=None, liquid_height=None,
+                           liquid_mat_index=None, transform_matrix=None, smooth=True):
+    """Creates a stylized hollow cylinder with physical wall thickness and interior cavity (e.g. mugs, cups, pots)."""
+    if inner_mat_index is None:
+        inner_mat_index = mat_index
+    if liquid_mat_index is None:
+        liquid_mat_index = mat_index
+
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector(location))
+    tr_mat = loc_mat @ rot_mat
+    if transform_matrix is not None:
+        tr_mat = transform_matrix @ tr_mat
+
+    half_h = height * 0.5
+    cavity_floor_z = half_h - inner_depth
+    outer_bot_verts = []
+    outer_top_verts = []
+    inner_top_verts = []
+    inner_bot_verts = []
+
+    for i in range(segments):
+        angle = (2.0 * math.pi * i) / segments
+        ca = math.cos(angle)
+        sa = math.sin(angle)
+        outer_bot_verts.append(bm.verts.new(tr_mat @ Vector((radius * ca, radius * sa, -half_h))))
+        outer_top_verts.append(bm.verts.new(tr_mat @ Vector((radius * ca, radius * sa, half_h))))
+        inner_top_verts.append(bm.verts.new(tr_mat @ Vector((inner_radius * ca, inner_radius * sa, half_h))))
+        inner_bot_verts.append(bm.verts.new(tr_mat @ Vector((inner_radius * ca, inner_radius * sa, cavity_floor_z))))
+
+    uv_layer = bm.loops.layers.uv.verify()
+    faces = []
+
+    # 1. Outer side faces
+    circ_out = 2.0 * math.pi * radius
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f = bm.faces.new([outer_bot_verts[i], outer_bot_verts[nxt], outer_top_verts[nxt], outer_top_verts[i]])
+        f.material_index = mat_index
+        f.tag = True
+        if smooth:
+            f.smooth = True
+        faces.append(f)
+        u0 = circ_out * i / segments
+        u1 = circ_out * (i + 1) / segments
+        f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+        f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+        f.loops[2][uv_layer].uv = Vector((u1, height))
+        f.loops[3][uv_layer].uv = Vector((u0, height))
+
+    # 2. Outer bottom cap (facing -Z)
+    f_bot = bm.faces.new(list(reversed(outer_bot_verts)))
+    f_bot.material_index = mat_index
+    f_bot.tag = True
+    faces.append(f_bot)
+
+    # 3. Top rim annular ring (bridges outer rim to inner rim, facing +Z)
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f = bm.faces.new([outer_top_verts[i], outer_top_verts[nxt], inner_top_verts[nxt], inner_top_verts[i]])
+        f.material_index = mat_index
+        f.tag = True
+        faces.append(f)
+        u0 = i / segments
+        u1 = (i + 1) / segments
+        f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+        f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+        f.loops[2][uv_layer].uv = Vector((u1, 1.0))
+        f.loops[3][uv_layer].uv = Vector((u0, 1.0))
+
+    # 4. Inner side faces (facing inward into cavity)
+    circ_in = 2.0 * math.pi * inner_radius
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f = bm.faces.new([inner_top_verts[i], inner_top_verts[nxt], inner_bot_verts[nxt], inner_bot_verts[i]])
+        f.material_index = inner_mat_index
+        f.tag = True
+        if smooth:
+            f.smooth = True
+        faces.append(f)
+        u0 = circ_in * i / segments
+        u1 = circ_in * (i + 1) / segments
+        f.loops[0][uv_layer].uv = Vector((u0, inner_depth))
+        f.loops[1][uv_layer].uv = Vector((u1, inner_depth))
+        f.loops[2][uv_layer].uv = Vector((u1, 0.0))
+        f.loops[3][uv_layer].uv = Vector((u0, 0.0))
+
+    # 5. Inner bottom disc (facing +Z up into cavity)
+    f_in_bot = bm.faces.new(inner_bot_verts)
+    f_in_bot.material_index = inner_mat_index
+    f_in_bot.tag = True
+    faces.append(f_in_bot)
+
+    # 6. Optional liquid surface inside the cavity
+    if liquid_height is not None and liquid_height > 0.005:
+        liq_z = min(half_h - 0.005, cavity_floor_z + liquid_height)
+        liq_r = inner_radius - 0.001
+        liq_verts = []
+        for i in range(segments):
+            angle = (2.0 * math.pi * i) / segments
+            liq_verts.append(bm.verts.new(tr_mat @ Vector((liq_r * math.cos(angle), liq_r * math.sin(angle), liq_z))))
+        f_liq = bm.faces.new(liq_verts)
+        f_liq.material_index = liquid_mat_index
+        f_liq.tag = True
+        faces.append(f_liq)
+
+    return faces
+
+
+def create_hollow_dish(bm, radius_base=0.08, radius_rim=0.13, inner_radius_rim=0.12,
+                       inner_radius_base=0.07, height=0.025, inner_depth=0.018,
+                       segments=18, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
+                       mat_index=0, smooth=True, transform_matrix=None):
+    """Creates a concave hollow dish/plate/bowl with a true recessed interior cavity,
+    sloping well walls, annular rim lip, and resting foot ring at z=0."""
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector(location))
+    tr_mat = loc_mat @ rot_mat
+    if transform_matrix is not None:
+        tr_mat = transform_matrix @ tr_mat
+
+    cavity_floor_z = max(0.003, height - inner_depth)
+    outer_bot_verts = []
+    outer_rim_verts = []
+    inner_rim_verts = []
+    inner_bot_verts = []
+
+    for i in range(segments):
+        angle = (2.0 * math.pi * i) / segments
+        ca = math.cos(angle)
+        sa = math.sin(angle)
+        outer_bot_verts.append(bm.verts.new(tr_mat @ Vector((radius_base * ca, radius_base * sa, 0.0))))
+        outer_rim_verts.append(bm.verts.new(tr_mat @ Vector((radius_rim * ca, radius_rim * sa, height))))
+        inner_rim_verts.append(bm.verts.new(tr_mat @ Vector((inner_radius_rim * ca, inner_radius_rim * sa, height))))
+        inner_bot_verts.append(bm.verts.new(tr_mat @ Vector((inner_radius_base * ca, inner_radius_base * sa, cavity_floor_z))))
+
+    uv_layer = bm.loops.layers.uv.verify()
+    faces = []
+
+    # 1. Outer sloping wall (faces outward)
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f = bm.faces.new([outer_bot_verts[i], outer_bot_verts[nxt], outer_rim_verts[nxt], outer_rim_verts[i]])
+        f.material_index = mat_index
+        f.tag = True
+        if smooth:
+            f.smooth = True
+        faces.append(f)
+        u0, u1 = i / segments, (i + 1) / segments
+        f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+        f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+        f.loops[2][uv_layer].uv = Vector((u1, 1.0))
+        f.loops[3][uv_layer].uv = Vector((u0, 1.0))
+
+    # 2. Outer flat bottom base (resting on surface at z=0, facing -Z)
+    f_bot = bm.faces.new(list(reversed(outer_bot_verts)))
+    f_bot.material_index = mat_index
+    f_bot.tag = True
+    faces.append(f_bot)
+
+    # 3. Top annular rim lip (bridges outer rim to inner rim, facing +Z)
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f = bm.faces.new([outer_rim_verts[i], outer_rim_verts[nxt], inner_rim_verts[nxt], inner_rim_verts[i]])
+        f.material_index = mat_index
+        f.tag = True
+        faces.append(f)
+        u0, u1 = i / segments, (i + 1) / segments
+        f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+        f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+        f.loops[2][uv_layer].uv = Vector((u1, 1.0))
+        f.loops[3][uv_layer].uv = Vector((u0, 1.0))
+
+    # 4. Inner concave well wall (sloping down to cavity floor, facing inward/upward)
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f = bm.faces.new([inner_rim_verts[i], inner_rim_verts[nxt], inner_bot_verts[nxt], inner_bot_verts[i]])
+        f.material_index = mat_index
+        f.tag = True
+        if smooth:
+            f.smooth = True
+        faces.append(f)
+        u0, u1 = i / segments, (i + 1) / segments
+        f.loops[0][uv_layer].uv = Vector((u0, 1.0))
+        f.loops[1][uv_layer].uv = Vector((u1, 1.0))
+        f.loops[2][uv_layer].uv = Vector((u1, 0.0))
+        f.loops[3][uv_layer].uv = Vector((u0, 0.0))
+
+    # 5. Inner well floor disc (facing +Z up into bowl cavity)
+    f_well = bm.faces.new(inner_bot_verts)
+    f_well.material_index = mat_index
+    f_well.tag = True
+    faces.append(f_well)
+
+    return faces
+
+
+def create_organic_pumpkin(bm, radius=0.20, height=0.22, num_ribs=8,
+                           segments_per_rib=4, rings=12,
+                           location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
+                           mat_index=0, stem_mat_index=0, transform_matrix=None):
+    """Creates a stylized organic pumpkin with natural spherical lobes,
+    indented top stem hollow, blossom base tuck, and a curved gnarled stalk."""
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector(location))
+    tr_mat = loc_mat @ rot_mat
+    if transform_matrix is not None:
+        tr_mat = transform_matrix @ tr_mat
+
+    total_segments = num_ribs * segments_per_rib
+    half_h = height * 0.5
+    uv_layer = bm.loops.layers.uv.verify()
+    faces = []
+
+    grid = []
+    for r in range(rings + 1):
+        t = r / rings
+        theta = 0.08 * math.pi + t * (0.87 * math.pi)
+        sin_theta = math.sin(theta)
+        cos_theta = math.cos(theta)
+
+        dip = -0.030 * (max(0.0, 1.0 - t * 4.0) ** 1.5)
+        tuck = 0.018 * (max(0.0, (t - 0.75) * 4.0) ** 1.5)
+        z_local = half_h * cos_theta + dip + tuck + half_h
+
+        row_verts = []
+        for i in range(total_segments):
+            phi = (2.0 * math.pi * i) / total_segments
+            rib_factor = 1.0 + 0.17 * math.cos(num_ribs * phi) - 0.035 * math.cos(2 * num_ribs * phi)
+            r_local = radius * sin_theta * rib_factor
+            x_local = r_local * math.cos(phi)
+            y_local = r_local * math.sin(phi)
+
+            v = bm.verts.new(tr_mat @ Vector((x_local, y_local, z_local)))
+            row_verts.append(v)
+        grid.append(row_verts)
+
+    for r in range(rings):
+        for i in range(total_segments):
+            nxt = (i + 1) % total_segments
+            v0 = grid[r][i]
+            v1 = grid[r][nxt]
+            v2 = grid[r + 1][nxt]
+            v3 = grid[r + 1][i]
+            f = bm.faces.new([v0, v1, v2, v3])
+            f.material_index = mat_index
+            f.tag = True
+            f.smooth = True
+            faces.append(f)
+            u0 = i / total_segments
+            u1 = (i + 1) / total_segments
+            v_uv0 = r / rings
+            v_uv1 = (r + 1) / rings
+            f.loops[0][uv_layer].uv = Vector((u0, v_uv0))
+            f.loops[1][uv_layer].uv = Vector((u1, v_uv0))
+            f.loops[2][uv_layer].uv = Vector((u1, v_uv1))
+            f.loops[3][uv_layer].uv = Vector((u0, v_uv1))
+
+    # Bottom blossom closure cap
+    f_bot = bm.faces.new(list(reversed(grid[-1])))
+    f_bot.material_index = mat_index
+    f_bot.tag = True
+    f_bot.smooth = True
+    faces.append(f_bot)
+
+    # Curved 5-sided gnarled stem
+    top_avg_z = sum(v.co.z for v in grid[0]) / len(grid[0])
+    stem_segments = 6
+    stem_rings = 4
+    stem_len = height * 0.36
+    stem_base_r = radius * 0.15
+    stem_grid = []
+
+    for sr in range(stem_rings + 1):
+        st = sr / stem_rings
+        sz = top_avg_z + st * stem_len
+        bend_x = 0.030 * (st ** 1.8)
+        bend_y = 0.015 * (st ** 1.8)
+        curr_r = stem_base_r * (1.0 - st * 0.45)
+
+        s_row = []
+        for si in range(stem_segments):
+            sphi = (2.0 * math.pi * si) / stem_segments
+            flute = 1.0 + 0.15 * math.cos(stem_segments * sphi)
+            sx = bend_x + curr_r * flute * math.cos(sphi)
+            sy = bend_y + curr_r * flute * math.sin(sphi)
+            v = bm.verts.new(tr_mat @ Vector((sx, sy, sz)))
+            s_row.append(v)
+        stem_grid.append(s_row)
+
+    # Top opening closure to stem base
+    f_top_cap = bm.faces.new(grid[0])
+    f_top_cap.material_index = stem_mat_index
+    f_top_cap.tag = True
+    faces.append(f_top_cap)
+
+    # Stem cylinder quads
+    for sr in range(stem_rings):
+        for si in range(stem_segments):
+            nxt_si = (si + 1) % stem_segments
+            f = bm.faces.new([stem_grid[sr][si], stem_grid[sr][nxt_si], stem_grid[sr + 1][nxt_si], stem_grid[sr + 1][si]])
+            f.material_index = stem_mat_index
+            f.tag = True
+            f.smooth = True
+            faces.append(f)
+
+    # Stem tip cap
+    f_stem_top = bm.faces.new(stem_grid[-1])
+    f_stem_top.material_index = stem_mat_index
+    f_stem_top.tag = True
+    faces.append(f_stem_top)
+
+    return faces
+
+
+def create_bread_boule(bm, radius=0.065, height=0.045, segments=18, rings=8,
+                       location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
+                       mat_index=0, transform_matrix=None):
+    """Creates a rustic round hearth bread boule with rounded crust dome and flat base."""
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector(location))
+    tr_mat = loc_mat @ rot_mat
+    if transform_matrix is not None:
+        tr_mat = transform_matrix @ tr_mat
+
+    uv_layer = bm.loops.layers.uv.verify()
+    faces = []
+
+    grid = []
+    for r in range(rings + 1):
+        t = (r + 1) / (rings + 1)
+        theta = t * (math.pi * 0.5)
+        sin_theta = math.sin(theta)
+        cos_theta = math.cos(theta)
+        z_local = height * cos_theta
+        r_local = radius * sin_theta
+
+        row = []
+        for i in range(segments):
+            phi = (2.0 * math.pi * i) / segments
+            variation = 1.0 + 0.03 * math.sin(3.0 * phi) + 0.02 * math.cos(2.0 * phi)
+            x_local = r_local * variation * math.cos(phi)
+            y_local = r_local * variation * math.sin(phi)
+            v = bm.verts.new(tr_mat @ Vector((x_local, y_local, z_local)))
+            row.append(v)
+        grid.append(row)
+
+    apex_vert = bm.verts.new(tr_mat @ Vector((0.0, 0.0, height)))
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f = bm.faces.new([apex_vert, grid[0][nxt], grid[0][i]])
+        f.material_index = mat_index
+        f.tag = True
+        f.smooth = True
+        faces.append(f)
+
+    for r in range(rings):
+        for i in range(segments):
+            nxt = (i + 1) % segments
+            f = bm.faces.new([grid[r][i], grid[r][nxt], grid[r + 1][nxt], grid[r + 1][i]])
+            f.material_index = mat_index
+            f.tag = True
+            f.smooth = True
+            faces.append(f)
+            u0 = i / segments
+            u1 = (i + 1) / segments
+            v0 = r / rings
+            v1 = (r + 1) / rings
+            f.loops[0][uv_layer].uv = Vector((u0, v0))
+            f.loops[1][uv_layer].uv = Vector((u1, v0))
+            f.loops[2][uv_layer].uv = Vector((u1, v1))
+            f.loops[3][uv_layer].uv = Vector((u0, v1))
+
+    f_bot = bm.faces.new(list(reversed(grid[-1])))
+    f_bot.material_index = mat_index
+    f_bot.tag = True
+    faces.append(f_bot)
+
+    return faces
+
+
 def create_cone(bm, radius1=0.5, radius2=0.0, height=1.0, segments=8,
                 location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
                 mat_index=0, transform_matrix=None):

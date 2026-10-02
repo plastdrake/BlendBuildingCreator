@@ -1313,11 +1313,20 @@ def build_roof_and_attic(bm, props, ctx):
 
     # Stylized Crooked Chimney - user-controlled, avoids pillared outdoors & dormers.
     # The shaft starts at the attic floor (attic-only, never inside living rooms).
-    ctx.chimney_pos = build_roof_chimney(bm, props, effective_archetype,
-                                         dormer_placements, wing_dormer_placements,
-                                         top_cx, top_cy, top_hx, top_hy,
-                                         top_x_min, top_x_max, top_y_min, top_y_max, total_height,
-                                         annex_band=_annex_band, attic_z=top_z)
+    chim_result = build_roof_chimney(bm, props, effective_archetype,
+                                     dormer_placements, wing_dormer_placements,
+                                     top_cx, top_cy, top_hx, top_hy,
+                                     top_x_min, top_x_max, top_y_min, top_y_max, total_height,
+                                     annex_band=_annex_band, attic_z=top_z)
+    if isinstance(chim_result, list):
+        ctx.chimney_positions = chim_result
+        ctx.chimney_pos = chim_result[0] if chim_result else None
+    elif chim_result is not None:
+        ctx.chimney_positions = [chim_result]
+        ctx.chimney_pos = chim_result
+    else:
+        ctx.chimney_positions = []
+        ctx.chimney_pos = None
 
     ctx.top_z = top_z
     ctx.top_hx = top_hx

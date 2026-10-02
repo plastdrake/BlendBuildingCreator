@@ -384,6 +384,10 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
             box2.prop(props, "roof_clock_pos_x")
             box2.prop(props, "roof_clock_pos_y")
         box2.prop(props, "has_chimney")
+        if props.has_chimney:
+            box2.prop(props, "chimney_count")
+            box2.prop(props, "chimney_pos_x")
+            box2.prop(props, "chimney_pos_y")
 
 
 # ---------------------------------------------------------------------------

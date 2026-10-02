@@ -55,38 +55,47 @@ class RoomOccupancyTracker:
                                                 dcy - w_margin, dcy + w_margin))
 
         # 3. Reserve window clearance along exterior walls so tall props never block windows
+        self.window_boxes: List[Tuple[float, float, float, float]] = []
         if windows:
             for wx, wy, facade in windows:
                 if facade == 'FRONT':
-                    self.occupied_boxes.append((wx - 0.65, wx + 0.65, self.ry0 - 0.15, self.ry0 + 0.60))
+                    self.window_boxes.append((wx - 0.65, wx + 0.65, self.ry0 - 0.15, self.ry0 + 0.60))
                 elif facade == 'BACK':
-                    self.occupied_boxes.append((wx - 0.65, wx + 0.65, self.ry1 - 0.60, self.ry1 + 0.15))
+                    self.window_boxes.append((wx - 0.65, wx + 0.65, self.ry1 - 0.60, self.ry1 + 0.15))
                 elif facade == 'LEFT':
-                    self.occupied_boxes.append((self.rx0 - 0.15, self.rx0 + 0.60, wy - 0.65, wy + 0.65))
+                    self.window_boxes.append((self.rx0 - 0.15, self.rx0 + 0.60, wy - 0.65, wy + 0.65))
                 elif facade == 'RIGHT':
-                    self.occupied_boxes.append((self.rx1 - 0.60, self.rx1 + 0.15, wy - 0.65, wy + 0.65))
+                    self.window_boxes.append((self.rx1 - 0.60, self.rx1 + 0.15, wy - 0.65, wy + 0.65))
 
-        # 4. Reserve stone chimney shaft footprint only if it's attached to a wall
-        # (an attic-only roof chimney projection should never create a phantom box in the middle of a room)
-        self.chimney_box = None
+        # 4. Reserve stone chimney shaft footprints for any chimney attached to a wall
+        self.chimney_boxes: List[Tuple[float, float, float, float]] = []
         if chimney is not None:
-            cx, cy = chimney
-            near_wall = min(abs(cx - rx0), abs(cx - rx1), abs(cy - ry0), abs(cy - ry1)) <= 0.65
-            if near_wall and (self.rx0 - 0.6 <= cx <= self.rx1 + 0.6) and (self.ry0 - 0.6 <= cy <= self.ry1 + 0.6):
-                self.chimney_box = (cx - 0.42, cx + 0.42, cy - 0.42, cy + 0.42)
+            c_list = chimney if isinstance(chimney, list) else [chimney]
+            for c in c_list:
+                if c is None:
+                    continue
+                cx, cy = c
+                near_wall = min(abs(cx - rx0), abs(cx - rx1), abs(cy - ry0), abs(cy - ry1)) <= 0.65
+                if near_wall and (self.rx0 - 0.6 <= cx <= self.rx1 + 0.6) and (self.ry0 - 0.6 <= cy <= self.ry1 + 0.6):
+                    self.chimney_boxes.append((cx - 0.42, cx + 0.42, cy - 0.42, cy + 0.42))
+        self.chimney_box = self.chimney_boxes[0] if self.chimney_boxes else None
 
     def is_free(self, bx0: float, bx1: float, by0: float, by1: float, margin: float = 0.03,
-                ignore_chimney: bool = False) -> bool:
+                ignore_chimney: bool = False, check_windows: bool = False) -> bool:
         """Returns True if the box [bx0, bx1] x [by0, by1] is inside the room and unblocked."""
         eps = 0.02
         if bx0 < self.rx0 - eps or bx1 > self.rx1 + eps:
             return False
         if by0 < self.ry0 - eps or by1 > self.ry1 + eps:
             return False
-        if not ignore_chimney and self.chimney_box is not None:
-            cx0, cx1, cy0, cy1 = self.chimney_box
-            if not (bx1 + margin < cx0 or bx0 - margin > cx1 or by1 + margin < cy0 or by0 - margin > cy1):
-                return False
+        if not ignore_chimney and self.chimney_boxes:
+            for cx0, cx1, cy0, cy1 in self.chimney_boxes:
+                if not (bx1 + margin < cx0 or bx0 - margin > cx1 or by1 + margin < cy0 or by0 - margin > cy1):
+                    return False
+        if check_windows and hasattr(self, 'window_boxes') and self.window_boxes:
+            for wx0, wx1, wy0, wy1 in self.window_boxes:
+                if not (bx1 + margin < wx0 or bx0 - margin > wx1 or by1 + margin < wy0 or by0 - margin > wy1):
+                    return False
         for ox0, ox1, oy0, oy1 in self.occupied_boxes:
             if not (bx1 + margin < ox0 or bx0 - margin > ox1 or by1 + margin < oy0 or by0 - margin > oy1):
                 return False
@@ -98,7 +107,7 @@ class RoomOccupancyTracker:
 
 
 def _try_place_hearth(bm, tracker: RoomOccupancyTracker, z_floor: float,
-                      chimney_pos: Optional[Tuple[float, float]] = None) -> bool:
+                      chimney_pos: Optional[Any] = None) -> bool:
     """Places a stone hearth/fireplace, prioritizing direct attachment to the chimney flue."""
     width = 1.60
     depth = 0.55
@@ -109,49 +118,53 @@ def _try_place_hearth(bm, tracker: RoomOccupancyTracker, z_floor: float,
 
     # 1. Try attaching directly to the stone chimney shaft if in/adjacent to room wall
     if chimney_pos is not None:
-        cx, cy = chimney_pos
-        near_wall = min(abs(cx - rx0), abs(cx - rx1), abs(cy - ry0), abs(cy - ry1)) <= 0.65
-        if near_wall and (rx0 - 0.5 <= cx <= rx1 + 0.5) and (ry0 - 0.5 <= cy <= ry1 + 0.5):
-            chim_half = 0.38
-            candidates = []
-            # South face of chimney (firebox faces -Y into room)
-            hy_s = cy - chim_half - depth * 0.5 + 0.02
-            cand_s = (cx, hy_s, 0.0,
-                      (cx - width * 0.5 - 0.15, cx + width * 0.5 + 0.15, hy_s - depth * 0.5 - 0.45, cy - chim_half))
-            candidates.append((abs(rcy - hy_s), cand_s))
+        c_list = chimney_pos if isinstance(chimney_pos, list) else [chimney_pos]
+        for c in c_list:
+            if c is None:
+                continue
+            cx, cy = c
+            near_wall = min(abs(cx - rx0), abs(cx - rx1), abs(cy - ry0), abs(cy - ry1)) <= 0.65
+            if near_wall and (rx0 - 0.5 <= cx <= rx1 + 0.5) and (ry0 - 0.5 <= cy <= ry1 + 0.5):
+                chim_half = 0.38
+                candidates = []
+                # South face of chimney (firebox faces -Y into room)
+                hy_s = cy - chim_half - depth * 0.5 + 0.02
+                cand_s = (cx, hy_s, 0.0,
+                          (cx - width * 0.5 - 0.15, cx + width * 0.5 + 0.15, hy_s - depth * 0.5 - 0.45, cy - chim_half))
+                candidates.append((abs(rcy - hy_s), cand_s))
 
-            # North face of chimney (firebox faces +Y into room)
-            hy_n = cy + chim_half + depth * 0.5 - 0.02
-            cand_n = (cx, hy_n, math.pi,
-                      (cx - width * 0.5 - 0.15, cx + width * 0.5 + 0.15, cy + chim_half, hy_n + depth * 0.5 + 0.45))
-            candidates.append((abs(rcy - hy_n), cand_n))
+                # North face of chimney (firebox faces +Y into room)
+                hy_n = cy + chim_half + depth * 0.5 - 0.02
+                cand_n = (cx, hy_n, math.pi,
+                          (cx - width * 0.5 - 0.15, cx + width * 0.5 + 0.15, cy + chim_half, hy_n + depth * 0.5 + 0.45))
+                candidates.append((abs(rcy - hy_n), cand_n))
 
-            # East face of chimney (firebox faces +X into room)
-            hx_e = cx + chim_half + depth * 0.5 - 0.02
-            cand_e = (hx_e, cy, math.pi / 2,
-                      (cx + chim_half, hx_e + depth * 0.5 + 0.45, cy - width * 0.5 - 0.15, cy + width * 0.5 + 0.15))
-            candidates.append((abs(rcx - hx_e), cand_e))
+                # East face of chimney (firebox faces +X into room)
+                hx_e = cx + chim_half + depth * 0.5 - 0.02
+                cand_e = (hx_e, cy, math.pi / 2,
+                          (cx + chim_half, hx_e + depth * 0.5 + 0.45, cy - width * 0.5 - 0.15, cy + width * 0.5 + 0.15))
+                candidates.append((abs(rcx - hx_e), cand_e))
 
-            # West face of chimney (firebox faces -X into room)
-            hx_w = cx - chim_half - depth * 0.5 + 0.02
-            cand_w = (hx_w, cy, -math.pi / 2,
-                      (hx_w - depth * 0.5 - 0.45, cx - chim_half, cy - width * 0.5 - 0.15, cy + width * 0.5 + 0.15))
-            candidates.append((abs(rcx - hx_w), cand_w))
+                # West face of chimney (firebox faces -X into room)
+                hx_w = cx - chim_half - depth * 0.5 + 0.02
+                cand_w = (hx_w, cy, -math.pi / 2,
+                          (hx_w - depth * 0.5 - 0.45, cx - chim_half, cy - width * 0.5 - 0.15, cy + width * 0.5 + 0.15))
+                candidates.append((abs(rcx - hx_w), cand_w))
 
-            candidates.sort(key=lambda item: item[0])
-            for _, (hx, hy, yaw, b) in candidates:
-                if tracker.is_free(b[0], b[1], b[2], b[3], ignore_chimney=True):
-                    tracker.occupy(b[0], b[1], b[2], b[3])
-                    if tracker.chimney_box is not None:
-                        tracker.occupy(*tracker.chimney_box)
-                    build_prop(bm, 'HEARTH', hx, hy, z_floor, yaw, width=width, height=1.50)
-                    return True
+                candidates.sort(key=lambda item: item[0])
+                for _, (hx, hy, yaw, b) in candidates:
+                    if tracker.is_free(b[0], b[1], b[2], b[3], ignore_chimney=True):
+                        tracker.occupy(b[0], b[1], b[2], b[3])
+                        for cb in tracker.chimney_boxes:
+                            tracker.occupy(*cb)
+                        build_prop(bm, 'HEARTH', hx, hy, z_floor, yaw, width=width, height=1.50)
+                        return (hx, hy, yaw)
 
-    return False
+    return None
 
 
 def _try_place_kitchen_stove(bm, tracker: RoomOccupancyTracker, z_floor: float,
-                            chimney_pos: Optional[Tuple[float, float]] = None) -> bool:
+                            chimney_pos: Optional[Any] = None) -> bool:
     """Places a cast-iron kitchen stove directly attached to the chimney flue or along outer wall."""
     width = 0.95
     depth = 0.75
@@ -161,43 +174,47 @@ def _try_place_kitchen_stove(bm, tracker: RoomOccupancyTracker, z_floor: float,
     rcy = (ry0 + ry1) * 0.5
 
     if chimney_pos is not None:
-        cx, cy = chimney_pos
-        near_wall = min(abs(cx - rx0), abs(cx - rx1), abs(cy - ry0), abs(cy - ry1)) <= 0.65
-        if near_wall and (rx0 - 0.6 <= cx <= rx1 + 0.6) and (ry0 - 0.6 <= cy <= ry1 + 0.6):
-            chim_half = 0.40
-            candidates = []
-            # South face of chimney (faces -Y into room)
-            hy_s = cy - chim_half - depth * 0.5 + 0.02
-            cand_s = (cx, hy_s, 0.0,
-                      (cx - width * 0.5 - 0.10, cx + width * 0.5 + 0.10, hy_s - depth * 0.5 - 0.15, cy - chim_half))
-            candidates.append((abs(rcy - hy_s), cand_s))
+        c_list = chimney_pos if isinstance(chimney_pos, list) else [chimney_pos]
+        for c in c_list:
+            if c is None:
+                continue
+            cx, cy = c
+            near_wall = min(abs(cx - rx0), abs(cx - rx1), abs(cy - ry0), abs(cy - ry1)) <= 0.65
+            if near_wall and (rx0 - 0.6 <= cx <= rx1 + 0.6) and (ry0 - 0.6 <= cy <= ry1 + 0.6):
+                chim_half = 0.40
+                candidates = []
+                # South face of chimney (faces -Y into room)
+                hy_s = cy - chim_half - depth * 0.5 + 0.02
+                cand_s = (cx, hy_s, 0.0,
+                          (cx - width * 0.5 - 0.10, cx + width * 0.5 + 0.10, hy_s - depth * 0.5 - 0.15, cy - chim_half))
+                candidates.append((abs(rcy - hy_s), cand_s))
 
-            # North face of chimney (faces +Y into room)
-            hy_n = cy + chim_half + depth * 0.5 - 0.02
-            cand_n = (cx, hy_n, math.pi,
-                      (cx - width * 0.5 - 0.10, cx + width * 0.5 + 0.10, cy + chim_half, hy_n + depth * 0.5 + 0.15))
-            candidates.append((abs(rcy - hy_n), cand_n))
+                # North face of chimney (faces +Y into room)
+                hy_n = cy + chim_half + depth * 0.5 - 0.02
+                cand_n = (cx, hy_n, math.pi,
+                          (cx - width * 0.5 - 0.10, cx + width * 0.5 + 0.10, cy + chim_half, hy_n + depth * 0.5 + 0.15))
+                candidates.append((abs(rcy - hy_n), cand_n))
 
-            # East face of chimney (faces +X into room)
-            hx_e = cx + chim_half + depth * 0.5 - 0.02
-            cand_e = (hx_e, cy, math.pi / 2,
-                      (cx + chim_half, hx_e + depth * 0.5 + 0.15, cy - width * 0.5 - 0.10, cy + width * 0.5 + 0.10))
-            candidates.append((abs(rcx - hx_e), cand_e))
+                # East face of chimney (faces +X into room)
+                hx_e = cx + chim_half + depth * 0.5 - 0.02
+                cand_e = (hx_e, cy, math.pi / 2,
+                          (cx + chim_half, hx_e + depth * 0.5 + 0.15, cy - width * 0.5 - 0.10, cy + width * 0.5 + 0.10))
+                candidates.append((abs(rcx - hx_e), cand_e))
 
-            # West face of chimney (faces -X into room)
-            hx_w = cx - chim_half - depth * 0.5 + 0.02
-            cand_w = (hx_w, cy, -math.pi / 2,
-                      (hx_w - depth * 0.5 - 0.15, cx - chim_half, cy - width * 0.5 - 0.10, cy + width * 0.5 + 0.10))
-            candidates.append((abs(rcx - hx_w), cand_w))
+                # West face of chimney (faces -X into room)
+                hx_w = cx - chim_half - depth * 0.5 + 0.02
+                cand_w = (hx_w, cy, -math.pi / 2,
+                          (hx_w - depth * 0.5 - 0.15, cx - chim_half, cy - width * 0.5 - 0.10, cy + width * 0.5 + 0.10))
+                candidates.append((abs(rcx - hx_w), cand_w))
 
-            candidates.sort(key=lambda item: item[0])
-            for _, (hx, hy, yaw, b) in candidates:
-                if tracker.is_free(b[0], b[1], b[2], b[3], ignore_chimney=True):
-                    tracker.occupy(b[0], b[1], b[2], b[3])
-                    if tracker.chimney_box is not None:
-                        tracker.occupy(*tracker.chimney_box)
-                    build_prop(bm, 'KITCHEN_STOVE', hx, hy, z_floor, yaw, width=width, depth=depth, height=1.05)
-                    return True
+                candidates.sort(key=lambda item: item[0])
+                for _, (hx, hy, yaw, b) in candidates:
+                    if tracker.is_free(b[0], b[1], b[2], b[3], ignore_chimney=True):
+                        tracker.occupy(b[0], b[1], b[2], b[3])
+                        for cb in tracker.chimney_boxes:
+                            tracker.occupy(*cb)
+                        build_prop(bm, 'KITCHEN_STOVE', hx, hy, z_floor, yaw, width=width, depth=depth, height=1.05)
+                        return (hx, hy, yaw)
 
     # Fallback: place kitchen stove against an outer perimeter wall
     return _try_place_wall_prop(
@@ -232,10 +249,10 @@ def _sample_wall_positions(center: float, min_val: float, max_val: float, step: 
 def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                          tracker: RoomOccupancyTracker, z_floor: float,
                          candidate_walls=('NORTH', 'SOUTH', 'EAST', 'WEST'),
-                         offset_bias: float = 0.0, **params) -> bool:
+                         offset_bias: float = 0.0, check_windows: bool = True, **params) -> Optional[Tuple[float, float, float]]:
     """
     Attempts to place a wall-backed prop along one of the candidate walls facing inwards.
-    Returns True if successfully placed.
+    Returns (cx, cy, yaw) if successfully placed, or None.
     """
     rx0, rx1 = tracker.rx0, tracker.rx1
     ry0, ry1 = tracker.ry0, tracker.ry1
@@ -251,10 +268,10 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             max_x = rx1 - width * 0.5 - 0.15
             for cx in _sample_wall_positions(rcx + offset_bias, min_x, max_x, step=0.30):
                 b = (cx - width * 0.5, cx + width * 0.5, cy - depth * 0.5, cy + depth * 0.5)
-                if tracker.is_free(b[0], b[1], b[2], b[3]):
+                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
-                    return True
+                    return (cx, cy, yaw)
 
         elif wall == 'SOUTH':
             # Back at -Y, front at +Y -> yaw = math.pi
@@ -264,10 +281,10 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             max_x = rx1 - width * 0.5 - 0.15
             for cx in _sample_wall_positions(rcx + offset_bias, min_x, max_x, step=0.30):
                 b = (cx - width * 0.5, cx + width * 0.5, cy - depth * 0.5, cy + depth * 0.5)
-                if tracker.is_free(b[0], b[1], b[2], b[3]):
+                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
-                    return True
+                    return (cx, cy, yaw)
 
         elif wall == 'EAST':
             # Back at +X, front at -X -> yaw = -math.pi / 2
@@ -277,10 +294,10 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             max_y = ry1 - width * 0.5 - 0.15
             for cy in _sample_wall_positions(rcy + offset_bias, min_y, max_y, step=0.30):
                 b = (cx - depth * 0.5, cx + depth * 0.5, cy - width * 0.5, cy + width * 0.5)
-                if tracker.is_free(b[0], b[1], b[2], b[3]):
+                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
-                    return True
+                    return (cx, cy, yaw)
 
         elif wall == 'WEST':
             # Back at -X, front at +X -> yaw = math.pi / 2
@@ -290,12 +307,12 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             max_y = ry1 - width * 0.5 - 0.15
             for cy in _sample_wall_positions(rcy + offset_bias, min_y, max_y, step=0.30):
                 b = (cx - depth * 0.5, cx + depth * 0.5, cy - width * 0.5, cy + width * 0.5)
-                if tracker.is_free(b[0], b[1], b[2], b[3]):
+                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
-                    return True
+                    return (cx, cy, yaw)
 
-    return False
+    return None
 
 
 def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
@@ -580,6 +597,8 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
             tracker.occupy(cbx0, cbx1, cby0, cby1)
             chest_yaw = bang + math.pi / 2
             build_prop(bm, 'CHEST', fcx, fcy, z_floor, chest_yaw, width=cw)
+            # Folded linen stack resting on the foot chest
+            build_prop(bm, 'FOLDED_CLOTH', fcx, fcy, z_floor + 0.50, chest_yaw)
 
         # Bedside stool for nightstand
         for side_sign in (1.0, -1.0):
@@ -588,10 +607,15 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
             if tracker.is_free(scx - 0.22, scx + 0.22, scy - 0.22, scy + 0.22):
                 tracker.occupy(scx - 0.22, scx + 0.22, scy - 0.22, scy + 0.22)
                 build_prop(bm, 'STOOL', scx, scy, z_floor, 0.0)
+                # Nightstand item: small book pile or candle
+                if rng.random() < 0.60:
+                    build_prop(bm, 'BOOK_PILE_SMALL', scx, scy, z_floor + 0.48, 0.2)
+                else:
+                    build_prop(bm, 'POTTED_PLANT_SMALL', scx, scy, z_floor + 0.48, 0.0)
                 break
 
     elif bed_info is not None and narrow_room:
-        # In narrow rooms: just a small chest directly beside the bed head (not at foot)
+        # In narrow rooms: stool nightstand directly beside bed head
         bcx, bcy, bang = bed_info
         side_x = -math.sin(bang)
         side_y = math.cos(bang)
@@ -601,11 +625,10 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
             if tracker.is_free(scx - 0.25, scx + 0.25, scy - 0.25, scy + 0.25):
                 tracker.occupy(scx - 0.25, scx + 0.25, scy - 0.25, scy + 0.25)
                 build_prop(bm, 'STOOL', scx, scy, z_floor, 0.0)
+                build_prop(bm, 'BOOK_PILE_SMALL', scx, scy, z_floor + 0.48, 0.2)
                 break
 
     # 3. Wardrobe against the wall opposite or beside the bed
-    # Prefer whichever long wall is freer — only place in rooms with sufficient width (>= 2.8m)
-    # so narrow bedrooms are not choked off by bulky furniture
     if not narrow_room and min(rw, rd) >= 2.8:
         if rw >= rd:
             wall_order = ('NORTH', 'SOUTH', 'EAST', 'WEST')
@@ -614,7 +637,28 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         _try_place_wall_prop(bm, 'WARDROBE', 1.20, 0.60, tracker, z_floor,
                              candidate_walls=wall_order)
 
-    # 4. Cozy floor area rug, smartly placed alongside and at the foot of the bed
+    # 4. Bedroom Bookshelf along wall (cozy reading in bed)
+    _try_place_wall_prop(bm, 'BOOKSHELF', 1.20, 0.38, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'NORTH', 'WEST', 'EAST'))
+
+    # 5. Cozy reading armchair in bedroom corner if space permits
+    if not narrow_room and min(rw, rd) >= 3.2:
+        for cx in (rm.bounds[0] + 0.65, rm.bounds[1] - 0.65):
+            for cy in (rm.bounds[2] + 0.65, rm.bounds[3] - 0.65):
+                if tracker.is_free(cx - 0.45, cx + 0.45, cy - 0.45, cy + 0.45):
+                    tracker.occupy(cx - 0.45, cx + 0.45, cy - 0.45, cy + 0.45)
+                    build_prop(bm, 'ARMCHAIR', cx, cy, z_floor, rng.uniform(0.2, 0.8))
+                    break
+
+    # 6. Floor book pile in bedroom corner
+    for cx in (rm.bounds[0] + 0.35, rm.bounds[1] - 0.35):
+        for cy in (rm.bounds[2] + 0.35, rm.bounds[3] - 0.35):
+            if tracker.is_free(cx - 0.22, cx + 0.22, cy - 0.22, cy + 0.22):
+                tracker.occupy(cx - 0.22, cx + 0.22, cy - 0.22, cy + 0.22)
+                build_prop(bm, 'BOOK_PILE_LARGE', cx, cy, z_floor, rng.uniform(0, 1.0))
+                break
+
+    # 7. Cozy floor area rug alongside and at foot of the bed
     rug_choice = rng.choice(['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST'])
     rug_w = min(2.40, max(1.20, rw * 0.50))
     rug_l = min(3.20, max(1.60, rd * 0.55))
@@ -623,7 +667,6 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         bcx, bcy, bang = bed_info
         fwd_x = math.cos(bang)
         fwd_y = math.sin(bang)
-        # Position rug adjacent to bed where occupant steps down
         rug_cx = bcx + fwd_x * 0.35
         rug_cy = bcy + fwd_y * 0.35
     else:
@@ -631,36 +674,20 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
 
     _lay_rug(bm, tracker, rm, rng, rug_choice, rug_cx, rug_cy, z_floor, rug_w, rug_l)
 
-    # 5. Optional desk or shelf if room is roomy
-    if (rw >= 3.6 or rd >= 3.6) and density >= 0.6:
+    # 7b. Secondary bedroom runner rug so bedroom floor feels warmly dressed
+    if (rw >= 3.6 or rd >= 3.6):
+        sub_rug = 'RUG_FOREST' if rug_choice != 'RUG_FOREST' else 'RUG_SAPPHIRE'
+        _lay_rug(bm, tracker, rm, rng, sub_rug, rcx, rcy, z_floor,
+                 min(1.40, rw * 0.35), min(2.60, rd * 0.48), yaw_max=0.04, allow_overlap=False)
+
+    # 8. Writing desk in spacious bedrooms
+    if (rw >= 3.6 or rd >= 3.6) and density >= 0.5:
         if is_master:
             _try_place_wall_prop(bm, 'DESK', 1.30, 0.65, tracker, z_floor,
                                  candidate_walls=('SOUTH', 'EAST', 'NORTH'))
         else:
             _try_place_wall_prop(bm, 'SHELF', 1.20, 0.40, tracker, z_floor,
                                  candidate_walls=('SOUTH', 'NORTH', 'EAST'))
-
-    if rm.role == 'TENEMENT_BEDROOM' and rw * rd >= 30.0 and density >= 1.2:
-        desk_w, desk_d = 1.05, 0.65
-        for desk_x, desk_y in (
-            (rcx + rw * 0.24, rcy + rd * 0.24),
-            (rcx - rw * 0.24, rcy + rd * 0.24),
-            (rcx + rw * 0.24, rcy - rd * 0.24),
-            (rcx - rw * 0.24, rcy - rd * 0.24),
-        ):
-            if not tracker.is_free(desk_x - desk_w * 0.5, desk_x + desk_w * 0.5,
-                                   desk_y - desk_d * 0.5, desk_y + desk_d * 0.5):
-                continue
-            tracker.occupy(desk_x - desk_w * 0.5, desk_x + desk_w * 0.5,
-                           desk_y - desk_d * 0.5, desk_y + desk_d * 0.5)
-            build_prop(bm, 'INDOOR_TABLE', desk_x, desk_y, z_floor, 0.0,
-                       length=desk_w, width=desk_d)
-            build_prop(bm, 'BOOK_PILE_SMALL', desk_x, desk_y, z_floor + 0.76, 0.0)
-            chair_y = desk_y - desk_d * 0.5 - 0.30
-            if tracker.is_free(desk_x - 0.24, desk_x + 0.24, chair_y - 0.24, chair_y + 0.24):
-                tracker.occupy(desk_x - 0.24, desk_x + 0.24, chair_y - 0.24, chair_y + 0.24)
-                build_prop(bm, 'CHAIR', desk_x, chair_y, z_floor, math.pi)
-            break
 
     # 6. Ceiling light
     if is_master and (rw * rd >= 16.0):
@@ -777,8 +804,8 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
                 if tracker.rx0 + 0.10 <= sx <= tracker.rx1 - 0.10 and tracker.ry0 + 0.10 <= sy <= tracker.ry1 - 0.10:
                     build_prop(bm, 'STOOL', sx, sy, z_floor, yaw)
             
-            # Tableware scatter on counter
-            build_prop(bm, 'SCATTER_TABLEWARE', cx + tang_dx * 0.4, cy + tang_dy * 0.4, z_floor + 1.02, yaw)
+            # Tableware scatter on counter at exact counter top height (1.075)
+            build_prop(bm, 'SCATTER_TABLEWARE', cx + tang_dx * 0.4, cy + tang_dy * 0.4, z_floor + 1.075, yaw)
             # Runner rug in front of counter
             _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', cx + front_dx * 0.75, cy + front_dy * 0.75,
                      z_floor, 0.80, counter_len + 0.2, yaw_max=0.08)
@@ -807,7 +834,8 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
         if tracker.is_free(tx - 0.88, tx + 0.88, ty - 0.88, ty + 0.88):
             tracker.occupy(tx - 0.92, tx + 0.92, ty - 0.92, ty + 0.92)
             build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=r)
-            build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_floor + 0.76, 0.0)
+            build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_floor + 0.775, 0.0)
+            build_prop(bm, 'BOTTLE_CLUSTER', tx + 0.25, ty + 0.10, z_floor + 0.775, 0.0)
             if first_table_pos is None:
                 first_table_pos = (tx, ty)
             placed_tables += 1
@@ -854,171 +882,513 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
     build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.46)
 
 
+def _table_offset(tx: float, ty: float, off_x: float, off_y: float, yaw: float) -> Tuple[float, float]:
+    """Computes world position of a surface item given local table offsets (along length/depth)."""
+    c, s = math.cos(yaw), math.sin(yaw)
+    return (tx + off_x * c - off_y * s, ty + off_x * s + off_y * c)
+
+
+def _place_prep_clutter(bm, px: float, py: float, z_table: float, yaw: float, rng):
+    """Populates the foodprep table with cutting board, knife, bread, cheese, cauldron, and herb bowl."""
+    # 1. Foodprep cutting board with realistic knife, artisan bread, cheese, salt bowl, linen cloth
+    clutter_x, clutter_y = _table_offset(px, py, -0.22, 0.0, yaw)
+    build_prop(bm, 'FOODPREP_CLUTTER', clutter_x, clutter_y, z_table, yaw)
+    # 2. Stove pot / cauldron
+    pot_x, pot_y = _table_offset(px, py, 0.28, 0.0, yaw)
+    build_prop(bm, 'CAULDRON', pot_x, pot_y, z_table, yaw)
+    # 3. Potted culinary herb bowl
+    if rng.random() < 0.75:
+        herb_x, herb_y = _table_offset(px, py, 0.04, -0.06, yaw)
+        build_prop(bm, 'POTTED_HERB', herb_x, herb_y, z_table, yaw)
+
+
+def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: float,
+                                   rng, chimney_pos: Optional[Any] = None) -> Optional[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]:
+    """
+    Places an integrated culinary workstation: cast-iron stove and foodprep table
+    DIRECTLY NEXT TO EACH OTHER (side-by-side along the same wall or in an L-shaped corner).
+    Returns ((sx, sy, syaw), (px, py, pyaw)) if successfully placed, or None.
+    """
+    sw, sd, sh = 0.95, 0.75, 1.05
+    pw, pd = 1.15, 0.65
+    z_table = z_floor + 0.775
+    rx0, rx1 = tracker.rx0, tracker.rx1
+    ry0, ry1 = tracker.ry0, tracker.ry1
+    rcx, rcy = (rx0 + rx1) * 0.5, (ry0 + ry1) * 0.5
+    rw, rd = rx1 - rx0, ry1 - ry0
+
+    # 1. Check Chimney flue in or adjacent to the room:
+    if chimney_pos is not None:
+        c_list = chimney_pos if isinstance(chimney_pos, list) else [chimney_pos]
+        for c in c_list:
+            if c is None:
+                continue
+            cx, cy = c
+            near_wall = min(abs(cx - rx0), abs(cx - rx1), abs(cy - ry0), abs(cy - ry1)) <= 0.65
+            if near_wall and (rx0 - 0.6 <= cx <= rx1 + 0.6) and (ry0 - 0.6 <= cy <= ry1 + 0.6):
+                chim_half = 0.40
+                candidates = []
+                # South face of chimney (faces -Y into room)
+                hy_s = cy - chim_half - sd * 0.5 + 0.02
+                cand_s = (cx, hy_s, 0.0,
+                          (cx - sw * 0.5 - 0.10, cx + sw * 0.5 + 0.10, hy_s - sd * 0.5 - 0.15, cy - chim_half))
+                candidates.append((abs(rcy - hy_s), cand_s))
+                # North face of chimney (faces +Y into room)
+                hy_n = cy + chim_half + sd * 0.5 - 0.02
+                cand_n = (cx, hy_n, math.pi,
+                          (cx - sw * 0.5 - 0.10, cx + sw * 0.5 + 0.10, cy + chim_half, hy_n + sd * 0.5 + 0.15))
+                candidates.append((abs(rcy - hy_n), cand_n))
+                # East face of chimney (faces +X into room)
+                hx_e = cx + chim_half + sd * 0.5 - 0.02
+                cand_e = (hx_e, cy, math.pi / 2,
+                          (cx + chim_half, hx_e + sd * 0.5 + 0.15, cy - sw * 0.5 - 0.10, cy + sw * 0.5 + 0.10))
+                candidates.append((abs(rcx - hx_e), cand_e))
+                # West face of chimney (faces -X into room)
+                hx_w = cx - chim_half - sd * 0.5 + 0.02
+                cand_w = (hx_w, cy, -math.pi / 2,
+                          (hx_w - sd * 0.5 - 0.15, cx - chim_half, cy - sw * 0.5 - 0.10, cy + sw * 0.5 + 0.10))
+                candidates.append((abs(rcx - hx_w), cand_w))
+
+                candidates.sort(key=lambda item: item[0])
+                for _, (hx, hy, yaw, b) in candidates:
+                    if tracker.is_free(b[0], b[1], b[2], b[3], ignore_chimney=True, check_windows=True):
+                        # Temporarily mark stove occupied to test candidate prep table positions adjacent
+                        tracker.occupy(b[0], b[1], b[2], b[3])
+                        is_vert = (0.5 < abs(yaw) < 2.5)
+                        prep_cand = []
+                        if is_vert:
+                            wall_x = rx1 - pd * 0.5 - 0.03 if yaw < 0 else rx0 + pd * 0.5 + 0.03
+                            dist_y = (sw + pw) * 0.5 + 0.06
+                            prep_cand.append((wall_x, hy + dist_y, yaw))
+                            prep_cand.append((wall_x, hy - dist_y, yaw))
+                            # L-corner on adjoining perpendicular wall
+                            if abs(hy - ry1) < 1.4:
+                                prep_cand.append((hx - 0.70 if yaw < 0 else hx + 0.70, ry1 - pd * 0.5 - 0.03, 0.0))
+                            if abs(hy - ry0) < 1.4:
+                                prep_cand.append((hx - 0.70 if yaw < 0 else hx + 0.70, ry0 + pd * 0.5 + 0.03, math.pi))
+                        else:
+                            wall_y = ry1 - pd * 0.5 - 0.03 if abs(yaw) < 1.0 else ry0 + pd * 0.5 + 0.03
+                            dist_x = (sw + pw) * 0.5 + 0.06
+                            prep_cand.append((hx + dist_x, wall_y, yaw))
+                            prep_cand.append((hx - dist_x, wall_y, yaw))
+                            # L-corner on adjoining perpendicular wall
+                            if abs(hx - rx1) < 1.4:
+                                prep_cand.append((rx1 - pd * 0.5 - 0.03, hy - 0.70 if abs(yaw) < 1.0 else hy + 0.70, -math.pi / 2))
+                            if abs(hx - rx0) < 1.4:
+                                prep_cand.append((rx0 + pd * 0.5 + 0.03, hy - 0.70 if abs(yaw) < 1.0 else hy + 0.70, math.pi / 2))
+
+                        chosen_prep = None
+                        for cpx, cpy, cpyaw in prep_cand:
+                            cp_vert = (0.5 < abs(cpyaw) < 2.5)
+                            ctw = pd if cp_vert else pw
+                            ctd = pw if cp_vert else pd
+                            tb = (cpx - ctw * 0.5 - 0.04, cpx + ctw * 0.5 + 0.04,
+                                  cpy - ctd * 0.5 - 0.04, cpy + ctd * 0.5 + 0.04)
+                            if tracker.is_free(tb[0], tb[1], tb[2], tb[3], check_windows=True):
+                                if not any(math.hypot(cpx - d.get('x', rcx), cpy - d.get('y', rcy)) < 1.20 for d in tracker.doorways):
+                                    chosen_prep = (cpx, cpy, cpyaw, tb)
+                                    break
+                        if chosen_prep:
+                            for cb in tracker.chimney_boxes:
+                                tracker.occupy(*cb)
+                            build_prop(bm, 'KITCHEN_STOVE', hx, hy, z_floor, yaw, width=sw, depth=sd, height=sh)
+                            px, py, pyaw, ptb = chosen_prep
+                            tracker.occupy(ptb[0], ptb[1], ptb[2], ptb[3])
+                            build_prop(bm, 'INDOOR_TABLE', px, py, z_floor, pyaw, length=pw, width=pd)
+                            _place_prep_clutter(bm, px, py, z_table, pyaw, rng)
+                            return ((hx, hy, yaw), (px, py, pyaw))
+                        else:
+                            tracker.occupied_boxes.pop()
+
+    # 2. Side-by-Side along an Outer Perimeter Wall:
+    # Sort candidate walls so walls with 0 doorways come first!
+    def _wall_door_count(w_name):
+        cnt = 0
+        for d in tracker.doorways:
+            dx, dy = d.get('x', rcx), d.get('y', rcy)
+            if w_name == 'EAST' and abs(dx - rx1) < 0.6: cnt += 1
+            elif w_name == 'WEST' and abs(dx - rx0) < 0.6: cnt += 1
+            elif w_name == 'NORTH' and abs(dy - ry1) < 0.6: cnt += 1
+            elif w_name == 'SOUTH' and abs(dy - ry0) < 0.6: cnt += 1
+        return cnt
+
+    wall_order = sorted(['EAST', 'NORTH', 'SOUTH', 'WEST'], key=_wall_door_count)
+    tot_len = sw + pw + 0.06
+
+    for wall in wall_order:
+        if wall in ('EAST', 'WEST'):
+            if rd < tot_len + 0.25:
+                continue
+            yaw = -math.pi / 2 if wall == 'EAST' else math.pi / 2
+            wall_x_stove = rx1 - sd * 0.5 - 0.03 if wall == 'EAST' else rx0 + sd * 0.5 + 0.03
+            wall_x_table = rx1 - pd * 0.5 - 0.03 if wall == 'EAST' else rx0 + pd * 0.5 + 0.03
+            y_shifts = [rcy, rcy + (rd - tot_len) * 0.22, rcy - (rd - tot_len) * 0.22]
+            for cy_cand in y_shifts:
+                for swap in (False, True):
+                    s_y = cy_cand - (pw + 0.06) * 0.5 if not swap else cy_cand + (pw + 0.06) * 0.5
+                    p_y = cy_cand + (sw + 0.06) * 0.5 if not swap else cy_cand - (sw + 0.06) * 0.5
+                    sb = (min(wall_x_stove - sd*0.5, wall_x_stove + sd*0.5) - 0.05,
+                          max(wall_x_stove - sd*0.5, wall_x_stove + sd*0.5) + 0.05,
+                          s_y - sw * 0.5 - 0.04, s_y + sw * 0.5 + 0.04)
+                    pb = (min(wall_x_table - pd*0.5, wall_x_table + pd*0.5) - 0.05,
+                          max(wall_x_table - pd*0.5, wall_x_table + pd*0.5) + 0.05,
+                          p_y - pw * 0.5 - 0.04, p_y + pw * 0.5 + 0.04)
+                    if tracker.is_free(sb[0], sb[1], sb[2], sb[3], check_windows=True) and \
+                       tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True):
+                        if any(math.hypot(wall_x_stove - d.get('x', rcx), s_y - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
+                            continue
+                        if any(math.hypot(wall_x_table - d.get('x', rcx), p_y - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
+                            continue
+                        tracker.occupy(sb[0], sb[1], sb[2], sb[3])
+                        tracker.occupy(pb[0], pb[1], pb[2], pb[3])
+                        build_prop(bm, 'KITCHEN_STOVE', wall_x_stove, s_y, z_floor, yaw, width=sw, depth=sd, height=sh)
+                        build_prop(bm, 'INDOOR_TABLE', wall_x_table, p_y, z_floor, yaw, length=pw, width=pd)
+                        _place_prep_clutter(bm, wall_x_table, p_y, z_table, yaw, rng)
+                        return ((wall_x_stove, s_y, yaw), (wall_x_table, p_y, yaw))
+
+        else:  # 'NORTH' or 'SOUTH'
+            if rw < tot_len + 0.25:
+                continue
+            yaw = 0.0 if wall == 'NORTH' else math.pi
+            wall_y_stove = ry1 - sd * 0.5 - 0.03 if wall == 'NORTH' else ry0 + sd * 0.5 + 0.03
+            wall_y_table = ry1 - pd * 0.5 - 0.03 if wall == 'NORTH' else ry0 + pd * 0.5 + 0.03
+            x_shifts = [rcx, rcx + (rw - tot_len) * 0.22, rcx - (rw - tot_len) * 0.22]
+            for cx_cand in x_shifts:
+                for swap in (False, True):
+                    s_x = cx_cand - (pw + 0.06) * 0.5 if not swap else cx_cand + (pw + 0.06) * 0.5
+                    p_x = cx_cand + (sw + 0.06) * 0.5 if not swap else cx_cand - (sw + 0.06) * 0.5
+                    sb = (s_x - sw * 0.5 - 0.04, s_x + sw * 0.5 + 0.04,
+                          min(wall_y_stove - sd*0.5, wall_y_stove + sd*0.5) - 0.05,
+                          max(wall_y_stove - sd*0.5, wall_y_stove + sd*0.5) + 0.05)
+                    pb = (p_x - pw * 0.5 - 0.04, p_x + pw * 0.5 + 0.04,
+                          min(wall_y_table - pd*0.5, wall_y_table + pd*0.5) - 0.05,
+                          max(wall_y_table - pd*0.5, wall_y_table + pd*0.5) + 0.05)
+                    if tracker.is_free(sb[0], sb[1], sb[2], sb[3], check_windows=True) and \
+                       tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True):
+                        if any(math.hypot(s_x - d.get('x', rcx), wall_y_stove - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
+                            continue
+                        if any(math.hypot(p_x - d.get('x', rcx), wall_y_table - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
+                            continue
+                        tracker.occupy(sb[0], sb[1], sb[2], sb[3])
+                        tracker.occupy(pb[0], pb[1], pb[2], pb[3])
+                        build_prop(bm, 'KITCHEN_STOVE', s_x, wall_y_stove, z_floor, yaw, width=sw, depth=sd, height=sh)
+                        build_prop(bm, 'INDOOR_TABLE', p_x, wall_y_table, z_floor, yaw, length=pw, width=pd)
+                        _place_prep_clutter(bm, p_x, wall_y_table, z_table, yaw, rng)
+                        return ((s_x, wall_y_stove, yaw), (p_x, wall_y_table, yaw))
+
+    # 3. Corner L-Shape Placement:
+    corners = [
+        ('EAST', 'NORTH', rx1 - sd*0.5 - 0.03, ry1 - sw*0.5 - 0.12, -math.pi/2,
+                          rx1 - sd - pw*0.5 - 0.08, ry1 - pd*0.5 - 0.03, 0.0),
+        ('EAST', 'SOUTH', rx1 - sd*0.5 - 0.03, ry0 + sw*0.5 + 0.12, -math.pi/2,
+                          rx1 - sd - pw*0.5 - 0.08, ry0 + pd*0.5 + 0.03, math.pi),
+        ('WEST', 'NORTH', rx0 + sd*0.5 + 0.03, ry1 - sw*0.5 - 0.12, math.pi/2,
+                          rx0 + sd + pw*0.5 + 0.08, ry1 - pd*0.5 - 0.03, 0.0),
+        ('WEST', 'SOUTH', rx0 + sd*0.5 + 0.03, ry0 + sw*0.5 + 0.12, math.pi/2,
+                          rx0 + sd + pw*0.5 + 0.08, ry0 + pd*0.5 + 0.03, math.pi),
+    ]
+    for w1, w2, sx, sy, syaw, px, py, pyaw in corners:
+        sb = (sx - sd*0.5 - 0.04, sx + sd*0.5 + 0.04, sy - sw*0.5 - 0.04, sy + sw*0.5 + 0.04)
+        pb = (px - pw*0.5 - 0.04, px + pw*0.5 + 0.04, py - pd*0.5 - 0.04, py + pd*0.5 + 0.04)
+        if tracker.is_free(sb[0], sb[1], sb[2], sb[3], check_windows=True) and \
+           tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True):
+            if any(math.hypot(sx - d.get('x', rcx), sy - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
+                continue
+            if any(math.hypot(px - d.get('x', rcx), py - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
+                continue
+            tracker.occupy(sb[0], sb[1], sb[2], sb[3])
+            tracker.occupy(pb[0], pb[1], pb[2], pb[3])
+            build_prop(bm, 'KITCHEN_STOVE', sx, sy, z_floor, syaw, width=sw, depth=sd, height=sh)
+            build_prop(bm, 'INDOOR_TABLE', px, py, z_floor, pyaw, length=pw, width=pd)
+            _place_prep_clutter(bm, px, py, z_table, pyaw, rng)
+            return ((sx, sy, syaw), (px, py, pyaw))
+
+    # 4. Fallback: Place stove on any available wall, prep table in room
+    placed_stove = _try_place_kitchen_stove(bm, tracker, z_floor, chimney_pos=chimney_pos)
+    if placed_stove:
+        sx, sy, syaw = placed_stove
+        for ang in (0.0, math.pi * 0.5, math.pi, -math.pi * 0.5):
+            px = sx + 1.25 * math.cos(ang)
+            py = sy + 1.25 * math.sin(ang)
+            pb = (px - pw*0.5, px + pw*0.5, py - pd*0.5, py + pd*0.5)
+            if tracker.is_free(pb[0], pb[1], pb[2], pb[3]):
+                tracker.occupy(pb[0], pb[1], pb[2], pb[3])
+                build_prop(bm, 'INDOOR_TABLE', px, py, z_floor, syaw, length=pw, width=pd)
+                _place_prep_clutter(bm, px, py, z_table, syaw, rng)
+                return (placed_stove, (px, py, syaw))
+        return (placed_stove, None)
+    return None
+
+
 def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
-                     rng, density: float, chimney_pos: Optional[Tuple[float, float]] = None):
-    """Furnishes a rustic cookhouse / kitchen / pantry with cooking stove, prep table, and supplies."""
+                     rng, density: float, chimney_pos: Optional[Any] = None):
+    """Furnishes a kitchen with dedicated foodprep & stove workstation side-by-side along the wall,
+    shelf neatly placed away on an open wall, and dining area positioned in the open, spacious
+    opposite area (e.g. by the windows, clear of doorway circulation)."""
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
-
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
+    area = rw * rd
+    z_table = z_floor + 0.775
 
-    # 1. Cooking Stove (cast-iron) or Hearth (strictly attached to chimney or wall)
-    placed_stove = _try_place_kitchen_stove(bm, tracker, z_floor, chimney_pos=chimney_pos)
-    if not placed_stove and rm.role != 'TENEMENT_KITCHEN':
-        _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+    # 1. INTEGRATED COOKING WORKSTATION: Stove & Foodprep Table SIDE-BY-SIDE
+    workstation = _try_place_kitchen_workstation(bm, tracker, z_floor, rng, chimney_pos=chimney_pos)
+    if workstation:
+        placed_stove, prep_table_pos = workstation
+    else:
+        placed_stove = _try_place_kitchen_stove(bm, tracker, z_floor, chimney_pos=chimney_pos)
+        if not placed_stove and rm.role != 'TENEMENT_KITCHEN':
+            placed_stove = _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+        prep_table_pos = None
 
-    # 2. Food / Plate Shelf along wall opposite or adjacent to stove
-    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
-                         candidate_walls=('NORTH', 'EAST', 'WEST', 'SOUTH'))
+    station_x = placed_stove[0] if placed_stove else (prep_table_pos[0] if prep_table_pos else rcx)
+    station_y = placed_stove[1] if placed_stove else (prep_table_pos[1] if prep_table_pos else rcy)
 
-    # 3. Food prep / dining table: placed comfortably in the center / social zone,
-    # strictly keeping clear of all entry and interior doorways.
-    prep_placed = False
-    table_pos = None
+    # 2. Wall Shelf: Placed along available wall space AWAY from the cooking workstation!
+    w_dists = {
+        'EAST': abs(station_x - tracker.rx1),
+        'WEST': abs(station_x - tracker.rx0),
+        'NORTH': abs(station_y - tracker.ry1),
+        'SOUTH': abs(station_y - tracker.ry0),
+    }
+    cooking_wall = min(w_dists, key=w_dists.get)
+    shelf_walls = [w for w in ('NORTH', 'SOUTH', 'EAST', 'WEST') if w != cooking_wall]
+    _try_place_wall_prop(bm, 'SHELF', 1.25, 0.40, tracker, z_floor,
+                         candidate_walls=shelf_walls, check_windows=True)
 
-    candidate_tables = [
-        (rcx, rcy),
-        (rcx + (rw * 0.18), rcy),
-        (rcx - (rw * 0.18), rcy),
-        (rcx, rcy + (rd * 0.18)),
-        (rcx, rcy - (rd * 0.18)),
-        (rcx + (rw * 0.20), rcy + (rd * 0.20)),
-        (rcx - (rw * 0.20), rcy + (rd * 0.20)),
-        (rcx + (rw * 0.20), rcy - (rd * 0.20)),
-        (rcx - (rw * 0.20), rcy - (rd * 0.20)),
-    ]
-    tw, td = 1.30, 0.85
-    target_tables = 2 if (
-        rm.role == 'TENEMENT_KITCHEN' and rw * rd >= 30.0 and density >= 1.2
-    ) else 1
-    placed_tables = 0
-    for tx, ty in candidate_tables:
-        if placed_tables >= target_tables:
-            break
-        # Guarantee at least 1.6m clearance from any door threshold
-        if any(math.hypot(tx - d.get('x', rcx), ty - d.get('y', rcy)) < 1.60 for d in tracker.doorways):
-            continue
-        if tracker.is_free(tx - tw * 0.5 - 0.20, tx + tw * 0.5 + 0.20, ty - td * 0.5 - 0.45, ty + td * 0.5 + 0.45):
-            tracker.occupy(tx - tw * 0.5 - 0.20, tx + tw * 0.5 + 0.20, ty - td * 0.5 - 0.45, ty + td * 0.5 + 0.45)
-            build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, 0.0, length=tw, width=td)
-            build_prop(bm, 'CAULDRON', tx + 0.35, ty, z_floor + 0.76, 0.0)
-            build_prop(bm, 'SCATTER_TABLEWARE', tx - 0.25, ty, z_floor + 0.76, 0.0)
-            # Add 2 chairs tucked into table facing inward
-            for chy, chang in [(ty - (td * 0.5 + 0.30), math.pi), (ty + (td * 0.5 + 0.30), 0.0)]:
-                if tracker.rx0 <= tx <= tracker.rx1 and tracker.ry0 <= chy <= tracker.ry1:
-                    build_prop(bm, 'CHAIR', tx, chy, z_floor, chang, seat_h=0.48)
-            prep_placed = True
-            if table_pos is None:
-                table_pos = (tx, ty)
-            placed_tables += 1
+    # 3. DEDICATED DINING AREA:
+    # PLACED IN THE OPEN, SPACIOUS OPPOSITE AREA (CLEAR OF DOORWAYS, NEAR WINDOWS)!
+    is_small_kitchen = (area < 15.0 or rw < 3.5 or rd < 3.5)
+    dining_table_pos = None
 
-    if not prep_placed:
-        for tx, ty in candidate_tables:
-            if any(math.hypot(tx - d.get('x', rcx), ty - d.get('y', rcy)) < 1.45 for d in tracker.doorways):
+    # Determine opposite half from cooking station
+    if abs(station_x - rcx) >= abs(station_y - rcy) * 0.7:
+        opp_x = rcx - rw * 0.24 if station_x > rcx else rcx + rw * 0.24
+        candidate_points = [
+            (opp_x, rcy + rd * 0.22),
+            (opp_x, rcy - rd * 0.22),
+            (opp_x + (rcx - opp_x) * 0.20, rcy + rd * 0.22),
+            (opp_x + (rcx - opp_x) * 0.20, rcy - rd * 0.22),
+            (opp_x, rcy),
+            (rcx, rcy + rd * 0.22),
+            (rcx, rcy - rd * 0.22),
+            (rcx, rcy),
+        ]
+    else:
+        opp_y = rcy - rd * 0.24 if station_y > rcy else rcy + rd * 0.24
+        candidate_points = [
+            (rcx + rw * 0.22, opp_y),
+            (rcx - rw * 0.22, opp_y),
+            (rcx + rw * 0.22, opp_y + (rcy - opp_y) * 0.20),
+            (rcx - rw * 0.22, opp_y + (rcy - opp_y) * 0.20),
+            (rcx, opp_y),
+            (rcx + rw * 0.22, rcy),
+            (rcx - rw * 0.22, rcy),
+            (rcx, rcy),
+        ]
+
+    def _score_dining_cand(pt):
+        tx, ty = pt
+        door_dists = [math.hypot(tx - d.get('x', rcx), ty - d.get('y', rcy)) for d in tracker.doorways]
+        min_door = min(door_dists) if door_dists else 999.0
+        if min_door < 1.25:
+            return -9999.0
+        score = min_door * 1.5
+        score += math.hypot(tx - station_x, ty - station_y) * 2.0
+        if hasattr(tracker, 'window_boxes') and tracker.window_boxes:
+            win_dists = [math.hypot(tx - (wx0+wx1)*0.5, ty - (wy0+wy1)*0.5) for wx0, wx1, wy0, wy1 in tracker.window_boxes]
+            min_win = min(win_dists)
+            if min_win < 2.0:
+                score += (2.0 - min_win) * 2.0
+        margin = min(tx - tracker.rx0, tracker.rx1 - tx, ty - tracker.ry0, tracker.ry1 - ty)
+        if margin < 0.65:
+            score -= 500.0
+        return score
+
+    candidate_points.sort(key=_score_dining_cand, reverse=True)
+
+    if is_small_kitchen:
+        tr = 0.48
+        for tx, ty in candidate_points:
+            if _score_dining_cand((tx, ty)) < -500:
                 continue
-            if tracker.is_free(tx - 0.65, tx + 0.65, ty - 0.45, ty + 0.45):
-                tracker.occupy(tx - 0.65, tx + 0.65, ty - 0.45, ty + 0.45)
-                build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, 0.0, length=1.2, width=0.8)
-                build_prop(bm, 'CAULDRON', tx + 0.30, ty, z_floor + 0.76, 0.0)
-                build_prop(bm, 'SCATTER_TABLEWARE', tx - 0.25, ty, z_floor + 0.76, 0.0)
-                prep_placed = True
-                table_pos = (tx, ty)
+            if tracker.is_free(tx - 0.72, tx + 0.72, ty - 0.72, ty + 0.72):
+                tracker.occupy(tx - 0.72, tx + 0.72, ty - 0.72, ty + 0.72)
+                build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=tr)
+                build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_table, 0.0)
+                for ci, ca in enumerate([0.0, math.pi]):
+                    cx = tx + 0.65 * math.cos(ca)
+                    cy = ty + 0.65 * math.sin(ca)
+                    if tracker.rx0 <= cx <= tracker.rx1 and tracker.ry0 <= cy <= tracker.ry1:
+                        build_prop(bm, 'CHAIR', cx, cy, z_floor, ca - math.pi * 0.5, seat_h=0.48)
+                dining_table_pos = (tx, ty)
+                break
+    else:
+        for tx, ty in candidate_points:
+            if _score_dining_cand((tx, ty)) < -500:
+                continue
+            placed = False
+            for try_yaw, tw, td in [(0.0, 1.40, 0.85), (math.pi * 0.5, 0.85, 1.40)]:
+                if tracker.is_free(tx - tw * 0.5 - 0.32, tx + tw * 0.5 + 0.32,
+                                   ty - td * 0.5 - 0.32, ty + td * 0.5 + 0.32):
+                    tracker.occupy(tx - tw * 0.5 - 0.32, tx + tw * 0.5 + 0.32,
+                                   ty - td * 0.5 - 0.32, ty + td * 0.5 + 0.32)
+                    build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, try_yaw, length=1.40, width=0.85)
+                    clutter_x, clutter_y = _table_offset(tx, ty, -0.20, 0.0, try_yaw)
+                    bottle_x, bottle_y = _table_offset(tx, ty, 0.30, 0.0, try_yaw)
+                    build_prop(bm, 'SCATTER_TABLEWARE', clutter_x, clutter_y, z_table, try_yaw)
+                    build_prop(bm, 'BOTTLE_CLUSTER', bottle_x, bottle_y, z_table, try_yaw)
+                    if try_yaw == 0.0:
+                        chair_offsets = [
+                            (tx, ty - (td * 0.5 + 0.30), math.pi),
+                            (tx, ty + (td * 0.5 + 0.30), 0.0),
+                            (tx - (tw * 0.5 + 0.28), ty, math.pi * 0.5),
+                            (tx + (tw * 0.5 + 0.28), ty, -math.pi * 0.5),
+                        ]
+                    else:
+                        chair_offsets = [
+                            (tx - (tw * 0.5 + 0.30), ty, math.pi * 0.5),
+                            (tx + (tw * 0.5 + 0.30), ty, -math.pi * 0.5),
+                            (tx, ty - (td * 0.5 + 0.28), math.pi),
+                            (tx, ty + (td * 0.5 + 0.28), 0.0),
+                        ]
+                    for chx, chy, chang in chair_offsets:
+                        if tracker.rx0 + 0.08 <= chx <= tracker.rx1 - 0.08 and tracker.ry0 + 0.08 <= chy <= tracker.ry1 - 0.08:
+                            build_prop(bm, 'CHAIR', chx, chy, z_floor, chang, seat_h=0.48)
+                    dining_table_pos = (tx, ty)
+                    placed = True
+                    break
+            if placed:
                 break
 
-    # 4. Storage barrels, sacks and crates in corners (pantry storage)
-    for cx in (rm.bounds[0] + 0.45, rm.bounds[1] - 0.45):
-        for cy in (rm.bounds[2] + 0.45, rm.bounds[3] - 0.45):
-            if tracker.is_free(cx - 0.25, cx + 0.25, cy - 0.25, cy + 0.25):
-                tracker.occupy(cx - 0.25, cx + 0.25, cy - 0.25, cy + 0.25)
-                prop = 'BARREL' if rng.random() < 0.5 else 'CRATE'
-                build_prop(bm, prop, cx, cy, z_floor, 0.0)
+    # Fallback dining table if tight
+    if dining_table_pos is None and tracker.is_free(rcx - 0.60, rcx + 0.60, rcy - 0.60, rcy + 0.60):
+        tracker.occupy(rcx - 0.60, rcx + 0.60, rcy - 0.60, rcy + 0.60)
+        build_prop(bm, 'ROUND_TABLE', rcx, rcy, z_floor, 0.0, radius=0.48)
+        build_prop(bm, 'SCATTER_TABLEWARE', rcx, rcy, z_table, 0.0)
+        build_prop(bm, 'CHAIR', rcx, rcy - 0.65, z_floor, math.pi, seat_h=0.48)
+        build_prop(bm, 'CHAIR', rcx, rcy + 0.65, z_floor, 0.0, seat_h=0.48)
+        dining_table_pos = (rcx, rcy)
 
-    # 4b. Second worktable / shelving in large kitchens to fill space sensibly
-    if rw >= 4.0 or rd >= 4.5:
-        _try_place_wall_prop(bm, 'SHELF', 1.20, 0.40, tracker, z_floor,
-                             candidate_walls=('SOUTH', 'WEST', 'EAST', 'NORTH'))
+    # 4. Food / Produce Clutter: Pumpkin, Barrels, Sacks, Crates in corners
+    placed_pumpkin = False
+    for cx in (rm.bounds[0] + 0.40, rm.bounds[1] - 0.40):
+        for cy in (rm.bounds[2] + 0.40, rm.bounds[3] - 0.40):
+            if tracker.is_free(cx - 0.22, cx + 0.22, cy - 0.22, cy + 0.22):
+                tracker.occupy(cx - 0.22, cx + 0.22, cy - 0.22, cy + 0.22)
+                if not placed_pumpkin:
+                    build_prop(bm, 'PUMPKIN', cx, cy, z_floor, rng.uniform(0, math.pi * 2))
+                    placed_pumpkin = True
+                else:
+                    prop = rng.choice(['BARREL', 'CRATE', 'SACK'])
+                    build_prop(bm, prop, cx, cy, z_floor, 0.0)
 
-    # 5. Smart kitchen rug placement:
-    # Anchor the dining set with a clean, proportioned area rug directly under table & chairs
+    # 5. Guaranteed Kitchen Rugs:
+    # Dedicated woven rug centered directly under the dining table in the open area!
     k_rug_choice = rng.choice(['RUG_FOREST', 'RUG_CRIMSON'])
-    if table_pos is not None:
-        tx, ty = table_pos
-        rug_w = min(tw + 0.70, rw - 0.40)
-        rug_l = min(td + 1.20, rd - 0.40)
-        if rug_w >= 1.20 and rug_l >= 1.40:
-            _lay_rug(bm, tracker, rm, rng, k_rug_choice, tx, ty, z_floor, rug_w, rug_l)
+    if dining_table_pos is not None:
+        tx, ty = dining_table_pos
+        rug_w = min(2.50, max(1.45, rw * 0.46))
+        rug_l = min(2.80, max(1.65, rd * 0.46))
+        _lay_rug(bm, tracker, rm, rng, k_rug_choice, tx, ty, z_floor, rug_w, rug_l, yaw_max=0.03)
     else:
-        k_rug_w, k_rug_l = _area_rug_size(rw, rd, coverage=0.55, max_w=2.60, max_l=3.20,
-                                          min_w=1.40, min_l=1.80)
-        _lay_rug(bm, tracker, rm, rng, k_rug_choice, rcx, rcy, z_floor, k_rug_w, k_rug_l)
+        rug_w = min(1.40, rw * 0.40)
+        rug_l = min(2.80, rd * 0.60)
+        _lay_rug(bm, tracker, rm, rng, k_rug_choice, rcx, rcy, z_floor, rug_w, rug_l, yaw_max=0.03)
 
+    # Secondary foodprep runner right along the prep table & stove workstation
+    if (rw >= 3.8 or rd >= 3.8) and (placed_stove or prep_table_pos):
+        sub_rug = 'RUG_CRIMSON' if k_rug_choice != 'RUG_CRIMSON' else 'RUG_FOREST'
+        wx = (placed_stove[0] + (prep_table_pos[0] if prep_table_pos else placed_stove[0])) * 0.5
+        wy = (placed_stove[1] + (prep_table_pos[1] if prep_table_pos else placed_stove[1])) * 0.5
+        run_x = wx + (0.65 if wx < rcx else -0.65) if abs(wx - rcx) > abs(wy - rcy) else wx
+        run_y = wy + (0.65 if wy < rcy else -0.65) if abs(wy - rcy) >= abs(wx - rcx) else wy
+        _lay_rug(bm, tracker, rm, rng, sub_rug,
+                 run_x, run_y, z_floor,
+                 min(1.20, rw * 0.35), min(2.20, rd * 0.45), yaw_max=0.01, allow_overlap=False)
 
     # 6. Ceiling light
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
 def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
-                        rng, density: float, chimney_pos: Optional[Tuple[float, float]] = None):
-    """Furnishes a cozy living / dining hall."""
+                        rng, density: float, chimney_pos: Optional[Any] = None):
+    """Furnishes a cozy living / dining hall with dining table, plush sofa/armchairs, bookshelves, and plants."""
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    z_table = z_floor + 0.775
 
     # 1. Warm stone hearth (attaches to chimney if present)
     _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
 
-    # 2. Central Dining Table with 4 Chairs
+    # 2. Central Dining Table with 4 Chairs and Table Clutter
     tw, td = 1.50, 0.90
     if tracker.is_free(rcx - tw * 0.5 - 0.35, rcx + tw * 0.5 + 0.35, rcy - td * 0.5 - 0.35, rcy + td * 0.5 + 0.35):
         tracker.occupy(rcx - tw * 0.5 - 0.35, rcx + tw * 0.5 + 0.35, rcy - td * 0.5 - 0.35, rcy + td * 0.5 + 0.35)
         build_prop(bm, 'INDOOR_TABLE', rcx, rcy, z_floor, 0.0, length=tw, width=td)
-        # 4 Chairs around table facing inward towards center (local chair front is -Y)
+        build_prop(bm, 'SCATTER_TABLEWARE', rcx - 0.25, rcy, z_table, 0.0)
+        build_prop(bm, 'BOTTLE_CLUSTER', rcx + 0.35, rcy, z_table, 0.0)
+        # 4 Chairs around table facing inward towards center
         chair_positions = [
-            (rcx, rcy - (td * 0.5 + 0.30), math.pi),        # South chair facing North towards table
-            (rcx, rcy + (td * 0.5 + 0.30), 0.0),            # North chair facing South towards table
-            (rcx - (tw * 0.5 + 0.30), rcy, math.pi * 0.5), # West chair facing East towards table
-            (rcx + (tw * 0.5 + 0.30), rcy, -math.pi * 0.5), # East chair facing West towards table
+            (rcx, rcy - (td * 0.5 + 0.30), math.pi),
+            (rcx, rcy + (td * 0.5 + 0.30), 0.0),
+            (rcx - (tw * 0.5 + 0.30), rcy, math.pi * 0.5),
+            (rcx + (tw * 0.5 + 0.30), rcy, -math.pi * 0.5),
         ]
         for chx, chy, chang in chair_positions:
             if tracker.rx0 + 0.10 <= chx <= tracker.rx1 - 0.10 and tracker.ry0 + 0.10 <= chy <= tracker.ry1 - 0.10:
                 build_prop(bm, 'CHAIR', chx, chy, z_floor, chang, seat_h=0.48)
 
-    # 3. Wall shelf or cupboard
-    _try_place_wall_prop(bm, 'SHELF', 1.30, 0.40, tracker, z_floor,
-                         candidate_walls=('SOUTH', 'EAST', 'WEST'))
+    # 3. Fireside Lounge / Seating: Plush Sofa or Armchair facing hearth/center
+    if rw >= 4.0 or rd >= 4.0:
+        sofa_candidates = [
+            (rcx, rcy - rd * 0.26, 0.0),
+            (rcx, rcy + rd * 0.26, math.pi),
+            (rcx - rw * 0.26, rcy, math.pi * 0.5),
+            (rcx + rw * 0.26, rcy, -math.pi * 0.5),
+        ]
+        sofa_placed = False
+        for sx, sy, syaw in sofa_candidates:
+            if any(math.hypot(sx - d.get('x', rcx), sy - d.get('y', rcy)) < 1.30 for d in tracker.doorways):
+                continue
+            if tracker.is_free(sx - 0.95, sx + 0.95, sy - 0.45, sy + 0.45):
+                tracker.occupy(sx - 0.95, sx + 0.95, sy - 0.45, sy + 0.45)
+                build_prop(bm, 'SOFA', sx, sy, z_floor, syaw, length=1.75, depth=0.80)
+                sofa_placed = True
+                break
+        if not sofa_placed:
+            for ax, ay, ayaw in sofa_candidates:
+                if any(math.hypot(ax - d.get('x', rcx), ay - d.get('y', rcy)) < 1.30 for d in tracker.doorways):
+                    continue
+                if tracker.is_free(ax - 0.48, ax + 0.48, ay - 0.45, ay + 0.45):
+                    tracker.occupy(ax - 0.48, ax + 0.48, ay - 0.45, ay + 0.45)
+                    build_prop(bm, 'ARMCHAIR', ax, ay, z_floor, ayaw)
+                    break
 
-    # 4. Storage Chest
+    # 4. Wall bookshelf and cupboard
+    _try_place_wall_prop(bm, 'BOOKSHELF', 1.25, 0.38, tracker, z_floor,
+                         candidate_walls=('NORTH', 'WEST', 'EAST', 'SOUTH'))
     _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
                          candidate_walls=('WEST', 'SOUTH', 'EAST'))
 
-    # 4b. Second seating cluster in grand halls so big floors never read as
-    # one lonely table (round table + 3 stools opposite the main table).
-    rw = rm.bounds[1] - rm.bounds[0]
-    rd = rm.bounds[3] - rm.bounds[2]
-    if rw * rd >= 30.0 and density >= 0.5:
-        for sx, sy in [(rcx - rw * 0.22, rcy + rd * 0.18),
-                       (rcx + rw * 0.22, rcy + rd * 0.18)]:
-            if tracker.is_free(sx - 0.95, sx + 0.95, sy - 0.95, sy + 0.95):
-                tracker.occupy(sx - 0.95, sx + 0.95, sy - 0.95, sy + 0.95)
-                build_prop(bm, 'ROUND_TABLE', sx, sy, z_floor, 0.0, radius=0.55)
-                build_prop(bm, 'SCATTER_TABLEWARE', sx, sy, z_floor + 0.76, 0.0)
-                for ci in range(3):
-                    ca = ci * (math.pi * 2.0 / 3.0) + 0.5
-                    chx = sx + 0.78 * math.cos(ca)
-                    chy = sy + 0.78 * math.sin(ca)
-                    if tracker.rx0 <= chx <= tracker.rx1 and tracker.ry0 <= chy <= tracker.ry1:
-                        build_prop(bm, 'CHAIR', chx, chy, z_floor, ca - math.pi * 0.5, seat_h=0.48)
+    # 4b. Large Floor Potted Plant in corner
+    for cx in (rm.bounds[0] + 0.45, rm.bounds[1] - 0.45):
+        for cy in (rm.bounds[2] + 0.45, rm.bounds[3] - 0.45):
+            if tracker.is_free(cx - 0.30, cx + 0.30, cy - 0.30, cy + 0.30):
+                tracker.occupy(cx - 0.30, cx + 0.30, cy - 0.30, cy + 0.30)
+                build_prop(bm, 'POTTED_PLANT_LARGE', cx, cy, z_floor, 0.0)
                 break
 
     # 5. Grand central living & dining area rugs (oversized + layered)
-    rw = rm.bounds[1] - rm.bounds[0]
-    rd = rm.bounds[3] - rm.bounds[2]
     rug_choice = rng.choice(['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST'])
     rug_w, rug_l = _area_rug_size(rw, rd, coverage=0.84, max_w=5.20, max_l=6.40,
                                   min_w=2.80, min_l=3.40)
     _lay_rug(bm, tracker, rm, rng, rug_choice, rcx, rcy, z_floor, rug_w, rug_l)
 
-    # 5b. Secondary hearth / entry runner rug (now in most halls, not just huge ones)
+    # 5b. Secondary hearth / entry runner rug
     if (rw >= 4.0 or rd >= 4.0) and density >= 0.4:
         sub_choice = 'RUG_SAPPHIRE' if rug_choice != 'RUG_SAPPHIRE' else 'RUG_CRIMSON'
         run_w = min(1.80, max(1.10, rw * 0.36))
@@ -1607,28 +1977,33 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                 if (rx0 - 0.35 <= wx <= rx1 + 0.35) and (ry0 - 0.35 <= wy <= ry1 + 0.35):
                     room_windows.append((wx, wy, facade))
 
-    # 3. Chimney stone shaft position
+    # 3. Chimney stone shaft position (supports multiple chimney flues)
     chimney_pos = getattr(ctx, 'chimney_pos', None) if ctx is not None else None
+    chimney_positions = getattr(ctx, 'chimney_positions', None) if ctx is not None else None
+    if not chimney_positions and chimney_pos:
+        chimney_positions = [chimney_pos]
+    elif not chimney_positions:
+        chimney_positions = []
 
     tracker = RoomOccupancyTracker(
         rx0 + inset, rx1 - inset, ry0 + inset, ry1 - inset,
         stair_hole=rm.stair_hole,
         doorways=all_doorways,
         windows=room_windows,
-        chimney=chimney_pos
+        chimney=chimney_positions
     )
 
     role = rm.role
     if role in ('STAIR_LANDING', 'CORRIDOR'):
         _furnish_corridor(bm, rm, tracker, z_floor, z_ceil, rng, density)
     elif role in ('TAVERN_TAPROOM', 'COMMON'):
-        _furnish_tavern_taproom(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_pos)
+        _furnish_tavern_taproom(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
     elif role in ('GREAT_HALL', 'COUNCIL_CHAMBER'):
-        _furnish_great_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_pos)
+        _furnish_great_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
     elif role in ('MAYOR_OFFICE', 'OFFICE'):
         _furnish_office(bm, rm, tracker, z_floor, z_ceil, rng, density)
     elif role in ('KITCHEN', 'TENEMENT_KITCHEN'):
-        _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_pos)
+        _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
     elif role in ('MASTER_BED', 'OFFICER_QUARTERS'):
         _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, density, is_master=True)
     elif role in ('MESS_HALL',):
@@ -1654,7 +2029,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     elif role in ('STORAGE', 'CELLAR', 'PANTRY'):
         _furnish_storage(bm, rm, tracker, z_floor, z_ceil, rng, density)
     else:  # HOUSE_HALL, DINING, PARLOR, default
-        _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_pos)
+        _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
 
 
 def furnish_building_interior(bm, props, ctx):

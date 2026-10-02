@@ -102,6 +102,12 @@ MAT_INDEX_LEATHER_3     = 29
 MAT_INDEX_RUG_1         = 30
 MAT_INDEX_RUG_2         = 31
 MAT_INDEX_RUG_3         = 32
+MAT_INDEX_PLANT         = 33
+MAT_INDEX_PUMPKIN       = 34
+MAT_INDEX_BREAD         = 35
+MAT_INDEX_UPHOLSTERY    = 36
+MAT_INDEX_CLOTH_LINEN   = 37
+MAT_INDEX_BOTTLE_GLASS  = 38
 
 
 # ---------------------------------------------------------------------------
@@ -1962,6 +1968,46 @@ def create_stylized_rug(name="M_Building_Rug", texture_name="rug_crimson_ornate.
     return mat
 
 
+def create_stylized_plant(name="M_Building_Plant"):
+    """Lush green botanical plant foliage using plant_leaves_diffuse.jpg."""
+    return create_stylized_fabric(name, "plant_leaves_diffuse.jpg", color=(0.95, 1.05, 0.92, 1.0), roughness=0.45)
+
+
+def create_stylized_pumpkin(name="M_Building_Pumpkin"):
+    """Stylized handpainted pumpkin skin using pumpkin_diffuse.jpg."""
+    return create_stylized_fabric(name, "pumpkin_diffuse.jpg", color=(1.05, 0.95, 0.85, 1.0), roughness=0.55)
+
+
+def create_stylized_bread(name="M_Building_Bread"):
+    """Crusty baked artisan bread crust using bread_crust_diffuse.jpg."""
+    return create_stylized_fabric(name, "bread_crust_diffuse.jpg", color=(1.0, 0.95, 0.90, 1.0), roughness=0.88)
+
+
+def create_stylized_upholstery(name="M_Building_Upholstery"):
+    """Rich medieval damask brocade velvet upholstery for sofas and armchairs."""
+    return create_stylized_fabric(name, "upholstery_damask_diffuse.jpg", color=(1.0, 1.0, 1.0, 1.0), roughness=0.75)
+
+
+def create_stylized_linen(name="M_Building_Cloth_Linen"):
+    """Woven checkered rustic linen cloth for kitchen towels and folded cloth."""
+    return create_stylized_fabric(name, "kitchen_cloth_diffuse.jpg", color=(1.0, 1.0, 1.0, 1.0), roughness=0.92)
+
+
+def create_stylized_bottle_glass(name="M_Building_Bottle_Glass", color=(0.12, 0.28, 0.16, 1.0)):
+    """Deep green or amber tinted glass for wine bottles, flasks and potions."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=0.14, metallic=0.0)
+    if "Transmission Weight" in bsdf.inputs:
+        bsdf.inputs["Transmission Weight"].default_value = 0.82
+    elif "Transmission" in bsdf.inputs:
+        bsdf.inputs["Transmission"].default_value = 0.82
+    if "IOR" in bsdf.inputs:
+        bsdf.inputs["IOR"].default_value = 1.48
+    return mat
+
+
 # ---------------------------------------------------------------------------
 # Material slot setup
 # ---------------------------------------------------------------------------
@@ -2118,6 +2164,14 @@ def setup_building_material_slots(obj, props):
     mat_rug_2 = getattr(props, 'custom_rug_2', None) or create_stylized_rug("M_Building_Rug_2", "rug_sapphire_royal.png")
     mat_rug_3 = getattr(props, 'custom_rug_3', None) or create_stylized_rug("M_Building_Rug_3", "rug_forest_woven.png")
 
+    # 33-38. Foliage, foods, fine upholstery, linen, bottle glass
+    mat_plant = create_stylized_plant("M_Building_Plant")
+    mat_pumpkin = create_stylized_pumpkin("M_Building_Pumpkin")
+    mat_bread = create_stylized_bread("M_Building_Bread")
+    mat_upholstery = create_stylized_upholstery("M_Building_Upholstery")
+    mat_cloth_linen = create_stylized_linen("M_Building_Cloth_Linen")
+    mat_bottle_glass = create_stylized_bottle_glass("M_Building_Bottle_Glass")
+
     # Assemble canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
@@ -2153,6 +2207,12 @@ def setup_building_material_slots(obj, props):
         mat_rug_1,          # 30 MAT_INDEX_RUG_1
         mat_rug_2,          # 31 MAT_INDEX_RUG_2
         mat_rug_3,          # 32 MAT_INDEX_RUG_3
+        mat_plant,          # 33 MAT_INDEX_PLANT
+        mat_pumpkin,        # 34 MAT_INDEX_PUMPKIN
+        mat_bread,          # 35 MAT_INDEX_BREAD
+        mat_upholstery,     # 36 MAT_INDEX_UPHOLSTERY
+        mat_cloth_linen,    # 37 MAT_INDEX_CLOTH_LINEN
+        mat_bottle_glass,   # 38 MAT_INDEX_BOTTLE_GLASS
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -2196,6 +2256,12 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Rug_1",         # 30
     "M_Building_Rug_2",         # 31
     "M_Building_Rug_3",         # 32
+    "M_Building_Plant",         # 33
+    "M_Building_Pumpkin",       # 34
+    "M_Building_Bread",         # 35
+    "M_Building_Upholstery",    # 36
+    "M_Building_Cloth_Linen",   # 37
+    "M_Building_Bottle_Glass",  # 38
 )
 
 

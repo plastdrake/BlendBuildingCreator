@@ -1093,6 +1093,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    chimney_count: IntProperty(
+        name="Chimney Count",
+        description="Number of chimneys on the building (auto-spaced to serve apartments and hearths)",
+        min=1, max=4, default=1,
+        update=on_property_updated
+    )
+
     chimney_pos_x: FloatProperty(
         name="Chimney X",
         description="Front-back / left-right offset across roof (-1 to 1). Move to avoid dormers/windows",
@@ -2211,6 +2218,18 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('RUG_SAPPHIRE', "Rug (Sapphire Royal)", "Royal blue damask carpet with tassels"),
             ('RUG_FOREST', "Rug (Forest Woven)", "Sage and terracotta woven geometric carpet with tassels"),
             ('SCATTER_TABLEWARE', "Table Clutter", "Pewter tankards, ceramic plates, bottles, and candles"),
+            ('PEWTER_TANKARD', "Pewter Mug", "Hollow pewter tavern tankard with ear handle"),
+            ('SOFA', "Sofa (Damask)", "Luxurious 2-3 seater upholstered sofa with brocade damask cushions"),
+            ('ARMCHAIR', "Armchair", "Plush fireside armchair with damask cushions and rolled arms"),
+            ('BOTTLE', "Glass Bottle", "Slender glass wine/ale bottle with cork stopper"),
+            ('BOTTLE_CLUSTER', "Bottle Cluster", "Trio of wine, spirits, and potion bottles with corks"),
+            ('BREAD_LOAF', "Bread Loaf", "Artisan baked round bread boule with score slits"),
+            ('PUMPKIN', "Pumpkin", "Segmented orange pumpkin with rustic stem"),
+            ('FOODPREP_CLUTTER', "Foodprep Clutter", "Butcher cutting board, cleaver, bread, cheese, prep bowl"),
+            ('POTTED_PLANT_SMALL', "Potted Plant (Small)", "Tabletop terracotta pot with lush green leaves"),
+            ('POTTED_PLANT_LARGE', "Potted Plant (Floor)", "Large ornamental urn with tall indoor ficus/shrub"),
+            ('POTTED_HERB', "Potted Herb Bowl", "Earthenware kitchen bowl with culinary herbs"),
+            ('FOLDED_CLOTH', "Folded Cloth Stack", "Neat stack of folded linens and kitchen towels"),
             ('BARREL', "Barrel", "Staved ale barrel"),
             ('CRATE', "Crate", "Braced shipping crate"),
             ('SACK', "Grain Sack", "Tied burlap grain sack"),

@@ -16,12 +16,16 @@ from mathutils import Matrix, Vector
 
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, create_torus_ring,
+    create_hollow_cylinder, create_hollow_dish, create_organic_pumpkin, create_bread_boule,
     transform_faces,
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON,
     MAT_INDEX_CLAY, MAT_INDEX_WAX, MAT_INDEX_LANTERN,
     MAT_INDEX_FABRIC_WHITE, MAT_INDEX_FABRIC_RED, MAT_INDEX_FABRIC_STITCHED,
+    MAT_INDEX_PLANT, MAT_INDEX_PUMPKIN, MAT_INDEX_BREAD,
+    MAT_INDEX_UPHOLSTERY, MAT_INDEX_CLOTH_LINEN, MAT_INDEX_BOTTLE_GLASS,
+    MAT_INDEX_DIRT, MAT_INDEX_CUT_STONE,
 )
 
 
@@ -1483,134 +1487,798 @@ def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=2.4, length=3.6, rug_style=
     return [f]
 
 
-def build_table_scatter(bm, x, y, z_ground=0.0, ang=0.0, clutter_type='AUTO', rng=None, z_table=None):
-    """Authentic medieval tavern tabletop clutter: pewter tankards, stoneware jugs, wood trenchers with bread, chamber candlestick."""
-    from ..materials import (
-        MAT_INDEX_IRON, MAT_INDEX_CLAY, MAT_INDEX_WOOD,
-        MAT_INDEX_TIMBER, MAT_INDEX_WAX, MAT_INDEX_LANTERN
+def build_pewter_tankard(bm, x, y, z_ground=0.0, ang=0.0):
+    """Authentic pewter tavern mug/tankard with flared base, banded body, hollow interior cavity, and ear handle."""
+    faces = []
+    r_out, r_in, h, depth = 0.052, 0.044, 0.13, 0.115
+    # Hollow main cylinder with physical interior volume and sunken ale liquid level
+    # Top rim is completely open (NO solid top cap cylinders!)
+    faces += create_hollow_cylinder(
+        bm, radius=r_out, inner_radius=r_in, height=h, inner_depth=depth,
+        segments=18, location=(0.0, 0.0, h * 0.5),
+        mat_index=MAT_INDEX_IRON, inner_mat_index=MAT_INDEX_IRON,
+        liquid_height=0.070, liquid_mat_index=MAT_INDEX_TIMBER, smooth=True
     )
+    # Flared bottom base foot ring
+    faces += create_cone(
+        bm, radius1=r_out + 0.008, radius2=r_out, height=0.018, segments=18,
+        location=(0.0, 0.0, 0.009), mat_index=MAT_INDEX_IRON
+    )
+    # Mid-body decorative lathe band (low on the body, never covering the rim)
+    faces += create_cylinder(
+        bm, radius=r_out + 0.0025, height=0.007, segments=18,
+        location=(0.0, 0.0, h * 0.46), mat_index=MAT_INDEX_IRON
+    )
+    # Cast pewter ear handle on side
+    faces += create_torus_ring(
+        bm, location=(r_out + 0.024, 0.0, h * 0.52),
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        major_radius=0.034, minor_radius=0.0075,
+        major_segments=14, minor_segments=8,
+        mat_index=MAT_INDEX_IRON
+    )
+    # Ergonomic thumb-rest tab on top of handle
+    faces += create_beveled_box(
+        bm, size=(0.016, 0.012, 0.006),
+        location=(r_out + 0.016, 0.0, h * 0.52 + 0.036),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.001
+    )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+build_mug = build_pewter_tankard
+
+
+def build_trencher_plate(bm, x, y, z_ground=0.0, ang=0.0):
+    """Turned wooden dining trencher with true recessed concave well, artisan bread roll & creamy cheese wedge."""
+    faces = []
+    # 1. Real hollow wooden dish with concave interior cavity and resting foot ring (100% turned wood)
+    h_plate = 0.024
+    depth_well = 0.017
+    faces += create_hollow_dish(
+        bm, radius_base=0.088, radius_rim=0.130, inner_radius_rim=0.122,
+        inner_radius_base=0.076, height=h_plate, inner_depth=depth_well,
+        segments=20, location=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_WOOD, smooth=True
+    )
+    z_well = h_plate - depth_well
+    # 2. Crusty artisan bread roll sitting inside well (organic dome boule, NO iron/timber bars!)
+    faces += create_bread_boule(
+        bm, radius=0.044, height=0.034, segments=16, rings=6,
+        location=(-0.025, 0.012, z_well), mat_index=MAT_INDEX_BREAD
+    )
+    # 3. Pale creamy cheese wedge sitting in the well
+    faces += create_cone(
+        bm, radius1=0.036, radius2=0.006, height=0.022, segments=5,
+        location=(0.042, -0.020, z_well + 0.011),
+        mat_index=MAT_INDEX_WAX
+    )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+
+def build_candlestick(bm, x, y, z_ground=0.0, ang=0.0):
+    """Chamber candlestick with saucer drip pan, finger ring, wax candle pillar, wick, and warm flame."""
+    faces = []
+    # Saucer base plate resting firmly at z=0.0
+    faces += create_cylinder(
+        bm, radius=0.055, height=0.006, segments=14,
+        location=(0.0, 0.0, 0.003), mat_index=MAT_INDEX_IRON
+    )
+    # Saucer flared rim
+    faces += create_cone(
+        bm, radius1=0.055, radius2=0.070, height=0.014, segments=14,
+        location=(0.0, 0.0, 0.010), mat_index=MAT_INDEX_IRON
+    )
+    # Central socket cup
+    faces += create_cylinder(
+        bm, radius=0.022, height=0.026, segments=12,
+        location=(0.0, 0.0, 0.020), mat_index=MAT_INDEX_IRON
+    )
+    # Finger loop handle on saucer edge (fully elevated above table)
+    faces += create_torus_ring(
+        bm, location=(0.065, 0.0, 0.025),
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        major_radius=0.018, minor_radius=0.004,
+        major_segments=10, minor_segments=6,
+        mat_index=MAT_INDEX_IRON
+    )
+    # Wax candle column
+    faces += create_cylinder(
+        bm, radius=0.014, height=0.076, segments=10,
+        location=(0.0, 0.0, 0.030 + 0.038),
+        mat_index=MAT_INDEX_WAX
+    )
+    # Dark wick
+    faces += create_cylinder(
+        bm, radius=0.002, height=0.010, segments=6,
+        location=(0.0, 0.0, 0.030 + 0.076 + 0.005),
+        mat_index=MAT_INDEX_IRON
+    )
+    # Glowing teardrop flame
+    faces += create_cone(
+        bm, radius1=0.007, radius2=0.001, height=0.022, segments=8,
+        location=(0.0, 0.0, 0.030 + 0.076 + 0.016),
+        mat_index=MAT_INDEX_LANTERN
+    )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_wine_flagon(bm, x, y, z_ground=0.0, ang=0.0):
+    """Stoneware tavern flagon with glazed ceramic body, neck, cork stopper & handle."""
+    faces = []
+    # Base ring at z=0.0
+    faces += create_cylinder(
+        bm, radius=0.048, height=0.015, segments=14,
+        location=(0.0, 0.0, 0.0075), mat_index=MAT_INDEX_TIMBER
+    )
+    # Bulbous body
+    faces += create_cylinder(
+        bm, radius=0.052, height=0.12, segments=14,
+        location=(0.0, 0.0, 0.015 + 0.06), mat_index=MAT_INDEX_CLAY
+    )
+    # Shoulder taper
+    faces += create_cone(
+        bm, radius1=0.052, radius2=0.024, height=0.045, segments=12,
+        location=(0.0, 0.0, 0.135 + 0.0225), mat_index=MAT_INDEX_CLAY
+    )
+    # Slender neck with lip collar
+    faces += create_cylinder(
+        bm, radius=0.022, height=0.045, segments=10,
+        location=(0.0, 0.0, 0.180 + 0.0225), mat_index=MAT_INDEX_CLAY
+    )
+    faces += create_cylinder(
+        bm, radius=0.026, height=0.010, segments=10,
+        location=(0.0, 0.0, 0.220), mat_index=MAT_INDEX_CLAY
+    )
+    # Cork stopper
+    faces += create_cylinder(
+        bm, radius=0.016, height=0.024, segments=10,
+        location=(0.0, 0.0, 0.235), mat_index=MAT_INDEX_WOOD
+    )
+    # Loop handle
+    faces += create_torus_ring(
+        bm, location=(-0.038, 0.0, 0.165),
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        major_radius=0.022, minor_radius=0.006,
+        major_segments=10, minor_segments=6,
+        mat_index=MAT_INDEX_CLAY
+    )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_table_scatter(bm, x, y, z_ground=0.0, ang=0.0, clutter_type='AUTO', rng=None, z_table=None):
+    """Authentic medieval tavern tabletop clutter: hollow pewter tankard, stoneware jug, wood trencher with bread, chamber candlestick."""
     if z_table is not None:
         z_ground = z_table
     if rng is None:
         rng = random.Random(42)
 
     faces = []
-    # 1. Pewter tankard with authentic upright ear handle and flared bands
-    faces += create_cylinder(
-        bm, radius=0.052, height=0.13, segments=14,
-        location=(0.08, 0.05, 0.065),
-        mat_index=MAT_INDEX_IRON
-    )
-    # Bottom base ring
-    faces += create_cylinder(
-        bm, radius=0.058, height=0.016, segments=14,
-        location=(0.08, 0.05, 0.008),
-        mat_index=MAT_INDEX_IRON
-    )
-    # Top rim band
-    faces += create_cylinder(
-        bm, radius=0.056, height=0.014, segments=14,
-        location=(0.08, 0.05, 0.123),
-        mat_index=MAT_INDEX_IRON
-    )
-    # Upright ear handle on the side
-    faces += create_torus_ring(
-        bm, location=(0.08 + 0.056, 0.05, 0.068),
-        rotation=(math.pi * 0.5, 0.0, 0.0),
-        major_radius=0.032, minor_radius=0.008,
-        major_segments=10, minor_segments=6,
-        mat_index=MAT_INDEX_IRON
-    )
+    # 1. Pewter tankard (hollow interior with ale!)
+    faces += build_pewter_tankard(bm, 0.08, 0.05, 0.0, 0.15)
+    # 2. Wooden trencher plate with bread & cheese
+    faces += build_trencher_plate(bm, -0.10, -0.05, 0.0, -0.20)
+    # 3. Stoneware flagon / jug
+    faces += build_wine_flagon(bm, -0.06, 0.12, 0.0, 0.40)
+    # 4. Chamber candlestick
+    faces += build_candlestick(bm, 0.13, -0.09, 0.0, 0.0)
 
-    # 2. Wooden trencher plate with crusty golden bread roll & cheese wedge
-    faces += create_cylinder(
-        bm, radius=0.12, height=0.014, segments=16,
-        location=(-0.10, -0.05, 0.007),
-        mat_index=MAT_INDEX_WOOD
-    )
-    # Raised outer plate rim
-    faces += create_cylinder(
-        bm, radius=0.125, height=0.008, segments=16,
-        location=(-0.10, -0.05, 0.014),
-        mat_index=MAT_INDEX_TIMBER
-    )
-    # Bread roll (rounded golden loaf)
-    faces += create_cylinder(
-        bm, radius=0.052, height=0.032, segments=12,
-        location=(-0.11, -0.04, 0.026),
-        mat_index=MAT_INDEX_CLAY
-    )
-    # Bread scoring crust slit
-    faces += create_beveled_box(
-        bm, size=(0.06, 0.012, 0.012),
-        location=(-0.11, -0.04, 0.040),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.003
-    )
-    # Cheese wedge
-    faces += create_cone(
-        bm, radius1=0.038, radius2=0.005, height=0.026, segments=5,
-        location=(-0.05, -0.08, 0.023),
-        mat_index=MAT_INDEX_WAX
-    )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
 
-    # 3. Stoneware Tavern Ale / Wine Flagon (warm glazed ceramic body, neck, cork stopper & loop handle)
-    faces += create_cylinder(
-        bm, radius=0.048, height=0.13, segments=14,
-        location=(-0.06, 0.11, 0.065),
-        mat_index=MAT_INDEX_CLAY
-    )
-    # Flagon shoulder taper
-    faces += create_cone(
-        bm, radius1=0.048, radius2=0.022, height=0.042, segments=12,
-        location=(-0.06, 0.11, 0.141),
-        mat_index=MAT_INDEX_CLAY
-    )
-    # Bottle neck with lip
-    faces += create_cylinder(
-        bm, radius=0.022, height=0.045, segments=10,
-        location=(-0.06, 0.11, 0.174),
-        mat_index=MAT_INDEX_CLAY
-    )
+
+def build_bottle(bm, x, y, z_ground=0.0, ang=0.0, bottle_type='WINE'):
+    """Detailed glass wine bottle or apothecary potion flask with cork stopper."""
+    faces = []
+    is_potion = (bottle_type == 'POTION')
+    r_body = 0.046 if is_potion else 0.038
+    h_body = 0.11 if is_potion else 0.16
+
+    # Bottom push-up punt
+    faces += create_cylinder(bm, radius=r_body, height=0.014, segments=12,
+                            location=(0.0, 0.0, 0.007), mat_index=MAT_INDEX_BOTTLE_GLASS)
+    # Main bottle body
+    faces += create_cylinder(bm, radius=r_body, height=h_body, segments=14,
+                            location=(0.0, 0.0, 0.014 + h_body * 0.5), mat_index=MAT_INDEX_BOTTLE_GLASS)
+    # Tapered shoulder
+    sh_z = 0.014 + h_body
+    faces += create_cone(bm, radius1=r_body, radius2=0.015, height=0.045, segments=12,
+                         location=(0.0, 0.0, sh_z + 0.0225), mat_index=MAT_INDEX_BOTTLE_GLASS)
+    # Slender neck
+    neck_z = sh_z + 0.045
+    faces += create_cylinder(bm, radius=0.015, height=0.065, segments=10,
+                            location=(0.0, 0.0, neck_z + 0.0325), mat_index=MAT_INDEX_BOTTLE_GLASS)
+    # Rolled lip collar
+    faces += create_cylinder(bm, radius=0.018, height=0.010, segments=10,
+                            location=(0.0, 0.0, neck_z + 0.060), mat_index=MAT_INDEX_BOTTLE_GLASS)
     # Cork stopper
-    faces += create_cylinder(
-        bm, radius=0.016, height=0.025, segments=10,
-        location=(-0.06, 0.11, 0.204),
-        mat_index=MAT_INDEX_WOOD
+    faces += create_cylinder(bm, radius=0.013, height=0.022, segments=10,
+                            location=(0.0, 0.0, neck_z + 0.071), mat_index=MAT_INDEX_WOOD)
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_bottle_cluster(bm, x, y, z_ground=0.0, ang=0.0):
+    """Cluster of 3 varied bottles: wine bottle, round spirits flask, and small apothecary bottle."""
+    faces = []
+    # 1. Tall green wine bottle
+    faces += build_bottle(bm, 0.04, 0.02, 0.0, 0.2, bottle_type='WINE')
+    # 2. Squat rounded spirits flask
+    faces += build_bottle(bm, -0.05, 0.03, 0.0, -0.5, bottle_type='POTION')
+    # 3. Flagon / smaller bottle
+    faces += build_bottle(bm, 0.00, -0.05, 0.0, 1.1, bottle_type='WINE')
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_bread_loaf(bm, x, y, z_ground=0.0, ang=0.0):
+    """Artisan baked round boule loaf with crusty dome and dusted flour."""
+    faces = []
+    # Generous artisan bread boule with organic dome
+    faces += create_bread_boule(
+        bm, radius=0.115, height=0.078, segments=20, rings=10,
+        location=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_BREAD
     )
-    # Small finger loop handle on the flagon neck
-    faces += create_torus_ring(
-        bm, location=(-0.06 - 0.036, 0.11, 0.145),
-        rotation=(math.pi * 0.5, 0.0, 0.0),
-        major_radius=0.022, minor_radius=0.006,
-        major_segments=8, minor_segments=5,
-        mat_index=MAT_INDEX_CLAY
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_pumpkin(bm, x, y, z_ground=0.0, ang=0.0, radius=0.20):
+    """Stylized organic segmented pumpkin with spherical lobes, stem hollow, and twisted stalk."""
+    faces = []
+    faces += create_organic_pumpkin(
+        bm, radius=radius, height=radius * 1.15, num_ribs=8,
+        segments_per_rib=4, rings=12,
+        location=(0.0, 0.0, 0.0),
+        mat_index=MAT_INDEX_PUMPKIN, stem_mat_index=MAT_INDEX_TIMBER
+    )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_potted_plant_small(bm, x, y, z_ground=0.0, ang=0.0):
+    """Tabletop terracotta planter with lush botanical greenery."""
+    faces = []
+    # Terracotta pot
+    faces += create_cylinder(bm, radius=0.052, height=0.012, segments=14,
+                            location=(0.0, 0.0, 0.006), mat_index=MAT_INDEX_CLAY)
+    faces += create_cone(bm, radius1=0.052, radius2=0.082, height=0.11, segments=14,
+                         location=(0.0, 0.0, 0.012 + 0.055), mat_index=MAT_INDEX_CLAY)
+    faces += create_cylinder(bm, radius=0.088, height=0.020, segments=14,
+                            location=(0.0, 0.0, 0.122 + 0.010), mat_index=MAT_INDEX_CLAY)
+    # Rich potting soil disc
+    faces += create_cylinder(bm, radius=0.076, height=0.008, segments=12,
+                            location=(0.0, 0.0, 0.118), mat_index=MAT_INDEX_DIRT)
+
+    # Lush radiating botanical leaves
+    num_leaves = 8
+    for i in range(num_leaves):
+        la = i * (2.0 * math.pi / num_leaves) + 0.12
+        ca, sa = math.cos(la), math.sin(la)
+        leaf_dist = 0.075
+        leaf_x = ca * leaf_dist
+        leaf_y = sa * leaf_dist
+        leaf_z = 0.130 + (i % 2) * 0.03
+        # Stem and leaf blade
+        faces += create_beveled_box(
+            bm, size=(0.048, 0.095, 0.006),
+            location=(leaf_x + ca * 0.045, leaf_y + sa * 0.045, leaf_z),
+            rotation=(ca * 0.45, -sa * 0.45, la),
+            mat_index=MAT_INDEX_PLANT, bevel_amount=0.002
+        )
+    # Central young shoot
+    faces += create_cone(bm, radius1=0.015, radius2=0.002, height=0.075, segments=6,
+                         location=(0.0, 0.0, 0.130 + 0.0375), mat_index=MAT_INDEX_PLANT)
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_potted_plant_large(bm, x, y, z_ground=0.0, ang=0.0):
+    """Large ornamental floor planter urn with tall lush indoor ficus/shrub."""
+    faces = []
+    # Heavy stone/clay urn base plinth
+    faces += create_cylinder(bm, radius=0.18, height=0.04, segments=16,
+                            location=(0.0, 0.0, 0.02), mat_index=MAT_INDEX_CUT_STONE)
+    # Flared lower urn
+    faces += create_cone(bm, radius1=0.15, radius2=0.24, height=0.22, segments=16,
+                         location=(0.0, 0.0, 0.04 + 0.11), mat_index=MAT_INDEX_CLAY)
+    # Upper urn waist & mouth
+    faces += create_cone(bm, radius1=0.24, radius2=0.19, height=0.18, segments=16,
+                         location=(0.0, 0.0, 0.26 + 0.09), mat_index=MAT_INDEX_CLAY)
+    faces += create_cylinder(bm, radius=0.22, height=0.035, segments=16,
+                            location=(0.0, 0.0, 0.44 + 0.0175), mat_index=MAT_INDEX_CLAY)
+    # Potting soil
+    faces += create_cylinder(bm, radius=0.18, height=0.015, segments=14,
+                            location=(0.0, 0.0, 0.43), mat_index=MAT_INDEX_DIRT)
+
+    # Central woody trunk
+    trunk_h = 0.55
+    faces += create_cylinder(bm, radius=0.032, height=trunk_h, segments=10,
+                            location=(0.0, 0.0, 0.44 + trunk_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # Multi-tiered lush foliage
+    # Tier 1: Lower broad canopy
+    for i in range(5):
+        la = i * (2.0 * math.pi / 5)
+        ca, sa = math.cos(la), math.sin(la)
+        faces += create_beveled_box(
+            bm, size=(0.14, 0.28, 0.010),
+            location=(ca * 0.22, sa * 0.22, 0.72),
+            rotation=(ca * 0.42, -sa * 0.42, la),
+            mat_index=MAT_INDEX_PLANT, bevel_amount=0.003
+        )
+    # Tier 2: Mid bushy foliage
+    for i in range(6):
+        la = i * (2.0 * math.pi / 6) + 0.35
+        ca, sa = math.cos(la), math.sin(la)
+        faces += create_beveled_box(
+            bm, size=(0.12, 0.24, 0.010),
+            location=(ca * 0.18, sa * 0.18, 0.95),
+            rotation=(ca * 0.32, -sa * 0.32, la),
+            mat_index=MAT_INDEX_PLANT, bevel_amount=0.003
+        )
+    # Tier 3: Top crown
+    for i in range(4):
+        la = i * (2.0 * math.pi / 4) + 0.20
+        ca, sa = math.cos(la), math.sin(la)
+        faces += create_beveled_box(
+            bm, size=(0.10, 0.20, 0.008),
+            location=(ca * 0.12, sa * 0.12, 1.15),
+            rotation=(ca * 0.20, -sa * 0.20, la),
+            mat_index=MAT_INDEX_PLANT, bevel_amount=0.002
+        )
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_potted_herb(bm, x, y, z_ground=0.0, ang=0.0):
+    """Kitchen herb bowl with true concave interior cavity and lush culinary herbs (parsley, basil, thyme)."""
+    faces = []
+    # Shallow terracotta herb bowl with concave hollow interior (100% clay)
+    h_bowl = 0.065
+    depth_bowl = 0.048
+    faces += create_hollow_dish(
+        bm, radius_base=0.065, radius_rim=0.118, inner_radius_rim=0.108,
+        inner_radius_base=0.055, height=h_bowl, inner_depth=depth_bowl,
+        segments=18, location=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_CLAY, smooth=True
+    )
+    # Soil level inside the hollow bowl
+    z_soil = max(0.015, h_bowl - depth_bowl + 0.024)
+    faces += create_cylinder(
+        bm, radius=0.088, height=0.010, segments=16,
+        location=(0.0, 0.0, z_soil), mat_index=MAT_INDEX_DIRT
+    )
+    # Bushy cluster of lush botanical herbs rising from soil
+    num_herbs = 8
+    for i in range(num_herbs):
+        ha = i * (2.0 * math.pi / num_herbs)
+        hx = 0.045 * math.cos(ha)
+        hy = 0.045 * math.sin(ha)
+        faces += create_beveled_box(
+            bm, size=(0.042, 0.075, 0.006),
+            location=(hx, hy, z_soil + 0.020 + (i % 2) * 0.014),
+            rotation=(math.cos(ha) * 0.40, math.sin(ha) * 0.40, ha),
+            mat_index=MAT_INDEX_PLANT, bevel_amount=0.002
+        )
+    faces += create_beveled_box(
+        bm, size=(0.055, 0.055, 0.008),
+        location=(0.0, 0.0, z_soil + 0.038),
+        rotation=(0.10, -0.15, 0.7),
+        mat_index=MAT_INDEX_PLANT, bevel_amount=0.002
+    )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_folded_cloth(bm, x, y, z_ground=0.0, ang=0.0):
+    """Stack of neatly folded linens, blankets and kitchen towels."""
+    faces = []
+    # Layer 1: Base folded blue checkered linen towel
+    faces += create_beveled_box(
+        bm, size=(0.28, 0.22, 0.024),
+        location=(0.0, 0.0, 0.012),
+        mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.004
+    )
+    # Layer 2: White stitched linen fold (slightly rotated)
+    faces += create_beveled_box(
+        bm, size=(0.26, 0.21, 0.024),
+        location=(0.005, 0.002, 0.024 + 0.012),
+        rotation=(0.0, 0.0, 0.06),
+        mat_index=MAT_INDEX_FABRIC_WHITE, bevel_amount=0.004
+    )
+    # Layer 3: Warm red fabric fold
+    faces += create_beveled_box(
+        bm, size=(0.27, 0.20, 0.024),
+        location=(-0.004, -0.003, 0.048 + 0.012),
+        rotation=(0.0, 0.0, -0.05),
+        mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.004
+    )
+    # Layer 4: Top folded stitched cloth
+    faces += create_beveled_box(
+        bm, size=(0.25, 0.19, 0.022),
+        location=(0.002, 0.003, 0.072 + 0.011),
+        rotation=(0.0, 0.0, 0.03),
+        mat_index=MAT_INDEX_FABRIC_STITCHED, bevel_amount=0.004
+    )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_foodprep_clutter(bm, x, y, z_ground=0.0, ang=0.0):
+    """Foodprep cluster for kitchen counters: butcher block chopping board, realistic chef knife, bread, cheese, hollow clay bowl."""
+    faces = []
+    # 1. Thick solid wooden butcher block / cutting board
+    board_t = 0.036
+    faces += create_beveled_box(
+        bm, size=(0.38, 0.26, board_t),
+        location=(0.0, 0.0, board_t * 0.5),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.005
     )
 
-    # 4. Chamber candlestick on saucer with finger ring and glowing flame
+    # 2. Authentic kitchen chef's knife resting on the cutting board
+    # Blade: forged steel, curved belly, sharp point at tip
+    blade_len = 0.15
+    blade_h = 0.032
+    blade_t = 0.003
+    knife_yaw = 0.24
+    kx, ky = -0.03, 0.05
+    # Steel blade with tapered cutting edge
+    faces += create_beveled_box(
+        bm, size=(blade_len, blade_h, blade_t),
+        location=(kx, ky, board_t + blade_t * 0.5),
+        rotation=(0.0, 0.0, knife_yaw),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.001
+    )
+    # Polished brass bolster collar
+    cos_ky, sin_ky = math.cos(knife_yaw), math.sin(knife_yaw)
+    bolster_x = kx - (blade_len * 0.5 + 0.005) * cos_ky
+    bolster_y = ky - (blade_len * 0.5 + 0.005) * sin_ky
+    faces += create_beveled_box(
+        bm, size=(0.010, 0.020, 0.012),
+        location=(bolster_x, bolster_y, board_t + 0.006),
+        rotation=(0.0, 0.0, knife_yaw),
+        mat_index=MAT_INDEX_WAX, bevel_amount=0.001
+    )
+    # Ergonomic wooden handle scales
+    handle_len = 0.095
+    handle_x = bolster_x - (handle_len * 0.5 + 0.005) * cos_ky
+    handle_y = bolster_y - (handle_len * 0.5 + 0.005) * sin_ky
+    faces += create_beveled_box(
+        bm, size=(handle_len, 0.018, 0.014),
+        location=(handle_x, handle_y, board_t + 0.007),
+        rotation=(0.0, 0.0, knife_yaw),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.003
+    )
+
+    # 3. Crusty artisan bread boule sitting on the board (organic dome, NO timber bars!)
+    faces += create_bread_boule(
+        bm, radius=0.058, height=0.042, segments=16, rings=7,
+        location=(0.085, -0.025, board_t), mat_index=MAT_INDEX_BREAD
+    )
+
+    # 4. Hollow ceramic ingredient / salt bowl with wooden spoon (100% clay)
+    bowl_h = 0.034
+    bowl_depth = 0.026
+    bowl_x, bowl_y = -0.08, -0.06
+    faces += create_hollow_dish(
+        bm, radius_base=0.034, radius_rim=0.058, inner_radius_rim=0.050,
+        inner_radius_base=0.028, height=bowl_h, inner_depth=bowl_depth,
+        segments=16, location=(bowl_x, bowl_y, board_t), mat_index=MAT_INDEX_CLAY, smooth=True
+    )
+    # Wooden tasting spoon resting on the rim dipping into the cavity
+    faces += create_beveled_box(
+        bm, size=(0.065, 0.010, 0.005),
+        location=(bowl_x + 0.018, bowl_y + 0.018, board_t + 0.022),
+        rotation=(0.32, -0.28, 0.75),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.001
+    )
+
+    # 5. Folded blue/cream checkered linen kitchen towel draped on board edge
+    faces += create_beveled_box(
+        bm, size=(0.12, 0.16, 0.016),
+        location=(0.06, 0.07, board_t + 0.008),
+        rotation=(0.0, 0.0, -0.15),
+        mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.003
+    )
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84):
+    """Luxurious 3-cushion salon sofa / settee with damask upholstery,
+    turned wooden feet, twin deep plush cushions, rolled arms, and throw pillows."""
+    faces = []
+    deck_h = 0.34
+    foot_h = 0.080
+    foot_r = 0.042
+    foot_inset_x = length * 0.5 - 0.10
+    foot_inset_y = depth * 0.5 - 0.09
+
+    # 1. Six elegant turned timber bun feet tucked directly under chassis corners & center
+    for lx in (-foot_inset_x, 0.0, foot_inset_x):
+        for ly in (-foot_inset_y, foot_inset_y):
+            faces += create_cylinder(
+                bm, radius=foot_r, height=foot_h, segments=12,
+                location=(lx, ly, foot_h * 0.5),
+                mat_index=MAT_INDEX_TIMBER, smooth=True
+            )
+            faces += create_cylinder(
+                bm, radius=foot_r + 0.005, height=0.010, segments=12,
+                location=(lx, ly, foot_h - 0.005),
+                mat_index=MAT_INDEX_WOOD, smooth=True
+            )
+
+    # 2. Main upholstered base apron (solid chassis wrapping around the bottom)
+    apron_h = deck_h - foot_h
+    faces += create_beveled_box(
+        bm, size=(length - 0.04, depth - 0.04, apron_h),
+        location=(0.0, 0.0, foot_h + apron_h * 0.5),
+        mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.028
+    )
+
+    # 3. Two wide, plush seat cushions
+    cushion_thick = 0.14
+    cushion_w = (length - 0.30) * 0.5 - 0.015
+    cushion_d = depth - 0.16
+    for cx in (-cushion_w * 0.5 - 0.01, cushion_w * 0.5 + 0.01):
+        faces += create_beveled_box(
+            bm, size=(cushion_w, cushion_d, cushion_thick),
+            location=(cx, -0.02, deck_h + cushion_thick * 0.5),
+            mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.032
+        )
+
+    # 4. Left and right rolled scroll armrests
+    arm_w = 0.14
+    arm_h = 0.25
+    arm_cz = deck_h + arm_h * 0.5
+    for sgn in (-1.0, 1.0):
+        ax = sgn * (length * 0.5 - arm_w * 0.5 - 0.02)
+        faces += create_beveled_box(
+            bm, size=(arm_w, depth - 0.06, arm_h),
+            location=(ax, -0.01, arm_cz),
+            mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.025
+        )
+        faces += create_cylinder(
+            bm, radius=arm_w * 0.52, height=depth - 0.05, segments=14,
+            location=(ax, -0.01, deck_h + arm_h),
+            rotation=(math.pi * 0.5, 0.0, 0.0),
+            mat_index=MAT_INDEX_UPHOLSTERY, smooth=True
+        )
+
+    # 5. High upholstered backrest with rolled top crest
+    back_h = 0.98
+    back_span = back_h - deck_h
+    back_y = depth * 0.5 - 0.10
+    faces += create_beveled_box(
+        bm, size=(length - 0.16, 0.15, back_span),
+        location=(0.0, back_y, deck_h + back_span * 0.5),
+        rotation=(-0.07, 0.0, 0.0),
+        mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.030
+    )
     faces += create_cylinder(
-        bm, radius=0.048, height=0.010, segments=12,
-        location=(0.12, -0.09, 0.005),
-        mat_index=MAT_INDEX_IRON
+        bm, radius=0.075, height=length - 0.14, segments=14,
+        location=(0.0, back_y + 0.02, back_h),
+        rotation=(0.0, math.pi * 0.5, 0.0),
+        mat_index=MAT_INDEX_UPHOLSTERY, smooth=True
     )
-    # Finger ring on saucer edge
-    faces += create_torus_ring(
-        bm, location=(0.12 + 0.048, -0.09, 0.012),
-        rotation=(math.pi * 0.5, 0.0, 0.0),
-        major_radius=0.016, minor_radius=0.004,
-        major_segments=8, minor_segments=5,
-        mat_index=MAT_INDEX_IRON
+
+    # 6. Two plush throw pillows at either arm
+    for sgn, p_mat in [(-1.0, MAT_INDEX_FABRIC_RED), (1.0, MAT_INDEX_CLOTH_LINEN)]:
+        px = sgn * (length * 0.5 - 0.25)
+        faces += create_beveled_box(
+            bm, size=(0.28, 0.10, 0.28),
+            location=(px, back_y - 0.16, deck_h + cushion_thick + 0.10),
+            rotation=(0.18, sgn * 0.22, sgn * 0.35),
+            mat_index=p_mat, bevel_amount=0.024
+        )
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=0.86, depth=0.82):
+    """High-end fireside lounge armchair with continuous damask upholstery,
+    turned wooden bun feet, deep plush seat cushion, rolled scroll armrests,
+    enveloping winged backrest with rolled crest, and cozy throw pillow."""
+    faces = []
+    deck_h = 0.34
+    foot_h = 0.080
+    foot_r = 0.042
+    foot_inset_x = width * 0.5 - 0.08
+    foot_inset_y = depth * 0.5 - 0.09
+
+    # 1. Four elegant turned timber bun feet tucked directly under corners
+    for lx in (-foot_inset_x, foot_inset_x):
+        for ly in (-foot_inset_y, foot_inset_y):
+            faces += create_cylinder(
+                bm, radius=foot_r, height=foot_h, segments=12,
+                location=(lx, ly, foot_h * 0.5),
+                mat_index=MAT_INDEX_TIMBER, smooth=True
+            )
+            faces += create_cylinder(
+                bm, radius=foot_r + 0.005, height=0.010, segments=12,
+                location=(lx, ly, foot_h - 0.005),
+                mat_index=MAT_INDEX_WOOD, smooth=True
+            )
+
+    # 2. Main upholstered base apron (solid chassis wrapping around the bottom)
+    apron_h = deck_h - foot_h
+    faces += create_beveled_box(
+        bm, size=(width - 0.04, depth - 0.04, apron_h),
+        location=(0.0, 0.0, foot_h + apron_h * 0.5),
+        mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.028
     )
-    # Wax candle column
+
+    # 3. Deep plush upholstered seat cushion
+    cushion_thick = 0.14
+    cushion_w = width - 0.24
+    cushion_d = depth - 0.16
+    faces += create_beveled_box(
+        bm, size=(cushion_w, cushion_d, cushion_thick),
+        location=(0.0, -0.02, deck_h + cushion_thick * 0.5),
+        mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.032
+    )
+
+    # 4. Left and right rolled scroll armrests
+    arm_w = 0.13
+    arm_h = 0.25
+    arm_cz = deck_h + arm_h * 0.5
+    for sgn in (-1.0, 1.0):
+        ax = sgn * (width * 0.5 - arm_w * 0.5 - 0.02)
+        faces += create_beveled_box(
+            bm, size=(arm_w, depth - 0.06, arm_h),
+            location=(ax, -0.01, arm_cz),
+            mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.025
+        )
+        faces += create_cylinder(
+            bm, radius=arm_w * 0.52, height=depth - 0.05, segments=14,
+            location=(ax, -0.01, deck_h + arm_h),
+            rotation=(math.pi * 0.5, 0.0, 0.0),
+            mat_index=MAT_INDEX_UPHOLSTERY, smooth=True
+        )
+
+    # 5. High enveloping winged backrest with rolled top crest
+    back_h = 0.98
+    back_span = back_h - deck_h
+    back_y = depth * 0.5 - 0.10
+    faces += create_beveled_box(
+        bm, size=(width - 0.12, 0.15, back_span),
+        location=(0.0, back_y, deck_h + back_span * 0.5),
+        rotation=(-0.07, 0.0, 0.0),
+        mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.030
+    )
     faces += create_cylinder(
-        bm, radius=0.016, height=0.068, segments=10,
-        location=(0.12, -0.09, 0.042),
-        mat_index=MAT_INDEX_WAX
+        bm, radius=0.075, height=width - 0.10, segments=14,
+        location=(0.0, back_y + 0.02, back_h),
+        rotation=(0.0, math.pi * 0.5, 0.0),
+        mat_index=MAT_INDEX_UPHOLSTERY, smooth=True
     )
-    # Glowing teardrop flame
-    faces += create_cone(
-        bm, radius1=0.007, radius2=0.001, height=0.020, segments=8,
-        location=(0.12, -0.09, 0.084),
-        mat_index=MAT_INDEX_LANTERN
+    # Wingback side flares
+    for sgn in (-1.0, 1.0):
+        wx = sgn * (width * 0.5 - 0.07)
+        faces += create_beveled_box(
+            bm, size=(0.09, 0.17, back_span * 0.65),
+            location=(wx, back_y - 0.08, deck_h + back_span * 0.58),
+            rotation=(-0.07, sgn * 0.12, sgn * 0.14),
+            mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.022
+        )
+
+    # 6. Plush accent throw pillow resting nestled in corner
+    faces += create_beveled_box(
+        bm, size=(0.28, 0.10, 0.28),
+        location=(width * 0.14, back_y - 0.16, deck_h + cushion_thick + 0.10),
+        rotation=(0.18, 0.22, 0.35),
+        mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.024
+    )
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+build_sofa_chair = build_armchair
+
+
+def build_chair(bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
+                ang: float = 0.0, seat_h: float = 0.48, width: float = 0.46,
+                depth: float = 0.44, back_h: float = 0.92):
+    """Stylized medieval tavern / dining chair with chamfered timber legs,
+    lower stretchers, comfortable contoured seat, and curved ladderback rails."""
+    faces = []
+    leg_thick = 0.045
+    leg_inset_x = width * 0.5 - 0.035
+    leg_inset_y = depth * 0.5 - 0.035
+
+    # 1. Front legs (from floor to underside of seat)
+    for lx in (-leg_inset_x, leg_inset_x):
+        faces += create_beveled_box(
+            bm, size=(leg_thick, leg_thick, seat_h),
+            location=(lx, -leg_inset_y, seat_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+        )
+
+    # 2. Rear legs & upright back stiles (continuous from floor all the way up to back_h)
+    for lx in (-leg_inset_x, leg_inset_x):
+        faces += create_beveled_box(
+            bm, size=(leg_thick, leg_thick, back_h),
+            location=(lx, leg_inset_y, back_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+        )
+        # Decorative finial / chamfer cap atop each back stile
+        faces += create_beveled_box(
+            bm, size=(leg_thick + 0.012, leg_thick + 0.012, 0.035),
+            location=(lx, leg_inset_y, back_h + 0.018),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004
+        )
+
+    # 3. Lower perimeter stretchers (bracing all four sides)
+    str_h = 0.16
+    str_thick = 0.024
+    # Side stretchers
+    faces += create_beveled_box(
+        bm, size=(str_thick, depth - 0.07, 0.035),
+        location=(-leg_inset_x, 0.0, str_h),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.004
+    )
+    faces += create_beveled_box(
+        bm, size=(str_thick, depth - 0.07, 0.035),
+        location=(leg_inset_x, 0.0, str_h),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.004
+    )
+    # Front and rear cross stretchers (staggered slightly in height)
+    faces += create_beveled_box(
+        bm, size=(width - 0.07, str_thick, 0.035),
+        location=(0.0, -leg_inset_y, str_h - 0.03),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.004
+    )
+    faces += create_beveled_box(
+        bm, size=(width - 0.07, str_thick, 0.035),
+        location=(0.0, leg_inset_y, str_h + 0.03),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.004
+    )
+
+    # 4. Seat plank (beveled solid timber slab with apron)
+    seat_thick = 0.035
+    faces += create_beveled_box(
+        bm, size=(width, depth, seat_thick),
+        location=(0.0, 0.0, seat_h + seat_thick * 0.5),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
+    )
+
+    # 5. Padded cloth cushion with tie-downs
+    cushion_thick = 0.025
+    faces += create_beveled_box(
+        bm, size=(width - 0.06, depth - 0.06, cushion_thick),
+        location=(0.0, 0.0, seat_h + seat_thick + cushion_thick * 0.5),
+        mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.007
+    )
+
+    # 6. Curved ladderback backrest (top crest rail + middle splats)
+    splat_w = width - 0.04
+    # Top arched crest rail
+    faces += create_beveled_box(
+        bm, size=(splat_w, 0.026, 0.08),
+        location=(0.0, leg_inset_y, back_h - 0.05),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
+    )
+    # Mid-back lumbar rail
+    faces += create_beveled_box(
+        bm, size=(splat_w, 0.022, 0.05),
+        location=(0.0, leg_inset_y, seat_h + 0.18),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.005
+    )
+    # Lower lumbar rail
+    faces += create_beveled_box(
+        bm, size=(splat_w, 0.020, 0.04),
+        location=(0.0, leg_inset_y, seat_h + 0.08),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.004
     )
 
     transform_faces(faces, _place(x, y, z_ground, ang))
