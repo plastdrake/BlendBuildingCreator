@@ -88,6 +88,7 @@ def _side_plan(props, ctx):
     wall = ring[0]
 
     walk_lo, walk_hi = wall['lo'], wall['hi']
+    walk_span = walk_hi - walk_lo
     min_land = max(2.20, STAIR_W + 0.10)
     flen, _ = flight_steps(found_h + floor_h)
     flen = min(flen, max(3.0, walk_span - min_land * 2.0))
