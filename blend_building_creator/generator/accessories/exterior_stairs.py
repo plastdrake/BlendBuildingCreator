@@ -88,12 +88,12 @@ def _side_plan(props, ctx):
     wall = ring[0]
 
     walk_lo, walk_hi = wall['lo'], wall['hi']
-    walk_span = walk_hi - walk_lo
+    min_land = max(2.20, STAIR_W + 0.10)
     flen, _ = flight_steps(found_h + floor_h)
-    flen = min(flen, max(3.0, walk_span - 3.6))
+    flen = min(flen, max(3.0, walk_span - min_land * 2.0))
 
     # Landings extend all the way to walk_lo and walk_hi so they align with walkway ends
-    land_len = max(1.80, (walk_span - flen) * 0.5)
+    land_len = max(min_land, (walk_span - flen) * 0.5)
     stair_lo = walk_lo + land_len
     stair_hi = walk_hi - land_len
 
@@ -427,12 +427,25 @@ def _build_side_stairs(bm, props, ctx, plan):
     deck_cx_along = (walk_lo + walk_hi) * 0.5
     top_z = found_h + (n_floors - 1) * floor_h
 
-    # Support posts under outer corners of landings (from ground to top_z)
-    for pa in (walk_lo + 0.08, stair_lo - 0.12, stair_hi + 0.12, walk_hi - 0.08):
-        px, py = _wall_point(wall, pa, u_out_edge - 0.08)
-        create_beveled_box(bm, size=(0.16, 0.16, top_z),
-                           location=(px, py, top_z * 0.5),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
+    # Support posts under outer corners of landings, sized up to the actual highest landing level
+    high_floors = [fl for fl in range(1, n_floors) if fl % 2 == 1]
+    low_floors = [fl for fl in range(1, n_floors) if fl % 2 == 0]
+    max_z_high = (found_h + max(high_floors) * floor_h) if high_floors else 0.0
+    max_z_low = (found_h + max(low_floors) * floor_h) if low_floors else 0.0
+
+    if max_z_low > 0.1:
+        for pa in (walk_lo + 0.08, stair_lo - 0.12):
+            px, py = _wall_point(wall, pa, u_out_edge - 0.08)
+            create_beveled_box(bm, size=(0.16, 0.16, max_z_low),
+                               location=(px, py, max_z_low * 0.5),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
+
+    if max_z_high > 0.1:
+        for pa in (stair_hi + 0.12, walk_hi - 0.08):
+            px, py = _wall_point(wall, pa, u_out_edge - 0.08)
+            create_beveled_box(bm, size=(0.16, 0.16, max_z_high),
+                               location=(px, py, max_z_high * 0.5),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
 
     # Support posts under the gallery deck (at u_deck_out - 0.08)
     n_posts = max(2, int(math.ceil(walk_len / 2.4)))
