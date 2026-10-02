@@ -281,19 +281,24 @@ def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
         ux, uy = dx / length, dy / length
 
         # Door/portal openings are stored relative to the exterior wall start.
-        # Convert them to this interior segment and expand a little for the jamb.
+        # The trim line sits half a wall thickness inboard of that origin, so
+        # shift the opening by wall_t/2 before converting to the trim segment
+        # (otherwise every cut is half a wall thickness off and the baseboard
+        # crosses the doorway).
         cuts = []
         reversed_from_wall_builder = side in {'back', 'left'}
-        outer_length = length + wall_thickness * 2.0
+        shift = wall_thickness * 0.5
         for opening in wall_openings.get(side, []):
             if opening.get('z_start', z_floor + 1.0) <= z_floor + trim_h_floor:
                 clr = opening.get('trim_clearance', reveal)
+                u0 = opening.get('u_start', 0.0)
+                u1 = opening.get('u_end', 0.0)
                 if reversed_from_wall_builder:
-                    a = outer_length - opening.get('u_end', 0.0) - wall_thickness - clr
-                    b = outer_length - opening.get('u_start', 0.0) - wall_thickness + clr
+                    a = length - (u1 - shift) - clr
+                    b = length - (u0 - shift) + clr
                 else:
-                    a = opening.get('u_start', 0.0) - wall_thickness - clr
-                    b = opening.get('u_end', 0.0) - wall_thickness + clr
+                    a = (u0 - shift) - clr
+                    b = (u1 - shift) + clr
                 a = max(0.0, a)
                 b = min(length, b)
                 if b > a:
@@ -669,6 +674,25 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
     trim_h_ceil = 0.09
     trim_ceil_d = 0.026
 
+    _uvl = bm.loops.layers.uv.verify()
+
+    def _plank_panel(size, location, rotation):
+        """Wall panel whose plank grain runs top-to-bottom (tagged so the
+        global box-UV pass leaves it alone)."""
+        fs = create_box(bm, size=size, location=location, rotation=rotation, mat_index=mat_index)
+        for f in fs:
+            f.tag = True
+            f.normal_update()
+            n = f.normal
+            for lp in f.loops:
+                co = lp.vert.co
+                if abs(n.z) < 0.7:
+                    along = co.x if abs(n.y) >= abs(n.x) else co.y
+                    lp[_uvl].uv = Vector((co.z * 0.55, along * 0.55))
+                else:
+                    lp[_uvl].uv = Vector((co.x * 0.55, co.y * 0.55))
+        return fs
+
     # Resolve doorway
     has_door = False
     u_door_cx = 0.0
@@ -702,11 +726,10 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
         cx = (x1 + x2) * 0.5
         cy = (y1 + y2) * 0.5
         cz = z_floor + H * 0.5
-        create_box(
-            bm, size=(length, thickness, H),
+        _plank_panel(
+            size=(length, thickness, H),
             location=(cx, cy, cz),
             rotation=(0.0, 0.0, ang),
-            mat_index=mat_index
         )
         for sgn in (-1.0, 1.0):
             off = sgn * (thickness * 0.5 + trim_d * 0.5)
@@ -739,11 +762,10 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
     len1 = rough_start
     if len1 > 0.02:
         c1 = len1 * 0.5
-        create_box(
-            bm, size=(len1, thickness, H),
+        _plank_panel(
+            size=(len1, thickness, H),
             location=(x1 + ux * c1, y1 + uy * c1, z_floor + H * 0.5),
             rotation=(0.0, 0.0, ang),
-            mat_index=mat_index
         )
         for sgn in (-1.0, 1.0):
             off = sgn * (thickness * 0.5 + trim_d * 0.5)
@@ -761,22 +783,20 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
     if top_h > 0.02:
         c2 = (rough_start + rough_end) * 0.5
         header_len = rough_end - rough_start
-        create_box(
-            bm, size=(header_len, thickness, top_h),
+        _plank_panel(
+            size=(header_len, thickness, top_h),
             location=(x1 + ux * c2, y1 + uy * c2, z_floor + door_h + top_pad + top_h * 0.5),
             rotation=(0.0, 0.0, ang),
-            mat_index=mat_index
         )
 
     # 3. Right segment
     len3 = length - rough_end
     if len3 > 0.02:
         c3 = rough_end + len3 * 0.5
-        create_box(
-            bm, size=(len3, thickness, H),
+        _plank_panel(
+            size=(len3, thickness, H),
             location=(x1 + ux * c3, y1 + uy * c3, z_floor + H * 0.5),
             rotation=(0.0, 0.0, ang),
-            mat_index=mat_index
         )
         for sgn in (-1.0, 1.0):
             off = sgn * (thickness * 0.5 + trim_d * 0.5)
@@ -832,15 +852,102 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
     )
 
 
-def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, total_floors=1):
+# ---------------------------------------------------------------------------
+# Interior programs: declarative room mixes per building type.
+# AUTO follows the archetype logic below; choosing a program (from the UI)
+# overrides it. Utility roles never get rugs in an industrial fit-out.
+# ---------------------------------------------------------------------------
+_INTERIOR_PROGRAMS = {
+    'RESIDENTIAL': {
+        'ground': ('HOUSE_HALL', 'KITCHEN', 'PANTRY', 'LIBRARY'),
+        'upper': ('STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'STUDY', 'GUEST_ROOM'),
+    },
+    'HOSPITALITY': {
+        'ground': ('TAVERN_TAPROOM', 'KITCHEN', 'PANTRY', 'CELLAR'),
+        'upper': ('STAIR_LANDING', 'GUEST_ROOM', 'GUEST_ROOM', 'MASTER_BED', 'STUDY'),
+    },
+    'CIVIC': {
+        'ground': ('GREAT_HALL', 'COUNCIL_CHAMBER', 'ARCHIVE', 'STUDY'),
+        'upper': ('STAIR_LANDING', 'MAYOR_OFFICE', 'OFFICE', 'STUDY', 'ARCHIVE'),
+    },
+    'MILITARY': {
+        'ground': ('DRILL_HALL', 'MESS_HALL', 'ARMORY', 'STORAGE'),
+        'upper': ('STAIR_LANDING', 'BARRACKS_DORM', 'BARRACKS_DORM', 'OFFICER_QUARTERS'),
+    },
+    'SACRED': {
+        'ground': ('CHAPEL_HALL', 'INFIRMARY', 'APOTHECARY', 'STUDY'),
+        'upper': ('STAIR_LANDING', 'HEALER_QUARTERS', 'STUDY', 'BEDROOM'),
+    },
+    'COMMERCIAL': {
+        'ground': ('STORE', 'WORKSHOP', 'STORAGE', 'PANTRY'),
+        'upper': ('STAIR_LANDING', 'HOUSE_HALL', 'BEDROOM', 'KITCHEN'),
+    },
+    'INDUSTRIAL': {
+        'ground': ('WORKSHOP', 'STORAGE', 'STORE', 'OFFICE'),
+        'upper': ('STAIR_LANDING', 'STORAGE', 'WORKSHOP', 'OFFICE'),
+        'no_utility_rugs': True,
+    },
+    'RANGER': {
+        'ground': ('FLETCHER_WORKSHOP', 'RANGE', 'STORAGE', 'LODGE'),
+        'upper': ('STAIR_LANDING', 'BARRACKS_DORM', 'LODGE', 'BEDROOM'),
+    },
+}
+
+_ARCHETYPE_PROGRAM = {
+    'HOUSE': 'RESIDENTIAL', 'MANOR': 'RESIDENTIAL', 'TENEMENT': 'RESIDENTIAL',
+    'TAVERN': 'HOSPITALITY', 'INN': 'HOSPITALITY',
+    'TOWN_HALL': 'CIVIC', 'CIVIC': 'CIVIC', 'GUILDHALL': 'CIVIC',
+    'BARRACKS': 'MILITARY', 'INFANTRY_BARRACKS': 'MILITARY', 'KNIGHTS_MANOR': 'MILITARY',
+    'ARCHERY': 'RANGER', 'ARCHERY_RANGE': 'RANGER',
+    'CHAPEL': 'SACRED', 'HEALERS_CHAPEL': 'SACRED',
+    'WAREHOUSE': 'INDUSTRIAL', 'LUMBERMILL': 'INDUSTRIAL', 'BLACKSMITH': 'INDUSTRIAL',
+    'QUARRY': 'INDUSTRIAL',
+    'BAKERY': 'COMMERCIAL', 'FISHERMAN': 'COMMERCIAL', 'BREWERY': 'COMMERCIAL',
+    'BUTCHER': 'COMMERCIAL', 'TAILOR': 'COMMERCIAL', 'TOOLSMITH': 'COMMERCIAL',
+    'JEWELER': 'COMMERCIAL', 'FURNITURE_MAKER': 'COMMERCIAL',
+}
+
+
+def resolve_interior_program(archetype, program_override='AUTO'):
+    """Resolve the active interior program: explicit UI choice, else archetype."""
+    if program_override and program_override != 'AUTO':
+        return program_override
+    return _ARCHETYPE_PROGRAM.get(archetype, 'RESIDENTIAL')
+
+
+def _program_roles(program, fl_idx, num_rooms, has_stairs_landing):
+    """Role pool for a chosen interior program, or None when unknown."""
+    prog = _INTERIOR_PROGRAMS.get(program)
+    if not prog:
+        return None
+    if has_stairs_landing and prog.get('upper'):
+        pool = list(prog['upper'])
+    else:
+        pool = list(prog['ground'])
+    while len(pool) < num_rooms:
+        pool.append(pool[-1] if pool else 'STORAGE')
+    return pool[:num_rooms]
+
+
+def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, total_floors=1,
+                        program=None):
+
     """Assigns functional roles to rooms on a floor based on building archetype and stair presence."""
+    if program and program != 'AUTO':
+        _p = _program_roles(program, fl_idx, num_rooms, has_stairs_landing)
+        if _p is not None:
+            return _p
     if has_stairs_landing:
         # On upper floors with stairs, Room 0 (around stair hole) is the protected landing/corridor.
         # Bedrooms and private suites are strictly placed in the separate partitioned chambers.
         if archetype in ('TAVERN', 'INN'):
             pool = ['STAIR_LANDING', 'GUEST_ROOM', 'GUEST_ROOM', 'GUEST_ROOM', 'MASTER_BED', 'STUDY']
             return pool[:num_rooms]
-        elif archetype in ('BLACKSMITH', 'WAREHOUSE', 'LUMBERMILL', 'BAKERY', 'FISHERMAN', 'BREWERY',
+        elif archetype in ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH'):
+            # Industrial upper floors are work/storage, never bedrooms or kitchens.
+            pool = ['STAIR_LANDING', 'STORAGE', 'WORKSHOP', 'OFFICE']
+            return pool[:num_rooms]
+        elif archetype in ('BAKERY', 'FISHERMAN', 'BREWERY',
                           'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER') or archetype.startswith('ARTISAN'):
             if fl_idx == 1:
                 pool = ['STAIR_LANDING', 'HOUSE_HALL', 'BEDROOM', 'KITCHEN']
@@ -903,12 +1010,13 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         pool = ['TENEMENT_KITCHEN', 'TENEMENT_BEDROOM', 'TENEMENT_KITCHEN', 'TENEMENT_BEDROOM']
         return pool[:num_rooms]
 
-    # Default HOUSE / MANOR
+    # Default HOUSE / MANOR. A house only needs ONE pantry; the largest plots
+    # get a library/reading room instead of a second storage room.
     if total_floors == 1:
-        pool = ['KITCHEN', 'BEDROOM', 'HOUSE_HALL', 'PANTRY']
+        pool = ['HOUSE_HALL', 'KITCHEN', 'BEDROOM', 'LIBRARY']
         return pool[:num_rooms]
     else:
-        pool = ['HOUSE_HALL', 'KITCHEN', 'PANTRY', 'STORAGE']
+        pool = ['HOUSE_HALL', 'KITCHEN', 'PANTRY', 'LIBRARY']
         return pool[:num_rooms]
 
 
@@ -952,14 +1060,23 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     floor_h = float(getattr(props, 'floor_height', 3.6))
     total_floors = int(getattr(props, 'num_floors', 1))
     shape = getattr(props, 'building_shape', 'RECTANGLE')
+    program = getattr(props, 'interior_program', 'AUTO')
     has_stairs_landing = (fl_idx > 0 and stair_hole is not None)
 
     dw_w = 1.30
     dw_h = min(2.65, floor_h - 0.35)
 
-    # Single open room fallback (only when explicitly requested or plot is tiny < 4.2m)
-    if not has_interior_walls or partition_style == 'OPEN' or (W < 4.2 and D < 4.2):
-        roles = _resolve_room_roles(effective_archetype, fl_idx, 1, has_stairs_landing, total_floors)
+    # Single open room fallback (only when explicitly requested, plot is tiny
+    # < 4.2m, or the archetype is an open industrial hall such as a lumbermill
+    # whose equipment fills the floor).
+    loom_open = (effective_archetype in ('LUMBERMILL', 'QUARRY'))
+    if not has_interior_walls or partition_style == 'OPEN' or (W < 4.2 and D < 4.2) or loom_open:
+        if effective_archetype == 'QUARRY':
+            roles = ['STONE_STORE']
+        elif effective_archetype == 'LUMBERMILL':
+            roles = ['WORKSHOP' if fl_idx == 0 else 'STORAGE']
+        else:
+            roles = _resolve_room_roles(effective_archetype, fl_idx, 1, has_stairs_landing, total_floors, program=program)
         main_room = Room(
             id=f"fl{fl_idx}_main",
             floor_idx=fl_idx,
@@ -994,14 +1111,15 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     else:
                         w_doorways = _wing_portals(wb, doorways)
                 elif effective_archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL'):
-                    w_role = 'COUNCIL_CHAMBER' if fl_idx == 0 else 'MAYOR_OFFICE'
+                    w_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'MAYOR_OFFICE'
                     w_doorways = []
                 elif effective_archetype in ('BARRACKS', 'INFANTRY_BARRACKS', 'KNIGHTS_MANOR',
                                              'ARCHERY', 'ARCHERY_RANGE'):
                     w_role = 'BARRACKS_DORM'
                     w_doorways = []
                 else:
-                    w_role = 'STORAGE' if fl_idx == 0 else 'GUEST_ROOM'
+                    w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
+                                       ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH')) else 'GUEST_ROOM'
                     w_doorways = []
                 w_rm = Room(
                     id=f"fl{fl_idx}_wing{wi}",
@@ -1114,8 +1232,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
         _hw_now = split_x - ix_min
         _cw_now = ix_max - split_x
-        _r4 = _resolve_room_roles(effective_archetype, fl_idx, 4, has_stairs_landing, total_floors)
-        _r3 = _resolve_room_roles(effective_archetype, fl_idx, 3, has_stairs_landing, total_floors)
+        _r4 = _resolve_room_roles(effective_archetype, fl_idx, 4, has_stairs_landing, total_floors, program=program)
+        _r3 = _resolve_room_roles(effective_archetype, fl_idx, 3, has_stairs_landing, total_floors, program=program)
         _big_k4 = len(_r4) > 1 and _r4[1] == 'KITCHEN'
         _big_k3 = len(_r3) > 1 and _r3[1] == 'KITCHEN'
         _f4 = (0.42, 0.28, 0.30) if _big_k4 else (0.35, 0.33, 0.32)
@@ -1386,7 +1504,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
         elif can_4_rooms and (ix_max - split_x >= 2.4):
             # 4 Rooms (Corridor/Landing Hall on Left + 3 separate chambers on Right)
-            roles = _resolve_room_roles(effective_archetype, fl_idx, 4, has_stairs_landing, total_floors)
+            roles = _resolve_room_roles(effective_archetype, fl_idx, 4, has_stairs_landing, total_floors, program=program)
             # One bigger kitchen: when chamber 1 is the kitchen it takes a
             # larger share of the strip instead of two small rooms.
             _k1, _k2 = (0.42, 0.70) if (len(roles) > 1 and roles[1] == 'KITCHEN') else (0.35, 0.68)
@@ -1460,7 +1578,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
         elif can_3_rooms and (D >= 5.4) and (ix_max - split_x >= 2.2):
             # 3 Rooms total (Landing/Corridor on Left + 2 Chambers on Right)
-            roles = _resolve_room_roles(effective_archetype, fl_idx, 3, has_stairs_landing, total_floors)
+            roles = _resolve_room_roles(effective_archetype, fl_idx, 3, has_stairs_landing, total_floors, program=program)
             # One bigger kitchen: the kitchen chamber takes ~58% of the strip.
             _kf = 0.58 if (len(roles) > 1 and roles[1] == 'KITCHEN') else 0.50
             split_y = _clear_doorway_span(iy_min + D * _kf, axis='Y')
@@ -1511,7 +1629,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
         else:
             # 2 Rooms along Y (Left Room + Right Room)
-            roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors)
+            roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors, program=program)
             dw_y = (iy_min + iy_max) * 0.5
             interior_walls.append({
                 'p1': (split_x, iy_min), 'p2': (split_x, iy_max),
@@ -1536,7 +1654,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
     else:
         # Deep building: Partition along X (horizontal wall at Y = split_y, running from ix_min to ix_max)
-        roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors)
+        roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors, program=program)
         # Keep the cross partition clear of the stair band on whichever side
         # the switchback actually occupies, so it never bisects the flights.
         if stair_guards_north:
@@ -1628,14 +1746,15 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 w_role = 'TENEMENT_BEDROOM'
                 w_doorways = _wing_portals(wb, doorways)
             elif effective_archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL'):
-                w_role = 'COUNCIL_CHAMBER' if fl_idx == 0 else 'MAYOR_OFFICE'
+                w_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'MAYOR_OFFICE'
                 w_doorways = []
             elif effective_archetype in ('BARRACKS', 'INFANTRY_BARRACKS', 'KNIGHTS_MANOR',
                                          'ARCHERY', 'ARCHERY_RANGE'):
                 w_role = 'BARRACKS_DORM'
                 w_doorways = []
             else:
-                w_role = 'STORAGE' if fl_idx == 0 else 'GUEST_ROOM'
+                w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
+                                       ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH')) else 'GUEST_ROOM'
                 w_doorways = []
             w_rm = Room(
                 id=f"fl{fl_idx}_wing{wi}",

@@ -249,8 +249,12 @@ def test_tenement_layouts():
         assert len(entrances) == 1, f"{room.id} must have exactly one gallery entrance"
     assert row_stairs['is_walkway']
     assert len(row_stairs['flights']) == row_props.num_floors - 1
-    assert row_stairs['u_outer'] == row_stairs['u_inner']
-    assert all(f['lane'] == 'SINGLE' for f in row_stairs['flights'])
+    # Two-lane switchback: inner and outer lanes are separated, and each
+    # storey climbs the lane the storey below did not use.
+    assert row_stairs['u_outer'] > row_stairs['u_inner']
+    assert all(f['lane'] in ('INNER', 'OUTER') for f in row_stairs['flights'])
+    for i, f in enumerate(row_stairs['flights']):
+        assert (f['lane'] == 'OUTER') == (i % 2 == 0)
     for first, second in zip(row_stairs['flights'], row_stairs['flights'][1:]):
         assert abs(first['a1'] - second['a0']) < 0.01, (
             "consecutive flights must meet at their landing"
@@ -272,8 +276,14 @@ def test_tenement_layouts():
                      if d.get('axis') == 'X' and abs(d.get('y', 0.0) - court_y_min) < 0.05]
         assert len(entrances) == 1, f"{room.id} must have one courtyard entrance"
     for room in wing_k:
-        entrances = [d for d in room.doorways if d.get('axis') == 'Y']
-        assert len(entrances) == 1, f"{room.id} must have one wing entrance"
+        x0, x1, y0, y1 = room.bounds
+        # A wing kitchen has exactly one external entrance: the courtyard-gallery
+        # door on its inner wall (axis Y), or - for the ground-floor left wing -
+        # the gable-end door on the wing tip (axis X at the outer y edge).
+        y_entr = [d for d in room.doorways if d.get('axis') == 'Y']
+        tip_entr = [d for d in room.doorways
+                    if d.get('axis') == 'X' and abs(d.get('y', 999.0) - y0) < 0.05]
+        assert len(y_entr) + len(tip_entr) == 1, f"{room.id} must have one wing entrance"
     _assert_no_overlap(court_rooms, 'court')
     assert court_stairs['is_courtyard']
     assert len(court_stairs['flights']) == court_props.num_floors - 1
@@ -343,6 +353,36 @@ def test_chimneys_and_stoves():
     print("  [PASS] Chimney snaps to outer wall and generates proper stone flue.")
 
 
+def test_stair_switchback():
+    """Non-tenement straight stairs must switch lanes every storey so an upper
+    flight never stacks on (and blocks) the run below."""
+    print("\n--- [TEST] Non-Tenement Stair Switchback ---")
+    from types import SimpleNamespace
+    from blend_building_creator.presets import PRESETS, base_settings, ARCHETYPE_MAP
+    from blend_building_creator.generator.building import _create_building_context
+    from blend_building_creator.generator.floors import build_floors
+
+    key = 'HOUSE_1_MEDIUM_T3'
+    settings = base_settings()
+    settings.update(PRESETS[key]['settings'])
+    settings['building_archetype'] = ARCHETYPE_MAP.get(key, 'HOUSE')
+    settings.setdefault('seed', 1)
+    props = SimpleNamespace(**settings)
+    ctx = _create_building_context(props)
+    bm = bmesh.new()
+    try:
+        build_floors(bm, props, ctx)
+        holes = ctx.floor_stair_holes
+        assert len(holes) >= 2, f"expected per-floor stair holes, got {holes}"
+        c1 = (holes[1][0] + holes[1][1]) * 0.5
+        c2 = (holes[2][0] + holes[2][1]) * 0.5
+        assert abs(c1 - c2) > props.stair_width * 0.5, (
+            f"consecutive flights share a lane (stacked): {holes}")
+    finally:
+        bm.free()
+    print("  [PASS] Consecutive non-tenement flights climb separate switchback lanes.")
+
+
 def test_props_and_rugs():
     """Verifies new props (Kitchen Stove, Rugs with alpha cutout, Table Scatter) build cleanly."""
     print("\n--- [TEST] Props Catalog & Stylized Rugs ---")
@@ -356,9 +396,17 @@ def test_props_and_rugs():
     for r_key in ['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST']:
         build_prop(bm, r_key, 2.0, 0.0, 0.0, 0.0, width=1.4, length=2.0)
 
+    # 4. New furnishings: sofa/armchair (previously crashed on cylinder shading),
+    #    the fixed pumpkin, the salad/herb bowl and the planters.
+    build_prop(bm, 'SOFA', 3.5, 0.0, 0.0, 0.0)
+    build_prop(bm, 'ARMCHAIR', 4.5, 0.0, 0.0, 0.0)
+    build_prop(bm, 'PUMPKIN', 5.2, 0.0, 0.0, 0.0)
+    build_prop(bm, 'POTTED_HERB', 5.8, 0.0, 0.0, 0.0)
+    build_prop(bm, 'POTTED_PLANT_LARGE', 6.4, 0.0, 0.0, 0.0)
+
     total_faces = len(bm.faces)
     assert total_faces > 100, f"Expected > 100 faces from new props, got {total_faces}"
-    print(f"  [PASS] KITCHEN_STOVE, SCATTER_TABLEWARE, and 3 RUG variants built cleanly ({total_faces} faces).")
+    print(f"  [PASS] KITCHEN_STOVE, SCATTER_TABLEWARE, 3 RUG variants, SOFA/ARMCHAIR and planters built cleanly ({total_faces} faces).")
     bm.free()
 
 
@@ -373,6 +421,8 @@ def test_representative_presets():
         'ARTISAN_BAKERY_T1',
         'TENEMENT_ROW_MEDIUM_T1',
         'MAGE_TOWER_T1',
+        'TOWN_HALL_T1',
+        'WAREHOUSE_T1',
     ]
     for p_key in curated:
         bpy.ops.building.apply_preset(preset_key=p_key)
@@ -500,7 +550,7 @@ def main():
 
     test_map = {
         'scale': [test_registration, test_gamified_scale],
-        'stairs': [test_stairs_and_uv_fibers],
+        'stairs': [test_stairs_and_uv_fibers, test_stair_switchback],
         'mage': [test_mage_tower],
         'zoning': [test_room_zoning_and_furnishing],
         'tenements': [test_tenement_layouts],
@@ -511,6 +561,7 @@ def main():
             test_registration,
             test_gamified_scale,
             test_stairs_and_uv_fibers,
+            test_stair_switchback,
             test_mage_tower,
             test_room_zoning_and_furnishing,
             test_tenement_layouts,

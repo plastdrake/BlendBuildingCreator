@@ -2174,6 +2174,30 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    interior_program: EnumProperty(
+        name="Interior Program",
+        description="Which room mix to use. AUTO follows the building archetype; pick one to override it (e.g. an industrial fit-out with no bedrooms)",
+        items=[
+            ('AUTO', "Auto (By Archetype)", "Room roles and rugs follow the building type"),
+            ('RESIDENTIAL', "Residential", "Living halls, kitchens, bedrooms, libraries"),
+            ('HOSPITALITY', "Hospitality", "Taprooms, guest rooms, kitchens, cellars"),
+            ('CIVIC', "Civic", "Great halls, council chambers, offices, archives"),
+            ('MILITARY', "Military", "Drill halls, mess halls, armouries, dormitories"),
+            ('SACRED', "Sacred", "Chapel halls, infirmaries, studies"),
+            ('COMMERCIAL', "Commercial / Artisan", "Shop + workshop below, home above"),
+            ('INDUSTRIAL', "Industrial / Warehouse", "Workshops, stores and offices only - no bedrooms, kitchens or rugs"),
+        ],
+        default='AUTO',
+        update=on_property_updated
+    )
+
+    rug_in_utility_rooms: BoolProperty(
+        name="Rugs In Store Rooms",
+        description="Also lay rugs in workshops, stores and pantries (off by default so warehouses stay bare)",
+        default=False,
+        update=on_property_updated
+    )
+
     prop_category: EnumProperty(
         name="Prop Category",
         description="Filter standalone props by category",
@@ -2223,13 +2247,15 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('ARMCHAIR', "Armchair", "Plush fireside armchair with damask cushions and rolled arms"),
             ('BOTTLE', "Glass Bottle", "Slender glass wine/ale bottle with cork stopper"),
             ('BOTTLE_CLUSTER', "Bottle Cluster", "Trio of wine, spirits, and potion bottles with corks"),
-            ('BREAD_LOAF', "Bread Loaf", "Artisan baked round bread boule with score slits"),
-            ('PUMPKIN', "Pumpkin", "Segmented orange pumpkin with rustic stem"),
+            ('PUMPKIN', "Pumpkin", "Segmented orange pumpkin with green stem"),
             ('FOODPREP_CLUTTER', "Foodprep Clutter", "Butcher cutting board, cleaver, bread, cheese, prep bowl"),
             ('POTTED_PLANT_SMALL', "Potted Plant (Small)", "Tabletop terracotta pot with lush green leaves"),
             ('POTTED_PLANT_LARGE', "Potted Plant (Floor)", "Large ornamental urn with tall indoor ficus/shrub"),
             ('POTTED_HERB', "Potted Herb Bowl", "Earthenware kitchen bowl with culinary herbs"),
             ('FOLDED_CLOTH', "Folded Cloth Stack", "Neat stack of folded linens and kitchen towels"),
+            ('LOG_PILE', "Log Pile", "Stacked round timber logs"),
+            ('PLANK_PILE', "Plank Pile", "Stacked sawn planks"),
+            ('STONE_PILE', "Stone Block Stack", "Stacked cut-stone blocks"),
             ('BARREL', "Barrel", "Staved ale barrel"),
             ('CRATE', "Crate", "Braced shipping crate"),
             ('SACK', "Grain Sack", "Tied burlap grain sack"),

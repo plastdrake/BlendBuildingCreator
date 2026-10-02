@@ -16,16 +16,18 @@ from mathutils import Matrix, Vector
 
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, create_torus_ring,
-    create_hollow_cylinder, create_hollow_dish, create_organic_pumpkin, create_bread_boule,
+    create_hollow_cylinder, create_hollow_dish, create_organic_pumpkin,
     transform_faces,
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON,
     MAT_INDEX_CLAY, MAT_INDEX_WAX, MAT_INDEX_LANTERN,
     MAT_INDEX_FABRIC_WHITE, MAT_INDEX_FABRIC_RED, MAT_INDEX_FABRIC_STITCHED,
-    MAT_INDEX_PLANT, MAT_INDEX_PUMPKIN, MAT_INDEX_BREAD,
+    MAT_INDEX_PLANT, MAT_INDEX_PUMPKIN, MAT_INDEX_PUMPKIN_STEM,
     MAT_INDEX_UPHOLSTERY, MAT_INDEX_CLOTH_LINEN, MAT_INDEX_BOTTLE_GLASS,
     MAT_INDEX_DIRT, MAT_INDEX_CUT_STONE,
+    MAT_INDEX_LOG, MAT_INDEX_LOG_END, MAT_INDEX_STONE,
+    MAT_INDEX_LEATHER, MAT_INDEX_LEATHER_2,
 )
 
 
@@ -1542,16 +1544,18 @@ def build_trencher_plate(bm, x, y, z_ground=0.0, ang=0.0):
         segments=20, location=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_WOOD, smooth=True
     )
     z_well = h_plate - depth_well
-    # 2. Crusty artisan bread roll sitting inside well (organic dome boule, NO iron/timber bars!)
-    faces += create_bread_boule(
-        bm, radius=0.044, height=0.034, segments=16, rings=6,
-        location=(-0.025, 0.012, z_well), mat_index=MAT_INDEX_BREAD
-    )
-    # 3. Pale creamy cheese wedge sitting in the well
+    # 2. Pale creamy cheese wedge sitting in the well
     faces += create_cone(
         bm, radius1=0.036, radius2=0.006, height=0.022, segments=5,
         location=(0.042, -0.020, z_well + 0.011),
         mat_index=MAT_INDEX_WAX
+    )
+    # 3. A second smaller cheese cube opposite it
+    faces += create_beveled_box(
+        bm, size=(0.034, 0.028, 0.024),
+        location=(-0.030, 0.014, z_well + 0.012),
+        rotation=(0.0, 0.0, 0.5),
+        mat_index=MAT_INDEX_WAX, bevel_amount=0.003
     )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -1716,132 +1720,185 @@ def build_bottle_cluster(bm, x, y, z_ground=0.0, ang=0.0):
     return faces
 
 
-def build_bread_loaf(bm, x, y, z_ground=0.0, ang=0.0):
-    """Artisan baked round boule loaf with crusty dome and dusted flour."""
-    faces = []
-    # Generous artisan bread boule with organic dome
-    faces += create_bread_boule(
-        bm, radius=0.115, height=0.078, segments=20, rings=10,
-        location=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_BREAD
-    )
-    transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
-
-
 def build_pumpkin(bm, x, y, z_ground=0.0, ang=0.0, radius=0.20):
     """Stylized organic segmented pumpkin with spherical lobes, stem hollow, and twisted stalk."""
     faces = []
     faces += create_organic_pumpkin(
         bm, radius=radius, height=radius * 1.15, num_ribs=8,
-        segments_per_rib=4, rings=12,
+        segments_per_rib=6, rings=16,
         location=(0.0, 0.0, 0.0),
-        mat_index=MAT_INDEX_PUMPKIN, stem_mat_index=MAT_INDEX_TIMBER
+        mat_index=MAT_INDEX_PUMPKIN, stem_mat_index=MAT_INDEX_PUMPKIN_STEM
     )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
 
-def build_potted_plant_small(bm, x, y, z_ground=0.0, ang=0.0):
-    """Tabletop terracotta planter with lush botanical greenery."""
-    faces = []
-    # Terracotta pot
-    faces += create_cylinder(bm, radius=0.052, height=0.012, segments=14,
-                            location=(0.0, 0.0, 0.006), mat_index=MAT_INDEX_CLAY)
-    faces += create_cone(bm, radius1=0.052, radius2=0.082, height=0.11, segments=14,
-                         location=(0.0, 0.0, 0.012 + 0.055), mat_index=MAT_INDEX_CLAY)
-    faces += create_cylinder(bm, radius=0.088, height=0.020, segments=14,
-                            location=(0.0, 0.0, 0.122 + 0.010), mat_index=MAT_INDEX_CLAY)
-    # Rich potting soil disc
-    faces += create_cylinder(bm, radius=0.076, height=0.008, segments=12,
-                            location=(0.0, 0.0, 0.118), mat_index=MAT_INDEX_DIRT)
+def _build_leaf(bm, faces, origin, yaw, pitch, length, width,
+                roll=0.0, curl=0.35, mat_index=MAT_INDEX_PLANT):
+    """One real 3D leaf blade: a closed, pointed, gently cupped shell with a
+    raised centre vein. Built in a local frame (length along +X, width ±Y),
+    then yawed/pitched/rolled so it grows outward from ``origin``."""
+    tr = (Matrix.Translation(Vector(origin))
+          @ Matrix.Rotation(yaw, 4, 'Z')
+          @ Matrix.Rotation(-pitch, 4, 'Y')
+          @ Matrix.Rotation(roll, 4, 'X'))
+    uv_layer = bm.loops.layers.uv.verify()
+    local = {}
+    leaf_faces = []
 
-    # Lush radiating botanical leaves
-    num_leaves = 8
-    for i in range(num_leaves):
-        la = i * (2.0 * math.pi / num_leaves) + 0.12
-        ca, sa = math.cos(la), math.sin(la)
-        leaf_dist = 0.075
-        leaf_x = ca * leaf_dist
-        leaf_y = sa * leaf_dist
-        leaf_z = 0.130 + (i % 2) * 0.03
-        # Stem and leaf blade
-        faces += create_beveled_box(
-            bm, size=(0.048, 0.095, 0.006),
-            location=(leaf_x + ca * 0.045, leaf_y + sa * 0.045, leaf_z),
-            rotation=(ca * 0.45, -sa * 0.45, la),
-            mat_index=MAT_INDEX_PLANT, bevel_amount=0.002
-        )
-    # Central young shoot
-    faces += create_cone(bm, radius1=0.015, radius2=0.002, height=0.075, segments=6,
-                         location=(0.0, 0.0, 0.130 + 0.0375), mat_index=MAT_INDEX_PLANT)
+    def V(x, y, z):
+        v = bm.verts.new(tr @ Vector((x, y, z)))
+        local[v] = (x, y, z)
+        return v
+
+    def face(verts):
+        f = bm.faces.new(verts)
+        f.material_index = mat_index
+        f.tag = True
+        f.smooth = True
+        for lp in f.loops:
+            lx, ly, _lz = local[lp.vert]
+            lp[uv_layer].uv = Vector((lx * 3.2, ly * 3.2))
+        leaf_faces.append(f)
+
+    n = 4
+    th = max(0.0016, width * 0.05)
+    base = V(0.0, 0.0, 0.0)
+    tip = V(length, 0.0, length * 0.12)
+    secs = []
+    for i in range(1, n):
+        t = i / n
+        hw = width * (math.sin(math.pi * t) ** 0.7)
+        lift = length * 0.18 * math.sin(math.pi * t)
+        cup = curl * hw
+        secs.append([
+            V(t * length, hw, lift - cup),
+            V(t * length, 0.0, lift + th),
+            V(t * length, -hw, lift - cup),
+            V(t * length, 0.0, lift - th),
+        ])
+    for k in range(4):
+        face([base, secs[0][k], secs[0][(k + 1) % 4]])
+    for i in range(len(secs) - 1):
+        a, b = secs[i], secs[i + 1]
+        for k in range(4):
+            face([a[k], a[(k + 1) % 4], b[(k + 1) % 4], b[k]])
+    last = secs[-1]
+    for k in range(4):
+        face([last[k], last[(k + 1) % 4], tip])
+    try:
+        bmesh.ops.recalc_face_normals(bm, faces=leaf_faces)
+    except Exception:
+        pass
+    faces.extend(leaf_faces)
+
+
+def _leaf_fan(bm, faces, z, base_r, count, length, width, pitch_lo, pitch_hi,
+              phase=0.0, curl=0.30, seed=0.0, mat_index=MAT_INDEX_PLANT):
+    """A slightly irregular ring of real leaves growing up and outward.
+
+    Each blade gets its own yaw jitter, pitch, size and curl so the plant reads
+    organic instead of a perfect radial star.
+    """
+    for i in range(count):
+        h1 = math.sin((i + 1) * 12.9898 + seed * 78.233) * 43758.5453
+        r1 = h1 - math.floor(h1)
+        h2 = math.sin((i + 1) * 39.3467 + seed * 11.135) * 24634.6345
+        r2 = h2 - math.floor(h2)
+        a = phase + i * (2.0 * math.pi / count) + (r1 - 0.5) * 0.40
+        ca, sa = math.cos(a), math.sin(a)
+        pitch = pitch_lo + (pitch_hi - pitch_lo) * ((i * 0.6180339 + r1 * 0.3) % 1.0)
+        br = base_r * (0.75 + 0.55 * r2)
+        lscale = 0.80 + 0.45 * r1
+        wscale = 0.85 + 0.30 * r2
+        _build_leaf(bm, faces,
+                    (ca * br, sa * br, z + (r2 - 0.5) * 0.014), a, pitch,
+                    length * lscale, width * wscale,
+                    roll=0.28 * math.sin(a * 3.0) + (r1 - 0.5) * 0.25,
+                    curl=curl * (0.8 + 0.4 * r2), mat_index=mat_index)
+
+
+def build_potted_plant_small(bm, x, y, z_ground=0.0, ang=0.0):
+    """Tabletop terracotta planter: a real hollow pot with soil inside and a
+    bushy cluster of true 3D leaves (no flat leaf cards)."""
+    faces = []
+    h_pot = 0.13
+    inner_depth = 0.075
+    # Hollow planter (outer wall, rim lip, inner wall, inner floor).
+    faces += create_hollow_dish(
+        bm, radius_base=0.045, radius_rim=0.086, inner_radius_rim=0.072,
+        inner_radius_base=0.036, height=h_pot, inner_depth=inner_depth,
+        segments=16, location=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_CLAY, smooth=True
+    )
+    floor_z = h_pot - inner_depth
+    # Soil fill inside the hollow cavity.
+    faces += create_cylinder(
+        bm, radius=0.037, height=0.014, segments=14,
+        location=(0.0, 0.0, floor_z + 0.005), mat_index=MAT_INDEX_DIRT
+    )
+    soil_z = floor_z + 0.012
+
+    # Short central stem, then rings of leaves starting at the rim height so
+    # the blades never clip through the pot wall.
+    stem_top = h_pot + 0.03
+    faces += create_cylinder(bm, radius=0.007, height=max(0.02, stem_top - soil_z),
+                             segments=6, location=(0.0, 0.0, (soil_z + stem_top) * 0.5),
+                             mat_index=MAT_INDEX_TIMBER)
+    _leaf_fan(bm, faces, h_pot - 0.010, 0.020, 6, 0.090, 0.030, 0.28, 0.58,
+              phase=0.20, curl=0.26, seed=1.0)
+    _leaf_fan(bm, faces, h_pot + 0.012, 0.013, 5, 0.072, 0.026, 0.60, 0.95,
+              phase=0.80, curl=0.26, seed=2.0)
+    _leaf_fan(bm, faces, h_pot + 0.030, 0.008, 4, 0.055, 0.020, 0.95, 1.25,
+              phase=1.40, curl=0.24, seed=3.0)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
 
+
 def build_potted_plant_large(bm, x, y, z_ground=0.0, ang=0.0):
-    """Large ornamental floor planter urn with tall lush indoor ficus/shrub."""
+    """Large ornamental floor planter: a hollow stone-footed urn filled with
+    soil, growing a small indoor tree with real 3D leaves."""
     faces = []
-    # Heavy stone/clay urn base plinth
-    faces += create_cylinder(bm, radius=0.18, height=0.04, segments=16,
-                            location=(0.0, 0.0, 0.02), mat_index=MAT_INDEX_CUT_STONE)
-    # Flared lower urn
-    faces += create_cone(bm, radius1=0.15, radius2=0.24, height=0.22, segments=16,
-                         location=(0.0, 0.0, 0.04 + 0.11), mat_index=MAT_INDEX_CLAY)
-    # Upper urn waist & mouth
-    faces += create_cone(bm, radius1=0.24, radius2=0.19, height=0.18, segments=16,
-                         location=(0.0, 0.0, 0.26 + 0.09), mat_index=MAT_INDEX_CLAY)
-    faces += create_cylinder(bm, radius=0.22, height=0.035, segments=16,
-                            location=(0.0, 0.0, 0.44 + 0.0175), mat_index=MAT_INDEX_CLAY)
-    # Potting soil
-    faces += create_cylinder(bm, radius=0.18, height=0.015, segments=14,
-                            location=(0.0, 0.0, 0.43), mat_index=MAT_INDEX_DIRT)
+    # Stone foot plinth.
+    faces += create_cylinder(bm, radius=0.19, height=0.05, segments=16,
+                             location=(0.0, 0.0, 0.025), mat_index=MAT_INDEX_CUT_STONE)
+    # Hollow clay urn (outer wall + rim lip + inner wall + inner floor).
+    urn_h = 0.46
+    inner_depth = 0.10
+    faces += create_hollow_dish(
+        bm, radius_base=0.16, radius_rim=0.235, inner_radius_rim=0.20,
+        inner_radius_base=0.135, height=urn_h, inner_depth=inner_depth,
+        segments=18, location=(0.0, 0.0, 0.05), mat_index=MAT_INDEX_CLAY, smooth=True
+    )
+    floor_z = 0.05 + urn_h - inner_depth          # cavity floor (world z)
+    # Soil fill inside the cavity, mounded a touch above the cavity floor.
+    faces += create_cylinder(bm, radius=0.137, height=0.02, segments=16,
+                             location=(0.0, 0.0, floor_z + 0.008), mat_index=MAT_INDEX_DIRT)
+    soil_z = floor_z + 0.016
 
-    # Central woody trunk
-    trunk_h = 0.55
-    faces += create_cylinder(bm, radius=0.032, height=trunk_h, segments=10,
-                            location=(0.0, 0.0, 0.44 + trunk_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+    # Central woody trunk.
+    trunk_h = 0.62
+    faces += create_cylinder(bm, radius=0.034, height=trunk_h, segments=10,
+                             location=(0.0, 0.0, soil_z + trunk_h * 0.5),
+                             mat_index=MAT_INDEX_TIMBER)
 
-    # Multi-tiered lush foliage
-    # Tier 1: Lower broad canopy
-    for i in range(5):
-        la = i * (2.0 * math.pi / 5)
-        ca, sa = math.cos(la), math.sin(la)
-        faces += create_beveled_box(
-            bm, size=(0.14, 0.28, 0.010),
-            location=(ca * 0.22, sa * 0.22, 0.72),
-            rotation=(ca * 0.42, -sa * 0.42, la),
-            mat_index=MAT_INDEX_PLANT, bevel_amount=0.003
-        )
-    # Tier 2: Mid bushy foliage
-    for i in range(6):
-        la = i * (2.0 * math.pi / 6) + 0.35
-        ca, sa = math.cos(la), math.sin(la)
-        faces += create_beveled_box(
-            bm, size=(0.12, 0.24, 0.010),
-            location=(ca * 0.18, sa * 0.18, 0.95),
-            rotation=(ca * 0.32, -sa * 0.32, la),
-            mat_index=MAT_INDEX_PLANT, bevel_amount=0.003
-        )
-    # Tier 3: Top crown
-    for i in range(4):
-        la = i * (2.0 * math.pi / 4) + 0.20
-        ca, sa = math.cos(la), math.sin(la)
-        faces += create_beveled_box(
-            bm, size=(0.10, 0.20, 0.008),
-            location=(ca * 0.12, sa * 0.12, 1.15),
-            rotation=(ca * 0.20, -sa * 0.20, la),
-            mat_index=MAT_INDEX_PLANT, bevel_amount=0.002
-        )
+    # Three tiers of real leaves fanning out from the trunk, plus a crown.
+    _leaf_fan(bm, faces, soil_z + 0.18, 0.028, 6, 0.30, 0.075, 0.42, 0.72, phase=0.1, curl=0.22, seed=4.0)
+    _leaf_fan(bm, faces, soil_z + 0.36, 0.024, 6, 0.25, 0.062, 0.55, 0.85, phase=0.6, curl=0.22, seed=5.0)
+    _leaf_fan(bm, faces, soil_z + 0.52, 0.020, 5, 0.19, 0.050, 0.70, 1.00, phase=1.1, curl=0.22, seed=6.0)
+    _leaf_fan(bm, faces, soil_z + 0.60, 0.012, 4, 0.13, 0.038, 1.00, 1.30, phase=1.7, curl=0.22, seed=7.0)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
 
 def build_potted_herb(bm, x, y, z_ground=0.0, ang=0.0):
-    """Kitchen herb bowl with true concave interior cavity and lush culinary herbs (parsley, basil, thyme)."""
+    """Kitchen herb/salad bowl: a shallow terracotta dish mounded full of fresh
+    greens. No loose chopped-leaf cards — the fill itself uses the plant
+    material so the bowl simply reads as a bowl of herbs."""
     faces = []
-    # Shallow terracotta herb bowl with concave hollow interior (100% clay)
+    # Shallow terracotta herb bowl with a true hollow interior (open top).
     h_bowl = 0.065
     depth_bowl = 0.048
     faces += create_hollow_dish(
@@ -1849,30 +1906,18 @@ def build_potted_herb(bm, x, y, z_ground=0.0, ang=0.0):
         inner_radius_base=0.055, height=h_bowl, inner_depth=depth_bowl,
         segments=18, location=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_CLAY, smooth=True
     )
-    # Soil level inside the hollow bowl
-    z_soil = max(0.015, h_bowl - depth_bowl + 0.024)
-    faces += create_cylinder(
-        bm, radius=0.088, height=0.010, segments=16,
-        location=(0.0, 0.0, z_soil), mat_index=MAT_INDEX_DIRT
-    )
-    # Bushy cluster of lush botanical herbs rising from soil
-    num_herbs = 8
-    for i in range(num_herbs):
-        ha = i * (2.0 * math.pi / num_herbs)
-        hx = 0.045 * math.cos(ha)
-        hy = 0.045 * math.sin(ha)
-        faces += create_beveled_box(
-            bm, size=(0.042, 0.075, 0.006),
-            location=(hx, hy, z_soil + 0.020 + (i % 2) * 0.014),
-            rotation=(math.cos(ha) * 0.40, math.sin(ha) * 0.40, ha),
-            mat_index=MAT_INDEX_PLANT, bevel_amount=0.002
-        )
-    faces += create_beveled_box(
-        bm, size=(0.055, 0.055, 0.008),
-        location=(0.0, 0.0, z_soil + 0.038),
-        rotation=(0.10, -0.15, 0.7),
-        mat_index=MAT_INDEX_PLANT, bevel_amount=0.002
-    )
+    # Simple flat "salad" disc, sitting a little below the rim and well inside
+    # the inner wall so it never pokes out of the bowl.
+    z_fill = h_bowl - 0.014
+    r_fill = 0.088
+    seg = 18
+    ring = [bm.verts.new((math.cos(2.0 * math.pi * i / seg) * r_fill,
+                          math.sin(2.0 * math.pi * i / seg) * r_fill,
+                          z_fill)) for i in range(seg)]
+    f_fill = bm.faces.new(ring)
+    f_fill.material_index = MAT_INDEX_PLANT
+    f_fill.tag = True
+    faces.append(f_fill)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
@@ -1957,10 +2002,10 @@ def build_foodprep_clutter(bm, x, y, z_ground=0.0, ang=0.0):
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.003
     )
 
-    # 3. Crusty artisan bread boule sitting on the board (organic dome, NO timber bars!)
-    faces += create_bread_boule(
-        bm, radius=0.058, height=0.042, segments=16, rings=7,
-        location=(0.085, -0.025, board_t), mat_index=MAT_INDEX_BREAD
+    # 3. Creamy cheese wedge resting on the board
+    faces += create_cone(
+        bm, radius1=0.040, radius2=0.006, height=0.026, segments=5,
+        location=(0.085, -0.025, board_t + 0.013), mat_index=MAT_INDEX_WAX
     )
 
     # 4. Hollow ceramic ingredient / salt bowl with wooden spoon (100% clay)
@@ -1992,7 +2037,8 @@ def build_foodprep_clutter(bm, x, y, z_ground=0.0, ang=0.0):
     return faces
 
 
-def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84):
+def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84,
+               fabric_mat=MAT_INDEX_UPHOLSTERY):
     """Luxurious 3-cushion salon sofa / settee with damask upholstery,
     turned wooden feet, twin deep plush cushions, rolled arms, and throw pillows."""
     faces = []
@@ -2021,7 +2067,7 @@ def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84):
     faces += create_beveled_box(
         bm, size=(length - 0.04, depth - 0.04, apron_h),
         location=(0.0, 0.0, foot_h + apron_h * 0.5),
-        mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.028
+        mat_index=fabric_mat, bevel_amount=0.028
     )
 
     # 3. Two wide, plush seat cushions
@@ -2032,7 +2078,7 @@ def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84):
         faces += create_beveled_box(
             bm, size=(cushion_w, cushion_d, cushion_thick),
             location=(cx, -0.02, deck_h + cushion_thick * 0.5),
-            mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.032
+            mat_index=fabric_mat, bevel_amount=0.032
         )
 
     # 4. Left and right rolled scroll armrests
@@ -2044,13 +2090,13 @@ def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84):
         faces += create_beveled_box(
             bm, size=(arm_w, depth - 0.06, arm_h),
             location=(ax, -0.01, arm_cz),
-            mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.025
+            mat_index=fabric_mat, bevel_amount=0.025
         )
         faces += create_cylinder(
             bm, radius=arm_w * 0.52, height=depth - 0.05, segments=14,
             location=(ax, -0.01, deck_h + arm_h),
             rotation=(math.pi * 0.5, 0.0, 0.0),
-            mat_index=MAT_INDEX_UPHOLSTERY, smooth=True
+            mat_index=fabric_mat, smooth=True
         )
 
     # 5. High upholstered backrest with rolled top crest
@@ -2061,22 +2107,22 @@ def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84):
         bm, size=(length - 0.16, 0.15, back_span),
         location=(0.0, back_y, deck_h + back_span * 0.5),
         rotation=(-0.07, 0.0, 0.0),
-        mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.030
+        mat_index=fabric_mat, bevel_amount=0.030
     )
     faces += create_cylinder(
         bm, radius=0.075, height=length - 0.14, segments=14,
         location=(0.0, back_y + 0.02, back_h),
         rotation=(0.0, math.pi * 0.5, 0.0),
-        mat_index=MAT_INDEX_UPHOLSTERY, smooth=True
+        mat_index=fabric_mat, smooth=True
     )
 
-    # 6. Two plush throw pillows at either arm
+    # 6. Two plush throw pillows at either arm, leaning back naturally.
     for sgn, p_mat in [(-1.0, MAT_INDEX_FABRIC_RED), (1.0, MAT_INDEX_CLOTH_LINEN)]:
         px = sgn * (length * 0.5 - 0.25)
         faces += create_beveled_box(
-            bm, size=(0.28, 0.10, 0.28),
-            location=(px, back_y - 0.16, deck_h + cushion_thick + 0.10),
-            rotation=(0.18, sgn * 0.22, sgn * 0.35),
+            bm, size=(0.28, 0.10, 0.26),
+            location=(px, back_y - 0.20, deck_h + cushion_thick + 0.11),
+            rotation=(-0.26, 0.0, sgn * 0.10),
             mat_index=p_mat, bevel_amount=0.024
         )
 
@@ -2084,7 +2130,8 @@ def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84):
     return faces
 
 
-def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=0.86, depth=0.82):
+def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=0.86, depth=0.82,
+                   fabric_mat=MAT_INDEX_UPHOLSTERY):
     """High-end fireside lounge armchair with continuous damask upholstery,
     turned wooden bun feet, deep plush seat cushion, rolled scroll armrests,
     enveloping winged backrest with rolled crest, and cozy throw pillow."""
@@ -2114,7 +2161,7 @@ def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=0.86, depth=0.82):
     faces += create_beveled_box(
         bm, size=(width - 0.04, depth - 0.04, apron_h),
         location=(0.0, 0.0, foot_h + apron_h * 0.5),
-        mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.028
+        mat_index=fabric_mat, bevel_amount=0.028
     )
 
     # 3. Deep plush upholstered seat cushion
@@ -2124,7 +2171,7 @@ def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=0.86, depth=0.82):
     faces += create_beveled_box(
         bm, size=(cushion_w, cushion_d, cushion_thick),
         location=(0.0, -0.02, deck_h + cushion_thick * 0.5),
-        mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.032
+        mat_index=fabric_mat, bevel_amount=0.032
     )
 
     # 4. Left and right rolled scroll armrests
@@ -2136,13 +2183,13 @@ def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=0.86, depth=0.82):
         faces += create_beveled_box(
             bm, size=(arm_w, depth - 0.06, arm_h),
             location=(ax, -0.01, arm_cz),
-            mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.025
+            mat_index=fabric_mat, bevel_amount=0.025
         )
         faces += create_cylinder(
             bm, radius=arm_w * 0.52, height=depth - 0.05, segments=14,
             location=(ax, -0.01, deck_h + arm_h),
             rotation=(math.pi * 0.5, 0.0, 0.0),
-            mat_index=MAT_INDEX_UPHOLSTERY, smooth=True
+            mat_index=fabric_mat, smooth=True
         )
 
     # 5. High enveloping winged backrest with rolled top crest
@@ -2153,13 +2200,13 @@ def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=0.86, depth=0.82):
         bm, size=(width - 0.12, 0.15, back_span),
         location=(0.0, back_y, deck_h + back_span * 0.5),
         rotation=(-0.07, 0.0, 0.0),
-        mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.030
+        mat_index=fabric_mat, bevel_amount=0.030
     )
     faces += create_cylinder(
         bm, radius=0.075, height=width - 0.10, segments=14,
         location=(0.0, back_y + 0.02, back_h),
         rotation=(0.0, math.pi * 0.5, 0.0),
-        mat_index=MAT_INDEX_UPHOLSTERY, smooth=True
+        mat_index=fabric_mat, smooth=True
     )
     # Wingback side flares
     for sgn in (-1.0, 1.0):
@@ -2168,14 +2215,14 @@ def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=0.86, depth=0.82):
             bm, size=(0.09, 0.17, back_span * 0.65),
             location=(wx, back_y - 0.08, deck_h + back_span * 0.58),
             rotation=(-0.07, sgn * 0.12, sgn * 0.14),
-            mat_index=MAT_INDEX_UPHOLSTERY, bevel_amount=0.022
+            mat_index=fabric_mat, bevel_amount=0.022
         )
 
-    # 6. Plush accent throw pillow resting nestled in corner
+    # 6. Plush accent throw pillow leaning back in the corner
     faces += create_beveled_box(
-        bm, size=(0.28, 0.10, 0.28),
-        location=(width * 0.14, back_y - 0.16, deck_h + cushion_thick + 0.10),
-        rotation=(0.18, 0.22, 0.35),
+        bm, size=(0.28, 0.10, 0.26),
+        location=(width * 0.14, back_y - 0.20, deck_h + cushion_thick + 0.11),
+        rotation=(-0.26, 0.0, 0.12),
         mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.024
     )
 
@@ -2281,5 +2328,67 @@ def build_chair(bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.004
     )
 
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_stone_pile(bm, x, y, z_ground=0.0, ang=0.0, length=1.8, width=0.95, layers=4):
+    """Stacked, roughly squared cut-stone blocks (quarry / stone store)."""
+    faces = []
+    rng = random.Random(int(abs(x) * 2654435761) ^ int(abs(y) * 40503))
+    block_h = 0.17
+    for k in range(layers):
+        n = max(1, layers - k)
+        row_w = width / n
+        for j in range(n):
+            L = length * (0.78 + 0.30 * rng.random())
+            cy = (j - (n - 1) * 0.5) * row_w * 1.06
+            faces += create_beveled_box(
+                bm, size=(L, row_w * 1.02, block_h),
+                location=(0.0, cy, block_h * 0.5 + k * (block_h + 0.006)),
+                rotation=(0.0, 0.0, (rng.random() - 0.5) * 0.18),
+                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_log_pile(bm, x, y, z_ground=0.0, ang=0.0, length=2.10, radius=0.17, rows=3):
+    """Pyramid of stacked round logs (bulk timber, warehouse / lumbermill)."""
+    faces = []
+    rng = random.Random(int(abs(x) * 73856093) ^ int(abs(y) * 19349663))
+    for row in range(rows):
+        count = max(2, rows + 2 - row)
+        for i in range(count):
+            L = length * (0.84 + 0.32 * rng.random())
+            rr = radius * (0.90 + 0.14 * rng.random())
+            cz = rr + row * (radius * 1.62)
+            cy = (i - (count - 1) * 0.5) * (radius * 2.06)
+            faces += create_cylinder(
+                bm, radius=rr, height=L, segments=10,
+                location=(0.0, cy, cz), rotation=(0.0, math.pi * 0.5, 0.0),
+                mat_index=MAT_INDEX_LOG)
+            for s in (-1.0, 1.0):
+                faces += create_cylinder(
+                    bm, radius=rr * 0.98, height=0.012, segments=10,
+                    location=(s * (L * 0.5 - 0.006), cy, cz),
+                    rotation=(0.0, math.pi * 0.5, 0.0),
+                    mat_index=MAT_INDEX_LOG_END)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_plank_pile(bm, x, y, z_ground=0.0, ang=0.0, length=2.0, width=0.28, layers=6):
+    """Neatly stacked sawn planks (bulk timber, warehouse / lumbermill)."""
+    faces = []
+    rng = random.Random(int(abs(x) * 83492791) ^ int(abs(y) * 19349663))
+    for k in range(layers):
+        for j in range(2):
+            L = length * (0.86 + 0.28 * rng.random())
+            off = (j - 0.5) * width * 1.06 + (rng.random() - 0.5) * 0.03
+            faces += create_beveled_box(
+                bm, size=(L, width, 0.055),
+                location=(0.0, off, 0.03 + k * 0.058),
+                rotation=(0.0, 0.0, (rng.random() - 0.5) * 0.05),
+                mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces

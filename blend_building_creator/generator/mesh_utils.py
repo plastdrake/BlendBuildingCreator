@@ -300,8 +300,12 @@ def create_flared_post(bm, size=(0.28, 0.28, 3.0), location=(0.0, 0.0, 0.0), rot
 
     return faces
 
-def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, transform_matrix=None, u_repeats=None):
-    """Creates a stylized faceted cylinder with end caps."""
+def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, transform_matrix=None, u_repeats=None, smooth=False):
+    """Creates a stylized faceted cylinder with end caps.
+
+    ``smooth`` shades the side wall smoothly (used by rounded furniture and
+    turned legs); caps stay flat so discs keep a crisp rim.
+    """
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
     tr_mat = loc_mat @ rot_mat
@@ -332,6 +336,8 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
         f = bm.faces.new([bottom_verts[i], bottom_verts[nxt], top_verts[nxt], top_verts[i]])
         f.material_index = mat_index
         f.tag = True
+        if smooth:
+            f.smooth = True
         faces.append(f)
         u0 = total_u * i / segments
         u1 = total_u * (i + 1) / segments
@@ -584,7 +590,17 @@ def create_organic_pumpkin(bm, radius=0.20, height=0.22, num_ribs=8,
     uv_layer = bm.loops.layers.uv.verify()
     faces = []
 
+    # The handpainted pumpkin skin tiles seamlessly; repeat it around the
+    # circumference so the painted ribs line up with the modelled ribs instead
+    # of smearing one copy over the whole fruit.
+    u_rep = 2.0
+    v_rep = 1.0
+
     grid = []
+    # Lowest blossom point (t=1) sits slightly above origin by this much; drop
+    # the whole fruit by it so the pumpkin rests exactly on the ground/table.
+    _theta_bot = 0.08 * math.pi + 0.87 * math.pi
+    _base_drop = half_h * math.cos(_theta_bot) + 0.018 + half_h
     for r in range(rings + 1):
         t = r / rings
         theta = 0.08 * math.pi + t * (0.87 * math.pi)
@@ -593,7 +609,7 @@ def create_organic_pumpkin(bm, radius=0.20, height=0.22, num_ribs=8,
 
         dip = -0.030 * (max(0.0, 1.0 - t * 4.0) ** 1.5)
         tuck = 0.018 * (max(0.0, (t - 0.75) * 4.0) ** 1.5)
-        z_local = half_h * cos_theta + dip + tuck + half_h
+        z_local = half_h * cos_theta + dip + tuck + half_h - _base_drop
 
         row_verts = []
         for i in range(total_segments):
@@ -619,20 +635,24 @@ def create_organic_pumpkin(bm, radius=0.20, height=0.22, num_ribs=8,
             f.tag = True
             f.smooth = True
             faces.append(f)
-            u0 = i / total_segments
-            u1 = (i + 1) / total_segments
-            v_uv0 = r / rings
-            v_uv1 = (r + 1) / rings
+            u0 = (i / total_segments) * u_rep
+            u1 = ((i + 1) / total_segments) * u_rep
+            v_uv0 = (r / rings) * v_rep
+            v_uv1 = ((r + 1) / rings) * v_rep
             f.loops[0][uv_layer].uv = Vector((u0, v_uv0))
             f.loops[1][uv_layer].uv = Vector((u1, v_uv0))
             f.loops[2][uv_layer].uv = Vector((u1, v_uv1))
             f.loops[3][uv_layer].uv = Vector((u0, v_uv1))
 
-    # Bottom blossom closure cap
+    # Bottom blossom closure cap (planar radial UVs from the fruit centre)
     f_bot = bm.faces.new(list(reversed(grid[-1])))
     f_bot.material_index = mat_index
     f_bot.tag = True
     f_bot.smooth = True
+    for loop in f_bot.loops:
+        co = loop.vert.co
+        loop[uv_layer].uv = Vector((co.x / (2.0 * radius) + 0.5,
+                                    co.y / (2.0 * radius) + 0.5))
     faces.append(f_bot)
 
     # Curved 5-sided gnarled stem
@@ -660,13 +680,18 @@ def create_organic_pumpkin(bm, radius=0.20, height=0.22, num_ribs=8,
             s_row.append(v)
         stem_grid.append(s_row)
 
-    # Top opening closure to stem base
+    # Top opening closure to stem base: keep the fruit skin material so the
+    # crown reads as a continuous pumpkin, with radial UVs (never a (0,0) texel).
     f_top_cap = bm.faces.new(grid[0])
-    f_top_cap.material_index = stem_mat_index
+    f_top_cap.material_index = mat_index
     f_top_cap.tag = True
+    for loop in f_top_cap.loops:
+        co = loop.vert.co
+        loop[uv_layer].uv = Vector((co.x / (2.0 * radius) + 0.5,
+                                    co.y / (2.0 * radius) + 0.5))
     faces.append(f_top_cap)
 
-    # Stem cylinder quads
+    # Stem cylinder quads with cylindrical wood UVs (V runs up the stalk).
     for sr in range(stem_rings):
         for si in range(stem_segments):
             nxt_si = (si + 1) % stem_segments
@@ -674,12 +699,26 @@ def create_organic_pumpkin(bm, radius=0.20, height=0.22, num_ribs=8,
             f.material_index = stem_mat_index
             f.tag = True
             f.smooth = True
+            su0 = (si / stem_segments) * 2.0
+            su1 = ((si + 1) / stem_segments) * 2.0
+            sv0 = (sr / stem_rings) * 1.6
+            sv1 = ((sr + 1) / stem_rings) * 1.6
+            f.loops[0][uv_layer].uv = Vector((su0, sv0))
+            f.loops[1][uv_layer].uv = Vector((su1, sv0))
+            f.loops[2][uv_layer].uv = Vector((su1, sv1))
+            f.loops[3][uv_layer].uv = Vector((su0, sv1))
             faces.append(f)
 
-    # Stem tip cap
+    # Stem tip cap (planar UVs so the cut stalk end is not a flat texel).
     f_stem_top = bm.faces.new(stem_grid[-1])
     f_stem_top.material_index = stem_mat_index
     f_stem_top.tag = True
+    _sx = sum(v.co.x for v in stem_grid[-1]) / len(stem_grid[-1])
+    _sy = sum(v.co.y for v in stem_grid[-1]) / len(stem_grid[-1])
+    for loop in f_stem_top.loops:
+        co = loop.vert.co
+        loop[uv_layer].uv = Vector(((co.x - _sx) / (2.0 * stem_base_r) + 0.5,
+                                    (co.y - _sy) / (2.0 * stem_base_r) + 0.5))
     faces.append(f_stem_top)
 
     return faces

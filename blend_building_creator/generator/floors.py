@@ -99,6 +99,10 @@ def build_floors(bm, props, ctx):
         if f_idx == 0:
             # 1. Front entrance
             if getattr(props, 'has_front_door', True) and not open_timber:
+                # Default to the building's resolved main-door centre; the
+                # RECTANGLE/L/U branches below refine it. (T-shaped town halls
+                # previously left this unset and crashed.)
+                door_cx = main_door_cx
                 if shape == 'RECTANGLE':
                     door_offset = getattr(props, 'front_door_offset_x', 0.0)
                     door_cx = 0.0 + door_offset
@@ -128,38 +132,37 @@ def build_floors(bm, props, ctx):
 
         return front_ex, back_ex, left_ex, right_ex
 
-    # Ground floor master interior reference for staircase
-    fl0_ix_min = -base_w * 0.5 + wall_t
-    fl0_ix_max = base_w * 0.5 - wall_t
-    fl0_iy_min = -base_d * 0.5 + wall_t
-    fl0_iy_max = base_d * 0.5 - wall_t
+    # Ground floor master interior reference for staircase. Walls are centred
+    # on the footprint line, so the interior face is half a wall thickness in
+    # (matching the per-floor bounds used everywhere else).
+    fl0_ix_min = -base_w * 0.5 + wall_t * 0.5
+    fl0_ix_max = base_w * 0.5 - wall_t * 0.5
+    fl0_iy_min = -base_d * 0.5 + wall_t * 0.5
+    fl0_iy_max = base_d * 0.5 - wall_t * 0.5
 
     stair_w = props.stair_width
     landing_depth = max(1.10, stair_w * 0.75)
-    # TENEMENT SWITCHBACK.  Only the shared common stairwells of the tenement
-    # archetype switch to a two-lane layout: two flights side by side inside
-    # the hall, and each storey climbs the lane the storey below did NOT use.
-    # An upper flight therefore sits BESIDE the one below instead of stacked
-    # directly over it, so no run steals the headroom of the run beneath, and
-    # the strip alongside the open well stays clear as a walking area.
-    # TENEMENT TANDEM STAIRS: All flights run along the SAME wall (single lane).
-    # The hallway is narrow (~2.5m wide) and flights run in-line sequentially:
-    # Floor 0: South flight climbs North (+Y)
-    # Floor 1: North flight climbs North (+Y) along the SAME wall
-    # Floor 2: Turned 180 degrees and moved to South half (solid floor), climbing South (-Y)
-    # Floor 3: North flight climbing South (-Y), etc.
-    stair_w = props.stair_width
-    landing_depth = max(1.10, stair_w * 0.75)
-    stair_switchback = False
-    lane_gap = 0.0
-    stair_cx = fl0_ix_min + 0.08 + stair_w * 0.5
-    lane_cx_0 = lane_cx_1 = stair_cx
 
     is_tenement_stairs = (
         effective_archetype == 'TENEMENT'
         and getattr(props, 'has_stairs', False)
         and getattr(props, 'stair_style', 'STRAIGHT') != 'SPIRAL'
     )
+
+    # Non-tenement straight stairs use a side-by-side switchback: each storey
+    # climbs the lane the storey below did NOT use, so an upper flight sits
+    # BESIDE the lower one and never stacks on top of it (which made the run
+    # below unwalkable).  Tenements keep their own single-wall tandem scheme.
+    lane_gap = 0.20
+    lane_cx_0 = fl0_ix_min + 0.08 + stair_w * 0.5
+    stair_switchback = (
+        not is_tenement_stairs
+        and getattr(props, 'stair_style', 'STRAIGHT') != 'SPIRAL'
+    )
+    lane_cx_1 = lane_cx_0 + stair_w + lane_gap
+    # Room planning needs the whole switchback well centre; the single-lane
+    # tenement/tandem stair just uses its one lane.
+    stair_cx = (lane_cx_0 + lane_cx_1) * 0.5 if stair_switchback else lane_cx_0
 
     D_interior = fl0_iy_max - fl0_iy_min
     end_landing = max(1.10, stair_w * 0.75)

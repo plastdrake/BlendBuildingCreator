@@ -581,25 +581,30 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
             create_box(bm, size=(span, span, 0.12), location=(_sz[0], _sz[1], fz + 0.07),
                        mat_index=MAT_INDEX_FLOOR)
 
-    # Doorways through the MAIN wall into the tower: a wall plank band is built
-    # on the centre line (matching the main wall thickness, nudge-reversing the
-    # window trick) with one opening per storey, so the hall wall visibly ends
-    # into the turret and each floor connects to it.
+    # The tower is entered through the doorway the floor builder cuts in the
+    # main back wall (one per storey). We deliberately do NOT build a second
+    # wall band across the tower here: it used to split the tower interior and
+    # read as a loose panel floating inside the shaft.
+
+    # Near (building) face: a wall with a doorway per storey that closes the
+    # jetty pocket under the overhanging upper storeys, so the tower reads as
+    # one solid volume instead of a shell with a gap beside the hall. Nudged
+    # 20mm outward so it never sits coplanar with the hall's back wall.
     if main_wall_top is not None:
-        _dw = min(1.0, half * 0.9)
-        _dh = min(2.15, floor_h - 0.35)
-        _ops = []
+        _ndw = min(1.10, half * 0.95)
+        _ndh = min(2.15, floor_h - 0.35)
+        _nops = []
         for fz in levels:
             _z0 = max(fz, shaft_base)
-            _z1 = min(fz + _dh, wall_top_z - 0.25)
+            _z1 = min(fz + _ndh, wall_top_z - 0.25)
             if _z1 - _z0 > 0.6:
-                _ops.append({'u_start': -_dw * 0.5, 'u_end': _dw * 0.5,
-                             'z_start': _z0, 'z_end': _z1})
-        if _ops:
-            _l0 = pt(-o_line, 0.0)
-            _l1 = pt(o_line, 0.0)
+                _nops.append({'u_start': -_ndw * 0.5, 'u_end': _ndw * 0.5,
+                              'z_start': _z0, 'z_end': _z1})
+        if _nops:
+            _n0 = pt(-half + 0.02, -o_line)
+            _n1 = pt(-half + 0.02, o_line)
             build_wall_with_opening(
-                bm, _l0, _l1, shaft_base, main_wall_top, t, _ops,
+                bm, _n0, _n1, shaft_base, main_wall_top, t, _nops,
                 mat_ext=wall_mat, normal_vec=(-ox, -oy), tier=tier,
                 physical_siding=False, plank_direction=plank_direction, seed=seed)
 

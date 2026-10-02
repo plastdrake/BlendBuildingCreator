@@ -148,9 +148,7 @@ for _s in (
           'interior_furniture', 'build_bottle', 0.15),
     _spec('BOTTLE_CLUSTER', "Bottle Cluster", 'TABLES', "Trio of wine, spirits, and potion bottles with corks",
           'interior_furniture', 'build_bottle_cluster', 0.25),
-    _spec('BREAD_LOAF', "Bread Loaf", 'KITCHEN', "Artisan baked round bread boule with score slits",
-          'interior_furniture', 'build_bread_loaf', 0.25),
-    _spec('PUMPKIN', "Pumpkin", 'KITCHEN', "Segmented orange pumpkin with rustic stem",
+    _spec('PUMPKIN', "Pumpkin", 'KITCHEN', "Segmented orange pumpkin with green stem",
           'interior_furniture', 'build_pumpkin', 0.35, radius=0.20),
     _spec('FOODPREP_CLUTTER', "Foodprep Clutter", 'KITCHEN', "Butcher cutting board, cleaver, bread, cheese, prep bowl",
           'interior_furniture', 'build_foodprep_clutter', 0.40),
@@ -162,6 +160,12 @@ for _s in (
           'interior_furniture', 'build_potted_herb', 0.25),
     _spec('FOLDED_CLOTH', "Folded Cloth Stack", 'STORAGE', "Neat stack of folded linens and kitchen towels",
           'interior_furniture', 'build_folded_cloth', 0.30),
+    _spec('LOG_PILE', "Log Pile", 'STORAGE', "Stacked round timber logs",
+          'interior_furniture', 'build_log_pile', 1.20, length=2.10, radius=0.17, rows=3),
+    _spec('PLANK_PILE', "Plank Pile", 'STORAGE', "Stacked sawn planks",
+          'interior_furniture', 'build_plank_pile', 1.15, length=2.0, width=0.28, layers=6),
+    _spec('STONE_PILE', "Stone Block Stack", 'STORAGE', "Stacked cut-stone blocks",
+          'interior_furniture', 'build_stone_pile', 1.10, length=1.8, width=0.95, layers=4),
 ):
     PROP_REGISTRY[_s.key] = _s
 

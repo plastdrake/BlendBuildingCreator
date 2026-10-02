@@ -765,8 +765,10 @@ class VIEW3D_PT_fantasy_building_furnishing(bpy.types.Panel):
         box = layout.box()
         box.label(text="Whole-Building Interior", icon='HOME')
         box.prop(props, "has_interior_furnishing", text="Furnish Interior")
+        box.prop(props, "interior_program", text="Room Mix")
         box.prop(props, "furnishing_style", text="Style")
         box.prop(props, "furnishing_density", slider=True)
+        box.prop(props, "rug_in_utility_rooms", text="Rugs In Store Rooms")
         if is_bldg:
             box.operator("building.furnish_interior", text="Furnish Interior Now", icon='CHECKMARK')
         else:

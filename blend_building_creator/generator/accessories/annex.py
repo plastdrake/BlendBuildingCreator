@@ -166,7 +166,9 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                                     nvec, list(_fb_ops), diagonals,
                                     is_top_floor=(f == floors - 1))
 
-        # Furnish annex interior space on each floor
+        # Furnish annex interior space on each floor: a sitting / reading room
+        # (never a bedroom). Sofa against the outer wall, an armchair facing it,
+        # a small table, a bookcase and a plant.
         try:
             from .prop_registry import build_prop
             _annex_w = max(0.1, (y1 - wall_t) - (y0 + wall_t))
@@ -175,28 +177,31 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             _annex_cy = cy
             _z_fl = fz0 + 0.05
             _z_cl = fz0 + floor_h - 0.08
-            
-            if f == 0:
-                # Ground floor: parlor / dining nook
-                build_prop(bm, 'RUG_CRIMSON', _annex_cx, _annex_cy, _z_fl, 0.0,
-                           width=min(1.4, _annex_d * 0.75), length=min(2.0, _annex_w * 0.75))
-                if _annex_d >= 1.8 and _annex_w >= 1.8:
-                    build_prop(bm, 'ROUND_TABLE', _annex_cx, _annex_cy, _z_fl, 0.0, radius=0.48)
-                    build_prop(bm, 'CHAIR', _annex_cx - 0.65, _annex_cy, _z_fl, math.pi * 0.5)
-                    build_prop(bm, 'CHAIR', _annex_cx + 0.65, _annex_cy, _z_fl, -math.pi * 0.5)
-                    build_prop(bm, 'SCATTER_TABLEWARE', _annex_cx, _annex_cy, _z_fl + 0.76, 0.0)
-                build_prop(bm, 'CHEST', _annex_cx, y1 - wall_t - 0.35, _z_fl, 0.0, width=0.85)
-                build_prop(bm, 'CHAIN_LANTERN', _annex_cx, _annex_cy, _z_cl, 0.0)
-            else:
-                # Upper floor: cozy private bedroom
-                build_prop(bm, 'RUG_SAPPHIRE', _annex_cx, _annex_cy, _z_fl, 0.0,
-                           width=min(1.4, _annex_d * 0.75), length=min(1.8, _annex_w * 0.75))
-                bed_x = outer_x - side_sgn * 1.15
-                build_prop(bm, 'BED', bed_x, _annex_cy, _z_fl, 0.0 if side_sgn > 0 else math.pi,
-                           length=1.90, width=1.05)
-                build_prop(bm, 'WARDROBE', _annex_cx, y0 + wall_t + 0.35, _z_fl, math.pi * 0.5,
-                           width=1.05, height=1.75)
-                build_prop(bm, 'CHAIN_LANTERN', _annex_cx, _annex_cy, _z_cl, 0.0)
+            # Back of the sofa against the annex's outer wall.
+            _sofa_yaw = -math.pi / 2 if side_sgn > 0 else math.pi / 2
+            _chair_yaw = side_sgn * math.pi / 2
+
+            build_prop(bm, 'RUG_CRIMSON', _annex_cx, _annex_cy, _z_fl, 0.0,
+                       width=min(2.6, _annex_d * 0.72), length=min(3.4, _annex_w * 0.66))
+
+            _sx = outer_x - side_sgn * 0.54
+            build_prop(bm, 'SOFA', _sx, _annex_cy, _z_fl, _sofa_yaw,
+                       length=min(1.75, max(1.15, _annex_w * 0.5)))
+
+            if _annex_d >= 2.8:
+                _ax = inner_x + side_sgn * 0.78
+                build_prop(bm, 'ARMCHAIR', _ax, _annex_cy, _z_fl, _chair_yaw)
+                build_prop(bm, 'ROUND_TABLE', (_sx + _ax) * 0.5, _annex_cy, _z_fl, 0.0,
+                           radius=0.32)
+
+            if _annex_w >= 2.6:
+                _bk_y = y0 + wall_t + 0.30
+                build_prop(bm, 'BOOKSHELF', inner_x + side_sgn * 0.55, _bk_y, _z_fl, 0.0,
+                           width=min(1.1, _annex_w * 0.5), height=1.70)
+
+            build_prop(bm, 'POTTED_PLANT_SMALL',
+                       outer_x - side_sgn * 0.55, y1 - wall_t - 0.45, _z_fl, 0.0)
+            build_prop(bm, 'CHAIN_LANTERN', _annex_cx, _annex_cy, _z_cl, 0.0)
         except Exception:
             pass
     top_inner = floor_inner[floors - 1]

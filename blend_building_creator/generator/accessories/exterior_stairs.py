@@ -42,6 +42,16 @@ def _stair_clearance(props):
     return stair_geometry(props, type('C', (), {'found_h': 0.4, 'floor_h': 3.6}))['clearance']
 
 
+def _floor_overhang(props, fl_idx):
+    """Per-storey cantilever expansion beyond the base footprint (matches floors.py)."""
+    if not getattr(props, 'has_cantilever', False):
+        return 0.0
+    c = float(getattr(props, 'cantilever_overhang', 0.0))
+    if getattr(props, 'overhang_mode', 'SECOND_FLOOR_ONLY') == 'SECOND_FLOOR_ONLY':
+        return c if fl_idx >= 1 else 0.0
+    return fl_idx * c
+
+
 def _wall_ring(props, ctx):
     """The four walls as an ordered walk around the building (base footprint)."""
     hw = float(getattr(ctx, 'base_w', 8.0)) * 0.5
@@ -698,30 +708,33 @@ def _build_courtyard_stairs(bm, props, ctx, plan, tier='TIER_1'):
 
     # Wing inner-wall geometry: the spurs run the wing's full depth so every
     # turn landing is reachable, and the wing doors sit in the front kitchen.
+    # The wall edge is tracked separately from the outer courtyard edge so a
+    # jettied upper storey (where the wing grows into the courtyard) can shift
+    # the deck's inner edge without moving the outer walkway boundary.
     wing_info = []
     for wi, w in enumerate(wings):
         wx0, wx1, wy0, wy1 = (float(w['base'][0]), float(w['base'][1]),
                               float(w['base'][2]), float(w['base'][3]))
         inner_x = wx1 if wi == 0 else wx0
         e_y = wy0 + max(1.3, (wy1 - wy0) * 0.26)
-        sx0, sx1 = (inner_x, inner_x + sg) if wi == 0 else (inner_x - sg, inner_x)
+        outer_x = inner_x + sg if wi == 0 else inner_x - sg
         wing_info.append({'inner_x': inner_x, 'tip': wy0, 'attach': wy1,
-                          'e_y': e_y, 'sx0': sx0, 'sx1': sx1})
+                          'e_y': e_y, 'wall_x': inner_x, 'outer_x': outer_x})
 
     left, right = wing_info[0], wing_info[1]
     top_z = found_h + (n_floors - 1) * floor_h
+    max_ovh = max(0.0, _floor_overhang(props, n_floors - 1))
 
-    # Support posts around the wrap gallery / landings (placed on outside corners, never blocking paths).
-    # Note: intermediate turn landings create their own support posts sized up to landing level z.
-    # We do NOT create full-height posts for the landing here to prevent them from shooting through upper stairs.
-    landing_lo = gap0 + sg
+    # Support posts around the wrap gallery / landings (placed on outside
+    # corners, pushed clear of the largest (top-storey) jetty so they never
+    # stand inside a wing room).
     post_spots = [
-        (left['sx0'] + 0.16, y_attach - 0.20),
-        (right['sx1'] - 0.16, y_attach - 0.20),
+        (left['wall_x'] + max_ovh + 0.16, y_attach - max_ovh - 0.20),
+        (right['wall_x'] - max_ovh - 0.16, y_attach - max_ovh - 0.20),
         (gap0 + sg + 0.16, y_gal_edge - 0.18),
         (gap1 - sg - 0.16, y_gal_edge - 0.18),
-        (left['sx0'] + 0.16, left['tip'] + 0.20),
-        (right['sx1'] - 0.16, right['tip'] + 0.20),
+        (left['wall_x'] + max_ovh + 0.16, left['tip'] - max_ovh + 0.20),
+        (right['wall_x'] - max_ovh - 0.16, right['tip'] - max_ovh + 0.20),
     ]
     for px, py in post_spots:
         create_beveled_box(bm, size=(0.18, 0.18, top_z),
@@ -731,32 +744,36 @@ def _build_courtyard_stairs(bm, props, ctx, plan, tier='TIER_1'):
     for fl_idx in range(1, n_floors):
         zw = found_h + fl_idx * floor_h
         odd = (fl_idx % 2 == 1)
+        ovh = _floor_overhang(props, fl_idx)
+        w_tip = left['tip'] - ovh
+        w_attach = y_attach - ovh
+        l_wall = left['wall_x'] + ovh
+        r_wall = right['wall_x'] - ovh
 
-        # Decks: main facade strip between the spurs, plus full-depth spurs.
-        # Cleanly abutted at gap0 + sg and gap1 - sg with zero coplanar overlap!
-        _build_courtyard_deck(bm, gap0 + sg, gap1 - sg, y_gal_edge, y_attach, zw)
-        _build_courtyard_deck(bm, left['sx0'], left['sx1'], left['tip'], y_attach, zw)
-        _build_courtyard_deck(bm, right['sx0'], right['sx1'], right['tip'], y_attach, zw)
+        # Decks: main facade strip between the spurs, plus full-depth spurs
+        # starting at this storey's jettied wall face (so no deck slab is ever
+        # buried inside a room). Outer walkway edges stay put.
+        _build_courtyard_deck(bm, gap0 + sg, gap1 - sg, y_gal_edge, w_attach, zw)
+        _build_courtyard_deck(bm, l_wall, left['outer_x'], w_tip, w_attach, zw)
+        _build_courtyard_deck(bm, right['outer_x'], r_wall, w_tip, w_attach, zw)
 
         # 1. Left spur outer railing:
-        # Runs along X = left['sx1'] - 0.06.
-        # CRITICAL: stops at y_gal_edge - 0.06 so the 2.5m walkway into the Main Gallery is 100% UNBLOCKED!
-        # On even floors (e.g. Floor 2), open the passage where the turn landing connects at y_bot:
+        # Runs along X = outer edge; stops at y_gal_edge - 0.06 so the 2.5m
+        # walkway into the Main Gallery is 100% UNBLOCKED.
+        # On even floors, open the passage where the turn landing connects at y_bot.
         left_gaps = []
         if not odd:
             left_gaps.append((y_bot - _LAND_LEN - 0.10, y_bot + 0.10))
-        _rail_gapped(bm, 'Y', left['sx1'] - 0.06, left['tip'] + 0.06, y_gal_edge - 0.06,
+        _rail_gapped(bm, 'Y', left['outer_x'] - 0.06, w_tip + 0.06, y_gal_edge - 0.06,
                      left_gaps, zw + 0.07)
 
         # 2. Right spur outer railing:
-        # Runs along X = right['sx0'] + 0.06 from tip up to y_gal_edge - 0.06.
-        # CRITICAL: stops at y_gal_edge - 0.06 so the 2.5m corner into the Main Gallery is 100% UNBLOCKED!
-        _rail_gapped(bm, 'Y', right['sx0'] + 0.06, right['tip'] + 0.06,
+        _rail_gapped(bm, 'Y', right['outer_x'] + 0.06, w_tip + 0.06,
                      y_gal_edge - 0.06, [], zw + 0.07)
 
-        # 3. Wing-tip end caps:
-        for wf in wing_info:
-            _rail_gapped(bm, 'X', wf['tip'] + 0.06, wf['sx0'] + 0.04, wf['sx1'] - 0.04, [], zw + 0.07)
+        # 3. Wing-tip end caps (spanning jettied wall edge to outer edge):
+        _rail_gapped(bm, 'X', w_tip + 0.06, l_wall + 0.04, left['outer_x'] - 0.04, [], zw + 0.07)
+        _rail_gapped(bm, 'X', w_tip + 0.06, right['outer_x'] + 0.04, r_wall - 0.04, [], zw + 0.07)
 
         # 4. Main facade outer railing along Y = y_gal_edge - 0.06:
         # On odd floors, leave clear openings for the stairs arriving at x_inner and departing at x_outer:

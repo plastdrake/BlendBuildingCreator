@@ -55,6 +55,7 @@ def base_settings():
         'has_ceiling_beams': True,
         'has_interior_walls': True, 'interior_partition_style': 'AUTO',
         'interior_wall_thickness': 0.16,
+        'interior_program': 'AUTO', 'rug_in_utility_rooms': False,
         # Openings
         'has_front_door': True, 'front_door_offset_x': 0.0,
         'has_back_door': False, 'has_back_portal': False,
@@ -6210,6 +6211,7 @@ def apply_preset(props, preset_key):
                 'scaffold_width', 'scaffold_depth', 'scaffold_height',
                 'scaffold_levels', 'scaffold_tarp', 'construction_piles',
                 'construction_crane',
+                'interior_program', 'rug_in_utility_rooms',
                 *_ALL_KIT_FLAGS,
                 'roof_orientation'):
         if hasattr(props, _fk):

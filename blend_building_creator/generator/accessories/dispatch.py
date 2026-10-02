@@ -156,21 +156,25 @@ def _build_civic_landmarks(bm, props, ctx, tier):
             include_leaf=_prop(props, 'include_door_leaves', True),
         )
     if _prop(props, 'has_corner_turrets', False):
-        # Square corner turrets built INTO the back corners. Each turret is
-        # centred on the wall corner, its shell matches the wall thickness and
-        # its outer faces sit flush with both exterior walls, so the two walls
-        # run into the turret footprint and terminate there instead of crossing
-        # the interior. No floating slab, no overlapping interior wall.
+        # Square corner turrets hugging the back corners. The turret must ABUT
+        # the two exterior walls (its outer side face flush with the side wall,
+        # its near/open face on the back wall) rather than be centred on the
+        # corner - centring it pushed half the tower out past both walls and
+        # left a gap between the tower and the hall.
         _eave = ctx.found_h + ctx.num_floors * ctx.floor_h
         tur_top = (_eave + ctx.floor_h * 0.95) * 1.30
         tur_half = max(1.0, min(2.0, _prop(props, 'corner_turret_size', 1.35)))
         _levels = [ctx.found_h + i * ctx.floor_h for i in range(ctx.num_floors)]
         _fb = ctx.floor_wall_bounds.get(ctx.num_floors - 1) or ctx.floor_wall_bounds.get(1)
         if _fb is not None:
-            _cx = abs(_fb[0]) if abs(_fb[0]) > abs(_fb[1]) else abs(_fb[1])
+            _hx = max(abs(_fb[0]), abs(_fb[1]))
+            _hy = max(abs(_fb[2]), abs(_fb[3]))
         else:
-            _cx = base_hx
-        _cy = abs(_fb[2]) if _fb is not None and abs(_fb[2]) > abs(_fb[3]) else base_hy
+            _hx, _hy = base_hx, base_hy
+        # Flush against the side wall; sit just outside the back wall so the
+        # tower's open near face is closed by the hall wall (with its portal).
+        _cx = _hx - tur_half
+        _cy = _hy + tur_half
         for _sx in (-1.0, 1.0):
             build_corner_turret(
                 bm,
