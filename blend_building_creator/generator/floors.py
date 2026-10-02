@@ -240,7 +240,16 @@ def build_floors(bm, props, ctx):
     _turrets = []
     if getattr(props, 'has_corner_turrets', False) and not open_timber:
         _thalf = max(1.0, min(2.0, getattr(props, 'corner_turret_size', 1.35)))
-        _t_cx = base_w * 0.5 - _thalf
+        # The turret centres on the OUTERMOST (top-storey) wall face, so the
+        # doorway must use that same reference or it lands off the tower and a
+        # wall blocks the way in.
+        _t_ovh = 0.0
+        if getattr(props, 'has_cantilever', False):
+            if getattr(props, 'overhang_mode', 'SECOND_FLOOR_ONLY') == 'SECOND_FLOOR_ONLY':
+                _t_ovh = cantilever if num_floors >= 2 else 0.0
+            else:
+                _t_ovh = (num_floors - 1) * cantilever
+        _t_cx = base_w * 0.5 + _t_ovh - _thalf
         _turrets = [{'cx': -_t_cx, 'half': _thalf}, {'cx': _t_cx, 'half': _thalf}]
 
     # ---- Mini-wing outcrop layout ------------------------------------------

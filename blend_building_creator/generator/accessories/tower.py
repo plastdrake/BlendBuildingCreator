@@ -586,25 +586,34 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
     # wall band across the tower here: it used to split the tower interior and
     # read as a loose panel floating inside the shaft.
 
-    # Near (building) face: a wall with a doorway per storey that closes the
-    # jetty pocket under the overhanging upper storeys, so the tower reads as
-    # one solid volume instead of a shell with a gap beside the hall. Nudged
-    # 20mm outward so it never sits coplanar with the hall's back wall.
+    # Near (building) face: a FULL-height wall with a doorway per storey, set
+    # just outboard of the hall wall so it never overlaps it. This closes both
+    # the jetty pocket below and the open shaft above the eave (the tower used
+    # to be only three-walled). Doorways are centred on the tower axis so they
+    # line up with the portal the floor builder cuts in the hall wall.
     if main_wall_top is not None:
-        _ndw = min(1.10, half * 0.95)
-        _ndh = min(2.15, floor_h - 0.35)
-        _nops = []
-        for fz in levels:
-            _z0 = max(fz, shaft_base)
-            _z1 = min(fz + _ndh, wall_top_z - 0.25)
-            if _z1 - _z0 > 0.6:
-                _nops.append({'u_start': -_ndw * 0.5, 'u_end': _ndw * 0.5,
-                              'z_start': _z0, 'z_end': _z1})
-        if _nops:
-            _n0 = pt(-half + 0.02, -o_line)
-            _n1 = pt(-half + 0.02, o_line)
+        _n_out = -half + t * 0.5 + 0.03
+        _np0 = pt(_n_out, -o_line)
+        _np1 = pt(_n_out, o_line)
+        _nfl = math.hypot(_np1[0] - _np0[0], _np1[1] - _np0[1])
+        if _nfl > 0.4:
+            _nux = (_np1[0] - _np0[0]) / _nfl
+            _nuy = (_np1[1] - _np0[1]) / _nfl
+            _nuc = (cx - _np0[0]) * _nux + (cy - _np0[1]) * _nuy
+            _ndw = min(1.30, _nfl - 0.24)
+            _ndh = min(2.15, floor_h - 0.35)
+            _nops = []
+            for fz in levels:
+                if fz > main_wall_top - 0.30:
+                    break
+                _z0 = max(fz, shaft_base)
+                _z1 = min(fz + _ndh, wall_top_z - 0.25)
+                if _z1 - _z0 > 0.6:
+                    _nops.append({'u_start': _nuc - _ndw * 0.5,
+                                  'u_end': _nuc + _ndw * 0.5,
+                                  'z_start': _z0, 'z_end': _z1})
             build_wall_with_opening(
-                bm, _n0, _n1, shaft_base, main_wall_top, t, _nops,
+                bm, _np0, _np1, shaft_base, wall_top_z, t, _nops,
                 mat_ext=wall_mat, normal_vec=(-ox, -oy), tier=tier,
                 physical_siding=False, plank_direction=plank_direction, seed=seed)
 
