@@ -212,7 +212,7 @@ def build_clock_tower(bm, cx, cy, z_ground=0.0, size=3.0, shaft_top_z=10.0,
                                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014)
             create_beveled_box(bm, size=(s, 0.2, shaft_top_z - arch_top if (shaft_top_z - arch_top) < 1.2 else 1.0),
                                location=(cx, fy, arch_top + 0.45),
-                               mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
         base_z = arch_top
     else:
         # Two-step stepped plinth grounding the tower
@@ -477,7 +477,7 @@ def build_roof_clock_spire(bm, cx, cy, z_base, scale=0.85, tier='TIER_3'):
 def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
                         tier='TIER_3', out_dir=(1.0, 0.0),
                         floor_levels=None, floor_h=3.0, main_wall_top=None,
-                        attach_tuck=0.32, plank_direction='HORIZONTAL', seed=42):
+                        attach_tuck=0.32, plank_direction='VERTICAL', seed=42):
     """Square corner tower bolted onto the outside of the hall, annex-style.
 
     out_dir is the axis the tower projects along; the opposite side (toward the

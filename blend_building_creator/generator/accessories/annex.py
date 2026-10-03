@@ -26,7 +26,7 @@ from .mini_wing import build_mini_wing
 
 def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                      found_h=0.6, floors=2, floor_h=3.0, tier='TIER_3',
-                     width=5.2, depth=4.0, roof_h=3.0, plank_direction='HORIZONTAL',
+                     width=5.2, depth=4.0, roof_h=3.0, plank_direction='VERTICAL',
                      main_bounds_by_floor=None, timber_framing=True, diagonals=True,
                      main_roof=None):
     """Half-timbered side volume embedded into the main side wall.
@@ -171,6 +171,11 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
         # a small table, a bookcase and a plant.
         try:
             from .prop_registry import build_prop
+            from ..materials import MAT_INDEX_LEATHER, MAT_INDEX_LEATHER_2, MAT_INDEX_FABRIC_STITCHED
+            import random as _rnd
+            _leather_opts = [MAT_INDEX_LEATHER, MAT_INDEX_LEATHER_2, MAT_INDEX_FABRIC_STITCHED]
+            _rng = _rnd.Random(int(abs(outer_x * 97 + cy * 131)) + f)
+            _annex_leather = _rng.choice(_leather_opts)
             _annex_w = max(0.1, (y1 - wall_t) - (y0 + wall_t))
             _annex_d = max(0.1, _fx_max - _fx_min)
             _annex_cx = (_fx_min + _fx_max) * 0.5
@@ -184,14 +189,23 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             build_prop(bm, 'RUG_CRIMSON', _annex_cx, _annex_cy, _z_fl, 0.0,
                        width=min(2.6, _annex_d * 0.72), length=min(3.4, _annex_w * 0.66))
 
+            # Place sofa offset from outer wall; limit length so it never
+            # reaches within 0.55m of front/back walls (walkway clearance).
             _sx = outer_x - side_sgn * 0.54
+            _sofa_len = min(1.75, max(1.15, _annex_w * 0.5), _annex_w - 1.10)
             build_prop(bm, 'SOFA', _sx, _annex_cy, _z_fl, _sofa_yaw,
-                       length=min(1.75, max(1.15, _annex_w * 0.5)))
+                       length=_sofa_len, fabric_mat=_annex_leather)
 
-            if _annex_d >= 2.8:
-                _ax = inner_x + side_sgn * 0.78
-                build_prop(bm, 'ARMCHAIR', _ax, _annex_cy, _z_fl, _chair_yaw)
-                build_prop(bm, 'ROUND_TABLE', (_sx + _ax) * 0.5, _annex_cy, _z_fl, 0.0,
+            # Doorway into annex is at inner_x; armchair must stay clear of
+            # the 1.2m zone in front of that opening. Place it only when
+            # the annex is deep enough to have clearance.
+            _portal_clearance = 1.20
+            _chair_x = inner_x + side_sgn * 0.78
+            _chair_clear = abs(_chair_x - inner_x) > _portal_clearance * 0.5
+            if _annex_d >= 2.8 and _chair_clear:
+                build_prop(bm, 'ARMCHAIR', _chair_x, _annex_cy, _z_fl, _chair_yaw,
+                           fabric_mat=_annex_leather)
+                build_prop(bm, 'ROUND_TABLE', (_sx + _chair_x) * 0.5, _annex_cy, _z_fl, 0.0,
                            radius=0.32)
 
             if _annex_w >= 2.6:
@@ -321,7 +335,7 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
         abut_back=_abut_back,
         segments_y=_seg_y,
         tier=tier,
-        plank_direction='HORIZONTAL',
+        plank_direction='VERTICAL',
         roof_flare=0.35,
         valley_notch=_vnotch,
     )

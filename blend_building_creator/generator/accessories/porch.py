@@ -7,7 +7,7 @@ from ..roof.gable_roof import build_gable_roof
 
 def build_arched_porch(bm, door_x, front_y, z_ground=0.0, z_floor=0.6,
                        half_span=1.5, height=2.9, tier='TIER_3',
-                       plank_direction='HORIZONTAL'):
+                       plank_direction='VERTICAL', roof_mat=None):
     """Stone entry porch with an angled two-slope roof and NO gable wall.
 
     Twin stone piers carry an outer beam; above them the real gable-roof builder
@@ -52,4 +52,5 @@ def build_arched_porch(bm, door_x, front_y, z_ground=0.0, z_floor=0.6,
         plank_direction=plank_direction,
         roof_flare=0.35,
         gable_walls=False,
+        roof_mat=roof_mat,
     )

@@ -495,15 +495,15 @@ def create_stylized_cut_stone(name="M_Building_Cut_Stone", color=None, tier='TIE
         rough = 0.90
     elif tier == 'TIER_2':
         c_use = color or (0.68, 0.66, 0.62, 1.0)
-        tex_node = _load_image_texture(tree, "squared_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+        tex_node = _load_image_texture(tree, "squared_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.42, 0.42, 1.0))
         if tex_node is None:
-            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.42, 0.42, 1.0))
         rough = 0.80
     else:
         c_use = color or (0.78, 0.72, 0.60, 1.0)
-        tex_node = _load_image_texture(tree, "ashlar_stone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+        tex_node = _load_image_texture(tree, "ashlar_stone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.45, 0.45, 1.0))
         if tex_node is None:
-            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.45, 0.45, 1.0))
         rough = 0.65
 
     if tex_node is not None:
@@ -1156,9 +1156,9 @@ def create_stylized_facade_planks(name="M_Building_Wood", color=None, tier='TIER
         tex_name = "oiled_timber_diffuse.png"
         rough = 0.45
 
-    tex_node = _load_image_texture(tree, tex_name, c, loc_x=-800, loc_y=120, scale=(0.60, 0.60, 1.0), rotation=(0.0, 0.0, 0.0))
+    tex_node = _load_image_texture(tree, tex_name, c, loc_x=-800, loc_y=120, scale=(0.60, 0.60, 1.0), rotation=(0.0, 0.0, 1.5707963))
     if tex_node is None:
-        tex_node = _load_image_texture(tree, "facade_wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(0.60, 0.60, 1.0), rotation=(0.0, 0.0, 0.0))
+        tex_node = _load_image_texture(tree, "facade_wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(0.60, 0.60, 1.0), rotation=(0.0, 0.0, 1.5707963))
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'

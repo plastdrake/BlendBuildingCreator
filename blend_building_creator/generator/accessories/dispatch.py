@@ -35,6 +35,8 @@ from .banner import build_banner_pole
 from .military_props import build_military_props
 from .exterior_stairs import build_exterior_stairs
 from ..openings import build_front_steps
+from ..style import get_effective_roof_material, get_effective_wall_material
+from ..materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_WOOD, MAT_INDEX_STONE
 
 
 def _prop(props, name, default):
@@ -45,6 +47,13 @@ def _build_mini_wing(bm, props, ctx, tier):
     """Build the outcrops laid out by :func:`mini_wing_spread` (ctx owns the slots)."""
     if not _prop(props, 'has_mini_wing', False):
         return
+    # Resolve the outcrop cladding from the building's effective wall material
+    # so it always matches the main hall instead of guessing from the tier.
+    _eff_wall = get_effective_wall_material(props)
+    if _eff_wall in ('WATTLE_DAUB', 'STUCCO', 'STONE'):
+        _mw_wall = MAT_INDEX_PLASTER_EXT if _eff_wall in ('WATTLE_DAUB', 'STUCCO') else MAT_INDEX_STONE
+    else:
+        _mw_wall = MAT_INDEX_WOOD
     for fl, placements in sorted(ctx.mini_wing_spread.items()):
         bounds = ctx.bounds_for(fl)
         lower = ctx.bounds_for(max(0, fl - 1))
@@ -67,6 +76,7 @@ def _build_mini_wing(bm, props, ctx, tier):
                 shingle_scale=_prop(props, 'mini_wing_shingle_scale', 0.32),
                 shingle_rot=int(_prop(props, 'mini_wing_shingle_rot', '0')),
                 off_along=off,
+                wall_mat=_mw_wall,
             )
 
 
@@ -183,7 +193,8 @@ def _build_civic_landmarks(bm, props, ctx, tier):
                 out_dir=(0.0, 1.0), floor_levels=_levels,
                 floor_h=ctx.floor_h, main_wall_top=_eave,
                 attach_tuck=ctx.wall_t,
-                plank_direction=ctx.plank_dir, seed=ctx.seed)
+                plank_direction=ctx.plank_dir,  # already defaults to VERTICAL from building.py
+            )  # close build_corner_turret
     if (_prop(props, 'has_arched_porch', False)
             and getattr(ctx, 'effective_archetype', None) != 'STABLE'):
         # A jettied upper storey overhangs the ground-floor wall, so the porch
@@ -198,10 +209,14 @@ def _build_civic_landmarks(bm, props, ctx, tier):
         _dh = getattr(props, 'door_height', 2.80)
         _half_span = max(1.5, _dw * 0.5 + 0.45)
         _porch_h = max(2.9, _dh + 0.25)
+        # Match the main roof: a Tier-1 porch must not use the thick stepped
+        # thatch profile when the building itself has wood shingles.
+        _porch_roof = get_effective_roof_material(props)
         build_arched_porch(bm, door_x=ctx.main_door_cx, front_y=_porch_front,
                            z_ground=0.0, z_floor=ctx.found_h,
                            half_span=_half_span, height=_porch_h,
-                           tier=tier, plank_direction=ctx.plank_dir)
+                           tier=tier, plank_direction=ctx.plank_dir,
+                           roof_mat=_porch_roof)
     if _prop(props, 'has_entry_ramp', False):
         _tw = []
         if _prop(props, 'has_bastion_towers', False):

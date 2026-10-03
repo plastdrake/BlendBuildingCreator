@@ -377,13 +377,25 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
             bevel_amount=0.01
         )
         # Wood grain oriented strictly ALONG LENGTH (V axis) of each stair step board
+        # The length direction is along the stair flight diagonal
         for f in tread_faces:
             if not f.is_valid:
                 continue
             for loop in f.loops:
                 co = loop.vert.co
-                v = (co.x - (sx - stair_width * 0.5)) * 0.45 + (i * 0.37)
+                # Calculate position along the stair length (diagonal from start to target)
+                # Length direction: (stair_depth * direction_y, 0, dz)
+                # Normalize and map to V axis (0 at bottom, 1 at top of tread)
+                len_dir_x = stair_depth * direction_y
+                len_dir_z = dz
+                length = math.sqrt(len_dir_x * len_dir_x + len_dir_z * len_dir_z)
+                if length > 0:
+                    along = (co.x * len_dir_x + co.z * len_dir_z) / length * 0.5 + 0.5  # 0-1 along length
+                else:
+                    along = 0.5
+                # V runs along length, U runs across width
                 u = (co.y - (sy - tread_d * 0.5)) * 1.6 + (co.z - sz) * 1.4 + (i * 0.19)
+                v = along * 2.0  # Scale to fill UV space
                 loop[uv_layer].uv = Vector((u, v))
 
         # Riser plank beneath tread (down to step below or floor)
@@ -648,12 +660,13 @@ class Room:
 
 def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
                         doorway=None, mat_index=MAT_INDEX_PLASTER_EXT,
-                        casing_mat=MAT_INDEX_WOOD):
+                        casing_mat=MAT_INDEX_WOOD, plank_direction='VERTICAL'):
     """
     Builds a double-sided stylized interior partition wall running from p1=(x1,y1) to p2=(x2,y2).
     Includes an open cased walkthrough doorway (with timber jambs and lintel, but NO door blade).
     Also generates interior baseboard and crown moulding trims on both sides of the wall.
     doorway: optional dict with keys 'cx', 'cy', 'w', 'h' or tuple (u_cx, door_w, door_h).
+    plank_direction: 'VERTICAL' for floor-to-ceiling boards, 'HORIZONTAL' for left-to-right boards.
     """
     x1, y1 = p1
     x2, y2 = p2
@@ -677,8 +690,7 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
     _uvl = bm.loops.layers.uv.verify()
 
     def _plank_panel(size, location, rotation):
-        """Wall panel whose plank grain runs top-to-bottom (tagged so the
-        global box-UV pass leaves it alone)."""
+        """Wall panel whose plank grain direction depends on plank_direction param."""
         fs = create_box(bm, size=size, location=location, rotation=rotation, mat_index=mat_index)
         for f in fs:
             f.tag = True
@@ -686,11 +698,22 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
             n = f.normal
             for lp in f.loops:
                 co = lp.vert.co
-                if abs(n.z) < 0.7:
-                    along = co.x if abs(n.y) >= abs(n.x) else co.y
-                    lp[_uvl].uv = Vector((co.z * 0.55, along * 0.55))
+                if plank_direction == 'VERTICAL':
+                    # Grain runs top-to-bottom (vertically along wall height)
+                    if abs(n.z) < 0.7:
+                        # Wall-facing vertical: grain runs along the wall's vertical axis
+                        along = co.x if abs(n.y) >= abs(n.x) else co.y
+                        lp[_uvl].uv = Vector((co.z * 0.55, along * 0.55))
+                    else:
+                        # Horizontal surface: grain runs vertically (along Z)
+                        lp[_uvl].uv = Vector((co.x * 0.55, co.y * 0.55))
                 else:
-                    lp[_uvl].uv = Vector((co.x * 0.55, co.y * 0.55))
+                    # HORIZONTAL: grain runs left-to-right (along wall width)
+                    if abs(n.z) < 0.7:
+                        along = co.x if abs(n.y) >= abs(n.x) else co.y
+                        lp[_uvl].uv = Vector((along * 0.55, co.z * 0.55))
+                    else:
+                        lp[_uvl].uv = Vector((co.x * 0.55, co.y * 0.55))
         return fs
 
     # Resolve doorway

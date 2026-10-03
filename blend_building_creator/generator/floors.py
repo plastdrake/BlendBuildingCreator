@@ -892,8 +892,13 @@ def build_floors(bm, props, ctx):
                                           'u_end': (r_cy + rdw * 0.5 + r_margin) - y_min,
                                           'z_start': z_floor, 'z_end': r_top_z})
                     ctx.floor_doorways.setdefault(1, []).append({'x': x_min, 'y': r_cy, 'axis': 'Y', 'w': rdw})
+                    # Recess the whole assembly into the wall so the arch
+                    # surround and threshold sit nearly flush with the wall face
+                    # instead of jutting onto the narrow deck walkway, which
+                    # made the door unreachable from the ramp. The wall opening
+                    # itself stays on the wall line; the jambs still lap it.
                     build_door_assembly(
-                        bm, center_x=x_min, y_front=r_cy, z_base=z_floor,
+                        bm, center_x=x_min + 0.10, y_front=r_cy, z_base=z_floor,
                         wall_thickness=wall_t, door_w=rdw, door_h=rdh, door_angle_deg=props.door_angle,
                         door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
                         normal_axis='-X', include_leaf=getattr(props, 'include_door_leaves', True)
@@ -903,8 +908,9 @@ def build_floors(bm, props, ctx):
                                            'u_end': (r_cy + rdw * 0.5 + r_margin) - y_min,
                                            'z_start': z_floor, 'z_end': r_top_z})
                     ctx.floor_doorways.setdefault(1, []).append({'x': x_max, 'y': r_cy, 'axis': 'Y', 'w': rdw})
+                    # Recessed like the LEFT branch so the deck stays walkable.
                     build_door_assembly(
-                        bm, center_x=x_max, y_front=r_cy, z_base=z_floor,
+                        bm, center_x=x_max - 0.10, y_front=r_cy, z_base=z_floor,
                         wall_thickness=wall_t, door_w=rdw, door_h=rdh, door_angle_deg=props.door_angle,
                         door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=False,
                         normal_axis='+X', include_leaf=getattr(props, 'include_door_leaves', True)
@@ -993,6 +999,34 @@ def build_floors(bm, props, ctx):
                     create_beveled_box(bm, size=(p_w + jamb_w * 2.0 + 0.06, wall_t + 0.16, 0.038),
                                        location=(p_cx, f_yf, z_floor + 0.05 + 0.019),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
+                    # Interior liner: the main wall's outer (exterior) face would
+                    # otherwise show inside the wing room. Cover the wing span
+                    # with wood planks (portal cut out), tucking every liner
+                    # edge under the portal jambs/lintel and the wing side walls
+                    # so no raw edge ever shows.
+                    _lt = 0.06
+                    _ly = p_yf + (-1.0 if w_wall == 'FRONT' else 1.0) * (wall_t * 0.5)
+                    _lx0 = w_xmin - 0.05
+                    _lx1 = w_xmax + 0.05
+                    _jx0 = p_cx - p_w * 0.5 - jamb_w + 0.03
+                    _jx1 = p_cx + p_w * 0.5 + jamb_w - 0.03
+                    _HH = z_ceil - z_floor
+                    if _jx0 - _lx0 > 0.05:
+                        create_beveled_box(
+                            bm, size=((_jx0 - _lx0), _lt, _HH),
+                            location=((_lx0 + _jx0) * 0.5, _ly, z_floor + _HH * 0.5),
+                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
+                    if _lx1 - _jx1 > 0.05:
+                        create_beveled_box(
+                            bm, size=((_lx1 - _jx1), _lt, _HH),
+                            location=((_jx1 + _lx1) * 0.5, _ly, z_floor + _HH * 0.5),
+                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
+                    _ztop = z_floor + portal_h + lintel_h - 0.05
+                    if z_ceil - _ztop > 0.05 and _jx1 - _jx0 > 0.05:
+                        create_beveled_box(
+                            bm, size=((_jx1 - _jx0), _lt, z_ceil - _ztop),
+                            location=(p_cx, _ly, _ztop + (z_ceil - _ztop) * 0.5),
+                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
                 else: # LEFT or RIGHT
                     wing_span = w_ymax - w_ymin
                     clear_margin = wall_t + jamb_w + 0.22
@@ -1027,6 +1061,32 @@ def build_floors(bm, props, ctx):
                     create_beveled_box(bm, size=(wall_t + 0.16, p_w + jamb_w * 2.0 + 0.06, 0.038),
                                        location=(f_xf, p_cy, z_floor + 0.05 + 0.019),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
+                    # Interior liner (mirrors the FRONT/BACK case): cover the wing
+                    # span of the main wall with wood planks on the wing side,
+                    # portal cut out, all edges tucked under jambs/lintel/walls.
+                    _lt = 0.06
+                    _lx = p_xf + (-1.0 if w_wall == 'LEFT' else 1.0) * (wall_t * 0.5)
+                    _ly0 = w_ymin - 0.05
+                    _ly1 = w_ymax + 0.05
+                    _jy0 = p_cy - p_w * 0.5 - jamb_w + 0.03
+                    _jy1 = p_cy + p_w * 0.5 + jamb_w - 0.03
+                    _HH = z_ceil - z_floor
+                    if _jy0 - _ly0 > 0.05:
+                        create_beveled_box(
+                            bm, size=(_lt, (_jy0 - _ly0), _HH),
+                            location=(_lx, (_ly0 + _jy0) * 0.5, z_floor + _HH * 0.5),
+                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
+                    if _ly1 - _jy1 > 0.05:
+                        create_beveled_box(
+                            bm, size=(_lt, (_ly1 - _jy1), _HH),
+                            location=(_lx, (_jy1 + _ly1) * 0.5, z_floor + _HH * 0.5),
+                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
+                    _ztop = z_floor + portal_h + lintel_h - 0.05
+                    if z_ceil - _ztop > 0.05 and _jy1 - _jy0 > 0.05:
+                        create_beveled_box(
+                            bm, size=(_lt, (_jy1 - _jy0), z_ceil - _ztop),
+                            location=(_lx, p_cy, _ztop + (z_ceil - _ztop) * 0.5),
+                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
 
         # Walk-in portal into mini-wing outcrop (layout decided up front)
         has_mw = getattr(props, 'has_mini_wing', False)
@@ -2084,11 +2144,15 @@ def build_floors(bm, props, ctx):
                 phys_siding = False
             elif fl_idx == 0 and props.ground_floor_stone and tier_val == 'TIER_2':
                 phys_siding = False
-        plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
+        plank_dir = getattr(props, 'plank_direction', 'VERTICAL')
         plank_jank = getattr(props, 'plank_jankiness', 0.35)
         stone_scale = getattr(props, 'stone_block_scale', 1.0)
-        stone_disorder = getattr(props, 'stone_disorder', 0.35)
-        has_brick = getattr(props, 'has_exposed_brick', True)
+        stone_disorder = getattr(props, 'stone_disorder', 0.0)
+        # Exposed brick patches only make sense on smooth stucco (Tier 3).
+        # On wattle-and-daub or log walls the brick material reads as plain
+        # white stucco strips (most visible on the narrow wall columns above
+        # and below windows), so suppress it there.
+        has_brick = getattr(props, 'has_exposed_brick', True) and not tier1_wattle
         brick_freq = getattr(props, 'exposed_brick_frequency', 0.25)
 
         # Interior joinery

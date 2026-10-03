@@ -159,10 +159,10 @@ def build_round_tower(bm, props, seed):
 
     tier_val = getattr(props, 'material_tier', 'TIER_3')
     phys_siding = getattr(props, 'physical_siding', True)
-    plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
+    plank_dir = getattr(props, 'plank_direction', 'VERTICAL')
     plank_jank = getattr(props, 'plank_jankiness', 0.35)
     stone_scale = getattr(props, 'stone_block_scale', 1.0)
-    stone_disorder = getattr(props, 'stone_disorder', 0.35)
+    stone_disorder = getattr(props, 'stone_disorder', 0.0)
 
     # ---- Foundation: broad battered stone plinth ----
     if props.has_foundation:

@@ -239,7 +239,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                     z_base, width=2.2, depth=1.6, height=2.6, roof_style='LEAN_TO', tier='TIER_3',
                     floor_h=2.8, lower_bounds=None,
                     win_w=None, win_h=None, shingle_scale=0.32, shingle_rot=0,
-                    off_along=0.0, frame=None, peak_h=None):
+                    off_along=0.0, frame=None, peak_h=None, wall_mat=None):
     """
     Builds a small outcrop bay room / annex projection:
     - GROUND: rests on grounded stone foundation plinth.
@@ -366,7 +366,11 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
     )
 
     # 3. Hollow Walls: Front Wall & Side Walls (Leaving Rear Open into Main Room)
-    wall_mat = MAT_INDEX_WOOD if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_PLASTER_EXT
+    # wall_mat is resolved by the caller from the building's effective wall
+    # material so the outcrop always matches the main hall (wattle-and-daub
+    # halls get plaster, log/plank halls get wood).
+    if wall_mat is None:
+        wall_mat = MAT_INDEX_WOOD if tier in ('TIER_1', 'TIER_2') else MAT_INDEX_PLASTER_EXT
     col_w = 0.16
     wall_thick = 0.12
 
@@ -493,11 +497,15 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                 bevel_amount=0.008
             ))
     # Engine-consistent wall UVs: side runs get U along the depth (local X),
-    # front runs get U along the width (local Y); both use V vertical at 0.55/m.
+    # front runs get U along the width (local Y); V is vertical in both.
+    # Wood keeps the 0.55/m joinery scale, but masonry (plaster/stone) must
+    # use the 1.0/m world scale so its bricks match the main-hall walls
+    # instead of rendering at half density.
+    _uvs = 0.55 if wall_mat == MAT_INDEX_WOOD else 1.0
     map_local_wall_uv(bm, wall_side_faces, frame.wall_x, frame.wall_y, facade_rot_mat,
-                      u_comp=0, v_comp=2, scale=0.55)
+                      u_comp=0, v_comp=2, scale=_uvs)
     map_local_wall_uv(bm, wall_front_faces, frame.wall_x, frame.wall_y, facade_rot_mat,
-                      u_comp=1, v_comp=2, scale=0.55)
+                      u_comp=1, v_comp=2, scale=_uvs)
 
     # Heavy horizontal timber sill plate across front wall base (hides interior floor)
     timber_box(
@@ -600,7 +608,10 @@ def plan_outcrop_spread(props, base_w, base_d, num_floors, wings, has_wing,
             _blocked.add(_rampart_side)
         if _tower_side:
             _blocked.add(_tower_side)
-        if _pil_side and _f >= 1:
+        if _pil_side:
+            # The pillared overhang's posts stand on the ground along this
+            # facade, so no outcrop may use it on any floor (a ground-floor
+            # outcrop would swallow the pillars).
             _blocked.add(_pil_side)
         if (_gear_ground and _f == 0) or (_gear_top and _f == num_floors - 1):
             _blocked.add('FRONT')

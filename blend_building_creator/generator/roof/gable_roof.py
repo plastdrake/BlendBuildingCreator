@@ -52,7 +52,7 @@ def _build_eave_fascia_segment(bm, rx_val, y_start, y_end, ez, exclusions=None):
 
 def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, overhang=0.45,
                      wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6, abut_back=False,
-                     abut_front=False, tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35,
+                     abut_front=False, tier='TIER_3', plank_direction='VERTICAL', roof_flare=0.35,
                      dormer_apertures=None, eave_exclusions=None, valley_notch=None, loft_hatch=None,
                      gable_walls=True, is_wattle=False, roof_mat=None):
     """

@@ -161,7 +161,7 @@ def build_roof_and_attic(bm, props, ctx):
     )
     
     tier_val = getattr(props, 'material_tier', 'TIER_3')
-    plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
+    plank_dir = getattr(props, 'plank_direction', 'VERTICAL')
     eff_wall_mat = get_effective_wall_material(props)
     is_wattle = (tier_val == 'TIER_1' and (eff_wall_mat == 'WATTLE_DAUB' or is_tier1_wattle_daub(props)))
     eff_roof_mat = get_effective_roof_material(props)

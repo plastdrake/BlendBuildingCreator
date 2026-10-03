@@ -14,7 +14,7 @@ from ..materials import (
 )
 
 def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
-                               z_base, ez, rz, deck_thick, slope, tier='TIER_3', plank_direction='HORIZONTAL',
+                               z_base, ez, rz, deck_thick, slope, tier='TIER_3', plank_direction='VERTICAL',
                                roof_flare=0.35, hatch=None):
     """
     Populates the triangular gable wall under the roof pitch with physical 3D

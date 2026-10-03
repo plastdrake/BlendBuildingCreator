@@ -12,8 +12,15 @@ import math
 from mathutils import Euler, Matrix, Vector
 
 from ..mesh_utils import create_beveled_box
-from ..materials import MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER_FRAME
+from ..materials import MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD
 from ..uv_utils import apply_roof_shingle_uvs, map_planar_faces, timber_box
+
+
+def _masonry_uv_scale(wall_mat):
+    """Wall UV density matching the main hall: wood joinery uses 0.55/m,
+    masonry (plaster/stone) uses the 1.0/m world scale so bricks read at
+    exactly the same size and orientation as the main walls."""
+    return 0.55 if wall_mat == MAT_INDEX_WOOD else 1.0
 
 
 def _shingle_plane(bm, center, rotation, half_x, half_y, up_offset=0.0,
@@ -110,7 +117,7 @@ def build_lean_to_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
         cheek_faces.extend([f1, f2, f_slope, f_back])
 
     if cheek_faces:
-        map_planar_faces(bm, cheek_faces, scale=0.55)
+        map_planar_faces(bm, cheek_faces, scale=_masonry_uv_scale(wall_mat))
 
 
 def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
@@ -230,7 +237,7 @@ def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
     )
 
     if gable_faces:
-        map_planar_faces(bm, gable_faces, scale=0.55)
+        map_planar_faces(bm, gable_faces, scale=_masonry_uv_scale(wall_mat))
 
 
 def build_outcrop_roof(bm, style, frame, z_roof, depth, width, avail_h, wall_mat,

@@ -267,9 +267,9 @@ def build_stone_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                 target_l = nominal_bl * 0.5
             else:
                 target_l = nominal_bl
-                
-            len_jitter = (h_val - 0.5) * (0.42 * nominal_bl * disorder)
-            this_bl = target_l + len_jitter
+            
+            # Use fixed block size (no size jitter for normalized bricks)
+            this_bl = target_l
             
             # Clamp to remaining wall length
             rem_len = seg_len - cur_u
@@ -330,8 +330,8 @@ def _choose_plaster_mat(p1, p2, z_b, z_t, base_mat, has_brick, brick_freq, seed_
 def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
                        mat_ext=MAT_INDEX_PLASTER_EXT, normal_vec=None,
                        tier='TIER_3', physical_siding=True,
-                       plank_direction='HORIZONTAL', plank_jankiness=0.35,
-                       stone_block_scale=1.0, stone_disorder=0.35,
+                       plank_direction='VERTICAL', plank_jankiness=0.35,
+                       stone_block_scale=1.0, stone_disorder=0.0,
                        is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0, v_offset=0.0,
                        has_exposed_brick=False, exposed_brick_freq=0.25,
                        inner_mat=None, flat_ranges=None):
@@ -340,9 +340,8 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     rounded logs (Tier 1), overlapping/batten planks (Tier 2), chunky stone blocks (Tier 3),
     or smooth plaster/stone core boxes with optional exposed terracotta brick accents.
 
-    Faces pointing inward (against ``normal_vec``) use ``inner_mat`` when
-    given, else the usual warm wood lining. Freestanding outer walls (curtain
-    walls) pass their exterior material so both faces match.
+    plank_direction: 'HORIZONTAL' for planks running along wall length,
+                     'VERTICAL' for planks running floor-to-ceiling.
     """
     if physical_siding and tier == 'TIER_1' and mat_ext != MAT_INDEX_PLASTER_EXT:
         build_log_wall_segment(
@@ -402,8 +401,8 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
 def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                             openings=[], mat_ext=MAT_INDEX_PLASTER_EXT,
                             normal_vec=None, tier='TIER_3', physical_siding=True,
-                            plank_direction='HORIZONTAL', plank_jankiness=0.35,
-                            stone_block_scale=1.0, stone_disorder=0.35,
+                            plank_direction='VERTICAL', plank_jankiness=0.35,
+                            stone_block_scale=1.0, stone_disorder=0.0,
                             is_corner_start=True, is_corner_end=True, seed=42, u_offset=0.0,
                             omit_top_log_row=False,
                             force_omit_top_log_row=False,

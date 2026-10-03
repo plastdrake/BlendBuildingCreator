@@ -320,7 +320,7 @@ def _create_building_context(props):
         floor_wall_bounds={}, hx=0.0, hy=0.0,
         base_w=base_w, base_d=base_d, raw_wing_d=raw_wing_d,
         main_door_cx=main_door_cx, main_door_yf=main_door_yf,
-        shape=shape, seed=seed, plank_dir=getattr(props, 'plank_direction', 'HORIZONTAL'),
+        shape=shape, seed=seed, plank_dir=getattr(props, 'plank_direction', 'VERTICAL'),
         floor_balc_side=floor_balc_side, floor_balconies=floor_balconies,
         active_balc_floors=active_balc_floors,
         wall_t=wall_t, cantilever=cantilever, open_timber=open_timber,

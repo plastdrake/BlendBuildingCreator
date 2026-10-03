@@ -112,7 +112,7 @@ def build_town_hall_composer(bm, props, ctx):
             bm, side_sgn=a_side, main_hx=base_hx, main_cy0=cy0, main_cy1=cy1,
             z_ground=0.0, found_h=found_h, floors=a_floors, floor_h=floor_h,
             tier=tier, width=a_w, depth=a_d, roof_h=a_roof,
-            plank_direction=getattr(props, 'plank_direction', 'HORIZONTAL'),
+            plank_direction=getattr(props, 'plank_direction', 'VERTICAL'),
             main_bounds_by_floor=ctx.get('floor_wall_bounds', None),
             timber_framing=bool(getattr(props, 'has_timber_framing', True)),
             diagonals=bool(getattr(props, 'timber_diagonals', True)),
@@ -161,6 +161,10 @@ def build_town_hall_composer(bm, props, ctx):
             deck_y0 = (t_cy + t_plinth) + 0.10 + ramp_len
         else:
             deck_y0 = -3.0
+            # Ensure the deck starts behind the front door so the railing
+            # does not block door access. Door is at y = -base_d * 0.5.
+            if deck_y0 > -base_hy * 0.5:
+                deck_y0 = -base_hy * 0.5 - 1.0
         if has_turrets:
             # The corner towers sit on the back wall now, so the walk can run
             # all the way to the back corner.

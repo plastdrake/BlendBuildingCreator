@@ -2038,7 +2038,7 @@ def build_foodprep_clutter(bm, x, y, z_ground=0.0, ang=0.0):
 
 
 def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84,
-               fabric_mat=MAT_INDEX_UPHOLSTERY):
+               fabric_mat=MAT_INDEX_LEATHER):
     """Luxurious 3-cushion salon sofa / settee with damask upholstery,
     turned wooden feet, twin deep plush cushions, rolled arms, and throw pillows."""
     faces = []
@@ -2131,7 +2131,7 @@ def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84,
 
 
 def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=0.86, depth=0.82,
-                   fabric_mat=MAT_INDEX_UPHOLSTERY):
+                   fabric_mat=MAT_INDEX_LEATHER):
     """High-end fireside lounge armchair with continuous damask upholstery,
     turned wooden bun feet, deep plush seat cushion, rolled scroll armrests,
     enveloping winged backrest with rolled crest, and cozy throw pillow."""
