@@ -26,7 +26,7 @@ from ..walls import build_wall_with_opening
 from ..openings import build_window_assembly
 from ..style import tier_wall_mat
 from .mini_wing import build_mini_wing
-from .rampart import build_rampart_walk
+from .rampart import build_rampart_walk, town_hall_deck_span
 from .annex import build_side_annex
 
 
@@ -146,33 +146,9 @@ def build_town_hall_composer(bm, props, ctx):
             r_face = fl1[1] if r_sgn > 0 else fl1[0]
         else:
             r_face = r_sgn * ctx['base_hx']
-        base_hy = ctx['base_d'] * 0.5
-        t_sgn = 1.0 if tower_side == 'RIGHT' else -1.0
-        has_turrets = bool(getattr(props, 'has_corner_turrets', False))
-        tr_half = max(1.0, min(2.0, getattr(props, 'corner_turret_size', 1.35)))
-        deck_top = found_h + ctx.get('floor_h', 3.0) + 0.11
-        ramp_len = deck_top * 1.9 + 1.3
-        if has_tower and t_sgn == r_sgn:
-            t_cy = wing_front + t_size * 0.5 - 0.25
-            # The ramp's foot sits just behind the tower's stepped plinth so it
-            # never pokes through the tower wall: you run through the tower gate
-            # and straight up the ramp onto the walk.
-            t_plinth = t_size * 0.5 + 0.45
-            deck_y0 = (t_cy + t_plinth) + 0.10 + ramp_len
-        else:
-            deck_y0 = -3.0
-            # Ensure the deck starts behind the front door so the railing
-            # does not block door access. Door is at y = -base_d * 0.5.
-            if deck_y0 > -base_hy * 0.5:
-                deck_y0 = -base_hy * 0.5 - 1.0
-        if has_turrets:
-            # The corner towers sit on the back wall now, so the walk can run
-            # all the way to the back corner.
-            deck_y1 = base_hy + 0.45
-        else:
-            deck_y1 = deck_y0 + 7.0
-        if deck_y1 - deck_y0 < 5.5:
-            deck_y1 = deck_y0 + 5.5
+        deck_y0, deck_y1, deck_top = town_hall_deck_span(
+            props, base_hx, ctx['base_d'], found_h,
+            ctx.get('floor_h', 3.0), wing_front)
         build_rampart_walk(bm, side_sgn=r_sgn, wall_face_x=r_face,
                            deck_cy=(deck_y0 + deck_y1) * 0.5,
                            deck_len=deck_y1 - deck_y0,

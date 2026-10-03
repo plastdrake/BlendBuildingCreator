@@ -26,7 +26,7 @@ from .interior import (
 from .openings import build_door_assembly, build_front_steps, build_window_assembly
 from .accessories.cargo_port import build_cargo_port_frame
 from .accessories.mini_wing import plan_outcrop_spread
-from .accessories.rampart import rampart_deck_span
+from .accessories.rampart import rampart_deck_span, town_hall_deck_span
 from .accessories.exterior_stairs import (
     exterior_stairs_y_span as _ext_stairs_y_span,
     exterior_stair_plan as _ext_stair_plan,
@@ -874,11 +874,18 @@ def build_floors(bm, props, ctx):
             r_side = getattr(props, 'rampart_side', 'RIGHT')
             _composer = (getattr(props, 'town_hall_composer', False) and shape == 'T_SHAPE')
             if _composer:
-                # Town-hall composer places its own rampart; keep the historic
-                # wall-centre door so that layout is unchanged.
-                _rspan = (y_min, y_max)
+                # The composer deck spans less than the wall (it starts behind
+                # the clock tower and the ramp leaves from its front end), so
+                # a wall-centre door can land past the deck next to the ramp.
+                # Use the real deck span (same helper the deck builder uses).
+                _dy0, _dy1, _dtop = town_hall_deck_span(
+                    props, ctx.base_w * 0.5, ctx.base_d, ctx.found_h,
+                    ctx.floor_h, -(ctx.base_d * 0.5) - ctx.raw_wing_d)
+                _rspan = (_dy0, _dy1)
+                _bias_back = True
             else:
                 _rspan = rampart_deck_span(props, ctx)
+                _bias_back = False
             if _rspan is not None:
                 rdw = getattr(props, 'rampart_door_width', getattr(props, 'door_width', 1.20))
                 rdh = min(props.door_height, 2.40)
@@ -886,7 +893,13 @@ def build_floors(bm, props, ctx):
                 r_top_z = z_floor + rdh + r_margin
                 # Centre the door on the deck (not the wall) so it always lands
                 # on the walk, clear of the descent ramp at the front end.
+                # Composer decks start behind the tower with the ramp at the
+                # front, so push the door toward the back end instead.
                 r_cy = (_rspan[0] + _rspan[1]) * 0.5
+                if _bias_back:
+                    r_cy = _rspan[0] + (_rspan[1] - _rspan[0]) * 0.68
+                    _clr = rdw * 0.5 + 0.9
+                    r_cy = max(_rspan[0] + _clr, min(_rspan[1] - _clr, r_cy))
                 if r_side == 'LEFT':
                     left_openings.append({'u_start': (r_cy - rdw * 0.5 - r_margin) - y_min,
                                           'u_end': (r_cy + rdw * 0.5 + r_margin) - y_min,

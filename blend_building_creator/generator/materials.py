@@ -348,7 +348,13 @@ def create_stylized_stone(name="M_Building_Stone", color=None, tier='TIER_3'):
         c_use = color or default_clr
         tex_node = _load_image_texture(tree, "mud_fieldstone_diffuse.png", c, loc_x=-720, loc_y=100, scale=(0.34, 0.34, 1.0))
         if tex_node is None:
-            tex_node = _load_image_texture(tree, "stone_wall_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.35, 0.35, 1.0))
+            tex_node = _load_image_texture(tree, "stone_wall_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.91, 1.19, 1.0))
+        if tex_node is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-350, 100)
+            tint.inputs["Factor"].default_value = 0.20
         if tex_node is not None:
             tint = tree.nodes.new("ShaderNodeMix")
             tint.data_type = 'RGBA'
@@ -397,9 +403,9 @@ def create_stylized_stone(name="M_Building_Stone", color=None, tier='TIER_3'):
     elif tier == 'TIER_2':
         default_clr = (0.50, 0.52, 0.54, 1.0)
         c_use = color or default_clr
-        tex_node = _load_image_texture(tree, "squared_fieldstone_diffuse.png", c, loc_x=-720, loc_y=100, scale=(0.42, 0.42, 1.0))
+        tex_node = _load_image_texture(tree, "squared_fieldstone_diffuse.png", c, loc_x=-720, loc_y=100, scale=(0.57, 0.60, 1.0))
         if tex_node is None:
-            tex_node = _load_image_texture(tree, "stone_wall_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.42, 0.42, 1.0))
+            tex_node = _load_image_texture(tree, "stone_wall_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.91, 1.19, 1.0))
         if tex_node is not None:
             tint = tree.nodes.new("ShaderNodeMix")
             tint.data_type = 'RGBA'
@@ -421,10 +427,13 @@ def create_stylized_stone(name="M_Building_Stone", color=None, tier='TIER_3'):
             tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
             return mat
 
-        # Procedural Squared Fieldstone Fallback
+        # Procedural Squared Fieldstone Fallback (bricks normalized to the
+        # 0.22 x 0.14 m ashlar canonical size: explicit Width/Row at Scale 1.2)
         brick = tree.nodes.new("ShaderNodeTexBrick")
         brick.location = (-720, 100)
         brick.inputs["Scale"].default_value = 1.2
+        brick.inputs["Brick Width"].default_value = 0.26
+        brick.inputs["Row Height"].default_value = 0.17
         brick.inputs["Mortar Size"].default_value = 0.025
         brick.inputs["Color1"].default_value = (0.42, 0.46, 0.50, 1.0)  # cool slate
         brick.inputs["Color2"].default_value = (0.56, 0.53, 0.48, 1.0)  # warm grey
@@ -464,10 +473,14 @@ def create_stylized_stone(name="M_Building_Stone", color=None, tier='TIER_3'):
             tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
             return mat
 
-        # Procedural Ashlar Stone Fallback
+        # Procedural Ashlar Stone Fallback (explicit Width/Row so fallback
+        # bricks match the 0.22 x 0.14 m image bricks instead of the node
+        # defaults, which render twice as large)
         brick = tree.nodes.new("ShaderNodeTexBrick")
         brick.location = (-720, 100)
         brick.inputs["Scale"].default_value = 1.0
+        brick.inputs["Brick Width"].default_value = 0.22
+        brick.inputs["Row Height"].default_value = 0.14
         brick.inputs["Mortar Size"].default_value = 0.008
         brick.inputs["Color1"].default_value = (c_use[0] * 0.95, c_use[1] * 0.95, c_use[2] * 0.92, 1.0)
         brick.inputs["Color2"].default_value = (min(1.0, c_use[0] * 1.08), min(1.0, c_use[1] * 1.06), min(1.0, c_use[2] * 1.02), 1.0)
@@ -489,21 +502,25 @@ def create_stylized_cut_stone(name="M_Building_Cut_Stone", color=None, tier='TIE
     out, bsdf = _out_bsdf(tree, loc_x=1000)
     c = _coord(tree, loc_x=-900)
 
+    # Cut stone always uses the smooth cut_stone_diffuse.jpg (never the brick
+    # textures) so arches, sills and steps read as smooth dressed stone.
     if tier == 'TIER_1':
         c_use = color or (0.64, 0.54, 0.44, 1.0)
-        tex_node = _load_image_texture(tree, "mud_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+        tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "mud_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
         rough = 0.90
     elif tier == 'TIER_2':
         c_use = color or (0.68, 0.66, 0.62, 1.0)
-        tex_node = _load_image_texture(tree, "squared_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.42, 0.42, 1.0))
+        tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.42, 0.42, 1.0))
         if tex_node is None:
-            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.42, 0.42, 1.0))
+            tex_node = _load_image_texture(tree, "squared_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.57, 0.60, 1.0))
         rough = 0.80
     else:
         c_use = color or (0.78, 0.72, 0.60, 1.0)
-        tex_node = _load_image_texture(tree, "ashlar_stone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.45, 0.45, 1.0))
+        tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.45, 0.45, 1.0))
         if tex_node is None:
-            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.45, 0.45, 1.0))
+            tex_node = _load_image_texture(tree, "ashlar_stone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.45, 0.45, 1.0))
         rough = 0.65
 
     if tex_node is not None:
@@ -686,15 +703,16 @@ def create_stylized_plaster_brick(name="M_Building_Plaster_Brick", color=(0.93, 
         tree.links.new(brush_noise.outputs["Fac"], plaster_ramp.inputs["Fac"])
         base_plaster_color = plaster_ramp.outputs["Color"]
 
-    # 2. Exposed Handpainted Terracotta Clay Bricks
-    brick_tex = _load_image_texture(tree, "terracotta_brick_diffuse.jpg", c, loc_x=-1100, loc_y=-200, scale=(1.1, 1.1, 1.0))
+    # 2. Exposed Handpainted Terracotta Clay Bricks (normalized to the
+    # 0.22 x 0.14 m canonical brick: the 4.5 x 8 tile maps to 0.99 x 1.12 m)
+    brick_tex = _load_image_texture(tree, "terracotta_brick_diffuse.jpg", c, loc_x=-1100, loc_y=-200, scale=(1.01, 0.89, 1.0))
     brick = None
     if brick_tex is not None:
         final_brick_color = brick_tex.outputs["Color"]
     else:
         brick_map = tree.nodes.new("ShaderNodeMapping")
         brick_map.location = (-1400, -200)
-        brick_map.inputs["Scale"].default_value = (1.5, 1.5, 1.0)
+        brick_map.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
         tree.links.new(c.outputs["UV"], brick_map.inputs["Vector"])
 
         brick = tree.nodes.new("ShaderNodeTexBrick")
@@ -707,12 +725,12 @@ def create_stylized_plaster_brick(name="M_Building_Plaster_Brick", color=(0.93, 
             ("Color1", (0.64, 0.26, 0.14, 1.0)),      # Rich burnt terracotta red
             ("Color2", (0.50, 0.19, 0.10, 1.0)),      # Dark aged clay umber
             ("Mortar", (0.54, 0.50, 0.44, 1.0)),      # Weathered dark-grey mortar
-            ("Scale", 1.8),
+            ("Scale", 1.0),
             ("Mortar Size", 0.018),
             ("Mortar Smooth", 0.20),
             ("Bias", 0.10),
-            ("Brick Width", 0.42),
-            ("Row Height", 0.17),
+            ("Brick Width", 0.22),
+            ("Row Height", 0.14),
         ]:
             if k in brick.inputs:
                 brick.inputs[k].default_value = v

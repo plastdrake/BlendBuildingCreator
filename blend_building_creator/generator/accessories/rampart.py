@@ -107,6 +107,42 @@ def build_rampart_walk(bm, side_sgn, wall_face_x, deck_cy, deck_len=7.0,
     _sloped_railings(bm, rcx, ramp_w, start_y, foot_y, deck_top_z)
 
 
+def town_hall_deck_span(props, base_hx, base_d, found_h, floor_h, wing_front):
+    """Y-span and deck-top Z of the town-hall composer side rampart walk.
+
+    Single source of truth shared by the deck builder (town_hall.py) and the
+    upper-door placement (floors.py) so the door always lands on the physical
+    deck instead of the wall centre, which can sit past the deck end next to
+    the descent ramp. The ramp always leaves from the FRONT end, so callers
+    should bias the door toward the BACK end.
+    """
+    tower_side = getattr(props, 'clock_tower_side', 'RIGHT')
+    t_size = getattr(props, 'clock_tower_size', 3.0)
+    has_tower = getattr(props, 'has_clock_tower', False)
+    base_hy = base_d * 0.5
+    r_side = getattr(props, 'rampart_side', 'RIGHT')
+    t_sgn = 1.0 if tower_side == 'RIGHT' else -1.0
+    r_sgn = 1.0 if r_side == 'RIGHT' else -1.0
+    has_turrets = bool(getattr(props, 'has_corner_turrets', False))
+    deck_top = found_h + floor_h + 0.11
+    ramp_len = deck_top * 1.9 + 1.3
+    if has_tower and t_sgn == r_sgn:
+        t_cy = wing_front + t_size * 0.5 - 0.25
+        t_plinth = t_size * 0.5 + 0.45
+        deck_y0 = (t_cy + t_plinth) + 0.10 + ramp_len
+    else:
+        deck_y0 = -3.0
+        if deck_y0 > -base_hy * 0.5:
+            deck_y0 = -base_hy * 0.5 - 1.0
+    if has_turrets:
+        deck_y1 = base_hy + 0.45
+    else:
+        deck_y1 = deck_y0 + 7.0
+    if deck_y1 - deck_y0 < 5.5:
+        deck_y1 = deck_y0 + 5.5
+    return deck_y0, deck_y1, deck_top
+
+
 def rampart_deck_span(props, ctx):
     """World-space Y span of the generic side rampart deck.
 

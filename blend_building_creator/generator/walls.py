@@ -481,7 +481,21 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             u_edges.add(ou2)
     edges = sorted(u_edges)
 
-    def _emit(ua, ub, za, zb, seg_is_start, seg_is_end):
+    # Opening rects in wall-local coords, used to keep exposed-brick patches
+    # off pieces that border an opening. A brick patch landing on a door or
+    # window jamb reads as a brick doorframe; door and window surrounds must
+    # stay in the base wall material (or cut stone trim).
+    op_rects = []
+    for op in openings:
+        ou1 = max(0.0, min(seg_len, op['u_start']))
+        ou2 = max(0.0, min(seg_len, op['u_end']))
+        if ou2 - ou1 > 0.01:
+            oz1 = max(z_bottom, min(z_top, op.get('z_start', z_bottom)))
+            oz2 = max(z_bottom, min(z_top, op.get('z_end', z_top)))
+            if oz2 - oz1 > 0.01:
+                op_rects.append((ou1, ou2, oz1, oz2))
+
+    def _emit(ua, ub, za, zb, seg_is_start, seg_is_end, brick_ok=True):
         build_wall_segment(
             bm, pt_at(ua), pt_at(ub), za, zb, thickness, mat_ext=mat_ext,
             normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
@@ -489,7 +503,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
             is_corner_start=seg_is_start, is_corner_end=seg_is_end, seed=seed,
             u_offset=u_offset + ua, v_offset=za - z_bottom,
-            has_exposed_brick=has_exposed_brick, exposed_brick_freq=exposed_brick_freq,
+            has_exposed_brick=(has_exposed_brick and brick_ok),
+            exposed_brick_freq=exposed_brick_freq,
             inner_mat=inner_mat
         )
 
@@ -520,9 +535,19 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             pieces.append((z_bottom, z_top))
         last_col = (i == len(edges) - 2)
         for pi, (za, zb) in enumerate(pieces):
+            # Veto brick on any piece touching an opening (sill/header strips
+            # in this column, or a flank column beside one): surrounds stay
+            # base material, patches only on blank runs.
+            brick_ok = True
+            for (ou1, ou2, oz1, oz2) in op_rects:
+                if (ou1 - 0.25 <= ub and ua <= ou2 + 0.25
+                        and oz1 - 0.05 <= zb and za <= oz2 + 0.05):
+                    brick_ok = False
+                    break
             _emit(ua, ub, za, zb,
                   seg_is_start=(i == 0 and pi == 0 and is_corner_start),
-                  seg_is_end=(last_col and pi == len(pieces) - 1 and is_corner_end))
+                  seg_is_end=(last_col and pi == len(pieces) - 1 and is_corner_end),
+                  brick_ok=brick_ok)
 
 def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
                          normal_vec, openings=[], has_diagonals=True, is_top_floor=False):
