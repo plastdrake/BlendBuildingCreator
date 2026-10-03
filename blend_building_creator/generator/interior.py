@@ -659,8 +659,8 @@ class Room:
 
 
 def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
-                        doorway=None, mat_index=MAT_INDEX_PLASTER_EXT,
-                        casing_mat=MAT_INDEX_WOOD, plank_direction='VERTICAL'):
+                        doorway=None, mat_index=MAT_INDEX_WOOD,
+                        casing_mat=MAT_INDEX_TIMBER, plank_direction='VERTICAL'):
     """
     Builds a double-sided stylized interior partition wall running from p1=(x1,y1) to p2=(x2,y2).
     Includes an open cased walkthrough doorway (with timber jambs and lintel, but NO door blade).
@@ -689,31 +689,24 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
 
     _uvl = bm.loops.layers.uv.verify()
 
-    def _plank_panel(size, location, rotation):
-        """Wall panel whose plank grain direction depends on plank_direction param."""
-        fs = create_box(bm, size=size, location=location, rotation=rotation, mat_index=mat_index)
-        for f in fs:
-            f.tag = True
-            f.normal_update()
-            n = f.normal
-            for lp in f.loops:
-                co = lp.vert.co
-                if plank_direction == 'VERTICAL':
-                    # Grain runs top-to-bottom (vertically along wall height)
-                    if abs(n.z) < 0.7:
-                        # Wall-facing vertical: grain runs along the wall's vertical axis
-                        along = co.x if abs(n.y) >= abs(n.x) else co.y
-                        lp[_uvl].uv = Vector((co.z * 0.55, along * 0.55))
-                    else:
-                        # Horizontal surface: grain runs vertically (along Z)
-                        lp[_uvl].uv = Vector((co.x * 0.55, co.y * 0.55))
-                else:
-                    # HORIZONTAL: grain runs left-to-right (along wall width)
-                    if abs(n.z) < 0.7:
-                        along = co.x if abs(n.y) >= abs(n.x) else co.y
-                        lp[_uvl].uv = Vector((along * 0.55, co.z * 0.55))
-                    else:
-                        lp[_uvl].uv = Vector((co.x * 0.55, co.y * 0.55))
+    def _plank_panel(size, location, rotation, u_off=0.0, v_off=0.0):
+        """Wall panel whose plank grain direction matches surrounding interior walls.
+
+        Using create_box with is_wall=True generates local wall UVs where U is along
+        the wall length and V is up the wall height. Combined with M_Building_Wood's
+        90-degree shader rotation, this produces vertical planks on the walls that
+        align seamlessly across openings and corners.
+        """
+        fs = create_box(
+            bm, size=size, location=location, rotation=rotation,
+            mat_index=mat_index, is_wall=True,
+            u_offset=u_off, v_offset=v_off
+        )
+        if plank_direction == 'HORIZONTAL':
+            for f in fs:
+                for lp in f.loops:
+                    uv = lp[_uvl].uv
+                    lp[_uvl].uv = Vector((uv.y, uv.x))
         return fs
 
     # Resolve doorway
@@ -753,6 +746,8 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
             size=(length, thickness, H),
             location=(cx, cy, cz),
             rotation=(0.0, 0.0, ang),
+            u_off=0.0,
+            v_off=0.0,
         )
         for sgn in (-1.0, 1.0):
             off = sgn * (thickness * 0.5 + trim_d * 0.5)
@@ -789,6 +784,8 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
             size=(len1, thickness, H),
             location=(x1 + ux * c1, y1 + uy * c1, z_floor + H * 0.5),
             rotation=(0.0, 0.0, ang),
+            u_off=0.0,
+            v_off=0.0,
         )
         for sgn in (-1.0, 1.0):
             off = sgn * (thickness * 0.5 + trim_d * 0.5)
@@ -810,6 +807,8 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
             size=(header_len, thickness, top_h),
             location=(x1 + ux * c2, y1 + uy * c2, z_floor + door_h + top_pad + top_h * 0.5),
             rotation=(0.0, 0.0, ang),
+            u_off=rough_start,
+            v_off=door_h + top_pad,
         )
 
     # 3. Right segment
@@ -820,6 +819,8 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
             size=(len3, thickness, H),
             location=(x1 + ux * c3, y1 + uy * c3, z_floor + H * 0.5),
             rotation=(0.0, 0.0, ang),
+            u_off=rough_end,
+            v_off=0.0,
         )
         for sgn in (-1.0, 1.0):
             off = sgn * (thickness * 0.5 + trim_d * 0.5)
@@ -1796,7 +1797,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
 
 def build_floor_interior_walls(bm, interior_walls, z_floor, z_ceil,
-                               mat_index=MAT_INDEX_FLOOR, casing_mat=MAT_INDEX_TIMBER):
+                               mat_index=MAT_INDEX_WOOD, casing_mat=MAT_INDEX_TIMBER,
+                               plank_direction='VERTICAL'):
     """Constructs physical 3D geometry for all planned interior partition walls on a floor."""
     for w in interior_walls:
         p1 = w['p1']
@@ -1806,7 +1808,8 @@ def build_floor_interior_walls(bm, interior_walls, z_floor, z_ceil,
         build_interior_wall(
             bm, p1, p2, z_floor, z_ceil,
             thickness=thick, doorway=doorway,
-            mat_index=mat_index, casing_mat=casing_mat
+            mat_index=mat_index, casing_mat=casing_mat,
+            plank_direction=plank_direction
         )
 
 

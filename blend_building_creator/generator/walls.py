@@ -6,7 +6,7 @@ Builds manifold thick walls with cleanly framed door and window cutouts.
 import bmesh
 import math
 from mathutils import Vector, Euler, Matrix
-from .mesh_utils import create_box, create_beveled_box, create_horizontal_cylinder
+from .mesh_utils import create_box, create_beveled_box, create_horizontal_cylinder, recalc_face_normals_safe
 from .materials import (
     MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER, MAT_INDEX_STONE,
     MAT_INDEX_LOG, MAT_INDEX_LOG_END, MAT_INDEX_WOOD, MAT_INDEX_PLASTER_BRICK,
@@ -808,7 +808,8 @@ def create_curved_corbel(bm, loc, facing_dir=(0.0, -1.0, 0.0), width=0.28, depth
         f_p = bm.faces.new([vl[k], vr[k], vr[kn], vl[kn]])
         f_p.material_index = mat_index
         corbel_faces.append(f_p)
-    bmesh.ops.recalc_face_normals(bm, faces=corbel_faces)
+    from .mesh_utils import recalc_face_normals_safe
+    recalc_face_normals_safe(bm, corbel_faces)
 
     uv_layer = bm.loops.layers.uv.verify()
     inv_rot = rot_m.to_3x3().transposed()

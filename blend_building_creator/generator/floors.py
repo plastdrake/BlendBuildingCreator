@@ -2165,7 +2165,7 @@ def build_floors(bm, props, ctx):
         # On wattle-and-daub or log walls the brick material reads as plain
         # white stucco strips (most visible on the narrow wall columns above
         # and below windows), so suppress it there.
-        has_brick = getattr(props, 'has_exposed_brick', True) and not tier1_wattle
+        has_brick = getattr(props, 'has_exposed_brick', False) and not tier1_wattle
         brick_freq = getattr(props, 'exposed_brick_frequency', 0.25)
 
         # Interior joinery
@@ -2183,7 +2183,8 @@ def build_floors(bm, props, ctx):
             if fl_interior_walls:
                 build_floor_interior_walls(
                     bm, fl_interior_walls, z_floor, z_ceil,
-                    mat_index=MAT_INDEX_FLOOR, casing_mat=MAT_INDEX_TIMBER
+                    mat_index=MAT_INDEX_WOOD, casing_mat=MAT_INDEX_TIMBER,
+                    plank_direction='VERTICAL'
                 )
 
         wall_top_z = z_ceil

@@ -166,7 +166,8 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
     def _uv_wall(f):
         for loop in f.loops:
             co = loop.vert.co
-            loop[uv_g].uv = Vector((co.x * 0.55, (co.z - z_base) * 0.55))
+            loop[uv_g].uv = Vector((co.x * 1.0, (co.z - z_base) * 1.0))
+        f.tag = True
 
     # Optional loft hatch opening (validated against the real wall bounds,
     # edges snapped to the seal contour samples so no duplicate verts exist).

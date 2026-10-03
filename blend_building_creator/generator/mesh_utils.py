@@ -79,11 +79,18 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
             f.material_index = 1 # Keep interior room wall clean plaster
             
         if is_wall:
-            # Consistent length & height wall unwrapping for planks & stone:
-            # U is ALWAYS along wall length (X, horizontal), offset by u_offset
-            # V is ALWAYS along wall height (Z, vertical), offset by v_offset
-            su = 0.55
-            sv = 0.55
+            # Wall unwrap: U along wall length, V up the wall height.
+            # Masonry (stone/plaster/cut-stone) uses the 1.0/m world density so
+            # image bricks read at the canonical 0.22 x 0.14 m on every wall
+            # and every orientation; wood joinery keeps the 0.55/m scale its
+            # shaders are tuned for. Faces are tagged so the final world-space
+            # UV pass preserves this continuous (u_offset/v_offset) unwrap.
+            if mat_index in (0, 1, 7, 8, 11):
+                su = 1.0
+                sv = 1.0
+            else:
+                su = 0.55
+                sv = 0.55
             u0 = u_offset * su
             u1 = (u_offset + dx) * su
             v0 = v_offset * sv
@@ -113,6 +120,26 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                 f.loops[1][uv_layer].uv = Vector((u0, dy * sv))
                 f.loops[2][uv_layer].uv = Vector((u1, dy * sv))
                 f.loops[3][uv_layer].uv = Vector((u1, 0.0))
+            f.tag = True
+        elif mat_index in (0, 1, 3, 8, 11):
+            # Masonry / stone / plaster / cut stone / floor box (foundations, steps, plinths, slabs, pillars, stone blocks):
+            # Normalized world-space meter scaling (1.0/m).
+            # Height is ALWAYS V (upward along Z axis).
+            # Horizontal span is ALWAYS U (along X for front/back, along Y for left/right).
+            # Top/bottom is U along X, V along Y.
+            # Bricks and masonry courses are ALWAYS horizontal and never rotated or stretched!
+            for loop_idx, v_idx in enumerate(idxs):
+                lv = verts[v_idx]
+                if f_idx in (0, 1): # Bottom (-Z), Top (+Z)
+                    u = (lv.x + sx) * scale
+                    v = (lv.y + sy) * scale
+                elif f_idx in (2, 4): # Front (-Y), Back (+Y)
+                    u = (lv.x + sx) * scale
+                    v = (lv.z + sz) * scale
+                else: # Right (+X), Left (-X)
+                    u = (lv.y + sy) * scale
+                    v = (lv.z + sz) * scale
+                f.loops[loop_idx][uv_layer].uv = Vector((u, v))
         elif dz >= dx and dz >= dy:
             # Vertical post / column: V along longitudinal Z axis, U around circumference
             for loop_idx, v_idx in enumerate(idxs):
@@ -167,8 +194,12 @@ def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotat
     faces = create_box(bm, size, location, rotation, mat_index, is_wall=is_wall, u_offset=u_offset, v_offset=v_offset, transform_matrix=transform_matrix)
     if bevel_amount > 0.001:
         edges = list({e for f in faces for e in f.edges})
+        tagged_prior = {f for f in bm.faces if f.tag}
         try:
             res = bmesh.ops.bevel(bm, geom=edges, offset=bevel_amount, segments=bevel_segments, profile=0.7, affect='EDGES')
+            for pf in tagged_prior:
+                if pf.is_valid:
+                    pf.tag = True
             new_faces = [f for f in res.get('faces', []) if f.is_valid]
             if new_faces:
                 uv_layer = bm.loops.layers.uv.verify()
@@ -188,8 +219,21 @@ def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotat
                     for loop in f.loops:
                         lv = inv_tr @ loop.vert.co
                         if is_wall:
-                            u = (lv.x + sx) * 0.55
-                            v = (lv.z + sz) * 0.55
+                            _ws = 1.0 if mat_index in (0, 1, 7, 8, 11) else 0.55
+                            u = (lv.x + sx) * _ws
+                            v = (lv.z + sz) * _ws
+                        elif mat_index in (0, 1, 3, 8, 11):
+                            ln = inv_tr.to_3x3() @ f.normal
+                            nx, ny, nz = abs(ln.x), abs(ln.y), abs(ln.z)
+                            if nz >= nx and nz >= ny:
+                                u = (lv.x + sx) * scale
+                                v = (lv.y + sy) * scale
+                            elif nx >= ny:
+                                u = (lv.y + sy) * scale
+                                v = (lv.z + sz) * scale
+                            else:
+                                u = (lv.x + sx) * scale
+                                v = (lv.z + sz) * scale
                         elif dz >= dx and dz >= dy:
                             u = (lv.x + sx) * scale
                             v = (lv.z + sz) * scale
@@ -213,6 +257,13 @@ def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotat
             faces = list(linked.values())
         except Exception:
             pass
+    # Bevel output faces carry fresh local unwraps above. For wall boxes keep
+    # them tagged so the final world pass preserves the continuous wall unwrap
+    # (U along length, V up); for everything else clear the tag so the final
+    # pass deterministically re-unwraps with the world projection.
+    for f in faces:
+        if f.is_valid:
+            f.tag = True if is_wall else False
     return [f for f in faces if f.is_valid]
 
 def create_flared_post(bm, size=(0.28, 0.28, 3.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
@@ -1045,6 +1096,26 @@ def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=
         faces.append(f_top)
         
     return faces
+
+def recalc_face_normals_safe(bm, faces):
+    """Recalculate face normals without poisoning the UV pipeline.
+
+    ``bmesh.ops.recalc_face_normals`` sets the generic ``tag`` on EVERY face
+    in the bmesh (Blender dirty-flags the whole mesh), not just the faces
+    passed in. Since :func:`apply_box_uvs` treats ``tag`` as "keep my custom
+    unwrap", a single mid-build recalc would permanently exempt all
+    previously built geometry from the final world-space UV pass — walls and
+    foundations would keep their builder-local, orientation-dependent UVs
+    (the classic "bricks change size and rotate at corners" bug). Snapshot
+    and restore the tags so only the winding changes.
+    """
+    tagged = set(f for f in bm.faces if f.tag)
+    try:
+        bmesh.ops.recalc_face_normals(bm, faces=list(faces))
+    finally:
+        for f in bm.faces:
+            f.tag = (f in tagged)
+
 
 def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32)):
     """Calculates clean cubic / triplanar style UVs for bmesh faces.

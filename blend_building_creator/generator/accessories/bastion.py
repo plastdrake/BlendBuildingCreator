@@ -805,15 +805,36 @@ def _tower_geom(props, ctx):
     return x_min, x_max, y_min, y_max, t, T, proj
 
 
+def is_wood_tower(props):
+    """True when courtyard towers are open timber watchtowers (Tier 1/2 or a
+    palisade without curtain wall) rather than stone bastions."""
+    t_tier = getattr(props, 'material_tier', 'TIER_3')
+    return (t_tier in ('TIER_1', 'TIER_2')
+            or (getattr(props, 'has_palisade', False)
+                and not getattr(props, 'has_curtain_wall', False)))
+
+
 def courtyard_tower_rects(props, ctx):
     """Corner tower footprints (x0, x1, y0, y1, door_dir), corner-anchored.
 
-    Each tower IS the corner of the defensive wall: its outer two faces lie
-    flush with the enclosure line (continuing the wall's outer plane) and it
-    extends inward, so the wall runs terminate against the tower's inner faces
-    instead of passing through it. This is the classic castle corner bastion.
+    Stone bastions (Tier 3) ARE the corners of the defensive wall: their outer
+    two faces lie flush with the enclosure line and the runs stop at their
+    edges. Open timber watchtowers (Tier 1/2) instead stand fully INSIDE the
+    palisade with clearance all round, and the palisade runs past them
+    uninterrupted so the compound stays completely enclosed.
     """
     x_min, x_max, y_min, y_max, t, T, proj = _tower_geom(props, ctx)
+    if is_wood_tower(props):
+        m = 0.55  # clearance between the fence line and the tower footprint
+        rects = []
+        # Front-left
+        rects.append((x_min + m, x_min + m + t, y_min + m, y_min + m + t, (0.0, 1.0)))
+        # Front-right
+        rects.append((x_max - m - t, x_max - m, y_min + m, y_min + m + t, (0.0, 1.0)))
+        if int(getattr(props, 'bastion_tower_count', 2)) >= 4:
+            rects.append((x_max - m - t, x_max - m, y_max - m - t, y_max - m, (0.0, -1.0)))
+            rects.append((x_min + m, x_min + m + t, y_max - m - t, y_max - m, (0.0, -1.0)))
+        return rects
     h = T * 0.5 + proj
     rects = []
     # Front-left
@@ -849,13 +870,12 @@ def build_bastion_courtyard_towers(bm, props, ctx):
     t_size = getattr(props, 'bastion_tower_size', 3.2)
     t_height = getattr(props, 'bastion_tower_height', 8.2)
 
-    t_tier = getattr(props, 'material_tier', 'TIER_3')
-    is_wood_tower = (t_tier in ('TIER_1', 'TIER_2') or (getattr(props, 'has_palisade', False) and not getattr(props, 'has_curtain_wall', False)))
-    t_mat = MAT_INDEX_WOOD if is_wood_tower else MAT_INDEX_STONE
-    t_trim = MAT_INDEX_TIMBER if is_wood_tower else MAT_INDEX_CUT_STONE
+    is_wood = is_wood_tower(props)
+    t_mat = MAT_INDEX_WOOD if is_wood else MAT_INDEX_STONE
+    t_trim = MAT_INDEX_TIMBER if is_wood else MAT_INDEX_CUT_STONE
 
     for cx, cy, d_dir in courtyard_tower_centers(props, ctx):
-        if is_wood_tower:
+        if is_wood:
             # Palisade tiers get an open rickety frame watchtower, never a
             # wooden clone of the stone bastion.
             build_rickety_frame_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,

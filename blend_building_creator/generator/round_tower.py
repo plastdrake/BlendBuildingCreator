@@ -293,7 +293,7 @@ def build_round_tower(bm, props, seed):
             physical_siding=phys_siding, plank_direction=plank_dir,
             plank_jankiness=plank_jank, stone_block_scale=stone_scale,
             stone_disorder=stone_disorder,
-            has_exposed_brick=getattr(props, 'has_exposed_brick', True),
+            has_exposed_brick=getattr(props, 'has_exposed_brick', False),
             exposed_brick_freq=getattr(props, 'exposed_brick_frequency', 0.25),
         )
         corner_posts(bm, cur_r, z_floor, floor_h, segments, offset_ang)

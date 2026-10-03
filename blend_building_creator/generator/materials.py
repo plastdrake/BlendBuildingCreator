@@ -504,21 +504,22 @@ def create_stylized_cut_stone(name="M_Building_Cut_Stone", color=None, tier='TIE
 
     # Cut stone always uses the smooth cut_stone_diffuse.jpg (never the brick
     # textures) so arches, sills and steps read as smooth dressed stone.
+    # Smooth grain runs at 1.0/m on every tier so sills/steps match walls.
     if tier == 'TIER_1':
         c_use = color or (0.64, 0.54, 0.44, 1.0)
-        tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+        tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(1.0, 1.0, 1.0))
         if tex_node is None:
-            tex_node = _load_image_texture(tree, "mud_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+            tex_node = _load_image_texture(tree, "mud_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.34, 0.34, 1.0))
         rough = 0.90
     elif tier == 'TIER_2':
         c_use = color or (0.68, 0.66, 0.62, 1.0)
-        tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.42, 0.42, 1.0))
+        tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(1.0, 1.0, 1.0))
         if tex_node is None:
             tex_node = _load_image_texture(tree, "squared_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.57, 0.60, 1.0))
         rough = 0.80
     else:
         c_use = color or (0.78, 0.72, 0.60, 1.0)
-        tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.45, 0.45, 1.0))
+        tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(1.0, 1.0, 1.0))
         if tex_node is None:
             tex_node = _load_image_texture(tree, "ashlar_stone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.45, 0.45, 1.0))
         rough = 0.65
@@ -563,27 +564,23 @@ def create_stylized_plaster(name="M_Building_Plaster", color=None, is_interior=F
     if tier == 'TIER_1':
         default_clr = (0.84, 0.68, 0.48, 1.0)
         c_use = color or default_clr
-        tex_node = _load_image_texture(tree, "wattle_daub_diffuse.png", c, loc_x=-760, loc_y=100, scale=(0.48, 0.48, 1.0))
+        tex_node = _load_image_texture(tree, "wattle_daub_diffuse.png", c, loc_x=-760, loc_y=100, scale=(0.50, 0.50, 1.0))
         if tex_node is None:
-            tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-760, loc_y=100, scale=(0.85, 0.85, 1.0))
+            tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-760, loc_y=100, scale=(0.45, 0.45, 1.0))
         rough = 0.94
         ao_str = 0.40 if is_interior else 0.68
         ao_dist = 0.20
     elif tier == 'TIER_2':
         default_clr = (0.95, 0.90, 0.78, 1.0)
         c_use = color or default_clr
-        tex_node = _load_image_texture(tree, "stucco_plaster_diffuse.png", c, loc_x=-760, loc_y=100, scale=(0.85, 0.85, 1.0))
-        if tex_node is None:
-            tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-760, loc_y=100, scale=(0.85, 0.85, 1.0))
+        tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-760, loc_y=100, scale=(0.45, 0.45, 1.0))
         rough = 0.84
         ao_str = 0.35 if is_interior else 0.50
         ao_dist = 0.16
     else:  # TIER_3
         default_clr = (0.96, 0.95, 0.92, 1.0)
         c_use = color or default_clr
-        tex_node = _load_image_texture(tree, "smooth_ivory_stucco_diffuse.png", c, loc_x=-760, loc_y=100, scale=(0.90, 0.90, 1.0))
-        if tex_node is None:
-            tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-760, loc_y=100, scale=(0.85, 0.85, 1.0))
+        tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-760, loc_y=100, scale=(0.45, 0.45, 1.0))
         rough = 0.68
         ao_str = 0.30 if is_interior else 0.38
         ao_dist = 0.14
@@ -622,7 +619,7 @@ def create_stylized_plaster(name="M_Building_Plaster", color=None, is_interior=F
 
     brush_noise = tree.nodes.new("ShaderNodeTexNoise")
     brush_noise.location = (-900, 100)
-    brush_noise.inputs["Scale"].default_value = 1.8
+    brush_noise.inputs["Scale"].default_value = 4.0
     brush_noise.inputs["Detail"].default_value = 2.0
     try:
         brush_noise.inputs["Roughness"].default_value = 0.55
@@ -665,8 +662,8 @@ def create_stylized_plaster_brick(name="M_Building_Plaster_Brick", color=(0.93, 
     out, bsdf = _out_bsdf(tree, loc_x=2200)
     c = _coord(tree, loc_x=-1700)
 
-    # 1. Base Plaster Layer (identical to M_Building_Plaster)
-    tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-1400, loc_y=300, scale=(0.85, 0.85, 1.0))
+    # 1. Base Plaster Layer (identical density to M_Building_Plaster)
+    tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-1400, loc_y=300, scale=(0.45, 0.45, 1.0))
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
@@ -2357,6 +2354,11 @@ def setup_building_material_slots(obj, props):
     """
     tier = getattr(props, 'tier', getattr(props, 'material_tier', 'TIER_2'))
 
+    # Tier-varying materials carry a tier suffix (M_Building_Stone_T3, ...)
+    # so each tier can be wired distinctly in Unreal. Tier-invariant helpers
+    # (iron, glass, logs, cloth, ...) keep their plain names.
+    _sfx = {'TIER_1': '_T1', 'TIER_2': '_T2', 'TIER_3': '_T3'}.get(tier, '')
+
     # Resolve manual or tier-based material choices
     eff_roof_mat = getattr(props, 'roof_material_override', 'AUTO')
     if eff_roof_mat == 'AUTO':
@@ -2390,27 +2392,27 @@ def setup_building_material_slots(obj, props):
                     eff_wall_mat = 'LOGS'
 
     # 0. Stone (stone_wall_diffuse.jpg / mud_fieldstone / squared_fieldstone / ashlar_stone)
-    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone("M_Building_Stone", color=props.color_stone, tier=tier)
+    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone("M_Building_Stone" + _sfx, color=props.color_stone, tier=tier)
 
     # 1. Plaster (wattle_daub / stucco_plaster / smooth_ivory_stucco)
     freq = getattr(props, 'exposed_brick_frequency', 0.25)
     if eff_wall_mat == 'WATTLE_DAUB':
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False, tier='TIER_1'))
+                       create_stylized_plaster("M_Building_Plaster" + _sfx, color=props.color_wall_ext, is_interior=False, tier='TIER_1'))
     elif eff_wall_mat == 'STUCCO':
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False, tier='TIER_2'))
+                       create_stylized_plaster("M_Building_Plaster" + _sfx, color=props.color_wall_ext, is_interior=False, tier='TIER_2'))
     elif eff_wall_mat == 'STONE':
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_stone("M_Building_Plaster", color=props.color_stone, tier=tier))
+                       create_stylized_stone("M_Building_Plaster" + _sfx, color=props.color_stone, tier=tier))
     else:
         if tier != 'TIER_1' and getattr(props, 'has_exposed_brick', False):
             mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                           create_stylized_plaster_brick("M_Building_Plaster", color=props.color_wall_ext, frequency=freq))
+                           create_stylized_plaster_brick("M_Building_Plaster" + _sfx, color=props.color_wall_ext, frequency=freq))
         else:
             mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
                            getattr(props, 'custom_wall_int', None) or 
-                           create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False, tier=tier))
+                           create_stylized_plaster("M_Building_Plaster" + _sfx, color=props.color_wall_ext, is_interior=False, tier=tier))
 
     # 2. Timber (fachwerk_timber / oiled_timber / timber_beam)
     clr_tf = getattr(props, 'color_timber_frame', None) or (0.24, 0.14, 0.08, 1.0)
@@ -2420,15 +2422,15 @@ def setup_building_material_slots(obj, props):
                  getattr(props, 'custom_railing', None) or 
                  getattr(props, 'custom_window_frame', None) or 
                  getattr(props, 'custom_shutter', None))
-    mat_timber = custom_tf or create_stylized_timber("M_Building_Timber", color=clr_tf, tier=tier)
+    mat_timber = custom_tf or create_stylized_timber("M_Building_Timber" + _sfx, color=clr_tf, tier=tier)
 
     # 3. Floor (floorboards variations)
     clr_floor = getattr(props, 'color_floor', None) or (0.50, 0.35, 0.20, 1.0)
-    mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards("M_Building_Floor", color=clr_floor, tier=tier)
+    mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards("M_Building_Floor" + _sfx, color=clr_floor, tier=tier)
 
     # 4. Shingles (thatch / wood shingles / terracotta / slate)
     mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_shingles(
-        "M_Building_Shingles",
+        "M_Building_Shingles" + _sfx,
         color=getattr(props, 'color_shingles', None),
         tier=tier,
         roof_mat=eff_roof_mat
@@ -2446,11 +2448,11 @@ def setup_building_material_slots(obj, props):
 
     # 7. Wood (facade planks, dormer cheeks, weatherboards)
     clr_wood = getattr(props, 'color_timber', None) or (0.86, 0.74, 0.58, 1.0)
-    mat_wood = getattr(props, 'custom_timber', None) or create_stylized_facade_planks("M_Building_Wood", color=clr_wood, tier=tier)
+    mat_wood = getattr(props, 'custom_timber', None) or create_stylized_facade_planks("M_Building_Wood" + _sfx, color=clr_wood, tier=tier)
 
     # 8. Cut Stone (steps, sills, door arches, thresholds)
     clr_cs = getattr(props, 'color_cut_stone', None) or (0.78, 0.74, 0.68, 1.0)
-    mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone("M_Building_Cut_Stone", color=clr_cs, tier=tier)
+    mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone("M_Building_Cut_Stone" + _sfx, color=clr_cs, tier=tier)
 
     # 9. Log (stylized_log_bark_diffuse.png / log_bark_diffuse.jpg) - Tier 1 rounded logs
     clr_log = (clr_tf[0] * 0.92, clr_tf[1] * 0.88, clr_tf[2] * 0.82, 1.0)
@@ -2609,6 +2611,8 @@ def setup_building_material_slots(obj, props):
 # Canonical slot names in strict MAT_INDEX_* order. Outbuilding merges use
 # this to translate a temp build's pruned slot table back to canonical
 # indices (by material name) before appending into the host mesh.
+# Tier-varying materials carry a _T1/_T2/_T3 suffix (see setup above);
+# canonical_slot_index() strips it so suffixed builds still map correctly.
 CANONICAL_SLOT_NAMES = (
     "M_Building_Stone",         # 0
     "M_Building_Plaster",       # 1
@@ -2651,6 +2655,20 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Bottle_Glass",  # 38
     "M_Building_Pumpkin_Stem",  # 39
 )
+
+
+def canonical_slot_index(name):
+    """Canonical slot index for a material name, ignoring any _T1/_T2/_T3
+    tier suffix. Returns None for unknown names."""
+    if not name:
+        return None
+    base = name
+    if len(base) > 3 and base[-3] == '_' and base[-2] == 'T' and base[-1] in '123':
+        base = base[:-3]
+    try:
+        return CANONICAL_SLOT_NAMES.index(base)
+    except ValueError:
+        return None
 
 
 def prune_material_slots_for_bmesh(obj, bm):

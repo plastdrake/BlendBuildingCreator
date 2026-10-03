@@ -88,7 +88,7 @@ def wall_ring(bm, radius, z0, z1, wall_t, segments, offset, openings_by_seg,
               mat_ext, normal_face=True, seed=42, tier='TIER_3',
               physical_siding=True, plank_direction='VERTICAL',
               plank_jankiness=0.35, stone_block_scale=1.0, stone_disorder=0.0,
-              has_exposed_brick=True, exposed_brick_freq=0.25, indices=None,
+              has_exposed_brick=False, exposed_brick_freq=0.25, indices=None,
               center=(0.0, 0.0)):
     """Emit a circular (or arc) wall as flat facets with per-facet openings.
 

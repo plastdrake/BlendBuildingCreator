@@ -17,7 +17,7 @@ from mathutils import Matrix, Vector
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, create_torus_ring,
     create_hollow_cylinder, create_hollow_dish, create_organic_pumpkin,
-    transform_faces,
+    transform_faces, recalc_face_normals_safe,
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON,
@@ -1734,10 +1734,18 @@ def build_pumpkin(bm, x, y, z_ground=0.0, ang=0.0, radius=0.20):
 
 
 def _build_leaf(bm, faces, origin, yaw, pitch, length, width,
-                roll=0.0, curl=0.35, mat_index=MAT_INDEX_PLANT):
+                roll=0.0, curl=0.35, mat_index=MAT_INDEX_PLANT,
+                collect=None):
     """One real 3D leaf blade: a closed, pointed, gently cupped shell with a
     raised centre vein. Built in a local frame (length along +X, width ±Y),
-    then yawed/pitched/rolled so it grows outward from ``origin``."""
+    then yawed/pitched/rolled so it grows outward from ``origin``.
+
+    Pass a ``collect`` list to gather this leaf's faces so the caller can fix
+    winding once for the whole plant: ``bmesh.ops.recalc_face_normals`` tags
+    EVERY face in the bmesh (not just the ones passed in), which would exempt
+    all previously built geometry from the final world-space UV pass. Use
+    :func:`mesh_utils.recalc_face_normals_safe` on the collected faces.
+    """
     tr = (Matrix.Translation(Vector(origin))
           @ Matrix.Rotation(yaw, 4, 'Z')
           @ Matrix.Rotation(-pitch, 4, 'Y')
@@ -1787,9 +1795,11 @@ def _build_leaf(bm, faces, origin, yaw, pitch, length, width,
     for k in range(4):
         face([last[k], last[(k + 1) % 4], tip])
     try:
-        bmesh.ops.recalc_face_normals(bm, faces=leaf_faces)
+        recalc_face_normals_safe(bm, leaf_faces)
     except Exception:
         pass
+    for f in leaf_faces:
+        f.tag = True
     faces.extend(leaf_faces)
 
 

@@ -2065,7 +2065,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     has_exposed_brick: BoolProperty(
         name="Exposed Brick Accents",
         description="Expose terracotta clay brickwork beneath chipped stucco on select wall panels and corners",
-        default=True,
+        default=False,
         update=on_property_updated
     )
 

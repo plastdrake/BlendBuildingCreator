@@ -369,9 +369,23 @@ def _build_exterior_annular_band(bm, r_in, r_out, z_bot, z_top, segments=48, off
             f.material_index = mat_index
             f.tag = True
             f.smooth = True
-            for lp in f.loops:
-                co = lp.vert.co
-                lp[uv_layer].uv = Vector((co.x * 0.5, co.z * 0.5 if f == f_out else co.y * 0.5))
+            if f == f_out:
+                angs = []
+                for lp in f.loops:
+                    co = lp.vert.co
+                    angs.append((math.atan2(co.y, co.x) - offset) % (2.0 * math.pi))
+                a0 = angs[0]
+                for lp, a in zip(f.loops, angs):
+                    while a - a0 > math.pi:
+                        a -= 2.0 * math.pi
+                    while a0 - a > math.pi:
+                        a += 2.0 * math.pi
+                    r = (lp.vert.co.x ** 2 + lp.vert.co.y ** 2) ** 0.5
+                    lp[uv_layer].uv = Vector((a * r * 1.0, lp.vert.co.z * 1.0))
+            else:
+                for lp in f.loops:
+                    co = lp.vert.co
+                    lp[uv_layer].uv = Vector((co.x * 1.0, co.y * 1.0))
             faces.append(f)
     return faces
 
@@ -681,7 +695,9 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
     # UVs are unwrapped per face relative to its first loop, so a face that
     # straddles the 0/2pi seam can never stretch across the whole map (which
     # showed up as a bright smeared band on the front bay).
-    u_scale = r_out * 0.45
+    # World density 1.0/m (arc length x height) so tower bricks match the
+    # main-hall walls at the canonical 0.22 x 0.14 m size.
+    u_scale = r_out * 1.0
     two_pi = 2.0 * math.pi
     for f in created_faces:
         f.smooth = True
@@ -696,7 +712,7 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
                 a -= two_pi
             while a0 - a > math.pi:
                 a += two_pi
-            lp[uv_layer].uv = Vector((a * u_scale, lp.vert.co.z * 0.45))
+            lp[uv_layer].uv = Vector((a * u_scale, lp.vert.co.z * 1.0))
 
     # Opening reveal faces (jambs, sills, lintels) stay hard-edged with a clean
     # planar unwrap so the stone reads crisp around every door and window.
@@ -704,7 +720,7 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
         f.smooth = False
         f.tag = True
     if trim_faces:
-        map_planar_faces(bm, trim_faces, scale=0.5)
+        map_planar_faces(bm, trim_faces, scale=1.0)
 
     return created_faces + trim_faces
 
@@ -1436,7 +1452,7 @@ def _build_doorframe(bm, frame, z_base, cut_w, cut_h, wall_t,
 
 
 def _build_pointed_tail(bm, cx, cy, z_top, radius, depth, segments=32,
-                        rings=14, mat_index=MAT_INDEX_STONE, power=1.6, uv_scale=0.45):
+                        rings=14, mat_index=MAT_INDEX_STONE, power=1.6, uv_scale=1.0):
     """A revolved, cleanly-unwrapped teardrop tail curving down to a point."""
     uv = bm.loops.layers.uv.verify()
     d_ang = 2.0 * math.pi / segments

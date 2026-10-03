@@ -349,7 +349,7 @@ def test_chimneys_and_stoves():
     obj = bpy.context.active_object
     assert obj is not None
     mat_names = [m.name for m in obj.data.materials]
-    assert "M_Building_Stone" in mat_names
+    assert any(m.startswith("M_Building_Stone") for m in mat_names), f"Stone material not found in {mat_names}"
     print("  [PASS] Chimney snaps to outer wall and generates proper stone flue.")
 
 

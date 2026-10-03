@@ -10,7 +10,7 @@ import math
 from mathutils import Vector, Euler, Matrix
 from .mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, apply_box_uvs,
-    create_torus_ring, create_door_batten
+    create_torus_ring, create_door_batten, recalc_face_normals_safe
 )
 from .materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_DOOR, MAT_INDEX_GLASS,
@@ -314,9 +314,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 f_center = bm.faces.new([apex_vf, apex_vb, v_top_b, v_top_f])
             for f_elem in [f_top_f, f_top_b, f_top_roof, f_center]:
                 f_elem.material_index = MAT_INDEX_CUT_STONE
-            sp_faces.extend([f_top_f, f_top_b, f_top_roof, f_center])
-            
-            bmesh.ops.recalc_face_normals(bm, faces=sp_faces)
+            recalc_face_normals_safe(bm, sp_faces)
             sp_vol = 0.0
             for sf in sp_faces:
                 v0 = sf.verts[0].co

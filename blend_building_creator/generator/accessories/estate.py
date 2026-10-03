@@ -233,14 +233,13 @@ def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, pre
 
         # Translate the temp mesh's pruned slot indices back to canonical.
         try:
-            from ..materials import CANONICAL_SLOT_NAMES
+            from ..materials import canonical_slot_index
             _src_names = [m.name if m is not None else '' for m in obj.data.materials]
             _remap = {}
             for _si, _nm in enumerate(_src_names):
-                try:
-                    _remap[_si] = CANONICAL_SLOT_NAMES.index(_nm)
-                except ValueError:
-                    pass
+                _ci = canonical_slot_index(_nm)
+                if _ci is not None:
+                    _remap[_si] = _ci
             if _remap:
                 for _poly in mesh.polygons:
                     if _poly.material_index in _remap:

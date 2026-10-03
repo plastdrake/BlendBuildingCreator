@@ -58,6 +58,14 @@ def fortification_offset(props):
         base_off = getattr(props, 'palisade_offset', 3.0)
         off_x = getattr(props, 'palisade_offset_x', 0.0)
         off_y = getattr(props, 'palisade_offset_y', 0.0)
+        # Open timber watchtowers stand fully inside the palisade: grow the
+        # compound until the tower footprint (size + fence clearance) clears
+        # the hall walls. Stone bastions plug the wall corners and need nothing.
+        if getattr(props, 'has_bastion_towers', False):
+            from .bastion import is_wood_tower
+            if is_wood_tower(props):
+                need = float(getattr(props, 'bastion_tower_size', 3.2)) + 0.85
+                base_off = max(float(base_off), need)
 
     ox = off_x if off_x > 0.001 else base_off
     oy = off_y if off_y > 0.001 else base_off
@@ -289,9 +297,14 @@ def build_palisade_enclosure(bm, props, ctx, height=2.3, style='STAKES', offset=
     has_towers = getattr(props, 'has_bastion_towers', False)
     # Towers ARE the corners: the runs stop at the tower faces (the tower's
     # outer faces continue the wall plane) so the wall terminates into them
-    # instead of passing through.
+    # instead of passing through. Open timber watchtowers (Tier 1/2) stand
+    # fully inside instead, so the palisade runs past them uninterrupted and
+    # the compound stays completely enclosed.
+    split_at_towers = False
     if has_towers:
-        from .bastion import courtyard_tower_rects
+        from .bastion import courtyard_tower_rects, is_wood_tower
+        split_at_towers = not is_wood_tower(props)
+    if split_at_towers:
         _rects = courtyard_tower_rects(props, ctx)
         _fl, _fr = _rects[0], _rects[1]
         front_x0, front_x1 = _fl[1], _fr[0]
