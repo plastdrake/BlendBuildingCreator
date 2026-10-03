@@ -18,6 +18,7 @@ from .walls import (
     build_cantilever_corbels, build_cantilever_soffit, build_open_timber_arcade
 )
 from .shapes import get_facade_window_positions, compute_fl_wing_bounds
+from .style import is_tier1_wattle_daub, get_effective_wall_material
 from .interior import (
     build_floor_slab, build_ceiling_beams, build_interior_trims, build_straight_staircase,
     build_spiral_staircase, build_stair_guardrail, plan_floor_rooms, build_floor_interior_walls
@@ -2050,18 +2051,39 @@ def build_floors(bm, props, ctx):
 
         # 4 Main Solid Walls with Openings
         tier_val = getattr(props, 'material_tier', 'TIER_3')
-        if fl_idx == 0 and props.ground_floor_stone and tier_val != 'TIER_1':
-            mat_w = MAT_INDEX_STONE
-        elif tier_val == 'TIER_1':
-            mat_w = MAT_INDEX_WOOD
-        elif tier_val == 'TIER_2':
-            mat_w = MAT_INDEX_WOOD
-        else:
+        eff_wall_mat = get_effective_wall_material(props)
+        tier1_wattle = (eff_wall_mat == 'WATTLE_DAUB') or (tier_val == 'TIER_1' and is_tier1_wattle_daub(props))
+        if eff_wall_mat == 'WATTLE_DAUB':
             mat_w = MAT_INDEX_PLASTER_EXT
-
-        phys_siding = getattr(props, 'physical_siding', True)
-        if fl_idx == 0 and props.ground_floor_stone and tier_val == 'TIER_2':
             phys_siding = False
+        elif eff_wall_mat == 'LOGS':
+            mat_w = MAT_INDEX_WOOD
+            phys_siding = True
+        elif eff_wall_mat == 'WOOD_PLANKS':
+            mat_w = MAT_INDEX_WOOD
+            phys_siding = getattr(props, 'physical_siding', True)
+        elif eff_wall_mat == 'STUCCO':
+            mat_w = MAT_INDEX_PLASTER_EXT
+            phys_siding = False
+        elif eff_wall_mat == 'STONE':
+            mat_w = MAT_INDEX_STONE
+            phys_siding = False
+        else: # AUTO
+            tier1_wattle = (tier_val == 'TIER_1' and is_tier1_wattle_daub(props))
+            if fl_idx == 0 and props.ground_floor_stone and tier_val != 'TIER_1':
+                mat_w = MAT_INDEX_STONE
+            elif tier1_wattle:
+                mat_w = MAT_INDEX_PLASTER_EXT
+            elif tier_val in ('TIER_1', 'TIER_2'):
+                mat_w = MAT_INDEX_WOOD
+            else:
+                mat_w = MAT_INDEX_PLASTER_EXT
+
+            phys_siding = getattr(props, 'physical_siding', True)
+            if tier1_wattle:
+                phys_siding = False
+            elif fl_idx == 0 and props.ground_floor_stone and tier_val == 'TIER_2':
+                phys_siding = False
         plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
         plank_jank = getattr(props, 'plank_jankiness', 0.35)
         stone_scale = getattr(props, 'stone_block_scale', 1.0)
@@ -2238,7 +2260,7 @@ def build_floors(bm, props, ctx):
         # Corner posts stay even on a stone ground storey so the frame reads as continuous;
         # only the infill/brace timbering is dropped there to keep the base solid masonry.
         _stone_ground_fl = (fl_idx == 0 and props.ground_floor_stone)
-        _frame_here = (tier_val != 'TIER_1') or _stone_ground_fl
+        _frame_here = (tier_val != 'TIER_1') or _stone_ground_fl or tier1_wattle
         if not open_timber and props.has_timber_framing and effective_archetype != 'WATCHTOWER' and _frame_here:
             post_w = 0.30
             timber_jank = props.wonkiness * 0.5

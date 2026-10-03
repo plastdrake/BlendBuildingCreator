@@ -12,6 +12,7 @@ from mathutils import Vector, Matrix
 from ..materials import MAT_INDEX_FLOOR
 from ..shapes import compute_fl_wing_bounds
 from ..interior import build_floor_slab, build_ceiling_beams
+from ..style import is_tier1_wattle_daub, get_effective_roof_material, get_effective_wall_material
 from . import build_sway_roof, build_gable_roof, build_conical_turret_roof, build_shingle_layers, build_valley_rafters, deck_top_z
 from .details import (
     build_roof_dormers, build_roof_spire_turret,
@@ -161,6 +162,9 @@ def build_roof_and_attic(bm, props, ctx):
     
     tier_val = getattr(props, 'material_tier', 'TIER_3')
     plank_dir = getattr(props, 'plank_direction', 'HORIZONTAL')
+    eff_wall_mat = get_effective_wall_material(props)
+    is_wattle = (tier_val == 'TIER_1' and (eff_wall_mat == 'WATTLE_DAUB' or is_tier1_wattle_daub(props)))
+    eff_roof_mat = get_effective_roof_material(props)
 
     # Loft hatch resolved below by the roof builder. Initialised here so builds
     # that raise no gable/sway roof (watchtower, turret, round tower) leave them
@@ -540,7 +544,9 @@ def build_roof_and_attic(bm, props, ctx):
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=dormer_apertures,
-                        eave_exclusions=eave_ex
+                        eave_exclusions=eave_ex,
+                        is_wattle=is_wattle,
+                        roof_mat=eff_roof_mat
                     )
                 else: # 'GABLE'
                     build_gable_roof(
@@ -557,7 +563,9 @@ def build_roof_and_attic(bm, props, ctx):
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=dormer_apertures,
-                        eave_exclusions=eave_ex
+                        eave_exclusions=eave_ex,
+                        is_wattle=is_wattle,
+                        roof_mat=eff_roof_mat
                     )
                 rot_m = Matrix.Rotation(-math.pi * 0.5, 4, 'Z')
                 trans_m = Matrix.Translation(Vector((top_cx, top_cy, top_z)))
@@ -578,7 +586,9 @@ def build_roof_and_attic(bm, props, ctx):
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=dormer_apertures,
-                        eave_exclusions=eave_ex
+                        eave_exclusions=eave_ex,
+                        is_wattle=is_wattle,
+                        roof_mat=eff_roof_mat
                     )
                 else:
                     build_gable_roof(
@@ -595,7 +605,9 @@ def build_roof_and_attic(bm, props, ctx):
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=dormer_apertures,
-                        eave_exclusions=eave_ex
+                        eave_exclusions=eave_ex,
+                        is_wattle=is_wattle,
+                        roof_mat=eff_roof_mat
                     )
 
             uv_src = roof_bm.loops.layers.uv.verify()
@@ -852,7 +864,9 @@ def build_roof_and_attic(bm, props, ctx):
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
                         eave_exclusions=w_eave_fb,
-                        valley_notch=w_notch_fb
+                        valley_notch=w_notch_fb,
+                        is_wattle=is_wattle,
+                        roof_mat=eff_roof_mat
                     )
                 else:
                     build_gable_roof(
@@ -873,7 +887,9 @@ def build_roof_and_attic(bm, props, ctx):
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
                         eave_exclusions=w_eave_fb,
-                        valley_notch=w_notch_fb
+                        valley_notch=w_notch_fb,
+                        is_wattle=is_wattle,
+                        roof_mat=eff_roof_mat
                     )
 
                 if not is_lower_wing and is_rotated_roof:
@@ -1018,7 +1034,9 @@ def build_roof_and_attic(bm, props, ctx):
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
                         eave_exclusions=w_eave_bk,
-                        valley_notch=w_notch_bk
+                        valley_notch=w_notch_bk,
+                        is_wattle=is_wattle,
+                        roof_mat=eff_roof_mat
                     )
                 else:
                     build_gable_roof(
@@ -1040,7 +1058,9 @@ def build_roof_and_attic(bm, props, ctx):
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
                         eave_exclusions=w_eave_bk,
-                        valley_notch=w_notch_bk
+                        valley_notch=w_notch_bk,
+                        is_wattle=is_wattle,
+                        roof_mat=eff_roof_mat
                     )
 
                 if not is_lower_wing and is_rotated_roof:
@@ -1213,7 +1233,9 @@ def build_roof_and_attic(bm, props, ctx):
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
                         eave_exclusions=w_eave_lr,
-                        valley_notch=w_notch_lr
+                        valley_notch=w_notch_lr,
+                        is_wattle=is_wattle,
+                        roof_mat=eff_roof_mat
                     )
                 else:
                     build_gable_roof(
@@ -1233,7 +1255,9 @@ def build_roof_and_attic(bm, props, ctx):
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
                         eave_exclusions=w_eave_lr,
-                        valley_notch=w_notch_lr
+                        valley_notch=w_notch_lr,
+                        is_wattle=is_wattle,
+                        roof_mat=eff_roof_mat
                     )
 
                 rot_ang = -math.pi * 0.5 if w_wall == 'LEFT' else math.pi * 0.5

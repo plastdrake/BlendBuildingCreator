@@ -344,7 +344,7 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
     given, else the usual warm wood lining. Freestanding outer walls (curtain
     walls) pass their exterior material so both faces match.
     """
-    if physical_siding and tier == 'TIER_1':
+    if physical_siding and tier == 'TIER_1' and mat_ext != MAT_INDEX_PLASTER_EXT:
         build_log_wall_segment(
             bm, p_start, p_end, z_bottom, z_top, thickness,
             normal_vec=normal_vec, is_corner_start=is_corner_start, is_corner_end=is_corner_end,
@@ -361,7 +361,7 @@ def build_wall_segment(bm, p_start, p_end, z_bottom, z_top, thickness,
             )
         return
 
-    if tier == 'TIER_1' and mat_ext in (MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER):
+    if tier == 'TIER_1' and mat_ext == MAT_INDEX_TIMBER:
         mat_ext = MAT_INDEX_WOOD
 
     if mat_ext == MAT_INDEX_PLASTER_EXT and has_exposed_brick:

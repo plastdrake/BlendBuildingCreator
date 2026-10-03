@@ -6,7 +6,7 @@ Follows Single Responsibility, Open/Closed, and DRY principles.
 import bmesh
 import math
 from mathutils import Vector
-from ..mesh_utils import create_beveled_box
+from ..mesh_utils import create_beveled_box, create_cylinder
 from ..materials import MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER
 from .gable_wall import build_gable_end_wall
 from .features import build_curved_bargeboards
@@ -54,7 +54,7 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                      wall_thickness=0.28, gable_ends=('FRONT', 'BACK'), segments_y=6, abut_back=False,
                      abut_front=False, tier='TIER_3', plank_direction='HORIZONTAL', roof_flare=0.35,
                      dormer_apertures=None, eave_exclusions=None, valley_notch=None, loft_hatch=None,
-                     gable_walls=True):
+                     gable_walls=True, is_wattle=False, roof_mat=None):
     """
     Builds a classic steep medieval gable roof with solid 0.16m thick timber decking,
     thick volumetric gable walls, and complete eave closures.
@@ -67,6 +67,18 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
     skips deck cells past valley lines (wing dies into main slope). keep='le' keeps
     cells with y <= line (FRONT wing), keep='ge' keeps y >= line (BACK wing).
     """
+    if roof_mat is not None:
+        is_thatch = (roof_mat == 'THATCH')
+    else:
+        is_thatch = (tier == 'TIER_1')
+    if is_thatch:
+        overhang = max(overhang, 0.58)
+        deck_thick = 0.40
+        ez = z_base - 0.16
+    else:
+        deck_thick = 0.21
+        ez = z_base - 0.10
+
     rx_min = x_min - overhang
     rx_max = x_max + overhang
     ry_min = y_min if abut_front else (y_min - overhang)
@@ -76,20 +88,34 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
     
     cx = (x_min + x_max) * 0.5
     rz = z_base + roof_height
-    ez = z_base - 0.10
-    deck_thick = 0.21
     uv_layer = bm.loops.layers.uv.verify()
-    
-    segments_x = 4
     half_w = total_w * 0.5
+
+    if is_thatch:
+        num_courses = 3
+        profile_u = []
+        for c in range(num_courses):
+            u0 = c / num_courses
+            u1 = (c + 1) / num_courses
+            profile_u.append((u0, 0.00))
+            profile_u.append((u0 + (u1 - u0) * 0.55, 0.04))
+            profile_u.append((u0 + (u1 - u0) * 0.95, 0.10))
+            if c < num_courses - 1:
+                profile_u.append((u1, 0.01))
+            else:
+                profile_u.append((1.0, 0.08))
+        num_x_steps = len(profile_u) - 1
+    else:
+        num_x_steps = 4
+        profile_u = [(k / num_x_steps, 0.0) for k in range(num_x_steps + 1)]
     
-    # 1. Solid Volumetric 3D Timber Roof Deck (Segmented along Y)
+    # 1. Solid Volumetric 3D Roof Deck (Segmented along Y)
+    edge_mat = MAT_INDEX_SHINGLES if is_thatch else MAT_INDEX_TIMBER
     for side in [-1, 1]:
         grid_top = []
         grid_bot = []
         
-        for k in range(segments_x + 1):
-            u = k / segments_x
+        for k, (u, norm_bump) in enumerate(profile_u):
             drop = (1.0 - roof_flare) * u + roof_flare * (1.0 - (1.0 - u) ** 2)
             x_val = cx + side * u * half_w
             
@@ -114,6 +140,13 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                         col_ry_min = max(ry_min, _yl - _overlap)
             col_total_d = max(0.01, col_ry_max - col_ry_min)
             
+            d_drop = (1.0 - roof_flare) + 2.0 * roof_flare * (1.0 - u)
+            dz_du = -d_drop * (rz - ez)
+            dx_du = side * half_w
+            pitch = math.atan2(dz_du, abs(dx_du)) if abs(dx_du) > 1e-4 else 0.0
+            norm_x = -math.sin(pitch) * side
+            norm_z = math.cos(pitch)
+
             row_top = []
             row_bot = []
             for j in range(segments_y + 1):
@@ -121,23 +154,23 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                 y_val = col_ry_min + t_y * col_total_d
                 z_val = rz - drop * (rz - ez)
                 
+                pt_x = x_val + norm_x * norm_bump
+                pt_z = z_val + norm_z * norm_bump
+                
                 if k == 0:
                     bot_pos = Vector((cx, y_val, z_val - deck_thick))
                 else:
-                    d_drop = (1.0 - roof_flare) + 2.0 * roof_flare * (1.0 - u)
-                    dz_du = -d_drop * (rz - ez)
-                    dx_du = side * half_w
                     inward = Vector((dz_du * side, 0.0, -abs(dx_du))).normalized() * deck_thick if (dx_du**2 + dz_du**2) > 1e-6 else Vector((0, 0, -deck_thick))
                     bot_x = min(cx, x_val + inward.x) if side < 0 else max(cx, x_val + inward.x)
                     bot_pos = Vector((bot_x, y_val + inward.y, z_val + inward.z))
                 
-                row_top.append(bm.verts.new(Vector((x_val, y_val, z_val + 0.05))))
+                row_top.append(bm.verts.new(Vector((pt_x, y_val, pt_z + (0.0 if is_thatch else 0.05)))))
                 row_bot.append(bm.verts.new(bot_pos))
             grid_top.append(row_top)
             grid_bot.append(row_bot)
             
         # Create continuous quad faces across the grid (all quads retained, 100% manifold)
-        for k in range(segments_x):
+        for k in range(num_x_steps):
             for j in range(segments_y):
                 v_in0_t = grid_top[k][j]
                 v_in1_t = grid_top[k][j+1]
@@ -153,32 +186,32 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                 if side < 0:
                     f_top = bm.faces.new([v_in0_t, v_in1_t, v_out1_t, v_out0_t])
                     f_bot = bm.faces.new([v_out0_b, v_out1_b, v_in1_b, v_in0_b])
-                    if k == segments_x - 1:
+                    if k == num_x_steps - 1:
                         f_e = bm.faces.new([v_out0_b, v_out0_t, v_out1_t, v_out1_b])
-                        f_e.material_index = MAT_INDEX_TIMBER
+                        f_e.material_index = edge_mat
                         edge_faces.append((f_e, 'EAVE', (v_out0_t, v_out1_t), k, j))
                     if j == 0 and not abut_front:
                         f_f = bm.faces.new([v_in0_t, v_out0_t, v_out0_b, v_in0_b])
-                        f_f.material_index = MAT_INDEX_TIMBER
+                        f_f.material_index = edge_mat
                         edge_faces.append((f_f, 'VERGE', (v_in0_t, v_out0_t), k, j))
                     if j == segments_y - 1:
                         f_b = bm.faces.new([v_out1_t, v_in1_t, v_in1_b, v_out1_b])
-                        f_b.material_index = MAT_INDEX_TIMBER
+                        f_b.material_index = edge_mat
                         edge_faces.append((f_b, 'VERGE', (v_out1_t, v_in1_t), k, j))
                 else:
                     f_top = bm.faces.new([v_out0_t, v_out1_t, v_in1_t, v_in0_t])
                     f_bot = bm.faces.new([v_in0_b, v_in1_b, v_out1_b, v_out0_b])
-                    if k == segments_x - 1:
+                    if k == num_x_steps - 1:
                         f_e = bm.faces.new([v_out1_b, v_out1_t, v_out0_t, v_out0_b])
-                        f_e.material_index = MAT_INDEX_TIMBER
+                        f_e.material_index = edge_mat
                         edge_faces.append((f_e, 'EAVE', (v_out1_t, v_out0_t), k, j))
                     if j == 0 and not abut_front:
                         f_f = bm.faces.new([v_out0_t, v_in0_t, v_in0_b, v_out0_b])
-                        f_f.material_index = MAT_INDEX_TIMBER
+                        f_f.material_index = edge_mat
                         edge_faces.append((f_f, 'VERGE', (v_out0_t, v_in0_t), k, j))
                     if j == segments_y - 1:
                         f_b = bm.faces.new([v_in1_t, v_out1_t, v_out1_b, v_in1_b])
-                        f_b.material_index = MAT_INDEX_TIMBER
+                        f_b.material_index = edge_mat
                         edge_faces.append((f_b, 'VERGE', (v_in1_t, v_out1_t), k, j))
                         
                 f_top.material_index = MAT_INDEX_SHINGLES
@@ -196,6 +229,7 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
                     v_uv = -s_dist * 0.32
                     loop[uv_layer].uv = Vector((u_uv, v_uv))
                 for ef, kind, top_verts, _k, _j in edge_faces:
+                    ef.material_index = edge_mat
                     if kind == 'EAVE':
                         for loop in ef.loops:
                             is_top = (loop.vert in top_verts)
@@ -231,31 +265,73 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
             build_gable_end_wall(
                 bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
                 deck_thick, z_base, roof_height, roof_flare, tier, plank_direction,
-                get_gable_deck_z, ez, rz, hatch=_h
+                get_gable_deck_z, ez, rz, hatch=_h, is_wattle=is_wattle
             )
-        # Verge Bargeboards along gable rafter slopes
-        y_verge = ry_min + 0.04 if g_norm < 0 else ry_max - 0.04
-        build_curved_bargeboards(bm, cx, rx_min, rx_max, y_verge, ez, rz, roof_flare=roof_flare)
+        if not is_thatch:
+            # Verge Bargeboards along gable rafter slopes (omitted for thatch)
+            y_verge = ry_min + 0.04 if g_norm < 0 else ry_max - 0.04
+            build_curved_bargeboards(bm, cx, rx_min, rx_max, y_verge, ez, rz, roof_flare=roof_flare)
 
-    # 3. Eaves Fascia & Ridge Beams
-    y_f_start = ry_min + 0.06
-    y_f_end = (ry_max - 0.06) if not abut_back else ry_max
-    ex_min = eave_exclusions.get('min', []) if eave_exclusions else []
-    ex_max = eave_exclusions.get('max', []) if eave_exclusions else []
-    _build_eave_fascia_segment(bm, rx_min, y_f_start, y_f_end, ez, ex_min)
-    _build_eave_fascia_segment(bm, rx_max, y_f_start, y_f_end, ez, ex_max)
-    # Segmented Ridge Beam along Y
-    for j in range(segments_y):
-        t0 = j / segments_y
-        t1 = (j + 1) / segments_y
-        y0 = ry_min + t0 * total_d
-        y1 = ry_min + t1 * total_d
-        extra_len = 0.01 if (abut_back and j == segments_y - 1) else 0.04
-        seg_len = (y1 - y0) + extra_len
-        create_beveled_box(
+    if not is_thatch:
+        # 3. Eaves Fascia & Ridge Beams (omitted for thatch)
+        y_f_start = ry_min + 0.06
+        y_f_end = (ry_max - 0.06) if not abut_back else ry_max
+        ex_min = eave_exclusions.get('min', []) if eave_exclusions else []
+        ex_max = eave_exclusions.get('max', []) if eave_exclusions else []
+        _build_eave_fascia_segment(bm, rx_min, y_f_start, y_f_end, ez, ex_min)
+        _build_eave_fascia_segment(bm, rx_max, y_f_start, y_f_end, ez, ex_max)
+        # Segmented Ridge Beam along Y
+        for j in range(segments_y):
+            t0 = j / segments_y
+            t1 = (j + 1) / segments_y
+            y0 = ry_min + t0 * total_d
+            y1 = ry_min + t1 * total_d
+            extra_len = 0.01 if (abut_back and j == segments_y - 1) else 0.04
+            seg_len = (y1 - y0) + extra_len
+            create_beveled_box(
+                bm,
+                size=(0.20, seg_len, 0.22),
+                location=(cx, (y0 + y1) * 0.5, rz + 0.05),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.015
+            )
+    else:
+        # Tier 1 Thatch: Sculpted rounded straw ridge roll + crossed thatch spars
+        ridge_faces = create_cylinder(
             bm,
-            size=(0.20, seg_len, 0.22),
-            location=(cx, (y0 + y1) * 0.5, rz + 0.05),
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.015
+            radius=0.25,
+            height=total_d + 0.12,
+            segments=14,
+            location=(cx, (ry_min + ry_max) * 0.5, rz + 0.06),
+            rotation=(math.pi * 0.5, 0.0, 0.0),
+            mat_index=MAT_INDEX_SHINGLES
         )
+        for rf in ridge_faces:
+            for loop in rf.loops:
+                co = loop.vert.co
+                loop[uv_layer].uv = Vector(((co.y - ry_min) * 0.35, co.z * 0.35))
+
+        num_spars = max(3, int(total_d / 1.4) + 1)
+        for i in range(num_spars):
+            t = (i + 0.5) / num_spars
+            sy = ry_min + t * total_d
+            sz = rz + 0.20
+            spar_len = 0.76
+            spar_w = 0.08
+            spar_angle = math.radians(34)
+            create_beveled_box(
+                bm,
+                size=(spar_w, spar_w, spar_len),
+                location=(cx - 0.05, sy, sz),
+                rotation=(0.0, spar_angle, 0.0),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.008
+            )
+            create_beveled_box(
+                bm,
+                size=(spar_w, spar_w, spar_len),
+                location=(cx + 0.05, sy, sz),
+                rotation=(0.0, -spar_angle, 0.0),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.008
+            )

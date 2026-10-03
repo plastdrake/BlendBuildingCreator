@@ -190,6 +190,36 @@ def _warm_painterly_pass(tree, coord, color_socket, loc_x=460, loc_y=-260,
     return finish.outputs["Result"]
 
 
+def _anti_repetition_wash(tree, coord, color_socket, loc_x=460, loc_y=-260,
+                          strength=0.10, scale=0.25):
+    """Broad subtle painterly noise wash across large roof/wall spans to eliminate tiling repetition."""
+    wash = tree.nodes.new("ShaderNodeTexNoise")
+    wash.location = (loc_x, loc_y)
+    wash.inputs["Scale"].default_value = scale
+    wash.inputs["Detail"].default_value = 1.5
+    try:
+        wash.inputs["Roughness"].default_value = 0.50
+    except Exception:
+        pass
+    tree.links.new(coord.outputs["UV"], wash.inputs["Vector"])
+
+    wash_ramp = tree.nodes.new("ShaderNodeValToRGB")
+    wash_ramp.location = (loc_x + 200, loc_y)
+    wash_ramp.color_ramp.interpolation = 'EASE'
+    wash_ramp.color_ramp.elements[0].color = (0.86, 0.82, 0.78, 1.0)
+    wash_ramp.color_ramp.elements[1].color = (1.08, 1.06, 1.02, 1.0)
+    tree.links.new(wash.outputs["Fac"], wash_ramp.inputs["Fac"])
+
+    finish = tree.nodes.new("ShaderNodeMix")
+    finish.data_type = 'RGBA'
+    finish.blend_type = 'MULTIPLY'
+    finish.location = (loc_x + 420, loc_y + 40)
+    finish.inputs["Factor"].default_value = strength
+    tree.links.new(color_socket, finish.inputs["A"])
+    tree.links.new(wash_ramp.outputs["Color"], finish.inputs["B"])
+    return finish.outputs["Result"]
+
+
 def _new_mat(name):
     m = bpy.data.materials.get(name)
     if m is None:
@@ -299,94 +329,198 @@ def _wood_grain_nodes(tree, coord, loc_x=-950,
 
 
 # ---------------------------------------------------------------------------
-# 0. Stone — Chunky fantasy cobblestone with bevel catchlight
+# 0. Stone — Mud Stone (T1), Squared Fieldstone (T2), Ashlar Masonry (T3)
 # ---------------------------------------------------------------------------
 
-def create_stylized_stone(name="M_Building_Stone", color=(0.55, 0.51, 0.46, 1.0)):
+def create_stylized_stone(name="M_Building_Stone", color=None, tier='TIER_3'):
     """
-    Hand-painted finish for masonry blocks and stone foundations.
-    Uses packaged handpainted cobblestone texture if available, with procedural fallback.
+    Hand-painted stone and masonry shaders across the 3 progression tiers:
+    - Tier 1: Mud Stone & Rounded Boulder-like Fieldstone with thick dark corner AO.
+    - Tier 2: Squared Fieldstone with blocky rounded ashlar stones and thick clay-like mortar joints.
+    - Tier 3: Clean-cut Ashlar Stone blocks with tight, precise joints in rich sandy-tan / pale gold.
     """
     mat, tree = _new_mat(name)
-    out, bsdf = _out_bsdf(tree, loc_x=1000)
-    c = _coord(tree, loc_x=-900)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-1000)
 
-    tex_node = _load_image_texture(tree, "stone_wall_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.75, 0.75, 1.0))
-    if tex_node is not None:
-        tint = tree.nodes.new("ShaderNodeMix")
-        tint.data_type = 'RGBA'
-        tint.blend_type = 'MULTIPLY'
-        tint.location = (-200, 100)
-        tint.inputs["Factor"].default_value = 0.35
-        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
-        tint.inputs["B"].default_value = color
-        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-210, strength=0.10, scale=1.2)
-        _apply_ao(tree, bsdf, painted, strength=0.58, distance=0.16)
-        _setup_pbr(tree, bsdf, out, roughness=0.88)
+    if tier == 'TIER_1':
+        default_clr = (0.58, 0.48, 0.40, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "mud_fieldstone_diffuse.png", c, loc_x=-720, loc_y=100, scale=(0.34, 0.34, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "stone_wall_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.35, 0.35, 1.0))
+        if tex_node is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-350, 100)
+            tint.inputs["Factor"].default_value = 0.20
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = c_use
+            painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=-100, loc_y=-210, strength=0.08, scale=1.2)
+            macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.12, scale=0.30)
+            _apply_ao(tree, bsdf, macro, strength=0.72, distance=0.22)
+            _setup_pbr(tree, bsdf, out, roughness=0.92, metallic=0.0)
+
+            bump = tree.nodes.new("ShaderNodeBump")
+            bump.location = (600, -210)
+            bump.inputs["Strength"].default_value = 0.28
+            bump.inputs["Distance"].default_value = 0.04
+            tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+            tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+            return mat
+
+        # Procedural Mud Stone Fallback
+        voronoi = tree.nodes.new("ShaderNodeTexVoronoi")
+        voronoi.location = (-720, 100)
+        voronoi.feature = 'DISTANCE_TO_EDGE'
+        voronoi.inputs["Scale"].default_value = 1.4
+        tree.links.new(c.outputs["UV"], voronoi.inputs["Vector"])
+
+        ramp = tree.nodes.new("ShaderNodeValToRGB")
+        ramp.location = (-460, 100)
+        ramp.color_ramp.interpolation = 'LINEAR'
+        ramp.color_ramp.elements[0].position = 0.0
+        ramp.color_ramp.elements[0].color = (0.28, 0.18, 0.12, 1.0)  # dark mud mortar
+        el_c = ramp.color_ramp.elements.new(0.20)
+        el_c.color = (0.64, 0.46, 0.32, 1.0)  # warm clay tan
+        ramp.color_ramp.elements[1].position = 0.55
+        ramp.color_ramp.elements[1].color = (0.52, 0.48, 0.56, 1.0)  # soft purplish grey stone
+        tree.links.new(voronoi.outputs["Distance"], ramp.inputs["Fac"])
+
+        painted = _warm_painterly_pass(tree, c, ramp.outputs["Color"], loc_x=-120, loc_y=-210, strength=0.10, scale=1.2)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=140, loc_y=-210, strength=0.12, scale=0.30)
+        _apply_ao(tree, bsdf, macro, strength=0.72, distance=0.22)
+        _setup_pbr(tree, bsdf, out, roughness=0.92)
         return mat
 
-    # Procedural Fallback
-    block_tint = tree.nodes.new("ShaderNodeTexNoise")
-    block_tint.location = (-660, 100)
-    block_tint.inputs["Scale"].default_value = 0.72
-    block_tint.inputs["Detail"].default_value = 1.5
-    block_tint.inputs["Roughness"].default_value = 0.70
-    tree.links.new(c.outputs["UV"], block_tint.inputs["Vector"])
+    elif tier == 'TIER_2':
+        default_clr = (0.50, 0.52, 0.54, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "squared_fieldstone_diffuse.png", c, loc_x=-720, loc_y=100, scale=(0.42, 0.42, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "stone_wall_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.42, 0.42, 1.0))
+        if tex_node is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-350, 100)
+            tint.inputs["Factor"].default_value = 0.22
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = c_use
+            painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=-100, loc_y=-210, strength=0.08, scale=1.3)
+            macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.10, scale=0.35)
+            _apply_ao(tree, bsdf, macro, strength=0.60, distance=0.18)
+            _setup_pbr(tree, bsdf, out, roughness=0.82, metallic=0.0)
 
-    tint_ramp = tree.nodes.new("ShaderNodeValToRGB")
-    tint_ramp.location = (-420, 100)
-    tint_ramp.color_ramp.interpolation = 'LINEAR'
-    tint_ramp.color_ramp.elements[0].color = (color[0] * 0.58, color[1] * 0.62, color[2] * 0.72, 1.0)
-    mid = tint_ramp.color_ramp.elements.new(0.52)
-    mid.color = (color[0] * 1.03, color[1] * 0.96, color[2] * 0.87, 1.0)
-    tint_ramp.color_ramp.elements[1].color = (min(1.0, color[0] * 1.42), min(1.0, color[1] * 1.30), min(1.0, color[2] * 1.16), 1.0)
-    tree.links.new(block_tint.outputs["Fac"], tint_ramp.inputs["Fac"])
+            bump = tree.nodes.new("ShaderNodeBump")
+            bump.location = (600, -210)
+            bump.inputs["Strength"].default_value = 0.22
+            bump.inputs["Distance"].default_value = 0.03
+            tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+            tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+            return mat
 
-    impasto = tree.nodes.new("ShaderNodeTexNoise")
-    impasto.location = (-420, -180)
-    impasto.inputs["Scale"].default_value = 4.0
-    impasto.inputs["Detail"].default_value = 2.0
-    tree.links.new(c.outputs["UV"], impasto.inputs["Vector"])
+        # Procedural Squared Fieldstone Fallback
+        brick = tree.nodes.new("ShaderNodeTexBrick")
+        brick.location = (-720, 100)
+        brick.inputs["Scale"].default_value = 1.2
+        brick.inputs["Mortar Size"].default_value = 0.025
+        brick.inputs["Color1"].default_value = (0.42, 0.46, 0.50, 1.0)  # cool slate
+        brick.inputs["Color2"].default_value = (0.56, 0.53, 0.48, 1.0)  # warm grey
+        brick.inputs["Mortar"].default_value = (0.24, 0.22, 0.20, 1.0)  # dark mortar
+        tree.links.new(c.outputs["UV"], brick.inputs[0])
 
-    impasto_mix = tree.nodes.new("ShaderNodeMix")
-    impasto_mix.data_type = 'RGBA'
-    impasto_mix.blend_type = 'OVERLAY'
-    impasto_mix.location = (-120, 30)
-    impasto_mix.inputs["Factor"].default_value = 0.17
-    tree.links.new(tint_ramp.outputs["Color"], impasto_mix.inputs["A"])
-    tree.links.new(impasto.outputs["Color"], impasto_mix.inputs["B"])
-
-    painted = _warm_painterly_pass(tree, c, impasto_mix.outputs["Result"], loc_x=110, loc_y=-210, strength=0.10, scale=1.2)
-    _apply_ao(tree, bsdf, painted, strength=0.58, distance=0.16)
-    _setup_pbr(tree, bsdf, out, roughness=0.88)
-    return mat
-
-def create_stylized_cut_stone(name="M_Building_Cut_Stone", color=(0.74, 0.70, 0.64, 1.0)):
-    """
-    Cozy smooth architectural cut stone / ashlar flagstone for door steps,
-    thresholds, stone door frame blocks, and window sills.
-    Uses packaged handpainted cut stone texture if available, with procedural fallback.
-    """
-    mat, tree = _new_mat(name)
-    out, bsdf = _out_bsdf(tree, loc_x=1000)
-    c = _coord(tree, loc_x=-900)
-
-    tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
-    if tex_node is not None:
-        tint = tree.nodes.new("ShaderNodeMix")
-        tint.data_type = 'RGBA'
-        tint.blend_type = 'MULTIPLY'
-        tint.location = (-200, 100)
-        tint.inputs["Factor"].default_value = 0.25
-        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
-        tint.inputs["B"].default_value = color
-        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-210, strength=0.08, scale=1.3)
-        _apply_ao(tree, bsdf, painted, strength=0.50, distance=0.15)
+        painted = _warm_painterly_pass(tree, c, brick.outputs["Color"], loc_x=-120, loc_y=-210, strength=0.10, scale=1.3)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=140, loc_y=-210, strength=0.10, scale=0.35)
+        _apply_ao(tree, bsdf, macro, strength=0.60, distance=0.18)
         _setup_pbr(tree, bsdf, out, roughness=0.82)
         return mat
 
-    _set_bsdf_input(bsdf, "Base Color", color)
-    _set_bsdf_input(bsdf, "Roughness", 0.82)
+    else:  # TIER_3
+        default_clr = (0.76, 0.68, 0.54, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "ashlar_stone_diffuse.png", c, loc_x=-720, loc_y=100, scale=(0.45, 0.45, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.45, 0.45, 1.0))
+        if tex_node is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-350, 100)
+            tint.inputs["Factor"].default_value = 0.18
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = c_use
+            painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=-100, loc_y=-210, strength=0.06, scale=1.3)
+            macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.08, scale=0.40)
+            _apply_ao(tree, bsdf, macro, strength=0.48, distance=0.14)
+            _setup_pbr(tree, bsdf, out, roughness=0.65, metallic=0.0)
+
+            bump = tree.nodes.new("ShaderNodeBump")
+            bump.location = (600, -210)
+            bump.inputs["Strength"].default_value = 0.18
+            bump.inputs["Distance"].default_value = 0.02
+            tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+            tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+            return mat
+
+        # Procedural Ashlar Stone Fallback
+        brick = tree.nodes.new("ShaderNodeTexBrick")
+        brick.location = (-720, 100)
+        brick.inputs["Scale"].default_value = 1.0
+        brick.inputs["Mortar Size"].default_value = 0.008
+        brick.inputs["Color1"].default_value = (c_use[0] * 0.95, c_use[1] * 0.95, c_use[2] * 0.92, 1.0)
+        brick.inputs["Color2"].default_value = (min(1.0, c_use[0] * 1.08), min(1.0, c_use[1] * 1.06), min(1.0, c_use[2] * 1.02), 1.0)
+        brick.inputs["Mortar"].default_value = (0.35, 0.32, 0.28, 1.0)
+        tree.links.new(c.outputs["UV"], brick.inputs[0])
+
+        painted = _warm_painterly_pass(tree, c, brick.outputs["Color"], loc_x=-120, loc_y=-210, strength=0.08, scale=1.3)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=140, loc_y=-210, strength=0.08, scale=0.40)
+        _apply_ao(tree, bsdf, macro, strength=0.48, distance=0.14)
+        _setup_pbr(tree, bsdf, out, roughness=0.65)
+        return mat
+
+
+def create_stylized_cut_stone(name="M_Building_Cut_Stone", color=None, tier='TIER_3'):
+    """
+    Cozy smooth architectural cut stone, door steps, thresholds, and window sills across the 3 tiers.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    c = _coord(tree, loc_x=-900)
+
+    if tier == 'TIER_1':
+        c_use = color or (0.64, 0.54, 0.44, 1.0)
+        tex_node = _load_image_texture(tree, "mud_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+        rough = 0.90
+    elif tier == 'TIER_2':
+        c_use = color or (0.68, 0.66, 0.62, 1.0)
+        tex_node = _load_image_texture(tree, "squared_fieldstone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+        rough = 0.80
+    else:
+        c_use = color or (0.78, 0.72, 0.60, 1.0)
+        tex_node = _load_image_texture(tree, "ashlar_stone_diffuse.png", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-660, loc_y=100, scale=(0.85, 0.85, 1.0))
+        rough = 0.65
+
+    if tex_node is not None:
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-200, 100)
+        tint.inputs["Factor"].default_value = 0.20
+        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = c_use
+        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-210, strength=0.08, scale=1.3)
+        _apply_ao(tree, bsdf, painted, strength=0.50, distance=0.15)
+        _setup_pbr(tree, bsdf, out, roughness=rough)
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", c_use)
+    _set_bsdf_input(bsdf, "Roughness", rough)
     tree.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
     return mat
 
@@ -395,36 +529,79 @@ def create_stylized_cut_stone(name="M_Building_Cut_Stone", color=(0.74, 0.70, 0.
 # 1. Plaster EXT — Warm stucco with localized exposed clay brick accents
 # ---------------------------------------------------------------------------
 
-def create_stylized_plaster(name="M_Building_Plaster", color=(0.93, 0.88, 0.82, 1.0), is_interior=False):
+def create_stylized_plaster(name="M_Building_Plaster", color=None, is_interior=False, tier='TIER_3'):
     """
-    Exterior: Warm creamy off-white stucco with soft painterly gradients and subtle
-    localized exposed terracotta clay brick accents (matching CityGates concept art).
-    Interior: Clean, cozy warm plaster with soft ambient occlusion.
+    Plaster and wall infill across the 3 tiers:
+    - Tier 1: Wattle and Daub — Lumpy pillow-soft plaster panels with exposed wooden wicker sticks
+              and branches poking through, warm clay tans, muddy oranges, and thick dark corner AO.
+    - Tier 2: Fachwerk Stucco Panels — Warm creamy off-white or butter-yellow stucco panels framed
+              by structural timber beams.
+    - Tier 3: Smooth Ivory Stucco — Flawlessly smooth creamy white / brilliant clean ivory stucco
+              on overhangs with subtle, elegant shading.
     """
     mat, tree = _new_mat(name)
-    out, bsdf = _out_bsdf(tree, loc_x=1500)
-    c = _coord(tree, loc_x=-1200)
+    out, bsdf = _out_bsdf(tree, loc_x=1400)
+    c = _coord(tree, loc_x=-1100)
 
-    tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(0.85, 0.85, 1.0))
+    if tier == 'TIER_1':
+        default_clr = (0.84, 0.68, 0.48, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "wattle_daub_diffuse.png", c, loc_x=-760, loc_y=100, scale=(0.48, 0.48, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-760, loc_y=100, scale=(0.85, 0.85, 1.0))
+        rough = 0.94
+        ao_str = 0.40 if is_interior else 0.68
+        ao_dist = 0.20
+    elif tier == 'TIER_2':
+        default_clr = (0.95, 0.90, 0.78, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "stucco_plaster_diffuse.png", c, loc_x=-760, loc_y=100, scale=(0.85, 0.85, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-760, loc_y=100, scale=(0.85, 0.85, 1.0))
+        rough = 0.84
+        ao_str = 0.35 if is_interior else 0.50
+        ao_dist = 0.16
+    else:  # TIER_3
+        default_clr = (0.96, 0.95, 0.92, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "smooth_ivory_stucco_diffuse.png", c, loc_x=-760, loc_y=100, scale=(0.90, 0.90, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "plaster_wall_diffuse.jpg", c, loc_x=-760, loc_y=100, scale=(0.85, 0.85, 1.0))
+        rough = 0.68
+        ao_str = 0.30 if is_interior else 0.38
+        ao_dist = 0.14
+
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
         tint.blend_type = 'MULTIPLY'
-        tint.location = (-300, 120)
-        tint.inputs["Factor"].default_value = 0.25
+        tint.location = (-350, 100)
+        tint.inputs["Factor"].default_value = 0.18
         tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
-        tint.inputs["B"].default_value = color
-        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260,
-                                       strength=0.10 if is_interior else 0.16, scale=1.35)
-        ao_str = 0.36 if is_interior else 0.52
-        _apply_ao(tree, bsdf, painted, strength=ao_str, distance=0.16)
-        _setup_pbr(tree, bsdf, out, roughness=0.92)
+        tint.inputs["B"].default_value = c_use
+        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=-100, loc_y=-210,
+                                       strength=0.08 if is_interior else 0.14, scale=1.35)
+        macro_str = 0.14 if tier == 'TIER_1' else 0.08
+        macro_scale = 0.22 if tier == 'TIER_1' else 0.30
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=macro_str, scale=macro_scale)
+        _apply_ao(tree, bsdf, macro, strength=ao_str, distance=ao_dist)
+        _setup_pbr(tree, bsdf, out, roughness=rough)
+
+        if tier == 'TIER_1':
+            bump = tree.nodes.new("ShaderNodeBump")
+            bump.location = (600, -210)
+            bump.inputs["Strength"].default_value = 0.25
+            bump.inputs["Distance"].default_value = 0.03
+            tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+            tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+
         return mat
 
+    # Procedural Fallback
     mult = 1.05 if is_interior else 1.0
-    c_shadow = (color[0] * 0.66, color[1] * 0.58, color[2] * 0.50, 1.0)
-    c_base   = (min(1.0, color[0] * mult), min(1.0, color[1] * mult), min(1.0, color[2] * mult), 1.0)
-    c_bright = (min(1.0, color[0] * 1.10), min(1.0, color[1] * 1.06), min(1.0, color[2] * 1.02), 1.0)
+    c_shadow = (c_use[0] * 0.66, c_use[1] * 0.58, c_use[2] * 0.50, 1.0)
+    c_base   = (min(1.0, c_use[0] * mult), min(1.0, c_use[1] * mult), min(1.0, c_use[2] * mult), 1.0)
+    c_bright = (min(1.0, c_use[0] * 1.10), min(1.0, c_use[1] * 1.06), min(1.0, c_use[2] * 1.02), 1.0)
 
     brush_noise = tree.nodes.new("ShaderNodeTexNoise")
     brush_noise.location = (-900, 100)
@@ -447,86 +624,11 @@ def create_stylized_plaster(name="M_Building_Plaster", color=(0.93, 0.88, 0.82, 
     plaster_ramp.color_ramp.elements[1].color = c_bright
     tree.links.new(brush_noise.outputs["Fac"], plaster_ramp.inputs["Fac"])
 
-    final_color = plaster_ramp.outputs["Color"]
-
-    if not is_interior:
-        brick = tree.nodes.new("ShaderNodeTexBrick")
-        brick.location = (-660, -220)
-        try:
-            brick.offset = 0.50
-        except Exception:
-            pass
-        for k, v in [
-            ("Color1", (0.68, 0.32, 0.18, 1.0)),
-            ("Color2", (0.55, 0.24, 0.13, 1.0)),
-            ("Mortar", (0.62, 0.58, 0.52, 1.0)),
-            ("Scale", 1.0),
-            ("Mortar Size", 0.014),
-            ("Mortar Smooth", 0.20),
-            ("Bias", 0.10),
-            ("Brick Width", 0.36),
-            ("Row Height", 0.14),
-        ]:
-            if k in brick.inputs:
-                brick.inputs[k].default_value = v
-        tree.links.new(c.outputs["UV"], brick.inputs[0])
-
-        expose = tree.nodes.new("ShaderNodeTexNoise")
-        expose.location = (-900, -440)
-        expose.inputs["Scale"].default_value = 1.4
-        expose.inputs["Detail"].default_value = 2.0
-        try:
-            expose.inputs["Roughness"].default_value = 0.55
-        except Exception:
-            pass
-        tree.links.new(c.outputs["UV"], expose.inputs["Vector"])
-
-        expose_ramp = tree.nodes.new("ShaderNodeValToRGB")
-        expose_ramp.location = (-660, -440)
-        expose_ramp.color_ramp.interpolation = 'LINEAR'
-        expose_ramp.color_ramp.elements[0].position = 0.0
-        expose_ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
-        expose_ramp.color_ramp.elements[1].position = 0.74
-        expose_ramp.color_ramp.elements[1].color = (0.0, 0.0, 0.0, 1.0)
-        el_br = expose_ramp.color_ramp.elements.new(0.82)
-        el_br.color = (1.0, 1.0, 1.0, 1.0)
-        tree.links.new(expose.outputs["Fac"], expose_ramp.inputs["Fac"])
-
-        rim_ramp = tree.nodes.new("ShaderNodeValToRGB")
-        rim_ramp.location = (-420, -440)
-        rim_ramp.color_ramp.interpolation = 'LINEAR'
-        rim_ramp.color_ramp.elements[0].position = 0.0
-        rim_ramp.color_ramp.elements[0].color = (1.0, 1.0, 1.0, 1.0)
-        el_r1 = rim_ramp.color_ramp.elements.new(0.72)
-        el_r1.color = (1.0, 1.0, 1.0, 1.0)
-        el_r2 = rim_ramp.color_ramp.elements.new(0.75)
-        el_r2.color = (0.65, 0.55, 0.45, 1.0)
-        rim_ramp.color_ramp.elements[1].position = 0.78
-        rim_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
-        tree.links.new(expose.outputs["Fac"], rim_ramp.inputs["Fac"])
-
-        rim_mul = tree.nodes.new("ShaderNodeMix")
-        rim_mul.data_type = 'RGBA'
-        rim_mul.blend_type = 'MULTIPLY'
-        rim_mul.location = (-180, 50)
-        rim_mul.inputs["Factor"].default_value = 0.65
-        tree.links.new(plaster_ramp.outputs["Color"], rim_mul.inputs["A"])
-        tree.links.new(rim_ramp.outputs["Color"], rim_mul.inputs["B"])
-
-        expose_mix = tree.nodes.new("ShaderNodeMix")
-        expose_mix.data_type = 'RGBA'
-        expose_mix.blend_type = 'MIX'
-        expose_mix.location = (60, 0)
-        tree.links.new(expose_ramp.outputs["Color"], expose_mix.inputs["Factor"])
-        tree.links.new(rim_mul.outputs["Result"], expose_mix.inputs["A"])
-        tree.links.new(brick.outputs["Color"], expose_mix.inputs["B"])
-        final_color = expose_mix.outputs["Result"]
-
-    painted = _warm_painterly_pass(tree, c, final_color, loc_x=310, loc_y=-610,
-                                   strength=0.12 if is_interior else 0.18, scale=1.35)
-    ao_str = 0.36 if is_interior else 0.52
-    _apply_ao(tree, bsdf, painted, strength=ao_str, distance=0.16)
-    _setup_pbr(tree, bsdf, out, roughness=0.95)
+    painted = _warm_painterly_pass(tree, c, plaster_ramp.outputs["Color"], loc_x=-100, loc_y=-210,
+                                   strength=0.10 if is_interior else 0.16, scale=1.35)
+    macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.08, scale=0.30)
+    _apply_ao(tree, bsdf, macro, strength=ao_str, distance=ao_dist)
+    _setup_pbr(tree, bsdf, out, roughness=rough)
     return mat
 
 
@@ -776,7 +878,7 @@ def create_stylized_interior_planks(name="M_Building_Interior_Planks",
     out, bsdf = _out_bsdf(tree, loc_x=1400)
     c = _coord(tree, loc_x=-1500)
 
-    tex_node = _load_image_texture(tree, "wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.45, 1.0), rotation=(0.0, 0.0, 1.5707963))
+    tex_node = _load_image_texture(tree, "wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.45, 1.0), rotation=(0.0, 0.0, 0.0))
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
@@ -915,33 +1017,61 @@ def create_stylized_interior_planks(name="M_Building_Interior_Planks",
 # 3. Timber Frame — Length-aligned wood grain on beams, posts, rafters
 # ---------------------------------------------------------------------------
 
-def create_stylized_timber(name="M_Building_Timber", color=(0.30, 0.16, 0.08, 1.0)):
+def create_stylized_timber(name="M_Building_Timber", color=None, tier='TIER_3'):
     """
-    Handpainted timber frame:
-    Uses warped, longitudinally-stretched organic grain (no straight SAW waves).
-    Grain flows naturally along horizontal, vertical, and diagonal beams.
+    Handpainted timber framing across the 3 tiers:
+    - Tier 1: Chunky, improvised, rugged beams with warped grain and mud crevice pooling.
+    - Tier 2: Bold Fachwerk timber framing in deep rich chocolate brown or espresso with wood-grain brush strokes.
+    - Tier 3: Oiled half-timbering with clean lines, subtle beveled edges, and rich specular highlights.
     """
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1400)
     c = _coord(tree, loc_x=-1100)
 
-    tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.45, 1.0), rotation=(0.0, 0.0, 0.0))
+    if tier == 'TIER_1':
+        default_clr = (0.34, 0.20, 0.12, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.45, 1.0))
+        rough = 0.85
+        spec = 0.20
+        ao_str = 0.45
+    elif tier == 'TIER_2':
+        default_clr = (0.20, 0.12, 0.08, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.40, 1.0))
+        rough = 0.72
+        spec = 0.38
+        ao_str = 0.35
+    else:  # TIER_3
+        default_clr = (0.14, 0.10, 0.08, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.35, 1.0))
+        rough = 0.45
+        spec = 0.60
+        ao_str = 0.25
+
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
         tint.blend_type = 'MULTIPLY'
         tint.location = (-250, 120)
-        tint.inputs["Factor"].default_value = 0.35
+        tint.inputs["Factor"].default_value = 0.20
         tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
-        tint.inputs["B"].default_value = color
-        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260, strength=0.10, scale=1.35)
-        _apply_ao(tree, bsdf, painted, strength=0.30, distance=0.14)
-        _setup_pbr(tree, bsdf, out, roughness=0.78)
+        tint.inputs["B"].default_value = c_use
+        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260, strength=0.08, scale=1.35)
+        _apply_ao(tree, bsdf, painted, strength=ao_str, distance=0.14)
+        _setup_pbr(tree, bsdf, out, roughness=rough)
+        if "Specular IOR Level" in bsdf.inputs:
+            bsdf.inputs["Specular IOR Level"].default_value = spec
+        elif "Specular" in bsdf.inputs:
+            bsdf.inputs["Specular"].default_value = spec
+        if tier == 'TIER_3' and "IOR" in bsdf.inputs:
+            bsdf.inputs["IOR"].default_value = 1.52
         return mat
 
-    c_dark  = (color[0] * 0.20, color[1] * 0.14, color[2] * 0.09, 1.0)
-    c_mid   = (color[0], color[1], color[2], 1.0)
-    c_light = (min(1.0, color[0] * 1.72), min(1.0, color[1] * 1.50), min(1.0, color[2] * 1.30), 1.0)
+    c_dark  = (c_use[0] * 0.20, c_use[1] * 0.14, c_use[2] * 0.09, 1.0)
+    c_mid   = (c_use[0], c_use[1], c_use[2], 1.0)
+    c_light = (min(1.0, c_use[0] * 1.72), min(1.0, c_use[1] * 1.50), min(1.0, c_use[2] * 1.30), 1.0)
 
     grain = _wood_grain_nodes(tree, c, loc_x=-850,
                               scale_u=1.4, scale_v=0.06, warp_amount=0.25,
@@ -962,8 +1092,12 @@ def create_stylized_timber(name="M_Building_Timber", color=(0.30, 0.16, 0.08, 1.
     tree.links.new(anti.outputs["Color"], anti_mix.inputs["B"])
 
     painted = _warm_painterly_pass(tree, c, anti_mix.outputs["Result"], loc_x=380, loc_y=-260, strength=0.16, scale=1.35)
-    _apply_ao(tree, bsdf, painted, strength=0.30, distance=0.14)
-    _setup_pbr(tree, bsdf, out, roughness=0.78)
+    _apply_ao(tree, bsdf, painted, strength=ao_str, distance=0.14)
+    _setup_pbr(tree, bsdf, out, roughness=rough)
+    if "Specular IOR Level" in bsdf.inputs:
+        bsdf.inputs["Specular IOR Level"].default_value = spec
+    elif "Specular" in bsdf.inputs:
+        bsdf.inputs["Specular"].default_value = spec
     return mat
 
 
@@ -972,23 +1106,16 @@ def create_stylized_timber(name="M_Building_Timber", color=(0.30, 0.16, 0.08, 1.
 # ---------------------------------------------------------------------------
 
 def create_stylized_floorboards(name="M_Building_Floor",
-                                 color=(0.48, 0.32, 0.18, 1.0)):
+                                 color=None, tier='TIER_3'):
     """
-    Authentic stylized tavern floorboards matching reference image:
-    - Wide boards (~38cm wide x ~2.2m long) in running bond along X.
-    - Hand-carved organic edge wobble (NO ruler-straight lines!).
-    - Razor-thin dark crevices between planks (~1.5mm), NEVER wide beige borders!
-    - Subtle warm bevel catchlight on plank edges.
-    - Beautiful per-plank warm wood stain variation.
-    - Longitudinal grain flowing ALONG the length of the planks (X axis).
-    - Contact AO in room corners.
+    Authentic stylized tavern floorboards across the 3 tiers.
     """
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1600)
     c = _coord(tree, loc_x=-1500)
+    c_use = color or ((0.42, 0.28, 0.18, 1.0) if tier == 'TIER_3' else ((0.50, 0.35, 0.20, 1.0) if tier == 'TIER_2' else (0.48, 0.32, 0.18, 1.0)))
 
-    # 1. Use packaged handpainted wood planks texture if present
-    tex_node = _load_image_texture(tree, "wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(0.70, 0.70, 1.0), rotation=(0.0, 0.0, 1.5707963))
+    tex_node = _load_image_texture(tree, "wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(0.70, 0.70, 1.0), rotation=(0.0, 0.0, 0.0))
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
@@ -996,23 +1123,42 @@ def create_stylized_floorboards(name="M_Building_Floor",
         tint.location = (-250, 120)
         tint.inputs["Factor"].default_value = 0.10
         tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
-        tint.inputs["B"].default_value = color
+        tint.inputs["B"].default_value = c_use
         painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260, strength=0.10, scale=1.4)
         _apply_ao(tree, bsdf, painted, strength=0.52, distance=0.18)
-        _setup_pbr(tree, bsdf, out, roughness=0.74)
+        _setup_pbr(tree, bsdf, out, roughness=0.60 if tier == 'TIER_3' else 0.74)
         return mat
 
+    _set_bsdf_input(bsdf, "Base Color", c_use)
+    _set_bsdf_input(bsdf, "Roughness", 0.60 if tier == 'TIER_3' else 0.74)
+    tree.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+    return mat
 
-def create_stylized_facade_planks(name="M_Building_Wood", color=(0.86, 0.74, 0.58, 1.0)):
+
+def create_stylized_facade_planks(name="M_Building_Wood", color=None, tier='TIER_3'):
     """
-    Stylized lighter wood planks for exterior facade weatherboards and dormer walls.
-    Distinguishes facade planks clearly from darker timber frame beams and posts.
+    Stylized exterior facade planks, weatherboards, and dormer walls across the 3 tiers.
     """
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1400)
     c = _coord(tree, loc_x=-1100)
 
-    tex_node = _load_image_texture(tree, "facade_wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(0.60, 0.60, 1.0), rotation=(0.0, 0.0, 1.5707963))
+    if tier == 'TIER_1':
+        c_use = color or (0.42, 0.28, 0.16, 1.0)
+        tex_name = "facade_wood_planks_diffuse.jpg"
+        rough = 0.86
+    elif tier == 'TIER_2':
+        c_use = color or (0.75, 0.58, 0.38, 1.0)
+        tex_name = "facade_wood_planks_diffuse.jpg"
+        rough = 0.74
+    else:  # TIER_3
+        c_use = color or (0.24, 0.16, 0.12, 1.0)
+        tex_name = "oiled_timber_diffuse.png"
+        rough = 0.45
+
+    tex_node = _load_image_texture(tree, tex_name, c, loc_x=-800, loc_y=120, scale=(0.60, 0.60, 1.0), rotation=(0.0, 0.0, 0.0))
+    if tex_node is None:
+        tex_node = _load_image_texture(tree, "facade_wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(0.60, 0.60, 1.0), rotation=(0.0, 0.0, 0.0))
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
@@ -1020,13 +1166,13 @@ def create_stylized_facade_planks(name="M_Building_Wood", color=(0.86, 0.74, 0.5
         tint.location = (-250, 120)
         tint.inputs["Factor"].default_value = 0.15
         tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
-        tint.inputs["B"].default_value = color
+        tint.inputs["B"].default_value = c_use
         painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260, strength=0.08, scale=1.35)
         _apply_ao(tree, bsdf, painted, strength=0.48, distance=0.14)
-        _setup_pbr(tree, bsdf, out, roughness=0.76)
+        _setup_pbr(tree, bsdf, out, roughness=rough)
         return mat
 
-    return create_stylized_timber(name, color=color)
+    return create_stylized_timber(name, color=c_use, tier=tier)
 
     # 2. Hand-carved organic edge wobble (procedural fallback)
     wobble = tree.nodes.new("ShaderNodeTexNoise")
@@ -1149,69 +1295,204 @@ def create_stylized_facade_planks(name="M_Building_Wood", color=(0.86, 0.74, 0.5
 # ---------------------------------------------------------------------------
 
 def create_stylized_shingles(name="M_Building_Shingles",
-                              color=(0.22, 0.30, 0.48, 1.0)):
+                            color=None,
+                            tier='TIER_2',
+                            roof_mat=None):
     """
-    Clay roof shingles: Matte clay material without artificial texture seams.
-    Overlapping physical tile geometry combined with strong contact AO produces
-    deep, natural, bakeable shadows under each tile lip.
+    Tier-aware roof roofing material:
+    - THATCH: Oversized chunky Thatch Bundles (golden amber, roughness 0.96)
+    - WOOD_SHINGLES: Big uneven weathered wooden shakes / shingles (rustic cedar/oak, roughness 0.88)
+    - TERRACOTTA: Terracotta mission clay tiles (rich reds/burnt oranges, roughness 0.50)
+    - SLATE: Heavy slate stone tiles (slate blues, cyan rim highlights, roughness 0.36)
     """
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-900)
 
-    tex_node = _load_image_texture(tree, "roof_tiles_diffuse.jpg", c, loc_x=-660, loc_y=80, scale=(1.0, 1.0, 1.0))
-    if tex_node is not None:
-        tint = tree.nodes.new("ShaderNodeMix")
-        tint.data_type = 'RGBA'
-        tint.blend_type = 'MULTIPLY'
-        tint.location = (-200, 80)
-        tint.inputs["Factor"].default_value = 0.35
-        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
-        tint.inputs["B"].default_value = color
-        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-280, strength=0.10, scale=1.5)
-        _apply_ao(tree, bsdf, painted, strength=0.65, distance=0.18)
-        _setup_pbr(tree, bsdf, out, roughness=0.85)
+    if roof_mat is None:
+        if tier == 'TIER_1':
+            roof_mat = 'THATCH'
+        elif tier == 'TIER_2':
+            roof_mat = 'TERRACOTTA'
+        else:
+            roof_mat = 'SLATE'
+
+    if roof_mat == 'WOOD_SHINGLES':
+        default_clr = (0.75, 0.60, 0.45, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "wood_shingles_diffuse.png", c, loc_x=-660, loc_y=80, scale=(0.70, 0.70, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "roof_tiles_diffuse.jpg", c, loc_x=-660, loc_y=80, scale=(0.70, 0.70, 1.0))
+        if tex_node is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-200, 80)
+            tint.inputs["Factor"].default_value = 0.20
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = c_use
+            painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-280, strength=0.08, scale=1.3)
+            macro = _anti_repetition_wash(tree, c, painted, loc_x=260, loc_y=-280, strength=0.08, scale=0.35)
+            _apply_ao(tree, bsdf, macro, strength=0.55, distance=0.20)
+            _setup_pbr(tree, bsdf, out, roughness=0.88)
+
+            bump = tree.nodes.new("ShaderNodeBump")
+            bump.location = (600, -280)
+            bump.inputs["Strength"].default_value = 0.28
+            bump.inputs["Distance"].default_value = 0.04
+            tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+            tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+            return mat
+
+        # Procedural Wood Shakes Fallback
+        brick = tree.nodes.new("ShaderNodeTexBrick")
+        brick.location = (-660, 80)
+        brick.inputs["Scale"].default_value = 1.6
+        brick.inputs["Row Height"].default_value = 0.40
+        brick.inputs["Mortar Size"].default_value = 0.015
+        tree.links.new(c.outputs["UV"], brick.inputs[0])
+
+        painted = _warm_painterly_pass(tree, c, brick.outputs["Color"], loc_x=60, loc_y=-280, strength=0.10, scale=1.3)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=260, loc_y=-280, strength=0.08, scale=0.35)
+        _apply_ao(tree, bsdf, macro, strength=0.55, distance=0.20)
+        _setup_pbr(tree, bsdf, out, roughness=0.88)
         return mat
 
-    weather = tree.nodes.new("ShaderNodeTexNoise")
-    weather.location = (-660, 80)
-    weather.inputs["Scale"].default_value = 1.0
-    weather.inputs["Detail"].default_value = 2.0
-    tree.links.new(c.outputs["UV"], weather.inputs["Vector"])
+    elif roof_mat == 'THATCH' or (tier == 'TIER_1' and roof_mat not in ('TERRACOTTA', 'SLATE')):
+        default_clr = (0.86, 0.65, 0.22, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "thatch_bundles_diffuse.png", c, loc_x=-660, loc_y=80, scale=(0.95, 0.95, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "roof_tiles_diffuse.jpg", c, loc_x=-660, loc_y=80, scale=(0.95, 0.95, 1.0))
+        if tex_node is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-200, 80)
+            tint.inputs["Factor"].default_value = 0.20
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = c_use
+            painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-280, strength=0.08, scale=1.5)
+            macro = _anti_repetition_wash(tree, c, painted, loc_x=260, loc_y=-280, strength=0.08, scale=0.35)
+            _apply_ao(tree, bsdf, macro, strength=0.45, distance=0.20)
+            _setup_pbr(tree, bsdf, out, roughness=0.96)
 
-    c_damp  = (color[0] * 0.62, color[1] * 0.66, color[2] * 0.74, 1.0)
-    c_mid   = (color[0], color[1], color[2], 1.0)
-    c_faded = (min(1.0, color[0] * 1.52), min(1.0, color[1] * 1.40), min(1.0, color[2] * 1.28), 1.0)
+            # Volumetric physical relief via subtle normal bump from the straw fiber profile
+            bump = tree.nodes.new("ShaderNodeBump")
+            bump.location = (600, -280)
+            bump.inputs["Strength"].default_value = 0.22
+            bump.inputs["Distance"].default_value = 0.03
+            tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+            tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+            return mat
 
-    w_ramp = tree.nodes.new("ShaderNodeValToRGB")
-    w_ramp.location = (-420, 80)
-    w_ramp.color_ramp.interpolation = 'LINEAR'
-    w_ramp.color_ramp.elements[0].position = 0.0
-    w_ramp.color_ramp.elements[0].color = c_damp
-    el_w = w_ramp.color_ramp.elements.new(0.50)
-    el_w.color = c_mid
-    w_ramp.color_ramp.elements[1].position = 1.0
-    w_ramp.color_ramp.elements[1].color = c_faded
-    tree.links.new(weather.outputs["Fac"], w_ramp.inputs["Fac"])
+        # Procedural Thatch Fallback
+        wave = tree.nodes.new("ShaderNodeTexWave")
+        wave.location = (-660, 80)
+        wave.inputs["Scale"].default_value = 14.0
+        wave.inputs["Distortion"].default_value = 3.5
+        tree.links.new(c.outputs["UV"], wave.inputs["Vector"])
 
-    micro = tree.nodes.new("ShaderNodeTexNoise")
-    micro.location = (-420, -160)
-    micro.inputs["Scale"].default_value = 16.0
-    micro.inputs["Detail"].default_value = 2.0
-    tree.links.new(c.outputs["UV"], micro.inputs["Vector"])
+        ramp = tree.nodes.new("ShaderNodeValToRGB")
+        ramp.location = (-420, 80)
+        ramp.color_ramp.interpolation = 'LINEAR'
+        ramp.color_ramp.elements[0].position = 0.0
+        ramp.color_ramp.elements[0].color = (0.24, 0.12, 0.05, 1.0)  # dark brown crevice
+        el_th = ramp.color_ramp.elements.new(0.40)
+        el_th.color = (0.78, 0.58, 0.20, 1.0)  # warm amber
+        ramp.color_ramp.elements[1].position = 1.0
+        ramp.color_ramp.elements[1].color = (0.92, 0.76, 0.32, 1.0)  # golden straw
+        tree.links.new(wave.outputs["Fac"], ramp.inputs["Fac"])
 
-    micro_mix = tree.nodes.new("ShaderNodeMix")
-    micro_mix.data_type = 'RGBA'
-    micro_mix.blend_type = 'OVERLAY'
-    micro_mix.location = (-180, 0)
-    micro_mix.inputs["Factor"].default_value = 0.10
-    tree.links.new(w_ramp.outputs["Color"], micro_mix.inputs["A"])
-    tree.links.new(micro.outputs["Color"], micro_mix.inputs["B"])
+        painted = _warm_painterly_pass(tree, c, ramp.outputs["Color"], loc_x=60, loc_y=-280, strength=0.10, scale=1.5)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=260, loc_y=-280, strength=0.10, scale=0.35)
+        _apply_ao(tree, bsdf, macro, strength=0.75, distance=0.25)
+        _setup_pbr(tree, bsdf, out, roughness=0.96)
+        return mat
 
-    painted = _warm_painterly_pass(tree, c, micro_mix.outputs["Result"], loc_x=80, loc_y=-280, strength=0.12, scale=1.5)
-    _apply_ao(tree, bsdf, painted, strength=0.65, distance=0.18)
-    _setup_pbr(tree, bsdf, out, roughness=0.88)
-    return mat
+    elif tier == 'TIER_2':
+        default_clr = (0.78, 0.30, 0.14, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "terracotta_tiles_diffuse.png", c, loc_x=-660, loc_y=80, scale=(1.0, 1.0, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "roof_tiles_diffuse.jpg", c, loc_x=-660, loc_y=80, scale=(1.0, 1.0, 1.0))
+        if tex_node is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-200, 80)
+            tint.inputs["Factor"].default_value = 0.18
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = c_use
+            painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-280, strength=0.08, scale=1.5)
+            macro = _anti_repetition_wash(tree, c, painted, loc_x=260, loc_y=-280, strength=0.08, scale=0.40)
+            _apply_ao(tree, bsdf, macro, strength=0.55, distance=0.18)
+            _setup_pbr(tree, bsdf, out, roughness=0.52)
+            return mat
+
+        # Procedural Terracotta Fallback
+        weather = tree.nodes.new("ShaderNodeTexNoise")
+        weather.location = (-660, 80)
+        weather.inputs["Scale"].default_value = 1.0
+        weather.inputs["Detail"].default_value = 2.0
+        tree.links.new(c.outputs["UV"], weather.inputs["Vector"])
+
+        c_damp  = (c_use[0] * 0.62, c_use[1] * 0.66, c_use[2] * 0.74, 1.0)
+        c_mid   = (c_use[0], c_use[1], c_use[2], 1.0)
+        c_faded = (min(1.0, c_use[0] * 1.35), min(1.0, c_use[1] * 1.25), min(1.0, c_use[2] * 1.15), 1.0)
+
+        w_ramp = tree.nodes.new("ShaderNodeValToRGB")
+        w_ramp.location = (-420, 80)
+        w_ramp.color_ramp.interpolation = 'LINEAR'
+        w_ramp.color_ramp.elements[0].position = 0.0
+        w_ramp.color_ramp.elements[0].color = c_damp
+        el_w = w_ramp.color_ramp.elements.new(0.50)
+        el_w.color = c_mid
+        w_ramp.color_ramp.elements[1].position = 1.0
+        w_ramp.color_ramp.elements[1].color = c_faded
+        tree.links.new(weather.outputs["Fac"], w_ramp.inputs["Fac"])
+
+        painted = _warm_painterly_pass(tree, c, w_ramp.outputs["Color"], loc_x=60, loc_y=-280, strength=0.10, scale=1.5)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=260, loc_y=-280, strength=0.08, scale=0.40)
+        _apply_ao(tree, bsdf, macro, strength=0.55, distance=0.18)
+        _setup_pbr(tree, bsdf, out, roughness=0.52)
+        return mat
+
+    else:  # TIER_3 Slate
+        default_clr = (0.24, 0.32, 0.44, 1.0)
+        c_use = color or default_clr
+        tex_node = _load_image_texture(tree, "slate_tiles_diffuse.png", c, loc_x=-660, loc_y=80, scale=(1.0, 1.0, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "roof_tiles_diffuse.jpg", c, loc_x=-660, loc_y=80, scale=(1.0, 1.0, 1.0))
+        if tex_node is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-200, 80)
+            tint.inputs["Factor"].default_value = 0.18
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = c_use
+            painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-280, strength=0.06, scale=1.5)
+            macro = _anti_repetition_wash(tree, c, painted, loc_x=260, loc_y=-280, strength=0.08, scale=0.45)
+            _apply_ao(tree, bsdf, macro, strength=0.50, distance=0.16)
+            _setup_pbr(tree, bsdf, out, roughness=0.38)
+            return mat
+
+        # Procedural Slate Fallback
+        brick = tree.nodes.new("ShaderNodeTexBrick")
+        brick.location = (-660, 80)
+        brick.inputs["Scale"].default_value = 3.0
+        brick.inputs["Mortar Size"].default_value = 0.015
+        brick.inputs["Color1"].default_value = (0.22, 0.28, 0.38, 1.0)
+        brick.inputs["Color2"].default_value = (0.16, 0.20, 0.28, 1.0)
+        brick.inputs["Mortar"].default_value = (0.08, 0.09, 0.12, 1.0)
+        tree.links.new(c.outputs["UV"], brick.inputs[0])
+
+        painted = _warm_painterly_pass(tree, c, brick.outputs["Color"], loc_x=60, loc_y=-280, strength=0.08, scale=1.5)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=260, loc_y=-280, strength=0.08, scale=0.45)
+        _apply_ao(tree, bsdf, macro, strength=0.50, distance=0.16)
+        _setup_pbr(tree, bsdf, out, roughness=0.38)
+        return mat
 
 
 # ---------------------------------------------------------------------------
@@ -1264,16 +1545,34 @@ def create_lantern_emissive(name="LanternEmissive", color=(1.0, 0.80, 0.46, 1.0)
 # 7. Door — 3 wide vertical planks with thin dark seams
 # ---------------------------------------------------------------------------
 
-def create_stylized_door(name="M_Building_Door", color=(0.28, 0.14, 0.07, 1.0)):
+def create_stylized_door(name="M_Building_Door", color=None, tier='TIER_2'):
     """
     3 wide vertical wooden planks with hand-carved wobble, thin dark seams,
-    and flowing vertical wood grain.
+    and flowing vertical wood grain. Tier-aware:
+    - TIER_1: Rustic timber door
+    - TIER_2: Fachwerk dark chocolate timber door
+    - TIER_3: Oiled polished timber door
     """
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1400)
     c = _coord(tree, loc_x=-1400)
 
-    tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.45, 1.0), rotation=(0.0, 0.0, 0.0))
+    if tier == 'TIER_1':
+        default_clr = (0.34, 0.20, 0.10, 1.0)
+        c_use = color or default_clr
+        tex_file = "timber_beam_diffuse.jpg"
+    elif tier == 'TIER_2':
+        default_clr = (0.24, 0.14, 0.08, 1.0)
+        c_use = color or default_clr
+        tex_file = "timber_beam_diffuse.jpg"
+    else:
+        default_clr = (0.16, 0.11, 0.08, 1.0)
+        c_use = color or default_clr
+        tex_file = "oiled_timber_diffuse.png"
+
+    tex_node = _load_image_texture(tree, tex_file, c, loc_x=-800, loc_y=120, scale=(1.0, 0.45, 1.0), rotation=(0.0, 0.0, 0.0))
+    if tex_node is None:
+        tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.45, 1.0), rotation=(0.0, 0.0, 0.0))
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
@@ -1281,10 +1580,10 @@ def create_stylized_door(name="M_Building_Door", color=(0.28, 0.14, 0.07, 1.0)):
         tint.location = (-250, 120)
         tint.inputs["Factor"].default_value = 0.18
         tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
-        tint.inputs["B"].default_value = color
+        tint.inputs["B"].default_value = c_use
         painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260, strength=0.08, scale=1.35)
         _apply_ao(tree, bsdf, painted, strength=0.52, distance=0.14)
-        _setup_pbr(tree, bsdf, out, roughness=0.76)
+        _setup_pbr(tree, bsdf, out, roughness=0.58 if tier == 'TIER_3' else 0.76)
         return mat
 
     # 1. Rotate UV 90 degrees around Z so Brick columns run VERTICALLY on the door
@@ -2038,59 +2337,109 @@ def setup_building_material_slots(obj, props):
     for seamless, reusable master materials in Unreal Engine.
     Custom material overrides on props take priority.
     """
-    # 0. Stone (stone_wall_diffuse.jpg)
-    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone("M_Building_Stone", color=props.color_stone)
+    tier = getattr(props, 'tier', getattr(props, 'material_tier', 'TIER_2'))
 
-    # 1. Plaster (plaster_wall_diffuse.jpg) - consolidated exterior and interior plaster
+    # Resolve manual or tier-based material choices
+    eff_roof_mat = getattr(props, 'roof_material_override', 'AUTO')
+    if eff_roof_mat == 'AUTO':
+        if tier == 'TIER_1':
+            eff_roof_mat = getattr(props, 'tier1_roof_style', 'AUTO')
+            if eff_roof_mat == 'AUTO':
+                arch = getattr(props, 'archetype', 'NONE')
+                if arch in ('WOODCUTTER', 'LODGE', 'CABIN', 'HUNTER', 'MINE', 'MILL', 'BARRACKS', 'TOOLSMITH', 'FURNITURE_MAKER', 'STABLE'):
+                    eff_roof_mat = 'WOOD_SHINGLES'
+                else:
+                    eff_roof_mat = 'THATCH'
+        elif tier == 'TIER_2':
+            eff_roof_mat = 'TERRACOTTA'
+        else:
+            eff_roof_mat = 'SLATE'
+
+    eff_wall_mat = getattr(props, 'wall_material_override', 'AUTO')
+    if eff_wall_mat == 'AUTO':
+        if tier == 'TIER_1':
+            t1_wall = getattr(props, 'tier1_wall_style', 'AUTO')
+            if t1_wall == 'WATTLE_DAUB':
+                eff_wall_mat = 'WATTLE_DAUB'
+            elif t1_wall == 'LOGS':
+                eff_wall_mat = 'LOGS'
+            else:
+                arch = getattr(props, 'archetype', 'NONE')
+                seed = getattr(props, 'seed', 42)
+                if arch in ('COTTAGE', 'HOVEL', 'FARM', 'BAKERY', 'TAVERN', 'ALCHEMIST') or (seed % 2 == 1):
+                    eff_wall_mat = 'WATTLE_DAUB'
+                else:
+                    eff_wall_mat = 'LOGS'
+
+    # 0. Stone (stone_wall_diffuse.jpg / mud_fieldstone / squared_fieldstone / ashlar_stone)
+    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone("M_Building_Stone", color=props.color_stone, tier=tier)
+
+    # 1. Plaster (wattle_daub / stucco_plaster / smooth_ivory_stucco)
     freq = getattr(props, 'exposed_brick_frequency', 0.25)
-    if getattr(props, 'has_exposed_brick', False):
+    if eff_wall_mat == 'WATTLE_DAUB':
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_plaster_brick("M_Building_Plaster", color=props.color_wall_ext, frequency=freq))
+                       create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False, tier='TIER_1'))
+    elif eff_wall_mat == 'STUCCO':
+        mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
+                       create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False, tier='TIER_2'))
+    elif eff_wall_mat == 'STONE':
+        mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
+                       create_stylized_stone("M_Building_Plaster", color=props.color_stone, tier=tier))
     else:
-        mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       getattr(props, 'custom_wall_int', None) or 
-                       create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False))
+        if tier != 'TIER_1' and getattr(props, 'has_exposed_brick', False):
+            mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
+                           create_stylized_plaster_brick("M_Building_Plaster", color=props.color_wall_ext, frequency=freq))
+        else:
+            mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
+                           getattr(props, 'custom_wall_int', None) or 
+                           create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False, tier=tier))
 
-    # 2. Timber (timber_beam_diffuse.jpg) - consolidates timber frames, doors, stairs, railings, window frames, shutters
-    clr_tf = getattr(props, 'color_timber_frame', (0.24, 0.14, 0.08, 1.0))
+    # 2. Timber (fachwerk_timber / oiled_timber / timber_beam)
+    clr_tf = getattr(props, 'color_timber_frame', None) or (0.24, 0.14, 0.08, 1.0)
     custom_tf = (getattr(props, 'custom_timber_frame', None) or 
                  getattr(props, 'custom_door', None) or 
                  getattr(props, 'custom_stairs', None) or 
                  getattr(props, 'custom_railing', None) or 
                  getattr(props, 'custom_window_frame', None) or 
                  getattr(props, 'custom_shutter', None))
-    mat_timber = custom_tf or create_stylized_timber("M_Building_Timber", color=clr_tf)
+    mat_timber = custom_tf or create_stylized_timber("M_Building_Timber", color=clr_tf, tier=tier)
 
-    # 3. Floor (wood_planks_diffuse.jpg) - floorboards and interior wood planks
-    mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards("M_Building_Floor", color=props.color_floor)
+    # 3. Floor (floorboards variations)
+    clr_floor = getattr(props, 'color_floor', None) or (0.50, 0.35, 0.20, 1.0)
+    mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards("M_Building_Floor", color=clr_floor, tier=tier)
 
-    # 4. Shingles (roof_tiles_diffuse.jpg)
-    mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_shingles("M_Building_Shingles", color=props.color_shingles)
+    # 4. Shingles (thatch / wood shingles / terracotta / slate)
+    mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_shingles(
+        "M_Building_Shingles",
+        color=getattr(props, 'color_shingles', None),
+        tier=tier,
+        roof_mat=eff_roof_mat
+    )
 
     # 5. Glass (procedural emissive glass)
     mat_glass = getattr(props, 'custom_glass', None) or create_stylized_glass(
         "M_Building_Glass",
-        glow_strength=props.window_glow_strength,
-        emissive_glow=props.color_window_glow
+        glow_strength=getattr(props, 'window_glow_strength', 0.0),
+        emissive_glow=getattr(props, 'color_window_glow', (1.0, 0.85, 0.50, 1.0))
     )
 
     # 6. Iron (iron_metal_diffuse.jpg)
     mat_iron = getattr(props, 'custom_iron', None) or create_stylized_iron("M_Building_Iron")
 
-    # 7. Wood (facade_wood_planks_diffuse.jpg) - facade planks, dormer cheeks, weatherboards
-    clr_wood = getattr(props, 'color_timber', (0.86, 0.74, 0.58, 1.0))
-    mat_wood = getattr(props, 'custom_timber', None) or create_stylized_facade_planks("M_Building_Wood", color=clr_wood)
+    # 7. Wood (facade planks, dormer cheeks, weatherboards)
+    clr_wood = getattr(props, 'color_timber', None) or (0.86, 0.74, 0.58, 1.0)
+    mat_wood = getattr(props, 'custom_timber', None) or create_stylized_facade_planks("M_Building_Wood", color=clr_wood, tier=tier)
 
-    # 8. Cut Stone (cut_stone_diffuse.jpg) - steps, sills, door arches, thresholds
-    clr_cs = (0.78, 0.74, 0.68, 1.0)
-    mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone("M_Building_Cut_Stone", color=clr_cs)
+    # 8. Cut Stone (steps, sills, door arches, thresholds)
+    clr_cs = getattr(props, 'color_cut_stone', None) or (0.78, 0.74, 0.68, 1.0)
+    mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone("M_Building_Cut_Stone", color=clr_cs, tier=tier)
 
-    # 9. Log (log_bark_diffuse.jpg) - Tier 1 rounded logs
+    # 9. Log (stylized_log_bark_diffuse.png / log_bark_diffuse.jpg) - Tier 1 rounded logs
     clr_log = (clr_tf[0] * 0.92, clr_tf[1] * 0.88, clr_tf[2] * 0.82, 1.0)
     mat_log = getattr(props, 'custom_log', None) or create_stylized_log("M_Building_Log", color=clr_log)
 
-    # 10. Log End (log_end_diffuse.jpg) - Tier 1 log ends
-    clr_le = getattr(props, 'color_log_end', (0.50, 0.34, 0.18, 1.0))
+    # 10. Log End (stylized_log_end_diffuse.png / log_end_diffuse.jpg) - Tier 1 log ends
+    clr_le = getattr(props, 'color_log_end', None) or (0.50, 0.34, 0.18, 1.0)
     mat_log_end = getattr(props, 'custom_log_end', None) or create_stylized_log_ends("M_Building_Log_End", color=clr_le)
 
     # 11. Plaster with Exposed Brick (plaster_wall_diffuse.jpg + handpainted terracotta bricks)

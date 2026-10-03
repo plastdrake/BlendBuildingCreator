@@ -96,7 +96,7 @@ def build_gable_physical_siding(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm
 
 def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
                          deck_thick, z_base, roof_height, roof_flare, tier, plank_direction,
-                         get_gable_deck_z_func, ez, rz, slope=None, hatch=None):
+                         get_gable_deck_z_func, ez, rz, slope=None, hatch=None, is_wattle=False):
     """
     Constructs a solid double-walled volumetric gable end wall matching the roof deck contour,
     with timber boundary trims and bargeboard fascia.
@@ -154,7 +154,9 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
         v_ext_br = top_verts_ext[-1]
         v_int_br = top_verts_int[-1]
 
-    if tier in ('TIER_1', 'TIER_2'):
+    if tier == 'TIER_1' and is_wattle:
+        gable_mat = MAT_INDEX_PLASTER_EXT
+    elif tier in ('TIER_1', 'TIER_2'):
         gable_mat = MAT_INDEX_WOOD
     else:
         gable_mat = MAT_INDEX_PLASTER_EXT
@@ -374,11 +376,12 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
         )
 
     # Physical logs siding for Tier 1 (split around a validated hatch opening)
-    _siding_hatch = None
-    if _hx0 is not None:
-        _siding_hatch = {'x0': _hx0, 'x1': _hx1, 'z0': _hz0, 'z1': _hz1}
-    build_gable_physical_siding(
-        bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
-        z_base, ez, rz, deck_thick, slope, tier=tier,
-        plank_direction=plank_direction, roof_flare=roof_flare, hatch=_siding_hatch
-    )
+    if not is_wattle:
+        _siding_hatch = None
+        if _hx0 is not None:
+            _siding_hatch = {'x0': _hx0, 'x1': _hx1, 'z0': _hz0, 'z1': _hz1}
+        build_gable_physical_siding(
+            bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_wt,
+            z_base, ez, rz, deck_thick, slope, tier=tier,
+            plank_direction=plank_direction, roof_flare=roof_flare, hatch=_siding_hatch
+        )

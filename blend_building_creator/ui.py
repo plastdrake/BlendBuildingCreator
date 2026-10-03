@@ -354,6 +354,9 @@ class VIEW3D_PT_fantasy_building_roof(bpy.types.Panel):
 
         col = layout.column(align=True)
         col.prop(props, "roof_style")
+        col.prop(props, "roof_material_override", text="Roof Material")
+        if props.material_tier == 'TIER_1' and props.roof_material_override == 'AUTO':
+            col.prop(props, "tier1_roof_style", text="T1 Roof Style")
         if props.roof_style != 'NONE':
             if props.roof_style in ('SWAY', 'GABLE'):
                 col.prop(props, "roof_orientation")
@@ -685,8 +688,17 @@ class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
         props = context.scene.fantasy_building_settings
 
         box_t = layout.box()
-        box_t.label(text="Material Tier", icon='MATERIAL')
+        box_t.label(text="Material Progression & Overrides", icon='MATERIAL')
         box_t.prop(props, "material_tier", expand=True)
+
+        col_m = box_t.column(align=True)
+        col_m.prop(props, "wall_material_override", text="Wall Material")
+        col_m.prop(props, "roof_material_override", text="Roof Material")
+        if props.material_tier == 'TIER_1' and props.wall_material_override == 'AUTO':
+            col_m.prop(props, "tier1_wall_style", text="T1 Wall Style")
+        if props.material_tier == 'TIER_1' and props.roof_material_override == 'AUTO':
+            col_m.prop(props, "tier1_roof_style", text="T1 Roof Style")
+
         box_t.prop(props, "physical_siding")
 
         if (props.material_tier == 'TIER_3' or props.ground_floor_stone) and props.physical_siding:

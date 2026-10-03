@@ -41,7 +41,7 @@ def on_tier_updated(self, context):
     if not getattr(self, "auto_update", True):
         return
         
-    tier = getattr(self, "material_tier", "TIER_3")
+    tier = getattr(self, "tier", getattr(self, "material_tier", "TIER_3"))
     # Temporarily prevent recursive regeneration while updating multiple parameters
     self.auto_update = False
     if tier == 'TIER_1':
@@ -52,6 +52,15 @@ def on_tier_updated(self, context):
         self.has_cantilever = False
         self.ground_floor_stone = False
         self.has_timber_framing = False
+        self.color_shingles = (0.95, 0.78, 0.30, 1.0)
+        self.color_stone = (0.58, 0.48, 0.40, 1.0)
+        self.color_wall_ext = (0.84, 0.68, 0.48, 1.0)
+        self.color_wall_int = (0.78, 0.62, 0.44, 1.0)
+        self.color_timber_frame = (0.34, 0.20, 0.12, 1.0)
+        self.color_timber = (0.38, 0.24, 0.14, 1.0)
+        self.color_door = (0.32, 0.18, 0.10, 1.0)
+        self.color_floor = (0.48, 0.32, 0.18, 1.0)
+        self.color_log_end = (0.58, 0.42, 0.24, 1.0)
     elif tier == 'TIER_2':
         self.num_floors = 2
         self.width = 6.8
@@ -61,6 +70,14 @@ def on_tier_updated(self, context):
         self.cantilever_overhang = 0.35
         self.ground_floor_stone = False
         self.has_timber_framing = True
+        self.color_shingles = (0.86, 0.38, 0.16, 1.0)
+        self.color_stone = (0.50, 0.52, 0.54, 1.0)
+        self.color_wall_ext = (0.95, 0.90, 0.78, 1.0)
+        self.color_wall_int = (0.92, 0.88, 0.80, 1.0)
+        self.color_timber_frame = (0.20, 0.12, 0.08, 1.0)
+        self.color_timber = (0.24, 0.15, 0.10, 1.0)
+        self.color_door = (0.22, 0.14, 0.09, 1.0)
+        self.color_floor = (0.50, 0.35, 0.20, 1.0)
     elif tier == 'TIER_3':
         self.num_floors = 3
         self.width = 8.8
@@ -70,6 +87,14 @@ def on_tier_updated(self, context):
         self.cantilever_overhang = 0.40
         self.ground_floor_stone = True
         self.has_timber_framing = True
+        self.color_shingles = (0.18, 0.26, 0.42, 1.0)
+        self.color_stone = (0.76, 0.68, 0.54, 1.0)
+        self.color_wall_ext = (0.96, 0.95, 0.92, 1.0)
+        self.color_wall_int = (0.94, 0.92, 0.88, 1.0)
+        self.color_timber_frame = (0.14, 0.10, 0.08, 1.0)
+        self.color_timber = (0.16, 0.12, 0.09, 1.0)
+        self.color_door = (0.18, 0.12, 0.08, 1.0)
+        self.color_floor = (0.42, 0.28, 0.18, 1.0)
     self.auto_update = True
     
     on_property_updated(self, context)
@@ -1937,12 +1962,65 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Material Tier",
         description="Progression tier determining building wall, roof, and trim materials",
         items=[
-            ('TIER_1', "Tier 1: Timber & Log", "Heavy dark timber/log walls, cedar shake roof, fieldstone base"),
-            ('TIER_2', "Tier 2: Planks & Weatherboard", "Wooden planks siding, slate roof, clean timber frame"),
-            ('TIER_3', "Tier 3: Stone & Stucco", "Dressed ashlar stone, bright medieval stucco, terracotta/slate roof"),
+            ('TIER_1', "Tier 1: The Frontier / Outskirt Settlement", "Chunky, improvised, rugged with thatch bundles, round-hewn logs, wattle & daub, mud stone"),
+            ('TIER_2', "Tier 2: The Established Market Town", "Clean geometric shapes, bold Fachwerk timber, terracotta tiles, squared fieldstone"),
+            ('TIER_3', "Tier 3: The Prosperous Merchant Quarter", "Regal, polished storybook elegance with slate tiles, clean ashlar stone, ivory stucco, oiled half-timbering"),
         ],
         default='TIER_3',
         update=on_tier_updated
+    )
+
+    tier1_wall_style: EnumProperty(
+        name="Tier 1 Wall Style",
+        description="Wall material style for Tier 1 Frontier buildings (hewn logs vs wattle & daub)",
+        items=[
+            ('AUTO', "Auto / Varied", "Automatically choose between hewn logs and wattle & daub based on archetype and seed"),
+            ('LOGS', "Hewn Logs", "Chunky round-hewn log walls with corner notches"),
+            ('WATTLE_DAUB', "Wattle & Daub", "Earthy wattle & daub plaster panels framed by rustic timbers"),
+        ],
+        default='AUTO',
+        update=on_property_updated
+    )
+
+    tier1_roof_style: EnumProperty(
+        name="Tier 1 Roof Style",
+        description="Roofing material style for Tier 1 Frontier buildings (thatch bundles vs shabby wood shingles)",
+        items=[
+            ('AUTO', "Auto / Varied", "Automatically choose between thatch bundles and shabby wood shingles"),
+            ('THATCH', "Thatch Bundles", "Volumetric stepped straw thatch bundles with straw ridge roll"),
+            ('WOOD_SHINGLES', "Shabby Wood Shingles", "Big uneven weathered wooden shakes with chipped ends"),
+        ],
+        default='AUTO',
+        update=on_property_updated
+    )
+
+    roof_material_override: EnumProperty(
+        name="Roof Material",
+        description="Select or override roofing material without needing presets",
+        items=[
+            ('AUTO', "Auto (Tier Default)", "Use tier default (Thatch in T1, Terracotta in T2, Slate in T3)"),
+            ('THATCH', "Thatch Bundles (T1)", "Golden volumetric straw thatch bundles"),
+            ('WOOD_SHINGLES', "Shabby Wood Shingles (T1/T2)", "Big uneven weathered wooden shakes"),
+            ('TERRACOTTA', "Terracotta Clay Tiles (T2)", "Rich orange/red ceramic clay tiles"),
+            ('SLATE', "Slate Stone Tiles (T3)", "Layered blue-grey cut stone slate tiles"),
+        ],
+        default='AUTO',
+        update=on_property_updated
+    )
+
+    wall_material_override: EnumProperty(
+        name="Wall Material",
+        description="Select or override wall material without needing presets",
+        items=[
+            ('AUTO', "Auto (Tier Default)", "Use tier default (Logs/Wattle in T1, Planks in T2, Ashlar/Stucco in T3)"),
+            ('LOGS', "Round Logs (T1)", "Chunky horizontal logs with round notched crowns"),
+            ('WATTLE_DAUB', "Wattle & Daub (T1)", "Earthy daub panels with woven wicker branches"),
+            ('WOOD_PLANKS', "Wood Planks (T2)", "Horizontal or vertical rustic wooden planks"),
+            ('STUCCO', "Fachwerk Stucco (T2/T3)", "Creamy plaster stucco panels between timbers"),
+            ('STONE', "Stone Masonry (All Tiers)", "Chunky fieldstone / squared ashlar stone masonry"),
+        ],
+        default='AUTO',
+        update=on_property_updated
     )
     
     physical_siding: BoolProperty(
