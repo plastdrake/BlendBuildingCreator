@@ -1117,13 +1117,13 @@ def recalc_face_normals_safe(bm, faces):
             f.tag = (f in tagged)
 
 
-def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32)):
+def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 40)):
     """Calculates clean cubic / triplanar style UVs for bmesh faces.
     Skips faces whose materials already have specialized local unwraps
     (timber frames 2, roof shingles 4, forged iron 6, wood facade/accessories 7,
     logs 9, log end caps 10, clock face 12, banner 13, archery target 14, sign
     decal 17, rope 18, fabrics 22-24, book leathers 25,28,29, book paper 26, wax 27,
-    rugs 30-32).
+    rugs 30-32, open-book spread 40).
     Stone (0), plaster (1), floor (3), cut stone (8), hay (15), dirt (16), lantern (19),
     tarp (20), and clay (21) receive continuous world-space meter-scaled UVs.
     Tagged faces (face.tag == True) are also preserved, but note bmesh.ops.bevel

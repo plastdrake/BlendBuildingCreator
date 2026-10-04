@@ -109,6 +109,7 @@ MAT_INDEX_UPHOLSTERY    = 36
 MAT_INDEX_CLOTH_LINEN   = 37
 MAT_INDEX_BOTTLE_GLASS  = 38
 MAT_INDEX_PUMPKIN_STEM  = 39
+MAT_INDEX_OPEN_BOOK     = 40
 
 
 # ---------------------------------------------------------------------------
@@ -2253,6 +2254,43 @@ def create_stylized_book_paper(name="M_Building_Book_Paper",
     return create_stylized_fabric(name, "book_side_paper.png", color=color, roughness=0.95)
 
 
+def create_stylized_open_book(name="M_Building_Open_Book",
+                              texture="open_book_page.jpg"):
+    """Illuminated open grimoire page spread with Latin text, drop caps, and astronomical seals.
+
+    Dedicated builder (not the shared fabric helper): the page overlay faces
+    carry exact 0-1 spread UVs, so the Mapping node stays at identity scale.
+    The shared fabric helper's 1.2x tiling would push the crop past the
+    parchment into the table/feather/inkwell photo margins.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1400)
+    c = _coord(tree, loc_x=-1100)
+    color = (0.94, 0.90, 0.82, 1.0)
+
+    tex_node = _load_image_texture(tree, texture, c, loc_x=-800, loc_y=120,
+                                   scale=(1.0, 1.0, 1.0))
+    if tex_node is not None:
+        tex_node.extension = 'CLIP'
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-250, 120)
+        tint.inputs["Factor"].default_value = 0.25
+        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = color
+        painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260,
+                                       strength=0.06, scale=1.6)
+        _apply_ao(tree, bsdf, painted, strength=0.45, distance=0.14)
+        _setup_pbr(tree, bsdf, out, roughness=0.92)
+        return mat
+
+    # Missing texture: plain tinted BSDF (never pass a tuple into _apply_ao).
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=0.92)
+    return mat
+
+
 def create_stylized_wax(name="M_Building_Wax", color=(0.94, 0.88, 0.76, 1.0)):
     """Candle wax (wax.jpg) with a soft low-roughness finish."""
     return create_stylized_fabric(name, "wax.jpg", color=color, roughness=0.55)
@@ -2559,6 +2597,8 @@ def setup_building_material_slots(obj, props):
     mat_cloth_linen = create_stylized_linen("M_Building_Cloth_Linen")
     mat_bottle_glass = create_stylized_bottle_glass("M_Building_Bottle_Glass")
     mat_pumpkin_stem = create_stylized_pumpkin_stem("M_Building_Pumpkin_Stem")
+    mat_open_book = (getattr(props, 'custom_open_book', None)
+                     or create_stylized_open_book("M_Building_Open_Book"))
 
     # Assemble canonical slots in strict order
     required_mats = [
@@ -2602,6 +2642,7 @@ def setup_building_material_slots(obj, props):
         mat_cloth_linen,    # 37 MAT_INDEX_CLOTH_LINEN
         mat_bottle_glass,   # 38 MAT_INDEX_BOTTLE_GLASS
         mat_pumpkin_stem,   # 39 MAT_INDEX_PUMPKIN_STEM
+        mat_open_book,      # 40 MAT_INDEX_OPEN_BOOK
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -2654,6 +2695,7 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Cloth_Linen",   # 37
     "M_Building_Bottle_Glass",  # 38
     "M_Building_Pumpkin_Stem",  # 39
+    "M_Building_Open_Book",     # 40
 )
 
 

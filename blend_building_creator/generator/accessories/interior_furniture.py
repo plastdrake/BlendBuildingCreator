@@ -12,7 +12,7 @@ furnishing share materials with no extra setup.
 import math
 import random
 import bmesh
-from mathutils import Matrix, Vector
+from mathutils import Euler, Matrix, Vector
 
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, create_torus_ring,
@@ -27,8 +27,10 @@ from ..materials import (
     MAT_INDEX_UPHOLSTERY, MAT_INDEX_CLOTH_LINEN, MAT_INDEX_BOTTLE_GLASS,
     MAT_INDEX_DIRT, MAT_INDEX_CUT_STONE,
     MAT_INDEX_LOG, MAT_INDEX_LOG_END, MAT_INDEX_STONE,
-    MAT_INDEX_LEATHER, MAT_INDEX_LEATHER_2,
+    MAT_INDEX_LEATHER, MAT_INDEX_LEATHER_2, MAT_INDEX_LEATHER_3,
+    MAT_INDEX_GLASS, MAT_INDEX_BOOK_PAPER, MAT_INDEX_OPEN_BOOK,
 )
+from ..uv_utils import map_planar_faces
 
 
 def _place(x, y, z_ground=0.0, ang=0.0):
@@ -1699,9 +1701,11 @@ def build_bottle(bm, x, y, z_ground=0.0, ang=0.0, bottle_type='WINE'):
     # Rolled lip collar
     faces += create_cylinder(bm, radius=0.018, height=0.010, segments=10,
                             location=(0.0, 0.0, neck_z + 0.060), mat_index=MAT_INDEX_BOTTLE_GLASS)
-    # Cork stopper
+    # Cork stopper sunk 9mm into the neck (never floating)
     faces += create_cylinder(bm, radius=0.013, height=0.022, segments=10,
-                            location=(0.0, 0.0, neck_z + 0.071), mat_index=MAT_INDEX_WOOD)
+                            location=(0.0, 0.0, neck_z + 0.067), mat_index=MAT_INDEX_WOOD)
+    for f in faces:
+        f.smooth = True
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -2402,3 +2406,1183 @@ def build_plank_pile(bm, x, y, z_ground=0.0, ang=0.0, length=2.0, width=0.28, la
                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
+
+# =============================================================================
+# ARCANE & WIZARD PROPS (MAGE TOWER & ARCHEOLOGY)
+# =============================================================================
+
+def _drop_solid_caps(bm, faces, drop_top=True, drop_bottom=True):
+    """Remove the solid end-cap discs of a create_cylinder/create_cone stack.
+
+    Both builders append caps last (bottom, then top), so ``faces[-1]`` is the
+    top disc and ``faces[-2]`` the bottom disc. Dropping them turns a capped
+    solid into a genuinely open vessel mouth — the "booleaned out" interior
+    volume (no boolean modifier needed, DRY with the hollow-ware convention).
+    """
+    doomed = []
+    if drop_top and len(faces) >= 1:
+        doomed.append(faces[-1])
+    if drop_bottom and len(faces) >= 2:
+        doomed.append(faces[-2])
+    for f in doomed:
+        try:
+            faces.remove(f)
+        except ValueError:
+            pass
+        if f.is_valid:
+            try:
+                bm.faces.remove(f)
+            except ValueError:
+                pass
+    return faces
+
+
+def _build_open_grimoire(bm, width=0.64, length=0.44, page_thick=0.038, tilt_y=0.08,
+                         with_ribbon=True):
+    """Builds an authentic open illuminated grimoire with leather binding,
+    gold corner fittings, arched parchment pages, and top page faces UV-mapped
+    to open_book_page.jpg (left page spread 0.0-0.5, right page spread 0.5-1.0).
+
+    The photo texture shows the wooden table, feather quill and brass inkwell
+    around the parchment, so both page rects are cropped to the parchment only
+    (U 0.085-0.485 / 0.515-0.935, V 0.095-0.905). Page-block sides use the
+    orientation-proof page-line unwrap so the leaf lines run along the book.
+    Overlay faces are tagged so the global box-UV pass (and mat-40 skip) keeps
+    the manuscript alignment.
+    """
+    faces = []
+    # 1. Leather cover binding base
+    cov_w = width + 0.04
+    cov_l = length + 0.02
+    cov_h = 0.016
+    faces += create_beveled_box(bm, size=(cov_w, cov_l, cov_h),
+                                location=(0.0, 0.0, cov_h * 0.5),
+                                mat_index=MAT_INDEX_LEATHER, bevel_amount=0.003)
+    # Gilded brass corner protectors
+    for cx in (-cov_w * 0.5 + 0.02, cov_w * 0.5 - 0.02):
+        for cy in (-cov_l * 0.5 + 0.02, cov_l * 0.5 - 0.02):
+            faces += create_beveled_box(bm, size=(0.042, 0.042, cov_h + 0.004),
+                                        location=(cx, cy, (cov_h + 0.004) * 0.5),
+                                        mat_index=MAT_INDEX_IRON, bevel_amount=0.002)
+
+    # 2. Left and Right page blocks
+    hw = (width - 0.04) * 0.5
+    hl = length * 0.5
+    uv_layer = bm.loops.layers.uv.verify()
+
+    # Left Page Block (tilted slightly up to the left)
+    left_rot = (0.0, tilt_y, 0.0)
+    left_cx = -hw * 0.5 - 0.006
+    left_cz = cov_h + page_thick * 0.5
+    left_block = create_beveled_box(bm, size=(hw, length, page_thick),
+                                    location=(left_cx, 0.0, left_cz),
+                                    rotation=left_rot,
+                                    mat_index=MAT_INDEX_BOOK_PAPER, bevel_amount=0.003)
+    _smart_page_uv(bm, left_block)
+    faces += left_block
+
+    # Left Page Top Face (Open manuscript surface UV-mapped to left half of open_book_page.jpg)
+    rot_m = Matrix.Rotation(tilt_y, 4, 'Y')
+    trans_m = Matrix.Translation(Vector((left_cx, 0.0, left_cz + page_thick * 0.5 + 0.001)))
+    tr_left = trans_m @ rot_m
+
+    lv0 = tr_left @ Vector((-hw * 0.5, -hl, 0.0))
+    lv1 = tr_left @ Vector((+hw * 0.5, -hl, 0.0))
+    lv2 = tr_left @ Vector((+hw * 0.5, +hl, 0.0))
+    lv3 = tr_left @ Vector((-hw * 0.5, +hl, 0.0))
+
+    v_lv0 = bm.verts.new(lv0)
+    v_lv1 = bm.verts.new(lv1)
+    v_lv2 = bm.verts.new(lv2)
+    v_lv3 = bm.verts.new(lv3)
+    try:
+        f_left = bm.faces.new([v_lv0, v_lv1, v_lv2, v_lv3])
+        f_left.material_index = MAT_INDEX_OPEN_BOOK
+        f_left.smooth = False
+        f_left.tag = True
+        faces.append(f_left)
+        # UV mapping: left parchment only U: 0.09 -> 0.485, V: 0.11 -> 0.87
+        for loop in f_left.loops:
+            if loop.vert == v_lv0:
+                loop[uv_layer].uv = Vector((0.09, 0.11))
+            elif loop.vert == v_lv1:
+                loop[uv_layer].uv = Vector((0.485, 0.11))
+            elif loop.vert == v_lv2:
+                loop[uv_layer].uv = Vector((0.485, 0.87))
+            elif loop.vert == v_lv3:
+                loop[uv_layer].uv = Vector((0.09, 0.87))
+    except ValueError:
+        pass
+
+    # Right Page Block (tilted slightly up to the right)
+    right_rot = (0.0, -tilt_y, 0.0)
+    right_cx = hw * 0.5 + 0.006
+    right_cz = cov_h + page_thick * 0.5
+    right_block = create_beveled_box(bm, size=(hw, length, page_thick),
+                                     location=(right_cx, 0.0, right_cz),
+                                     rotation=right_rot,
+                                     mat_index=MAT_INDEX_BOOK_PAPER, bevel_amount=0.003)
+    _smart_page_uv(bm, right_block)
+    faces += right_block
+
+    # Right Page Top Face (Open manuscript surface UV-mapped to right half of open_book_page.jpg)
+    rot_mr = Matrix.Rotation(-tilt_y, 4, 'Y')
+    trans_mr = Matrix.Translation(Vector((right_cx, 0.0, right_cz + page_thick * 0.5 + 0.001)))
+    tr_right = trans_mr @ rot_mr
+
+    rv0 = tr_right @ Vector((-hw * 0.5, -hl, 0.0))
+    rv1 = tr_right @ Vector((+hw * 0.5, -hl, 0.0))
+    rv2 = tr_right @ Vector((+hw * 0.5, +hl, 0.0))
+    rv3 = tr_right @ Vector((-hw * 0.5, +hl, 0.0))
+
+    v_rv0 = bm.verts.new(rv0)
+    v_rv1 = bm.verts.new(rv1)
+    v_rv2 = bm.verts.new(rv2)
+    v_rv3 = bm.verts.new(rv3)
+    try:
+        f_right = bm.faces.new([v_rv0, v_rv1, v_rv2, v_rv3])
+        f_right.material_index = MAT_INDEX_OPEN_BOOK
+        f_right.smooth = False
+        f_right.tag = True
+        faces.append(f_right)
+        # UV mapping: right parchment only U: 0.515 -> 0.93, V: 0.11 -> 0.87
+        for loop in f_right.loops:
+            if loop.vert == v_rv0:
+                loop[uv_layer].uv = Vector((0.515, 0.11))
+            elif loop.vert == v_rv1:
+                loop[uv_layer].uv = Vector((0.93, 0.11))
+            elif loop.vert == v_rv2:
+                loop[uv_layer].uv = Vector((0.93, 0.87))
+            elif loop.vert == v_rv3:
+                loop[uv_layer].uv = Vector((0.515, 0.87))
+    except ValueError:
+        pass
+
+    # 3. Red silk bookmark ribbon running down the valley between pages
+    #    (lecterns skip it: with_ribbon=False keeps the reading desk clean).
+    if with_ribbon:
+        faces += create_beveled_box(bm, size=(0.026, length + 0.06, 0.005),
+                                    location=(0.0, 0.0, cov_h + page_thick * 0.88),
+                                    mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.001)
+    return faces
+
+
+def build_spellbook_pedestal(bm, x, y, z_ground=0.0, ang=0.0):
+    """Ornate wizard lectern: carved stone plinth, fluted timber column with gothic brackets,
+    and a massive open illuminated grimoire (no ribbon, no crystal) flanked by two
+    platter-rooted candle spikes whose cups, candles and flames stack connected."""
+    faces = []
+    
+    # 1. Stepped cut-stone plinth
+    plinth = []
+    plinth += create_cylinder(bm, radius=0.40, height=0.08, segments=20,
+                             location=(0.0, 0.0, 0.04), mat_index=MAT_INDEX_CUT_STONE)
+    plinth += create_cylinder(bm, radius=0.32, height=0.06, segments=20,
+                             location=(0.0, 0.0, 0.11), mat_index=MAT_INDEX_CUT_STONE)
+    for f in plinth:
+        f.smooth = True
+    map_planar_faces(bm, plinth, scale=0.8)
+    faces += plinth
+    
+    faces += create_torus_ring(bm, location=(0.0, 0.0, 0.14),
+                              major_radius=0.28, minor_radius=0.016,
+                              major_segments=20, minor_segments=6, mat_index=MAT_INDEX_IRON)
+    
+    # 2. Turned carved column shaft with decorative rings
+    shaft = create_cylinder(bm, radius=0.15, height=0.70, segments=18,
+                            location=(0.0, 0.0, 0.49), mat_index=MAT_INDEX_CUT_STONE)
+    for f in shaft:
+        f.smooth = True
+    map_planar_faces(bm, shaft, scale=0.8)
+    faces += shaft
+    
+    faces += create_torus_ring(bm, location=(0.0, 0.0, 0.48),
+                              major_radius=0.165, minor_radius=0.016,
+                              major_segments=20, minor_segments=6, mat_index=MAT_INDEX_IRON)
+    
+    # 3. 4 Carved timber Gothic buttress brackets supporting the shaft
+    for k in range(4):
+        kang = k * (math.pi * 0.5)
+        bx = 0.20 * math.cos(kang)
+        by = 0.20 * math.sin(kang)
+        faces += create_beveled_box(bm, size=(0.045, 0.14, 0.38),
+                                    location=(bx, by, 0.33),
+                                    rotation=(0.0, 0.0, kang + math.pi * 0.5),
+                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
+    
+    # 4. Flared console capital
+    cap = create_cylinder(bm, radius=0.25, height=0.08, segments=20,
+                          location=(0.0, 0.0, 0.88), mat_index=MAT_INDEX_TIMBER)
+    for f in cap:
+        f.smooth = True
+    map_planar_faces(bm, cap, scale=0.8)
+    faces += cap
+    for sx in (-0.14, 0.14):
+        faces += create_beveled_box(bm, size=(0.06, 0.18, 0.16),
+                                    location=(sx, -0.05, 0.94),
+                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+    
+    # 5. Tilted wooden desk platter (~25 deg forward lean)
+    desk_rot = (0.42, 0.0, 0.0)
+    top_z = 1.05
+    faces += create_beveled_box(bm, size=(0.74, 0.54, 0.04),
+                                location=(0.0, -0.04, top_z), rotation=desk_rot,
+                                mat_index=MAT_INDEX_WOOD, bevel_amount=0.008)
+    faces += create_beveled_box(bm, size=(0.74, 0.045, 0.05),
+                                location=(0.0, -0.27, top_z - 0.09), rotation=desk_rot,
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
+    for sx in (-0.35, 0.35):
+        faces += create_beveled_box(bm, size=(0.05, 0.04, 0.055),
+                                    location=(sx, -0.27, top_z - 0.09), rotation=desk_rot,
+                                    mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
+    
+    # 6. Large Illuminated Open Grimoire with authentic manuscript pages.
+    #    Lectern copy: slightly narrowed (0.58) so the candle spikes clear the
+    #    page edges, no bookmark ribbon, no spine crystal.
+    grimoire = _build_open_grimoire(bm, width=0.58, length=0.40, page_thick=0.036,
+                                    with_ribbon=False)
+    tr_grimoire = Matrix.Translation(Vector((0.0, -0.04, top_z + 0.025))) @ Matrix.Rotation(0.42, 4, 'X')
+    transform_faces(grimoire, tr_grimoire)
+    faces += grimoire
+    
+    # (Lectern grimoire carries no bookmark ribbon or spine crystal.)
+    
+    # 7. Iron candle spikes rooted THROUGH the platter's back corners: each
+    #    spike pierces the slab, and its cup + candle + flame stack directly
+    #    above it, so every holder visibly holds its candle (nothing floats).
+    for sx in (-0.345, 0.345):
+        faces += create_cylinder(bm, radius=0.012, height=0.22, segments=8,
+                                 location=(sx, 0.20, 1.19), mat_index=MAT_INDEX_IRON)
+        faces += create_cylinder(bm, radius=0.045, height=0.016, segments=10,
+                                 location=(sx, 0.20, 1.308), mat_index=MAT_INDEX_IRON)
+        candle = create_cylinder(bm, radius=0.022, height=0.12, segments=10,
+                                 location=(sx, 0.20, 1.376), mat_index=MAT_INDEX_WAX)
+        faces += candle
+        _normalize_candle_uv(bm, candle, sx, 0.20, 1.316, 1.436, 0.022)
+        faces += create_cone(bm, radius1=0.007, radius2=0.0, height=0.028, segments=6,
+                             location=(sx, 0.20, 1.45), mat_index=MAT_INDEX_LANTERN)
+# (Floating side-bracket candles removed; platter-rooted spikes above hold them.)
+    
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_arcane_orrery(bm, x, y, z_ground=0.0, ang=0.0):
+    """Celestial armillary sphere: gimbaled brass/iron concentric rings orbiting a glowing mana orb."""
+    faces = []
+    # Pedestal base
+    faces += create_cylinder(bm, radius=0.45, height=0.12, segments=16,
+                            location=(0.0, 0.0, 0.06), mat_index=MAT_INDEX_CUT_STONE)
+    faces += create_cylinder(bm, radius=0.38, height=0.06, segments=14,
+                            location=(0.0, 0.0, 0.15), mat_index=MAT_INDEX_CUT_STONE)
+    faces += create_cone(bm, radius1=0.16, radius2=0.12, height=0.68, segments=12,
+                        location=(0.0, 0.0, 0.52), mat_index=MAT_INDEX_TIMBER)
+    faces += create_cylinder(bm, radius=0.24, height=0.06, segments=14,
+                            location=(0.0, 0.0, 0.89), mat_index=MAT_INDEX_IRON)
+    # Gimbal crescent support
+    faces += create_torus_ring(bm, location=(0.0, 0.0, 1.25),
+                              rotation=(math.pi * 0.5, 0.0, 0.0),
+                              major_radius=0.52, minor_radius=0.022,
+                              major_segments=16, minor_segments=6,
+                              mat_index=MAT_INDEX_IRON)
+    # Concentric armillary rings rotated on three astronomical planes
+    faces += create_torus_ring(bm, location=(0.0, 0.0, 1.25),
+                              rotation=(0.0, 0.38, 0.0),
+                              major_radius=0.46, minor_radius=0.016,
+                              major_segments=20, minor_segments=6,
+                              mat_index=MAT_INDEX_IRON)
+    faces += create_torus_ring(bm, location=(0.0, 0.0, 1.25),
+                              rotation=(0.58, 0.0, 0.35),
+                              major_radius=0.41, minor_radius=0.014,
+                              major_segments=20, minor_segments=6,
+                              mat_index=MAT_INDEX_IRON)
+    faces += create_torus_ring(bm, location=(0.0, 0.0, 1.25),
+                              rotation=(-0.42, 0.62, 0.0),
+                              major_radius=0.36, minor_radius=0.012,
+                              major_segments=18, minor_segments=6,
+                              mat_index=MAT_INDEX_IRON)
+    # Central glowing mana core
+    faces += create_cone(bm, radius1=0.12, radius2=0.0, height=0.16, segments=8,
+                        location=(0.0, 0.0, 1.33), mat_index=MAT_INDEX_GLASS)
+    faces += create_cone(bm, radius1=0.0, radius2=0.12, height=0.16, segments=8,
+                        location=(0.0, 0.0, 1.17), mat_index=MAT_INDEX_GLASS)
+    # Three miniature orbiting planets / mana beads on wire spokes
+    orbit_data = [
+        (0.22, 0.8, 1.32, 0.028, MAT_INDEX_GLASS),
+        (0.29, 2.5, 1.21, 0.022, MAT_INDEX_IRON),
+        (0.34, 4.3, 1.29, 0.026, MAT_INDEX_GLASS),
+    ]
+    for dist, orb_ang, oz, rad, mat in orbit_data:
+        ox = dist * math.cos(orb_ang)
+        oy = dist * math.sin(orb_ang)
+        faces += create_cylinder(bm, radius=0.005, height=dist, segments=4,
+                                location=(ox * 0.5, oy * 0.5, oz),
+                                rotation=(0.0, math.pi * 0.5, orb_ang),
+                                mat_index=MAT_INDEX_IRON)
+        faces += create_cylinder(bm, radius=rad, height=rad * 1.5, segments=8,
+                                location=(ox, oy, oz), mat_index=mat)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def _mortar_bowl_faces(bm, lx, ly, base_z):
+    """Carved cut-stone mortar bowl with a TRUE hollow interior cavity (DRY).
+
+    Uses ``create_hollow_dish`` — sloping outer wall, annular rim lip, concave
+    inner well and well floor — so the mouth is a real open vessel, never a
+    capped solid hiding under a lid disc. Builds in the caller's current frame
+    at local (lx, ly) with the bowl foot resting on ``base_z``.
+    """
+    faces = []
+    # Foot plinth the bowl sits on
+    faces += create_cylinder(bm, radius=0.095, height=0.025, segments=18,
+                             location=(lx, ly, base_z + 0.0125), mat_index=MAT_INDEX_CUT_STONE)
+    dish_z = base_z + 0.025
+    faces += create_hollow_dish(
+        bm, radius_base=0.075, radius_rim=0.132,
+        inner_radius_rim=0.116, inner_radius_base=0.052,
+        height=0.11, inner_depth=0.072, segments=20,
+        location=(lx, ly, dish_z), mat_index=MAT_INDEX_CUT_STONE, smooth=True)
+    well_z = dish_z + 0.11 - 0.072
+    # Crushed herbal mash resting on the well floor deep inside the cavity
+    mash = create_cylinder(bm, radius=0.046, height=0.016, segments=12,
+                           location=(lx, ly, well_z + 0.008), mat_index=MAT_INDEX_PLANT)
+    for f in mash:
+        f.smooth = True
+    faces += mash
+    # Heavy pestle: smooth cut-stone grinding head resting in the bowl, turned
+    # wood handle stacked along the same tilt axis off the head with a 25mm
+    # overlap, so wood visibly meets stone (never floats in air).
+    tilt = Euler((0.42, 0.26, 0.0), 'XYZ')
+    tilt_axis = tilt.to_matrix() @ Vector((0.0, 0.0, 1.0))
+    tip_center = Vector((lx + 0.018, ly + 0.014, well_z + 0.030))
+    pestle_tip = create_cylinder(bm, radius=0.030, height=0.06, segments=10,
+                                 location=tip_center,
+                                 rotation=(0.42, 0.26, 0.0), mat_index=MAT_INDEX_CUT_STONE)
+    for f in pestle_tip:
+        f.smooth = True
+    faces += pestle_tip
+    handle_center = tip_center + tilt_axis * (0.03 + 0.08 - 0.025)
+    pestle_handle = create_cylinder(bm, radius=0.019, height=0.16, segments=10,
+                                    location=handle_center,
+                                    rotation=(0.42, 0.26, 0.0), mat_index=MAT_INDEX_WOOD)
+    for f in pestle_handle:
+        f.smooth = True
+    faces += pestle_handle
+    return faces
+
+
+def build_mortar_and_pestle(bm, x, y, z_ground=0.0, ang=0.0):
+    """Standalone apothecary mortar & pestle (reusable prop-kit piece)."""
+    faces = _mortar_bowl_faces(bm, 0.0, 0.0, 0.0)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def _station_flask(bm, bx, shelf_top, ry, br, bh, btype, bmat):
+    """One quality apothecary vessel seated on the alchemy riser shelf.
+
+    Smooth-shaded body + shoulder + neck with the cork sunk into the mouth
+    (never perched or floating), plus a glass meniscus inside tinted vessels.
+    """
+    faces = []
+    if btype == 'square':
+        faces += create_beveled_box(bm, size=(br * 2, br * 2, bh),
+                                    location=(bx, ry, shelf_top + bh * 0.5),
+                                    mat_index=bmat, bevel_amount=0.004)
+        neck_r = br * 0.45
+        neck = create_cylinder(bm, radius=neck_r, height=0.05, segments=10,
+                               location=(bx, ry, shelf_top + bh + 0.02),
+                               mat_index=bmat)
+        for f in neck:
+            f.smooth = True
+        faces += neck
+        faces += create_cylinder(bm, radius=neck_r * 0.8, height=0.032, segments=8,
+                                 location=(bx, ry, shelf_top + bh + 0.048),
+                                 mat_index=MAT_INDEX_WOOD)
+    elif btype == 'jar':
+        pot = create_cylinder(bm, radius=br, height=bh, segments=14,
+                              location=(bx, ry, shelf_top + bh * 0.5), mat_index=bmat)
+        for f in pot:
+            f.smooth = True
+        faces += pot
+        faces += create_cylinder(bm, radius=br * 1.02, height=0.022, segments=14,
+                                 location=(bx, ry, shelf_top + bh + 0.011),
+                                 mat_index=MAT_INDEX_WOOD)
+        faces += create_cylinder(bm, radius=0.018, height=0.025, segments=8,
+                                 location=(bx, ry, shelf_top + bh + 0.034),
+                                 mat_index=MAT_INDEX_WOOD)
+    else:
+        # round / elixir: smooth body, tapered shoulder, neck, seated cork
+        body = create_cylinder(bm, radius=br, height=bh, segments=16,
+                               location=(bx, ry, shelf_top + bh * 0.5), mat_index=bmat)
+        for f in body:
+            f.smooth = True
+        faces += body
+        sh_h = br * 0.9
+        sh = create_cone(bm, radius1=br, radius2=br * 0.42, height=sh_h, segments=14,
+                         location=(bx, ry, shelf_top + bh + sh_h * 0.5 - 0.005),
+                         mat_index=bmat)
+        for f in sh:
+            f.smooth = True
+        faces += sh
+        neck_r = br * 0.40
+        neck_top = shelf_top + bh + sh_h
+        neck = create_cylinder(bm, radius=neck_r, height=0.05, segments=10,
+                               location=(bx, ry, neck_top + 0.02), mat_index=bmat)
+        for f in neck:
+            f.smooth = True
+        faces += neck
+        faces += create_cylinder(bm, radius=neck_r * 0.78, height=0.03, segments=8,
+                                 location=(bx, ry, neck_top + 0.048),
+                                 mat_index=MAT_INDEX_WOOD)
+        liq = create_cylinder(bm, radius=br * 0.82, height=0.012, segments=12,
+                              location=(bx, ry, shelf_top + bh * 0.55),
+                              mat_index=MAT_INDEX_GLASS)
+        faces += liq
+    return faces
+
+
+def build_alchemy_station(bm, x, y, z_ground=0.0, ang=0.0, length=2.2, width=0.92):
+    """Wizard's alchemy workstation with glass alembic apparatus, stone mortar & pestle, potion bottles, and parchment."""
+    faces = []
+    top_z = 0.82
+
+    # 1. Main timber carpenter's bench
+    faces += create_beveled_box(bm, size=(length, width, 0.07),
+                                location=(0.0, 0.0, top_z),
+                                mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            lx = sx * (length * 0.5 - 0.12)
+            ly = sy * (width * 0.5 - 0.10)
+            faces += create_beveled_box(bm, size=(0.09, 0.09, top_z),
+                                        location=(lx, ly, top_z * 0.5),
+                                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    for sx in (-1.0, 1.0):
+        lx = sx * (length * 0.5 - 0.12)
+        faces += create_beveled_box(bm, size=(0.06, width - 0.20, 0.06),
+                                    location=(lx, 0.0, 0.25),
+                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
+    # Lower slatted storage shelf
+    faces += create_beveled_box(bm, size=(length - 0.22, width - 0.18, 0.035),
+                                location=(0.0, 0.0, 0.20),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
+    faces += create_beveled_box(bm, size=(0.42, 0.38, 0.28),
+                                location=(length * 0.25, 0.0, 0.36),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+    for c_off in (-0.12, 0.12):
+        faces += create_cylinder(bm, radius=0.09, height=0.24, segments=10,
+                                location=(-length * 0.28 + c_off, 0.0, 0.34),
+                                mat_index=MAT_INDEX_BOTTLE_GLASS)
+        faces += create_cylinder(bm, radius=0.03, height=0.06, segments=8,
+                                location=(-length * 0.28 + c_off, 0.0, 0.49),
+                                mat_index=MAT_INDEX_BOTTLE_GLASS)
+        faces += create_cylinder(bm, radius=0.026, height=0.03, segments=6,
+                                location=(-length * 0.28 + c_off, 0.0, 0.53),
+                                mat_index=MAT_INDEX_WOOD)
+
+    # 2. Back apothecary shelf with drawers
+    riser_y = width * 0.5 - 0.13
+    faces += create_beveled_box(bm, size=(length, 0.24, 0.04),
+                                location=(0.0, riser_y, top_z + 0.30),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
+    faces += create_beveled_box(bm, size=(length, 0.24, 0.03),
+                                location=(0.0, riser_y, top_z + 0.14),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
+    for sx in (-length * 0.5 + 0.06, -length * 0.18, length * 0.18, length * 0.5 - 0.06):
+        faces += create_beveled_box(bm, size=(0.04, 0.22, 0.30),
+                                    location=(sx, riser_y, top_z + 0.15),
+                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
+    for d_off in (-length * 0.34, 0.0, length * 0.34):
+        faces += create_beveled_box(bm, size=(0.26, 0.20, 0.11),
+                                    location=(d_off, riser_y, top_z + 0.065),
+                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.003)
+        faces += create_torus_ring(bm, location=(d_off, riser_y - 0.105, top_z + 0.065),
+                                  rotation=(math.pi * 0.5, 0.0, 0.0),
+                                  major_radius=0.018, minor_radius=0.004,
+                                  major_segments=8, minor_segments=4, mat_index=MAT_INDEX_IRON)
+
+    # 3. --- The Alembic Distillation Apparatus (Left Workbench) ---
+    surf_z = top_z + 0.035  # Tabletop surface is flush with top of bench slab
+    al_x, al_y = -length * 0.28, -0.06
+    al_stand_h = 0.12
+    faces += create_torus_ring(bm, location=(al_x, al_y, surf_z + al_stand_h),
+                              major_radius=0.10, minor_radius=0.014,
+                              major_segments=16, minor_segments=4, mat_index=MAT_INDEX_IRON)
+    for k in range(3):
+        kang = k * (2.0 * math.pi / 3.0) + 0.2
+        faces += create_cylinder(bm, radius=0.012, height=al_stand_h, segments=6,
+                                location=(al_x + 0.085 * math.cos(kang), al_y + 0.085 * math.sin(kang), surf_z + al_stand_h * 0.5),
+                                mat_index=MAT_INDEX_IRON)
+    faces += create_cylinder(bm, radius=0.05, height=0.03, segments=8,
+                            location=(al_x, al_y, surf_z + 0.015), mat_index=MAT_INDEX_IRON)
+    faces += create_cone(bm, radius1=0.032, radius2=0.0, height=0.05, segments=6,
+                         location=(al_x, al_y, surf_z + 0.045), mat_index=MAT_INDEX_LANTERN)
+
+    # Spherical / bulbous boiling flask (Transparent bottle glass with liquid inside!)
+    flask_z = surf_z + al_stand_h
+    flask = []
+    flask += create_cylinder(bm, radius=0.10, height=0.12, segments=16,
+                            location=(al_x, al_y, flask_z + 0.07), mat_index=MAT_INDEX_BOTTLE_GLASS)
+    flask += create_cylinder(bm, radius=0.085, height=0.06, segments=14,
+                            location=(al_x, al_y, flask_z + 0.04), mat_index=MAT_INDEX_GLASS)
+    flask += create_cone(bm, radius1=0.10, radius2=0.04, height=0.08, segments=16,
+                        location=(al_x, al_y, flask_z + 0.17), mat_index=MAT_INDEX_BOTTLE_GLASS)
+    flask += create_cylinder(bm, radius=0.06, height=0.05, segments=12,
+                            location=(al_x, al_y, flask_z + 0.23), mat_index=MAT_INDEX_BOTTLE_GLASS)
+    for f in flask:
+        f.smooth = True
+    faces += flask
+
+    rec_x, rec_y = al_x + 0.38, al_y
+    tube_mid = (al_x + rec_x) * 0.5
+    tube_len = 0.40
+    tube = create_cylinder(bm, radius=0.016, height=tube_len, segments=8,
+                           location=(tube_mid, al_y, flask_z + 0.19),
+                           rotation=(0.0, math.pi * 0.38, 0.0), mat_index=MAT_INDEX_BOTTLE_GLASS)
+    for f in tube:
+        f.smooth = True
+    faces += tube
+    faces += create_beveled_box(bm, size=(0.05, 0.05, al_stand_h + 0.06),
+                                location=(tube_mid, al_y, surf_z + (al_stand_h + 0.06) * 0.5),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
+
+    # Round collection receiving flask on wooden support ring
+    stand = create_torus_ring(bm, location=(rec_x, rec_y, surf_z + 0.016),
+                              major_radius=0.065, minor_radius=0.014,
+                              major_segments=16, minor_segments=4, mat_index=MAT_INDEX_WOOD)
+    for f in stand:
+        f.smooth = True
+    faces += stand
+    rec_z = surf_z + 0.02
+    rec_flask = []
+    rec_flask += create_cylinder(bm, radius=0.075, height=0.08, segments=16,
+                                location=(rec_x, rec_y, rec_z + 0.05), mat_index=MAT_INDEX_BOTTLE_GLASS)
+    rec_flask += create_cylinder(bm, radius=0.062, height=0.04, segments=14,
+                                location=(rec_x, rec_y, rec_z + 0.03), mat_index=MAT_INDEX_GLASS)
+    rec_flask += create_cone(bm, radius1=0.075, radius2=0.032, height=0.06, segments=16,
+                            location=(rec_x, rec_y, rec_z + 0.12), mat_index=MAT_INDEX_BOTTLE_GLASS)
+    for f in rec_flask:
+        f.smooth = True
+    faces += rec_flask
+
+    # 4. --- Carved Cut-Stone Mortar & Pestle (Center Workbench) ---
+    # Reusable hollow-dish vessel: a true open bowl cavity, never a capped solid.
+    mp_x, mp_y = 0.18, -0.12
+    faces += _mortar_bowl_faces(bm, mp_x, mp_y, surf_z)
+
+    # 5. --- Open Alchemist Grimoire (same illuminated tome as the lecterns,
+    #    bench-size format) resting flat on the bench beside the mortar ---
+    p_x, p_y = 0.58, -0.10
+    tome = _build_open_grimoire(bm, width=0.46, length=0.32, page_thick=0.030, with_ribbon=False)
+    tr_tome = Matrix.Translation(Vector((p_x, p_y, surf_z))) @ Matrix.Rotation(-0.15, 4, 'Z')
+    transform_faces(tome, tr_tome)
+    faces += tome
+
+    # 6. --- Potion Bottles & Vials on Riser Shelf ---
+    shelf_bottles = [
+        (-0.70, 0.042, 0.14, 'round', MAT_INDEX_BOTTLE_GLASS),
+        (-0.50, 0.034, 0.11, 'square', MAT_INDEX_BOTTLE_GLASS),
+        (-0.35, 0.038, 0.15, 'round', MAT_INDEX_BOTTLE_GLASS),
+        (0.05, 0.040, 0.13, 'round', MAT_INDEX_BOTTLE_GLASS),
+        (0.25, 0.032, 0.10, 'square', MAT_INDEX_BOTTLE_GLASS),
+        (0.48, 0.044, 0.16, 'elixir', MAT_INDEX_BOTTLE_GLASS),
+        (0.68, 0.055, 0.12, 'jar', MAT_INDEX_CLAY),
+    ]
+    for bx, br, bh, btype, bmat in shelf_bottles:
+        faces += _station_flask(bm, bx, top_z + 0.32, riser_y, br, bh, btype, bmat)
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_scrying_pool(bm, x, y, z_ground=0.0, ang=0.0, radius=0.90):
+    """Carved cut-stone divination basin with deep hollow font, sunken celestial liquid,
+    magnificent levitating arcane crystal cluster with orbiting shards, and rim candle prickets."""
+    faces = []
+    stone_faces = []
+
+    # 1. Stepped cut-stone plinth base
+    p1 = create_cylinder(bm, radius=radius * 0.98, height=0.12, segments=24,
+                         location=(0.0, 0.0, 0.06), mat_index=MAT_INDEX_CUT_STONE, smooth=True)
+    p2 = create_cylinder(bm, radius=radius * 0.86, height=0.08, segments=24,
+                         location=(0.0, 0.0, 0.16), mat_index=MAT_INDEX_CUT_STONE, smooth=True)
+    stone_faces += p1 + p2
+
+    # Molded torus base ring
+    b_ring = create_torus_ring(bm, location=(0.0, 0.0, 0.20),
+                               major_radius=radius * 0.80, minor_radius=0.026,
+                               major_segments=24, minor_segments=6, mat_index=MAT_INDEX_CUT_STONE)
+    stone_faces += b_ring
+
+    # Column shaft with 4 carved console buttresses
+    shaft = create_cylinder(bm, radius=radius * 0.52, height=0.44, segments=24,
+                            location=(0.0, 0.0, 0.42), mat_index=MAT_INDEX_CUT_STONE, smooth=True)
+    stone_faces += shaft
+
+    for k in range(4):
+        kang = k * (math.pi * 0.5)
+        bx = (radius * 0.48) * math.cos(kang)
+        by = (radius * 0.48) * math.sin(kang)
+        b_faces = create_beveled_box(bm, size=(0.10, 0.24, 0.40),
+                                    location=(bx, by, 0.42),
+                                    rotation=(0.0, 0.0, kang),
+                                    mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+        stone_faces += b_faces
+
+    # Flared capital bowl support
+    cap = create_cone(bm, radius1=radius * 0.52, radius2=radius * 0.88, height=0.20, segments=24,
+                      location=(0.0, 0.0, 0.72), mat_index=MAT_INDEX_CUT_STONE)
+    for f in cap:
+        f.smooth = True
+    stone_faces += cap
+
+    # 2. Hollow carved font basin
+    # We construct a real hollow stone bowl:
+    # Outer radius r_out, inner radius r_in, sunken bottom at z_bot, rim at z_top
+    r_out = radius + 0.05
+    r_in = radius * 0.78
+    z_bot = 0.78
+    z_top = 0.96
+    segs = 24
+
+    # Bottom support slab
+    b_slab = create_cylinder(bm, radius=radius * 0.90, height=0.08, segments=segs,
+                             location=(0.0, 0.0, z_bot - 0.04), mat_index=MAT_INDEX_CUT_STONE, smooth=True)
+    stone_faces += b_slab
+
+    # Inner floor, inner wall, rim lip, and outer wall
+    uv_layer = bm.loops.layers.uv.verify()
+    d_ang = 2.0 * math.pi / segs
+    bot_in_verts = []
+    top_in_verts = []
+    top_out_verts = []
+    bot_out_verts = []
+
+    for i in range(segs):
+        ia = i * d_ang
+        ca, sa = math.cos(ia), math.sin(ia)
+        bot_in_verts.append(bm.verts.new((r_in * ca, r_in * sa, z_bot)))
+        top_in_verts.append(bm.verts.new((r_in * ca, r_in * sa, z_top)))
+        top_out_verts.append(bm.verts.new((r_out * ca, r_out * sa, z_top)))
+        bot_out_verts.append(bm.verts.new((r_out * ca, r_out * sa, z_bot)))
+
+    center_bot = bm.verts.new((0.0, 0.0, z_bot))
+
+    for i in range(segs):
+        nxt = (i + 1) % segs
+        # Sunken interior floor fan
+        f_fl = bm.faces.new([center_bot, bot_in_verts[i], bot_in_verts[nxt]])
+        f_fl.material_index = MAT_INDEX_CUT_STONE
+        f_fl.smooth = True
+        stone_faces.append(f_fl)
+
+        # Hollow inner vertical wall (faces inward)
+        f_iw = bm.faces.new([bot_in_verts[i], top_in_verts[i], top_in_verts[nxt], bot_in_verts[nxt]])
+        f_iw.material_index = MAT_INDEX_CUT_STONE
+        f_iw.smooth = True
+        stone_faces.append(f_iw)
+
+        # Top rim lip (annular ring)
+        f_rim = bm.faces.new([top_in_verts[i], top_out_verts[i], top_out_verts[nxt], top_in_verts[nxt]])
+        f_rim.material_index = MAT_INDEX_CUT_STONE
+        f_rim.smooth = True
+        stone_faces.append(f_rim)
+
+        # Outer vertical wall (faces outward)
+        f_ow = bm.faces.new([bot_out_verts[i], bot_out_verts[nxt], top_out_verts[nxt], top_out_verts[i]])
+        f_ow.material_index = MAT_INDEX_CUT_STONE
+        f_ow.smooth = True
+        stone_faces.append(f_ow)
+
+    # Molded outer rim torus bead
+    r_bead = create_torus_ring(bm, location=(0.0, 0.0, z_top),
+                               major_radius=r_out, minor_radius=0.022,
+                               major_segments=segs, minor_segments=6, mat_index=MAT_INDEX_CUT_STONE)
+    stone_faces += r_bead
+
+    # Inlaid runic gold collar band on the rim
+    faces += create_torus_ring(bm, location=(0.0, 0.0, z_top + 0.005),
+                               major_radius=(r_in + r_out) * 0.5, minor_radius=0.010,
+                               major_segments=segs, minor_segments=4, mat_index=MAT_INDEX_IRON)
+
+    # Planar UV map all cut-stone faces
+    map_planar_faces(bm, stone_faces, scale=1.0)
+    faces += stone_faces
+
+    # 3. Sunken celestial scrying liquid (nestled inside the hollow bowl)
+    liq_z = z_bot + 0.09
+    liq_r = r_in * 0.96
+    liq_faces = create_cylinder(bm, radius=liq_r, height=0.04, segments=segs,
+                                location=(0.0, 0.0, liq_z), mat_index=MAT_INDEX_GLASS, smooth=True)
+    # Concentric rippling rings on the liquid
+    liq_faces += create_torus_ring(bm, location=(0.0, 0.0, liq_z + 0.02),
+                                   major_radius=liq_r * 0.55, minor_radius=0.008,
+                                   major_segments=20, minor_segments=4, mat_index=MAT_INDEX_GLASS)
+    liq_faces += create_torus_ring(bm, location=(0.0, 0.0, liq_z + 0.02),
+                                   major_radius=liq_r * 0.28, minor_radius=0.006,
+                                   major_segments=16, minor_segments=4, mat_index=MAT_INDEX_GLASS)
+    faces += liq_faces
+
+    # 4. LEVITATING ARCANE CRYSTAL CLUSTER (Floating high above the water, clearly visible!)
+    c_z = z_top + 0.28  # Floating 28cm above the rim!
+
+    # Main faceted bipyramidal gem
+    faces += create_cone(bm, radius1=0.12, radius2=0.0, height=0.24, segments=6,
+                         location=(0.0, 0.0, c_z + 0.12), mat_index=MAT_INDEX_GLASS)
+    faces += create_cone(bm, radius1=0.0, radius2=0.12, height=0.16, segments=6,
+                         location=(0.0, 0.0, c_z - 0.08), mat_index=MAT_INDEX_GLASS)
+    # Inner glowing core shard
+    faces += create_cone(bm, radius1=0.045, radius2=0.0, height=0.12, segments=6,
+                         location=(0.0, 0.0, c_z + 0.06), mat_index=MAT_INDEX_LANTERN)
+    faces += create_cone(bm, radius1=0.0, radius2=0.045, height=0.08, segments=6,
+                         location=(0.0, 0.0, c_z - 0.04), mat_index=MAT_INDEX_LANTERN)
+
+    # Orbiting celestial gimbal ring
+    faces += create_torus_ring(bm, location=(0.0, 0.0, c_z),
+                               rotation=(0.40, 0.22, 0.15),
+                               major_radius=0.26, minor_radius=0.010,
+                               major_segments=20, minor_segments=4, mat_index=MAT_INDEX_IRON)
+
+    # 4 satellite crystal shards floating around the main gem
+    for k in range(4):
+        kang = k * (math.pi * 0.5) + 0.38
+        sx = 0.28 * math.cos(kang)
+        sy = 0.28 * math.sin(kang)
+        sz = c_z + (0.05 if k % 2 == 0 else -0.05)
+        faces += create_cone(bm, radius1=0.040, radius2=0.0, height=0.10, segments=5,
+                             location=(sx, sy, sz + 0.05), rotation=(0.18, 0.14, kang),
+                             mat_index=MAT_INDEX_GLASS)
+        faces += create_cone(bm, radius1=0.0, radius2=0.040, height=0.06, segments=5,
+                             location=(sx, sy, sz - 0.03), rotation=(0.18, 0.14, kang),
+                             mat_index=MAT_INDEX_GLASS)
+
+    # 5. Perimeter Candle Sconces mounted on the stone rim
+    for k in range(4):
+        kang = k * (math.pi * 0.5)
+        cx = (r_out + 0.01) * math.cos(kang)
+        cy = (r_out + 0.01) * math.sin(kang)
+        # Forged iron rim bracket
+        faces += create_cylinder(bm, radius=0.016, height=0.09, segments=6,
+                                 location=(cx, cy, z_top + 0.045), mat_index=MAT_INDEX_IRON)
+        faces += create_cylinder(bm, radius=0.040, height=0.015, segments=8,
+                                 location=(cx, cy, z_top + 0.09), mat_index=MAT_INDEX_IRON)
+        # Tall ivory wax candle
+        candle = create_cylinder(bm, radius=0.022, height=0.14, segments=8,
+                                 location=(cx, cy, z_top + 0.16), mat_index=MAT_INDEX_WAX)
+        faces += candle
+        _normalize_candle_uv(bm, candle, cx, cy, z_top + 0.09, z_top + 0.23, 0.022)
+        # Glowing flame tip
+        faces += create_cone(bm, radius1=0.008, radius2=0.0, height=0.032, segments=6,
+                             location=(cx, cy, z_top + 0.245), mat_index=MAT_INDEX_LANTERN)
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_enchanting_table(bm, x, y, z_ground=0.0, ang=0.0, radius=0.75):
+    """Arcane enchanting altar with a levitating glowing crystal cluster, open grimoire, and runic inlays."""
+    faces = []
+    stone_faces = []
+
+    # Carved cut-stone altar base
+    p1 = create_cylinder(bm, radius=radius * 0.95, height=0.12, segments=18,
+                         location=(0.0, 0.0, 0.06), mat_index=MAT_INDEX_CUT_STONE, smooth=True)
+    p2 = create_cone(bm, radius1=radius * 0.68, radius2=radius * 0.56, height=0.58, segments=16,
+                     location=(0.0, 0.0, 0.41), mat_index=MAT_INDEX_CUT_STONE)
+    for f in p2:
+        f.smooth = True
+    p3 = create_cylinder(bm, radius=radius, height=0.10, segments=18,
+                         location=(0.0, 0.0, 0.75), mat_index=MAT_INDEX_CUT_STONE, smooth=True)
+    stone_faces += p1 + p2 + p3
+    map_planar_faces(bm, stone_faces, scale=1.0)
+    faces += stone_faces
+
+    # Inlaid gold runic ring atop altar
+    faces += create_torus_ring(bm, location=(0.0, 0.0, 0.805),
+                               major_radius=radius * 0.84, minor_radius=0.012,
+                               major_segments=20, minor_segments=4, mat_index=MAT_INDEX_IRON)
+
+    # Central floating arcane crystal focus (floating well above the slab)
+    c_z = 1.15
+    faces += create_cone(bm, radius1=0.11, radius2=0.0, height=0.22, segments=6,
+                         location=(0.0, 0.0, c_z + 0.11), mat_index=MAT_INDEX_GLASS)
+    faces += create_cone(bm, radius1=0.0, radius2=0.11, height=0.16, segments=6,
+                         location=(0.0, 0.0, c_z - 0.08), mat_index=MAT_INDEX_GLASS)
+    # Inner glowing core
+    faces += create_cone(bm, radius1=0.045, radius2=0.0, height=0.12, segments=6,
+                         location=(0.0, 0.0, c_z + 0.06), mat_index=MAT_INDEX_LANTERN)
+    faces += create_cone(bm, radius1=0.0, radius2=0.045, height=0.08, segments=6,
+                         location=(0.0, 0.0, c_z - 0.04), mat_index=MAT_INDEX_LANTERN)
+
+    # Dual interlocking gimbal rings rotating around the floating gem
+    faces += create_torus_ring(bm, location=(0.0, 0.0, c_z),
+                               rotation=(0.35, 0.20, 0.0),
+                               major_radius=0.24, minor_radius=0.010,
+                               major_segments=18, minor_segments=4, mat_index=MAT_INDEX_IRON)
+    faces += create_torus_ring(bm, location=(0.0, 0.0, c_z),
+                               rotation=(-0.25, 0.35, 0.8),
+                               major_radius=0.28, minor_radius=0.008,
+                               major_segments=20, minor_segments=4, mat_index=MAT_INDEX_IRON)
+
+    # Open ritual grimoire on the altar slab with illuminated manuscript pages
+    g_x, g_y = radius * 0.42, -radius * 0.22
+    altar_book = _build_open_grimoire(bm, width=0.34, length=0.25, page_thick=0.024, tilt_y=0.06)
+    tr_altar_book = Matrix.Translation(Vector((g_x, g_y, 0.805))) @ Matrix.Rotation(0.52, 4, 'Z')
+    transform_faces(altar_book, tr_altar_book)
+    faces += altar_book
+
+    # 3 perimeter altar candles
+    for k in (0, 1, 2):
+        c_ang = k * (2.0 * math.pi / 3.0) + 1.2
+        cx = radius * 0.72 * math.cos(c_ang)
+        cy = radius * 0.72 * math.sin(c_ang)
+        faces += create_cylinder(bm, radius=0.032, height=0.015, segments=8,
+                                 location=(cx, cy, 0.805), mat_index=MAT_INDEX_IRON)
+        candle = create_cylinder(bm, radius=0.018, height=0.12, segments=8,
+                                 location=(cx, cy, 0.87), mat_index=MAT_INDEX_WAX)
+        faces += candle
+        _normalize_candle_uv(bm, candle, cx, cy, 0.805, 0.93, 0.018)
+        faces += create_cone(bm, radius1=0.006, radius2=0.0, height=0.026, segments=6,
+                             location=(cx, cy, 0.94), mat_index=MAT_INDEX_LANTERN)
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_magic_cauldron(bm, x, y, z_ground=0.0, ang=0.0, radius=0.52, height=0.72):
+    """Large freestanding ritual cauldron with bulbous spherical belly, forged cabriole legs,
+    authentic cut-stone fire-pit ring, glowing red embers, and bubbling magical elixir."""
+    faces = []
+
+    # 1. Authentic Stone Fire-Pit Curb (Individual stone blocks arranged tangential to circle)
+    pit_r = radius * 0.95
+    n_stones = 10
+    stone_ang_step = 2.0 * math.pi / n_stones
+    for k in range(n_stones):
+        s_mid_ang = k * stone_ang_step
+        sx = pit_r * math.cos(s_mid_ang)
+        sy = pit_r * math.sin(s_mid_ang)
+        s_chord = 2.0 * pit_r * math.sin(stone_ang_step * 0.5) * 1.04
+        faces += create_beveled_box(bm, size=(0.18, s_chord, 0.10),
+                                    location=(sx, sy, 0.05),
+                                    rotation=(0.0, 0.0, s_mid_ang),
+                                    mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+
+    # 2. Glowing Embers & Campfire Charcoal Bed
+    bed = create_cylinder(bm, radius=pit_r * 0.88, height=0.04, segments=16,
+                          location=(0.0, 0.0, 0.02), mat_index=MAT_INDEX_STONE)
+    map_planar_faces(bm, bed, scale=0.8)
+    faces += bed
+
+    # Glowing charcoal embers nestled under the logs
+    ember_spots = [
+        (0.0, 0.0, 0.025, 0.035, 0.02),
+        (-0.08, 0.05, 0.025, 0.025, 0.02),
+        (0.07, -0.04, 0.025, 0.030, 0.02),
+        (-0.04, -0.07, 0.025, 0.025, 0.02),
+        (0.06, 0.06, 0.025, 0.028, 0.02),
+    ]
+    for ex, ey, ez, er, eh in ember_spots:
+        em = create_cylinder(bm, radius=er, height=eh, segments=6,
+                             location=(ex, ey, ez), mat_index=MAT_INDEX_LANTERN)
+        for f in em:
+            f.smooth = True
+        faces += em
+
+    # Add dark charcoal coal lumps around the glowing embers
+    charcoal_spots = [
+        (0.12, 0.04, 0.03, 0.045, 0.03),
+        (-0.10, -0.05, 0.03, 0.05, 0.03),
+        (0.02, -0.12, 0.03, 0.04, 0.03),
+        (-0.03, 0.11, 0.03, 0.045, 0.03),
+        (0.14, -0.08, 0.03, 0.04, 0.03),
+        (-0.13, 0.07, 0.03, 0.045, 0.03),
+    ]
+    for cx, cy, cz, cr, ch in charcoal_spots:
+        coal = create_cylinder(bm, radius=cr, height=ch, segments=6,
+                               location=(cx, cy, cz), mat_index=MAT_INDEX_STONE)
+        map_planar_faces(bm, coal, scale=1.5)
+        faces += coal
+
+    log_configs = [
+        (-0.18, 0.06, 0.07, 0.44, 0.12),
+        (0.16, -0.05, 0.08, 0.42, 1.85),
+        (0.02, 0.16, 0.10, 0.40, -0.92),
+        (-0.04, -0.15, 0.09, 0.38, 0.65),
+    ]
+    for lx, ly, lz, llen, lyaw in log_configs:
+        log_f = create_cylinder(bm, radius=0.042, height=llen, segments=8,
+                                location=(lx, ly, lz),
+                                rotation=(0.0, math.pi * 0.48, lyaw),
+                                mat_index=MAT_INDEX_LOG)
+        for f in log_f:
+            f.smooth = True
+        faces += log_f
+        for s in (-1.0, 1.0):
+            ex = lx + s * (llen * 0.5 - 0.005) * math.cos(lyaw)
+            ey = ly + s * (llen * 0.5 - 0.005) * math.sin(lyaw)
+            faces += create_cylinder(bm, radius=0.040, height=0.01, segments=8,
+                                    location=(ex, ey, lz),
+                                    rotation=(0.0, math.pi * 0.48, lyaw),
+                                    mat_index=MAT_INDEX_LOG_END)
+
+    # 3. Forged Iron Cabriole Legs (3 curved legs gripping the cauldron belly)
+    leg_h = 0.28
+    for k in range(3):
+        kang = k * (2.0 * math.pi / 3.0) + math.pi * 0.5
+        foot_x = (radius * 0.95) * math.cos(kang)
+        foot_y = (radius * 0.95) * math.sin(kang)
+        mid_x = (radius * 0.74) * math.cos(kang)
+        mid_y = (radius * 0.74) * math.sin(kang)
+        leg_strut = create_cylinder(bm, radius=0.030, height=leg_h * 1.15, segments=10,
+                                    location=(mid_x, mid_y, leg_h * 0.5),
+                                    rotation=(math.sin(kang) * 0.30, -math.cos(kang) * 0.30, 0.0),
+                                    mat_index=MAT_INDEX_IRON)
+        for f in leg_strut:
+            f.smooth = True
+        faces += leg_strut
+        faces += create_cylinder(bm, radius=0.048, height=0.025, segments=8,
+                                location=(foot_x, foot_y, 0.012),
+                                mat_index=MAT_INDEX_IRON)
+        claw = create_cylinder(bm, radius=0.026, height=0.18, segments=8,
+                               location=(mid_x * 0.95, mid_y * 0.95, leg_h + 0.08),
+                               mat_index=MAT_INDEX_IRON)
+        for f in claw:
+            f.smooth = True
+        faces += claw
+
+    # 4. Bulbous Curved Cauldron Body
+    z_pot_base = leg_h
+    bowl = create_cone(bm, radius1=0.34, radius2=radius * 1.08, height=0.20, segments=24,
+                       location=(0.0, 0.0, z_pot_base + 0.10), mat_index=MAT_INDEX_IRON)
+    for f in bowl:
+        f.smooth = True
+    map_planar_faces(bm, bowl, scale=0.8)
+    faces += bowl
+
+    belly_z = z_pot_base + 0.20
+    belly_h = 0.24
+    belly = create_cylinder(bm, radius=radius * 1.14, height=belly_h, segments=26,
+                            location=(0.0, 0.0, belly_z + belly_h * 0.5), mat_index=MAT_INDEX_IRON)
+    _drop_solid_caps(bm, belly, drop_top=True, drop_bottom=False)
+    for f in belly:
+        f.smooth = True
+    map_planar_faces(bm, belly, scale=0.8)
+    faces += belly
+
+    neck_z = belly_z + belly_h
+    neck_h = 0.12
+    neck = create_cone(bm, radius1=radius * 1.14, radius2=radius * 0.92, height=neck_h, segments=24,
+                       location=(0.0, 0.0, neck_z + neck_h * 0.5), mat_index=MAT_INDEX_IRON)
+    _drop_solid_caps(bm, neck, drop_top=True, drop_bottom=True)
+    for f in neck:
+        f.smooth = True
+    map_planar_faces(bm, neck, scale=0.8)
+    faces += neck
+
+    rim_z = neck_z + neck_h
+    rim_r = radius * 1.00
+    rim_lip = create_cylinder(bm, radius=rim_r + 0.04, height=0.06, segments=24,
+                              location=(0.0, 0.0, rim_z + 0.03), mat_index=MAT_INDEX_IRON)
+    _drop_solid_caps(bm, rim_lip, drop_top=True, drop_bottom=True)
+    for f in rim_lip:
+        f.smooth = True
+    map_planar_faces(bm, rim_lip, scale=0.8)
+    faces += rim_lip
+
+    rim_torus = create_torus_ring(bm, location=(0.0, 0.0, rim_z + 0.06),
+                                  major_radius=rim_r + 0.02, minor_radius=0.024,
+                                  major_segments=24, minor_segments=6, mat_index=MAT_INDEX_IRON)
+    for f in rim_torus:
+        f.smooth = True
+    faces += rim_torus
+
+    # 5. Heavy Forged Iron Side Ring Handles
+    for s_sign in (-1.0, 1.0):
+        hx = s_sign * (radius * 1.14 + 0.02)
+        faces += create_beveled_box(bm, size=(0.04, 0.09, 0.09),
+                                    location=(hx, 0.0, belly_z + belly_h * 0.65),
+                                    mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
+        ring = create_torus_ring(bm, location=(hx + s_sign * 0.04, 0.0, belly_z + belly_h * 0.65),
+                                 rotation=(0.0, math.pi * 0.5, 0.0),
+                                 major_radius=0.085, minor_radius=0.016,
+                                 major_segments=16, minor_segments=4, mat_index=MAT_INDEX_IRON)
+        for f in ring:
+            f.smooth = True
+        faces += ring
+
+    # 6. Hollow Cauldron Interior & Glowing Bubbling Magical Potion
+    # Deep inner wall lining the neck and belly of the cauldron. Both solid
+    # end caps are dropped so the mouth is genuinely open: you look down the
+    # dark inner wall onto the sunken glowing brew (true interior volume).
+    inner_wall = create_cone(bm, radius1=rim_r * 0.86, radius2=rim_r * 0.99, height=0.26, segments=24,
+                             location=(0.0, 0.0, rim_z - 0.07), mat_index=MAT_INDEX_IRON)
+    _drop_solid_caps(bm, inner_wall, drop_top=True, drop_bottom=True)
+    for f in inner_wall:
+        f.smooth = True
+    map_planar_faces(bm, inner_wall, scale=0.8)
+    faces += inner_wall
+
+    # Sunken glowing magical elixir surface (deep enough to see the inner cauldron wall)
+    liquid_z = rim_z - 0.11
+    liquid_r = rim_r * 0.90
+    liq = create_cylinder(bm, radius=liquid_r, height=0.03, segments=22,
+                          location=(0.0, 0.0, liquid_z), mat_index=MAT_INDEX_LANTERN)
+    for f in liq:
+        f.smooth = True
+    faces += liq
+
+    bubbles = [
+        (-liquid_r * 0.35, liquid_r * 0.25, 0.068, MAT_INDEX_GLASS),
+        (liquid_r * 0.40, -liquid_r * 0.20, 0.055, MAT_INDEX_LANTERN),
+        (liquid_r * 0.10, liquid_r * 0.42, 0.049, MAT_INDEX_GLASS),
+        (-liquid_r * 0.15, -liquid_r * 0.32, 0.060, MAT_INDEX_GLASS),
+        (0.02, 0.05, 0.080, MAT_INDEX_LANTERN),
+        (-liquid_r * 0.45, -liquid_r * 0.10, 0.046, MAT_INDEX_GLASS),
+        (liquid_r * 0.30, liquid_r * 0.30, 0.052, MAT_INDEX_GLASS),
+    ]
+    for bx, by, br, bmat in bubbles:
+        bub = create_cone(bm, radius1=br, radius2=0.0, height=br * 1.6, segments=10,
+                          location=(bx, by, liquid_z + br * 0.8), mat_index=bmat)
+        for f in bub:
+            f.smooth = True
+        faces += bub
+
+    # 7. Wooden Stirring Paddle resting diagonally over the rim dipping into the brew
+    paddle_shaft = create_cylinder(bm, radius=0.022, height=1.05, segments=8,
+                                   location=(0.26, -0.26, rim_z + 0.14),
+                                   rotation=(0.38, 0.45, 0.0), mat_index=MAT_INDEX_WOOD)
+    for f in paddle_shaft:
+        f.smooth = True
+    faces += paddle_shaft
+    paddle_blade = create_beveled_box(bm, size=(0.10, 0.22, 0.02),
+                                      location=(-0.08, 0.08, liquid_z - 0.06),
+                                      rotation=(0.38, 0.45, 0.0),
+                                      mat_index=MAT_INDEX_WOOD, bevel_amount=0.003)
+    faces += paddle_blade
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_grand_bookcase(bm, x, y, z_ground=0.0, ang=0.0, width=2.4, height=3.2, depth=0.42):
+    """Extra-tall grand library bookcase packed with grimoires, scrolls, and an attached library ladder."""
+    faces = []
+    side_t = 0.08
+    # Side uprights
+    for sx in (-width * 0.5 + side_t * 0.5, width * 0.5 - side_t * 0.5):
+        faces += create_beveled_box(bm, size=(side_t, depth, height),
+                                    location=(sx, 0.0, height * 0.5),
+                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    # Center upright divider
+    faces += create_beveled_box(bm, size=(0.06, depth - 0.02, height - 0.20),
+                                location=(0.0, 0.0, height * 0.5),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+    # Carved bottom plinth & top cornice
+    faces += create_beveled_box(bm, size=(width + 0.10, depth + 0.06, 0.12),
+                                location=(0.0, 0.0, 0.06),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+    faces += create_beveled_box(bm, size=(width + 0.12, depth + 0.08, 0.16),
+                                location=(0.0, 0.0, height - 0.08),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+    # Back panel
+    faces += create_beveled_box(bm, size=(width - side_t * 2, 0.02, height - 0.24),
+                                location=(0.0, depth * 0.5 - 0.01, height * 0.5),
+                                mat_index=MAT_INDEX_WOOD, bevel_amount=0.002)
+    # 5 shelf tiers
+    n_tiers = 5
+    span = (width - side_t * 2 - 0.06) * 0.5
+    shelf_dz = (height - 0.38) / (n_tiers - 1)
+    for i in range(n_tiers):
+        sz = 0.14 + i * shelf_dz
+        faces += create_beveled_box(bm, size=(width - side_t * 2, depth - 0.04, 0.04),
+                                    location=(0.0, 0.0, sz),
+                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
+        if i < n_tiers - 1:
+            _dress_row(bm, faces, sz + 0.02,
+                       -width * 0.5 + side_t + 0.03, -0.04,
+                       100 + i * 271, 'messy' if (i % 2 == 1) else 'neat',
+                       MAT_INDEX_LEATHER, MAT_INDEX_LEATHER_2)
+            _dress_row(bm, faces, sz + 0.02,
+                       0.04, width * 0.5 - side_t - 0.03,
+                       500 + i * 383, 'neat' if (i % 2 == 1) else 'messy',
+                       MAT_INDEX_LEATHER_2, MAT_INDEX_LEATHER_3)
+    # Library rail across the 4th tier
+    rail_z = 0.14 + 3 * shelf_dz + 0.10
+    rail_y = -depth * 0.5 + 0.02
+    faces += create_cylinder(bm, radius=0.016, height=width - 0.02, segments=8,
+                             location=(0.0, rail_y, rail_z),
+                            rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_IRON)
+    strap_top = 0.14 + 4 * shelf_dz - 0.02
+    for strap_x in (-(width * 0.5 - 0.18), width * 0.5 - 0.18):
+        faces += create_beveled_box(bm, size=(0.03, 0.03, strap_top - rail_z),
+                                    location=(strap_x, rail_y, (rail_z + strap_top) * 0.5),
+                                    mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
+    # Library ladder leaning against the rail
+    ladder_tilt = 0.22
+    lad_x = width * 0.26
+    lad_y = -depth * 0.5 - 0.04 - rail_z * math.sin(ladder_tilt) * 0.5
+    lad_len = rail_z / math.cos(ladder_tilt) + 0.35
+    for sx in (-0.18, 0.18):
+        faces += create_beveled_box(bm, size=(0.04, 0.06, lad_len),
+                                    location=(lad_x + sx, lad_y, rail_z * 0.5),
+                                    rotation=(-ladder_tilt, 0.0, 0.0),
+                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
+    # Ladder rungs
+    n_rungs = 7
+    for r in range(n_rungs):
+        rz = 0.25 + r * (rail_z - 0.20) / (n_rungs - 1)
+        ry = -depth * 0.5 - 0.04 - (rail_z - rz) * math.tan(ladder_tilt)
+        faces += create_cylinder(bm, radius=0.014, height=0.34, segments=6,
+                                location=(lad_x, ry, rz),
+                                rotation=(0.0, math.pi * 0.5, 0.0),
+                                mat_index=MAT_INDEX_TIMBER)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_arcane_circle(bm, x, y, z_ground=0.0, ang=0.0, radius=2.2):
+    """Inlaid floor summoning sigil: concentric runic metal rings, glowing arcane core, and candle nodes."""
+    faces = []
+    # Outer runic torus ring
+    faces += create_torus_ring(bm, location=(0.0, 0.0, 0.008),
+                              major_radius=radius, minor_radius=0.016,
+                              major_segments=28, minor_segments=4, mat_index=MAT_INDEX_IRON)
+    # Mid runic ring
+    faces += create_torus_ring(bm, location=(0.0, 0.0, 0.008),
+                              major_radius=radius * 0.75, minor_radius=0.012,
+                              major_segments=24, minor_segments=4, mat_index=MAT_INDEX_IRON)
+    # Center glowing rune disc
+    faces += create_cylinder(bm, radius=radius * 0.30, height=0.012, segments=16,
+                            location=(0.0, 0.0, 0.006), mat_index=MAT_INDEX_GLASS)
+    # Inlaid arcane hexagram: 6 chords connecting points of the outer ring
+    for k in range(6):
+        a1 = k * (math.pi / 3.0)
+        a2 = ((k + 2) % 6) * (math.pi / 3.0)
+        p1 = Vector((radius * 0.75 * math.cos(a1), radius * 0.75 * math.sin(a1), 0.008))
+        p2 = Vector((radius * 0.75 * math.cos(a2), radius * 0.75 * math.sin(a2), 0.008))
+        mid = (p1 + p2) * 0.5
+        d = p2 - p1
+        chord_yaw = math.atan2(d.y, d.x)
+        faces += create_beveled_box(bm, size=(d.length, 0.024, 0.010),
+                                    location=mid, rotation=(0.0, 0.0, chord_yaw),
+                                    mat_index=MAT_INDEX_IRON, bevel_amount=0.002)
+    # 6 perimeter candle nodes
+    for k in range(6):
+        kang = k * (math.pi / 3.0)
+        cx = radius * math.cos(kang)
+        cy = radius * math.sin(kang)
+        faces += create_cylinder(bm, radius=0.038, height=0.016, segments=8,
+                                 location=(cx, cy, 0.008), mat_index=MAT_INDEX_IRON)
+        candle = create_cylinder(bm, radius=0.020, height=0.12, segments=8,
+                                 location=(cx, cy, 0.076), mat_index=MAT_INDEX_WAX)
+        faces += candle
+        _normalize_candle_uv(bm, candle, cx, cy, 0.016, 0.136, 0.020)
+        faces += create_cone(bm, radius1=0.007, radius2=0.0, height=0.028, segments=6,
+                             location=(cx, cy, 0.145), mat_index=MAT_INDEX_LANTERN)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+

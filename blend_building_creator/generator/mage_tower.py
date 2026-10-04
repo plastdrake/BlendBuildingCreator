@@ -97,55 +97,115 @@ def _floating_arcane_shards(bm, cx, cy, z_spire, bel_r):
                           mat_index=MAT_INDEX_IRON)
 
 
-def _witch_hat_roof(bm, cx, cy, z_base, radius, height, segments=48, offset=OFFSET):
-    """Flared bell-cast fantasy spire with shingle UVs, iron spire and crystal finial.
+def _witch_hat_roof(bm, cx, cy, z_base, radius, height, segments=48, offset=OFFSET,
+                       corbels=True, finial=True):
+    """Smooth flared bell-cast fantasy witch-hat spire with shingle UVs, iron spire and crystal finial.
 
-    Includes a continuous wooden eaves soffit ring bridging the wall top to the flared
-    shingle skirt, downward overlapping the top of the wall to eliminate any gaps.
+    Sweeps a continuous concave bell-cast curve from the flared eaves up to the needle tip,
+    sealing cleanly over the belvedere wall without steps or harsh ridges.
     """
-    skirt_h = min(1.8, height * 0.32)
-    skirt = create_cone(bm, radius1=radius * 1.18, radius2=radius * 0.70,
-                        height=skirt_h, segments=segments,
-                        location=(cx, cy, z_base + skirt_h * 0.5),
-                        mat_index=MAT_INDEX_SHINGLES)
-    apply_roof_shingle_uvs(bm, skirt, scale=0.32)
+    rings = 14
+    ring_verts = []
+    d_ang = 2.0 * math.pi / segments
 
-    main_h = height - skirt_h
-    main = create_cone(bm, radius1=radius * 0.70, radius2=0.05, height=main_h,
-                       segments=segments,
-                       location=(cx, cy, z_base + skirt_h + main_h * 0.5),
-                       mat_index=MAT_INDEX_SHINGLES)
-    apply_roof_shingle_uvs(bm, main, scale=0.32)
+    if corbels:
+        # Fascia disc & underside soffit sealing the eaves overhang
+        create_cylinder(bm, radius=radius * 1.20, height=0.18, segments=segments,
+                        location=(cx, cy, z_base + 0.06), mat_index=MAT_INDEX_WOOD)
 
-    # Timber eaves fascia disc (single, seals the overhang underside) & collar
-    create_cylinder(bm, radius=radius * 1.20, height=0.18, segments=segments,
-                    location=(cx, cy, z_base + 0.06), mat_index=MAT_INDEX_WOOD)
-    create_cylinder(bm, radius=radius * 0.74, height=0.12, segments=segments,
-                    location=(cx, cy, z_base + skirt_h + 0.04),
-                    mat_index=MAT_INDEX_TIMBER)
+        # 8 carved timber corbels aligned with the belvedere bays
+        overhang = radius * 0.20 + 0.12
+        for k in range(BAYS):
+            ang = k * (2.0 * math.pi / BAYS) + offset
+            c_pos = Vector((cx + radius * math.cos(ang), cy + radius * math.sin(ang), z_base))
+            f_dir = (math.cos(ang), math.sin(ang), 0.0)
+            create_curved_corbel(bm, loc=c_pos, facing_dir=f_dir,
+                                 width=0.26, depth=overhang, height=0.74,
+                                 mat_index=MAT_INDEX_TIMBER)
 
-    # Real carved timber corbels under the eaves overhang - the same joined
-    # bracket used on the belvedere, aligned with the eight bays.
-    overhang = radius * 0.20 + 0.12
-    for k in range(BAYS):
-        ang = k * (2.0 * math.pi / BAYS) + offset
-        c_pos = Vector((cx + radius * math.cos(ang), cy + radius * math.sin(ang), z_base))
-        f_dir = (math.cos(ang), math.sin(ang), 0.0)
-        create_curved_corbel(bm, loc=c_pos, facing_dir=f_dir,
-                             width=0.26, depth=overhang, height=0.74,
-                             mat_index=MAT_INDEX_TIMBER)
+    # Generate vertices for each horizontal ring along the height
+    ring_profile = []
+    for i in range(rings + 1):
+        t = i / float(rings)
+        # Smooth concave bell-cast curve: flared eaves (1.18), slender waist, needle tip (0.035)
+        r_curve = radius * (1.18 * ((1.0 - t) ** 2.4) + 0.04 * (1.0 - t)) + 0.035
+        z_curr = z_base + t * height
+        ring_profile.append((r_curve, z_curr))
 
-    # Apex iron needle and glowing arcane crystal
-    apex = z_base + height
-    create_cylinder(bm, radius=0.055, height=0.85, segments=8,
-                    location=(cx, cy, apex + 0.42), mat_index=MAT_INDEX_IRON)
-    _arcane_crystal(bm, cx, cy, apex + 1.25, scale=1.35)
+        row = []
+        for j in range(segments):
+            ja = j * d_ang + offset
+            vx = cx + r_curve * math.cos(ja)
+            vy = cy + r_curve * math.sin(ja)
+            row.append(bm.verts.new((vx, vy, z_curr)))
+        ring_verts.append(row)
 
+    roof_faces = []
+    # Create quad bands between successive rings
+    for i in range(rings):
+        row0 = ring_verts[i]
+        row1 = ring_verts[i + 1]
+        for j in range(segments):
+            nxt = (j + 1) % segments
+            f = bm.faces.new([row0[j], row0[nxt], row1[nxt], row1[j]])
+            f.material_index = MAT_INDEX_SHINGLES
+            f.smooth = True
+            roof_faces.append(f)
+
+    # Continuous arc-length shingle unwrap (NOT per-face centered): U follows
+    # each ring's circumference and V accumulates slant height from the eaves,
+    # so shingle courses flow unbroken from flare to needle at a uniform
+    # 0.32/m density instead of squeezing into slivers near the tip.
+    uv_layer = bm.loops.layers.uv.verify()
+    _SHINGLE = 0.32
+    v_edge = [0.0]
+    for i in range(rings):
+        r0, z0 = ring_profile[i]
+        r1, z1 = ring_profile[i + 1]
+        v_edge.append(v_edge[-1] + math.hypot(r0 - r1, z1 - z0) * _SHINGLE)
+    _TAU = 2.0 * math.pi
+    _r_base = ring_profile[0][0]
+    _ROUND_U = max(8, round(_TAU * _r_base * _SHINGLE))
+    fi = 0
+    for i in range(rings):
+        for j in range(segments):
+            f = roof_faces[fi]
+            fi += 1
+            u_j = (j / segments) * _ROUND_U
+            u_j1 = ((j + 1) / segments) * _ROUND_U
+            f.loops[0][uv_layer].uv = Vector((u_j, v_edge[i]))
+            f.loops[1][uv_layer].uv = Vector((u_j1, v_edge[i]))
+            f.loops[2][uv_layer].uv = Vector((u_j1, v_edge[i + 1]))
+            f.loops[3][uv_layer].uv = Vector((u_j, v_edge[i + 1]))
+            f.smooth = False
+            f.tag = True
+
+    # Top apex cap cone
+    apex_z = z_base + height
+    apex_vert = bm.verts.new((cx, cy, apex_z + 0.05))
+    top_row = ring_verts[rings]
+    apex_faces = []
+    for j in range(segments):
+        nxt = (j + 1) % segments
+        f = bm.faces.new([top_row[j], top_row[nxt], apex_vert])
+        f.material_index = MAT_INDEX_SHINGLES
+        f.smooth = True
+        roof_faces.append(f)
+        apex_faces.append(f)
+
+    apply_roof_shingle_uvs(bm, apex_faces, scale=0.32)
+
+    if finial:
+        # Apex iron needle and glowing arcane crystal
+        needle_h = 1.10
+        create_cylinder(bm, radius=0.055, height=needle_h, segments=8,
+                        location=(cx, cy, apex_z + needle_h * 0.5), mat_index=MAT_INDEX_IRON)
+        _arcane_crystal(bm, cx, cy, apex_z + needle_h + 0.45, scale=1.45)
 
 def _corner_tourelles(bm, cx, cy, z_base, bel_r, height=2.4):
     """High-poly smooth fantasy corner tourelles / pinnacles around the belvedere eaves."""
     angles = [math.pi * 0.25, math.pi * 0.75, math.pi * 1.25, math.pi * 1.75]
-    tr_r = 0.55
+    tr_r = 0.45 + bel_r * 0.025  # pinnacles grow with the tower tier
     segs = 24  # High poly smooth roundness
     for ang in angles:
         tx = cx + (bel_r - 0.12) * math.cos(ang)
@@ -160,14 +220,10 @@ def _corner_tourelles(bm, cx, cy, z_base, bel_r, height=2.4):
         # Single timber framing collar at the eaves.
         create_cylinder(bm, radius=tr_r + 0.04, height=0.08, segments=segs,
                         location=(tx, ty, z_base + height), mat_index=MAT_INDEX_TIMBER_FRAME)
-        # Steep conical spire
+        # Mini bell-cast witch-hat spire (same bloodline as the main spire)
         sp_h = height * 1.22
-        cone_f = create_cone(bm, radius1=tr_r * 1.16, radius2=0.03, height=sp_h, segments=segs,
-                             location=(tx, ty, z_base + height + sp_h * 0.5),
-                             mat_index=MAT_INDEX_SHINGLES)
-        for f in cone_f:
-            f.smooth = True
-        apply_roof_shingle_uvs(bm, cone_f, scale=0.32)
+        _witch_hat_roof(bm, tx, ty, z_base + height, radius=tr_r * 1.05,
+                        height=sp_h, segments=24, corbels=False, finial=False)
         # Golden pointed cap finial
         cone_cap = create_cone(bm, radius1=0.09, radius2=0.0, height=0.28, segments=12,
                                location=(tx, ty, z_base + height + sp_h + 0.14),
@@ -1380,12 +1436,12 @@ def _build_mage_outcrop(bm, props, cur_r, ang, z0, level_h, wall_t, win_w, win_h
     from .facade import FacadeFrame
 
     rng = random.Random(int(seed) * 911 + int(index) * 37 + 13)
-    width = rng.uniform(2.3, 2.9)
-    depth = rng.uniform(1.8, 2.4)
+    width = rng.uniform(3.8, 4.4)
+    depth = rng.uniform(3.2, 3.8)
     roof_style = rng.choice(('GABLE', 'GABLE', 'LEAN_TO'))
     shingle_rot = rng.choice((0, 90, 180, 270))
-    bay_h = 2.60
-    peak_h = width * rng.uniform(0.42, 0.55)
+    bay_h = 2.90
+    peak_h = width * rng.uniform(0.45, 0.58)
 
     ox, oy = math.cos(ang), math.sin(ang)
     # Sink the bay a little into the shaft so its flat back and roof cheek edges
@@ -1405,7 +1461,33 @@ def _build_mage_outcrop(bm, props, cur_r, ang, z0, level_h, wall_t, win_w, win_h
         z_base=z0 + 0.14, width=width, depth=depth, height=bay_h,
         roof_style=roof_style, tier=getattr(props, 'material_tier', 'TIER_3'),
         floor_h=level_h, win_w=win_w, win_h=win_h, peak_h=peak_h,
-        shingle_scale=0.32, shingle_rot=shingle_rot, frame=frame)
+        shingle_scale=0.32, shingle_rot=shingle_rot, frame=frame,
+        has_bench=False)
+
+    # Furnish the outcrop bedroom with a sturdy apprentice bunk bed
+    from .accessories.interior_furniture import build_bunk_bed, build_chest, build_rug
+    from .accessories.lighting import build_chain_lantern
+    bed_lx = depth * 0.48
+    bed_ly = -(width * 0.5 - 1.05 * 0.5 - 0.12)
+    bed_pos = frame.to_world(Vector((bed_lx, bed_ly, 0.0)))
+    build_bunk_bed(bm, x=bed_pos.x, y=bed_pos.y, z_ground=z0 + 0.14,
+                   ang=ang, length=2.05, width=1.05)
+
+    # Apprentice storage footlocker along opposite wall
+    chest_ly = +(width * 0.5 - 0.50)
+    chest_pos = frame.to_world(Vector((depth * 0.45, chest_ly, 0.0)))
+    build_chest(bm, x=chest_pos.x, y=chest_pos.y, z_ground=z0 + 0.14,
+                ang=ang, width=1.1)
+
+    # Cozy bedside rug
+    rug_pos = frame.to_world(Vector((depth * 0.48, 0.0, 0.0)))
+    build_rug(bm, x=rug_pos.x, y=rug_pos.y, z_ground=z0 + 0.14,
+              width=1.3, length=1.8, rug_style=1, ang=ang)
+
+    # Ceiling lantern illumination
+    lantern_pos = frame.to_world(Vector((depth * 0.50, 0.0, 0.0)))
+    build_chain_lantern(bm, x=lantern_pos.x, y=lantern_pos.y,
+                        z_ceiling=z0 + 0.14 + bay_h - 0.05, chain_len=0.45)
 
     # The shaft wall is a straight cylinder of constant wall_t, so the casing
     # is centered on the mid-wall and laps BOTH faces of the 1.30 x 2.70
@@ -1527,6 +1609,12 @@ def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r, bay=0,
     turret: curved walls with a framed plank entrance facing the bridge, glowing
     windows, a boarded interior floor/ceiling, a UV-unwrapped curved teardrop
     tail beneath and a conical shingle cap with a crystal finial.
+
+    PLOT NOTE (deliberate): the bridge + turret reach ~bel_r + bridge_len +
+    tower_r from the shaft center, which overhangs the nominal map plot on T2
+    (~3m, high aerial at z 20m+) and T3 (~2m). Ground-level footprints stay
+    inside their plots; only this high aerial lookout crosses the line. Kept
+    iconic by design decision — do not "fix" by shortening without review.
     """
     from .facade import FacadeFrame
 
@@ -1675,14 +1763,10 @@ def _build_bridge_tower(bm, props, bel_r, crown_z, top_shaft_r, bay=0,
     _build_pointed_tail(bm, tx, ty, tz_lower, tower_r, depth=2.20, segments=32,
                         rings=16, mat_index=turret_mat, power=1.7)
 
-    # 4g. Conical shingle cap and crystal finial
+    # 4g. Bell-cast witch-hat cap and crystal finial
     cap_h = 2.30
-    cap = create_cone(bm, radius1=(tower_r + 0.10) * 1.16, radius2=0.05, height=cap_h,
-                      segments=32, location=(tx, ty, tz_top + cap_h * 0.5),
-                      mat_index=MAT_INDEX_SHINGLES)
-    for f in cap:
-        f.smooth = True
-    apply_roof_shingle_uvs(bm, cap, scale=0.32)
+    _witch_hat_roof(bm, tx, ty, tz_top, radius=tower_r + 0.10,
+                    height=cap_h, segments=32, corbels=False, finial=False)
     _arcane_crystal(bm, tx, ty, tz_top + cap_h, scale=0.75)
 
 
@@ -1690,7 +1774,7 @@ def build_mage_tower(bm, props, seed):
     """Build the authentic whimsical fantasy Mage Tower."""
     wall_t = props.wall_thickness
     found_h = props.foundation_height if props.has_foundation else 0.5
-    R = max(4.6, props.width * 0.48)
+    R = max(3.0, props.width * 0.5)
     level_h = max(4.8, props.floor_height)
     levels = max(3, props.num_floors)
 
@@ -1959,15 +2043,39 @@ def build_mage_tower(bm, props, seed):
     # 4. Roof, Spires, Tourelles & Orbiting Arcane Crystals
     # -------------------------------------------------------------------------
     roof_z = crown_z + bel_h
-    roof_h = max(6.8, level_h * 1.50)
+    scale_factor = 2.4 + max(0.0, bel_r - 3.5) * 0.22
+    roof_h = max(bel_r * scale_factor, getattr(props, 'roof_height', 0.0))
 
     # Main flared witch-hat spire (round smooth look)
     _witch_hat_roof(bm, 0.0, 0.0, roof_z, radius=bel_r, height=roof_h, segments=48)
 
     # High-poly smooth corner tourelles / pinnacles around the eaves.
-    _corner_tourelles(bm, 0.0, 0.0, roof_z + 0.16, bel_r, height=2.85)
+    _corner_tourelles(bm, 0.0, 0.0, roof_z + 0.16, bel_r, height=2.0 + bel_r * 0.15)
 
     # Floating orbiting arcane crystal shards (matching Images 4 & 5)
     _floating_arcane_shards(bm, 0.0, 0.0, roof_z, bel_r)
+
+    # -------------------------------------------------------------------------
+    # 5. Open Arcane Interior Furnishings (Bookcases & Magical Props)
+    # -------------------------------------------------------------------------
+    if getattr(props, 'has_interior_furnishing', True):
+        from .accessories.mage_furnishing import furnish_mage_tower
+        furnish_mage_tower(
+            bm=bm,
+            props=props,
+            shaft_storeys=shaft_storeys,
+            level_h=level_h,
+            found_h=found_h,
+            R=R,
+            wall_t=wall_t,
+            stair_configs=stair_configs,
+            outcrop_by_floor=outcrop_by_floor,
+            door_bays_by_floor=({lower_bridge_fl: {lower_bridge_bay}}
+                                if has_lower_bridge else None),
+            crown_z=crown_z,
+            bel_r=bel_r,
+            bel_h=bel_h,
+            seed=seed,
+        )
 
 

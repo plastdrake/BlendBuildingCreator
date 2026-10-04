@@ -239,7 +239,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                     z_base, width=2.2, depth=1.6, height=2.6, roof_style='LEAN_TO', tier='TIER_3',
                     floor_h=2.8, lower_bounds=None,
                     win_w=None, win_h=None, shingle_scale=0.32, shingle_rot=0,
-                    off_along=0.0, frame=None, peak_h=None, wall_mat=None):
+                    off_along=0.0, frame=None, peak_h=None, wall_mat=None, has_bench=True):
     """
     Builds a small outcrop bay room / annex projection:
     - GROUND: rests on grounded stone foundation plinth.
@@ -343,27 +343,28 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
     )
 
     # Fitted oriel window bench with warm cushioned seat pad
-    bench_w = max(0.8, width - 0.45)
-    bench_d = min(0.48, depth * 0.42)
-    bench_h = 0.42
-    bench_x = depth - bench_d * 0.5 - 0.12
-    create_beveled_box(
-        bm,
-        size=(bench_d, bench_w, bench_h),
-        location=frame.to_world(Vector((bench_x, 0.0, z_base + bench_h * 0.5))),
-        rotation=(0.0, 0.0, frame.rot_z),
-        mat_index=MAT_INDEX_WOOD,
-        bevel_amount=0.010
-    )
-    from ..materials import MAT_INDEX_FABRIC_RED
-    create_beveled_box(
-        bm,
-        size=(bench_d + 0.03, bench_w + 0.03, 0.06),
-        location=frame.to_world(Vector((bench_x, 0.0, z_base + bench_h + 0.03))),
-        rotation=(0.0, 0.0, frame.rot_z),
-        mat_index=MAT_INDEX_FABRIC_RED,
-        bevel_amount=0.012
-    )
+    if has_bench:
+        bench_w = max(0.8, width - 0.45)
+        bench_d = min(0.48, depth * 0.42)
+        bench_h = 0.42
+        bench_x = depth - bench_d * 0.5 - 0.12
+        create_beveled_box(
+            bm,
+            size=(bench_d, bench_w, bench_h),
+            location=frame.to_world(Vector((bench_x, 0.0, z_base + bench_h * 0.5))),
+            rotation=(0.0, 0.0, frame.rot_z),
+            mat_index=MAT_INDEX_WOOD,
+            bevel_amount=0.010
+        )
+        from ..materials import MAT_INDEX_FABRIC_RED
+        create_beveled_box(
+            bm,
+            size=(bench_d + 0.03, bench_w + 0.03, 0.06),
+            location=frame.to_world(Vector((bench_x, 0.0, z_base + bench_h + 0.03))),
+            rotation=(0.0, 0.0, frame.rot_z),
+            mat_index=MAT_INDEX_FABRIC_RED,
+            bevel_amount=0.012
+        )
 
     # 3. Hollow Walls: Front Wall & Side Walls (Leaving Rear Open into Main Room)
     # wall_mat is resolved by the caller from the building's effective wall

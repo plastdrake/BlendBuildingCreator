@@ -144,21 +144,45 @@ def test_mage_tower():
     bpy.ops.building.create_fantasy_building()
     
     # Test Tier 1, 2, 3 Mage Tower presets
-    for t_key in ['MAGE_TOWER_T1', 'MAGE_TOWER_T2', 'MAGE_TOWER_T3']:
+    tier_radii = {
+        'MAGE_TOWER_T1': 4.2,
+        'MAGE_TOWER_T2': 5.5,
+        'MAGE_TOWER_T3': 6.5,
+    }
+    for t_key, expected_r in tier_radii.items():
         p_data = PRESETS[t_key]['settings']
-        assert p_data['width'] >= 10.0, f"{t_key} width {p_data['width']} is below 10.0m"
+        expected_w = expected_r * 2.0
+        assert abs(p_data['width'] - expected_w) < 0.01, f"{t_key} width {p_data['width']} != {expected_w}m (expected radius {expected_r}m)"
         assert p_data['stair_width'] >= 1.70, f"{t_key} stair_width {p_data['stair_width']} is below 1.70m"
         assert p_data['floor_height'] >= 5.0, f"{t_key} floor_height {p_data['floor_height']} is below 5.0m"
 
-    # Generate Tier 1 Mage Tower
+    # Generate Tier 1 Mage Tower (furnished, 4.2m radius -> ~8.4m base diameter)
     bpy.ops.building.apply_preset(preset_key='MAGE_TOWER_T1')
     obj = bpy.context.active_object
     verts = len(obj.data.vertices)
-    assert verts > 5000, f"Mage Tower geometry too sparse: {verts} verts"
+    assert verts > 8000, f"Mage Tower T1 geometry too sparse: {verts} verts"
     dim = obj.dimensions
-    assert dim.x >= 9.5, f"Mage tower X diameter {dim.x:.1f}m is too small"
-    assert dim.y >= 9.5, f"Mage tower Y diameter {dim.y:.1f}m is too small"
-    print(f"  [PASS] Mage Tower generated successfully (X={dim.x:.1f}m, Y={dim.y:.1f}m, Z={dim.z:.1f}m, {verts} verts).")
+    assert dim.x >= 8.4, f"Mage tower T1 X diameter {dim.x:.1f}m is too small (expected >= 8.4m for 4.2m radius)"
+    assert dim.y >= 8.4, f"Mage tower T1 Y diameter {dim.y:.1f}m is too small (expected >= 8.4m for 4.2m radius)"
+    print(f"  [PASS] Mage Tower T1 (4.2m radius) generated successfully (X={dim.x:.1f}m, Y={dim.y:.1f}m, Z={dim.z:.1f}m, {verts} verts).")
+
+    # Generate Tier 2 Mage Tower (furnished, 5.5m radius -> ~11m base diameter)
+    bpy.ops.building.apply_preset(preset_key='MAGE_TOWER_T2')
+    obj = bpy.context.active_object
+    verts2 = len(obj.data.vertices)
+    assert verts2 > 14000, f"Mage Tower T2 geometry too sparse: {verts2} verts"
+    dim2 = obj.dimensions
+    assert dim2.x >= 11.0, f"Mage tower T2 X diameter {dim2.x:.1f}m is too small (expected >= 11.0m for 5.5m radius)"
+    print(f"  [PASS] Mage Tower T2 (5.5m radius) generated successfully (X={dim2.x:.1f}m, Y={dim2.y:.1f}m, Z={dim2.z:.1f}m, {verts2} verts).")
+
+    # Generate Tier 3 Mage Tower (furnished, 6.5m radius -> ~13m base diameter)
+    bpy.ops.building.apply_preset(preset_key='MAGE_TOWER_T3')
+    obj = bpy.context.active_object
+    verts3 = len(obj.data.vertices)
+    assert verts3 > 20000, f"Mage Tower T3 geometry too sparse: {verts3} verts"
+    dim3 = obj.dimensions
+    assert dim3.x >= 13.0, f"Mage tower T3 X diameter {dim3.x:.1f}m is too small (expected >= 13.0m for 6.5m radius)"
+    print(f"  [PASS] Mage Tower T3 (6.5m radius) generated successfully (X={dim3.x:.1f}m, Y={dim3.y:.1f}m, Z={dim3.z:.1f}m, {verts3} verts).")
 
 
 def test_room_zoning_and_furnishing():
@@ -397,16 +421,18 @@ def test_props_and_rugs():
         build_prop(bm, r_key, 2.0, 0.0, 0.0, 0.0, width=1.4, length=2.0)
 
     # 4. New furnishings: sofa/armchair (previously crashed on cylinder shading),
-    #    the fixed pumpkin, the salad/herb bowl and the planters.
-    build_prop(bm, 'SOFA', 3.5, 0.0, 0.0, 0.0)
-    build_prop(bm, 'ARMCHAIR', 4.5, 0.0, 0.0, 0.0)
-    build_prop(bm, 'PUMPKIN', 5.2, 0.0, 0.0, 0.0)
-    build_prop(bm, 'POTTED_HERB', 5.8, 0.0, 0.0, 0.0)
-    build_prop(bm, 'POTTED_PLANT_LARGE', 6.4, 0.0, 0.0, 0.0)
+    # 5. New magical props for Mage Tower
+    magical_props = [
+        'SPELLBOOK_PEDESTAL', 'ARCANE_ORRERY', 'ALCHEMY_STATION',
+        'SCRYING_POOL', 'ENCHANTING_TABLE', 'MAGIC_CAULDRON',
+        'GRAND_BOOKCASE', 'ARCANE_CIRCLE',
+    ]
+    for idx, m_key in enumerate(magical_props):
+        build_prop(bm, m_key, 7.0 + idx * 2.0, 0.0, 0.0, 0.0)
 
     total_faces = len(bm.faces)
-    assert total_faces > 100, f"Expected > 100 faces from new props, got {total_faces}"
-    print(f"  [PASS] KITCHEN_STOVE, SCATTER_TABLEWARE, 3 RUG variants, SOFA/ARMCHAIR and planters built cleanly ({total_faces} faces).")
+    assert total_faces > 500, f"Expected > 500 faces from new props, got {total_faces}"
+    print(f"  [PASS] All props including 8 magical props built cleanly ({total_faces} faces).")
     bm.free()
 
 

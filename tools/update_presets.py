@@ -221,21 +221,10 @@ update_floors_for('HEALERS_CHAPEL_T1', 1, 2)
 update_floors_for('HEALERS_CHAPEL_T2', 2, 3)
 update_floors_for('HEALERS_CHAPEL_T3', 2, 3)
 
-# Mage Tower specific sizing
-content = re.sub(r"('MAGE_TOWER_T1':[\s\S]*?'width':\s*)8\.4", r"\g<1>10.5", content)
-content = re.sub(r"('MAGE_TOWER_T1':[\s\S]*?'depth':\s*)8\.4", r"\g<1>10.5", content)
-content = re.sub(r"('MAGE_TOWER_T1':[\s\S]*?'floor_height':\s*)4\.8", r"\g<1>5.4", content)
-content = re.sub(r"('MAGE_TOWER_T1':[\s\S]*?'stair_width':\s*)1\.[0-9]+", r"\g<1>1.85", content)
-
-content = re.sub(r"('MAGE_TOWER_T2':[\s\S]*?'width':\s*)9\.4", r"\g<1>12.5", content)
-content = re.sub(r"('MAGE_TOWER_T2':[\s\S]*?'depth':\s*)9\.4", r"\g<1>12.5", content)
-content = re.sub(r"('MAGE_TOWER_T2':[\s\S]*?'floor_height':\s*)5\.4", r"\g<1>5.8", content)
-content = re.sub(r"('MAGE_TOWER_T2':[\s\S]*?'stair_width':\s*)1\.[0-9]+", r"\g<1>1.85", content)
-
-content = re.sub(r"('MAGE_TOWER_T3':[\s\S]*?'width':\s*)11\.0", r"\g<1>15.0", content)
-content = re.sub(r"('MAGE_TOWER_T3':[\s\S]*?'depth':\s*)11\.0", r"\g<1>15.0", content)
-content = re.sub(r"('MAGE_TOWER_T3':[\s\S]*?'floor_height':\s*)5\.6", r"\g<1>6.0", content)
-content = re.sub(r"('MAGE_TOWER_T3':[\s\S]*?'stair_width':\s*)1\.[0-9]+", r"\g<1>1.85", content)
+# Mage Tower specific sizing: RETIRED (one-shot migration already applied).
+# Current canonical radii live in presets.py: T1 R=4.2 (8.4m), T2 R=5.5 (11m),
+# T3 R=6.5 (13m). This block is intentionally a no-op so re-running this
+# script can never clobber the mage tower footprints.
 
 # 4. Add Tenement Presets
 tenement_presets_text = """    # =========================================================================

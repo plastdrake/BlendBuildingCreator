@@ -27,6 +27,7 @@ PROP_CATEGORIES: Tuple[Tuple[str, str], ...] = (
     ('LIGHT', "Lighting",),
     ('YARD', "Yard & Garden",),
     ('SIGN', "Signs & Boards",),
+    ('ARCANE', "Arcane & Magical",),
 )
 
 
@@ -166,6 +167,24 @@ for _s in (
           'interior_furniture', 'build_plank_pile', 1.15, length=2.0, width=0.28, layers=6),
     _spec('STONE_PILE', "Stone Block Stack", 'STORAGE', "Stacked cut-stone blocks",
           'interior_furniture', 'build_stone_pile', 1.10, length=1.8, width=0.95, layers=4),
+    _spec('SPELLBOOK_PEDESTAL', "Spellbook Pedestal", 'ARCANE', "Ornate wizard lectern with open grimoire, glowing crystal, and candles",
+          'interior_furniture', 'build_spellbook_pedestal', 0.55),
+    _spec('ARCANE_ORRERY', "Arcane Orrery", 'ARCANE', "Celestial armillary sphere with gimbaled rings and glowing mana orb",
+          'interior_furniture', 'build_arcane_orrery', 0.65),
+    _spec('ALCHEMY_STATION', "Alchemy Station", 'ARCANE', "Wizard's distillation workstation with alembic, flasks, and mortar",
+          'interior_furniture', 'build_alchemy_station', 1.20, length=2.1, width=0.9),
+    _spec('SCRYING_POOL', "Scrying Pool", 'ARCANE', "Carved cut-stone divination basin with glowing magical water",
+          'interior_furniture', 'build_scrying_pool', 1.05, radius=0.90),
+    _spec('ENCHANTING_TABLE', "Enchanting Table", 'ARCANE', "Arcane altar with levitating crystal focus, runic ring, and tome",
+          'interior_furniture', 'build_enchanting_table', 0.95, radius=0.75),
+    _spec('MAGIC_CAULDRON', "Ritual Cauldron", 'ARCANE', "Large bubbling iron cauldron with glowing potion, tripod legs, and embers",
+          'interior_furniture', 'build_magic_cauldron', 0.70, radius=0.48),
+    _spec('MORTAR_AND_PESTLE', "Mortar & Pestle", 'ARCANE', "Cut-stone apothecary mortar with true hollow bowl, herbal mash, and resting pestle",
+          'interior_furniture', 'build_mortar_and_pestle', 0.30),
+    _spec('GRAND_BOOKCASE', "Grand Arcane Bookcase", 'STORAGE', "Extra-tall 3.2m library bookcase with grimoires, scrolls, and ladder",
+          'interior_furniture', 'build_grand_bookcase', 1.30, width=2.4, height=3.2),
+    _spec('ARCANE_CIRCLE', "Arcane Summoning Circle", 'ARCANE', "Floor runic sigil with concentric metallic rings, glowing core, and candles",
+          'interior_furniture', 'build_arcane_circle', 2.30, radius=2.2),
 ):
     PROP_REGISTRY[_s.key] = _s
 
