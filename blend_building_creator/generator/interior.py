@@ -321,6 +321,52 @@ def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
         add_trim_segment(x1, y1, x2, y2, inward,
                          z_ceil - trim_h_ceil * 0.5 - 0.008, 0.026, trim_h_ceil, 0.008)
 
+def build_stair_guardrail_3sided(bm, sh_x1, sh_x2, sh_y1, sh_y2, floor_z,
+                                 climb_side='NORTH', offset=0.18, rail_h=0.95,
+                                 bounds=None):
+    """
+    Builds a 3-sided safety guardrail on the upper floor around the stairwell opening,
+    offset 18 cm (0.18m) outward from the hole so it never overlaps the stair structure or posts.
+    The side we climb up from the stairs is kept open.
+    Corner posts are cleanly shared so there is zero overlap between adjacent railing segments.
+    """
+    slab_xmin, slab_xmax, slab_ymin, slab_ymax = bounds if bounds else (-999.0, 999.0, -999.0, 999.0)
+    x_left = max(slab_xmin + 0.08, sh_x1 - offset)
+    x_right = min(slab_xmax - 0.08, sh_x2 + offset)
+    
+    if climb_side == 'NORTH':
+        y_foot = max(slab_ymin + 0.08, sh_y1 - offset)
+        y_climb = min(slab_ymax - 0.08, sh_y2)
+        # Left long railing (corner post at y_foot, end post at y_climb)
+        build_railing(bm, (x_left, y_foot), (x_left, y_climb), floor_z, height=rail_h,
+                      post_spacing=1.3, baluster_spacing=0.20, braces=False,
+                      post_at_start=True, post_at_end=True)
+        # Right long railing (corner post at y_foot, end post at y_climb)
+        build_railing(bm, (x_right, y_foot), (x_right, y_climb), floor_z, height=rail_h,
+                      post_spacing=1.3, baluster_spacing=0.20, braces=False,
+                      post_at_start=True, post_at_end=True)
+        # Return short railing across closed foot end (skips corner posts as side rails placed them)
+        if x_right - x_left > 0.3:
+            build_railing(bm, (x_left, y_foot), (x_right, y_foot), floor_z, height=rail_h,
+                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
+                          post_at_start=False, post_at_end=False)
+    else:  # climb_side == 'SOUTH'
+        y_foot = min(slab_ymax - 0.08, sh_y2 + offset)
+        y_climb = max(slab_ymin + 0.08, sh_y1)
+        # Left long railing
+        build_railing(bm, (x_left, y_climb), (x_left, y_foot), floor_z, height=rail_h,
+                      post_spacing=1.3, baluster_spacing=0.20, braces=False,
+                      post_at_start=True, post_at_end=True)
+        # Right long railing
+        build_railing(bm, (x_right, y_climb), (x_right, y_foot), floor_z, height=rail_h,
+                      post_spacing=1.3, baluster_spacing=0.20, braces=False,
+                      post_at_start=True, post_at_end=True)
+        # Return short railing across closed foot end
+        if x_right - x_left > 0.3:
+            build_railing(bm, (x_left, y_foot), (x_right, y_foot), floor_z, height=rail_h,
+                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
+                          post_at_start=False, post_at_end=False)
+
 def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, return_y=None, x_start=None):
     """
     Builds a safety guardrail on the upper floor along the open edge of the stairwell
@@ -333,7 +379,8 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, retu
     build_railing(bm, (rail_x, y_start), (rail_x, y_end), floor_z, height=rail_h)
     if return_y is not None and x_start is not None and abs(rail_x - x_start) > 0.3:
         build_railing(bm, (x_start, return_y), (rail_x, return_y), floor_z,
-                      height=rail_h, braces=False, post_spacing=1.0)
+                      height=rail_h, braces=False, post_spacing=1.0,
+                      post_at_start=False, post_at_end=False)
 
 def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_depth=2.6, num_steps=14, direction_y=1):
     """
@@ -415,16 +462,25 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
                 loop[uv_layer].uv = Vector((u, v))
         
     # 3. Side Stringer Boards (anchored from starter base to upper landing)
-    stringer_thick = 0.08
-    stringer_h = 0.20
+    # Closed stringer beam (stringer_h=0.44, stringer_thick=0.10) to cover the sides of all
+    # step treads and risers, and directly carry all vertical balusters without an extra sill rail.
+    stringer_thick = 0.10
+    stringer_h = 0.44
     diag_length = math.sqrt(dz * dz + stair_depth * stair_depth)
     pitch_angle = math.atan2(dz, stair_depth) * direction_y
     cos_pitch = math.cos(abs(pitch_angle))
+    sin_pitch = math.sin(abs(pitch_angle))
+    top_offset = (stringer_h * 0.5) / cos_pitch
+
+    # Shift along slope so bottom front corner meets the back of the bottom post flush
+    shift_along = (stringer_h * 0.5) * sin_pitch
+    shift_y = shift_along * cos_pitch * direction_y
+    shift_z = shift_along * sin_pitch
     
     for side in [-1, 1]:
         str_x = x0 + side * (stair_width * 0.5 + stringer_thick * 0.5)
-        str_y = y0 + (stair_depth * 0.5) * direction_y
-        str_z = z0 + dz * 0.5
+        str_y = y0 + (stair_depth * 0.5) * direction_y + shift_y
+        str_z = z0 + dz * 0.5 + shift_z
         # create_box automatically unwraps V strictly along the diagonal beam length (dy)
         create_box(
             bm,
@@ -449,15 +505,52 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
                 co = loop.vert.co
                 loop[uv_layer].uv = Vector(((co.x - x0) * 1.5, (co.y - (y0 + stair_depth * direction_y)) * 0.65 + (co.z - target_z) * 1.2))
 
-    # 5. Detailed guard railings on BOTH sides, following the flight's pitch
+    # 5. Guard railings on BOTH sides with prominent, taller end pillars (newel posts).
+    # End pillars are placed forward at the landing/step edges and grounded on floor/landing slabs.
+    # The handrail terminates cleanly into the sides of the pillars, and balusters enter
+    # directly into the top of the enlarged diagonal stringer beam without redundant sill beams.
+    POST_W = 0.10
+    bot_post_h = 1.15
+    top_post_h = 1.05
+    rail_h = 0.68
+    tan_pitch = dz / stair_depth
+
     for side in [-1, 1]:
         rail_x = x0 + side * (stair_width * 0.5 + stringer_thick * 0.5)
+
+        # Bottom end pillar: at the foot of the stairs, standing firmly on the lower floor (z0)
+        bot_post_y = y0 + (POST_W * 0.5) * direction_y
+        build_railing_post(bm, rail_x, bot_post_y, z0, height=bot_post_h,
+                           iron_pin=False, jankiness=0.0)
+
+        # Top end pillar: at the landing edge, standing firmly on the upper floor (target_z)
+        top_post_y = y0 + (stair_depth - POST_W * 0.5) * direction_y
+        build_railing_post(bm, rail_x, top_post_y, target_z, height=top_post_h,
+                           iron_pin=False, jankiness=0.0)
+
+        # Sloped rail spans between the inner faces of bottom and top end pillars
+        y_rail_start = bot_post_y + (POST_W * 0.5) * direction_y
+        y_rail_end = top_post_y - (POST_W * 0.5) * direction_y
+
+        dist_start = abs(y_rail_start - y0)
+        dist_end = abs(y_rail_end - y0)
+        z_start = z0 + dist_start * tan_pitch + top_offset
+        z_end = z0 + dist_end * tan_pitch + top_offset
+
         build_railing(
             bm,
-            (rail_x, y0 + 0.06 * direction_y),
-            (rail_x, y0 + (stair_depth - 0.06) * direction_y),
-            z0 + 0.06, height=0.92, base_z_end=target_z + 0.06,
-            post_spacing=1.1, baluster_spacing=0.20, braces=False,
+            (rail_x, y_rail_start),
+            (rail_x, y_rail_end),
+            z_start,
+            height=rail_h,
+            base_z_end=z_end,
+            has_sill=False,
+            posts=False,
+            post_at_start=False,
+            post_at_end=False,
+            baluster_spacing=0.20,
+            end_overhang=0.0,
+            braces=False,
         )
 
 def build_spiral_staircase(bm, center_pos, target_z, radius=1.35, num_steps=18, start_ang_deg=-90.0, total_angle_deg=360.0):

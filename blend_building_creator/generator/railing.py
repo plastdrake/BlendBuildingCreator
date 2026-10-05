@@ -88,7 +88,7 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
                   rail_mat=MAT_INDEX_TIMBER, baluster_mat=MAT_INDEX_WOOD,
                   end_overhang=0.08, post_spacing=1.60, baluster_spacing=0.25,
                   braces=False, iron_pins=False, posts=True, jankiness=0.15,
-                  seed=0):
+                  seed=0, has_sill=True, post_at_start=True, post_at_end=True):
     """Build a clean, optimized guard railing from p_start to p_end at floor level base_z.
 
     height is measured vertically from the underside of the sill to the top of the handrail.
@@ -109,10 +109,11 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
     def at(t):
         return (x0 + dx * t, y0 + dy * t, z0 + (z1 - z0) * t)
 
-    # 1. Grounded base sill rail, following slope
-    _rail_beam(bm, x0, y0, x1, y1,
-               z0 + SILL_T * 0.5, z1 + SILL_T * 0.5,
-               SILL_W, SILL_T, rail_mat, bevel=0.010)
+    # 1. Grounded base sill rail, following slope (optional, omitted when stringer serves as sill)
+    if has_sill:
+        _rail_beam(bm, x0, y0, x1, y1,
+                   z0 + SILL_T * 0.5, z1 + SILL_T * 0.5,
+                   SILL_W, SILL_T, rail_mat, bevel=0.010)
 
     # 2. Handrail and cap board
     rx0 = x0 - ux * end_overhang
@@ -132,6 +133,10 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
     posts_t = [i / n_post for i in range(n_post + 1)]
     if posts:
         for i, t in enumerate(posts_t):
+            if i == 0 and not post_at_start:
+                continue
+            if i == len(posts_t) - 1 and not post_at_end:
+                continue
             px, py, pz = at(t)
             build_railing_post(bm, px, py, pz, height, rail_mat, baluster_mat,
                                iron_pins, jankiness, i, seed)
@@ -139,6 +144,7 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
         posts_t = [0.0, 1.0]
 
     # 4. Clean vertical balusters inside every bay
+    sill_offset = SILL_T if has_sill else 0.0
     for bi in range(len(posts_t) - 1):
         ta, tb = posts_t[bi], posts_t[bi + 1]
         bay = (tb - ta) * run
@@ -148,14 +154,14 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
         for k in range(1, n_bal + 1):
             t = ta + (tb - ta) * (k / (n_bal + 1))
             px, py, pz = at(t)
-            bal_h = height - SILL_T - RAIL_T
+            bal_h = height - sill_offset - RAIL_T
             if bal_h < 0.12:
                 continue
             idx = bi * 100 + k
             t_x = _jitter(jankiness, idx, 27.0, seed, 0.02)
             t_y = _jitter(jankiness, idx, 30.0, seed, 0.02)
             create_beveled_box(bm, size=(0.055, 0.055, bal_h),
-                               location=(px, py, pz + SILL_T + bal_h * 0.5),
+                               location=(px, py, pz + sill_offset + bal_h * 0.5),
                                rotation=(t_x, t_y, 0.0),
                                mat_index=baluster_mat, bevel_amount=0.006)
 

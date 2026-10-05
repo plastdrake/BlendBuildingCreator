@@ -357,6 +357,10 @@ def _dress_desk(bm, tracker: RoomOccupancyTracker, cx: float, cy: float, yaw: fl
         build_prop(bm, 'CHAIR', ccx, ccy, z_floor, math.atan2(-fx, fy), seat_h=0.48)
     bx, by = cx - fy * 0.32, cy + fx * 0.32
     build_prop(bm, 'BOOK_PILE_SMALL', bx, by, z_floor + 0.78, rng.uniform(0.0, 6.28))
+    # Small potted plant on the opposite corner of the desk
+    if rng.random() < 0.60:
+        px, py = cx + fy * 0.35, cy - fx * 0.35
+        build_prop(bm, 'POTTED_PLANT_SMALL', px, py, z_floor + 0.78, rng.uniform(0.0, 6.28))
 
 
 def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
@@ -412,13 +416,16 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
 
 def _try_place_plant(bm, tracker, z_floor: float, rng,
                      large: bool = True, box: Optional[float] = None) -> bool:
-    """Drops a potted plant into whichever free corner/edge is available.
+    """Drops a large floor potted plant into whichever free corner/edge is available.
 
-    Used across room types so the new planters actually show up in play.
+    Only large potted plants are placed directly on the floor. Small potted plants
+    belong exclusively on surfaces (tables, desks, shelves, nightstands).
     """
-    key = 'POTTED_PLANT_LARGE' if large else 'POTTED_PLANT_SMALL'
+    if not large:
+        return False
+    key = 'POTTED_PLANT_LARGE'
     if box is None:
-        box = 0.34 if large else 0.20
+        box = 0.34
     rx0, rx1 = tracker.rx0, tracker.rx1
     ry0, ry1 = tracker.ry0, tracker.ry1
     xs = [rx0 + box, rx1 - box]
@@ -698,7 +705,10 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
             if tracker.is_free(scx - 0.25, scx + 0.25, scy - 0.25, scy + 0.25):
                 tracker.occupy(scx - 0.25, scx + 0.25, scy - 0.25, scy + 0.25)
                 build_prop(bm, 'STOOL', scx, scy, z_floor, 0.0)
-                build_prop(bm, 'BOOK_PILE_SMALL', scx, scy, z_floor + 0.48, 0.2)
+                if rng.random() < 0.50:
+                    build_prop(bm, 'BOOK_PILE_SMALL', scx, scy, z_floor + 0.48, 0.2)
+                else:
+                    build_prop(bm, 'POTTED_PLANT_SMALL', scx, scy, z_floor + 0.48, 0.0)
                 break
 
     # 3. Wardrobe against the wall opposite or beside the bed
@@ -805,6 +815,8 @@ def _furnish_study_library(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
                 build_prop(bm, 'CHAIR', rcx, rcy - 0.60, z_floor, math.pi)
             # Book pile on desk
             build_prop(bm, 'BOOK_PILE_SMALL', rcx + 0.40, rcy, z_floor + 0.78, 0.3)
+            if rng.random() < 0.60:
+                build_prop(bm, 'POTTED_PLANT_SMALL', rcx - 0.40, rcy, z_floor + 0.78, rng.uniform(0.0, 6.28))
 
     # 4. Large book pile on the floor in a study corner
     if density >= 0.6:
@@ -887,6 +899,8 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
             
             # Tableware scatter on counter at exact counter top height (1.075)
             build_prop(bm, 'SCATTER_TABLEWARE', cx + tang_dx * 0.4, cy + tang_dy * 0.4, z_floor + 1.075, yaw)
+            if rng.random() < 0.50:
+                build_prop(bm, 'POTTED_PLANT_SMALL', cx - tang_dx * 0.4, cy - tang_dy * 0.4, z_floor + 1.075, rng.uniform(0.0, 6.28))
             # Runner rug in front of counter
             _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', cx + front_dx * 0.75, cy + front_dy * 0.75,
                      z_floor, 0.80, counter_len + 0.2, yaw_max=0.08)
@@ -916,7 +930,10 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
             tracker.occupy(tx - 0.92, tx + 0.92, ty - 0.92, ty + 0.92)
             build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=r)
             build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_floor + 0.775, 0.0)
-            build_prop(bm, 'BOTTLE_CLUSTER', tx + 0.25, ty + 0.10, z_floor + 0.775, 0.0)
+            if rng.random() < 0.35:
+                build_prop(bm, 'POTTED_PLANT_SMALL', tx + 0.25, ty + 0.10, z_floor + 0.775, rng.uniform(0.0, 6.28))
+            else:
+                build_prop(bm, 'BOTTLE_CLUSTER', tx + 0.25, ty + 0.10, z_floor + 0.775, 0.0)
             if first_table_pos is None:
                 first_table_pos = (tx, ty)
             placed_tables += 1
@@ -1334,7 +1351,10 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                     clutter_x, clutter_y = _table_offset(tx, ty, -0.20, 0.0, try_yaw)
                     bottle_x, bottle_y = _table_offset(tx, ty, 0.30, 0.0, try_yaw)
                     build_prop(bm, 'SCATTER_TABLEWARE', clutter_x, clutter_y, z_table, try_yaw)
-                    build_prop(bm, 'BOTTLE_CLUSTER', bottle_x, bottle_y, z_table, try_yaw)
+                    if rng.random() < 0.35:
+                        build_prop(bm, 'POTTED_PLANT_SMALL', bottle_x, bottle_y, z_table, rng.uniform(0.0, 6.28))
+                    else:
+                        build_prop(bm, 'BOTTLE_CLUSTER', bottle_x, bottle_y, z_table, try_yaw)
                     if try_yaw == 0.0:
                         chair_offsets = [
                             (tx, ty - (td * 0.5 + 0.30), math.pi),
@@ -1451,7 +1471,10 @@ def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
         tracker.occupy(dtx - tw * 0.5 - 0.35, dtx + tw * 0.5 + 0.35, dty - td * 0.5 - 0.35, dty + td * 0.5 + 0.35)
         build_prop(bm, 'INDOOR_TABLE', dtx, dty, z_floor, 0.0, length=tw, width=td)
         build_prop(bm, 'SCATTER_TABLEWARE', dtx - 0.25, dty, z_table, 0.0)
-        build_prop(bm, 'BOTTLE_CLUSTER', dtx + 0.35, dty, z_table, 0.0)
+        if rng.random() < 0.45:
+            build_prop(bm, 'POTTED_PLANT_SMALL', dtx + 0.35, dty, z_table, rng.uniform(0.0, 6.28))
+        else:
+            build_prop(bm, 'BOTTLE_CLUSTER', dtx + 0.35, dty, z_table, 0.0)
         # 4 Chairs around table facing inward towards center
         chair_positions = [
             (dtx, dty - (td * 0.5 + 0.30), math.pi),
@@ -1539,9 +1562,8 @@ def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
                          candidate_walls=('WEST', 'SOUTH', 'EAST'))
 
-    # 4b. Large Floor Potted Plant in corner (plus a small tabletop plant)
+    # 4b. Large Floor Potted Plant in corner
     _try_place_plant(bm, tracker, z_floor, rng, large=True)
-    _try_place_plant(bm, tracker, z_floor, rng, large=False, box=0.18)
 
     # 5. Central dining rug, centred exactly under the table + chairs so the
     # group always reads as sitting in the middle of the carpet.
@@ -1653,8 +1675,8 @@ def _furnish_entrance_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
                              check_windows=False, fabric_mat=_sofa_fabric(rng))
     _try_place_wall_prop(bm, 'BOOKSHELF', 1.25, 0.38, tracker, z_floor,
                          candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'))
-    _try_place_plant(bm, tracker, z_floor, rng, large=(min(rw, rd) >= 3.0))
-    _try_place_plant(bm, tracker, z_floor, rng, large=False, box=0.18)
+    if min(rw, rd) >= 2.6:
+        _try_place_plant(bm, tracker, z_floor, rng, large=True)
 
     if min(rw, rd) >= 5.0:
         build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.44)
@@ -2159,8 +2181,11 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
 
     # 1. Storefront counter
     counter_len = min(2.0, rw * 0.45)
-    _try_place_wall_prop(bm, 'COUNTER', counter_len, 0.60, tracker, z_floor,
-                         candidate_walls=('NORTH', 'EAST', 'WEST'), length=counter_len)
+    _d_counter = _try_place_wall_prop(bm, 'COUNTER', counter_len, 0.60, tracker, z_floor,
+                                      candidate_walls=('NORTH', 'EAST', 'WEST'), length=counter_len)
+    if _d_counter:
+        cx, cy, cyaw = _d_counter
+        build_prop(bm, 'POTTED_PLANT_SMALL', cx, cy, z_floor + 1.075, rng.uniform(0.0, 6.28))
 
     # 2. Display shelves on perimeter walls
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
@@ -2342,11 +2367,11 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                      z_floor, min(2.40, max(1.10, rw * 0.55)), min(3.20, max(1.40, rd * 0.55)))
 
     # Most rooms get a potted planter so the new plant props are actually seen
-    # (skipped in bare industrial utility rooms).
+    # (skipped in bare industrial utility rooms). Only large plants go directly on the floor.
     rw = rx1 - rx0
     rd = ry1 - ry0
-    if not _bare and max(rw, rd) >= 2.6 and rng.random() < 0.8:
-        _try_place_plant(bm, tracker, z_floor, rng, large=(min(rw, rd) >= 3.0))
+    if not _bare and min(rw, rd) >= 2.6 and rng.random() < 0.7:
+        _try_place_plant(bm, tracker, z_floor, rng, large=True)
 
 
 def furnish_building_interior(bm, props, ctx):

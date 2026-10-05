@@ -638,7 +638,7 @@ def build_shelf(bm, x, y, z_ground=0.0, ang=0.0, width=1.4, height=1.7):
         # whole unit reads varied rather than repeating one pattern.
         for b in range(2):
             bx = (-width / 4, width / 4)[b] + (rng.random() - 0.5) * 0.10
-            kind = (i + b) % 3
+            kind = (i + b) % 4
             if kind == 0:
                 faces += build_clay_pot(bm, bx, 0.0, z_ground=board_top - 0.004,
                                         radius=0.085, height=0.20, pot_type='JAR')
@@ -646,6 +646,8 @@ def build_shelf(bm, x, y, z_ground=0.0, ang=0.0, width=1.4, height=1.7):
                 faces += create_cylinder(bm, radius=0.075, height=0.17, segments=10,
                                          location=(bx, 0.0, board_top - 0.004 + 0.085),
                                          mat_index=MAT_INDEX_CLAY)
+            elif kind == 2:
+                faces += build_potted_plant_small(bm, bx, 0.0, z_ground=board_top - 0.004)
             else:
                 faces += create_beveled_box(bm, size=(0.26, 0.20, 0.09),
                                             location=(bx, 0.0, board_top - 0.004 + 0.045),
@@ -1054,6 +1056,11 @@ def _dress_row(bm, faces, top, x0, x1, seed, mode, mat_a, mat_b):
     stack_at = {rng.randint(1, 3), rng.randint(4, 6)}
     while bx < limit:
         if k == gap_at:
+            if rng.random() < 0.40 and bx + 0.22 < limit:
+                faces += build_potted_plant_small(bm, bx + 0.10, 0.0, z_ground=top)
+                bx += 0.22
+                k += 1
+                continue
             bx += 0.10 + rng.random() * 0.12
             k += 1
             continue
@@ -2130,13 +2137,17 @@ def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84,
         mat_index=fabric_mat, smooth=True
     )
 
-    # 6. Two plush throw pillows at either arm, leaning back naturally.
-    for sgn, p_mat in [(-1.0, MAT_INDEX_FABRIC_RED), (1.0, MAT_INDEX_CLOTH_LINEN)]:
-        px = sgn * (length * 0.5 - 0.25)
+    # 6. Two plush throw pillows at either arm, leaning back naturally into the corners.
+    # Left pillow rotated 45 degrees, right pillow rotated -45 degrees.
+    for sgn, rot_deg, p_mat in [(-1.0, 45.0, MAT_INDEX_FABRIC_RED), (1.0, -45.0, MAT_INDEX_CLOTH_LINEN)]:
+        px = sgn * (length * 0.5 - 0.28)
+        py = back_y - 0.20
+        pz = deck_h + cushion_thick + 0.10
+        rot_rad = math.radians(rot_deg)
         faces += create_beveled_box(
             bm, size=(0.28, 0.10, 0.26),
-            location=(px, back_y - 0.20, deck_h + cushion_thick + 0.11),
-            rotation=(-0.26, 0.0, sgn * 0.10),
+            location=(px, py, pz),
+            rotation=(-0.24, 0.0, rot_rad),
             mat_index=p_mat, bevel_amount=0.024
         )
 

@@ -207,13 +207,14 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                            fabric_mat=_annex_leather)
                 build_prop(bm, 'ROUND_TABLE', (_sx + _chair_x) * 0.5, _annex_cy, _z_fl, 0.0,
                            radius=0.32)
+                build_prop(bm, 'POTTED_PLANT_SMALL', (_sx + _chair_x) * 0.5, _annex_cy, _z_fl + 0.775, 0.0)
 
             if _annex_w >= 2.6:
                 _bk_y = y0 + wall_t + 0.30
                 build_prop(bm, 'BOOKSHELF', inner_x + side_sgn * 0.55, _bk_y, _z_fl, 0.0,
                            width=min(1.1, _annex_w * 0.5), height=1.70)
 
-            build_prop(bm, 'POTTED_PLANT_SMALL',
+            build_prop(bm, 'POTTED_PLANT_LARGE',
                        outer_x - side_sgn * 0.55, y1 - wall_t - 0.45, _z_fl, 0.0)
             build_prop(bm, 'CHAIN_LANTERN', _annex_cx, _annex_cy, _z_cl, 0.0)
         except Exception:

@@ -21,7 +21,7 @@ from .shapes import get_facade_window_positions, compute_fl_wing_bounds
 from .style import is_tier1_wattle_daub, get_effective_wall_material
 from .interior import (
     build_floor_slab, build_ceiling_beams, build_interior_trims, build_straight_staircase,
-    build_spiral_staircase, build_stair_guardrail, plan_floor_rooms, build_floor_interior_walls
+    build_spiral_staircase, build_stair_guardrail, build_stair_guardrail_3sided, plan_floor_rooms, build_floor_interior_walls
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly
 from .accessories.cargo_port import build_cargo_port_frame
@@ -429,37 +429,37 @@ def build_floors(bm, props, ctx):
             elif stair_switchback:
                 # Switchback floor: this storey's opening is the lane the flight
                 # below climbed, and the sibling lane is solid floor carrying the
-                # next flight.  Guard the edge shared with that walkable lane and
-                # the end of the run nobody steps off, leaving the arrival end
-                # open so you can walk across the landing onto the next flight.
-                if (fl_idx - 1) % 2 == 0:
-                    # Void over the WEST lane: walkable floor lies to its east,
-                    # and that flight's foot is the NORTH end of the run.
-                    build_stair_guardrail(bm, sh_x2 + 0.05, sh_y1, sh_y2, z_floor + 0.05,
-                                          return_y=sh_y2, x_start=sh_x1)
-                else:
-                    # Void over the EAST lane: walkable floor on BOTH sides, and
-                    # that flight's foot is the SOUTH end of the run.
-                    build_stair_guardrail(bm, sh_x1 - 0.05, sh_y1, sh_y2, z_floor + 0.05,
-                                          return_y=sh_y1, x_start=sh_x2)
-                    build_stair_guardrail(bm, min(slab_xmax - 0.10, sh_x2 + 0.05),
-                                          sh_y1, sh_y2, z_floor + 0.05)
-            else:
-                # Straight stairs: only guard open void on the top floor where no more stairs ascend
-                # On intermediate floors, the ascending flight's own handrail protects the opening
+                # next flight. On top floor, no next flight ascends so all 3 sides are guarded.
                 if fl_idx == num_floors - 1:
-                    # The void runs from the arriving flight's foot, so the
-                    # return rail closes that end: track-0 arrivals (odd floors)
-                    # land at the north end, track-1 arrivals (even floors) at
-                    # the south end after the 180 degree rotation.
-                    ret_y = sh_y2 if (fl_idx % 2 == 1) else sh_y1
-                    # Guardrail along the right side and across the void edge
-                    build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
-                                          return_y=ret_y, x_start=sh_x1)
-                    # If there is walkable floor to the left of the stair opening (e.g. over lower flight),
-                    # protect that open edge with a matching left guardrail
-                    if sh_x1 > ix_min + 0.35:
-                        build_stair_guardrail(bm, sh_x1, sh_y1, sh_y2, z_floor + 0.05)
+                    dir_y = int(stair_ascend_sign) if ((fl_idx - 1) % 2 == 0) else int(-stair_ascend_sign)
+                    climb_side = 'NORTH' if dir_y == 1 else 'SOUTH'
+                    build_stair_guardrail_3sided(
+                        bm, sh_x1, sh_x2, sh_y1, sh_y2, z_floor + 0.05,
+                        climb_side=climb_side, offset=0.18, rail_h=0.95,
+                        bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
+                    )
+                elif (fl_idx - 1) % 2 == 0:
+                    # Void over the WEST lane: walkable floor lies to its east
+                    build_stair_guardrail(bm, sh_x2 + 0.18, sh_y1 - 0.18, sh_y2, z_floor + 0.05,
+                                          return_y=sh_y2 + 0.18, x_start=sh_x1 - 0.18)
+                else:
+                    # Void over the EAST lane: walkable floor on BOTH sides
+                    build_stair_guardrail(bm, sh_x1 - 0.18, sh_y1, sh_y2 + 0.18, z_floor + 0.05,
+                                          return_y=sh_y1 - 0.18, x_start=sh_x2 + 0.18)
+                    build_stair_guardrail(bm, min(slab_xmax - 0.08, sh_x2 + 0.18),
+                                          sh_y1, sh_y2 + 0.18, z_floor + 0.05)
+            else:
+                # Straight stairs: guard the open stairwell on all 3 sides except the climb-up side,
+                # offset 18 cm outward from the hole so it sits cleanly on the floor without overlapping
+                # any stair stringers or pillars.
+                if fl_idx == num_floors - 1:
+                    dir_y = int(stair_ascend_sign) if ((fl_idx - 1) % 2 == 0) else int(-stair_ascend_sign)
+                    climb_side = 'NORTH' if dir_y == 1 else 'SOUTH'
+                    build_stair_guardrail_3sided(
+                        bm, sh_x1, sh_x2, sh_y1, sh_y2, z_floor + 0.05,
+                        climb_side=climb_side, offset=0.18, rail_h=0.95,
+                        bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
+                    )
         
         # Wing floor slabs for compound shapes
         if fl_has_wing:
