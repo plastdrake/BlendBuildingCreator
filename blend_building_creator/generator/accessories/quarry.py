@@ -175,17 +175,43 @@ def build_cut_block_stack(bm, x, y, z_ground=0.0, count=6, seed=1):
         )
 
 
-def build_rubble_pile(bm, x, y, z_ground=0.0, count=5, seed=7):
-    """Small scatter of off-cut rubble (plain low-poly chunks)."""
+def build_rubble_pile(bm, x, y, z_ground=0.0, count=5, seed=7, spread=2.2):
+    """Small scatter of off-cut rubble (plain low-poly chunks).
+
+    ``spread`` is the full width of the scatter square: the open yard
+    keeps the wide default, while indoor bays pass a tight spread so the
+    chips stay at the foot of their stack instead of wandering into
+    neighbouring blocks or walls. Chunk spots are rejection-sampled so
+    chunks never interpenetrate each other; a chunk with no free spot is
+    skipped.
+    """
     rng = _rng(seed, salt=int(x * 11 + y * 5))
+    placed = []  # (px, py, bound_r) of accepted chunks
     for _ in range(max(1, count)):
         s = 0.25 + rng.random() * 0.35
+        sx = s
+        sy = s * (0.7 + rng.random() * 0.5)
+        yaw = rng.random() * math.pi
+        ca, sa = abs(math.cos(yaw)), abs(math.sin(yaw))
+        bound_r = math.hypot(sx * ca + sy * sa, sx * sa + sy * ca) * 0.5
+        # Rejection-sample a free spot so chunks never interpenetrate: a
+        # half-buried look reads as a bug, not as natural rubble. When the
+        # patch is full the chunk is skipped outright.
+        px, py = x, y
+        for _try in range(20):
+            tx = x + (rng.random() - 0.5) * spread
+            ty = y + (rng.random() - 0.5) * spread
+            if all(math.hypot(tx - ox, ty - oy) >= (bound_r + or_ + 0.03)
+                   for (ox, oy, or_) in placed):
+                px, py = tx, ty
+                break
+        else:
+            continue
+        placed.append((px, py, bound_r))
         create_box(
-            bm, size=(s, s * (0.7 + rng.random() * 0.5), s * 0.7),
-            location=(x + (rng.random() - 0.5) * 2.2,
-                      y + (rng.random() - 0.5) * 2.2,
-                      z_ground + s * 0.3),
-            rotation=(0.0, 0.0, rng.random() * math.pi),
+            bm, size=(sx, sy, s * 0.7),
+            location=(px, py, z_ground + s * 0.3),
+            rotation=(0.0, 0.0, yaw),
             mat_index=MAT_INDEX_CUT_STONE,
         )
 

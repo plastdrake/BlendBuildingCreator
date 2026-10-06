@@ -2392,10 +2392,9 @@ def setup_building_material_slots(obj, props):
     """
     tier = getattr(props, 'tier', getattr(props, 'material_tier', 'TIER_2'))
 
-    # Tier-varying materials carry a tier suffix (M_Building_Stone_T3, ...)
-    # so each tier can be wired distinctly in Unreal. Tier-invariant helpers
-    # (iron, glass, logs, cloth, ...) keep their plain names.
-    _sfx = {'TIER_1': '_T1', 'TIER_2': '_T2', 'TIER_3': '_T3'}.get(tier, '')
+    # Canonical material names across all tiers (no _T1, _T2, _T3 suffix)
+    # for seamless, automatic master/instance material assignment in Unreal Engine.
+    _sfx = ""
 
     # Resolve manual or tier-based material choices
     eff_roof_mat = getattr(props, 'roof_material_override', 'AUTO')
@@ -2430,27 +2429,27 @@ def setup_building_material_slots(obj, props):
                     eff_wall_mat = 'LOGS'
 
     # 0. Stone (stone_wall_diffuse.jpg / mud_fieldstone / squared_fieldstone / ashlar_stone)
-    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone("M_Building_Stone" + _sfx, color=props.color_stone, tier=tier)
+    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone("M_Building_Stone", color=props.color_stone, tier=tier)
 
     # 1. Plaster (wattle_daub / stucco_plaster / smooth_ivory_stucco)
     freq = getattr(props, 'exposed_brick_frequency', 0.25)
     if eff_wall_mat == 'WATTLE_DAUB':
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_plaster("M_Building_Plaster" + _sfx, color=props.color_wall_ext, is_interior=False, tier='TIER_1'))
+                       create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False, tier='TIER_1'))
     elif eff_wall_mat == 'STUCCO':
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_plaster("M_Building_Plaster" + _sfx, color=props.color_wall_ext, is_interior=False, tier='TIER_2'))
+                       create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False, tier='TIER_2'))
     elif eff_wall_mat == 'STONE':
-        mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_stone("M_Building_Plaster" + _sfx, color=props.color_stone, tier=tier))
+        # Re-use mat_stone so stone walls share the same material slot and avoid an unnecessary draw call
+        mat_plaster = getattr(props, 'custom_wall_ext', None) or mat_stone
     else:
         if tier != 'TIER_1' and getattr(props, 'has_exposed_brick', False):
             mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                           create_stylized_plaster_brick("M_Building_Plaster" + _sfx, color=props.color_wall_ext, frequency=freq))
+                           create_stylized_plaster_brick("M_Building_Plaster", color=props.color_wall_ext, frequency=freq))
         else:
             mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
                            getattr(props, 'custom_wall_int', None) or 
-                           create_stylized_plaster("M_Building_Plaster" + _sfx, color=props.color_wall_ext, is_interior=False, tier=tier))
+                           create_stylized_plaster("M_Building_Plaster", color=props.color_wall_ext, is_interior=False, tier=tier))
 
     # 2. Timber (fachwerk_timber / oiled_timber / timber_beam)
     clr_tf = getattr(props, 'color_timber_frame', None) or (0.24, 0.14, 0.08, 1.0)
@@ -2460,15 +2459,15 @@ def setup_building_material_slots(obj, props):
                  getattr(props, 'custom_railing', None) or 
                  getattr(props, 'custom_window_frame', None) or 
                  getattr(props, 'custom_shutter', None))
-    mat_timber = custom_tf or create_stylized_timber("M_Building_Timber" + _sfx, color=clr_tf, tier=tier)
+    mat_timber = custom_tf or create_stylized_timber("M_Building_Timber", color=clr_tf, tier=tier)
 
     # 3. Floor (floorboards variations)
     clr_floor = getattr(props, 'color_floor', None) or (0.50, 0.35, 0.20, 1.0)
-    mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards("M_Building_Floor" + _sfx, color=clr_floor, tier=tier)
+    mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards("M_Building_Floor", color=clr_floor, tier=tier)
 
     # 4. Shingles (thatch / wood shingles / terracotta / slate)
     mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_shingles(
-        "M_Building_Shingles" + _sfx,
+        "M_Building_Shingles",
         color=getattr(props, 'color_shingles', None),
         tier=tier,
         roof_mat=eff_roof_mat
@@ -2486,11 +2485,11 @@ def setup_building_material_slots(obj, props):
 
     # 7. Wood (facade planks, dormer cheeks, weatherboards)
     clr_wood = getattr(props, 'color_timber', None) or (0.86, 0.74, 0.58, 1.0)
-    mat_wood = getattr(props, 'custom_timber', None) or create_stylized_facade_planks("M_Building_Wood" + _sfx, color=clr_wood, tier=tier)
+    mat_wood = getattr(props, 'custom_timber', None) or create_stylized_facade_planks("M_Building_Wood", color=clr_wood, tier=tier)
 
     # 8. Cut Stone (steps, sills, door arches, thresholds)
     clr_cs = getattr(props, 'color_cut_stone', None) or (0.78, 0.74, 0.68, 1.0)
-    mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone("M_Building_Cut_Stone" + _sfx, color=clr_cs, tier=tier)
+    mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone("M_Building_Cut_Stone", color=clr_cs, tier=tier)
 
     # 9. Log (stylized_log_bark_diffuse.png / log_bark_diffuse.jpg) - Tier 1 rounded logs
     clr_log = (clr_tf[0] * 0.92, clr_tf[1] * 0.88, clr_tf[2] * 0.82, 1.0)
@@ -2714,13 +2713,14 @@ def canonical_slot_index(name):
 
 
 def prune_material_slots_for_bmesh(obj, bm):
-    """Drop unused slots and remap bmesh face indices BEFORE ``to_mesh``.
+    """Drop unused slots and deduplicate matching materials before ``to_mesh``.
 
     Slot surgery happens while the mesh still has no polygons, and the
     remap touches only bmesh face indices (plain ints with no Blender slot
     coupling), so no live mesh behavior can collapse the assignment. Call
     after :func:`setup_building_material_slots` and before ``bm.to_mesh``.
-    Keeps canonical order for surviving slots (stable Unreal slots).
+    Consolidates slots sharing the same material or name into a single slot
+    to eliminate redundant draw calls in Unreal Engine while preserving canonical order.
     """
     try:
         n_slots = len(obj.data.materials)
@@ -2731,12 +2731,29 @@ def prune_material_slots_for_bmesh(obj, bm):
                        if f.is_valid and 0 <= f.material_index < n_slots})
     except Exception:
         return
-    if not used or len(used) == n_slots:
+    if not used:
         return
-    kept = [obj.data.materials[i] for i in used]
-    remap = {old: new for new, old in enumerate(used)}
+
+    # Deduplicate slots by material identity / name
+    unique_mats = []
+    mat_to_new_idx = {}
+    remap = {}
+    for old_idx in used:
+        m = obj.data.materials[old_idx]
+        mat_key = m.name if m else None
+        if mat_key in mat_to_new_idx:
+            remap[old_idx] = mat_to_new_idx[mat_key]
+        else:
+            new_idx = len(unique_mats)
+            mat_to_new_idx[mat_key] = new_idx
+            remap[old_idx] = new_idx
+            unique_mats.append(m)
+
+    if len(unique_mats) == n_slots and all(remap.get(i) == i for i in range(n_slots)):
+        return
+
     obj.data.materials.clear()
-    for m in kept:
+    for m in unique_mats:
         obj.data.materials.append(m)
     for f in bm.faces:
         if f.is_valid:

@@ -22,7 +22,7 @@ from .prop_registry import build_prop, get_spec
 _STRICT_FURNISH = False
 
 # Back-of-house roles that stay bare (no rug) in an industrial fit-out.
-_UTILITY_ROLES = {'STORAGE', 'CELLAR', 'PANTRY', 'WORKSHOP', 'SMITHY', 'STORE'}
+_UTILITY_ROLES = {'STORAGE', 'CELLAR', 'PANTRY', 'WORKSHOP', 'SMITHY', 'STORE', 'STONE_STORE'}
 
 
 class RoomOccupancyTracker:
@@ -357,8 +357,8 @@ def _dress_desk(bm, tracker: RoomOccupancyTracker, cx: float, cy: float, yaw: fl
         build_prop(bm, 'CHAIR', ccx, ccy, z_floor, math.atan2(-fx, fy), seat_h=0.48)
     bx, by = cx - fy * 0.32, cy + fx * 0.32
     build_prop(bm, 'BOOK_PILE_SMALL', bx, by, z_floor + 0.78, rng.uniform(0.0, 6.28))
-    # Small potted plant on the opposite corner of the desk
-    if rng.random() < 0.60:
+    # Small potted plant on the opposite corner of the desk (skipped in industrial/utility rooms)
+    if not getattr(tracker, 'no_rugs', False) and rng.random() < 0.60:
         px, py = cx + fy * 0.35, cy - fx * 0.35
         build_prop(bm, 'POTTED_PLANT_SMALL', px, py, z_floor + 0.78, rng.uniform(0.0, 6.28))
 
@@ -456,6 +456,7 @@ def _area_rug_size(rw, rd, coverage=0.82, max_w=4.50, max_l=5.50,
 def _lay_rug(bm, tracker, rm, rng, key, cx, cy, z_floor, w, l, yaw_max=0.12,
              allow_overlap=True):
     """Lay one rug with organic imperfection and zero clipping/flicker.
+    Skipped completely in industrial / utility / quarry bare fit-outs.
 
     - Slight random yaw so rugs never sit perfectly square (``yaw_max`` rad).
     - Rotated bbox is shrunk to fit inside the room so corners clear walls.
@@ -468,6 +469,8 @@ def _lay_rug(bm, tracker, rm, rng, key, cx, cy, z_floor, w, l, yaw_max=0.12,
       while others go bare.
     Returns the placed rect or None when skipped.
     """
+    if getattr(tracker, 'no_rugs', False):
+        return None
     yaw = rng.uniform(-yaw_max, yaw_max)
     rx0, rx1, ry0, ry1 = tracker.rx0, tracker.rx1, tracker.ry0, tracker.ry1
     ca, sa = abs(math.cos(yaw)), abs(math.sin(yaw))
@@ -1731,76 +1734,254 @@ def _furnish_office(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
 def _furnish_industrial_bay(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                             rng, density: float):
     """Bare industrial fit-out: bulk piles, stacked crates, barrels and chests.
-    Quarries get cut-stone stacks and storage shelving instead of timber. No
-    rugs, no domestic furniture."""
+    Warehouses store both bulk timber (logs/planks) and dressed cut-stone blocks.
+    Lumber mills store heavy log pyramids and sawn plank stacks wherever space allows.
+    No rugs, no domestic furniture."""
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
-    is_quarry = (getattr(tracker, 'archetype', '') == 'QUARRY') or rm.role == 'STONE_STORE'
+    arch = getattr(tracker, 'archetype', '')
+    is_warehouse = (arch == 'WAREHOUSE')
+    is_quarry = (arch == 'QUARRY') or rm.role == 'STONE_STORE'
+    # Tier-1 open-air warehouse stockpiles carry product only: no shelving,
+    # chests or hanging lanterns (there is no ceiling to hang them from).
+    bare = bool(getattr(tracker, 'bare_stockpile', False))
 
-    # Large bulk piles lined along the walls.
+    # Select pile types: Warehouse holds BOTH timber and stone blocks!
+    # True worst-case footprints (incl. jitter) behind each reserve:
+    # - LOG_PILE (length=2.0): ~2.32 x 1.82 -> reserve 2.45 x 2.00.
+    # - PLANK_PILE (length=2.0): ~2.28 x 0.64 -> reserve 2.40 x 1.05.
+    # - STONE_PILE (length=1.9): ~2.07 x 1.18 -> reserve 2.20 x 1.40.
     if is_quarry:
-        pile_keys = ('STONE_PILE', 'STONE_PILE', 'CRATE')
+        pile_keys = ['STONE_PILE', 'STONE_PILE', 'CRATE', 'STONE_PILE']
+    elif is_warehouse:
+        pile_keys = ['LOG_PILE', 'STONE_PILE', 'PLANK_PILE', 'STONE_PILE', 'LOG_PILE', 'PLANK_PILE', 'CRATE']
     else:
-        pile_keys = ('LOG_PILE', 'PLANK_PILE', 'LOG_PILE', 'PLANK_PILE')
-    max_piles = 3 if max(rw, rd) >= 8.5 else (2 if max(rw, rd) >= 5.0 else 1)
+        # Lumber mill and timber workshops: stacked round logs and sawn plank piles
+        pile_keys = ['LOG_PILE', 'PLANK_PILE', 'LOG_PILE', 'PLANK_PILE', 'LOG_PILE', 'CRATE']
+
+    max_piles = 5 if max(rw, rd) >= 8.5 else (3 if max(rw, rd) >= 5.0 else 2)
     placed = 0
+    candidate_walls = ('NORTH', 'SOUTH', 'EAST', 'WEST')
     for key in pile_keys:
         if placed >= max_piles:
             break
         if key == 'CRATE':
             d = _try_place_wall_prop(bm, 'CRATE', 0.70, 0.70, tracker, z_floor,
-                                     candidate_walls=('NORTH', 'SOUTH', 'EAST', 'WEST'),
+                                     candidate_walls=candidate_walls,
                                      size=0.66, check_windows=False)
+        elif key == 'STONE_PILE':
+            # Same true footprint as the stone store (~2.07 x 1.18 incl.
+            # yaw): the old 2.10 x 1.10 box let blocks poke into walls.
+            d = _try_place_wall_prop(bm, key, 2.20, 1.40, tracker, z_floor,
+                                     candidate_walls=candidate_walls,
+                                     length=1.9, check_windows=False)
+        elif key == 'LOG_PILE':
+            d = _try_place_wall_prop(bm, key, 2.45, 2.00, tracker, z_floor,
+                                     candidate_walls=candidate_walls,
+                                     length=2.0, check_windows=False)
         else:
-            d = _try_place_wall_prop(bm, key, 2.25, 1.05, tracker, z_floor,
-                                     candidate_walls=('NORTH', 'SOUTH', 'EAST', 'WEST'),
+            d = _try_place_wall_prop(bm, key, 2.40, 1.05, tracker, z_floor,
+                                     candidate_walls=candidate_walls,
                                      length=2.0, check_windows=False)
         if d is not None:
             placed += 1
 
-    # Guaranteed bulk: if the wall sampler could not fit enough piles (e.g. a
-    # large keep-out for mill machinery), drop them at clear floor positions.
-    if placed < 2:
-        fallback_spots = [
-            (rm.bounds[0] + 1.35, rcy),
-            (rm.bounds[1] - 1.35, rcy),
-            (rcx, rm.bounds[2] + 0.95),
-            (rcx, rm.bounds[3] - 0.95),
-        ]
-        for (fx, fy) in fallback_spots:
-            if placed >= 2:
-                break
-            bx0, bx1, by0, by1 = fx - 1.15, fx + 1.15, fy - 0.60, fy + 0.60
-            if tracker.is_free(bx0, bx1, by0, by1, check_windows=False):
-                tracker.occupy(bx0, bx1, by0, by1)
-                key = 'STONE_PILE' if is_quarry else rng.choice(('LOG_PILE', 'PLANK_PILE'))
-                build_prop(bm, key, fx, fy, z_floor, 0.0, length=2.0)
-                placed += 1
-    if is_quarry:
-        _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
-                             candidate_walls=('SOUTH', 'WEST', 'EAST', 'NORTH'))
+    # Guaranteed bulk: place big storage piles at free floor spots
+    fallback_spots = [
+        (rm.bounds[0] + 1.45, rcy),
+        (rm.bounds[1] - 1.45, rcy),
+        (rcx, rm.bounds[2] + 1.15),
+        (rcx, rm.bounds[3] - 1.15),
+        (rm.bounds[0] + 1.65, rm.bounds[2] + 1.35),
+        (rm.bounds[1] - 1.65, rm.bounds[2] + 1.35),
+        (rm.bounds[0] + 1.65, rm.bounds[3] - 1.35),
+        (rm.bounds[1] - 1.65, rm.bounds[3] - 1.35),
+    ]
+    for (fx, fy) in fallback_spots:
+        if placed >= max_piles + 1:
+            break
+        if is_quarry:
+            key = 'STONE_PILE'
+        elif is_warehouse:
+            key = rng.choice(('LOG_PILE', 'STONE_PILE', 'PLANK_PILE'))
+        else:
+            key = rng.choice(('LOG_PILE', 'PLANK_PILE'))
+        # Per-key reserve matching the true built footprint (see above).
+        if key == 'LOG_PILE':
+            fbx, fby = 1.25, 1.00
+        elif key == 'STONE_PILE':
+            fbx, fby = 1.15, 0.70
+        else:
+            fbx, fby = 1.20, 0.55
+        bx0, bx1, by0, by1 = fx - fbx, fx + fbx, fy - fby, fy + fby
+        if tracker.is_free(bx0, bx1, by0, by1, check_windows=False):
+            tracker.occupy(bx0, bx1, by0, by1)
+            build_prop(bm, key, fx, fy, z_floor, 0.0, length=2.0)
+            placed += 1
 
-    # Stacked crates, barrels/sacks, clay pots in the free corners.
+    if not bare:
+        if is_quarry:
+            _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                                 candidate_walls=('SOUTH', 'WEST', 'EAST', 'NORTH'))
+        else:
+            _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                                 candidate_walls=('NORTH', 'EAST', 'WEST'))
+
+    # Stacked crates, barrels in the free corners.
     for cx in (rm.bounds[0] + 0.55, rm.bounds[1] - 0.55):
         for cy in (rm.bounds[2] + 0.55, rm.bounds[3] - 0.55):
             if not tracker.is_free(cx - 0.42, cx + 0.42, cy - 0.42, cy + 0.42):
                 continue
             tracker.occupy(cx - 0.42, cx + 0.42, cy - 0.42, cy + 0.42)
             what = rng.random()
-            if what < 0.4:
+            if what < 0.5:
                 build_prop(bm, 'CRATE', cx, cy, z_floor, 0.0, size=0.60)
                 build_prop(bm, 'CRATE', cx, cy, z_floor + 0.60, rng.uniform(0, 6.28), size=0.48)
-            elif what < 0.7:
-                build_prop(bm, 'BARREL', cx, cy, z_floor, rng.uniform(0, 6.28))
-                build_prop(bm, 'CLAY_POT', cx + 0.42, cy + 0.1, z_floor, 0.0, radius=0.20, height=0.44)
             else:
-                build_prop(bm, 'SACK', cx, cy, z_floor, rng.uniform(0, 6.28), scale=1.15)
+                build_prop(bm, 'BARREL', cx, cy, z_floor, rng.uniform(0, 6.28))
 
+    if not bare:
+        _try_place_wall_prop(bm, 'CHEST', 1.05, 0.55, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'))
+        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _furnish_stone_store(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                         rng, density: float):
+    """Heavy industrial stone storage yard & masonry cutting depot fit-out.
+    Zero domestic furniture, zero rugs, zero potted plants.
+    Cut-stone stacks on timber skids, stone chipping rubble, heavy mason tool benches,
+    iron-bound tool chests, equipment shelves, tool crates, water/oil barrels,
+    and rafters hung with chain lanterns.
+    """
+    from .quarry import build_cut_block_stack, build_rubble_pile
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+
+    # True worst-case footprints (incl. yaw jitter), so every reserved
+    # tracker box below always contains the geometry actually built:
+    # - STONE_PILE (length=1.9): ~2.07 x 1.18 -> reserve 2.20 x 1.40.
+    # - cut-block stack on skids: ~2.31 x 1.30 -> reserve 2.50 x 1.40.
+    # - indoor chipping rubble (spread=0.7): +/-0.80 box incl. chunk radius.
+    _RUBBLE_HALF = 0.80
+
+    def _place_foot_rubble(cx, cy, yaw, stack_half_depth, seed):
+        """Stone-chipping pile at the foot of a block stack.
+
+        Tries the face of the stack first, then behind it, then each
+        flank; the first tracker-free spot is reserved and built with a
+        tight indoor scatter. When the bay is full the rubble is skipped
+        outright - a missing pile beats one clipping through blocks,
+        props or walls.
+        """
+        fx, fy = math.sin(yaw), -math.cos(yaw)
+        px, py = -fy, fx
+        for (ox, oy) in ((fx, fy), (-fx, -fy), (px, py), (-px, -py)):
+            d = stack_half_depth + _RUBBLE_HALF + 0.08
+            rx = cx + ox * d + rng.uniform(-0.10, 0.10)
+            ry = cy + oy * d + rng.uniform(-0.10, 0.10)
+            if tracker.is_free(rx - _RUBBLE_HALF, rx + _RUBBLE_HALF,
+                               ry - _RUBBLE_HALF, ry + _RUBBLE_HALF,
+                               check_windows=False):
+                tracker.occupy(rx - _RUBBLE_HALF, rx + _RUBBLE_HALF,
+                               ry - _RUBBLE_HALF, ry + _RUBBLE_HALF)
+                build_rubble_pile(bm, rx, ry, z_ground=z_floor,
+                                  count=rng.randint(3, 5), seed=seed,
+                                  spread=0.7)
+                return True
+        return False
+
+    # 1. Large cut-stone block stacks along the walls (quarry product on skids)
+    num_stacks = 3 if max(rw, rd) >= 8.5 else (2 if max(rw, rd) >= 4.8 else 1)
+    placed_stacks = 0
+    candidate_walls = ('NORTH', 'SOUTH', 'EAST', 'WEST')
+    for _ in range(num_stacks):
+        d = _try_place_wall_prop(bm, 'STONE_PILE', 2.20, 1.40, tracker, z_floor,
+                                 candidate_walls=candidate_walls,
+                                 length=1.9, check_windows=False)
+        if d is not None:
+            placed_stacks += 1
+            # Scatter stone chippings at the foot of the block stack
+            _place_foot_rubble(d[0], d[1], d[2], 0.70,
+                               rng.randint(1, 10000))
+
+    # 2. Fill the open storage shelter bay with staged cut-stone block stacks on timber skids
+    fill_spots = [
+        (rm.bounds[0] + 1.8, rcy),
+        (rm.bounds[1] - 1.8, rcy),
+        (rcx - rw * 0.22, rm.bounds[2] + 1.3),
+        (rcx + rw * 0.22, rm.bounds[2] + 1.3),
+        (rcx, rm.bounds[3] - 1.3),
+    ]
+    for (fx, fy) in fill_spots:
+        bx0, bx1 = fx - 1.25, fx + 1.25
+        by0, by1 = fy - 0.70, fy + 0.70
+        if tracker.is_free(bx0, bx1, by0, by1, check_windows=False):
+            tracker.occupy(bx0, bx1, by0, by1)
+            build_cut_block_stack(bm, fx, fy, z_ground=z_floor,
+                                  count=rng.choice([4, 6, 8]), seed=rng.randint(1, 10000))
+            # Face the foot of the stack towards the room centre so the
+            # chippings land in the open bay, not inside the wall.
+            foot_yaw = 0.0 if fy >= rcy else math.pi
+            _place_foot_rubble(fx, fy, foot_yaw, 0.70,
+                               rng.randint(1, 10000))
+            placed_stacks += 1
+
+    # 2. Heavy masonry workbench / stone dressing station
+    _d = _try_place_wall_prop(bm, 'DESK', 1.50, 0.75, tracker, z_floor,
+                              candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'))
+    if _d:
+        # On top of the workbench: rough cut stone block being dressed
+        wx, wy, wyaw = _d
+        from ..materials import MAT_INDEX_CUT_STONE
+        from ..mesh_utils import create_box
+        create_box(bm, size=(0.38, 0.28, 0.22),
+                   location=(wx + rng.uniform(-0.15, 0.15), wy + rng.uniform(-0.08, 0.08), z_floor + 0.78 + 0.11),
+                   rotation=(0.0, 0.0, rng.uniform(-0.2, 0.2)), mat_index=MAT_INDEX_CUT_STONE)
+        # Stool at the workbench
+        sx = wx + math.sin(wyaw) * 0.70
+        sy = wy - math.cos(wyaw) * 0.70
+        if tracker.is_free(sx - 0.25, sx + 0.25, sy - 0.25, sy + 0.25):
+            tracker.occupy(sx - 0.25, sx + 0.25, sy - 0.25, sy + 0.25)
+            build_prop(bm, 'STOOL', sx, sy, z_floor, 0.0)
+
+    # 3. Tool storage shelf (for levels, wedges, measuring squares)
+    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('NORTH', 'EAST', 'WEST', 'SOUTH'))
+
+    # 4. Iron-bound heavy tool chests (wedges, sledges, feathers)
     _try_place_wall_prop(bm, 'CHEST', 1.05, 0.55, tracker, z_floor,
-                         candidate_walls=('SOUTH', 'WEST', 'EAST'), width=1.0)
+                         candidate_walls=('SOUTH', 'WEST', 'EAST'))
+    if max(rw, rd) >= 7.0:
+        _try_place_wall_prop(bm, 'CHEST', 0.95, 0.50, tracker, z_floor,
+                             candidate_walls=('WEST', 'EAST', 'SOUTH'))
+
+    # 5. Corners: Stacked tool crates and water/oil barrels (for stone cutting)
+    for cx in (rm.bounds[0] + 0.55, rm.bounds[1] - 0.55):
+        for cy in (rm.bounds[2] + 0.55, rm.bounds[3] - 0.55):
+            if not tracker.is_free(cx - 0.42, cx + 0.42, cy - 0.42, cy + 0.42):
+                continue
+            tracker.occupy(cx - 0.42, cx + 0.42, cy - 0.42, cy + 0.42)
+            if rng.random() < 0.55:
+                # Stacked quarry tool crates
+                build_prop(bm, 'CRATE', cx, cy, z_floor, 0.0, size=0.62)
+                build_prop(bm, 'CRATE', cx, cy, z_floor + 0.58, rng.uniform(0, 6.28), size=0.48)
+            else:
+                # Water barrel for lubricating stone saws
+                build_prop(bm, 'BARREL', cx, cy, z_floor, rng.uniform(0, 6.28))
+
+    # 6. Industrial chain lanterns suspended from rafters
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    if rw >= 8.0:
+        build_prop(bm, 'CHAIN_LANTERN', rcx - rw * 0.28, rcy, z_ceil, 0.0)
+        build_prop(bm, 'CHAIN_LANTERN', rcx + rw * 0.28, rcy, z_ceil, 0.0)
+    elif rd >= 8.0:
+        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy - rd * 0.28, z_ceil, 0.0)
+        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy + rd * 0.28, z_ceil, 0.0)
 
 
 def _furnish_workshop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -2299,21 +2480,48 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     )
     tracker.rng = rng
     tracker.archetype = getattr(ctx, 'effective_archetype', 'NONE') if ctx is not None else 'NONE'
+    tracker.bare_stockpile = bool(getattr(ctx, 'bare_stockpile', False)) if ctx is not None else False
+    tracker.is_quarry = (tracker.archetype == 'QUARRY')
+    tracker.industrial = getattr(ctx, 'industrial', False) or (tracker.archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY'))
     # The treadwheel sawmill stands near the middle of a lumbermill hall and is
     # built as kit geometry (not tracked), so reserve its working area here to
-    # keep storage piles and shelves from overlapping the machinery.
+    # keep storage piles and shelves from overlapping the machinery. The box
+    # is grade-aware (wheel size, twin benches, gear all grow by tier) and
+    # stashed on ctx by the mill kit; fall back to the old fixed box only if
+    # the kit never ran.
+    # Yard stock (pallets, log ranks, pots, shelter posts) is likewise kit
+    # geometry: reserve every recorded footprint on the ground floor so
+    # indoor piles never land on yard stock.
+    if ctx is not None:
+        for _yb in getattr(ctx, 'yard_keepouts', None) or ():
+            if rm.floor_idx == 0:
+                tracker.occupy(_yb[0], _yb[1], _yb[2], _yb[3])
     if tracker.archetype == 'LUMBERMILL' and rm.floor_idx == 0:
-        tracker.occupy(-2.8, 3.4, -2.8, 3.8)
+        _mill_box = None
+        if ctx is not None:
+            _mill_box = getattr(ctx, 'mill_keepout', None)
+        if _mill_box is None:
+            _mill_box = (-2.8, 3.4, -2.8, 3.8)
+        tracker.occupy(_mill_box[0], _mill_box[1], _mill_box[2], _mill_box[3])
     # Back-of-house rooms in an industrial fit-out stay bare (no rug/plant).
-    _bare = (getattr(ctx, 'no_utility_rugs', False)
-             and rm.role in _UTILITY_ROLES)
+    # Open-air stockpiles stay entirely bare: every room is product only.
+    _bare = ((getattr(ctx, 'no_utility_rugs', False)
+             and rm.role in _UTILITY_ROLES) or tracker.is_quarry)
+    if getattr(tracker, 'bare_stockpile', False):
+        _bare = True
     tracker.no_rugs = _bare
 
     role = rm.role
     try:
-        if role in ('STAIR_LANDING', 'CORRIDOR'):
+        if tracker.bare_stockpile and role in ('STORE', 'WORKSHOP', 'SMITHY', 'STORAGE',
+                                               'CELLAR', 'PANTRY', 'STONE_STORE', 'OFFICE',
+                                               'CORRIDOR', 'STAIR_LANDING'):
+            _furnish_industrial_bay(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('STAIR_LANDING', 'CORRIDOR'):
             _furnish_corridor(bm, rm, tracker, z_floor, z_ceil, rng, density)
-        elif getattr(tracker, 'industrial', False) and role in ('WORKSHOP', 'SMITHY', 'STORAGE', 'STORE', 'CELLAR', 'PANTRY', 'STONE_STORE'):
+        elif role == 'STONE_STORE' or (tracker.is_quarry and role in ('WORKSHOP', 'STORAGE', 'STORE', 'SMITHY')):
+            _furnish_stone_store(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif getattr(tracker, 'industrial', False) and role in ('WORKSHOP', 'SMITHY', 'STORAGE', 'STORE', 'CELLAR', 'PANTRY'):
             _furnish_industrial_bay(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('TAVERN_TAPROOM', 'COMMON'):
             _furnish_tavern_taproom(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
@@ -2401,13 +2609,28 @@ def furnish_building_interior(bm, props, ctx):
         _program == 'INDUSTRIAL'
         and not bool(getattr(props, 'rug_in_utility_rooms', False)))
     ctx.industrial = (_program == 'INDUSTRIAL')
+    # Tier-1 open-air warehouse stockpiles are product-only yards (piles,
+    # crates, barrels, awnings): no shelving, chests or hanging lanterns.
+    ctx.bare_stockpile = (
+        getattr(ctx, 'effective_archetype', '') == 'WAREHOUSE'
+        and getattr(props, 'material_tier', 'TIER_1') == 'TIER_1')
     seed = int(getattr(props, 'seed', 1)) + 917
     style = getattr(props, 'furnishing_style', 'AUTO')
 
     floor_rooms_dict = getattr(ctx, 'floor_rooms', {})
 
     for fl in range(ctx.num_floors):
-        z_floor = ctx.found_h + fl * ctx.floor_h + 0.05
+        # Match the lowered T1 ground slab (floors.py): quarry / lumbermill
+        # open-timber ground floors sit 3 cm lower, so props rest ON the slab
+        # instead of floating above it.
+        _low_t1 = (fl == 0
+                   and getattr(props, 'material_tier', 'TIER_1') == 'TIER_1'
+                   and getattr(ctx, 'effective_archetype', '') in ('LUMBERMILL', 'QUARRY'))
+        _lift = 0.02 if _low_t1 else 0.05
+        if fl == 0 and getattr(ctx, 'bare_stockpile', False):
+            # Open-air stockpile: no floor slab, props stand on the dirt.
+            _lift = 0.0
+        z_floor = ctx.found_h + fl * ctx.floor_h + _lift
         z_ceil = z_floor + ctx.floor_h - 0.065
         rng = random.Random(seed + fl * 131)
 

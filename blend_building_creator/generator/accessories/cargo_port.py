@@ -125,12 +125,15 @@ def build_cargo_port_frame(bm, face_coord, outward_sgn, portal_center, portal_w,
             _box(deck_d, 0.06, fascia_h, deck_norm_c, deck_uc + es * (deck_len * 0.5 - 0.03), fascia_z,
                  MAT_INDEX_TIMBER, bevel=0.008)
 
-        # Chunky posts on stone footings along bearer lines
+        # Chunky posts on stone footings along bearer lines. Footing height
+        # adapts to the deck: tall decks (high foundations) get full plinths,
+        # low decks get squat ones - but every raised ground dock gets
+        # visible supports instead of silently dropping them.
         n_posts = max(3, int(deck_len / 1.3) + 1)
-        footing_top = 0.18
         post_top = bearer_z - bearer_h * 0.5
+        footing_top = min(0.18, max(0.08, post_top - 0.12))
         post_h = post_top - footing_top
-        if post_h > 0.10:
+        if post_h > 0.02:
             for brow in post_rows:
                 for k in range(n_posts):
                     pu = dock_u1 + 0.28 + (deck_len - 0.56) * (k / max(1, n_posts - 1))

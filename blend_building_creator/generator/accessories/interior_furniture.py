@@ -17,6 +17,7 @@ from mathutils import Euler, Matrix, Vector
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, create_torus_ring,
     create_hollow_cylinder, create_hollow_dish, create_organic_pumpkin,
+    create_horizontal_cylinder,
     transform_faces, recalc_face_normals_safe,
 )
 from ..materials import (
@@ -2378,7 +2379,12 @@ def build_stone_pile(bm, x, y, z_ground=0.0, ang=0.0, length=1.8, width=0.95, la
 
 
 def build_log_pile(bm, x, y, z_ground=0.0, ang=0.0, length=2.10, radius=0.17, rows=3):
-    """Pyramid of stacked round logs (bulk timber, warehouse / lumbermill)."""
+    """Pyramid of stacked round logs (bulk timber, warehouse / lumbermill).
+
+    Uses the same horizontal-cylinder logs with recessed growth-ring end
+    caps as the outdoor lumbermill yard and warehouse log stacks, so indoor
+    piles never show the old z-fighting cap discs.
+    """
     faces = []
     rng = random.Random(int(abs(x) * 73856093) ^ int(abs(y) * 19349663))
     for row in range(rows):
@@ -2388,16 +2394,10 @@ def build_log_pile(bm, x, y, z_ground=0.0, ang=0.0, length=2.10, radius=0.17, ro
             rr = radius * (0.90 + 0.14 * rng.random())
             cz = rr + row * (radius * 1.62)
             cy = (i - (count - 1) * 0.5) * (radius * 2.06)
-            faces += create_cylinder(
-                bm, radius=rr, height=L, segments=10,
-                location=(0.0, cy, cz), rotation=(0.0, math.pi * 0.5, 0.0),
-                mat_index=MAT_INDEX_LOG)
-            for s in (-1.0, 1.0):
-                faces += create_cylinder(
-                    bm, radius=rr * 0.98, height=0.012, segments=10,
-                    location=(s * (L * 0.5 - 0.006), cy, cz),
-                    rotation=(0.0, math.pi * 0.5, 0.0),
-                    mat_index=MAT_INDEX_LOG_END)
+            faces += create_horizontal_cylinder(
+                bm, radius_y=rr, radius_z=rr, length=L, segments=12,
+                location=(0.0, cy, cz),
+                mat_index=MAT_INDEX_LOG, mat_index_cap=MAT_INDEX_LOG_END)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 

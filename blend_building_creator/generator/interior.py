@@ -1060,9 +1060,9 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         if archetype in ('TAVERN', 'INN'):
             pool = ['STAIR_LANDING', 'GUEST_ROOM', 'GUEST_ROOM', 'GUEST_ROOM', 'MASTER_BED', 'STUDY']
             return pool[:num_rooms]
-        elif archetype in ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH'):
+        elif archetype in ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH', 'QUARRY'):
             # Industrial upper floors are work/storage, never bedrooms or kitchens.
-            pool = ['STAIR_LANDING', 'STORAGE', 'WORKSHOP', 'OFFICE']
+            pool = ['STAIR_LANDING', 'STONE_STORE' if archetype == 'QUARRY' else 'STORAGE', 'WORKSHOP', 'OFFICE']
             return pool[:num_rooms]
         elif archetype in ('BAKERY', 'FISHERMAN', 'BREWERY',
                           'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER') or archetype.startswith('ARTISAN'):
@@ -1102,9 +1102,12 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         pool = ['TAVERN_TAPROOM', 'KITCHEN', 'PANTRY', 'CELLAR']
         return pool[:num_rooms]
 
-    if archetype in ('BLACKSMITH', 'WAREHOUSE', 'LUMBERMILL', 'BAKERY', 'FISHERMAN', 'BREWERY',
+    if archetype in ('BLACKSMITH', 'WAREHOUSE', 'LUMBERMILL', 'QUARRY', 'BAKERY', 'FISHERMAN', 'BREWERY',
                      'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER') or archetype.startswith('ARTISAN'):
-        pool = ['STORE', 'WORKSHOP', 'STORAGE', 'PANTRY']
+        if archetype == 'QUARRY':
+            pool = ['STONE_STORE', 'STORAGE', 'WORKSHOP', 'OFFICE']
+        else:
+            pool = ['STORE', 'WORKSHOP', 'STORAGE', 'PANTRY']
         return pool[:num_rooms]
 
     if archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):

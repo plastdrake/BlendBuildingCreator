@@ -567,11 +567,41 @@ def _build_warehouse_kit(bm, props, ctx, tier, hx, hy, shape, wings, seed):
         build_courtyard_crane(bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0, rot_angle=rot_crane)
     # For primitive / supply-depot tier, dress the yard with crates, barrels, lumber piles, sacks, and awnings
     if getattr(props, 'material_tier', 'TIER_3') == 'TIER_1' or props.roof_style in ('NONE', 'MAKESHIFT'):
-        from .warehouse import build_supply_depot_yard
-        build_supply_depot_yard(bm, min_x=-hx, max_x=hx, min_y=-hy, max_y=hy, z_floor=ctx.found_h, seed=seed)
+        from .warehouse import build_supply_depot_yard, build_stockpile_shelters
+        # Open-air temporary stockpiles keep a strict composition: product
+        # everywhere, exactly two courtyard-facing shelter roofs, no walls,
+        # no docks. Other tier-1 / makeshift combos keep the per-pallet roofs.
+        is_stockpile = (
+            getattr(ctx, 'effective_archetype', '') == 'WAREHOUSE'
+            and getattr(props, 'material_tier', 'TIER_1') == 'TIER_1'
+            and props.roof_style == 'NONE')
+        main_rect = (-hx, hx, -hy, hy)
+        if is_stockpile:
+            ctx.yard_keepouts = []
+            main_anchors = build_supply_depot_yard(
+                bm, min_x=-hx, max_x=hx, min_y=-hy, max_y=hy, z_floor=ctx.found_h, seed=seed,
+                with_awnings=False, keepouts=ctx.yard_keepouts)
+            wing_rect, wing_anchors = None, None
+            if shape == 'L_SHAPE' and wings:
+                wx1, wx2, wy1, wy2 = wings[0]['base']
+                wing_rect = (wx1, wx2, wy1, wy2)
+                wing_anchors = build_supply_depot_yard(
+                    bm, min_x=wx1, max_x=wx2, min_y=wy1, max_y=wy2, z_floor=ctx.found_h, seed=seed + 31,
+                    with_logs=False, with_pots=False, with_awnings=False,
+                    keepouts=ctx.yard_keepouts)
+            build_stockpile_shelters(bm, main_rect, wing_rect, main_anchors, wing_anchors,
+                                     z_base=ctx.found_h, seed=seed,
+                                     keepouts=ctx.yard_keepouts)
+            return
+        # Main yard shelters under 1.5x awnings with the full dress (log rank
+        # and pots); a tight side wing keeps fitting roofs and a compact
+        # stockpile without the colliding garnish.
+        build_supply_depot_yard(bm, min_x=-hx, max_x=hx, min_y=-hy, max_y=hy, z_floor=ctx.found_h, seed=seed,
+                                awning_scale=1.5)
         if shape == 'L_SHAPE' and wings:
             wx1, wx2, wy1, wy2 = wings[0]['base']
-            build_supply_depot_yard(bm, min_x=wx1, max_x=wx2, min_y=wy1, max_y=wy2, z_floor=ctx.found_h, seed=seed + 31)
+            build_supply_depot_yard(bm, min_x=wx1, max_x=wx2, min_y=wy1, max_y=wy2, z_floor=ctx.found_h, seed=seed + 31,
+                                    with_logs=False, with_pots=False)
 
 
 def _build_lumbermill_kit(bm, props, ctx, hx, hy, base_w, shape, wings, open_timber, seed):
@@ -580,9 +610,11 @@ def _build_lumbermill_kit(bm, props, ctx, hx, hy, base_w, shape, wings, open_tim
     rot_yard = 0.0
     dock_planks = None
     if is_enclosed_mill:
-        # Staged in the open yard between entrance corridor and dock, rotated ~85 deg
+        # Staged in the open yard between entrance corridor and dock, rotated ~85 deg.
+        # Pushed south of the dock edge so the rank never overlaps the cargo
+        # dock platform (ranks reach ~1.75 m from their centre).
         yard_x = -1.4
-        yard_y = -hy - 3.4 if mill_grade == 'GRADE_2' else -hy - 4.0
+        yard_y = -hy - 4.6 if mill_grade == 'GRADE_2' else -hy - 5.2
         # Sawn planks placed directly on the cargo dock floor (right side of freight portal)
         dock_x = 4.8 if mill_grade == 'GRADE_2' else 5.2
         dock_y = -hy - 1.0 if mill_grade == 'GRADE_2' else -hy - 1.2
@@ -614,7 +646,9 @@ def _build_lumbermill_kit(bm, props, ctx, hx, hy, base_w, shape, wings, open_tim
         bm, yard_x=yard_x, yard_y=yard_y, z_ground=0.0,
         rot_angle=rot_yard, grade=mill_grade, dock_planks_pos=dock_planks
     )
-    build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=ctx.found_h, grade=mill_grade)
+    # The builder returns its grade-aware footprint keep-out so indoor log /
+    # plank piles never overlap the wheel, benches or drive gear.
+    ctx.mill_keepout = build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=ctx.found_h, grade=mill_grade)
     # Mill worker steps: grounded cut-stone steps on the clearest entrance bay.
     # Only on open-timber / Tier 1 pavilions; Tier 2 and 3 have enclosed front walls with their own offset front door and steps.
     mill_sx = choose_entry_bay(base_w, hx, yard_x, mill_grade)

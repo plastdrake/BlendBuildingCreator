@@ -6,7 +6,7 @@ from ..mesh_utils import (
     create_torus_ring
 )
 from ..materials import (
-    MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
+    MAT_INDEX_TIMBER, MAT_INDEX_IRON,
     MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_LOG
 )
 
@@ -26,24 +26,19 @@ def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0, grade
     lat_y = cos_l
 
     log_r = 0.24
-    log_l = 3.4
+    # Enclosed mills stage slightly shorter ranks: with the 85-degree turn
+    # the rank reaches far south, and it must clear the cargo dock edge.
+    log_l = 3.4 if grade == 'GRADE_1' else 3.0
 
-    # Timber runner sleepers underneath the log stack so logs stay off bare ground
-    for l_end in [-1.05, 1.05]:
-        create_beveled_box(
-            bm, size=(1.35, 0.16, 0.12),
-            location=(yard_x + cos_l * l_end, yard_y + sin_l * l_end, z_ground + 0.06),
-            rotation=(0.0, 0.0, rot_logs + 1.5708),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
-        )
-
+    # No sleepers or chocks under the rank: the logs sit directly on the
+    # dirt like the indoor piles (bottom pair sunk 2 cm so nothing floats).
     # Layer 1: 3 logs
     for off_s in [-0.48, 0.0, 0.48]:
         lx = yard_x + (lat_x * off_s)
         ly = yard_y + (lat_y * off_s)
         create_horizontal_cylinder(
             bm, radius_y=log_r, radius_z=log_r, length=log_l, segments=12,
-            location=(lx, ly, z_ground + 0.12 + log_r - 0.02),
+            location=(lx, ly, z_ground + log_r - 0.02),
             rotation=(0.0, 0.0, rot_logs),
             mat_index=MAT_INDEX_LOG
         )
@@ -53,27 +48,17 @@ def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0, grade
         ly = yard_y + (lat_y * off_s)
         create_horizontal_cylinder(
             bm, radius_y=log_r * 0.95, radius_z=log_r * 0.95, length=log_l * 0.97, segments=12,
-            location=(lx, ly, z_ground + 0.12 + log_r * 2.55),
+            location=(lx, ly, z_ground + log_r * 2.55 - 0.12),
             rotation=(0.0, 0.0, rot_logs),
             mat_index=MAT_INDEX_LOG
         )
     # Layer 3: 1 cap log
     create_horizontal_cylinder(
         bm, radius_y=log_r * 0.90, radius_z=log_r * 0.90, length=log_l * 0.94, segments=12,
-        location=(yard_x, yard_y, z_ground + 0.12 + log_r * 4.05),
+        location=(yard_x, yard_y, z_ground + log_r * 4.05 - 0.12),
         rotation=(0.0, 0.0, rot_logs),
         mat_index=MAT_INDEX_LOG
     )
-    # Iron end chocks on bottom outer logs
-    for chock_s in [-0.80, 0.80]:
-        cx = yard_x + (lat_x * chock_s)
-        cy = yard_y + (lat_y * chock_s)
-        create_beveled_box(
-            bm, size=(0.20, 0.35, 0.22),
-            location=(cx, cy, z_ground + 0.12 + 0.07),
-            rotation=(0.0, 0.0, rot_logs),
-            mat_index=MAT_INDEX_IRON, bevel_amount=0.01
-        )
 
     # Sawn lumber plank stack: placed either on the cargo dock platform or in the yard
     if dock_planks_pos is not None:
@@ -133,10 +118,12 @@ def build_lumbermill_yard(bm, yard_x, yard_y, z_ground=0.0, rot_angle=0.0, grade
 def _build_shaft_pillar(bm, x, y, z_floor, z_shaft):
     h = max(0.15, z_shaft - z_floor)
     cz = z_floor + h * 0.5
+    # Solid timber sole plate under the post (no stone anywhere on the
+    # sawmill: the whole machine reads as one wooden structure).
     create_beveled_box(
         bm, size=(0.34, 0.34, 0.14),
         location=(x, y, z_floor + 0.07),
-        mat_index=MAT_INDEX_STONE, bevel_amount=0.02
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02
     )
     create_beveled_box(
         bm, size=(0.18, 0.18, h),
@@ -433,10 +420,11 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
         )
         for fx in (wheel_x - 0.50, wheel_x + 0.50):
+            # Timber footing blocks under the A-legs (wood only, no stone).
             create_beveled_box(
                 bm, size=(0.42, 0.42, 0.24),
                 location=(fx, sy, z_floor + 0.12),
-                mat_index=MAT_INDEX_STONE, bevel_amount=0.02
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02
             )
         leg_dz = axle_z - (z_floor + 0.24)
         leg_len = math.sqrt(0.50 * 0.50 + leg_dz * leg_dz) + 0.10
@@ -477,6 +465,18 @@ def build_treadwheel_sawmill(bm, mill_cx=0.4, mill_cy=0.55, z_floor=0.4, grade='
                 rotation=(0.0, -ga, 0.0),
                 mat_index=MAT_INDEX_TIMBER
             )
+
+    # Footprint keep-out for the furnishing composer (~0.3 m working
+    # clearance included): wheel rim + A-legs + footings on the west, saw
+    # benches + blade + drive axle/pulleys on the east. Returns
+    # (x0, x1, y0, y1) in world space. (The gear disc is thin in Y and the
+    # rim dominates it in X, so no extra gear margin is needed.)
+    feet_y0 = mill_cy - wheel_w * 0.5 - 0.63
+    axle_y0 = mill_cy - wheel_w * 0.5 - 0.685
+    return (wheel_x - wheel_r - 0.35,
+            mill_cx + bench_l * 0.5 + 0.35,
+            min(feet_y0, axle_y0) - 0.30,
+            pulley_y + 0.45)
 
 
 def choose_entry_bay(base_w, hx, yard_x, grade='GRADE_1'):

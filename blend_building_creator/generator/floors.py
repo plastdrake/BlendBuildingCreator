@@ -397,10 +397,14 @@ def build_floors(bm, props, ctx):
         else:
             tier_val = getattr(props, 'material_tier', 'TIER_3')
             floor_mat = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone and tier_val != 'TIER_1') else MAT_INDEX_FLOOR
-            # Lumbermill Tier 1: lower ground floor slab down 3cm (z_floor + 0.02 instead of z_floor + 0.05)
-            is_lumbermill_t1 = (effective_archetype == 'LUMBERMILL' and fl_idx == 0
-                                and getattr(props, 'material_tier', 'TIER_1') == 'TIER_1')
-            slab_z = z_floor + 0.02 if is_lumbermill_t1 else z_floor + 0.05
+            # Quarry / lumbermill Tier 1: the open timber frame stands on a wood
+            # sill ring whose top sits exactly at z_floor + 0.05, so a
+            # full-height slab would sit coplanar with the frame and z-fight
+            # along the seam. Drop the ground-floor slab 3 cm to sit cleanly
+            # below the sills.
+            is_low_slab_t1 = (effective_archetype in ('LUMBERMILL', 'QUARRY') and fl_idx == 0
+                              and getattr(props, 'material_tier', 'TIER_1') == 'TIER_1')
+            slab_z = z_floor + 0.02 if is_low_slab_t1 else z_floor + 0.05
             build_floor_slab(
                 bm,
                 floor_idx=fl_idx,
@@ -461,8 +465,9 @@ def build_floors(bm, props, ctx):
                         bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
                     )
         
-        # Wing floor slabs for compound shapes
-        if fl_has_wing:
+        # Wing floor slabs for compound shapes (never on open-air temporary
+        # stockpiles: the yard stays bare dirt with pallets and awnings).
+        if fl_has_wing and not is_temporary_stockpile:
             for w_elem, (w_xmin, w_xmax, w_ymin, w_ymax) in zip(wings, fl_wings_bounds):
                 w_wall = w_elem['wall']
                 if w_wall == 'FRONT':
@@ -593,8 +598,10 @@ def build_floors(bm, props, ctx):
             
             floor_stair_holes[fl_idx + 1] = next_stair_hole
 
-        # Ceiling Beams (underneath next floor, trimmed around stairs)
-        if props.has_ceiling_beams:
+        # Ceiling Beams (underneath next floor, trimmed around stairs).
+        # Never on open-air temporary stockpiles: with no walls or roof the
+        # beams would float in mid-air over the yard.
+        if props.has_ceiling_beams and not is_temporary_stockpile:
             build_ceiling_beams(
                 bm, ix_min, ix_max, iy_min, iy_max, z_ceil - 0.02, spacing=1.2,
                 stair_hole=next_stair_hole if (fl_idx < num_floors - 1 and props.has_stairs) else None
@@ -967,9 +974,12 @@ def build_floors(bm, props, ctx):
         # Open-timber pavilions (Warehouse/Lumbermill T1) have no walls, so the
         # arcade posts already leave the junction fully open - skip the floating
         # jamb/lintel/threshold frame that otherwise hovers mid-room.
+        # Open-air temporary stockpiles have no walls at all, so the portal
+        # frame and its full-height liner panels would stand alone in the
+        # yard - skip them there too.
         # Tenement U-shaped wings are independent apartment suites with their own
         # exterior entrances, so they have solid demising walls rather than walk-in portals.
-        if fl_has_wing and not open_timber and not (effective_archetype == 'TENEMENT' and shape == 'U_SHAPE'):
+        if fl_has_wing and not open_timber and not is_temporary_stockpile and not (effective_archetype == 'TENEMENT' and shape == 'U_SHAPE'):
             for w_elem, (w_xmin, w_xmax, w_ymin, w_ymax) in zip(wings, fl_wings_bounds):
                 w_wall = w_elem['wall']
                 jamb_w = 0.18
@@ -1373,13 +1383,26 @@ def build_floors(bm, props, ctx):
         front_cargo_port_cx = None
         if not open_timber and not fl_has_wing and rec_cargo_side == 'FRONT':
             _is_t3 = (effective_archetype == 'LUMBERMILL' and getattr(props, 'material_tier', 'TIER_3') == 'TIER_3')
-            _cp_w = 2.6
-            _cp_h = min(2.8, floor_h - 0.35)
-            _cp_cx = 3.5 if cur_w > 13.5 else 3.2
-            # Generous deep platform extending outwards for heavy timber freight handling
-            _dock_depth = 3.2 if _is_t3 else 2.2
-            _dock_x1 = 0.8
-            _dock_x2 = _dock_x1 + (6.0 if _is_t3 else 5.0)
+            _is_mill = (effective_archetype == 'LUMBERMILL')
+            if _is_mill:
+                # Lumber mill: wide open portal taking up almost the entire side/front section so you can see inside!
+                _door_x = getattr(props, 'front_door_offset_x', 0.0) if getattr(props, 'has_front_door', True) else None
+                if _door_x is not None and _door_x < 0:
+                    _dock_x1 = max(x_min + 0.6, _door_x + getattr(props, 'door_width', 1.2) * 0.5 + 0.6)
+                else:
+                    _dock_x1 = x_min + 0.6
+                _dock_x2 = x_max - 0.6
+                _cp_w = max(3.5, _dock_x2 - _dock_x1)
+                _cp_cx = (_dock_x1 + _dock_x2) * 0.5
+                _cp_h = min(floor_h - 0.35, 3.2 if _is_t3 else 3.0)
+                _dock_depth = 3.2 if _is_t3 else 2.5
+            else:
+                _cp_w = 2.6
+                _cp_h = min(2.8, floor_h - 0.35)
+                _cp_cx = 3.5 if cur_w > 13.5 else 3.2
+                _dock_depth = 3.2 if _is_t3 else 2.2
+                _dock_x1 = 0.8
+                _dock_x2 = _dock_x1 + (6.0 if _is_t3 else 5.0)
             front_cargo_port_cx = _cp_cx
 
             if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE', 'QUARRY') and not is_temporary_stockpile:
@@ -1672,12 +1695,21 @@ def build_floors(bm, props, ctx):
 
             # Rectangular main building cargo dock / freight opening (Left)
             if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not is_temporary_stockpile and not fl_has_wing and rec_cargo_side == 'LEFT':
-                _cp_w = 2.6
-                _cp_h = min(2.8, floor_h - 0.35)
+                _is_mill = (effective_archetype == 'LUMBERMILL')
+                if _is_mill:
+                    _cp_w = max(2.6, (y_max - y_min) - 1.2)
+                    _cp_h = min(floor_h - 0.35, 3.0)
+                    _dock_y1 = y_min + 0.5
+                    _dock_y2 = y_max - 0.5
+                else:
+                    _cp_w = 2.6
+                    _cp_h = min(2.8, floor_h - 0.35)
+                    _dock_y1 = y_min + 0.4
+                    _dock_y2 = y_max - 0.4
                 _cp_cy = (y_min + y_max) * 0.5
                 left_excludes.append((_cp_cy - _cp_w * 0.5 - 0.5, _cp_cy + _cp_w * 0.5 + 0.5))
                 left_openings.append({'u_start': _cp_cy - _cp_w * 0.5 - y_min, 'u_end': _cp_cy + _cp_w * 0.5 - y_min, 'z_start': z_floor, 'z_end': z_floor + _cp_h})
-                build_cargo_port_frame(bm, x_min, -1.0, _cp_cy, _cp_w, _cp_h, z_floor, wall_t, dock_y1=y_min + 0.4, dock_y2=y_max - 0.4)
+                build_cargo_port_frame(bm, x_min, -1.0, _cp_cy, _cp_w, _cp_h, z_floor, wall_t, dock_y1=_dock_y1, dock_y2=_dock_y2)
             elif fl_idx == 1 and getattr(props, 'has_upper_cargo_crane', False) and rec_cargo_side == 'LEFT':
                 _cp_w = 2.0
                 _cp_h = min(2.5, floor_h - 0.35)
@@ -1764,12 +1796,21 @@ def build_floors(bm, props, ctx):
 
             # Rectangular main building cargo dock / freight opening (Right)
             if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not is_temporary_stockpile and not fl_has_wing and rec_cargo_side == 'RIGHT':
-                _cp_w = 2.6
-                _cp_h = min(2.8, floor_h - 0.35)
+                _is_mill = (effective_archetype == 'LUMBERMILL')
+                if _is_mill:
+                    _cp_w = max(2.6, (y_max - y_min) - 1.2)
+                    _cp_h = min(floor_h - 0.35, 3.0)
+                    _dock_y1 = y_min + 0.5
+                    _dock_y2 = y_max - 0.5
+                else:
+                    _cp_w = 2.6
+                    _cp_h = min(2.8, floor_h - 0.35)
+                    _dock_y1 = y_min + 0.4
+                    _dock_y2 = y_max - 0.4
                 _cp_cy = (y_min + y_max) * 0.5
                 right_excludes.append((_cp_cy - _cp_w * 0.5 - 0.5, _cp_cy + _cp_w * 0.5 + 0.5))
                 right_openings.append({'u_start': _cp_cy - _cp_w * 0.5 - y_min, 'u_end': _cp_cy + _cp_w * 0.5 - y_min, 'z_start': z_floor, 'z_end': z_floor + _cp_h})
-                build_cargo_port_frame(bm, x_max, 1.0, _cp_cy, _cp_w, _cp_h, z_floor, wall_t, dock_y1=y_min + 0.4, dock_y2=y_max - 0.4)
+                build_cargo_port_frame(bm, x_max, 1.0, _cp_cy, _cp_w, _cp_h, z_floor, wall_t, dock_y1=_dock_y1, dock_y2=_dock_y2)
             elif fl_idx == 1 and getattr(props, 'has_upper_cargo_crane', False) and rec_cargo_side == 'RIGHT':
                 _cp_w = 2.0
                 _cp_h = min(2.5, floor_h - 0.35)
@@ -1824,9 +1865,11 @@ def build_floors(bm, props, ctx):
                 # Warehouse cargo port (enclosed ground floor only): open freight portal
                 # on the courtyard side face (Face 2 = left, Face 3 = right) for crane
                 # loading. Timber framing auto-avoids it via the openings list.
+                # Never on open-air temporary stockpiles: there are no walls to
+                # cut a portal into and no dock to build.
                 cargo_port = None
                 if (effective_archetype == 'WAREHOUSE' and not open_timber and fl_idx == 0
-                        and w_wall in ('FRONT', 'BACK')):
+                        and w_wall in ('FRONT', 'BACK') and not is_temporary_stockpile):
                     _face = 2 if w_elem.get('align', 'RIGHT') == 'RIGHT' else 3
                     _pw = 2.3
                     _ph = min(getattr(props, 'door_height', 2.5), floor_h - 0.35)
@@ -2237,7 +2280,7 @@ def build_floors(bm, props, ctx):
                     ((x_min, y_min), (x_min, y_max)),
                     ((x_max, y_min), (x_max, y_max)),
                 ]
-            arcade_spacing = 5.2 if effective_archetype in ('LUMBERMILL', 'WAREHOUSE') else 3.8
+            arcade_spacing = 5.2 if effective_archetype in ('LUMBERMILL', 'WAREHOUSE', 'QUARRY') else 3.8
             placed_posts = set()
             for p_start, p_end in arcade_segs:
                 build_open_timber_arcade(
