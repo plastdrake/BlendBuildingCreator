@@ -342,6 +342,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('QUARRY', "Stone Quarry", "Open worksite quarry: benched rock faces, swivel cranes, and cut-stone block stacks (stone only)"),
             ('CHAPEL', "Healers' Chapel", "Rounded apse, stone bell tower, rose window and a quiet herb churchyard"),
             ('KNIGHTS_MANOR', "Knights Manor", "Fortified hall: gatehouse with portcullis, courtyard and training yard"),
+            ('MANOR', "Manor Hall", "Grand residence: banquet hall, library, kitchen and guest chambers"),
             ('MAGE_TOWER', "Mage Tower", "Round wizard tower with a jettied belvedere, ring balcony and tall spire"),
             ('TENEMENT', "Tenement Row / Complex", "Multi-apartment residential complex with separate apartment suites"),
             ('BARRACKS', "Barracks / Garrison", "Military dormitories with bunk beds, armory, mess hall and drill yard"),

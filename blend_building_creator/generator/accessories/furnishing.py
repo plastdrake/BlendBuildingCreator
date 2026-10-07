@@ -119,6 +119,19 @@ def _jit(rng, amount: float) -> float:
     return rng.uniform(-amount, amount) if rng is not None else 0.0
 
 
+def _try_place_chair(bm, tracker: RoomOccupancyTracker, cx: float, cy: float,
+                     yaw: float, z_floor: float, seat_h: float = 0.48,
+                     half: float = 0.30) -> bool:
+    """Places one chair only when its footprint is inside the room and clear
+    of stairs, doorways, windows and other props. Chairs placed without this
+    check used to land inside stairwells and block the climb."""
+    if tracker.is_free(cx - half, cx + half, cy - half, cy + half):
+        tracker.occupy(cx - half, cx + half, cy - half, cy + half)
+        build_prop(bm, 'CHAIR', cx, cy, z_floor, yaw, seat_h=seat_h)
+        return True
+    return False
+
+
 def _sofa_fabric(rng):
     """Random hard-wearing sofa/armchair upholstery (leather or white cloth)."""
     from ..materials import (MAT_INDEX_LEATHER, MAT_INDEX_LEATHER_2,
@@ -799,6 +812,10 @@ def _furnish_study_library(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
         _try_place_wall_prop(bm, 'BOOKSHELF_NEAT', 1.25, 0.38, tracker, z_floor,
                              candidate_walls=('EAST', 'NORTH', 'WEST', 'SOUTH'))
 
+    # 2b. Scholar's lectern (reused mage-tower spellbook pedestal) with open grimoire.
+    _try_place_wall_prop(bm, 'SPELLBOOK_PEDESTAL', 0.85, 0.85, tracker, z_floor,
+                         candidate_walls=('NORTH', 'EAST', 'WEST', 'SOUTH'))
+
     # 3. Writing Desk with Chair
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
@@ -930,7 +947,6 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
         ty = rcy + toy * (rd * 0.45) + _jit(rng, 0.22)
         r = 0.55
         if tracker.is_free(tx - 0.88, tx + 0.88, ty - 0.88, ty + 0.88):
-            tracker.occupy(tx - 0.92, tx + 0.92, ty - 0.92, ty + 0.92)
             build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=r)
             build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_floor + 0.775, 0.0)
             if rng.random() < 0.35:
@@ -947,7 +963,8 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
                 chx = tx + 0.70 * math.cos(ca)
                 chy = ty + 0.70 * math.sin(ca)
                 # Chair faces inward towards table center (local chair front is -Y)
-                build_prop(bm, 'CHAIR', chx, chy, z_floor, ca - math.pi * 0.5, seat_h=0.48)
+                _try_place_chair(bm, tracker, chx, chy, ca - math.pi * 0.5, z_floor)
+            tracker.occupy(tx - 0.92, tx + 0.92, ty - 0.92, ty + 0.92)
 
     # 4. Ale barrel / crate corner clutter
     if density >= 0.5:
@@ -1330,14 +1347,13 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
             if _score_dining_cand((tx, ty)) < -500:
                 continue
             if tracker.is_free(tx - 0.72, tx + 0.72, ty - 0.72, ty + 0.72):
-                tracker.occupy(tx - 0.72, tx + 0.72, ty - 0.72, ty + 0.72)
                 build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=tr)
                 build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_table, 0.0)
                 for ci, ca in enumerate([0.0, math.pi]):
                     cx = tx + 0.65 * math.cos(ca)
                     cy = ty + 0.65 * math.sin(ca)
-                    if tracker.rx0 <= cx <= tracker.rx1 and tracker.ry0 <= cy <= tracker.ry1:
-                        build_prop(bm, 'CHAIR', cx, cy, z_floor, ca - math.pi * 0.5, seat_h=0.48)
+                    _try_place_chair(bm, tracker, cx, cy, ca - math.pi * 0.5, z_floor)
+                tracker.occupy(tx - 0.72, tx + 0.72, ty - 0.72, ty + 0.72)
                 dining_table_pos = (tx, ty)
                 break
     else:
@@ -1348,8 +1364,6 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
             for try_yaw, tw, td in [(0.0, 1.40, 0.85), (math.pi * 0.5, 0.85, 1.40)]:
                 if tracker.is_free(tx - tw * 0.5 - 0.32, tx + tw * 0.5 + 0.32,
                                    ty - td * 0.5 - 0.32, ty + td * 0.5 + 0.32):
-                    tracker.occupy(tx - tw * 0.5 - 0.32, tx + tw * 0.5 + 0.32,
-                                   ty - td * 0.5 - 0.32, ty + td * 0.5 + 0.32)
                     build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, try_yaw, length=1.40, width=0.85)
                     clutter_x, clutter_y = _table_offset(tx, ty, -0.20, 0.0, try_yaw)
                     bottle_x, bottle_y = _table_offset(tx, ty, 0.30, 0.0, try_yaw)
@@ -1373,8 +1387,9 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                             (tx, ty + (td * 0.5 + 0.28), 0.0),
                         ]
                     for chx, chy, chang in chair_offsets:
-                        if tracker.rx0 + 0.08 <= chx <= tracker.rx1 - 0.08 and tracker.ry0 + 0.08 <= chy <= tracker.ry1 - 0.08:
-                            build_prop(bm, 'CHAIR', chx, chy, z_floor, chang, seat_h=0.48)
+                        _try_place_chair(bm, tracker, chx, chy, chang, z_floor)
+                    tracker.occupy(tx - tw * 0.5 - 0.32, tx + tw * 0.5 + 0.32,
+                                   ty - td * 0.5 - 0.32, ty + td * 0.5 + 0.32)
                     dining_table_pos = (tx, ty)
                     placed = True
                     break
@@ -1384,11 +1399,11 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     # Fallback dining table if tight (never when a hall already has dining)
     if (not floor_has_dining and dining_table_pos is None
             and tracker.is_free(rcx - 0.60, rcx + 0.60, rcy - 0.60, rcy + 0.60)):
-        tracker.occupy(rcx - 0.60, rcx + 0.60, rcy - 0.60, rcy + 0.60)
         build_prop(bm, 'ROUND_TABLE', rcx, rcy, z_floor, 0.0, radius=0.48)
         build_prop(bm, 'SCATTER_TABLEWARE', rcx, rcy, z_table, 0.0)
-        build_prop(bm, 'CHAIR', rcx, rcy - 0.65, z_floor, math.pi, seat_h=0.48)
-        build_prop(bm, 'CHAIR', rcx, rcy + 0.65, z_floor, 0.0, seat_h=0.48)
+        _try_place_chair(bm, tracker, rcx, rcy - 0.65, math.pi, z_floor)
+        _try_place_chair(bm, tracker, rcx, rcy + 0.65, 0.0, z_floor)
+        tracker.occupy(rcx - 0.60, rcx + 0.60, rcy - 0.60, rcy + 0.60)
         dining_table_pos = (rcx, rcy)
 
     # 4. Produce presentation: the pumpkin is displayed ON a kitchen sideboard
@@ -1471,7 +1486,6 @@ def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     dty = rcy + _jit(rng, 0.22)
     tw, td = 1.50, 0.90
     if tracker.is_free(dtx - tw * 0.5 - 0.35, dtx + tw * 0.5 + 0.35, dty - td * 0.5 - 0.35, dty + td * 0.5 + 0.35):
-        tracker.occupy(dtx - tw * 0.5 - 0.35, dtx + tw * 0.5 + 0.35, dty - td * 0.5 - 0.35, dty + td * 0.5 + 0.35)
         build_prop(bm, 'INDOOR_TABLE', dtx, dty, z_floor, 0.0, length=tw, width=td)
         build_prop(bm, 'SCATTER_TABLEWARE', dtx - 0.25, dty, z_table, 0.0)
         if rng.random() < 0.45:
@@ -1486,8 +1500,8 @@ def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
             (dtx + (tw * 0.5 + 0.30), dty, -math.pi * 0.5),
         ]
         for chx, chy, chang in chair_positions:
-            if tracker.rx0 + 0.10 <= chx <= tracker.rx1 - 0.10 and tracker.ry0 + 0.10 <= chy <= tracker.ry1 - 0.10:
-                build_prop(bm, 'CHAIR', chx, chy, z_floor, chang, seat_h=0.48)
+            _try_place_chair(bm, tracker, chx, chy, chang, z_floor)
+        tracker.occupy(dtx - tw * 0.5 - 0.35, dtx + tw * 0.5 + 0.35, dty - td * 0.5 - 0.35, dty + td * 0.5 + 0.35)
 
     # 3. Fireside Lounge / Seating: Plush Sofa or Armchair facing hearth/center
     if rw >= 4.0 or rd >= 4.0:
@@ -1599,19 +1613,28 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     # 1. Warm stone hearth if chimney exists
     _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
 
-    # 2. Grand Council Table with Magistrate Chairs
+    # 2. Grand Council Table with Magistrate Chairs (chairs keep clear of
+    # stairs, doorways and other props).
     tw = min(3.0, max(1.80, rw * 0.45))
     td = 1.05
     if tracker.is_free(rcx - tw * 0.5 - 0.40, rcx + tw * 0.5 + 0.40, rcy - td * 0.5 - 0.40, rcy + td * 0.5 + 0.40):
-        tracker.occupy(rcx - tw * 0.5 - 0.40, rcx + tw * 0.5 + 0.40, rcy - td * 0.5 - 0.40, rcy + td * 0.5 + 0.40)
+        # Seats first, margin reservation last (chairs tuck against the table
+        # edge and would self-reject against the margin box).
         build_prop(bm, 'INDOOR_TABLE', rcx, rcy, z_floor, 0.0, length=tw, width=td)
         n_chairs = max(2, int(tw / 0.85))
         chair_step = tw / n_chairs
         for ci in range(n_chairs):
             chx = rcx - tw * 0.5 + (ci + 0.5) * chair_step
-            build_prop(bm, 'CHAIR', chx, rcy - (td * 0.5 + 0.32), z_floor, math.pi, seat_h=0.50)
-            build_prop(bm, 'CHAIR', chx, rcy + (td * 0.5 + 0.32), z_floor, 0.0, seat_h=0.50)
-        build_prop(bm, 'CHAIR', rcx - (tw * 0.5 + 0.38), rcy, z_floor, math.pi * 0.5, seat_h=0.54)
+            for chy, chang in ((rcy - (td * 0.5 + 0.32), math.pi),
+                               (rcy + (td * 0.5 + 0.32), 0.0)):
+                if tracker.is_free(chx - 0.30, chx + 0.30, chy - 0.30, chy + 0.30):
+                    tracker.occupy(chx - 0.30, chx + 0.30, chy - 0.30, chy + 0.30)
+                    build_prop(bm, 'CHAIR', chx, chy, z_floor, chang, seat_h=0.50)
+        _ex, _ey, _eyaw = rcx - (tw * 0.5 + 0.38), rcy, math.pi * 0.5
+        if tracker.is_free(_ex - 0.30, _ex + 0.30, _ey - 0.30, _ey + 0.30):
+            tracker.occupy(_ex - 0.30, _ex + 0.30, _ey - 0.30, _ey + 0.30)
+            build_prop(bm, 'CHAIR', _ex, _ey, z_floor, _eyaw, seat_h=0.54)
+        tracker.occupy(rcx - tw * 0.5 - 0.40, rcx + tw * 0.5 + 0.40, rcy - td * 0.5 - 0.40, rcy + td * 0.5 + 0.40)
 
     # 3. Perimeter benches along walls
     _try_place_wall_prop(bm, 'BENCH', 1.60, 0.45, tracker, z_floor,
@@ -1640,6 +1663,84 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
 
     # 6. Grand Chandelier
     build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.52)
+
+
+def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                          rng, density: float, chimney_pos: Optional[Tuple[float, float]] = None):
+    """Grand manor banquet hall: one long feast table with chairs all around,
+    festive tableware, hearth, sideboard and ceremonial rugs."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    z_table = z_floor + 0.775
+
+    # 1. Warm stone hearth if chimney exists
+    _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+
+    # 2. Long feast table along the room's long axis with chairs around all sides.
+    along_y = rd >= rw
+    if along_y:
+        tw, td, yaw = 1.05, min(4.6, max(2.2, rd * 0.62)), math.pi * 0.5
+    else:
+        tw, td, yaw = min(4.6, max(2.2, rw * 0.62)), 1.05, 0.0
+    tx, ty = rcx + _jit(rng, 0.15), rcy + _jit(rng, 0.15)
+    hw, hd = (0.55, td * 0.5 + 0.40) if along_y else (tw * 0.5 + 0.40, 0.95)
+    if tracker.is_free(tx - hw, tx + hw, ty - hd, ty + hd):
+        # Seats are placed BEFORE the table's margin box is reserved: chairs
+        # tuck against the table edge, so checking them against the margin
+        # would wrongly reject every one of them.
+        build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, yaw, length=max(tw, td), width=1.05)
+        build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_table, yaw)
+        if rng.random() < 0.7:
+            build_prop(bm, 'BOTTLE_CLUSTER', tx + _jit(rng, 0.3), ty + _jit(rng, 0.3), z_table, yaw)
+        # Chairs along both long sides plus both ends. Every chair is
+        # collision-checked so none lands in the stairwell, a doorway
+        # corridor or another prop.
+        def _seat(cx, cy, yaw, h=0.50):
+            if tracker.is_free(cx - 0.30, cx + 0.30, cy - 0.30, cy + 0.30):
+                tracker.occupy(cx - 0.30, cx + 0.30, cy - 0.30, cy + 0.30)
+                build_prop(bm, 'CHAIR', cx, cy, z_floor, yaw, seat_h=h)
+
+        long_len = max(tw, td)
+        n_side = max(2, int(long_len / 0.85))
+        step = long_len / n_side
+        for ci in range(n_side):
+            off = -long_len * 0.5 + (ci + 0.5) * step
+            if along_y:
+                _seat(tx - 0.85, ty + off, math.pi * 0.5)
+                _seat(tx + 0.85, ty + off, -math.pi * 0.5)
+            else:
+                _seat(tx + off, ty - 0.85, math.pi)
+                _seat(tx + off, ty + 0.85, 0.0)
+        if along_y:
+            _seat(tx, ty - (long_len * 0.5 + 0.38), math.pi, h=0.54)
+            _seat(tx, ty + (long_len * 0.5 + 0.38), 0.0, h=0.54)
+        else:
+            _seat(tx - (long_len * 0.5 + 0.38), ty, math.pi * 0.5, h=0.54)
+            _seat(tx + (long_len * 0.5 + 0.38), ty, -math.pi * 0.5, h=0.54)
+        tracker.occupy(tx - hw, tx + hw, ty - hd, ty + hd)
+
+    # 3. Sideboard with bottles against a free wall.
+    sideboard = _try_place_wall_prop(bm, 'INDOOR_TABLE', 1.40, 0.60, tracker, z_floor,
+                                     candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'),
+                                     length=1.40)
+    if sideboard is not None:
+        build_prop(bm, 'BOTTLE_CLUSTER', sideboard[0], sideboard[1], z_table, sideboard[2])
+
+    # 4. Perimeter bench + chest.
+    _try_place_wall_prop(bm, 'BENCH', 1.60, 0.45, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'), length=1.60)
+    _try_place_wall_prop(bm, 'CHEST', 1.00, 0.55, tracker, z_floor,
+                         candidate_walls=('WEST', 'EAST', 'SOUTH'))
+
+    # 5. Ceremonial runner under the feast table.
+    run_w = min(3.0, max(1.8, min(rw, rd) * 0.55))
+    run_l = min(9.0, max(3.4, max(rw, rd) * 0.80))
+    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', tx, ty, z_floor, run_w, run_l, yaw_max=0.05)
+
+    # 6. Grand chandelier over the table.
+    build_prop(bm, 'CHANDELIER', tx, ty, z_ceil, 0.0, radius=0.52)
 
 
 def _furnish_entrance_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -2214,8 +2315,6 @@ def _furnish_mess_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
         if not tracker.is_free(tx - tw * 0.5 - 0.30, tx + tw * 0.5 + 0.30,
                                ty - td * 0.5 - need, ty + td * 0.5 + need):
             continue
-        tracker.occupy(tx - tw * 0.5 - 0.30, tx + tw * 0.5 + 0.30,
-                       ty - td * 0.5 - need, ty + td * 0.5 + need)
         build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, 0.0, length=tw, width=td)
         build_prop(bm, 'SCATTER_TABLEWARE', tx - 0.45, ty, z_floor + 0.76, 0.0)
         build_prop(bm, 'SCATTER_TABLEWARE', tx + 0.45, ty, z_floor + 0.76, 0.0)
@@ -2225,13 +2324,15 @@ def _furnish_mess_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
                 ca = ci * (math.pi * 2.0 / 6.0)
                 chx = tx + (tw * 0.5 + 0.32) * math.cos(ca)
                 chy = ty + (td * 0.5 + 0.32) * math.sin(ca)
-                if tracker.rx0 <= chx <= tracker.rx1 and tracker.ry0 <= chy <= tracker.ry1:
-                    build_prop(bm, 'CHAIR', chx, chy, z_floor, ca - math.pi * 0.5, seat_h=0.48)
+                _try_place_chair(bm, tracker, chx, chy, ca - math.pi * 0.5, z_floor)
         else:
             for sgn in (-1.0, 1.0):
                 bx, by = tx, ty + sgn * (td * 0.5 + 0.32)
-                if tracker.rx0 <= bx - tw * 0.45 and bx + tw * 0.45 <= tracker.rx1:
+                if tracker.is_free(bx - tw * 0.45, bx + tw * 0.45, by - 0.25, by + 0.25):
+                    tracker.occupy(bx - tw * 0.45, bx + tw * 0.45, by - 0.25, by + 0.25)
                     build_prop(bm, 'BENCH', bx, by, z_floor, 0.0, length=min(tw - 0.2, 2.0))
+        tracker.occupy(tx - tw * 0.5 - 0.30, tx + tw * 0.5 + 0.30,
+                       ty - td * 0.5 - need, ty + td * 0.5 + need)
 
     # 2. Supply barrel in a free corner
     for cx in (rm.bounds[0] + 0.45, rm.bounds[1] - 0.45):
@@ -2527,6 +2628,8 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_tavern_taproom(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('GREAT_HALL', 'COUNCIL_CHAMBER'):
             _furnish_great_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
+        elif role in ('BANQUET_HALL',):
+            _furnish_banquet_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('ENTRANCE_HALL',):
             _furnish_entrance_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('MAYOR_OFFICE', 'OFFICE'):
@@ -2669,7 +2772,7 @@ def furnish_building_interior(bm, props, ctx):
 
         # A room on this floor already contains the dining/social set, so the
         # kitchen must not duplicate it. Shared across the whole storey.
-        _dining_roles = {'HOUSE_HALL', 'DINING', 'GREAT_HALL', 'TAVERN_TAPROOM',
+        _dining_roles = {'HOUSE_HALL', 'DINING', 'GREAT_HALL', 'BANQUET_HALL', 'TAVERN_TAPROOM',
                          'CHAPEL_HALL', 'MESS_HALL', 'COUNCIL_CHAMBER'}
         floor_has_dining = any(getattr(rm, 'role', None) in _dining_roles for rm in rooms)
 

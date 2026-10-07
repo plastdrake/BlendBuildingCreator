@@ -809,7 +809,10 @@ def build_arrow_slit(bm, center=(0.0, 0.0, 0.0), normal_axis='-Y', wall_thicknes
         return w_loc, (w_rot.x, w_rot.y, w_rot.z)
 
     liner_t = 0.05
-    depth = wall_thickness + 0.01
+    # Reveals stand 3cm proud of each wall face: flush faces shimmer
+    # (z-fight) at glancing angles, while a slight proud reads as a dressed
+    # stone surround.
+    depth = wall_thickness + 0.06
 
     # Cut-stone reveals lining the cut aperture on all four sides.
     for sx in (-1.0, 1.0):

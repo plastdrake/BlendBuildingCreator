@@ -76,8 +76,8 @@ def _create_sign_decal_quad(bm, cx, dy, cz, w, h, is_back=False):
     return [face]
 
 
-def build_hanging_sign(bm, x, y, z_top, run_ang=0.0, bracket_len=0.60,
-                       board_w=0.88, board_h=0.74, light_board=True, ang=None):
+def build_hanging_sign(bm, x, y, z_top, run_ang=0.0, bracket_len=2.20,
+                       board_w=1.76, board_h=1.48, light_board=True, ang=None):
     """A compact blacksmith-forged hanging trade sign with a painted icon decal.
 
     ``run_ang`` yaws the bracket in the XY plane (0 = +X). Local +X is the
@@ -91,33 +91,43 @@ def build_hanging_sign(bm, x, y, z_top, run_ang=0.0, bracket_len=0.60,
     rng = _rng(x, y, 31)
     faces = []
 
-    # Wall mounting plate.
-    faces += create_beveled_box(bm, size=(0.06, 0.16, 0.34),
-                                location=(0.02, 0.0, -0.14), mat_index=MAT_INDEX_IRON,
-                                bevel_amount=0.008)
-    # Main horizontal forged iron beam.
-    faces += create_beveled_box(bm, size=(bracket_len, 0.042, 0.042),
+    # Wall mounting plate (2x thicker/wider).
+    faces += create_beveled_box(bm, size=(0.12, 0.32, 0.68),
+                                location=(0.04, 0.0, -0.28), mat_index=MAT_INDEX_IRON,
+                                bevel_amount=0.016)
+    # Main horizontal forged iron beam (2x thicker).
+    faces += create_beveled_box(bm, size=(bracket_len, 0.084, 0.084),
                                 location=(bracket_len * 0.5 + 0.02, 0.0, 0.0),
-                                mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
-    # Support brace running from the wall foot UP to the arm near its tip.
-    brace_l = math.hypot(bracket_len * 0.8, 0.30)
-    brace_a = math.atan2(0.30, bracket_len * 0.8)
-    faces += create_beveled_box(bm, size=(brace_l, 0.028, 0.028),
-                                location=(bracket_len * 0.40, 0.0, -0.15),
-                                rotation=(0.0, -brace_a, 0.0),
-                                mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
-    # Two short straps hanging the board directly from the arm. The board hangs
-    # low enough that the diagonal brace ends above it instead of crossing it.
-    board_cx = bracket_len * 0.55
+                                mat_index=MAT_INDEX_IRON, bevel_amount=0.010)
+    # Board is CENTRED under the arm so the arm spans the full board width
+    # with a small overhang past the straps on both ends.
+    board_cx = bracket_len * 0.5 + 0.02
     board_top_z = -0.34
     board_cz = board_top_z - board_h * 0.5
-    for hx in (board_cx - board_w * 0.30, board_cx + board_w * 0.30):
-        faces += create_beveled_box(bm, size=(0.03, 0.03, -board_top_z + 0.03),
+    # Straps hang from the arm down to the board top, inset from the board
+    # ends so both rods carry the sign.
+    strap_offset = board_w * 0.32
+    strap1_x = board_cx - strap_offset
+    strap2_x = board_cx + strap_offset
+    # Support brace runs from the wall foot UP to the arm, but ends BEFORE
+    # the first vertical strap (with clearance) so the diagonal never
+    # crosses/intersects the hanger rods.
+    brace_reach = max(0.35, strap1_x - 0.12)
+    brace_l = math.hypot(brace_reach, 0.30)
+    brace_a = math.atan2(0.30, brace_reach)
+    faces += create_beveled_box(bm, size=(brace_l, 0.056, 0.056),
+                                location=(brace_reach * 0.5, 0.0, -0.15),
+                                rotation=(0.0, -brace_a, 0.0),
+                                mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
+    # Two short straps hanging the board directly from the arm. The board hangs
+    # low enough that the diagonal brace ends above it instead of crossing it.
+    for hx in (strap1_x, strap2_x):
+        faces += create_beveled_box(bm, size=(0.06, 0.06, -board_top_z + 0.03),
                                     location=(hx, 0.0, board_top_z * 0.5),
-                                    mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
+                                    mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
 
-    # Chunky wooden sign board (3 vertical planks lying in the local XZ plane).
-    board_thick = 0.075
+    # Chunky wooden sign board (3 vertical planks lying in the local XZ plane) - 2x thick.
+    board_thick = 0.15
     board_mat = MAT_INDEX_WOOD if light_board else MAT_INDEX_TIMBER
     gap = 0.010
     plank_w = (board_w - gap * 2.0) / 3.0
@@ -128,13 +138,13 @@ def build_hanging_sign(bm, x, y, z_top, run_ang=0.0, bracket_len=0.60,
             bm, size=(plank_w, board_thick, board_h),
             location=(px, 0.0, board_cz + j),
             rotation=(0.0, 0.0, (rng.random() - 0.5) * 0.02),
-            mat_index=board_mat, bevel_amount=0.010, bevel_segments=2)
+            mat_index=board_mat, bevel_amount=0.020, bevel_segments=2)
 
-    # Timber top and bottom cross battens.
+    # Timber top and bottom cross battens (2x thick).
     for bz in (board_cz + board_h * 0.44, board_cz - board_h * 0.44):
-        faces += create_beveled_box(bm, size=(board_w + 0.03, board_thick + 0.022, 0.07),
+        faces += create_beveled_box(bm, size=(board_w + 0.03, board_thick + 0.022, 0.14),
                                     location=(board_cx, 0.0, bz),
-                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.016)
 
     # Icon decal panels proud of both faces (local +/- Y).
     decal_w = board_w * 0.82

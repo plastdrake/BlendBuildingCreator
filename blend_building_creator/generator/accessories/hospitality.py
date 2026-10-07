@@ -109,7 +109,7 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
     build_hanging_sign(
         bm, mount_x, face_y - 0.03, mount_z,
         run_ang=-math.pi * 0.5,
-        bracket_len=1.05, board_w=1.15, board_h=0.96, light_board=True,
+        bracket_len=2.70, board_w=2.30, board_h=1.92, light_board=True,
     )
 
 
@@ -171,7 +171,7 @@ def _build_gable_signs(bm, props, ctx, tier):
 
     for ax, ay, az, ang in anchors:
         build_hanging_sign(bm, ax, ay, az, run_ang=ang,
-                           bracket_len=1.55, board_w=1.05, board_h=0.92,
+                           bracket_len=2.50, board_w=2.10, board_h=1.84,
                            light_board=True)
     return len(anchors)
 

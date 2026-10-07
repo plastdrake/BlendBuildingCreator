@@ -20,7 +20,7 @@ from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_TIMBER,
     MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_SHINGLES,
     MAT_INDEX_PLASTER_EXT, MAT_INDEX_IRON, MAT_INDEX_GLASS,
-    MAT_INDEX_FLOOR, MAT_INDEX_TARP
+    MAT_INDEX_FLOOR, MAT_INDEX_TARP, MAT_INDEX_WATER
 )
 from .furniture import build_barrel, build_crate, build_clay_pot
 
@@ -114,7 +114,7 @@ def build_estate_fountain(bm, pos=(0.0, -8.0, 0.0), tier='TIER_3'):
                    48, MAT_INDEX_CUT_STONE, close_bottom=True)
     # Recessed water surface, well below the coping (~0.3 m of freeboard).
     create_cylinder(bm, radius=pool_in - 0.04, height=0.015, segments=48,
-                    location=(fx, fy, z_plinth + 0.36), mat_index=MAT_INDEX_GLASS)
+                    location=(fx, fy, z_plinth + 0.36), mat_index=MAT_INDEX_WATER)
     z_floor_top = z_plinth + 0.32
 
     # 3. Central pedestal rising out of the pool.
@@ -135,7 +135,7 @@ def build_estate_fountain(bm, pos=(0.0, -8.0, 0.0), tier='TIER_3'):
                    ped_r + 0.02, bowl_r, ped_r - 0.10, bowl_r - 0.14,
                    40, MAT_INDEX_CUT_STONE, close_bottom=False)
     create_cylinder(bm, radius=bowl_r - 0.16, height=0.015, segments=40,
-                    location=(fx, fy, bowl_z1 - 0.11), mat_index=MAT_INDEX_GLASS)
+                    location=(fx, fy, bowl_z1 - 0.11), mat_index=MAT_INDEX_WATER)
 
     # 5. Central jet spire.
     create_cylinder(bm, radius=0.14, height=bowl_h + 0.30, segments=20,
@@ -464,7 +464,7 @@ def build_servant_quarters(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='T
         'has_timber_framing': True,
         'timber_diagonals': True,
         'roof_style': 'SWAY',
-        'roof_orientation': 'FRONT_BACK',
+        'roof_orientation': 'LEFT_RIGHT',
         'roof_height': 2.6,
         'roof_overhang': 0.60,
         'has_roof_shingles': True,
@@ -535,7 +535,10 @@ def _place_estate_awnings(bm, props, tier, spread_x, fore_y, stable=None, servan
     """
     shelters = (
         ('TARP', stable, -spread_x * 0.55, 'LEANTO', 3.4, 2.8, 2.25, 2.80),
-        ('LEANTO', servant, spread_x * 0.55, 'TARP', 2.8, 2.4, 1.95, 2.55),
+        # Servant lean-to rides high: the back beam clears the ground-floor
+        # window heads and open shutters (~2.5m), and the extra width covers
+        # the window bay instead of clipping through it.
+        ('LEANTO', servant, spread_x * 0.55, 'TARP', 3.6, 2.4, 2.60, 3.20),
     )
     for kind, slot, fallback_x, _other, width, depth, fh, bh in shelters:
         if slot is not None:

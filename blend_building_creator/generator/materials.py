@@ -110,6 +110,7 @@ MAT_INDEX_CLOTH_LINEN   = 37
 MAT_INDEX_BOTTLE_GLASS  = 38
 MAT_INDEX_PUMPKIN_STEM  = 39
 MAT_INDEX_OPEN_BOOK     = 40
+MAT_INDEX_WATER         = 41
 
 
 # ---------------------------------------------------------------------------
@@ -2378,6 +2379,21 @@ def create_stylized_bottle_glass(name="M_Building_Bottle_Glass", color=(0.12, 0.
     return mat
 
 
+def create_stylized_water(name="M_Water", color=(0.16, 0.38, 0.50, 1.0)):
+    """Clear blue courtyard water for fountain pools and well surfaces."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=0.08, metallic=0.0)
+    if "Transmission Weight" in bsdf.inputs:
+        bsdf.inputs["Transmission Weight"].default_value = 0.75
+    elif "Transmission" in bsdf.inputs:
+        bsdf.inputs["Transmission"].default_value = 0.75
+    if "IOR" in bsdf.inputs:
+        bsdf.inputs["IOR"].default_value = 1.33
+    return mat
+
+
 # ---------------------------------------------------------------------------
 # Material slot setup
 # ---------------------------------------------------------------------------
@@ -2598,6 +2614,7 @@ def setup_building_material_slots(obj, props):
     mat_pumpkin_stem = create_stylized_pumpkin_stem("M_Building_Pumpkin_Stem")
     mat_open_book = (getattr(props, 'custom_open_book', None)
                      or create_stylized_open_book("M_Building_Open_Book"))
+    mat_water = getattr(props, 'custom_water', None) or create_stylized_water("M_Water")
 
     # Assemble canonical slots in strict order
     required_mats = [
@@ -2642,6 +2659,7 @@ def setup_building_material_slots(obj, props):
         mat_bottle_glass,   # 38 MAT_INDEX_BOTTLE_GLASS
         mat_pumpkin_stem,   # 39 MAT_INDEX_PUMPKIN_STEM
         mat_open_book,      # 40 MAT_INDEX_OPEN_BOOK
+        mat_water,            # 41 MAT_INDEX_WATER
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -2695,6 +2713,7 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Bottle_Glass",  # 38
     "M_Building_Pumpkin_Stem",  # 39
     "M_Building_Open_Book",     # 40
+    "M_Water",                  # 41
 )
 
 

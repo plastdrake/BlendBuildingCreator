@@ -47,7 +47,8 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
                            height=3.2, thickness=0.55, plinth_h=0.45,
                            walk_width=0.95, merlon_h=0.78,
                            slits=True, slit_spacing=3.0, gate=None,
-                           plinth_end=(0.0, 0.0), seed=42):
+                           plinth_end=(0.0, 0.0), seed=42,
+                           merlon_end_clear=(0.0, 0.0)):
     """Build one straight curtain-wall run between two (x, y) points.
 
     ``outward`` is the horizontal normal the merlons and arrow slits face.
@@ -59,6 +60,10 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
     run. Where a run buries its head inside a corner bastion the caller pushes
     the plinth a little further in so it laps well under the tower's own plinth
     band rather than stopping flush against it (which read as a notch).
+
+    ``merlon_end_clear`` insets the parapet/merlon strip (only) at the
+    start/end of the run so the crenels stop cleanly at a corner post instead
+    of piling two perpendicular merlons onto each other.
     """
     x1, y1 = p_start
     x2, y2 = p_end
@@ -144,13 +149,15 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
 
-    # 5. Crenellated merlons along the exposed outer edge.
+    # 5. Crenellated merlons along the exposed outer edge, optionally
+    # stopping short of a corner post so perpendicular parapets never collide.
     par_t = 0.30
     off_out = thickness * 0.5 - par_t * 0.5 + 0.02
+    mc0, mc1 = merlon_end_clear
     for u0, u1 in walk_spans:
         if u1 - u0 < 0.8:
             continue
-        build_battlement_run(bm, at(u0, off_out), at(u1, off_out),
+        build_battlement_run(bm, at(u0 + mc0, off_out), at(u1 - mc1, off_out),
                              walk_top + 0.16, height=merlon_h,
                              thickness=par_t, style='STONE')
 
@@ -160,6 +167,25 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
         build_arrow_slit(bm, center=(cx, cy, slit_cz), normal_axis=(ox, oy),
                          wall_thickness=thickness, slit_w=slit_w, slit_h=slit_h,
                          has_transom=False)
+
+
+def _build_corner_post(bm, cx, cy, thickness, walk_top, ground_z=0.0):
+    """Dressed cut-stone corner pier where two runs meet without a tower.
+
+    A slightly proud square post swallowing the whole corner joint (plinth,
+    body, string course and parapet ends all terminate buried inside it), so
+    no coincident faces or doubled merlons remain visible. Capped with a
+    wider crown block.
+    """
+    half = thickness * 0.5 + 0.14
+    pier_h = (walk_top + 0.18) - ground_z
+    create_beveled_box(bm, size=(half * 2.0, half * 2.0, pier_h),
+                       location=(cx, cy, ground_z + pier_h * 0.5),
+                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+    cap_half = half + 0.10
+    create_beveled_box(bm, size=(cap_half * 2.0, cap_half * 2.0, 0.16),
+                       location=(cx, cy, walk_top + 0.18 + 0.08),
+                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
 
 
 def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
@@ -257,22 +283,55 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
         side_y0 = y_min
         side_y1_left = side_y1_right = y_max
 
+    # Stone corner piers wherever no bastion swallows the joint (see below).
+    _has_bast = getattr(props, 'has_bastion_towers', False)
+    _n_bast = int(getattr(props, 'bastion_tower_count', 2)) if _has_bast else 0
+    _post_FL = not _has_bast
+    _post_FR = not _has_bast
+    _post_BL = not (_has_bast and _n_bast >= 4)
+    _post_BR = not (_has_bast and _n_bast >= 4)
+    _post_clr = T * 0.5 + 0.14 + 0.12
+
     # Front run with the gate opening.
     build_curtain_wall_run(
         bm, (front_x0, y_min), (front_x1, y_min), (0.0, -1.0), 0.0, H, T,
         gate={'u0': g0 - front_x0, 'u1': g1 - front_x0, 'h': gate_h},
+        merlon_end_clear=(
+            _post_clr if (_post_FL and front_x0 <= x_min + 0.01) else 0.0,
+            _post_clr if (_post_FR and front_x1 >= x_max - 0.01) else 0.0),
         seed=ctx.seed)
     # Back run.
     build_curtain_wall_run(
         bm, (back_x0, y_max), (back_x1, y_max), (0.0, 1.0), 0.0, H, T,
+        merlon_end_clear=(
+            _post_clr if (_post_BL and back_x0 <= x_min + 0.01) else 0.0,
+            _post_clr if (_post_BR and back_x1 >= x_max - 0.01) else 0.0),
         seed=ctx.seed + 1)
-    # Left and right runs.
+    # Left and right runs. Wherever no corner tower swallows the joint,
+    # they tuck just inside the front/back runs (half a thickness + a hair)
+    # instead of overlapping them full-cube: stacked TxT corner cubes put
+    # coincident faces on top of each other, which z-fights.
+    _ly0 = side_y0 if _has_bast else y_min + T * 0.5 + 0.02
+    _ly1l = side_y1_left if (_has_bast and _n_bast >= 4) else y_max - T * 0.5 - 0.02
+    _ly1r = side_y1_right if (_has_bast and _n_bast >= 4) else y_max - T * 0.5 - 0.02
     build_curtain_wall_run(
-        bm, (x_min, side_y0), (x_min, side_y1_left), (-1.0, 0.0), 0.0, H, T,
+        bm, (x_min, _ly0), (x_min, _ly1l), (-1.0, 0.0), 0.0, H, T,
+        merlon_end_clear=(
+            _post_clr if (_post_FL and _ly0 <= y_min + 0.01) else 0.0,
+            _post_clr if (_post_BL and _ly1l >= y_max - 0.01) else 0.0),
         seed=ctx.seed + 2)
     build_curtain_wall_run(
-        bm, (x_max, side_y0), (x_max, side_y1_right), (1.0, 0.0), 0.0, H, T,
+        bm, (x_max, _ly0), (x_max, _ly1r), (1.0, 0.0), 0.0, H, T,
+        merlon_end_clear=(
+            _post_clr if (_post_FR and _ly0 <= y_min + 0.01) else 0.0,
+            _post_clr if (_post_BR and _ly1r >= y_max - 0.01) else 0.0),
         seed=ctx.seed + 3)
+    for (_do, _px, _py) in ((_post_FL, x_min, y_min),
+                            (_post_FR, x_max, y_min),
+                            (_post_BL, x_min, y_max),
+                            (_post_BR, x_max, y_max)):
+        if _do:
+            _build_corner_post(bm, _px, _py, T, H, ground_z=0.0)
 
     # Gatehouse dressing over the front opening.
     build_gate_house(bm, gate_cx, y_min, (0.0, -1.0), g1 - g0, 0.0, T,

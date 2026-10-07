@@ -1054,6 +1054,17 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         _p = _program_roles(program, fl_idx, num_rooms, has_stairs_landing)
         if _p is not None:
             return _p
+    if archetype == 'MANOR':
+        # Grand residence: banquet hall + compact service rooms + library.
+        if has_stairs_landing:
+            pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'LIBRARY',
+                    'STUDY', 'GUEST_ROOM']
+            return pool[:num_rooms]
+        if total_floors == 1:
+            pool = ['BANQUET_HALL', 'KITCHEN', 'BEDROOM', 'LIBRARY', 'STUDY']
+            return pool[:num_rooms]
+        pool = ['BANQUET_HALL', 'KITCHEN', 'PANTRY', 'LIBRARY', 'STUDY']
+        return pool[:num_rooms]
     if has_stairs_landing:
         # On upper floors with stairs, Room 0 (around stair hole) is the protected landing/corridor.
         # Bedrooms and private suites are strictly placed in the separate partitioned chambers.
@@ -1160,6 +1171,146 @@ def _wing_portals(wb, doorways):
     return out
 
 
+def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
+                      has_stairs_landing, stair_pos_info=None):
+    """Manor-specific floor plan: dedicated stair hall + grand banquet hall.
+
+    Large manor footprints (W >= 16m) get a 4-column grid instead of the generic
+    2-column split, so rooms stay at sensible domestic sizes:
+      - west strip: full-depth stair hall (the flight stands here, clear of
+        every partition, with a 1.2m walk-off at its foot);
+      - inner columns: kitchen/pantry split, full-depth banquet hall,
+        library/study split.
+    The stairs never sit inside the kitchen or a bedroom anymore.
+    Returns (rooms, interior_walls) or None when the footprint is too small.
+    """
+    ix_min, ix_max, iy_min, iy_max = bounds
+    W = ix_max - ix_min
+    D = iy_max - iy_min
+    if W < 16.0 or D < 7.0:
+        return None
+
+    # West strip holds the whole stair well plus a walkway beside it.
+    if stair_pos_info:
+        try:
+            _cx = float(stair_pos_info.get('cx', 0.0))
+            _w = float(stair_pos_info.get('w', 1.5))
+            c0w = (_cx + _w * 0.5 + 1.0) - ix_min
+        except Exception:
+            c0w = W * 0.22
+    else:
+        c0w = W * 0.22
+    c0w = min(max(c0w, 3.5), W * 0.30)
+    rest = W - c0w
+    b1 = ix_min + c0w
+    b2 = b1 + rest / 3.0
+    b3 = b1 + rest * 2.0 / 3.0
+    yA = (iy_min + iy_max) * 0.5
+    yB = (iy_min + iy_max) * 0.5
+
+    walls = []
+
+    def _vwall(px, y0, y1):
+        dw_y = (y0 + y1) * 0.5
+        walls.append({
+            'p1': (px, y0), 'p2': (px, y1),
+            'axis': 'Y', 'pos': px, 'thickness': wall_t,
+            'doorway': {'x': px, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'},
+        })
+
+    # West strip has no cross-divider: the flight runs full-depth clear.
+    _vwall(b1, iy_min, yA)
+    _vwall(b1, yA, iy_max)
+    _vwall(b2, iy_min, yA)
+    _vwall(b2, yA, iy_max)
+    walls.append({
+        'p1': (b1, yA), 'p2': (b2, yA),
+        'axis': 'X', 'pos': yA, 'thickness': wall_t, 'doorway': None,
+    })
+    _vwall(b3, iy_min, yB)
+    _vwall(b3, yB, iy_max)
+    walls.append({
+        'p1': (b3, yB), 'p2': (ix_max, yB),
+        'axis': 'X', 'pos': yB, 'thickness': wall_t, 'doorway': None,
+    })
+
+    def _dw(x, y, axis):
+        return {'x': x, 'y': y, 'axis': axis, 'w': dw_w}
+
+    def _holds_stair(rb):
+        if stair_hole is None:
+            return None
+        pad = 0.30
+        if rb[1] < stair_hole[0] - pad or rb[0] > stair_hole[1] + pad \
+                or rb[3] < stair_hole[2] - pad or rb[2] > stair_hole[3] + pad:
+            return None
+        return stair_hole
+
+    rooms = []
+    # Dedicated full-depth stair hall (west strip).
+    _bs = (ix_min, b1, iy_min, iy_max)
+    _stair_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'STAIR_LANDING'
+    rooms.append(Room(
+        id=f"fl{fl_idx}_stair_hall", floor_idx=fl_idx, role=_stair_role,
+        bounds=_bs,
+        doorways=[_dw(b1, (iy_min + yA) * 0.5, 'Y'),
+                  _dw(b1, (yA + iy_max) * 0.5, 'Y')],
+        stair_hole=_holds_stair(_bs),
+        exterior_facades={'FRONT': (ix_min, b1), 'BACK': (ix_min, b1),
+                          'LEFT': (iy_min, iy_max)}))
+
+    # Inner-west column split front/back (kitchen + pantry / bedrooms).
+    if fl_idx == 0:
+        _r0, _r1 = 'KITCHEN', 'PANTRY'
+    elif has_stairs_landing:
+        _r0, _r1 = 'BEDROOM', 'BEDROOM'
+    else:
+        _r0, _r1 = 'MASTER_BED', 'BEDROOM'
+    _b0 = (b1, b2, iy_min, yA)
+    _b1 = (b1, b2, yA, iy_max)
+    rooms.append(Room(
+        id=f"fl{fl_idx}_kitchen", floor_idx=fl_idx, role=_r0,
+        bounds=_b0, doorways=[_dw(b1, (iy_min + yA) * 0.5, 'Y'),
+                              _dw(b2, (iy_min + yA) * 0.5, 'Y')],
+        stair_hole=_holds_stair(_b0),
+        exterior_facades={'FRONT': (b1, b2)}))
+    rooms.append(Room(
+        id=f"fl{fl_idx}_pantry", floor_idx=fl_idx, role=_r1,
+        bounds=_b1, doorways=[_dw(b1, (yA + iy_max) * 0.5, 'Y'),
+                              _dw(b2, (yA + iy_max) * 0.5, 'Y')],
+        stair_hole=_holds_stair(_b1),
+        exterior_facades={'BACK': (b1, b2)}))
+
+    # Full-depth banquet hall / grand suite (center-east column).
+    _bc = (b2, b3, iy_min, iy_max)
+    _crole = 'BANQUET_HALL' if fl_idx == 0 else (
+        'MASTER_BED' if has_stairs_landing else 'GUEST_ROOM')
+    rooms.append(Room(
+        id=f"fl{fl_idx}_banquet", floor_idx=fl_idx, role=_crole,
+        bounds=_bc,
+        doorways=[_dw(b2, (iy_min + yA) * 0.5, 'Y'),
+                  _dw(b2, (yA + iy_max) * 0.5, 'Y'),
+                  _dw(b3, (iy_min + yB) * 0.5, 'Y'),
+                  _dw(b3, (yB + iy_max) * 0.5, 'Y')],
+        stair_hole=_holds_stair(_bc),
+        exterior_facades={'FRONT': (b2, b3), 'BACK': (b2, b3)}))
+
+    # East column split front/back (library + study).
+    _b2 = (b3, ix_max, iy_min, yB)
+    _b3 = (b3, ix_max, yB, iy_max)
+    rooms.append(Room(
+        id=f"fl{fl_idx}_library", floor_idx=fl_idx, role='LIBRARY',
+        bounds=_b2, doorways=[_dw(b3, (iy_min + yB) * 0.5, 'Y')],
+        stair_hole=_holds_stair(_b2),
+        exterior_facades={'FRONT': (b3, ix_max), 'RIGHT': (iy_min, yB)}))
+    rooms.append(Room(
+        id=f"fl{fl_idx}_study", floor_idx=fl_idx, role='STUDY',
+        bounds=_b3, doorways=[_dw(b3, (yB + iy_max) * 0.5, 'Y')],
+        stair_hole=_holds_stair(_b3),
+        exterior_facades={'BACK': (b3, ix_max), 'RIGHT': (yB, iy_max)}))
+    return rooms, walls
+
+
 def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                      front_door_info=None, fl_wings_bounds=None,
                      effective_archetype='NONE', props=None, seed=0,
@@ -1185,6 +1336,29 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
     dw_w = 1.30
     dw_h = min(2.65, floor_h - 0.35)
+
+    # Grand manor plan: wide noble footprints use a dedicated 4-column grid
+    # (full-depth stair hall + kitchen/pantry + banquet hall + library/study)
+    # so rooms stay at sensible domestic sizes and the stairs never sit
+    # inside the kitchen or a bedroom.
+    if effective_archetype == 'MANOR' and has_interior_walls \
+            and partition_style in ('AUTO', 'HALL_CHAMBERS'):
+        _manor = _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t,
+                                   dw_w, dw_h, has_stairs_landing,
+                                   stair_pos_info=stair_pos_info)
+        if _manor is not None:
+            _manor_rooms, _manor_walls = _manor
+            if fl_wings_bounds:
+                for wi, wb in enumerate(fl_wings_bounds):
+                    if fl_idx == 0:
+                        w_role = 'STUDY' if wi == 0 else 'GUEST_ROOM'
+                    else:
+                        w_role = 'BEDROOM' if wi == 0 else 'GUEST_ROOM'
+                    _manor_rooms.append(Room(
+                        id=f"fl{fl_idx}_wing{wi}", floor_idx=fl_idx,
+                        role=w_role, bounds=wb, is_wing=True, wing_id=wi,
+                        doorways=[], stair_hole=None, exterior_facades={}))
+            return _manor_rooms, _manor_walls
 
     # Single open room fallback (only when explicitly requested, plot is tiny
     # < 4.2m, or the archetype is an open industrial hall such as a lumbermill
@@ -1230,6 +1404,9 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                         w_doorways = [{'x': door_x, 'y': door_y, 'axis': 'Y', 'w': 1.10}]
                     else:
                         w_doorways = _wing_portals(wb, doorways)
+                elif effective_archetype == 'MANOR':
+                    w_role = 'STUDY' if (fl_idx == 0 and wi == 0) else ('GUEST_ROOM' if fl_idx == 0 else ('BEDROOM' if wi == 0 else 'GUEST_ROOM'))
+                    w_doorways = []
                 elif effective_archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL'):
                     w_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'MAYOR_OFFICE'
                     w_doorways = []
@@ -1772,6 +1949,77 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             )
             rooms = [rm0, rm1]
 
+        # Dedicated stair bay: when the landing hall is roomy, split the stair
+        # well (plus a 1m walkway) off into its own narrow full-depth stairwell
+        # room, so the flight never shares furnishing space with a living room
+        # and stays walkable end to end. Skipped for small footprints and for
+        # archetypes with bespoke layouts (they manage their own stairs).
+        if (rooms and rooms[0].stair_hole is not None and stair_hole is not None
+                and effective_archetype not in ('TOWN_HALL', 'CIVIC', 'GUILDHALL',
+                                                'TAVERN', 'INN', 'TENEMENT', 'MANOR')
+                and D >= 7.0):
+            _hall = rooms[0]
+            _hx0, _hx1, _hy0, _hy1 = _hall.bounds
+            if _hy0 <= iy_min + 0.05 and _hy1 >= iy_max - 0.05:
+                if stair_pos_info:
+                    try:
+                        _scx = float(stair_pos_info.get('cx', 0.0))
+                        _sw = float(stair_pos_info.get('w', 1.5))
+                        _wx0, _wx1 = _scx - _sw * 0.5, _scx + _sw * 0.5
+                    except Exception:
+                        _wx0, _wx1 = stair_hole[0], stair_hole[1]
+                else:
+                    _wx0, _wx1 = stair_hole[0], stair_hole[1]
+                _bay = _clear_doorway_span(_wx1 + 1.0, axis='X',
+                                           lo=_wx1 + 0.6, hi=_hx1 - 2.2)
+                if front_door_info is not None and fl_idx == 0:
+                    _dcx, _ddw = front_door_info
+                    if abs(_bay - _dcx) < _ddw * 0.5 + 0.65:
+                        _bay = _dcx + _ddw * 0.5 + 0.65
+                if _hx1 - _bay >= 2.2 and _bay - _hx0 >= 2.0:
+                    _ym = (iy_min + iy_max) * 0.5
+                    _bd0 = (_bay, (iy_min + _ym) * 0.5)
+                    _bd1 = (_bay, (_ym + iy_max) * 0.5)
+                    for (_sy0, _sy1, _sbd) in ((iy_min, _ym, _bd0), (_ym, iy_max, _bd1)):
+                        interior_walls.append({
+                            'p1': (_bay, _sy0), 'p2': (_bay, _sy1),
+                            'axis': 'Y', 'pos': _bay, 'thickness': wall_t,
+                            'doorway': {'x': _sbd[0], 'y': _sbd[1],
+                                        'w': dw_w, 'h': dw_h, 'axis': 'Y'},
+                        })
+                    _bay_dw = [{'x': _bd0[0], 'y': _bd0[1], 'axis': 'Y', 'w': dw_w},
+                               {'x': _bd1[0], 'y': _bd1[1], 'axis': 'Y', 'w': dw_w}]
+                    _bay_room = Room(
+                        id=f"fl{fl_idx}_stair_bay", floor_idx=fl_idx,
+                        role='CORRIDOR' if fl_idx == 0 else 'STAIR_LANDING',
+                        bounds=(_hx0, _bay, iy_min, iy_max),
+                        doorways=list(_bay_dw),
+                        stair_hole=stair_hole,
+                        exterior_facades={'FRONT': (_hx0, _bay),
+                                          'BACK': (_hx0, _bay),
+                                          'LEFT': (iy_min, iy_max)})
+                    _hall.bounds = (_bay, _hx1, iy_min, iy_max)
+                    _hall.stair_hole = None
+                    _hall.doorways = list(_hall.doorways) + list(_bay_dw)
+                    if fl_idx > 0:
+                        # The bay is the landing now, so the leftover hall
+                        # strip becomes the next unused chamber role instead
+                        # of a second landing.
+                        _pool = _resolve_room_roles(
+                            effective_archetype, fl_idx, len(rooms) + 1,
+                            has_stairs_landing, total_floors, program=program)
+                        while len(_pool) <= len(rooms):
+                            _pool.append(_pool[-1] if _pool else 'STORAGE')
+                        _hall.role = _pool[len(rooms)]
+                    _fac = dict(_hall.exterior_facades)
+                    _fac.pop('LEFT', None)
+                    if 'FRONT' in _fac:
+                        _fac['FRONT'] = (_bay, _hx1)
+                    if 'BACK' in _fac:
+                        _fac['BACK'] = (_bay, _hx1)
+                    _hall.exterior_facades = _fac
+                    rooms = [_bay_room, _hall] + list(rooms[1:])
+
     else:
         # Deep building: Partition along X (horizontal wall at Y = split_y, running from ix_min to ix_max)
         roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors, program=program)
@@ -1865,6 +2113,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 # (never an orphan kitchen); its portal is its doorway.
                 w_role = 'TENEMENT_BEDROOM'
                 w_doorways = _wing_portals(wb, doorways)
+            elif effective_archetype == 'MANOR':
+                if fl_idx == 0:
+                    w_role = 'STUDY' if wi == 0 else 'GUEST_ROOM'
+                else:
+                    w_role = 'BEDROOM' if wi == 0 else 'GUEST_ROOM'
+                w_doorways = []
             elif effective_archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL'):
                 w_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'MAYOR_OFFICE'
                 w_doorways = []

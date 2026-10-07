@@ -355,13 +355,23 @@ def _place_banners(bm, props, ctx):
     height = max(4.2, wall_h + 2.2 + (1.15 if _is_curtain else 0.0))
 
     has_towers = _prop(props, 'has_bastion_towers', False)
+    tower_rects = []
     if has_towers:
         from .bastion import courtyard_tower_rects
         _r = courtyard_tower_rects(props, ctx)
+        tower_rects = [(r[0], r[1], r[2], r[3]) for r in _r]
         px_min, px_max = _r[0][1], _r[1][0]
     else:
         px_min, px_max = x_min, x_max
     gate_cx = ctx.main_door_cx
+
+    # Outward step clears the wall mass plus the pole itself: curtain walls
+    # are up to ~1m thick, so the old fixed 0.55 put the pole surface flush
+    # with (or inside) the outer face and the bastion footprints.
+    if _is_curtain:
+        _push = _prop(props, 'curtain_wall_thickness', 0.55) * 0.5 + 0.50
+    else:
+        _push = 0.55
 
     # Candidate positions — front corners shift to midpoint between tower and gate
     front_left_x  = (px_min + gate_cx) * 0.5 if has_towers else x_min
@@ -382,7 +392,17 @@ def _place_banners(bm, props, ctx):
         if has_enclosure:
             # Step outside the wall line so the pole never lands inside the
             # yard or inside the palisade/wall mass.
-            bx, by = bx + d[0] * 0.55, by + d[1] * 0.55
+            bx, by = bx + d[0] * _push, by + d[1] * _push
+            # Bastion towers straddle the enclosure line: keep stepping out
+            # until the pole clears every tower footprint (+ margin).
+            if tower_rects:
+                for _ in range(6):
+                    _hit = any((r[0] - 0.35 <= bx <= r[1] + 0.35
+                                and r[2] - 0.35 <= by <= r[3] + 0.35)
+                               for r in tower_rects)
+                    if not _hit:
+                        break
+                    bx, by = bx + d[0] * 0.30, by + d[1] * 0.30
         build_banner_pole(bm, bx, by, 0.0, height=height, flag_dir=d)
 
 
@@ -404,9 +424,38 @@ def _build_manor_fortifications(bm, props, ctx):
         n_each = 2 if is_curtain else 1
         wall_face = ctx.main_door_yf - ctx.wall_t * 0.5 - 0.02
         sh_z = ctx.found_h + 1.75
+        # Ground-floor front window spans: shields flank the door at fixed
+        # spacing, which lands them mid-glass on tall storeys — snap each one
+        # to the nearest wall segment clear of windows and the doorway.
+        _win_half = _prop(props, 'window_width', 0.95) * 0.5 + 0.30 + 0.15
+        _front_wx = sorted(wx for wx, _wy, _wz in
+                           (getattr(ctx, 'window_centers', {}) or {}).get(0, {}).get('FRONT', []))
+        _door_span = (ctx.main_door_cx - door_half - 0.55,
+                      ctx.main_door_cx + door_half + 0.55)
+        _lim = ctx.base_w * 0.5 - 0.60
+        _placed = []
+
+        def _clear_sx(px):
+            for k in range(21):
+                _cands = (px,) if k == 0 else (px + k * 0.15, px - k * 0.15)
+                for cand in _cands:
+                    if abs(cand) > _lim:
+                        continue
+                    if _door_span[0] <= cand <= _door_span[1]:
+                        continue
+                    if any(abs(cand - wx) < _win_half for wx in _front_wx):
+                        continue
+                    if any(abs(cand - qx) < 0.70 for qx in _placed):
+                        continue
+                    return cand
+            return None
+
         for s in (-1.0, 1.0):
             for i in range(n_each):
-                sx = ctx.main_door_cx + s * (base_x + i * 0.85)
+                sx = _clear_sx(ctx.main_door_cx + s * (base_x + i * 0.85))
+                if sx is None:
+                    continue
+                _placed.append(sx)
                 build_round_shield(bm, (sx, wall_face, sh_z),
                                    normal=(0.0, -1.0, 0.0), radius=0.30,
                                    pattern='QUARTERED' if i % 2 == 0 else 'SOLID')

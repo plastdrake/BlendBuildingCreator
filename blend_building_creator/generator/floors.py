@@ -194,7 +194,13 @@ def build_floors(bm, props, ctx):
         stair_ascend_sign = 1.0
     else:
         stair_len = min(3.8, max(2.6, D_interior - landing_depth - 1.2))
-        stair_y_head = fl0_iy_min + landing_depth
+        if effective_archetype == 'MANOR':
+            # Grand stair hall: center the flight depth-wise so both the foot
+            # approach and the head landing open onto generous clear floor
+            # instead of crowding one end wall.
+            stair_y_head = (fl0_iy_min + fl0_iy_max) * 0.5 - stair_len * 0.5
+        else:
+            stair_y_head = fl0_iy_min + landing_depth
         stair_ascend_sign = -1.0
         stair_y_foot = stair_y_head - stair_ascend_sign * stair_len
         stair_y_bot = min(stair_y_head, stair_y_foot)
@@ -1907,7 +1913,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wwx, wy1, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('FRONT', []).append((wwx, wy1, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('FRONT', []).append((wwx, wy1, win_z1))
 
                     # Ground entrance for Left Wing of U-shaped tenement moved to the front gable (wy1)
                     if _is_u_tenement and _w_id == 0 and fl_idx == 0:
@@ -1945,7 +1951,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wx1, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-X',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('LEFT', []).append((wx1, wwy, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('LEFT', []).append((wx1, wwy, win_z1))
 
                     # Face 3: Right (wx2, wy1) -> (wx2, wy2) normal (1, 0)
                     # Buffered inside corner at wy2 (main building junction) by 1.25m
@@ -1966,7 +1972,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wx2, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+X',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((wx2, wwy, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((wx2, wwy, win_z1))
 
                     # Courtyard apartment entrance doors for U-shaped tenements:
                     # Left wing ground door is on Face 1 (front gable). Right wing ground door is on Face 2 (-X).
@@ -2035,7 +2041,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wwx, wy2, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('BACK', []).append((wwx, wy2, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('BACK', []).append((wwx, wy2, win_z1))
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
                     # Buffered inside corner at wy1 (main building junction) by 1.25m
                     # (skipped when the cargo port occupies this face)
@@ -2050,7 +2056,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wx1, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-X',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('LEFT', []).append((wx1, wwy, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('LEFT', []).append((wx1, wwy, win_z1))
                     # Face 3: Right (wx2, wy1) -> (wx2, wy2) normal (1, 0)
                     # Buffered inside corner at wy1 (main building junction) by 1.25m
                     # (skipped when the cargo port occupies this face)
@@ -2065,7 +2071,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wx2, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+X',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((wx2, wwy, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((wx2, wwy, win_z1))
 
                     wing_wall_openings.append(((wx1, wy2), (wx2, wy2), w_ops_1, (0.0, 1.0)))
                     wing_wall_openings.append(((wx1, wy1), (wx1, wy2), w_ops_2, (-1.0, 0.0)))
@@ -2090,7 +2096,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wx1, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-X',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('LEFT', []).append((wx1, wwy, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('LEFT', []).append((wx1, wwy, win_z1))
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     # Buffered inside corner at wx2 (main building junction) by 1.25m
                     if (props.has_windows and getattr(props, 'window_front', True) and not open_timber
@@ -2103,7 +2109,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wwx, wy1, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('FRONT', []).append((wwx, wy1, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('FRONT', []).append((wwx, wy1, win_z1))
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     # Buffered inside corner at wx2 (main building junction) by 1.25m
                     if (props.has_windows and getattr(props, 'window_back', True) and not open_timber
@@ -2116,7 +2122,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wwx, wy2, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('BACK', []).append((wwx, wy2, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('BACK', []).append((wwx, wy2, win_z1))
 
                     wing_wall_openings.append(((wx1, wy1), (wx1, wy2), w_ops_1, (-1.0, 0.0)))
                     wing_wall_openings.append(((wx1, wy1), (wx2, wy1), w_ops_2, (0.0, -1.0)))
@@ -2133,7 +2139,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wx2, wwy, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+X',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((wx2, wwy, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('RIGHT', []).append((wx2, wwy, win_z1))
                     # Face 2: Front (wx1, wy1) -> (wx2, wy1) normal (0, -1)
                     # Buffered inside corner at wx1 (main building junction) by 1.25m
                     if (props.has_windows and getattr(props, 'window_front', True) and not open_timber
@@ -2146,7 +2152,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wwx, wy1, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='-Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('FRONT', []).append((wwx, wy1, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('FRONT', []).append((wwx, wy1, win_z1))
                     # Face 3: Back (wx1, wy2) -> (wx2, wy2) normal (0, 1)
                     # Buffered inside corner at wx1 (main building junction) by 1.25m
                     if (props.has_windows and getattr(props, 'window_back', True) and not open_timber
@@ -2159,7 +2165,7 @@ def build_floors(bm, props, ctx):
                             build_window_assembly(bm, center=(wwx, wy2, win_cz), size=(win_w, win_h),
                                                   wall_thickness=wall_t, normal_axis='+Y',
                                                   has_shutters=sh_act, shutters_closed=sh_cl)
-                            window_centers.setdefault(fl_idx, {}).setdefault('BACK', []).append((wwx, wy2, win_cz))
+                            window_centers.setdefault(fl_idx, {}).setdefault('BACK', []).append((wwx, wy2, win_z1))
 
                     wing_wall_openings.append(((wx2, wy1), (wx2, wy2), w_ops_1, (1.0, 0.0)))
                     wing_wall_openings.append(((wx1, wy1), (wx2, wy1), w_ops_2, (0.0, -1.0)))
