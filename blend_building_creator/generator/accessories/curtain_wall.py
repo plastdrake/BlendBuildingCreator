@@ -180,7 +180,7 @@ def _build_corner_post(bm, cx, cy, thickness, walk_top, ground_z=0.0):
     half = thickness * 0.5 + 0.14
     # Rise to merlon-cap height so the pier reads as the corner merlon,
     # not a stump beside them.
-    pier_top = walk_top + 0.88
+    pier_top = walk_top + 1.20
     pier_h = pier_top - ground_z
     create_beveled_box(bm, size=(half * 2.0, half * 2.0, pier_h),
                        location=(cx, cy, ground_z + pier_h * 0.5),

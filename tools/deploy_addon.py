@@ -28,13 +28,6 @@ except Exception as _e:
 targets = [
     os.path.join(blender_root, "5.2", "extensions", "user_default", "blend_building_creator"),
 ]
-# Also refresh every other Blender version with an existing install: the
-# deploy used to update 5.2 only, so running any other version silently kept
-# serving stale geometry even after a fresh deploy + restart.
-for _hit in glob.glob(os.path.join(blender_root, "*", "extensions",
-                                    "user_default", "blend_building_creator")):
-    if _hit not in targets:
-        targets.append(_hit)
 
 # Legacy add-on copies with the same module name conflict with the extension and
 # make only one of the two work. Remove them so a single copy is loaded.
