@@ -178,13 +178,16 @@ def _build_corner_post(bm, cx, cy, thickness, walk_top, ground_z=0.0):
     wider crown block.
     """
     half = thickness * 0.5 + 0.14
-    pier_h = (walk_top + 0.18) - ground_z
+    # Rise to merlon-cap height so the pier reads as the corner merlon,
+    # not a stump beside them.
+    pier_top = walk_top + 0.88
+    pier_h = pier_top - ground_z
     create_beveled_box(bm, size=(half * 2.0, half * 2.0, pier_h),
                        location=(cx, cy, ground_z + pier_h * 0.5),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
     cap_half = half + 0.10
     create_beveled_box(bm, size=(cap_half * 2.0, cap_half * 2.0, 0.16),
-                       location=(cx, cy, walk_top + 0.18 + 0.08),
+                       location=(cx, cy, pier_top + 0.08),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
 
 
