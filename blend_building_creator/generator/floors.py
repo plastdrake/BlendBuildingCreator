@@ -402,7 +402,8 @@ def build_floors(bm, props, ctx):
             pass
         else:
             tier_val = getattr(props, 'material_tier', 'TIER_3')
-            floor_mat = MAT_INDEX_STONE if (fl_idx == 0 and props.ground_floor_stone and tier_val != 'TIER_1') else MAT_INDEX_FLOOR
+            is_stable_floor = (effective_archetype == 'STABLE' or getattr(props, 'building_archetype', '') == 'STABLE')
+            floor_mat = MAT_INDEX_STONE if (fl_idx == 0 and (is_stable_floor or (props.ground_floor_stone and tier_val != 'TIER_1'))) else MAT_INDEX_FLOOR
             # Quarry / lumbermill Tier 1: the open timber frame stands on a wood
             # sill ring whose top sits exactly at z_floor + 0.05, so a
             # full-height slab would sit coplanar with the frame and z-fight
@@ -624,24 +625,59 @@ def build_floors(bm, props, ctx):
 
         # Corner turret doorways: a walk-through portal in the back wall so each
         # tower room opens straight into the hall (annex-style connection).
+        # With a curtain wall the turret foot is buried in masonry, so the
+        # ground-storey portal is skipped (it would open into the wall).
+        _skip_ground_turret = bool(getattr(props, 'has_curtain_wall', False))
         for _tr in _turrets:
+            if _skip_ground_turret and fl_idx == 0:
+                continue
             _tcx = _tr['cx']
-            _pw = 1.30
-            _ph = min(2.15, floor_h * 0.78)
-            _pm = 0.12
+            _pw = 1.25  # Clear walkthrough width
+            _ph = min(2.15, floor_h * 0.72)  # Clear walkthrough height
+            _jw = 0.18  # Heavy timber jamb post width
+            _jd = wall_t + 0.14  # Full casing depth: sits proud by 0.07m on both hall & turret sides
+            _lh = 0.20  # Header lintel beam height
             _pz1 = z_floor + _ph
-            back_openings.append({'u_start': (_tcx - _pw * 0.5 - _pm) - x_min,
-                                  'u_end': (_tcx + _pw * 0.5 + _pm) - x_min,
-                                  'z_start': z_floor, 'z_end': _pz1})
-            _jw, _jd = 0.16, wall_t + 0.10
+
+            # Wall opening cutout:
+            # - In X: cutout edges align with the jamb centerlines (_tcx +/- (_pw * 0.5 + _jw * 0.5)),
+            #   so each jamb overlaps 0.09m over the solid wall and 0.09m into the opening as a reveal liner.
+            #   The rough cut edge is completely buried at the center of the jamb timber!
+            # - In Z: cutout extends to _pz1 + _lh * 0.5 (halfway into the lintel beam),
+            #   so the lintel caps the wall head by 0.10m and the underside of the lintel at _pz1 has
+            #   zero coplanar conflict with the wall!
+            _u_start = (_tcx - _pw * 0.5 - _jw * 0.5) - x_min
+            _u_end = (_tcx + _pw * 0.5 + _jw * 0.5) - x_min
+            back_openings.append({
+                'u_start': _u_start,
+                'u_end': _u_end,
+                'z_start': z_floor,
+                'z_end': _pz1 + _lh * 0.5
+            })
+            ctx.floor_doorways.setdefault(fl_idx, []).append({'x': _tcx, 'y': y_max, 'axis': 'X', 'w': _pw})
+
+            # Left and Right Heavy Timber Casing Jambs:
             for _s in (-1.0, 1.0):
-                create_beveled_box(bm, size=(_jw, _jd, _ph + _pm),
-                                   location=(_tcx + _s * (_pw * 0.5 + _jw * 0.5), y_max,
-                                             z_floor + (_ph + _pm) * 0.5),
-                                   mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
-            create_beveled_box(bm, size=(_pw + _jw * 2.0, _jd, _pm),
-                               location=(_tcx, y_max, _pz1 + _pm * 0.5),
-                               mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
+                create_beveled_box(
+                    bm, size=(_jw, _jd, _ph),
+                    location=(_tcx + _s * (_pw * 0.5 + _jw * 0.5), y_max, z_floor + _ph * 0.5),
+                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+                )
+
+            # Heavy Timber Header Lintel Beam resting on top of jambs:
+            create_beveled_box(
+                bm, size=(_pw + _jw * 2.0 + 0.06, _jd + 0.02, _lh),
+                location=(_tcx, y_max, _pz1 + _lh * 0.5),
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014
+            )
+
+            # Beveled Wooden Floor Threshold Board bridging the floor opening:
+            _th_h = 0.038
+            create_beveled_box(
+                bm, size=(_pw + _jw * 2.0 + 0.04, _jd + 0.04, _th_h),
+                location=(_tcx, y_max, z_floor + _th_h * 0.5),
+                mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
+            )
 
         win_w = props.window_width
         win_h = props.window_height

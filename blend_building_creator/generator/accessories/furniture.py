@@ -21,7 +21,7 @@ from ..mesh_utils import (
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_IRON, MAT_INDEX_WOOD,
-    MAT_INDEX_CLAY, MAT_INDEX_HAY,
+    MAT_INDEX_CLAY, MAT_INDEX_HAY, MAT_INDEX_ROPE,
 )
 
 
@@ -624,4 +624,190 @@ def build_picnic_table(bm, x, y, z_ground=0.0, ang=0.0, length=2.05):
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
+
+def build_hay_bale(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
+                   width=0.88, depth=0.54, height=0.44):
+    """A realistic tied golden straw / thatch hay bale with rope twine bands.
+
+    Features volumetric straw geometry (main beveled bale + slight side expansion)
+    and two taut twine cords wrapped around the bale with tied top knots.
+    """
+    faces = []
+    # 1. Main straw bale body with generous bevel so it reads soft and bound
+    faces += create_beveled_box(
+        bm, size=(width, depth, height),
+        location=(0.0, 0.0, height * 0.5),
+        mat_index=MAT_INDEX_HAY, bevel_amount=0.045, bevel_segments=2)
+
+    # 2. Slight central bulge (straw expanding between the tight binding twine)
+    faces += create_beveled_box(
+        bm, size=(width * 0.40, depth + 0.02, height + 0.02),
+        location=(0.0, 0.0, height * 0.5),
+        mat_index=MAT_INDEX_HAY, bevel_amount=0.035, bevel_segments=2)
+
+    # 3. Two binding twine straps wrapped around the bale (YZ perimeter)
+    strap_w = 0.028
+    strap_thick = 0.014
+    for sx in (-width * 0.24, width * 0.24):
+        # Ring loop around depth and height
+        faces += create_beveled_box(
+            bm, size=(strap_w, depth + strap_thick * 2.0, height + strap_thick * 2.0),
+            location=(sx, 0.0, height * 0.5),
+            mat_index=MAT_INDEX_ROPE, bevel_amount=0.005)
+        # Small tied twine knot on top
+        faces += create_beveled_box(
+            bm, size=(0.045, 0.05, 0.035),
+            location=(sx, 0.0, height + strap_thick + 0.012),
+            mat_index=MAT_INDEX_ROPE, bevel_amount=0.004)
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_hay_pile(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
+                   radius=0.58, height=0.20):
+    """A natural, slightly ruffled loose pile of golden straw/hay for floors and stalls.
+
+    Constructed with an irregular low-poly faceted mound so loose straw appears
+    authentically scattered rather than a geometric cone.
+    """
+    import mathutils
+    faces = []
+    segments = 10
+    # Deterministic wonkiness based on location
+    rng = _rng(x, y, salt=77)
+
+    uv_layer = bm.loops.layers.uv.verify()
+    peak = bm.verts.new((0.0, 0.0, height))
+
+    # Inner ring of raised straw tufts
+    inner_verts = []
+    r_in = radius * 0.55
+    z_in = height * 0.62
+    for i in range(segments):
+        a = 2.0 * math.pi * i / segments
+        r_var = r_in * (0.85 + 0.30 * rng.random())
+        z_var = z_in * (0.85 + 0.25 * rng.random())
+        inner_verts.append(bm.verts.new((r_var * math.cos(a), r_var * math.sin(a), z_var)))
+
+    # Outer ruffled skirt on the floor
+    outer_verts = []
+    for i in range(segments):
+        a = 2.0 * math.pi * (i + 0.5) / segments
+        r_var = radius * (0.82 + 0.36 * rng.random())
+        outer_verts.append(bm.verts.new((r_var * math.cos(a), r_var * math.sin(a), 0.005)))
+
+    # Connect peak to inner ring
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f = bm.faces.new([peak, inner_verts[i], inner_verts[nxt]])
+        f.material_index = MAT_INDEX_HAY
+        f.tag = True
+        faces.append(f)
+
+    # Connect inner ring to outer skirt
+    for i in range(segments):
+        nxt = (i + 1) % segments
+        f1 = bm.faces.new([inner_verts[i], outer_verts[i], inner_verts[nxt]])
+        f1.material_index = MAT_INDEX_HAY
+        f1.tag = True
+        faces.append(f1)
+        f2 = bm.faces.new([inner_verts[nxt], outer_verts[i], outer_verts[nxt]])
+        f2.material_index = MAT_INDEX_HAY
+        f2.tag = True
+        faces.append(f2)
+
+    # Bottom cap
+    f_bot = bm.faces.new(list(reversed(outer_verts)))
+    f_bot.material_index = MAT_INDEX_HAY
+    f_bot.tag = True
+    faces.append(f_bot)
+
+    # Apply planar UVs
+    for f in faces:
+        for loop in f.loops:
+            loop[uv_layer].uv = mathutils.Vector((loop.vert.co.x / (radius * 2.0) + 0.5,
+                                                  loop.vert.co.y / (radius * 2.0) + 0.5))
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_feed_trough(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
+                      length=1.05, depth=0.44, height=0.42):
+    """An open wooden feeding manger trough with a genuine hollow interior volume
+    packed full of golden straw/hay.
+
+    No lid: authentic 4-walled timber basin with heavy supporting runners, iron corner
+    straps, and an interior hollow bed heaped with organic straw thatch.
+    """
+    faces = []
+    t_wall = 0.045
+    leg_h = 0.16
+    trough_h = height - leg_h
+
+    # 1. Supporting timber runners / skids underneath
+    runner_w = 0.08
+    for rx in (-length * 0.32, length * 0.32):
+        faces += create_beveled_box(
+            bm, size=(runner_w, depth - 0.04, leg_h),
+            location=(rx, 0.0, leg_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+    # 2. Hollow wooden basin (bottom + 4 side walls)
+    base_z = leg_h
+    # Bottom board
+    faces += create_beveled_box(
+        bm, size=(length - 0.02, depth - 0.02, t_wall),
+        location=(0.0, 0.0, base_z + t_wall * 0.5),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+
+    wall_h = trough_h - t_wall
+    wall_cz = base_z + t_wall + wall_h * 0.5
+
+    # Front and back walls
+    for s_y in (-1.0, 1.0):
+        faces += create_beveled_box(
+            bm, size=(length, t_wall, wall_h),
+            location=(0.0, s_y * (depth * 0.5 - t_wall * 0.5), wall_cz),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+    # Left and right end walls
+    inner_d = depth - 2.0 * t_wall
+    for s_x in (-1.0, 1.0):
+        faces += create_beveled_box(
+            bm, size=(t_wall, inner_d, wall_h),
+            location=(s_x * (length * 0.5 - t_wall * 0.5), 0.0, wall_cz),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+    # 3. Iron corner reinforcement brackets on the trough exterior
+    bracket_h = wall_h * 0.70
+    for s_x in (-1.0, 1.0):
+        for s_y in (-1.0, 1.0):
+            faces += create_beveled_box(
+                bm, size=(0.045, 0.045, bracket_h),
+                location=(s_x * (length * 0.5 - 0.02), s_y * (depth * 0.5 - 0.02), wall_cz),
+                mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
+
+    # 4. Interior straw fill (heaped bedding of hay filling the hollow cavity)
+    fill_l = length - 2.0 * t_wall - 0.02
+    fill_d = inner_d - 0.02
+    fill_h = wall_h * 0.82
+    fill_cz = base_z + t_wall + fill_h * 0.5
+    # Base hay volume inside the cavity
+    faces += create_beveled_box(
+        bm, size=(fill_l, fill_d, fill_h),
+        location=(0.0, 0.0, fill_cz),
+        mat_index=MAT_INDEX_HAY, bevel_amount=0.03, bevel_segments=2)
+
+    # Mounded tufts of fresh straw protruding slightly near the rim
+    faces += create_beveled_box(
+        bm, size=(fill_l * 0.70, fill_d * 0.75, 0.08),
+        location=(0.0, 0.0, base_z + t_wall + fill_h + 0.01),
+        mat_index=MAT_INDEX_HAY, bevel_amount=0.025, bevel_segments=2)
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
 

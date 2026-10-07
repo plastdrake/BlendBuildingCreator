@@ -321,6 +321,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         min=0.0, max=0.40, default=0.0,
         update=on_property_updated
     )
+
+    enable_bevels: BoolProperty(
+        name="Beveled Edges",
+        description="Add sub-centimeter beveled edge chamfers to boxes (higher polycount, slower generation)",
+        default=False,
+        update=on_property_updated
+    )
     
     building_archetype: EnumProperty(
         name="Building Archetype",

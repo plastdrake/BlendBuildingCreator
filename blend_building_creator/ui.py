@@ -79,6 +79,7 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         box.prop(props, "auto_update")
         box.prop(props, "seed")
         box.prop(props, "wonkiness", slider=True)
+        box.prop(props, "enable_bevels")
 
 
 # ---------------------------------------------------------------------------

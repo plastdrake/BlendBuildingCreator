@@ -78,6 +78,8 @@ def generate_building(obj, props):
     # Tall doors must fit inside the ground storey: grow short floors
     # slightly rather than clipping the portal through the slab above.
     _ensure_door_floor_clearance(props)
+    from . import mesh_utils
+    mesh_utils.ENABLE_BEVELS = bool(getattr(props, 'enable_bevels', False))
     bm = bmesh.new()
 
     if (getattr(props, 'has_construction', False)

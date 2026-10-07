@@ -200,13 +200,16 @@ def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, pre
         op = scene.fantasy_building_settings
         op.auto_update = False
         op.building_archetype = 'NONE'
+        _is_stable = bool(preset_key) and str(preset_key).startswith('STABLE')
         if preset_key:
             try:
                 from ...presets import PRESETS, apply_preset
                 if preset_key in PRESETS:
                     apply_preset(op, preset_key)
                     op.auto_update = False
-                    op.building_archetype = 'NONE'
+                    # Working stable barns keep their STABLE archetype so the
+                    # interior dresses as stalls + hay storage, never bedrooms.
+                    op.building_archetype = 'STABLE' if _is_stable else 'NONE'
             except Exception:
                 pass
         op.material_tier = getattr(base_props, 'material_tier', 'TIER_1')

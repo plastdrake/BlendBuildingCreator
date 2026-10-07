@@ -65,7 +65,7 @@ def _beam(bm, p0, p1, z0, z1, cross_w, cross_t, mat, bevel=0.012):
 
 
 def build_railing_post(bm, x, y, base_z, height=1.05,
-                       rail_mat=MAT_INDEX_TIMBER, cap_mat=MAT_INDEX_WOOD,
+                       rail_mat=MAT_INDEX_TIMBER, cap_mat=MAT_INDEX_TIMBER,
                        iron_pin=False, jankiness=0.0, index=0, seed=0):
     """A single capped newel post matching build_railing's joinery."""
     tilt_x = _jitter(jankiness, index, 1.7, seed, 0.035)
@@ -76,7 +76,8 @@ def build_railing_post(bm, x, y, base_z, height=1.05,
     create_beveled_box(bm, size=(POST_W, POST_W, height),
                        location=(px, py, base_z + height * 0.5),
                        rotation=(tilt_x, tilt_y, 0.0),
-                       mat_index=rail_mat, bevel_amount=0.012)
+                       mat_index=rail_mat, bevel_amount=0.012,
+                       u_offset=index * 0.31, v_offset=base_z)
 
 
 def _rail_beam(bm, x0, y0, x1, y1, z0, z1, cross_w, cross_t, mat, bevel=0.010):
@@ -85,7 +86,7 @@ def _rail_beam(bm, x0, y0, x1, y1, z0, z1, cross_w, cross_t, mat, bevel=0.010):
 
 
 def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
-                  rail_mat=MAT_INDEX_TIMBER, baluster_mat=MAT_INDEX_WOOD,
+                  rail_mat=MAT_INDEX_TIMBER, baluster_mat=MAT_INDEX_TIMBER,
                   end_overhang=0.08, post_spacing=1.60, baluster_spacing=0.25,
                   braces=False, iron_pins=False, posts=True, jankiness=0.15,
                   seed=0, has_sill=True, post_at_start=True, post_at_end=True):
@@ -163,5 +164,6 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
             create_beveled_box(bm, size=(0.055, 0.055, bal_h),
                                location=(px, py, pz + sill_offset + bal_h * 0.5),
                                rotation=(t_x, t_y, 0.0),
-                               mat_index=baluster_mat, bevel_amount=0.006)
+                               mat_index=baluster_mat, bevel_amount=0.006,
+                               u_offset=k * 0.23, v_offset=pz + sill_offset)
 

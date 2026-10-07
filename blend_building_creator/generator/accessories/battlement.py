@@ -34,20 +34,23 @@ def build_battlement_run(bm, p_start, p_end, z_base, height=0.78,
         bm, size=(length, thickness, base_h),
         location=(mid_x, mid_y, z_base + base_h * 0.5),
         rotation=(0.0, 0.0, ang), mat_index=base_mat, bevel_amount=0.015,
+        is_wall=True, u_offset=0.0, v_offset=z_base,
     )
     # Merlons spaced along the run.
     pitch = merlon_w + crenel_w
     n = max(2, int(round(length / pitch)))
     step = length / n
+    mw = merlon_w * 0.62
     for i in range(n + 1):
         t = i * step
         if t < 0.05 or t > length - 0.05:
             continue
         mx, my = x1 + ux * t, y1 + uy * t
         create_beveled_box(
-            bm, size=(merlon_w * 0.62, thickness * 1.06, merlon_h),
+            bm, size=(mw, thickness * 1.06, merlon_h),
             location=(mx, my, z_base + base_h + merlon_h * 0.5),
             rotation=(0.0, 0.0, ang), mat_index=merlon_mat, bevel_amount=0.012,
+            is_wall=True, u_offset=t - mw * 0.5, v_offset=z_base + base_h,
         )
         create_beveled_box(
             bm, size=(merlon_w * 0.72, thickness * 1.16, 0.10),

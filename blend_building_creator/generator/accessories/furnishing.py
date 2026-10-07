@@ -2187,6 +2187,161 @@ def _furnish_storage(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
+def _build_stall_divider(bm, x: float, y_back: float, depth: float, z_floor: float, height: float = 1.85):
+    """An authentic equestrian stall partition wall.
+
+    Features:
+    - Heavy front aisle timber post (with beveled cap) and rear wall post.
+    - Solid tongue-and-groove horizontal wooden planks on the lower half (horse bulkhead).
+    - Heavy timber bottom sill and mid cap rail.
+    - Upper horse-stall safety grille: top timber rail with vertical hand-forged iron bars.
+    """
+    from ..mesh_utils import create_beveled_box
+    from ..materials import MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON
+
+    post_s = 0.16
+    front_y = y_back - depth + post_s * 0.5
+    back_y = y_back - post_s * 0.5
+    span = depth - post_s * 2.0
+    mid_y = (front_y + back_y) * 0.5
+
+    # 1. Front aisle timber post
+    create_beveled_box(
+        bm, size=(post_s, post_s, height),
+        location=(x, front_y, z_floor + height * 0.5),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+    # Pyramidal / beveled finial cap on aisle post
+    create_beveled_box(
+        bm, size=(post_s + 0.04, post_s + 0.04, 0.08),
+        location=(x, front_y, z_floor + height + 0.04),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+
+    # 2. Back wall timber post
+    create_beveled_box(
+        bm, size=(post_s - 0.02, post_s - 0.02, height),
+        location=(x, back_y, z_floor + height * 0.5),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+
+    # 3. Lower solid wooden bulkhead (tongue-and-groove planks + rails)
+    lower_h = 1.15
+    # Bottom runner / baseboard
+    create_beveled_box(
+        bm, size=(0.11, span, 0.09),
+        location=(x, mid_y, z_floor + 0.045),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    # Solid wooden plank bulkhead
+    create_beveled_box(
+        bm, size=(0.08, span, lower_h - 0.09),
+        location=(x, mid_y, z_floor + 0.09 + (lower_h - 0.09) * 0.5),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008)
+    # Middle cap rail / sill
+    create_beveled_box(
+        bm, size=(0.13, span, 0.08),
+        location=(x, mid_y, z_floor + lower_h + 0.04),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+
+    # 4. Upper horse-stall safety grille (iron bars)
+    top_rail_h = 0.07
+    create_beveled_box(
+        bm, size=(0.12, span, top_rail_h),
+        location=(x, mid_y, z_floor + height - top_rail_h * 0.5),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+    bar_bot_z = z_floor + lower_h + 0.08
+    bar_top_z = z_floor + height - top_rail_h
+    bar_h = bar_top_z - bar_bot_z
+    bar_cz = (bar_bot_z + bar_top_z) * 0.5
+
+    n_bars = max(3, int(span / 0.15))
+    bar_step = span / (n_bars + 1)
+    bar_start_y = back_y - post_s * 0.5 - bar_step
+    for b_idx in range(n_bars):
+        by = bar_start_y - b_idx * bar_step
+        create_beveled_box(
+            bm, size=(0.026, 0.026, bar_h),
+            location=(x, by, bar_cz),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.003)
+
+
+def _furnish_stable_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                         rng, density: float):
+    """Working stable barn: open stall rows, manger troughs and hay storage.
+
+    Strictly no domestic furniture (beds, tables, rugs) and no burlap sacks: stall
+    dividers feature solid timber bulkheads and upper iron bars, manger troughs
+    have real hollow interior volume heaped with golden straw thatch, tied hay
+    bales and scattered hay piles dress the stalls and feed storage. The central
+    carriageway (front door axis) is kept clear for horses and carts.
+    """
+    rx0, rx1, ry0, ry1 = rm.bounds
+    rcx = (rx0 + rx1) * 0.5
+    rcy = (ry0 + ry1) * 0.5
+    # Never a rug or a potted plant in a working stable.
+    tracker.no_rugs = True
+    tracker.rug_count = 1
+
+    # Stall row along the north wall. Each stall is ~2.2 m wide with an
+    # authentic equestrian divider; the middle stays open as the carriageway.
+    n_stalls = max(2, min(5, int((rx1 - rx0) / 2.3)))
+    stall_w = (rx1 - rx0 - 0.6) / n_stalls
+    div_h, div_d = 1.85, 2.30
+    for i in range(n_stalls + 1):
+        dx = rx0 + 0.30 + i * stall_w
+        dz = ry1 - 0.35 - div_d * 0.5
+        if tracker.is_free(dx - 0.12, dx + 0.12, dz - div_d * 0.5, dz + div_d * 0.5):
+            tracker.occupy(dx - 0.12, dx + 0.12, dz - div_d * 0.5, dz + div_d * 0.5)
+            _build_stall_divider(bm, dx, ry1 - 0.35, div_d, z_floor, height=div_h)
+
+    # One hay bale + manger trough + small hay piles per stall at the back wall.
+    for i in range(n_stalls):
+        sx = rx0 + 0.30 + (i + 0.5) * stall_w
+        # Manger trough against the back wall (open hollow volume full of straw).
+        tx, ty = sx, ry1 - 0.55
+        if tracker.is_free(tx - 0.55, tx + 0.55, ty - 0.30, ty + 0.30):
+            tracker.occupy(tx - 0.55, tx + 0.55, ty - 0.30, ty + 0.30)
+            build_prop(bm, 'TROUGH', tx, ty, z_floor, 0.0)
+
+        # Hay bale beside the trough (replaces old sacks).
+        hx, hy = sx + min(0.65, stall_w * 0.22), ry1 - 1.25
+        if tracker.is_free(hx - 0.30, hx + 0.30, hy - 0.30, hy + 0.30):
+            tracker.occupy(hx - 0.30, hx + 0.30, hy - 0.30, hy + 0.30)
+            build_prop(bm, 'HAY_BALE', hx, hy, z_floor, rng.random() * 0.40)
+
+        # Small piles of loose straw on the stall floor.
+        px1 = sx - min(0.35, stall_w * 0.20)
+        py1 = ry1 - 1.20
+        if tracker.is_free(px1 - 0.25, px1 + 0.25, py1 - 0.25, py1 + 0.25):
+            tracker.occupy(px1 - 0.25, px1 + 0.25, py1 - 0.25, py1 + 0.25)
+            build_prop(bm, 'HAY_PILE', px1, py1, z_floor, rng.random() * 6.28)
+
+        px2 = sx + min(0.25, stall_w * 0.15)
+        py2 = ry1 - 1.95
+        if tracker.is_free(px2 - 0.25, px2 + 0.25, py2 - 0.25, py2 + 0.25):
+            tracker.occupy(px2 - 0.25, px2 + 0.25, py2 - 0.25, py2 + 0.25)
+            build_prop(bm, 'HAY_PILE', px2, py2, z_floor, rng.random() * 6.28)
+
+    # Feed storage down the south side: crates, barrels and hay bales (STRICTLY no sacks).
+    n_store = max(2, min(4, int((rx1 - rx0) / 2.8)))
+    for i in range(n_store):
+        px = rx0 + 0.70 + i * ((rx1 - rx0 - 1.40) / max(1, n_store - 1) if n_store > 1 else 0.0)
+        py = ry0 + 0.70
+        if not tracker.is_free(px - 0.45, px + 0.45, py - 0.45, py + 0.45):
+            continue
+        tracker.occupy(px - 0.45, px + 0.45, py - 0.45, py + 0.45)
+        pick = rng.random()
+        if pick < 0.35:
+            build_prop(bm, 'CRATE', px, py, z_floor, 0.0)
+            build_prop(bm, 'HAY_BALE', px + 0.05, py + 0.05, z_floor + 0.58, 0.2)
+        elif pick < 0.65:
+            build_prop(bm, 'BARREL', px, py, z_floor, 0.0)
+            build_prop(bm, 'HAY_PILE', px - 0.30, py + 0.25, z_floor, rng.random() * 6.28)
+        else:
+            build_prop(bm, 'HAY_BALE', px, py, z_floor, rng.random() * 0.5)
+            build_prop(bm, 'HAY_PILE', px - 0.32, py + 0.18, z_floor, rng.random() * 6.28)
+
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
 def _furnish_corridor(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                       rng, density: float):
     """Furnishes a stair landing / corridor: runner rug, bench or chest, lantern. STRICTLY no bed!"""
@@ -2661,6 +2816,8 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_chapel(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('STORAGE', 'CELLAR', 'PANTRY'):
             _furnish_storage(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('STABLE_HALL',):
+            _furnish_stable_hall(bm, rm, tracker, z_floor, z_ceil, rng, density)
         else:  # HOUSE_HALL, DINING, PARLOR, default
             _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
     except Exception:
@@ -2678,10 +2835,10 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                      z_floor, min(2.40, max(1.10, rw * 0.55)), min(3.20, max(1.40, rd * 0.55)))
 
     # Most rooms get a potted planter so the new plant props are actually seen
-    # (skipped in bare industrial utility rooms). Only large plants go directly on the floor.
+    # (skipped in bare industrial utility rooms, and never in a working stable).
     rw = rx1 - rx0
     rd = ry1 - ry0
-    if not _bare and min(rw, rd) >= 2.6 and rng.random() < 0.7:
+    if role != 'STABLE_HALL' and not _bare and min(rw, rd) >= 2.6 and rng.random() < 0.7:
         _try_place_plant(bm, tracker, z_floor, rng, large=True)
 
 

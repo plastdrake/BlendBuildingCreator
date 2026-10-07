@@ -10,7 +10,7 @@ import math
 from mathutils import Vector, Euler, Matrix
 from .mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone, apply_box_uvs,
-    create_torus_ring, create_door_batten, recalc_face_normals_safe
+    create_torus_ring, create_door_batten, recalc_face_normals_safe, ENABLE_BEVELS
 )
 from .materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_DOOR, MAT_INDEX_GLASS,
@@ -116,14 +116,15 @@ def _create_arched_plank(bm, hinge_x, hinge_y, z_bot, x_left, x_right, z_left, z
         f.material_index = mat_index
 
     res = {}
-    try:
-        edges = list({e for f in faces for e in f.edges})
-        res = bmesh.ops.bevel(bm, geom=edges, offset=0.008, segments=2, profile=0.7, affect='EDGES')
-        for f in res.get('faces', []):
-            if f.is_valid:
-                f.material_index = mat_index
-    except Exception:
-        pass
+    if ENABLE_BEVELS:
+        try:
+            edges = list({e for f in faces for e in f.edges})
+            res = bmesh.ops.bevel(bm, geom=edges, offset=0.008, segments=2, profile=0.7, affect='EDGES')
+            for f in res.get('faces', []):
+                if f.is_valid:
+                    f.material_index = mat_index
+        except Exception:
+            pass
 
     all_plank_faces = set(faces) | set(res.get('faces', []))
     all_verts = {v for f in all_plank_faces if f.is_valid for v in f.verts}

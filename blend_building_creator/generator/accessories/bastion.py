@@ -31,7 +31,7 @@ from .palisade import (
 def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
                         roof_style='MERLONS',
                         mat_index=MAT_INDEX_STONE, door_dir=(0.0, 1.0),
-                        trim_mat=None):
+                        trim_mat=None, door_shift=0.0, door_push=0.03):
     """A heavy fortified bastion tower with walk-in hollow interior, courtyard entrance,
     open rooftop platform with crenellated merlons, and chamfered quoin corners.
     Supports wooden towers (Tier 2) and stone towers (Tier 3).
@@ -100,15 +100,26 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
         for f in pf:
             f.tag = False
     door_w_pl = 1.05
-    pl_jamb = pl_reach - door_w_pl * 0.5
-    for s_p in (-1.0, 1.0):
-        pf = create_beveled_box(bm, size=(pl_jamb, pl_t, plinth_h),
-                                location=to_world(s_p * (door_w_pl * 0.5 + pl_jamb * 0.5),
-                                                  half_s, plinth_h * 0.5),
+    door_x0_pl = max(-pl_reach, door_shift - door_w_pl * 0.5)
+    door_x1_pl = min(pl_reach, door_shift + door_w_pl * 0.5)
+    # Left plinth span from -pl_reach to door_x0_pl
+    w_pl_left = door_x0_pl - (-pl_reach)
+    if w_pl_left > 0.05:
+        c_pl_left = (-pl_reach + door_x0_pl) * 0.5
+        pf = create_beveled_box(bm, size=(w_pl_left, pl_t, plinth_h),
+                                location=to_world(c_pl_left, half_s, plinth_h * 0.5),
                                 rotation=(0.0, 0.0, door_yaw),
                                 mat_index=trim_mat, bevel_amount=0.02)
-        for f in pf:
-            f.tag = False
+        for f in pf: f.tag = False
+    # Right plinth span from door_x1_pl to +pl_reach
+    w_pl_right = pl_reach - door_x1_pl
+    if w_pl_right > 0.05:
+        c_pl_right = (door_x1_pl + pl_reach) * 0.5
+        pf = create_beveled_box(bm, size=(w_pl_right, pl_t, plinth_h),
+                                location=to_world(c_pl_right, half_s, plinth_h * 0.5),
+                                rotation=(0.0, 0.0, door_yaw),
+                                mat_index=trim_mat, bevel_amount=0.02)
+        for f in pf: f.tag = False
 
     # -----------------------------------------------------------------------
     # 2. Real Hollow Walk-In Interior Chamber & 4 Walls
@@ -222,23 +233,30 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     door_w = 1.05
     door_h = 2.15
     door_cz = door_h * 0.5
-    jamb_w = half_s - door_w * 0.5
+    door_x0 = max(-half_s, door_shift - door_w * 0.5)
+    door_x1 = min(half_s, door_shift + door_w * 0.5)
 
-    # Left door jamb wall segment (from ground z=0 to door_h)
-    left_jamb_pos = to_world(-half_s + jamb_w * 0.5, half_s - wall_t * 0.5, door_cz)
-    lj_f = create_beveled_box(bm, size=(jamb_w, wall_t, door_h),
-                             location=left_jamb_pos, rotation=(0.0, 0.0, door_yaw),
-                             mat_index=mat_index, bevel_amount=0.02)
-    for f in lj_f:
-        f.tag = False
+    # Left door jamb wall segment (from local x = -half_s to door_x0)
+    w_jamb_left = door_x0 - (-half_s)
+    if w_jamb_left > 0.02:
+        c_jamb_left = (-half_s + door_x0) * 0.5
+        left_jamb_pos = to_world(c_jamb_left, half_s - wall_t * 0.5, door_cz)
+        lj_f = create_beveled_box(bm, size=(w_jamb_left, wall_t, door_h),
+                                  location=left_jamb_pos, rotation=(0.0, 0.0, door_yaw),
+                                  mat_index=mat_index, bevel_amount=0.02)
+        for f in lj_f:
+            f.tag = False
 
-    # Right door jamb wall segment (from ground z=0 to door_h)
-    right_jamb_pos = to_world(half_s - jamb_w * 0.5, half_s - wall_t * 0.5, door_cz)
-    rj_f = create_beveled_box(bm, size=(jamb_w, wall_t, door_h),
-                              location=right_jamb_pos, rotation=(0.0, 0.0, door_yaw),
-                              mat_index=mat_index, bevel_amount=0.02)
-    for f in rj_f:
-        f.tag = False
+    # Right door jamb wall segment (from local x = door_x1 to +half_s)
+    w_jamb_right = half_s - door_x1
+    if w_jamb_right > 0.02:
+        c_jamb_right = (door_x1 + half_s) * 0.5
+        right_jamb_pos = to_world(c_jamb_right, half_s - wall_t * 0.5, door_cz)
+        rj_f = create_beveled_box(bm, size=(w_jamb_right, wall_t, door_h),
+                                  location=right_jamb_pos, rotation=(0.0, 0.0, door_yaw),
+                                  mat_index=mat_index, bevel_amount=0.02)
+        for f in rj_f:
+            f.tag = False
 
     # Upper wall above the door lintel, carrying one courtyard-facing slit.
     upper_wall_h = deck_lz - door_h
@@ -257,28 +275,32 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     # 3. Arched Doorway Trimmings & Open Inward Timber Door Leaf
     # -----------------------------------------------------------------------
     door_front_y = half_s
+    # The stone casing frames the wall opening. It is seated into the wall
+    # so it stands only slightly proud (+0.03m to +0.05m) of the masonry instead
+    # of jutting far out into the courtyard.
+    casing_y = half_s - wall_t * 0.5 + door_push
 
-    # Threshold step
-    th_f = create_beveled_box(bm, size=(door_w + 0.28, wall_t + 0.22, 0.14),
-                             location=to_world(0.0, door_front_y, 0.07),
+    # Threshold step at ground level
+    th_f = create_beveled_box(bm, size=(door_w + 0.24, wall_t + 0.12, 0.14),
+                             location=to_world(door_shift, casing_y + 0.04, 0.07),
                              rotation=(0.0, 0.0, door_yaw),
                              mat_index=trim_mat, bevel_amount=0.015)
     for f in th_f:
         f.tag = False
 
-    # Heavy jamb pilasters framing the opening
+    # Heavy jamb pilasters framing the opening (flush with masonry)
     for s_j in (-1.0, 1.0):
-        jx = s_j * (door_w * 0.5 + 0.11)
-        jamb_f = create_beveled_box(bm, size=(0.22, wall_t + 0.12, door_h),
-                                   location=to_world(jx, door_front_y, door_cz),
+        jx = door_shift + s_j * (door_w * 0.5 + 0.09)
+        jamb_f = create_beveled_box(bm, size=(0.18, wall_t + 0.06, door_h),
+                                   location=to_world(jx, casing_y, door_cz),
                                    rotation=(0.0, 0.0, door_yaw),
                                    mat_index=trim_mat, bevel_amount=0.015)
         for f in jamb_f:
             f.tag = False
 
     # Heavy arched lintel header above door
-    lintel_f = create_beveled_box(bm, size=(door_w + 0.44, wall_t + 0.16, 0.32),
-                                 location=to_world(0.0, door_front_y, door_h + 0.16),
+    lintel_f = create_beveled_box(bm, size=(door_w + 0.36, wall_t + 0.08, 0.28),
+                                 location=to_world(door_shift, casing_y + 0.01, door_h + 0.14),
                                  rotation=(0.0, 0.0, door_yaw),
                                  mat_index=trim_mat, bevel_amount=0.02)
     for f in lintel_f:
@@ -288,19 +310,19 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     cas_t = 0.035
     # Left casing lining
     l_cas = create_beveled_box(bm, size=(cas_t, wall_t, door_h),
-                              location=to_world(-door_w * 0.5 + cas_t * 0.5, half_s - wall_t * 0.5, door_cz),
+                              location=to_world(door_shift - door_w * 0.5 + cas_t * 0.5, half_s - wall_t * 0.5, door_cz),
                               rotation=(0.0, 0.0, door_yaw),
                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
     for f in l_cas: f.tag = True
     # Right casing lining
     r_cas = create_beveled_box(bm, size=(cas_t, wall_t, door_h),
-                              location=to_world(door_w * 0.5 - cas_t * 0.5, half_s - wall_t * 0.5, door_cz),
+                              location=to_world(door_shift + door_w * 0.5 - cas_t * 0.5, half_s - wall_t * 0.5, door_cz),
                               rotation=(0.0, 0.0, door_yaw),
                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
     for f in r_cas: f.tag = True
     # Head casing lining
     h_cas = create_beveled_box(bm, size=(door_w, wall_t, cas_t),
-                              location=to_world(0.0, half_s - wall_t * 0.5, door_h - cas_t * 0.5),
+                              location=to_world(door_shift, half_s - wall_t * 0.5, door_h - cas_t * 0.5),
                               rotation=(0.0, 0.0, door_yaw),
                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
     for f in h_cas: f.tag = True
@@ -311,8 +333,8 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
     door_leaf_t = 0.055
     open_angle = math.radians(72.0)  # swung inward towards the left inner wall
 
-    # Hinge location at left inner casing corner
-    hinge_lx = -door_w * 0.5 + 0.06
+    # Hinge location at left inner casing corner (follows the shifted opening)
+    hinge_lx = door_shift - door_w * 0.5 + 0.06
     hinge_ly = half_s - wall_t + 0.05
     # Center of swung door leaf
     dl_cx = hinge_lx + math.cos(open_angle) * (door_leaf_w * 0.5)
@@ -881,7 +903,22 @@ def build_bastion_courtyard_towers(bm, props, ctx):
             build_rickety_frame_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,
                                       height=t_height, door_dir=d_dir)
         else:
+            # Shift the courtyard doorway sideways off the adjoining side
+            # wall (which otherwise laps the door jamb) and push the frame
+            # slightly proud into the courtyard so all four stay walkable.
+            # Left towers step east, right towers step west.
+            _ddx, _ddy = d_dir
+            _side = -1.0 if cx < 0.0 else 1.0
+            _world_shift_x = -_side * 0.55
+            # Convert the world X shift into the tower's local lateral axis.
+            _rlx, _rly = -_ddy, _ddx
+            _shift = _world_shift_x * _rlx
+            # Clamp so the shifted opening never leaves the tower face.
+            _half_s = max(0.5, t_size * 0.5)
+            _max_shift = max(0.0, _half_s - 0.85)
+            _shift = max(-_max_shift, min(_max_shift, _shift))
             build_bastion_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,
                                 height=t_height, mat_index=t_mat,
-                                door_dir=d_dir, trim_mat=t_trim)
+                                door_dir=d_dir, trim_mat=t_trim,
+                                door_shift=_shift, door_push=0.03)
 

@@ -477,7 +477,9 @@ def build_roof_clock_spire(bm, cx, cy, z_base, scale=0.85, tier='TIER_3'):
 def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
                         tier='TIER_3', out_dir=(1.0, 0.0),
                         floor_levels=None, floor_h=3.0, main_wall_top=None,
-                        attach_tuck=0.32, plank_direction='VERTICAL', seed=42):
+                        attach_tuck=0.32, plank_direction='VERTICAL', seed=42,
+                        side_sign=0.0, block_height=0.0,
+                        skip_ground_entry=False):
     """Square corner tower bolted onto the outside of the hall, annex-style.
 
     out_dir is the axis the tower projects along; the opposite side (toward the
@@ -539,10 +541,18 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
         win_levels.append(_wz)
         _wz += floor_h
 
-    for (p0, p1, nv, z_from) in face_defs:
+    for (face_idx, (p0, p1, nv, z_from)) in enumerate(face_defs):
         f_len = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
         if f_len < 0.30:
             continue
+        # When a curtain/palisade wall buries the turret flank, that side
+        # face stays blank below the wall head: windows there would open
+        # straight into masonry. Face 1 is -X, face 2 is +X (for the
+        # standard back-projecting turret); side_sign selects the buried one.
+        is_blocked_side = (
+            block_height > 0.01 and face_idx in (1, 2)
+            and ((side_sign < 0.0 and face_idx == 1)
+                 or (side_sign > 0.0 and face_idx == 2)))
         z_lo = max(shaft_base, z_from)
         ux = (p1[0] - p0[0]) / f_len
         uy = (p1[1] - p0[1]) / f_len
@@ -553,6 +563,8 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
             for fz in win_levels:
                 wz = fz + floor_h * 0.50
                 if wz + wh * 0.5 > wall_top_z - 0.10 or wz - wh * 0.5 < shaft_base - 0.05:
+                    continue
+                if is_blocked_side and (wz - wh * 0.5) < block_height:
                     continue
                 ops.append({'u_start': u_win - ww * 0.5, 'u_end': u_win + ww * 0.5,
                             'z_start': wz - wh * 0.5, 'z_end': wz + wh * 0.5})
@@ -573,49 +585,27 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
                                   wall_thickness=t, normal_axis=nv, has_shutters=True)
 
     # Floor decks on every storey (ground included), sized to sit inside the
-    # shell so they never poke out through the tower walls.
-    span = half * 2.0 - t + 0.04
-    _sz = pt(-t * 0.5, 0.0)
+    # shell so they never poke out through the tower walls or into the hall doorway.
+    span_x = max(0.4, half * 2.0 - t * 2.0 - 0.02)
+    span_y = max(0.4, half * 2.0 - t * 2.0 - 0.02)
     for fz in levels:
         if shaft_base - 0.01 <= fz < wall_top_z - 0.10:
-            create_box(bm, size=(span, span, 0.12), location=(_sz[0], _sz[1], fz + 0.07),
+            create_box(bm, size=(span_x, span_y, 0.08), location=(cx, cy, fz + 0.04),
                        mat_index=MAT_INDEX_FLOOR)
 
-    # The tower is entered through the doorway the floor builder cuts in the
-    # main back wall (one per storey). We deliberately do NOT build a second
-    # wall band across the tower here: it used to split the tower interior and
-    # read as a loose panel floating inside the shaft.
-
-    # Near (building) face: a FULL-height wall with a doorway per storey, set
-    # just outboard of the hall wall so it never overlaps it. This closes both
-    # the jetty pocket below and the open shaft above the eave (the tower used
-    # to be only three-walled). Doorways are centred on the tower axis so they
-    # line up with the portal the floor builder cuts in the hall wall.
-    if main_wall_top is not None:
-        _n_out = -half + t * 0.5 + 0.03
+    # Near (building) face: above the main building eave (main_wall_top), the
+    # tower shaft continues up to wall_top_z exposed to the outside air, so it
+    # needs a solid wall closing the shaft. Below main_wall_top, the main hall
+    # wall already abuts and encloses the tower, with the cased walkthrough
+    # doorway cut through it (no duplicate overlapping wall or coplanar cutout).
+    if main_wall_top is not None and wall_top_z > main_wall_top + 0.05:
+        _n_out = -half + t * 0.5
         _np0 = pt(_n_out, -o_line)
         _np1 = pt(_n_out, o_line)
-        _nfl = math.hypot(_np1[0] - _np0[0], _np1[1] - _np0[1])
-        if _nfl > 0.4:
-            _nux = (_np1[0] - _np0[0]) / _nfl
-            _nuy = (_np1[1] - _np0[1]) / _nfl
-            _nuc = (cx - _np0[0]) * _nux + (cy - _np0[1]) * _nuy
-            _ndw = min(1.30, _nfl - 0.24)
-            _ndh = min(2.15, floor_h - 0.35)
-            _nops = []
-            for fz in levels:
-                if fz > main_wall_top - 0.30:
-                    break
-                _z0 = max(fz, shaft_base)
-                _z1 = min(fz + _ndh, wall_top_z - 0.25)
-                if _z1 - _z0 > 0.6:
-                    _nops.append({'u_start': _nuc - _ndw * 0.5,
-                                  'u_end': _nuc + _ndw * 0.5,
-                                  'z_start': _z0, 'z_end': _z1})
-            build_wall_with_opening(
-                bm, _np0, _np1, shaft_base, wall_top_z, t, _nops,
-                mat_ext=wall_mat, normal_vec=(-ox, -oy), tier=tier,
-                physical_siding=False, plank_direction=plank_direction, seed=seed)
+        build_wall_with_opening(
+            bm, _np0, _np1, max(shaft_base, main_wall_top), wall_top_z, t, [],
+            mat_ext=wall_mat, normal_vec=(-ox, -oy), tier=tier,
+            physical_siding=False, plank_direction=plank_direction, seed=seed)
 
     # No timber collar at the eave: the tall shaft now runs straight through the
     # main roof, and the old skirt ring read as a stray slab mid-tower.

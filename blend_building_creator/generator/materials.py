@@ -1807,19 +1807,23 @@ def create_stylized_target(name="M_Building_Target", color=(0.78, 0.72, 0.58, 1.
     return mat
 
 
-def create_stylized_hay(name="M_Building_Hay", color=(0.78, 0.60, 0.30, 1.0)):
-    """Handpainted woven straw/burlap for the padded training pell and sacks.
+def create_stylized_hay(name="M_Building_Hay", color=(0.86, 0.65, 0.22, 1.0)):
+    """Handpainted golden straw / thatch material for hay bales, hay piles, and manger straw.
 
-    Uses the packaged ``hay_diffuse.png`` handpainted texture (procedurally
-    painted woven straw fibres) tinted toward the requested straw colour, with a
-    soft painterly wash and contact AO so it bakes cleanly.
+    Uses the packaged ``thatch_bundles_diffuse.png`` handpainted texture (golden
+    straw thatch bundles, matching the thatch roof shader) tinted toward warm golden
+    straw, with a soft painterly wash, contact AO, and normal bump so it has rich
+    organic straw relief.
     """
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-900)
 
-    tex_node = _load_image_texture(tree, "hay_diffuse.png", c, loc_x=-660, loc_y=120,
-                                   scale=(1.4, 1.4, 1.0))
+    tex_node = _load_image_texture(tree, "thatch_bundles_diffuse.png", c, loc_x=-660, loc_y=120,
+                                   scale=(1.2, 1.2, 1.0))
+    if tex_node is None:
+        tex_node = _load_image_texture(tree, "hay_diffuse.png", c, loc_x=-660, loc_y=120,
+                                       scale=(1.4, 1.4, 1.0))
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
@@ -1829,9 +1833,17 @@ def create_stylized_hay(name="M_Building_Hay", color=(0.78, 0.60, 0.30, 1.0)):
         tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
         tint.inputs["B"].default_value = color
         painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=60, loc_y=-240,
-                                       strength=0.12, scale=1.8)
-        _apply_ao(tree, bsdf, painted, strength=0.38, distance=0.14)
+                                       strength=0.10, scale=1.6)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=260, loc_y=-240, strength=0.08, scale=0.40)
+        _apply_ao(tree, bsdf, macro, strength=0.45, distance=0.18)
         _setup_pbr(tree, bsdf, out, roughness=0.96)
+
+        bump = tree.nodes.new("ShaderNodeBump")
+        bump.location = (600, -240)
+        bump.inputs["Strength"].default_value = 0.22
+        bump.inputs["Distance"].default_value = 0.03
+        tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+        tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
         return mat
 
     _set_bsdf_input(bsdf, "Base Color", color)

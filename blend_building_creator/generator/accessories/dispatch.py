@@ -185,6 +185,16 @@ def _build_civic_landmarks(bm, props, ctx, tier):
         # tower's open near face is closed by the hall wall (with its portal).
         _cx = _hx - tur_half
         _cy = _hy + tur_half
+        # The manor side curtain wall runs straight into the turret flank:
+        # keep the buried side blank below the wall head and drop the
+        # ground-storey portal (it opens into masonry anyway).
+        _has_wall = bool(_prop(props, 'has_curtain_wall', False))
+        if _has_wall:
+            _block_h = float(_prop(props, 'curtain_wall_height', 4.0)) + 1.20
+        elif bool(_prop(props, 'has_palisade', False)):
+            _block_h = float(_prop(props, 'palisade_height', 3.0)) + 0.30
+        else:
+            _block_h = 0.0
         for _sx in (-1.0, 1.0):
             build_corner_turret(
                 bm,
@@ -194,6 +204,8 @@ def _build_civic_landmarks(bm, props, ctx, tier):
                 floor_h=ctx.floor_h, main_wall_top=_eave,
                 attach_tuck=ctx.wall_t,
                 plank_direction=ctx.plank_dir,  # already defaults to VERTICAL from building.py
+                side_sign=_sx, block_height=_block_h,
+                skip_ground_entry=_has_wall,
             )  # close build_corner_turret
     if (_prop(props, 'has_arched_porch', False)
             and getattr(ctx, 'effective_archetype', None) != 'STABLE'):

@@ -131,28 +131,30 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
             for loop_idx, v_idx in enumerate(idxs):
                 lv = verts[v_idx]
                 if f_idx in (0, 1): # Bottom (-Z), Top (+Z)
-                    u = (lv.x + sx) * scale
-                    v = (lv.y + sy) * scale
+                    u = (lv.x + sx) * scale + u_offset
+                    v = (lv.y + sy) * scale + v_offset
                 elif f_idx in (2, 4): # Front (-Y), Back (+Y)
-                    u = (lv.x + sx) * scale
-                    v = (lv.z + sz) * scale
+                    u = (lv.x + sx) * scale + u_offset
+                    v = (lv.z + sz) * scale + v_offset
                 else: # Right (+X), Left (-X)
-                    u = (lv.y + sy) * scale
-                    v = (lv.z + sz) * scale
+                    u = (lv.y + sy) * scale + u_offset
+                    v = (lv.z + sz) * scale + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
         elif dz >= dx and dz >= dy:
             # Vertical post / column: V along longitudinal Z axis, U around circumference
+            su = scale * 1.2
+            sv = scale * 0.40
             for loop_idx, v_idx in enumerate(idxs):
                 lv = verts[v_idx]
                 if f_idx in (0, 1): # End caps (-Z, +Z)
-                    u = (lv.x + sx) * scale
-                    v = (lv.y + sy) * scale
+                    u = (lv.x + sx) * su + u_offset
+                    v = (lv.y + sy) * su + v_offset
                 elif f_idx in (2, 4): # Front (-Y), Back (+Y)
-                    u = (lv.x + sx) * scale
-                    v = (lv.z + sz) * scale
+                    u = (lv.x + sx) * su + u_offset
+                    v = (lv.z + sz) * sv + v_offset
                 else: # Right (+X), Left (-X)
-                    u = (lv.y + sy) * scale
-                    v = (lv.z + sz) * scale
+                    u = (lv.y + sy) * su + u_offset
+                    v = (lv.z + sz) * sv + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
         elif dx >= dy and dx >= dz:
             # Horizontal beam along X: V along longitudinal X axis, U around circumference
@@ -161,14 +163,14 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
             for loop_idx, v_idx in enumerate(idxs):
                 lv = verts[v_idx]
                 if f_idx in (3, 5): # End caps (+X, -X)
-                    u = (lv.y + sy) * su
-                    v = (lv.z + sz) * su
+                    u = (lv.y + sy) * su + u_offset
+                    v = (lv.z + sz) * su + v_offset
                 elif f_idx in (0, 1): # Bottom (-Z), Top (+Z)
-                    u = (lv.y + sy) * su
-                    v = (lv.x + sx) * sv
+                    u = (lv.y + sy) * su + u_offset
+                    v = (lv.x + sx) * sv + v_offset
                 else: # Front (-Y), Back (+Y)
-                    u = (lv.z + sz) * su
-                    v = (lv.x + sx) * sv
+                    u = (lv.z + sz) * su + u_offset
+                    v = (lv.x + sx) * sv + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
         else:
             # Horizontal beam along Y: V along longitudinal Y axis, U around circumference
@@ -177,22 +179,26 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
             for loop_idx, v_idx in enumerate(idxs):
                 lv = verts[v_idx]
                 if f_idx in (2, 4): # End caps (-Y, +Y)
-                    u = (lv.x + sx) * su
-                    v = (lv.z + sz) * su
+                    u = (lv.x + sx) * su + u_offset
+                    v = (lv.z + sz) * su + v_offset
                 elif f_idx in (0, 1): # Bottom (-Z), Top (+Z)
-                    u = (lv.x + sx) * su
-                    v = (lv.y + sy) * sv
+                    u = (lv.x + sx) * su + u_offset
+                    v = (lv.y + sy) * sv + v_offset
                 else: # Right (+X), Left (-X)
-                    u = (lv.z + sz) * su
-                    v = (lv.y + sy) * sv
+                    u = (lv.z + sz) * su + u_offset
+                    v = (lv.y + sy) * sv + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
         
     return faces
 
+# Global toggle to optimize geometry and generation speed by bypassing unnoticeable sub-centimeter bevels.
+ENABLE_BEVELS = False
+
+
 def create_beveled_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, bevel_amount=0.03, bevel_segments=2, is_wall=False, u_offset=0.0, v_offset=0.0, transform_matrix=None):
-    """Creates a box and softly rounds its edges for a chunky, hand-carved organic look."""
+    """Creates a box for chunky stylized fantasy architecture without unnoticeable bevel overhead."""
     faces = create_box(bm, size, location, rotation, mat_index, is_wall=is_wall, u_offset=u_offset, v_offset=v_offset, transform_matrix=transform_matrix)
-    if bevel_amount > 0.001:
+    if ENABLE_BEVELS and bevel_amount > 0.001:
         edges = list({e for f in faces for e in f.edges})
         tagged_prior = {f for f in bm.faces if f.tag}
         try:
@@ -1130,12 +1136,17 @@ def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 
     clears the generic face tag, so material-index skips are the reliable guard.
     """
     uv_layer = bm.loops.layers.uv.verify()
+    bm.normal_update()
     for face in bm.faces:
         if face.tag:
             continue
         if skip_materials is not None and face.material_index in skip_materials:
             continue
         normal = face.normal
+        if normal.length_squared < 1e-4:
+            normal = face.calc_normal()
+        if normal.length_squared < 1e-4:
+            continue
         nx, ny, nz = abs(normal.x), abs(normal.y), abs(normal.z)
         
         for loop in face.loops:

@@ -1008,6 +1008,10 @@ _INTERIOR_PROGRAMS = {
         'ground': ('FLETCHER_WORKSHOP', 'RANGE', 'STORAGE', 'LODGE'),
         'upper': ('STAIR_LANDING', 'BARRACKS_DORM', 'LODGE', 'BEDROOM'),
     },
+    'STABLE': {
+        'ground': ('STABLE_HALL',),
+        'upper': ('STABLE_HALL',),
+    },
 }
 
 _ARCHETYPE_PROGRAM = {
@@ -1015,6 +1019,7 @@ _ARCHETYPE_PROGRAM = {
     'TAVERN': 'HOSPITALITY', 'INN': 'HOSPITALITY',
     'TOWN_HALL': 'CIVIC', 'CIVIC': 'CIVIC', 'GUILDHALL': 'CIVIC',
     'BARRACKS': 'MILITARY', 'INFANTRY_BARRACKS': 'MILITARY', 'KNIGHTS_MANOR': 'MILITARY',
+    'STABLE': 'STABLE',
     'ARCHERY': 'RANGER', 'ARCHERY_RANGE': 'RANGER',
     'CHAPEL': 'SACRED', 'HEALERS_CHAPEL': 'SACRED',
     'WAREHOUSE': 'INDUSTRIAL', 'LUMBERMILL': 'INDUSTRIAL', 'BLACKSMITH': 'INDUSTRIAL',
@@ -1100,6 +1105,9 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         elif archetype in ('TENEMENT',):
             pool = ['STAIR_LANDING', 'TENEMENT_KITCHEN', 'TENEMENT_BEDROOM', 'TENEMENT_KITCHEN', 'TENEMENT_BEDROOM']
             return pool[:num_rooms]
+        elif archetype in ('STABLE',):
+            pool = ['STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL']
+            return pool[:num_rooms]
         else:  # HOUSE, MANOR, default
             pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'STUDY', 'GUEST_ROOM']
             return pool[:num_rooms]
@@ -1139,6 +1147,10 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
 
     if archetype in ('TENEMENT',):
         pool = ['TENEMENT_KITCHEN', 'TENEMENT_BEDROOM', 'TENEMENT_KITCHEN', 'TENEMENT_BEDROOM']
+        return pool[:num_rooms]
+
+    if archetype in ('STABLE',):
+        pool = ['STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL']
         return pool[:num_rooms]
 
     # Default HOUSE / MANOR. A house only needs ONE pantry; the largest plots
@@ -1364,11 +1376,16 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     # < 4.2m, or the archetype is an open industrial hall such as a lumbermill
     # whose equipment fills the floor).
     loom_open = (effective_archetype in ('LUMBERMILL', 'QUARRY'))
-    if not has_interior_walls or partition_style == 'OPEN' or (W < 4.2 and D < 4.2) or loom_open:
+    # Working stable barns stay one open hall (stall rows + hay storage),
+    # never partitioned into bedrooms.
+    stable_open = (effective_archetype == 'STABLE')
+    if not has_interior_walls or partition_style == 'OPEN' or (W < 4.2 and D < 4.2) or loom_open or stable_open:
         if effective_archetype == 'QUARRY':
             roles = ['STONE_STORE']
         elif effective_archetype == 'LUMBERMILL':
             roles = ['WORKSHOP' if fl_idx == 0 else 'STORAGE']
+        elif effective_archetype == 'STABLE':
+            roles = ['STABLE_HALL']
         else:
             roles = _resolve_room_roles(effective_archetype, fl_idx, 1, has_stairs_landing, total_floors, program=program)
         main_room = Room(

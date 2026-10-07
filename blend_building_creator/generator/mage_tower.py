@@ -1019,7 +1019,7 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
     create_beveled_box(bm, size=(0.22, 0.22, 0.05),
                        location=(p1_x, p1_y, z1 + top_post_h + 0.005),
                        rotation=(0.0, 0.0, theta_end),
-                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
 
     # 4. Vertical balusters / pickets placed at every step
     for i in range(num_steps - 1):
@@ -1036,7 +1036,8 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
             create_beveled_box(bm, size=(0.075, 0.075, top_z - bot_z),
                                location=(px, py, (top_z + bot_z) * 0.5),
                                rotation=(0.0, 0.0, mid_ang),
-                               mat_index=MAT_INDEX_WOOD, bevel_amount=0.008)
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008,
+                               u_offset=i * 0.19, v_offset=bot_z)
 
     # 5. Intermediate structural posts along the flight
     for frac in (0.33, 0.67):
