@@ -739,17 +739,19 @@ def build_estate_chapel(bm, props, pos=(28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_3
 
 
 def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='TIER_3',
-                                   width=26.0, depth=18.0):
-    """Fortified courtyard military training grounds and archery drill yard.
+                                   width=32.0, depth=22.0):
+    """Fortified courtyard military training grounds, archery drill yard, and sparring arena.
 
     Features:
     - Post-and-rail rustic timber palisade boundary (clean timber posts directly into earth, no stone plinths).
     - Front opening gate with proud heraldic round shields mounted on outer face with iron brackets.
-    - 4 traditional straw archery target butts on tripods across the back fence.
-    - Full-width timber shooting line rail with arrow barrels and distance stakes.
-    - Sparring pell sector with 2 padded combat training dummies and a rope-wrapped sparring pell post.
-    - 2 A-frame armory weapon racks with halberds, spears, battleaxes, and tournament shields.
-    - Spectator / drill timber benches turned facing INWARD toward the training action.
+    - Archery Range on the long side (back fence): exactly 2 traditional straw archery target butts on tripods
+      with shooting line rail and arrow supply barrels.
+    - Sparring Arena: dedicated 8.4m octagonal timber combat ring with corner timber posts, pyramid caps,
+      double barrier rails, walk-in entrance opening, central rope-wrapped heavy sparring pell post,
+      and 2 swivel combat training dummies.
+    - Armory weapon rack stocked with polearms, halberds, spears, broadswords, and practice wasters.
+    - Inward-facing spectator / drill timber benches overlooking both the sparring arena and archery range.
     - Armorer's supply crates, tool chest, water cooling trough, and provision barrels.
     - Lord Nasher's high heraldic standard pole flying cloth banner pennon.
     """
@@ -777,7 +779,6 @@ def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='
         for j in range(n_posts_y + 1):
             py_val = -half_d + j * step_y
             p_world = t @ Vector((px_val, py_val, 0.0))
-            # Timber fence post seated cleanly in the ground
             create_beveled_box(bm, size=(0.16, 0.16, fence_h),
                                location=(p_world.x, p_world.y, fence_h * 0.5),
                                rotation=(0.0, 0.0, rot_z),
@@ -791,7 +792,7 @@ def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='
                                rotation=(0.0, 0.0, rot_z),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
-    # Back fence line (Y = +half_d)
+    # Back fence line (Y = +half_d) - The Long Side
     for i in range(1, n_posts_x):
         px_val = -half_w + i * step_x
         p_world = t @ Vector((px_val, half_d, 0.0))
@@ -841,36 +842,91 @@ def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='
                                rotation=(0.0, 0.0, rot_z),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
-    # 2. Archery Target Range (back sector) - 4 butts across back wall
-    target_y = half_d - 2.4
-    t_span = width * 0.72
-    target_xs = (-t_span * 0.45, -t_span * 0.15, t_span * 0.15, t_span * 0.45)
+    # 2. Archery Target Range (on the long side - back fence, left half): exactly 2 butts
+    target_y = half_d - 2.2
+    target_xs = (-9.6, -5.0)
     for tx_val in target_xs:
         tp_world = t @ Vector((tx_val, target_y, 0.0))
         build_archery_target(bm, tp_world.x, tp_world.y, 0.0, ang=rot_z)
 
-    # Shooting line rail on the ground
-    shoot_y = target_y - 8.5
-    shoot_line = t @ Vector((0.0, shoot_y, 0.06))
-    create_beveled_box(bm, size=(t_span + 2.0, 0.16, 0.10),
+    # Dedicated timber shooting line rail for the 2 archery targets
+    shoot_y = target_y - 9.5
+    shoot_w = 7.8
+    shoot_cx = (target_xs[0] + target_xs[1]) * 0.5
+    shoot_line = t @ Vector((shoot_cx, shoot_y, 0.06))
+    create_beveled_box(bm, size=(shoot_w, 0.16, 0.10),
                        location=(shoot_line.x, shoot_line.y, shoot_line.z),
                        rotation=(0.0, 0.0, rot_z),
                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
 
-    # Arrow barrels beside the shooting rail
+    # Arrow barrels beside the archery shooting rail
     for sgn_b in (-1.0, 1.0):
-        bar_pos = t @ Vector((sgn_b * (t_span * 0.5 + 1.4), shoot_y, 0.0))
+        bar_pos = t @ Vector((shoot_cx + sgn_b * (shoot_w * 0.5 + 0.55), shoot_y, 0.0))
         build_barrel(bm, x=bar_pos.x, y=bar_pos.y, z_ground=0.0, radius=0.26, height=0.62)
 
-    # 3. Sparring Pell / Combat Sector
-    # Two swivel combat dummies
-    dummy_pos1 = t @ Vector((-4.8, -half_d + 5.2, 0.0))
-    dummy_pos2 = t @ Vector((4.8, -half_d + 5.2, 0.0))
-    build_training_dummy(bm, dummy_pos1.x, dummy_pos1.y, 0.0, ang=rot_z + 0.35)
-    build_training_dummy(bm, dummy_pos2.x, dummy_pos2.y, 0.0, ang=rot_z - 0.35)
+    # 3. Sparring Arena (right half of the yard): dedicated 8.4m octagonal timber combat ring
+    arena_cx = half_w * 0.44
+    arena_cy = 1.0
+    arena_r = 4.2
+    n_ring_posts = 8
+    ring_post_h = 1.08
 
-    # Central heavy wooden sparring pell post wrapped in practice padding
-    pell_pos = t @ Vector((0.0, -half_d + 5.6, 0.0))
+    arena_local_pts = []
+    for k in range(n_ring_posts):
+        ang_k = k * (2.0 * math.pi / n_ring_posts) + (math.pi / n_ring_posts)
+        arena_local_pts.append(Vector((arena_cx + arena_r * math.cos(ang_k),
+                                       arena_cy + arena_r * math.sin(ang_k), 0.0)))
+
+    # Find the ring segment facing southwest towards the gate/yard aisle to leave open as entrance
+    open_seg_idx = 0
+    best_dot = -999.0
+    target_entrance_dir = Vector((-0.8, -0.6, 0.0)).normalized()
+    for k in range(n_ring_posts):
+        mid_pt = (arena_local_pts[k] + arena_local_pts[(k + 1) % n_ring_posts]) * 0.5
+        dir_from_center = (mid_pt - Vector((arena_cx, arena_cy, 0.0))).normalized()
+        dot_val = dir_from_center.dot(target_entrance_dir)
+        if dot_val > best_dot:
+            best_dot = dot_val
+            open_seg_idx = k
+
+    # Build the 8 perimeter posts of the sparring ring
+    for p_loc in arena_local_pts:
+        p_world = t @ p_loc
+        create_beveled_box(bm, size=(0.16, 0.16, ring_post_h),
+                           location=(p_world.x, p_world.y, ring_post_h * 0.5),
+                           rotation=(0.0, 0.0, rot_z),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+        # Pyramid timber cap
+        create_cone(bm, radius1=0.12, radius2=0.0, height=0.10, segments=4,
+                    location=(p_world.x, p_world.y, ring_post_h + 0.05),
+                    rotation=(0.0, 0.0, rot_z + math.pi * 0.25), mat_index=MAT_INDEX_TIMBER)
+
+    # Build rails and ground curb around the sparring arena ring
+    for k in range(n_ring_posts):
+        p1 = arena_local_pts[k]
+        p2 = arena_local_pts[(k + 1) % n_ring_posts]
+        mid_local = (p1 + p2) * 0.5
+        seg_len = (p2 - p1).length
+        seg_dir = (p2 - p1).normalized()
+        seg_ang = math.atan2(seg_dir.y, seg_dir.x) + rot_z
+        mid_w = t @ mid_local
+
+        # Low ground plinth / border curb beam on all segments
+        create_beveled_box(bm, size=(seg_len, 0.12, 0.10),
+                           location=(mid_w.x, mid_w.y, 0.05),
+                           rotation=(0.0, 0.0, seg_ang),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+        # Upper and lower rails on all segments except the walk-in entrance opening
+        if k != open_seg_idx:
+            for rz in (0.46, 0.92):
+                create_beveled_box(bm, size=(seg_len, 0.07, 0.10),
+                                   location=(mid_w.x, mid_w.y, rz),
+                                   rotation=(0.0, 0.0, seg_ang),
+                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+
+    # Inside the Sparring Arena: central practice pell and combat training dummies
+    pell_pos = t @ Vector((arena_cx, arena_cy, 0.0))
     create_cylinder(bm, radius=0.42, height=0.18, segments=12,
                     location=(pell_pos.x, pell_pos.y, 0.09), mat_index=MAT_INDEX_TIMBER)
     create_cylinder(bm, radius=0.18, height=1.90, segments=10,
@@ -878,28 +934,36 @@ def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='
     create_cylinder(bm, radius=0.20, height=0.62, segments=10,
                     location=(pell_pos.x, pell_pos.y, 1.25), mat_index=MAT_INDEX_WOOD)
 
-    # 4. Weapon Racks along side rails
-    rack_pos1 = t @ Vector((-half_w + 1.4, -half_d + 6.0, 0.0))
-    rack_pos2 = t @ Vector((half_w - 1.4, -half_d + 6.0, 0.0))
-    build_weapon_rack(bm, rack_pos1.x, rack_pos1.y, 0.0, ang=rot_z + math.pi * 0.5)
-    build_weapon_rack(bm, rack_pos2.x, rack_pos2.y, 0.0, ang=rot_z - math.pi * 0.5)
+    # Two swivel combat dummies inside the arena flanking the pell
+    dummy_pos1 = t @ Vector((arena_cx - 2.0, arena_cy + 1.2, 0.0))
+    dummy_pos2 = t @ Vector((arena_cx + 2.0, arena_cy - 1.2, 0.0))
+    build_training_dummy(bm, dummy_pos1.x, dummy_pos1.y, 0.0, ang=rot_z + 0.35)
+    build_training_dummy(bm, dummy_pos2.x, dummy_pos2.y, 0.0, ang=rot_z - 0.35)
 
-    # Tournament round shield resting against left rack
-    sh_stand = t @ Vector((-half_w + 1.4, -half_d + 3.4, 0.35))
-    sh_norm = (t.to_3x3() @ Vector((0.75, -0.35, 0.55))).normalized()
-    build_round_shield(bm, (sh_stand.x, sh_stand.y, sh_stand.z),
-                       normal=sh_norm, radius=0.34, pattern='CROSS')
+    # Outside the Sparring Arena: Weapon rack with armory crate beside the arena entrance
+    rack_pos = t @ Vector((arena_cx - 4.4, arena_cy - 3.2, 0.0))
+    build_weapon_rack(bm, rack_pos.x, rack_pos.y, 0.0, ang=rot_z + math.pi * 0.22)
+    crate_wep = t @ Vector((arena_cx - 4.8, arena_cy - 2.3, 0.0))
+    build_crate(bm, x=crate_wep.x, y=crate_wep.y, z_ground=0.0, size=0.52, height=0.46, ang=0.18)
 
-    # 5. Spectator / Armorer Timber Benches (turned facing INWARD toward the action!)
-    bench1_pos = t @ Vector((-gap_half - 2.2, -half_d + 1.4, 0.0))
-    build_bench(bm, x=bench1_pos.x, y=bench1_pos.y, z_ground=0.0,
+    # Spectator / trainer benches overlooking the sparring arena
+    # Bench 1: Along the right perimeter fence, turned facing left into the arena
+    bench_right = t @ Vector((half_w - 1.4, arena_cy, 0.0))
+    build_bench(bm, x=bench_right.x, y=bench_right.y, z_ground=0.0,
+                ang=rot_z - math.pi * 0.5, length=2.2)
+
+    # Bench 2: Behind the arena along back fence, facing forward into the arena
+    bench_back = t @ Vector((arena_cx, half_d - 1.4, 0.0))
+    build_bench(bm, x=bench_back.x, y=bench_back.y, z_ground=0.0,
+                ang=rot_z + math.pi, length=2.2)
+
+    # 4. Logistics, Armorer Supplies & Archery Spectator Seating
+    # Archery spectator bench near the front fence
+    bench_front = t @ Vector((shoot_cx, -half_d + 1.6, 0.0))
+    build_bench(bm, x=bench_front.x, y=bench_front.y, z_ground=0.0,
                 ang=rot_z + math.pi, length=2.0)
 
-    bench2_pos = t @ Vector((half_w - 1.4, -half_d + 2.0, 0.0))
-    build_bench(bm, x=bench2_pos.x, y=bench2_pos.y, z_ground=0.0,
-                ang=rot_z - math.pi * 0.5, length=1.8)
-
-    # 6. Armorer's Supplies & Water Trough
+    # Armorer crates, tool chest, and water cooling trough on the front right
     crate_pos = t @ Vector((gap_half + 2.2, -half_d + 1.4, 0.0))
     build_crate(bm, x=crate_pos.x, y=crate_pos.y, z_ground=0.0, size=0.68, height=0.55)
     build_crate(bm, x=crate_pos.x + 0.72, y=crate_pos.y, z_ground=0.0, size=0.50, height=0.45, ang=0.25)
@@ -911,7 +975,7 @@ def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='
                        rotation=(0.0, 0.0, rot_z),
                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
 
-    # 7. Heraldic Banner Pole
+    # 5. Heraldic Banner Pole
     pole_pos = t @ Vector((-gap_half - 0.30, -half_d - 0.20, 0.0))
     build_banner_pole(bm, x=pole_pos.x, y=pole_pos.y, z_ground=0.0, height=5.4)
 
@@ -1109,8 +1173,8 @@ def build_estate_outbuildings(bm, props, ctx):
         tr_sgn = -1.0 if stable_side == 'LEFT' else 1.0
         # Sited in the forward military bailey beside the armory/forge,
         # completely clear of the stable front apron and carriage path.
-        tr_w = 26.0 if tier == 'TIER_3' else 22.0
-        tr_d = 18.0 if tier == 'TIER_3' else 15.0
+        tr_w = 32.0 if tier == 'TIER_3' else 26.0
+        tr_d = 22.0 if tier == 'TIER_3' else 18.0
         tr_x = tr_sgn * (spread_x * 0.46)
         tr_y = fore_y - 24.0
         build_estate_training_grounds(bm, pos=(tr_x, tr_y, 0.0), rot_z=0.0, tier=tier,
