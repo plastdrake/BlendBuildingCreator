@@ -451,9 +451,9 @@ def create_stylized_stone(name="M_Building_Stone", color=None, tier='TIER_3'):
     else:  # TIER_3
         default_clr = (0.76, 0.68, 0.54, 1.0)
         c_use = color or default_clr
-        tex_node = _load_image_texture(tree, "ashlar_stone_diffuse.png", c, loc_x=-720, loc_y=100, scale=(0.45, 0.45, 1.0))
+        tex_node = _load_image_texture(tree, "ashlar_stone_diffuse.png", c, loc_x=-720, loc_y=100, scale=(0.20, 0.20, 1.0))
         if tex_node is None:
-            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.45, 0.45, 1.0))
+            tex_node = _load_image_texture(tree, "cut_stone_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.20, 0.20, 1.0))
         if tex_node is not None:
             tint = tree.nodes.new("ShaderNodeMix")
             tint.data_type = 'RGBA'
@@ -465,12 +465,12 @@ def create_stylized_stone(name="M_Building_Stone", color=None, tier='TIER_3'):
             painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=-100, loc_y=-210, strength=0.06, scale=1.3)
             macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.08, scale=0.40)
             _apply_ao(tree, bsdf, macro, strength=0.48, distance=0.14)
-            _setup_pbr(tree, bsdf, out, roughness=0.65, metallic=0.0)
+            _setup_pbr(tree, bsdf, out, roughness=0.68, metallic=0.0)
 
             bump = tree.nodes.new("ShaderNodeBump")
             bump.location = (600, -210)
-            bump.inputs["Strength"].default_value = 0.18
-            bump.inputs["Distance"].default_value = 0.02
+            bump.inputs["Strength"].default_value = 0.24
+            bump.inputs["Distance"].default_value = 0.03
             tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
             tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
             return mat

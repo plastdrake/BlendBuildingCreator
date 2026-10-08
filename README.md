@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.31.83-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.31.85-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 78 ready-made presets across three material tiers.
@@ -86,6 +86,14 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.31.85
+
+- **Handpainted Stylized Castle Ashlar Stone Texture**:
+  - Replaced the photo-realistic small-brick ashlar texture with a brand new, handcrafted, handpainted fantasy stylized castle stone texture (`ashlar_stone_diffuse.png`).
+  - Features bold, chunky fortress masonry blocks with painted edge bevels, subtle stone chips, rich warm limestone/granite variation, and deep stylized mortar crevices.
+  - **100% Seamless & Tileable**: Calibrated with wrap-around baseline leveling to ensure zero visible seams or edge line artifacts across repeating wall faces.
+  - Scaled specifically for majestic fortress walls so blocks read with heroic, stylized fantasy proportions in-game and in renders.
 
 ## What's new in 1.31.83
 
