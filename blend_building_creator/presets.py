@@ -3363,15 +3363,12 @@ PRESETS = {
             'has_corner_turrets': False,
             'corner_turret_size': 3.2,
             'has_clock_tower': False,
-            'has_arched_porch': True,
-            'has_balcony': True,
-            'balcony_width': 5.2,
-            'balcony_depth': 2.0,
+            'has_arched_porch': False,
+            'has_balcony': False,
             # Royal Throne Room
             'has_throne_room': True,
             'interior_program': 'PALACE',
-            # Twin pavilions / side annexes on both flanks
-            'has_side_annex': True,
+            'has_side_annex': False,
             'annex_floors': 2,
             'annex_side': 'BOTH',
             # No cluttered oriel boxes on front facade - clean, powerful castle walls!

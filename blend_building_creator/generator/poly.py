@@ -37,13 +37,15 @@ def segment_frame(radius, k, segments, offset):
 
 
 def ring_slab(bm, r_in, r_out, z, segments, offset, mat_index,
-              height=0.12, overlap=1.06, bevel=0.01, skip=()):
+              height=0.12, overlap=1.06, bevel=0.01, skip=(),
+              center=(0.0, 0.0)):
     """Lay a ring of trapezoid boxes between two radii (an annular deck)."""
     d_ang = 2.0 * math.pi / segments
     width = r_out - r_in
     if width <= 0.02:
         return []
     mid_r = (r_in + r_out) * 0.5
+    cx, cy = center
     faces = []
     for k in range(segments):
         if k in skip:
@@ -52,34 +54,38 @@ def ring_slab(bm, r_in, r_out, z, segments, offset, mat_index,
         chord = 2.0 * mid_r * math.tan(d_ang * 0.5) * overlap
         f = create_beveled_box(
             bm, size=(width, chord, height),
-            location=(mid_r * math.cos(ang), mid_r * math.sin(ang), z),
+            location=(cx + mid_r * math.cos(ang), cy + mid_r * math.sin(ang), z),
             rotation=(0.0, 0.0, ang), mat_index=mat_index, bevel_amount=bevel,
         )
         faces.extend(f)
     return faces
 
 
-def corner_posts(bm, radius, z_floor, height, segments, offset, size=0.14):
+def corner_posts(bm, radius, z_floor, height, segments, offset, size=0.14,
+                 center=(0.0, 0.0)):
     """Timber posts at every facet vertex, sealing the joins."""
     d_ang = 2.0 * math.pi / segments
+    cx, cy = center
     for k in range(segments):
         ang = k * d_ang + offset
         create_beveled_box(
             bm, size=(size, size, height),
-            location=(radius * math.cos(ang), radius * math.sin(ang),
+            location=(cx + radius * math.cos(ang), cy + radius * math.sin(ang),
                       z_floor + height * 0.5),
             mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012,
         )
 
 
-def corbel_ring(bm, radius, z_level, segments, offset, size=0.16, drop=0.36):
+def corbel_ring(bm, radius, z_level, segments, offset, size=0.16, drop=0.36,
+                center=(0.0, 0.0)):
     """Short timber corbels under a jettied floor / belvedere."""
     d_ang = 2.0 * math.pi / segments
+    cx, cy = center
     for k in range(segments):
         ang = k * d_ang + offset
         create_beveled_box(
             bm, size=(size, size, drop),
-            location=(radius * math.cos(ang), radius * math.sin(ang), z_level),
+            location=(cx + radius * math.cos(ang), cy + radius * math.sin(ang), z_level),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.015,
         )
 

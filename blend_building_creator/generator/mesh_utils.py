@@ -1144,8 +1144,6 @@ def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 
             continue
         normal = face.normal
         if normal.length_squared < 1e-4:
-            normal = face.calc_normal()
-        if normal.length_squared < 1e-4:
             continue
         nx, ny, nz = abs(normal.x), abs(normal.y), abs(normal.z)
         

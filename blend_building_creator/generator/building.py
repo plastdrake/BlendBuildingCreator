@@ -91,12 +91,33 @@ def generate_building(obj, props):
         _build_round_tower_building(obj, bm, props)
         return
 
+    if getattr(props, 'has_castle_citadel', False):
+        _build_castle_citadel_building(obj, bm, props)
+        return
+
     ctx = _create_building_context(props)
     _build_foundation(bm, props, ctx)
     build_floors(bm, props, ctx)
     loft_spec = build_roof_and_attic(bm, props, ctx)
     build_archetype_accessories(bm, props, ctx, loft_spec)
     build_architectural_accessories(bm, props, ctx)
+    _finalize_building(obj, bm, props, ctx)
+
+
+def _build_castle_citadel_building(obj, bm, props):
+    """
+    Dedicated generator for the monumental modular fantasy castle citadel.
+    Constructs an asymmetrical, multi-winged fortress with enterable towers,
+    walkable spiral staircases, great ballroom, flat stone ramparts with merlons,
+    and complete subterranean dungeons and wine cellar.
+    """
+    ctx = _create_building_context(props)
+    from .accessories.castle import build_modular_castle_citadel
+    build_modular_castle_citadel(bm, props, ctx)
+    from .accessories.estate import build_estate_outbuildings
+    build_estate_outbuildings(bm, props, ctx)
+    from .accessories.dispatch import _build_plot_fortifications
+    _build_plot_fortifications(bm, props, ctx)
     _finalize_building(obj, bm, props, ctx)
 
 

@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.31.87-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.31.91-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 78 ready-made presets across three material tiers.
@@ -301,7 +301,18 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **New UI toggles (any building):** Covered Veranda, Hanging Trade Sign, Window Flower Boxes, Yard Props & Furniture, and Courtyard Well.
 - **Window boxes align to real windows:** the wall phase now records window sill centres on the generation context, so flower boxes, awnings, lanterns and baskets can line up with the actual openings.
 
-## What's new in 1.11.3
+## What's new in 1.31.90
+ 
+- **Modular Citadel Fortress & Massive Scale Overhaul:** Nasher's Manor Tier 3 is now a sprawling $90\text{m} \times 56\text{m} \times 46\text{m}$ high interconnected modular fortress complex on a $200\text{m} \times 200\text{m}$ grand estate.
+- **Walkable Interior Round Towers & Spiral Stairs:** Round towers feature hollow defensive masonry, floor slabs, and fully walkable spiral stairs (`build_spiral_staircase`) connecting all levels with clean walk-through doorways into adjacent palace wings and subterranean chambers.
+- **Strict Aesthetic Tower Roof Rules:** Spire towers have steep conical witch-hat roofs with zero merlons; Bastions have 360° crenellated merlons, signal fire braziers, and rooftop stair hoods with zero conical roofs.
+- **Monumental Donjon Keep & Gothic Faceted Pyramid Roof:** Central Keep ($22\text{m} \times 20\text{m} \times 46\text{m}$) rises from ground foundations as an imposing bastion with machicolations, corner bartizans, and an authentic 4-sided gothic pyramid roof.
+- **Great Royal Ballroom & Fortress Citadel Ramparts Wings:** Double-height Great Ballroom with hammerbeam timber trusses and traceried stained-glass windows on the West; 100% flat stone ramparts fighting deck with machicolations and full perimeter merlons on the East.
+- **Grand Unobstructed Entrance Portal:** Carved stone buttress piers, open pointed archway, hoisted iron portcullis with > 2.85m clearance, flared stone stairs, and terrace. Zero blocking geometry.
+- **Subterranean Adventure:** Fully walkable vaulted Wine Cellar, iron-barred Castle Dungeon, and secret mural passages with stair connections.
+- **Organic Bailey Village Quarters:** Outbuildings organized into 6 functional defensive quarters hugging outer curtain walls, clearing a spacious 80m central Cour d'Honneur.
+ 
+ ## What's new in 1.11.3
 
 - **Painted pell bullseye:** the training dummy's paper plate and lashing cords are gone; the ring is now a painted red circle that conforms to the barrel, so it can never read as a detached plate (the paper panel was removed entirely).
 - **Heritage banners:** the gable crest is a single flat heraldic banner hanging behind the timber gable framing (was a kite shield), pushed clear of the roof and scaled up. Shields now flank only the main entrance instead of ringing the outer walls.
