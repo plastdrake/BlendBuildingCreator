@@ -1430,6 +1430,14 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    has_castle_citadel: BoolProperty(
+        name="Castle Citadel Keep & Drum Towers",
+        description="Monumental cylindrical drum towers with conical witch-hat spires, soaring central keep, corbelled bartizans, and royal portal loggia for grand fortress castles",
+        default=False,
+        update=on_property_updated
+    )
+
+
     has_roof_clock_spire: BoolProperty(
         name="Roof Clock Spire",
         description="Small roof-mounted spire turret with clock dials (Tier 1/2 halls)",

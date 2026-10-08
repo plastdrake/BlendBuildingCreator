@@ -496,6 +496,7 @@ class VIEW3D_PT_fantasy_building_civic(bpy.types.Panel):
         layout.prop(props, "has_corner_turrets")
         if props.has_corner_turrets:
             layout.prop(props, "corner_turret_size")
+        layout.prop(props, "has_castle_citadel")
         layout.prop(props, "has_side_rampart")
         if props.has_side_rampart:
             layout.prop(props, "rampart_side")

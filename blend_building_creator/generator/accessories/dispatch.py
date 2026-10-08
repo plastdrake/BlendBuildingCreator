@@ -488,6 +488,15 @@ def _build_manor_fortifications(bm, props, ctx):
     if _prop(props, 'has_gable_crest', False):
         _build_gable_crests(bm, props, ctx)
 
+    # Fantasy Castle Citadel: Colossal cylindrical drum towers, central keep, bartizans, and portal loggia
+    if _prop(props, 'has_castle_citadel', False):
+        try:
+            from .castle import build_castle_citadel
+            build_castle_citadel(bm, props, ctx)
+        except Exception:
+            pass
+
+
 
 def _build_plot_fortifications(bm, props, ctx):
     """Plot-level fortifications that stay anchored to the estate grounds:
