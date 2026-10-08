@@ -31,7 +31,8 @@ from .palisade import (
 def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
                         roof_style='MERLONS',
                         mat_index=MAT_INDEX_STONE, door_dir=(0.0, 1.0),
-                        trim_mat=None, door_shift=0.0, door_push=0.03):
+                        trim_mat=None, door_shift=0.0, door_push=0.03,
+                        is_grand=False):
     """A heavy fortified bastion tower with walk-in hollow interior, courtyard entrance,
     open rooftop platform with crenellated merlons, and chamfered quoin corners.
     Supports wooden towers (Tier 2) and stone towers (Tier 3).
@@ -475,6 +476,24 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
                                   mat_index=trim_mat, bevel_amount=0.015)
         for f in bk_f4: f.tag = False
 
+    if is_grand:
+        # Sculpted stone arches spanning between adjacent machicolation brackets
+        for i_b in range(len(b_offsets) - 1):
+            b0, b1 = b_offsets[i_b], b_offsets[i_b + 1]
+            b_mid = (b0 + b1) * 0.5
+            b_span = abs(b1 - b0)
+            for s_face in (-1.0, 1.0):
+                af1 = create_beveled_box(bm, size=(b_span - 0.16, 0.22, 0.14),
+                                         location=to_world(b_mid, s_face * (half_s + 0.05), c1_lz - 0.03),
+                                         rotation=(0.0, 0.0, door_yaw),
+                                         mat_index=trim_mat, bevel_amount=0.015)
+                for f in af1: f.tag = False
+                af2 = create_beveled_box(bm, size=(0.22, b_span - 0.16, 0.14),
+                                         location=to_world(s_face * (half_s + 0.05), b_mid, c1_lz - 0.03),
+                                         rotation=(0.0, 0.0, door_yaw),
+                                         mat_index=trim_mat, bevel_amount=0.015)
+                for f in af2: f.tag = False
+
     # Open rooftop fighting deck platform (open to sky - NO ROOF)
     deck_slab_pos = to_world(0.0, 0.0, deck_lz + 0.07)
     plat_w = base_size + 0.44
@@ -523,6 +542,25 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
                                   mat_index=trim_mat, bevel_amount=0.018)
         for f in cap_f:
             f.tag = False
+
+        if is_grand:
+            # Tapered cut-stone pyramidal spire pinnacle crowning each corner merlon
+            pin_h = 0.85
+            pin_r = merlon_t * 1.15
+            pin_loc = cp_pos + d_up * (merlon_h * 0.5 + 0.09 + pin_h * 0.5)
+            pin_f = create_cone(bm, radius1=pin_r, radius2=0.02, height=pin_h, segments=4,
+                                location=pin_loc,
+                                rotation=(0.0, 0.0, door_yaw + math.pi * 0.25),
+                                mat_index=trim_mat)
+            for f in pin_f: f.tag = False
+            # Iron collar & decorative spearhead spire finial atop pinnacle
+            fin_loc = cp_pos + d_up * (merlon_h * 0.5 + 0.09 + pin_h + 0.16)
+            fin_f = create_cylinder(bm, radius=0.022, height=0.34, segments=8,
+                                    location=fin_loc, mat_index=MAT_INDEX_IRON)
+            for f in fin_f: f.tag = True
+            fin_cone = create_cone(bm, radius1=0.05, radius2=0.0, height=0.18, segments=8,
+                                   location=fin_loc + d_up * 0.17, mat_index=MAT_INDEX_IRON)
+            for f in fin_cone: f.tag = True
 
     # Intermediate merlons with embrasure firing gaps along the 4 edges
     m_edge_inset = half_p - merlon_t * 0.5
@@ -577,6 +615,32 @@ def build_bastion_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
                                 rotation=(0.0, 0.0, door_yaw),
                                 mat_index=trim_mat, bevel_amount=0.015)
         for f in c4: f.tag = False
+
+    if is_grand:
+        try:
+            from .banner import build_banner_pole
+            banner_loc = to_world(0.0, -m_edge_inset, merlon_cz + merlon_h * 0.5)
+            build_banner_pole(bm, banner_loc.x, banner_loc.y, banner_loc.z,
+                              height=2.8, flag_len=1.1, flag_h=0.7, flag_dir=(-d_fwd.x, -d_fwd.y))
+        except Exception:
+            pass
+
+        try:
+            from .shield import build_round_shield
+            sh_z = shaft_bot_lz + shaft_wall_h * 0.78
+            # Rear outward face
+            sh_rear = to_world(0.0, -half_s - 0.04, sh_z)
+            build_round_shield(bm, (sh_rear.x, sh_rear.y, sh_rear.z),
+                               normal=(-d_fwd.x, -d_fwd.y, 0.0), radius=0.44)
+            # Flank outward faces
+            sh_left = to_world(-half_s - 0.04, 0.0, sh_z)
+            build_round_shield(bm, (sh_left.x, sh_left.y, sh_left.z),
+                               normal=(-d_right.x, -d_right.y, 0.0), radius=0.44)
+            sh_right = to_world(half_s + 0.04, 0.0, sh_z)
+            build_round_shield(bm, (sh_right.x, sh_right.y, sh_right.z),
+                               normal=(d_right.x, d_right.y, 0.0), radius=0.44)
+        except Exception:
+            pass
 
 
 def build_rickety_frame_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
@@ -828,12 +892,18 @@ def _tower_geom(props, ctx):
 
 
 def is_wood_tower(props):
-    """True when courtyard towers are open timber watchtowers (Tier 1/2 or a
-    palisade without curtain wall) rather than stone bastions."""
+    """True when courtyard towers are open timber watchtowers (palisade fort
+    without curtain wall) rather than stone bastions."""
+    style = getattr(props, 'bastion_tower_style', 'AUTO')
+    if style == 'WOOD':
+        return True
+    if style in ('STONE', 'GRAND'):
+        return False
+    # AUTO:
+    if getattr(props, 'has_curtain_wall', False):
+        return False
     t_tier = getattr(props, 'material_tier', 'TIER_3')
-    return (t_tier in ('TIER_1', 'TIER_2')
-            or (getattr(props, 'has_palisade', False)
-                and not getattr(props, 'has_curtain_wall', False)))
+    return t_tier != 'TIER_3'
 
 
 def courtyard_tower_rects(props, ctx):
@@ -895,6 +965,9 @@ def build_bastion_courtyard_towers(bm, props, ctx):
     is_wood = is_wood_tower(props)
     t_mat = MAT_INDEX_WOOD if is_wood else MAT_INDEX_STONE
     t_trim = MAT_INDEX_TIMBER if is_wood else MAT_INDEX_CUT_STONE
+    style = getattr(props, 'bastion_tower_style', 'AUTO')
+    t_tier = getattr(props, 'material_tier', 'TIER_3')
+    is_grand = (style == 'GRAND') or (style == 'AUTO' and t_tier == 'TIER_3')
 
     for cx, cy, d_dir in courtyard_tower_centers(props, ctx):
         if is_wood:
@@ -920,5 +993,6 @@ def build_bastion_courtyard_towers(bm, props, ctx):
             build_bastion_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,
                                 height=t_height, mat_index=t_mat,
                                 door_dir=d_dir, trim_mat=t_trim,
-                                door_shift=_shift, door_push=0.03)
+                                door_shift=_shift, door_push=0.03,
+                                is_grand=is_grand)
 

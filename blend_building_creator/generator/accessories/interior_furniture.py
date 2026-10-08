@@ -2358,6 +2358,149 @@ def build_chair(bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
     return faces
 
 
+def build_royal_throne(bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
+                       ang: float = 0.0, dais: bool = True):
+    """Grand ceremonial Royal Throne: 3-tier stepped cut-stone dais, velvet runner,
+    carved gold & ashlar pedestal, plush crimson cushion, towering arched backrest
+    with gothic finials, carved lion armrests and heraldic crest."""
+    faces = []
+    z_throne = 0.48 if dais else 0.0
+
+    # 1. Stepped cut-stone dais platform
+    if dais:
+        # Tier 1 (base step)
+        faces += create_beveled_box(
+            bm, size=(2.80, 2.40, 0.16),
+            location=(0.0, 0.15, 0.08),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+        )
+        # Tier 2 (middle step)
+        faces += create_beveled_box(
+            bm, size=(2.30, 2.00, 0.16),
+            location=(0.0, 0.20, 0.24),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+        )
+        # Tier 3 (top dais platform)
+        faces += create_beveled_box(
+            bm, size=(1.80, 1.65, 0.16),
+            location=(0.0, 0.25, 0.40),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+        )
+        # Crimson velvet dais runner
+        faces += create_beveled_box(
+            bm, size=(1.40, 1.60, 0.015),
+            location=(0.0, 0.25, 0.488),
+            mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.003
+        )
+
+    # 2. Throne Pedestal & Plinth
+    faces += create_beveled_box(
+        bm, size=(1.10, 0.95, 0.12),
+        location=(0.0, 0.20, z_throne + 0.06),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012
+    )
+    # 4 carved corner lion-paw pillars
+    for lx in (-0.46, 0.46):
+        for ly in (-0.18, 0.52):
+            faces += create_beveled_box(
+                bm, size=(0.12, 0.12, 0.46),
+                location=(lx, ly, z_throne + 0.12 + 0.23),
+                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010
+            )
+
+    # 3. Throne Seat Box & Cushion
+    faces += create_beveled_box(
+        bm, size=(1.02, 0.88, 0.10),
+        location=(0.0, 0.18, z_throne + 0.58),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
+    )
+    # Deep tufted crimson cushion
+    faces += create_beveled_box(
+        bm, size=(0.90, 0.78, 0.14),
+        location=(0.0, 0.16, z_throne + 0.63 + 0.07),
+        mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.015
+    )
+
+    # 4. Carved Armrests with terminal scroll bosses
+    for sgn in (-1.0, 1.0):
+        ax = sgn * 0.47
+        faces += create_beveled_box(
+            bm, size=(0.10, 0.72, 0.26),
+            location=(ax, 0.16, z_throne + 0.63 + 0.13),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+        # Padded velvet arm pad
+        faces += create_beveled_box(
+            bm, size=(0.12, 0.62, 0.035),
+            location=(ax, 0.14, z_throne + 0.89 + 0.018),
+            mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.006
+        )
+        # Front terminal boss (lion head / scroll finial)
+        faces += create_beveled_box(
+            bm, size=(0.13, 0.13, 0.13),
+            location=(ax, -0.22, z_throne + 0.86),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012
+        )
+
+    # 5. Towering Gothic Arched Backrest
+    stile_h = 1.85
+    for sgn in (-1.0, 1.0):
+        bx = sgn * 0.46
+        # Upright stiles flanking backrest
+        faces += create_beveled_box(
+            bm, size=(0.10, 0.10, stile_h),
+            location=(bx, 0.52, z_throne + 0.58 + stile_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+        # Pointed spire pinnacle atop stiles
+        faces += create_cone(
+            bm, radius1=0.07, radius2=0.0, height=0.28, segments=6,
+            location=(bx, 0.52, z_throne + 0.58 + stile_h + 0.14),
+            rotation=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_CUT_STONE
+        )
+
+    # Main backrest woodwork panel
+    faces += create_beveled_box(
+        bm, size=(0.84, 0.08, 1.50),
+        location=(0.0, 0.51, z_throne + 0.70 + 0.75),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
+    )
+    # Tufted velvet backrest inner cushion
+    faces += create_beveled_box(
+        bm, size=(0.74, 0.05, 1.35),
+        location=(0.0, 0.47, z_throne + 0.72 + 0.675),
+        mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.012
+    )
+    # Arched Gothic Crown atop backrest
+    faces += create_beveled_box(
+        bm, size=(0.92, 0.09, 0.26),
+        location=(0.0, 0.51, z_throne + 2.26),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012
+    )
+    # Carved heraldic shield crest atop crown
+    faces += create_beveled_box(
+        bm, size=(0.36, 0.07, 0.38),
+        location=(0.0, 0.50, z_throne + 2.45),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.014
+    )
+
+    # 6. Overhead Royal Baldachin / Canopy Cornice & Rear Drapery
+    faces += create_beveled_box(
+        bm, size=(1.60, 1.10, 0.12),
+        location=(0.0, 0.35, z_throne + 2.72),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012
+    )
+    # Hanging velvet backdrop drapery falling behind throne
+    faces += create_beveled_box(
+        bm, size=(1.50, 0.03, 2.25),
+        location=(0.0, 0.58, z_throne + 1.55),
+        mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.008
+    )
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
 def build_stone_pile(bm, x, y, z_ground=0.0, ang=0.0, length=1.8, width=0.95, layers=4):
     """Stacked, roughly squared cut-stone blocks (quarry / stone store)."""
     faces = []

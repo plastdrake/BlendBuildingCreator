@@ -141,13 +141,66 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
 
+    # 3b. Cut-stone machicolation corbels projecting beneath the string course on the outer face.
+    corbel_spacing = 2.4
+    for u0, u1 in walk_spans:
+        seg_len = u1 - u0
+        if seg_len >= 1.6:
+            n_cb = max(1, int(round(seg_len / corbel_spacing)))
+            step = seg_len / n_cb
+            for i in range(n_cb + 1):
+                cu = u0 + i * step
+                if cu < u0 + 0.35 or cu > u1 - 0.35:
+                    continue
+                if gate_gap and gate_gap[0] - 0.5 <= cu <= gate_gap[1] + 0.5:
+                    continue
+                cb_x, cb_y = at(cu, lateral=thickness * 0.5 + 0.05)
+                create_beveled_box(bm, size=(0.24, 0.22, 0.34),
+                                   location=(cb_x, cb_y, walk_top - 0.12),
+                                   rotation=(0.0, 0.0, ang),
+                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+
     # 4. Inner wall-walk deck, seated just behind the parapet.
     for u0, u1 in walk_spans:
-        cx, cy = at((u0 + u1) * 0.5, -(thickness * 0.5 + walk_width * 0.5 - 0.05))
+        cx_w, cy_w = at((u0 + u1) * 0.5, -(thickness * 0.5 + walk_width * 0.5 - 0.05))
         create_beveled_box(bm, size=(u1 - u0, walk_width, 0.14),
-                           location=(cx, cy, walk_top + 0.16),
+                           location=(cx_w, cy_w, walk_top + 0.16),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+
+        # 4b. Inner rampart supporting piers & corbel vaults (giving the back of the wall real depth)
+        n_piers = max(1, int(round((u1 - u0) / 2.8)))
+        p_step = (u1 - u0) / n_piers
+        inner_lat = -(thickness * 0.5 + walk_width * 0.5 - 0.05)
+        for pi in range(n_piers + 1):
+            pu = u0 + pi * p_step
+            if pu < u0 + 0.35 or pu > u1 - 0.35:
+                continue
+            if gate_gap and gate_gap[0] - 0.5 <= pu <= gate_gap[1] + 0.5:
+                continue
+            px_c, py_c = at(pu, inner_lat)
+            create_beveled_box(bm, size=(0.42, walk_width * 0.85, height),
+                               location=(px_c, py_c, ground_z + height * 0.5),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
+            create_beveled_box(bm, size=(0.54, walk_width * 0.90, 0.30),
+                               location=(px_c, py_c, walk_top - 0.15),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+
+        # 4c. Inner safety curb parapet along the bailey edge of the walkway
+        inner_edge_lat = -(thickness * 0.5 + walk_width - 0.05)
+        curb_h = 0.60
+        curb_t = 0.22
+        cx_curb, cy_curb = at((u0 + u1) * 0.5, inner_edge_lat)
+        create_beveled_box(bm, size=(u1 - u0, curb_t, curb_h),
+                           location=(cx_curb, cy_curb, walk_top + 0.16 + curb_h * 0.5),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+        create_beveled_box(bm, size=(u1 - u0, curb_t + 0.06, 0.08),
+                           location=(cx_curb, cy_curb, walk_top + 0.16 + curb_h + 0.04),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
 
     # 5. Crenellated merlons along the exposed outer edge, optionally
     # stopping short of a corner post so perpendicular parapets never collide.
@@ -191,58 +244,141 @@ def _build_corner_post(bm, cx, cy, thickness, walk_top, ground_z=0.0):
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
 
 
-def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
-                     gate_h=2.7, portcullis=False):
-    """Cut-stone gatehouse framing the front gate: flanking piers proud of the
-    wall, a lintel arch over the opening and stepped coping caps. The wall body
-    itself supplies the masonry above the gate; this only dresses the opening.
+def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
+                                  wall_h=3.2, thickness=0.55):
+    """Stone rampart stairs on the inner courtyard side flanking the gatehouse,
+    allowing the player to walk up from the bailey ground onto the curtain wall and gate towers."""
+    from mathutils import Vector
+    ox, oy = outward
+    on = math.hypot(ox, oy)
+    if on < 1e-5:
+        ox, oy = 0.0, -1.0
+    else:
+        ox, oy = ox / on, oy / on
+    tx, ty = -oy, ox
+    ang = math.atan2(ty, tx)
 
-    When ``portcullis`` is set an iron grille (built by the reusable
-    :func:`gatehouse.build_portcullis`) hangs in the opening.
+    v_tang = Vector((tx, ty, 0.0))
+    v_in = Vector((-ox, -oy, 0.0))
+
+    stair_w = 1.25
+    stair_l = 4.2
+    n_steps = 14
+    step_l = stair_l / n_steps
+    step_h = wall_h / n_steps
+
+    for sgn in (-1.0, 1.0):
+        # Starts in the courtyard and ascends towards the gatehouse
+        start_u = sgn * (gap_w * 0.5 + 0.60 + stair_l)
+        end_u = sgn * (gap_w * 0.5 + 0.60)
+        stair_lat = thickness * 0.5 + stair_w * 0.5 + 0.05
+
+        for i in range(n_steps):
+            t_frac = (i + 0.5) / n_steps
+            u_pos = start_u + (end_u - start_u) * t_frac
+            sz = ground_z + i * step_h
+            sp = Vector((cx, cy, 0.0)) + v_tang * u_pos + v_in * stair_lat + Vector((0.0, 0.0, sz + step_h * 0.5))
+
+            # Cut-stone step tread
+            create_beveled_box(bm, size=(step_l + 0.05, stair_w, step_h + 0.04),
+                               location=(sp.x, sp.y, sp.z),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+
+            # Solid stone carriage underneath step
+            if sz > ground_z + 0.05:
+                car_h = sz
+                car_p = Vector((cx, cy, 0.0)) + v_tang * u_pos + v_in * stair_lat + Vector((0.0, 0.0, ground_z + car_h * 0.5))
+                create_beveled_box(bm, size=(step_l + 0.02, stair_w, car_h),
+                                   location=(car_p.x, car_p.y, car_p.z),
+                                   rotation=(0.0, 0.0, ang),
+                                   mat_index=MAT_INDEX_STONE, bevel_amount=0.010)
+
+        # Upper landing at wall_h
+        landing_u = end_u - sgn * 0.65
+        land_p = Vector((cx, cy, 0.0)) + v_tang * landing_u + v_in * stair_lat + Vector((0.0, 0.0, ground_z + wall_h - 0.08))
+        create_beveled_box(bm, size=(1.30, stair_w, 0.18),
+                           location=(land_p.x, land_p.y, land_p.z),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+
+        # Outer handrail along the stair flight
+        for pi in (0, n_steps // 2, n_steps - 1):
+            t_f = (pi + 0.5) / n_steps
+            pu = start_u + (end_u - start_u) * t_f
+            pz = ground_z + pi * step_h
+            post_p = Vector((cx, cy, 0.0)) + v_tang * pu + v_in * (thickness * 0.5 + stair_w + 0.02) + Vector((0.0, 0.0, pz + 0.45))
+            create_beveled_box(bm, size=(0.10, 0.10, 0.90),
+                               location=(post_p.x, post_p.y, post_p.z),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+        rail_start = Vector((cx, cy, 0.0)) + v_tang * start_u + v_in * (thickness * 0.5 + stair_w + 0.02) + Vector((0.0, 0.0, ground_z + 0.90))
+        rail_end = Vector((cx, cy, 0.0)) + v_tang * end_u + v_in * (thickness * 0.5 + stair_w + 0.02) + Vector((0.0, 0.0, ground_z + wall_h + 0.90))
+        rail_mid = (rail_start + rail_end) * 0.5
+        slope_ang = math.atan2(wall_h, stair_l) * (-sgn)
+        create_beveled_box(bm, size=(stair_l + 0.20, 0.08, 0.10),
+                           location=(rail_mid.x, rail_mid.y, rail_mid.z),
+                           rotation=(0.0, slope_ang, ang),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+
+
+def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
+                     gate_h=2.7, portcullis=False, drawbridge=False,
+                     drawbridge_angle=0.0, gate_towers=False, wall_h=3.2):
+    """Cut-stone gatehouse framing the front gate: flanking piers proud of the
+    wall, a lintel arch over the opening, stepped coping caps, optional portcullis,
+    oak plank drawbridge with chains, flanking D-bastion gate towers, and rampart stairs.
     """
     ox, oy = outward
     on = math.hypot(ox, oy)
     if on > 1e-5:
         ox, oy = ox / on, oy / on
     tx, ty = -oy, ox            # wall tangent
-    # Rotate the frame members about the *wall tangent* (not the outward normal)
-    # or every box ends up turned 90 degrees across the gate.
     ang = math.atan2(ty, tx)
-    # Pull the piers in so their inner faces cover the masonry reveal at the
-    # edge of the opening, and keep them low and plain (no cap blocks) so the
-    # lintel alone closes the top of the frame.
     half_outer = gap_w * 0.5 + 0.22
-    # Push the whole frame proud of the wall face so it is not half-buried in
-    # the masonry, and dress it in timber to read as a gate frame.
     push = 0.12
-    # Deep members: the frame reaches well through the wall so none of its
-    # faces land coplanar with the masonry (which z-fights) and the timber
-    # covers the recessed stone reveal of the opening.
     frame_depth = thickness + 0.40
 
     for s in (-1.0, 1.0):
         px = cx + tx * (s * half_outer) + ox * push
         py = cy + ty * (s * half_outer) + oy * push
-        # Pillars stop exactly where the beam starts so the lintel rests ON
-        # the pillars with no interpenetration (which z-fought on the shared
-        # front faces).
         pier_h = gate_h
         create_beveled_box(bm, size=(0.62, frame_depth, pier_h),
                            location=(px, py, ground_z + pier_h * 0.5),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
 
-    # Deep lintel band across the opening, seated 2cm into the pillar tops and
-    # wide enough to cap the full pillar width on both ends.
+    # Deep lintel band across the opening
     create_beveled_box(bm, size=(gap_w + 1.20, frame_depth, 0.32),
                        location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.14),
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
+    # Fortified cut-stone crown coping above the gatehouse arch
+    create_beveled_box(bm, size=(gap_w + 1.45, frame_depth + 0.08, 0.20),
+                       location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.38),
+                       rotation=(0.0, 0.0, ang),
+                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+
+    if gate_towers:
+        from .gatehouse import build_flanking_gate_towers
+        build_flanking_gate_towers(bm, cx, cy, ground_z, gap_w=gap_w,
+                                   wall_h=wall_h, wall_t=thickness, outward=(ox, oy))
 
     if portcullis:
         from .gatehouse import build_portcullis
         build_portcullis(bm, cx, cy, ground_z, width=gap_w, height=gate_h,
                          outward=(ox, oy))
+
+    if drawbridge:
+        from .gatehouse import build_drawbridge
+        build_drawbridge(bm, cx, cy, ground_z, width=gap_w, length=max(3.8, gate_h * 1.40),
+                         outward=(ox, oy), angle_deg=drawbridge_angle, has_chains=True,
+                         pier_h=gate_h)
+
+    # Courtyard rampart access stairs flanking the gate
+    build_gatehouse_access_stairs(bm, cx, cy, (ox, oy), gap_w, ground_z,
+                                  wall_h=wall_h, thickness=thickness)
 
 
 def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
@@ -337,7 +473,13 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
             _build_corner_post(bm, _px, _py, T, H, ground_z=0.0)
 
     # Gatehouse dressing over the front opening.
-    build_gate_house(bm, gate_cx, y_min, (0.0, -1.0), g1 - g0, 0.0, T,
-                     gate_h=gate_h, portcullis=getattr(props, 'has_portcullis', False))
+    build_gate_house(
+        bm, gate_cx, y_min, (0.0, -1.0), g1 - g0, 0.0, T,
+        gate_h=gate_h, portcullis=getattr(props, 'has_portcullis', False),
+        drawbridge=getattr(props, 'has_drawbridge', False),
+        drawbridge_angle=getattr(props, 'drawbridge_angle', 22.0),
+        gate_towers=getattr(props, 'has_gate_towers', False),
+        wall_h=H,
+    )
 
     return (x_min, x_max, y_min, y_max, g0, g1)

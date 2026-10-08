@@ -159,6 +159,8 @@ def build_estate_fountain(bm, pos=(0.0, -8.0, 0.0), tier='TIER_3'):
 # otherwise every stable would recursively spawn its own stables and walls.
 _OUTHOUSE_DISABLED = (
     'has_stable', 'has_servant_quarters', 'has_estate_fountain',
+    'has_estate_guardhouse', 'has_estate_forge', 'has_estate_granary',
+    'has_estate_chapel', 'has_estate_training_grounds',
     'has_palisade', 'has_curtain_wall', 'has_banners',
     'has_bastion_towers', 'has_military_props', 'has_mounted_shields',
     'has_gable_crest', 'has_side_annex', 'has_mini_wing',
@@ -471,12 +473,447 @@ def build_servant_quarters(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='T
         'roof_height': 2.6,
         'roof_overhang': 0.60,
         'has_roof_shingles': True,
-        'has_dormers': False,
+        'has_dormers': tier in ('TIER_2', 'TIER_3'),
+        'dormer_count': 2 if floors > 1 else 1,
+        'dormer_sides': 'FRONT',
+        'has_mini_wing': floors > 1 and tier in ('TIER_2', 'TIER_3'),
+        'mini_wing_count': 1,
+        'mini_wing_width': 2.0,
+        'mini_wing_depth': 1.2,
         'has_chimney': True,
         'chimney_pos_x': 0.55,
         'chimney_pos_y': 0.0,
+        'has_balcony': floors > 1,
+        'balcony_side': 'FRONT',
+        'balcony_width': 2.2,
+        'balcony_depth': 1.1,
     }
     _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+
+
+def build_guardhouse(bm, props, pos=(24.0, -28.0, 0.0), rot_z=0.0, tier='TIER_1',
+                     width=10.5, depth=6.5, floors=1, floor_h=2.8):
+    """Detached gate guardhouse & watch lodge."""
+    is_t3 = tier == 'TIER_3'
+    is_t1 = tier == 'TIER_1'
+    overrides = {
+        'building_shape': 'RECTANGLE',
+        'num_floors': max(1, floors),
+        'floor_height': floor_h,
+        'width': width,
+        'depth': depth,
+        'wall_thickness': 0.30 if is_t3 else 0.28,
+        'has_cantilever': floors > 1 and not is_t1,
+        'overhang_mode': 'SECOND_FLOOR_ONLY',
+        'cantilever_overhang': 0.24,
+        'wonkiness': 0.0,
+        'has_foundation': True,
+        'foundation_type': 'WOOD' if is_t1 else 'STONE',
+        'foundation_height': 0.55,
+        'ground_floor_stone': not is_t1,
+        'has_ceiling_beams': False,
+        'has_stairs': floors > 1,
+        'stair_style': 'STRAIGHT',
+        'has_front_door': True,
+        'door_width': 1.40,
+        'door_height': 2.30,
+        'door_shape': 'ARCHED' if not is_t1 else 'SQUARE',
+        'door_angle': 0.0,
+        'has_windows': True,
+        'window_spacing': 2.4,
+        'has_shutters': True,
+        'shutter_state': 'OPEN',
+        'has_timber_framing': not is_t1,
+        'timber_diagonals': not is_t1,
+        'roof_style': 'GABLE' if is_t3 else 'SWAY',
+        'roof_orientation': 'LEFT_RIGHT',
+        'roof_height': 2.7,
+        'roof_overhang': 0.60,
+        'has_roof_shingles': True,
+        'has_dormers': floors > 1 or tier in ('TIER_2', 'TIER_3'),
+        'dormer_count': 1,
+        'dormer_sides': 'FRONT',
+        'has_mini_wing': floors > 1 and tier in ('TIER_2', 'TIER_3'),
+        'mini_wing_count': 1,
+        'mini_wing_width': 2.0,
+        'mini_wing_depth': 1.2,
+        'has_chimney': True,
+        'chimney_pos_x': 0.50,
+        'chimney_pos_y': 0.0,
+        'has_balcony': floors > 1,
+        'balcony_side': 'FRONT',
+        'balcony_width': 2.0,
+        'balcony_depth': 1.1,
+    }
+    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+    try:
+        from .military_props import build_weapon_rack
+        t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+        rw_pos = t @ Vector((-width * 0.28, -depth * 0.5 - 0.75, 0.0))
+        nrm = t.to_3x3() @ Vector((0.0, -1.0, 0.0))
+        build_weapon_rack(bm, rw_pos.x, rw_pos.y, 0.0, normal=(nrm.x, nrm.y, 0.0))
+    except Exception:
+        pass
+
+
+def build_estate_forge(bm, props, pos=(-24.0, -28.0, 0.0), rot_z=0.0, tier='TIER_1',
+                       width=10.5, depth=6.5, floors=1, floor_h=2.8):
+    """Detached estate armory & blacksmith forge."""
+    is_t3 = tier == 'TIER_3'
+    is_t1 = tier == 'TIER_1'
+    overrides = {
+        'building_shape': 'RECTANGLE',
+        'num_floors': max(1, floors),
+        'floor_height': floor_h,
+        'width': width,
+        'depth': depth,
+        'wall_thickness': 0.32 if is_t3 else 0.30,
+        'has_cantilever': False,
+        'wonkiness': 0.0,
+        'has_foundation': True,
+        'foundation_type': 'STONE',
+        'foundation_height': 0.60,
+        'ground_floor_stone': True,
+        'has_ceiling_beams': False,
+        'has_stairs': floors > 1,
+        'stair_style': 'STRAIGHT',
+        'has_front_door': True,
+        'door_width': 1.60,
+        'door_height': 2.40,
+        'door_shape': 'SQUARE',
+        'door_angle': 0.0,
+        'has_windows': True,
+        'window_spacing': 2.4,
+        'has_shutters': True,
+        'shutter_state': 'OPEN',
+        'has_timber_framing': not is_t1,
+        'timber_diagonals': not is_t1,
+        'roof_style': 'SWAY',
+        'roof_orientation': 'LEFT_RIGHT',
+        'roof_height': 2.8,
+        'roof_overhang': 0.65,
+        'has_roof_shingles': True,
+        'has_dormers': tier in ('TIER_2', 'TIER_3'),
+        'dormer_count': 1,
+        'dormer_sides': 'FRONT',
+        'has_chimney': True,
+        'chimney_pos_x': 0.70,
+        'chimney_pos_y': 0.0,
+    }
+    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+    try:
+        t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+        anv_loc = t @ Vector((width * 0.25, -depth * 0.5 - 1.25, 0.0))
+        create_cylinder(bm, radius=0.34, height=0.58, segments=16,
+                        location=(anv_loc.x, anv_loc.y, 0.29), mat_index=MAT_INDEX_TIMBER)
+        ang_z = rot_z + 0.3
+        create_beveled_box(bm, size=(0.58, 0.26, 0.28),
+                           location=(anv_loc.x, anv_loc.y, 0.58 + 0.14),
+                           rotation=(0.0, 0.0, ang_z),
+                           mat_index=MAT_INDEX_IRON, bevel_amount=0.015)
+        ax = math.cos(ang_z)
+        ay = math.sin(ang_z)
+        horn_pos = anv_loc + Vector((ax * 0.36, ay * 0.36, 0.58 + 0.14))
+        create_cone(bm, radius1=0.09, radius2=0.015, height=0.22, segments=12,
+                    location=horn_pos,
+                    rotation=(0.0, 1.5708, ang_z),
+                    mat_index=MAT_INDEX_IRON)
+        tub_loc = t @ Vector((width * 0.25 + 1.10, -depth * 0.5 - 1.30, 0.0))
+        build_barrel(bm, x=tub_loc.x, y=tub_loc.y, z_ground=0.0, radius=0.36, height=0.75)
+        crate_loc = t @ Vector((width * 0.25 - 1.05, -depth * 0.5 - 1.20, 0.0))
+        build_crate(bm, x=crate_loc.x, y=crate_loc.y, z_ground=0.0, size=0.60, height=0.52)
+    except Exception:
+        pass
+
+
+def build_estate_granary(bm, props, pos=(-28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_1',
+                         width=9.5, depth=6.0, floors=1, floor_h=2.8):
+    """Detached estate granary & provisions storehouse."""
+    overrides = {
+        'building_shape': 'RECTANGLE',
+        'num_floors': max(1, floors),
+        'floor_height': floor_h,
+        'width': width,
+        'depth': depth,
+        'wall_thickness': 0.28,
+        'has_cantilever': False,
+        'wonkiness': 0.0,
+        'has_foundation': True,
+        'foundation_type': 'WOOD',
+        'foundation_height': 0.65,
+        'ground_floor_stone': False,
+        'has_ceiling_beams': False,
+        'has_stairs': False,
+        'has_front_door': True,
+        'door_width': 1.60,
+        'door_height': 2.35,
+        'door_shape': 'SQUARE',
+        'door_angle': 0.0,
+        'has_windows': True,
+        'window_spacing': 2.6,
+        'has_shutters': True,
+        'shutter_state': 'OPEN',
+        'has_timber_framing': True,
+        'timber_diagonals': True,
+        'plank_direction': 'HORIZONTAL',
+        'roof_style': 'SWAY',
+        'roof_orientation': 'LEFT_RIGHT',
+        'roof_height': 2.7,
+        'roof_overhang': 0.70,
+        'has_roof_shingles': True,
+        'has_dormers': True,
+        'dormer_count': 1,
+        'dormer_sides': 'FRONT',
+        'has_chimney': False,
+    }
+    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+    try:
+        t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+        c1 = t @ Vector((-width * 0.30, -depth * 0.5 - 0.70, 0.0))
+        build_crate(bm, x=c1.x, y=c1.y, z_ground=0.0, size=0.55, height=0.50)
+        c2 = t @ Vector((-width * 0.30 + 0.60, -depth * 0.5 - 0.65, 0.0))
+        build_barrel(bm, x=c2.x, y=c2.y, z_ground=0.0, radius=0.30, height=0.68)
+    except Exception:
+        pass
+
+
+def build_estate_chapel(bm, props, pos=(28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_3',
+                        width=10.5, depth=6.5, floors=1, floor_h=3.6):
+    """Detached estate chantry chapel & treasury (consecrated private sanctuary)."""
+    overrides = {
+        'building_shape': 'RECTANGLE',
+        'num_floors': max(1, floors),
+        'floor_height': floor_h,
+        'width': width,
+        'depth': depth,
+        'wall_thickness': 0.36,
+        'has_cantilever': False,
+        'wonkiness': 0.0,
+        'has_foundation': True,
+        'foundation_type': 'STONE',
+        'foundation_height': 0.75,
+        'ground_floor_stone': True,
+        'has_ceiling_beams': True,
+        'has_stairs': False,
+        'has_front_door': True,
+        'door_width': 1.60,
+        'door_height': 2.70,
+        'door_shape': 'ARCHED',
+        'door_angle': 0.0,
+        'has_windows': True,
+        'window_spacing': 2.2,
+        'has_shutters': False,
+        'has_timber_framing': False,
+        'roof_style': 'GABLE',
+        'roof_orientation': 'LEFT_RIGHT',
+        'roof_height': 3.4,
+        'roof_overhang': 0.65,
+        'has_roof_shingles': True,
+        'has_dormers': False,
+        'has_chimney': False,
+    }
+    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+    try:
+        t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+        # Front arched stone bell-cote / sanctus bell turret over entrance gable
+        z_ridge = 0.75 + floor_h + 3.4
+        create_beveled_box(bm, size=(1.20, 0.45, 1.40),
+                           location=(t @ Vector((0.0, 0.0, z_ridge + 0.70))),
+                           rotation=(0.0, 0.0, rot_z),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03)
+        create_cylinder(bm, radius=0.22, height=0.35, segments=16,
+                        location=(t @ Vector((0.0, 0.0, z_ridge + 0.65))),
+                        rotation=(1.5708, 0.0, rot_z),
+                        mat_index=MAT_INDEX_IRON)
+        # Stone steps leading to chapel arched entrance
+        create_beveled_box(bm, size=(2.40, 0.85, 0.22),
+                           location=(t @ Vector((0.0, -depth * 0.5 - 0.42, 0.11))),
+                           rotation=(0.0, 0.0, rot_z),
+                           mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+        create_beveled_box(bm, size=(2.10, 0.65, 0.22),
+                           location=(t @ Vector((0.0, -depth * 0.5 - 0.25, 0.33))),
+                           rotation=(0.0, 0.0, rot_z),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+    except Exception:
+        pass
+
+
+def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='TIER_3',
+                                   width=26.0, depth=18.0):
+    """Fortified courtyard military training grounds and archery drill yard.
+
+    Features:
+    - Post-and-rail rustic timber palisade boundary (clean timber posts directly into earth, no stone plinths).
+    - Front opening gate with proud heraldic round shields mounted on outer face with iron brackets.
+    - 4 traditional straw archery target butts on tripods across the back fence.
+    - Full-width timber shooting line rail with arrow barrels and distance stakes.
+    - Sparring pell sector with 2 padded combat training dummies and a rope-wrapped sparring pell post.
+    - 2 A-frame armory weapon racks with halberds, spears, battleaxes, and tournament shields.
+    - Spectator / drill timber benches turned facing INWARD toward the training action.
+    - Armorer's supply crates, tool chest, water cooling trough, and provision barrels.
+    - Lord Nasher's high heraldic standard pole flying cloth banner pennon.
+    """
+    from .military_props import build_archery_target, build_weapon_rack, build_training_dummy
+    from .furniture import build_bench, build_crate, build_barrel
+    from .shield import build_round_shield
+    from .banner import build_banner_pole
+
+    t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+    half_w = width * 0.5
+    half_d = depth * 0.5
+
+    # 1. Post-and-rail perimeter fencing (clean rustic timber, no stone plinths)
+    post_spacing = 2.5
+    n_posts_x = max(3, int(round(width / post_spacing)))
+    step_x = width / n_posts_x
+    n_posts_y = max(3, int(round(depth / post_spacing)))
+    step_y = depth / n_posts_y
+
+    fence_h = 1.15
+
+    # Posts along Left and Right edges
+    for sgn_x in (-1.0, 1.0):
+        px_val = sgn_x * half_w
+        for j in range(n_posts_y + 1):
+            py_val = -half_d + j * step_y
+            p_world = t @ Vector((px_val, py_val, 0.0))
+            # Timber fence post seated cleanly in the ground
+            create_beveled_box(bm, size=(0.16, 0.16, fence_h),
+                               location=(p_world.x, p_world.y, fence_h * 0.5),
+                               rotation=(0.0, 0.0, rot_z),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+
+        # Rails connecting posts along Y
+        rail_mid = t @ Vector((px_val, 0.0, 0.0))
+        for rz in (0.45, 0.95):
+            create_beveled_box(bm, size=(0.08, depth, 0.12),
+                               location=(rail_mid.x, rail_mid.y, rz),
+                               rotation=(0.0, 0.0, rot_z),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+    # Back fence line (Y = +half_d)
+    for i in range(1, n_posts_x):
+        px_val = -half_w + i * step_x
+        p_world = t @ Vector((px_val, half_d, 0.0))
+        create_beveled_box(bm, size=(0.16, 0.16, fence_h),
+                           location=(p_world.x, p_world.y, fence_h * 0.5),
+                           rotation=(0.0, 0.0, rot_z),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+    rail_back_mid = t @ Vector((0.0, half_d, 0.0))
+    for rz in (0.45, 0.95):
+        create_beveled_box(bm, size=(width, 0.08, 0.12),
+                           location=(rail_back_mid.x, rail_back_mid.y, rz),
+                           rotation=(0.0, 0.0, rot_z),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+    # Front fence line (Y = -half_d) with 3.4m center gate opening
+    gap_half = 1.7
+    fwd_out = t.to_3x3() @ Vector((0.0, -1.0, 0.0))
+    for sgn in (-1.0, 1.0):
+        # Gate post flanking the opening
+        p_gate = t @ Vector((sgn * gap_half, -half_d, 0.0))
+        post_gh = fence_h + 0.35
+        create_beveled_box(bm, size=(0.20, 0.20, post_gh),
+                           location=(p_gate.x, p_gate.y, post_gh * 0.5),
+                           rotation=(0.0, 0.0, rot_z),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+        # Pyramid timber cap atop gate post
+        create_cone(bm, radius1=0.15, radius2=0.0, height=0.14, segments=4,
+                    location=(p_gate.x, p_gate.y, post_gh + 0.07),
+                    rotation=(0.0, 0.0, rot_z + math.pi * 0.25), mat_index=MAT_INDEX_TIMBER)
+
+        # Proud heraldic round shield on the outer front face with iron mounting plate
+        sh_bracket = p_gate + fwd_out * 0.10 + Vector((0.0, 0.0, 0.85))
+        create_beveled_box(bm, size=(0.16, 0.04, 0.16),
+                           location=(sh_bracket.x, sh_bracket.y, sh_bracket.z),
+                           rotation=(0.0, 0.0, rot_z),
+                           mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
+        sh_loc = p_gate + fwd_out * 0.13 + Vector((0.0, 0.0, 0.85))
+        build_round_shield(bm, (sh_loc.x, sh_loc.y, sh_loc.z),
+                           normal=fwd_out, radius=0.26, pattern='QUARTERED')
+
+        # Wings from corner post to gate post
+        wing_len = half_w - gap_half
+        wing_mid = t @ Vector((sgn * (gap_half + wing_len * 0.5), -half_d, 0.0))
+        for rz in (0.45, 0.95):
+            create_beveled_box(bm, size=(wing_len, 0.08, 0.12),
+                               location=(wing_mid.x, wing_mid.y, rz),
+                               rotation=(0.0, 0.0, rot_z),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+    # 2. Archery Target Range (back sector) - 4 butts across back wall
+    target_y = half_d - 2.4
+    t_span = width * 0.72
+    target_xs = (-t_span * 0.45, -t_span * 0.15, t_span * 0.15, t_span * 0.45)
+    for tx_val in target_xs:
+        tp_world = t @ Vector((tx_val, target_y, 0.0))
+        build_archery_target(bm, tp_world.x, tp_world.y, 0.0, ang=rot_z)
+
+    # Shooting line rail on the ground
+    shoot_y = target_y - 8.5
+    shoot_line = t @ Vector((0.0, shoot_y, 0.06))
+    create_beveled_box(bm, size=(t_span + 2.0, 0.16, 0.10),
+                       location=(shoot_line.x, shoot_line.y, shoot_line.z),
+                       rotation=(0.0, 0.0, rot_z),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+
+    # Arrow barrels beside the shooting rail
+    for sgn_b in (-1.0, 1.0):
+        bar_pos = t @ Vector((sgn_b * (t_span * 0.5 + 1.4), shoot_y, 0.0))
+        build_barrel(bm, x=bar_pos.x, y=bar_pos.y, z_ground=0.0, radius=0.26, height=0.62)
+
+    # 3. Sparring Pell / Combat Sector
+    # Two swivel combat dummies
+    dummy_pos1 = t @ Vector((-4.8, -half_d + 5.2, 0.0))
+    dummy_pos2 = t @ Vector((4.8, -half_d + 5.2, 0.0))
+    build_training_dummy(bm, dummy_pos1.x, dummy_pos1.y, 0.0, ang=rot_z + 0.35)
+    build_training_dummy(bm, dummy_pos2.x, dummy_pos2.y, 0.0, ang=rot_z - 0.35)
+
+    # Central heavy wooden sparring pell post wrapped in practice padding
+    pell_pos = t @ Vector((0.0, -half_d + 5.6, 0.0))
+    create_cylinder(bm, radius=0.42, height=0.18, segments=12,
+                    location=(pell_pos.x, pell_pos.y, 0.09), mat_index=MAT_INDEX_TIMBER)
+    create_cylinder(bm, radius=0.18, height=1.90, segments=10,
+                    location=(pell_pos.x, pell_pos.y, 0.95), mat_index=MAT_INDEX_TIMBER)
+    create_cylinder(bm, radius=0.20, height=0.62, segments=10,
+                    location=(pell_pos.x, pell_pos.y, 1.25), mat_index=MAT_INDEX_WOOD)
+
+    # 4. Weapon Racks along side rails
+    rack_pos1 = t @ Vector((-half_w + 1.4, -half_d + 6.0, 0.0))
+    rack_pos2 = t @ Vector((half_w - 1.4, -half_d + 6.0, 0.0))
+    build_weapon_rack(bm, rack_pos1.x, rack_pos1.y, 0.0, ang=rot_z + math.pi * 0.5)
+    build_weapon_rack(bm, rack_pos2.x, rack_pos2.y, 0.0, ang=rot_z - math.pi * 0.5)
+
+    # Tournament round shield resting against left rack
+    sh_stand = t @ Vector((-half_w + 1.4, -half_d + 3.4, 0.35))
+    sh_norm = (t.to_3x3() @ Vector((0.75, -0.35, 0.55))).normalized()
+    build_round_shield(bm, (sh_stand.x, sh_stand.y, sh_stand.z),
+                       normal=sh_norm, radius=0.34, pattern='CROSS')
+
+    # 5. Spectator / Armorer Timber Benches (turned facing INWARD toward the action!)
+    bench1_pos = t @ Vector((-gap_half - 2.2, -half_d + 1.4, 0.0))
+    build_bench(bm, x=bench1_pos.x, y=bench1_pos.y, z_ground=0.0,
+                ang=rot_z + math.pi, length=2.0)
+
+    bench2_pos = t @ Vector((half_w - 1.4, -half_d + 2.0, 0.0))
+    build_bench(bm, x=bench2_pos.x, y=bench2_pos.y, z_ground=0.0,
+                ang=rot_z - math.pi * 0.5, length=1.8)
+
+    # 6. Armorer's Supplies & Water Trough
+    crate_pos = t @ Vector((gap_half + 2.2, -half_d + 1.4, 0.0))
+    build_crate(bm, x=crate_pos.x, y=crate_pos.y, z_ground=0.0, size=0.68, height=0.55)
+    build_crate(bm, x=crate_pos.x + 0.72, y=crate_pos.y, z_ground=0.0, size=0.50, height=0.45, ang=0.25)
+    build_barrel(bm, x=crate_pos.x + 1.45, y=crate_pos.y + 0.15, z_ground=0.0)
+    # Water cooling trough for swords & cleaning
+    trough_pos = t @ Vector((gap_half + 2.8, -half_d + 2.5, 0.20))
+    create_beveled_box(bm, size=(1.20, 0.55, 0.40),
+                       location=(trough_pos.x, trough_pos.y, trough_pos.z),
+                       rotation=(0.0, 0.0, rot_z),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
+
+    # 7. Heraldic Banner Pole
+    pole_pos = t @ Vector((-gap_half - 0.30, -half_d - 0.20, 0.0))
+    build_banner_pole(bm, x=pole_pos.x, y=pole_pos.y, z_ground=0.0, height=5.4)
 
 
 # -----------------------------------------------------------------------------
@@ -562,16 +999,21 @@ def _place_estate_awnings(bm, props, tier, spread_x, fore_y, stable=None, servan
 def build_estate_outbuildings(bm, props, ctx):
     """
     High-level orchestrator called during architectural accessories dispatch.
-    Places the detached stables, servant quarters, courtyard fountain and awnings
-    procedurally according to scene properties.
+    Places the detached stables, servant quarters, guardhouse, forge, granary,
+    courtyard fountain and awnings procedurally according to scene properties.
     """
     tier = getattr(props, 'material_tier', 'TIER_1')
     has_stable = getattr(props, 'has_stable', False)
     has_servants = getattr(props, 'has_servant_quarters', False)
+    has_guardhouse = getattr(props, 'has_estate_guardhouse', False)
+    has_forge = getattr(props, 'has_estate_forge', False)
+    has_granary = getattr(props, 'has_estate_granary', False)
+    has_chapel = getattr(props, 'has_estate_chapel', False)
+    has_training = getattr(props, 'has_estate_training_grounds', False)
     has_fountain = getattr(props, 'has_estate_fountain', False)
     has_awnings = getattr(props, 'estate_awnings', False)
 
-    if not (has_stable or has_servants or has_fountain or has_awnings):
+    if not (has_stable or has_servants or has_guardhouse or has_forge or has_granary or has_chapel or has_training or has_fountain or has_awnings):
         return
 
     spread_x = getattr(props, 'outbuilding_offset_x', 24.0)
@@ -581,7 +1023,7 @@ def build_estate_outbuildings(bm, props, ctx):
     setback = getattr(props, 'plot_setback', 0.0)
     base_hy = ctx.base_d * 0.5
 
-    # 1. Central Courtyard Fountain — centred in the (now deeper) honor court.
+    # 1. Central Courtyard Fountain — centred in the honor court.
     if has_fountain:
         manor_front = setback - base_hy
         fountain_y = (fore_y + manor_front) * 0.5
@@ -596,8 +1038,6 @@ def build_estate_outbuildings(bm, props, ctx):
         st_sgn = -1.0 if stable_side == 'LEFT' else 1.0
         st_x = st_sgn * spread_x
         st_y = fore_y
-        # Rotate 90 deg so the carriage door faces the courtyard, not the field.
-        # Auto on very wide plots, or whenever the preset explicitly asks for it.
         _rot_on = getattr(props, 'stable_rotate', False) or spread_x > 18.0
         st_rot = -math.pi * 0.5 * st_sgn if _rot_on else 0.0
         build_stable(bm, props, pos=(st_x, st_y, 0.0), rot_z=st_rot, tier=tier)
@@ -618,7 +1058,65 @@ def build_estate_outbuildings(bm, props, ctx):
         )
         servant_slot = (sq_x, sq_y, sq_rot, sq_w)
 
-    # 4. Yard shelters backed onto the outbuilding gables
+    # 4. Gate Guardhouse & Watch Lodge (front right flank)
+    if has_guardhouse:
+        gh_sgn = 1.0 if servant_side == 'RIGHT' else -1.0
+        gh_x = gh_sgn * (spread_x * 0.98 if spread_x > 26.0 else spread_x * 0.90)
+        gh_y = fore_y - 18.0
+        gh_rot = -math.pi * 0.5 * gh_sgn
+        gh_fl = 2 if tier == 'TIER_3' else 1
+        build_guardhouse(
+            bm, props, pos=(gh_x, gh_y, 0.0), rot_z=gh_rot, tier=tier,
+            width=11.5 if tier == 'TIER_3' else 10.0, depth=6.5, floors=gh_fl
+        )
+
+    # 5. Estate Armory & Forge (front left flank)
+    if has_forge:
+        fg_sgn = -1.0 if stable_side == 'LEFT' else 1.0
+        fg_x = fg_sgn * (spread_x * 0.98 if spread_x > 26.0 else spread_x * 0.90)
+        fg_y = fore_y - 18.0
+        fg_rot = -math.pi * 0.5 * fg_sgn
+        fg_fl = 1
+        build_estate_forge(
+            bm, props, pos=(fg_x, fg_y, 0.0), rot_z=fg_rot, tier=tier,
+            width=11.0 if tier == 'TIER_3' else 10.0, depth=6.5, floors=fg_fl
+        )
+
+    # 6. Estate Granary & Provisions Storehouse (rear left service flank)
+    if has_granary:
+        gn_sgn = -1.0 if stable_side == 'LEFT' else 1.0
+        gn_x = gn_sgn * (spread_x + 1.8 if spread_x > 26.0 else spread_x * 1.05)
+        gn_y = fore_y + 16.0
+        gn_rot = -math.pi * 0.5 * gn_sgn
+        build_estate_granary(
+            bm, props, pos=(gn_x, gn_y, 0.0), rot_z=gn_rot, tier=tier,
+            width=9.5, depth=6.0, floors=1
+        )
+
+    # 7. Estate Chantry Chapel & Treasury (rear right service flank)
+    if has_chapel:
+        ch_sgn = 1.0 if servant_side == 'RIGHT' else -1.0
+        ch_x = ch_sgn * (spread_x + 1.8 if spread_x > 26.0 else spread_x * 1.05)
+        ch_y = fore_y + 16.0
+        ch_rot = -math.pi * 0.5 * ch_sgn
+        build_estate_chapel(
+            bm, props, pos=(ch_x, ch_y, 0.0), rot_z=ch_rot, tier=tier,
+            width=11.0 if tier == 'TIER_3' else 9.5, depth=6.5, floors=1
+        )
+
+    # 8. Estate Training Grounds & Archery Yard (outer bailey forward flank)
+    if has_training:
+        tr_sgn = -1.0 if stable_side == 'LEFT' else 1.0
+        # Sited in the forward military bailey beside the armory/forge,
+        # completely clear of the stable front apron and carriage path.
+        tr_w = 26.0 if tier == 'TIER_3' else 22.0
+        tr_d = 18.0 if tier == 'TIER_3' else 15.0
+        tr_x = tr_sgn * (spread_x * 0.46)
+        tr_y = fore_y - 24.0
+        build_estate_training_grounds(bm, pos=(tr_x, tr_y, 0.0), rot_z=0.0, tier=tier,
+                                      width=tr_w, depth=tr_d)
+
+    # 9. Yard shelters backed onto the outbuilding gables
     if has_awnings:
         _place_estate_awnings(bm, props, tier, spread_x, fore_y,
                               stable=stable_slot, servant=servant_slot)

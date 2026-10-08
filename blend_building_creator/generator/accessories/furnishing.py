@@ -1665,6 +1665,57 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.52)
 
 
+def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                         rng, density: float, chimney_pos: Optional[Tuple[float, float]] = None):
+    """Grand Castle Throne Room: 3-tier stepped cut-stone dais, carved royal high throne,
+    ceremonial crimson carpet aisle, flanking guard braziers, noble benches, weapon racks
+    and magnificent chandeliers."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+
+    # 1. Warm stone hearth on side wall if chimney exists
+    _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+
+    # 2. Place Royal Throne on Dais at the head wall (facing away from rear wall)
+    throne_y = rm.bounds[3] - 1.45
+    throne_x = rcx
+    throne_ang = math.pi  # Facing South / toward entrance doors
+    if tracker.is_free(throne_x - 1.55, throne_x + 1.55, throne_y - 1.35, throne_y + 1.35):
+        tracker.occupy(throne_x - 1.55, throne_x + 1.55, throne_y - 1.35, throne_y + 1.35)
+        build_prop(bm, 'ROYAL_THRONE', throne_x, throne_y, z_floor, throne_ang, dais=True)
+
+    # 3. Flanking guard braziers / iron cauldrons on pedestals
+    for sgn in (-1.0, 1.0):
+        bx = throne_x + sgn * 1.85
+        by = throne_y - 0.20
+        if tracker.is_free(bx - 0.40, bx + 0.40, by - 0.40, by + 0.40):
+            tracker.occupy(bx - 0.40, bx + 0.40, by - 0.40, by + 0.40)
+            build_prop(bm, 'CAULDRON', bx, by, z_floor, 0.0)
+
+    # 4. Long ceremonial royal red carpet runner leading down the aisle to the throne dais
+    runner_w = min(2.80, max(1.80, rw * 0.38))
+    runner_l = min(14.00, max(4.00, rd * 0.78))
+    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy - 0.3, z_floor, runner_w, runner_l,
+             yaw_max=0.0)
+
+    # 5. Courtier / noble benches along side walls
+    _try_place_wall_prop(bm, 'BENCH', 1.80, 0.50, tracker, z_floor,
+                         candidate_walls=('WEST', 'EAST'), length=1.75)
+    _try_place_wall_prop(bm, 'BENCH', 1.80, 0.50, tracker, z_floor,
+                         candidate_walls=('EAST', 'WEST'), length=1.75)
+
+    # 6. Flanking weapon racks / ceremonial guard halberds
+    _try_place_wall_prop(bm, 'WEAPON_RACK', 1.20, 0.55, tracker, z_floor,
+                         candidate_walls=('WEST', 'EAST', 'SOUTH'))
+
+    # 7. Grand chandeliers overhead
+    build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.62)
+    if rd >= 7.5:
+        build_prop(bm, 'CHANDELIER', rcx, throne_y - 0.60, z_ceil, 0.0, radius=0.52)
+
+
 def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                           rng, density: float, chimney_pos: Optional[Tuple[float, float]] = None):
     """Grand manor banquet hall: one long feast table with chairs all around,
@@ -2781,6 +2832,8 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_industrial_bay(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('TAVERN_TAPROOM', 'COMMON'):
             _furnish_tavern_taproom(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
+        elif role in ('THRONE_ROOM',):
+            _furnish_throne_room(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('GREAT_HALL', 'COUNCIL_CHAMBER'):
             _furnish_great_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('BANQUET_HALL',):
@@ -2930,8 +2983,14 @@ def furnish_building_interior(bm, props, ctx):
         # A room on this floor already contains the dining/social set, so the
         # kitchen must not duplicate it. Shared across the whole storey.
         _dining_roles = {'HOUSE_HALL', 'DINING', 'GREAT_HALL', 'BANQUET_HALL', 'TAVERN_TAPROOM',
-                         'CHAPEL_HALL', 'MESS_HALL', 'COUNCIL_CHAMBER'}
+                         'CHAPEL_HALL', 'MESS_HALL', 'COUNCIL_CHAMBER', 'THRONE_ROOM'}
         floor_has_dining = any(getattr(rm, 'role', None) in _dining_roles for rm in rooms)
+
+        # Designate largest ground-floor room as THRONE_ROOM if requested
+        if fl == 0 and (bool(getattr(props, 'has_throne_room', False)) or _program == 'PALACE') and rooms:
+            largest_rm = max(rooms, key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]))
+            largest_rm.role = 'THRONE_ROOM'
+            floor_has_dining = True
 
         for rm in rooms:
             # Skip rooms that are too tiny to furnish safely

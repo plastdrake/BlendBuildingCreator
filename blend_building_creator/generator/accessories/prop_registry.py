@@ -107,6 +107,8 @@ for _s in (
           'military_props', 'build_training_dummy', 0.55),
     _spec('ARCHERY_TARGET', "Archery Target", 'WORK', "Straw target butt on tripod with embedded arrows",
           'military_props', 'build_archery_target', 0.85),
+    _spec('ROYAL_THRONE', "Royal Throne", 'SEATING', "Carved royal throne chair on a stepped dais with heraldic crest and velvet cushion",
+          'interior_furniture', 'build_royal_throne', 1.45, dais=True),
     _spec('CHAIR', "Chair", 'SEATING', "High-back tavern chair",
           'interior_furniture', 'build_chair', 0.35),
     _spec('INDOOR_TABLE', "Dining Table", 'TABLES', "Rectangular indoor table",

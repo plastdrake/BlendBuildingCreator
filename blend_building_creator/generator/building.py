@@ -228,11 +228,19 @@ def _create_building_context(props):
         getattr(props, 'exterior_stairs_side', '') == 'COURTYARD' or
         'TENEMENT' in getattr(props, 'building_family', '')
     ))
+    is_estate_or_manor = (
+        effective_archetype in ('MANOR', 'PALACE', 'CASTLE') or
+        'MANOR' in getattr(props, 'building_family', '') or
+        (base_w >= 36.0 and num_floors >= 3)
+    )
     if has_balc:
         b_mode = getattr(props, 'balcony_mode', 'SINGLE')
         if is_u_tenement and b_mode == 'SINGLE':
             # Tenement complexes have multiple flats per storey; balconies grace all upper floors.
             active_balc_floors = list(range(1, num_floors))
+        elif is_estate_or_manor and b_mode == 'SINGLE' and num_floors >= 3:
+            # Grand manors & ducal palaces: balconies on piano nobile (fl 2) and ducal solar (fl 3)
+            active_balc_floors = [1, 2] if num_floors >= 4 else [1]
         elif b_mode == 'SINGLE':
             fl = min(num_floors, max(2, getattr(props, 'balcony_floor', 2)))
             active_balc_floors = [fl - 1]
@@ -295,7 +303,11 @@ def _create_building_context(props):
             if _bf <= wing_floors:
                 _blocked_f |= _wing_walls
             if _annex_on and _bf <= _annex_floors:
-                _blocked_f.add(_annex_side)
+                if _annex_side == 'BOTH':
+                    _blocked_f.add('LEFT')
+                    _blocked_f.add('RIGHT')
+                else:
+                    _blocked_f.add(_annex_side)
             if _rampart_side is not None and _bf <= 1:
                 _blocked_f.add(_rampart_side)
             if _has_veranda:
@@ -314,6 +326,14 @@ def _create_building_context(props):
                     cx_mid = (cuts[k] + cuts[k + 1]) * 0.5
                     b_entries.append({'side': 'BACK', 'offset': cx_mid})
                 floor_balconies[_bf] = b_entries
+            elif is_estate_or_manor and base_w >= 36.0 and _bf == 1:
+                # Main palace piano nobile: ceremonial lord's balcony at center + flank balconies
+                flank_off = base_w * 0.28
+                floor_balconies[_bf] = [
+                    {'side': chosen_side, 'offset': 0.0},
+                    {'side': chosen_side, 'offset': -flank_off},
+                    {'side': chosen_side, 'offset': flank_off},
+                ]
             elif chosen_side is not None:
                 floor_balconies[_bf] = [{'side': chosen_side, 'offset': 0.0}]
 

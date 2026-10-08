@@ -238,7 +238,8 @@ def build_floors(bm, props, ctx):
         else:
             # Generic side annex mirrors _build_generic_annex (centred on the
             # middle of the side wall) so the portal lines up with the annex room.
-            _annex_side = 'RIGHT' if getattr(props, 'annex_side', 'LEFT') == 'RIGHT' else 'LEFT'
+            _raw_side = getattr(props, 'annex_side', 'LEFT')
+            _annex_side = _raw_side if _raw_side in ('LEFT', 'RIGHT', 'BOTH') else 'LEFT'
             _a_w = min(6.0, max(3.6, base_d * 0.72))
             _annex_y_span = (-_a_w * 0.5 - 0.1, _a_w * 0.5 + 0.1)
 
@@ -357,9 +358,9 @@ def build_floors(bm, props, ctx):
             # there. The soffit board is kept: it closes the jetty underside and
             # becomes the annex ceiling edge.
             cor_l, cor_r = inc_l, inc_r
-            if _annex_side == 'LEFT' and _annex_floors > 0:
+            if _annex_side in ('LEFT', 'BOTH') and _annex_floors > 0:
                 cor_l = False
-            elif _annex_side == 'RIGHT' and _annex_floors > 0:
+            if _annex_side in ('RIGHT', 'BOTH') and _annex_floors > 0:
                 cor_r = False
             door_ex_f, door_ex_b, door_ex_l, door_ex_r = _get_floor_door_corbel_exclusions(
                 fl_idx - 1, (prev_x_min, prev_x_max, prev_y_min, prev_y_max)
@@ -989,28 +990,30 @@ def build_floors(bm, props, ctx):
             _ap_cy = (y_min + y_max) * 0.5
             _jamb_w = 0.16
             _jamb_d = wall_t + 0.10
-            if _annex_side == 'LEFT':
-                left_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _ap_m) - y_min,
-                                      'u_end': (_ap_cy + _ap_w * 0.5 + _ap_m) - y_min,
-                                      'z_start': z_floor, 'z_end': _ap_top})
-                _ap_fx = x_min
-            else:
-                right_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _ap_m) - y_min,
-                                       'u_end': (_ap_cy + _ap_w * 0.5 + _ap_m) - y_min,
-                                       'z_start': z_floor, 'z_end': _ap_top})
-                _ap_fx = x_max
-            ctx.floor_doorways.setdefault(fl_idx, []).append({'x': _ap_fx, 'y': _ap_cy, 'axis': 'Y', 'w': _ap_w})
-            # Timber jamb + lintel frame around the opening (no door leaf).
-            for _s in (-1.0, 1.0):
+            _cut_sides = ['LEFT', 'RIGHT'] if _annex_side == 'BOTH' else [_annex_side]
+            for _cs in _cut_sides:
+                if _cs == 'LEFT':
+                    left_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _ap_m) - y_min,
+                                          'u_end': (_ap_cy + _ap_w * 0.5 + _ap_m) - y_min,
+                                          'z_start': z_floor, 'z_end': _ap_top})
+                    _ap_fx = x_min
+                else:
+                    right_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _ap_m) - y_min,
+                                           'u_end': (_ap_cy + _ap_w * 0.5 + _ap_m) - y_min,
+                                           'z_start': z_floor, 'z_end': _ap_top})
+                    _ap_fx = x_max
+                ctx.floor_doorways.setdefault(fl_idx, []).append({'x': _ap_fx, 'y': _ap_cy, 'axis': 'Y', 'w': _ap_w})
+                # Timber jamb + lintel frame around the opening (no door leaf).
+                for _s in (-1.0, 1.0):
+                    create_beveled_box(
+                        bm, size=(_jamb_d, _jamb_w, _ap_h + _ap_m),
+                        location=(_ap_fx, _ap_cy + _s * (_ap_w * 0.5 + _jamb_w * 0.5),
+                                  z_floor + (_ap_h + _ap_m) * 0.5),
+                        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
                 create_beveled_box(
-                    bm, size=(_jamb_d, _jamb_w, _ap_h + _ap_m),
-                    location=(_ap_fx, _ap_cy + _s * (_ap_w * 0.5 + _jamb_w * 0.5),
-                              z_floor + (_ap_h + _ap_m) * 0.5),
+                    bm, size=(_jamb_d, _ap_w + _jamb_w * 2.0, _ap_m),
+                    location=(_ap_fx, _ap_cy, _ap_top - _ap_m * 0.5),
                     mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
-            create_beveled_box(
-                bm, size=(_jamb_d, _ap_w + _jamb_w * 2.0, _ap_m),
-                location=(_ap_fx, _ap_cy, _ap_top - _ap_m * 0.5),
-                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
 
         # Interior walk-through portals between main building and wings
         # Open-timber pavilions (Warehouse/Lumbermill T1) have no walls, so the
@@ -1716,7 +1719,7 @@ def build_floors(bm, props, ctx):
                 for _off, _mw_pw in _mw_offs_for('LEFT'):
                     mw_cy = (y_min + y_max) * 0.5 + _off
                     left_excludes.append((mw_cy - (_mw_pw * 0.5 + win_w_clr), mw_cy + (_mw_pw * 0.5 + win_w_clr)))
-            if _annex_side == 'LEFT' and fl_idx <= _annex_floors:
+            if _annex_side in ('LEFT', 'BOTH') and fl_idx <= _annex_floors:
                 left_excludes.append(_annex_y_span)
             # Doorway exclusions on Left facade (ALL floors)
             for d in ctx.floor_doorways.get(fl_idx, []):
@@ -1817,7 +1820,7 @@ def build_floors(bm, props, ctx):
                 for _off, _mw_pw in _mw_offs_for('RIGHT'):
                     mw_cy = (y_min + y_max) * 0.5 + _off
                     right_excludes.append((mw_cy - (_mw_pw * 0.5 + win_w_clr), mw_cy + (_mw_pw * 0.5 + win_w_clr)))
-            if _annex_side == 'RIGHT' and fl_idx <= _annex_floors:
+            if _annex_side in ('RIGHT', 'BOTH') and fl_idx <= _annex_floors:
                 right_excludes.append(_annex_y_span)
             # Doorway exclusions on Right facade (ALL floors)
             for d in ctx.floor_doorways.get(fl_idx, []):

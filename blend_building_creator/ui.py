@@ -101,8 +101,13 @@ class VIEW3D_PT_fantasy_building_presets(bpy.types.Panel):
         layout.prop(props, "preset_category", text="Category")
         cat_filter = props.preset_category
         for family in BUILDING_FAMILIES:
-            if cat_filter != 'ALL' and family.get('category') != cat_filter:
-                continue
+            fam_cat = family.get('category', 'ALL')
+            if cat_filter != 'ALL':
+                if isinstance(fam_cat, (list, tuple, set)):
+                    if cat_filter not in fam_cat:
+                        continue
+                elif fam_cat != cat_filter:
+                    continue
             card = layout.box()
             head = card.row(align=True)
             head.label(text=f"{family['name']}", icon=family.get('icon', 'HOME'))
@@ -568,8 +573,14 @@ class VIEW3D_PT_fantasy_building_fortifications(bpy.types.Panel):
             layout.prop(props, "curtain_wall_height")
             layout.prop(props, "curtain_wall_thickness")
             layout.prop(props, "curtain_wall_offset")
+            layout.prop(props, "has_portcullis")
+            layout.prop(props, "has_drawbridge")
+            if props.has_drawbridge:
+                layout.prop(props, "drawbridge_angle")
+            layout.prop(props, "has_gate_towers")
         layout.prop(props, "has_bastion_towers")
         if props.has_bastion_towers:
+            layout.prop(props, "bastion_tower_style")
             layout.prop(props, "bastion_tower_count")
             layout.prop(props, "bastion_tower_size")
             layout.prop(props, "bastion_tower_height")
@@ -613,9 +624,18 @@ class VIEW3D_PT_fantasy_building_estate(bpy.types.Panel):
         row = layout.row(align=True)
         row.prop(props, "has_stable")
         row.prop(props, "has_servant_quarters")
+        row2 = layout.row(align=True)
+        row2.prop(props, "has_estate_guardhouse")
+        row2.prop(props, "has_estate_forge")
+        row3 = layout.row(align=True)
+        row3.prop(props, "has_estate_granary")
+        row3.prop(props, "has_estate_chapel")
+        layout.prop(props, "has_estate_training_grounds")
         layout.prop(props, "has_estate_fountain")
         layout.prop(props, "estate_awnings")
-        if props.has_stable or props.has_servant_quarters or props.has_estate_fountain:
+        if (props.has_stable or props.has_servant_quarters or props.has_estate_guardhouse
+                or props.has_estate_forge or props.has_estate_granary or props.has_estate_chapel
+                or props.has_estate_training_grounds or props.has_estate_fountain):
             col = layout.column(align=True)
             if props.has_stable:
                 col.prop(props, "stable_side")
@@ -778,6 +798,7 @@ class VIEW3D_PT_fantasy_building_furnishing(bpy.types.Panel):
         box = layout.box()
         box.label(text="Whole-Building Interior", icon='HOME')
         box.prop(props, "has_interior_furnishing", text="Furnish Interior")
+        box.prop(props, "has_throne_room", text="Castle Throne Room")
         box.prop(props, "interior_program", text="Room Mix")
         box.prop(props, "furnishing_style", text="Style")
         box.prop(props, "furnishing_density", slider=True)

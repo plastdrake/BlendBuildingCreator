@@ -604,7 +604,11 @@ def plan_outcrop_spread(props, base_w, base_d, num_floors, wings, has_wing,
     for _f in range(num_floors):
         _blocked = set()
         if annex_on and _f < annex_floors:
-            _blocked.add(annex_side)
+            if annex_side == 'BOTH':
+                _blocked.add('LEFT')
+                _blocked.add('RIGHT')
+            else:
+                _blocked.add(annex_side)
         if _rampart_side and _f <= 1:
             _blocked.add(_rampart_side)
         if _tower_side:
@@ -620,8 +624,11 @@ def plan_outcrop_spread(props, base_w, base_d, num_floors, wings, has_wing,
         if _b_side:
             _blocked.add(_b_side)
         _spans = {s: list(sp) for s, sp in _wing_spans.items()}
-        if annex_on and annex_side not in _blocked:
-            _spans.setdefault(annex_side, []).extend(_annex_spans)
+        if annex_on:
+            _asides = ['LEFT', 'RIGHT'] if annex_side == 'BOTH' else [annex_side]
+            for _as in _asides:
+                if _as not in _blocked:
+                    _spans.setdefault(_as, []).extend(_annex_spans)
         if (_f == 0 and getattr(props, 'has_side_door', False) and not open_timber
                 and getattr(props, 'side_door_facade', 'LEFT') == 'LEFT'):
             # The left side door sits off-centre next to the stair, so the

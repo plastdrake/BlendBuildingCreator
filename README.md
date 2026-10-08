@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.29.0-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.31.79-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 78 ready-made presets across three material tiers.
@@ -33,7 +33,7 @@ There are 78 presets (26 building families in 3 tiers each). Filter them by cate
 
 | Category | Buildings |
 | --- | --- |
-| Civic | Town Hall (T-shaped, 40x40), Noble Manor (palatial, 100x100) |
+| Civic | Town Hall (T-shaped, 40x40), Noble Manor (palatial, 100x100), Nasher's Manor (citadel estate + outbuildings, 200x200) |
 | Military | Infantry Barracks (U-shaped, 40x40), Archery Range (butts field, 40x40), Knights Manor (fortified hall, 40x40), Healers' Chapel (nave + bell tower, 40x40), Mage Tower (round wizard tower, 20x20) |
 | Industrial | Warehouse (L-shaped, 20x20), Lumbermill (rectangular, 20x20) |
 | Residential | House 1 Small (12x12), House 2 Small (fairytale, 12x12), House 1 Medium (20x20), House 2 Medium (narrow, 12x20), House 3 Medium (L-shaped, 20x20 with courtyard) |
@@ -65,22 +65,50 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - Straight switchback or spiral staircases with generated railings.
 - Structural floor slabs and ceiling joists trimmed around stair openings.
 - Timber walk-through portals between wings and the main hall.
+- **Royal Throne Room**: 3-tier cut-stone dais, velvet runner, lion-paw royal throne chair, fabric baldachin canopy with valance, dual brass braziers, halberd racks, guard benches, and iron chandeliers.
 
-**Civic landmarks** (Town Hall)
+**Civic landmarks** (Town Hall & Citadel)
 - Attached clock tower, square corner turrets, elevated rampart walk with timber railing, side annex and oriels.
 
 **Accessories**
-- Mini-wing outcrops (with optional random width/depth), balconies and a pillared overhang.
+- Mini-wing outcrops (with optional random width/depth), multi-balconies and a pillared overhang.
 - Archetype props: warehouse crane, lumbermill sawmill, blacksmith forge, windmill sails, watchtower parapet, tavern porch, fisherman pier and bakery oven.
 - **Hospitality dressing** (reusable on any building): covered veranda, hanging textured trade sign, soil-filled window boxes, courtyard well, barrels, crates, sacks, stools, benches, picnic tables, post/hanging lanterns, notice boards and cloth awnings.
+- **Estate Compounds & Training Yard**: Stables, barracks, blacksmith forge, steward lodge, guardhouse, chapel, storehouse, and an enclosed 26m × 18m military training grounds with straw target butts, swivel quintains, pell post, weapon racks, and tournament shields.
 
 **Fortifications** (reusable on any preset/footprint)
 - **Palisade** stockade: rough stakes or neat pickets enclosing the compound with a front gate (style, height and offset controls).
 - **Stone curtain wall**: ashlar enclosing wall on a battered plinth with a wall-walk, crenellated merlons and a gated gatehouse (height, thickness and offset controls). Supersedes the palisade on the same defensive line.
+- **Inner wall depth & safety parapet**: structural inner buttress piers and corbelled arched vaulting supporting the rampart walk, plus a cut-stone inner safety parapet curb with bevelled coping.
+- **Castle drawbridge & suspension chains**: functional drawbridge with iron hinge sleeves, pit curb, stone ramp abutment, and real 3D interlocking torus iron suspension chain runs anchored to the gatehouse archway.
+- **Gatehouse fortifications & rampart stairs**: dual flanking D-bastion gate towers with outward-facing battlements, open hoisted portcullis, wall-mounted torch sconces, heraldic ground banner standards, and stone rampart access stairs flanking the gate courtyard.
 - **Real arrow slits**: pierced arrow loops (with cut-stone reveals and a crosslet transom) in the bastion towers and curtain walls — genuine through-holes, not surface appliqués.
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.31.0
+
+- **Lord Nasher's Manor & Citadel Estate Expansion (200m × 200m plot)**:
+  - Scaled the grand noble estate plot from 100m × 100m to 200m × 200m, transforming the compound into a full fortified mini-castle-city.
+  - Progressive tier-based outbuilding expansion across T1, T2, and T3 (Stables, Barracks, Blacksmith, Steward's Lodge, Guardhouse, Chapel, Storehouse), corner bastion defense towers, palatial annexes, and courtyard dressing.
+- **Castle Gatehouse, Drawbridge & Suspension Chains**:
+  - Fully articulated wooden drawbridge deck with heavy iron edge strapping and pivot brackets, resting flat (`drawbridge_angle = 0.0`) across an entrance ditch pit curb with a matching outer stone ramp abutment for seamless player entry.
+  - Procedural **3D interlocking torus iron chain runs** linking the outer drawbridge deck directly to iron eye-bolts anchored in the gatehouse portal arch.
+  - Hoisted heavy iron portcullis (`raised = 2.15m+`) positioned overhead to maintain clear walkthrough passage.
+  - Symmetrically shifted flanking D-bastion gate towers with 180° outward-facing stone crenellations and arrow slits framing the gatehouse portal.
+  - Twin stone rampart access stairs flanking the gatehouse inside the bailey providing walk-up access to the curtain wall ramparts.
+- **Curtain Wall Architectural Depth & Safety Parapets**:
+  - Added rhythmic structural inner buttress piers and corbelled arched vaulting along the inside of all curtain wall runs.
+  - Added cut-stone inner safety parapet curbs with bevelled coping along the inner edge of the rampart walk.
+- **Royal Throne Room Interior**:
+  - Full palatial throne room furnishing generator: 3-tier cut-stone dais, ceremonial velvet runner carpet, high-backed lion-paw throne chair, overhead fabric baldachin canopy with valance, dual brass braziers, halberd polearm racks, courtyard benches, and dual hanging iron chandeliers.
+- **Military Training Grounds & Archery Yard**:
+  - Dedicated 26m × 18m enclosed military training yard in the forward bailey clear of the stables.
+  - Sunk timber posts (without bulky stone plinths), four straw archery target butts, timber shooting rail, arrow barrels, two swivel quintain dummies, central rope-wrapped training pell post, two weapon racks, proud-mounted heraldic tournament shields with iron stand-off brackets, inward-facing spectator benches, armorer's crates, cooling trough, and a fluttering standard pole.
+- **Multi-Balcony System & Outbuilding Balconies**:
+  - Multi-balcony generation on grand estates and palaces: ceremonial central balcony, dual flanking balconies on upper floors, and solar balconies.
+  - Upper observation balconies integrated on estate outbuildings including the steward's lodge and gatehouse quarters.
 
 ## What's new in 1.29.0
 

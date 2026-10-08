@@ -258,35 +258,37 @@ def _build_civic_landmarks(bm, props, ctx, tier):
 
 def _build_generic_annex(bm, props, ctx, tier):
     """Attach the reusable half-timbered side annex to any footprint."""
-    side_sgn = 1.0 if _prop(props, 'annex_side', 'LEFT') == 'RIGHT' else -1.0
+    a_side = _prop(props, 'annex_side', 'LEFT')
+    side_sgns = [-1.0, 1.0] if a_side == 'BOTH' else ([1.0] if a_side == 'RIGHT' else [-1.0])
     a_floors = max(1, min(2, _prop(props, 'annex_floors', 2)))
     base_hx = ctx.base_w * 0.5
     base_hy = ctx.base_d * 0.5
     a_w = min(6.0, max(3.6, ctx.base_d * 0.72))
     a_d = 3.6 if tier == 'TIER_1' else 4.0
     a_roof = 3.0 if tier == 'TIER_3' else 2.6
-    build_side_annex(
-        bm, side_sgn=side_sgn, main_hx=base_hx,
-        main_cy0=-base_hy, main_cy1=base_hy,
-        z_ground=0.0, found_h=ctx.found_h, floors=a_floors, floor_h=ctx.floor_h,
-        tier=tier, width=a_w, depth=a_d, roof_h=a_roof,
-        plank_direction=ctx.plank_dir,
-        main_bounds_by_floor=ctx.floor_wall_bounds,
-        main_roof={
-            'num_floors': ctx.num_floors, 'rotated': ctx.is_rotated_roof,
-            'top_z': ctx.found_h + ctx.num_floors * ctx.floor_h,
-            'top_cx': 0.0, 'top_cy': 0.0, 'top_hx': ctx.hx, 'top_hy': ctx.hy,
-            'x_min': -ctx.hx, 'x_max': ctx.hx, 'y_min': -ctx.hy, 'y_max': ctx.hy,
-            'roof_h': _prop(props, 'roof_height', 3.0),
-            'flare': _prop(props, 'roof_flare', 0.40),
-            'sway': _prop(props, 'roof_sway', 0.30),
-            'style': _prop(props, 'roof_style', 'SWAY'),
-            'ov': _prop(props, 'roof_overhang', 0.70),
-        },
-        # Log (Tier 1) buildings get a plain log annex, never half-timbering.
-        timber_framing=bool(_prop(props, 'has_timber_framing', True)) and tier != 'TIER_1',
-        diagonals=bool(_prop(props, 'timber_diagonals', True)),
-    )
+    for side_sgn in side_sgns:
+        build_side_annex(
+            bm, side_sgn=side_sgn, main_hx=base_hx,
+            main_cy0=-base_hy, main_cy1=base_hy,
+            z_ground=0.0, found_h=ctx.found_h, floors=a_floors, floor_h=ctx.floor_h,
+            tier=tier, width=a_w, depth=a_d, roof_h=a_roof,
+            plank_direction=ctx.plank_dir,
+            main_bounds_by_floor=ctx.floor_wall_bounds,
+            main_roof={
+                'num_floors': ctx.num_floors, 'rotated': ctx.is_rotated_roof,
+                'top_z': ctx.found_h + ctx.num_floors * ctx.floor_h,
+                'top_cx': 0.0, 'top_cy': 0.0, 'top_hx': ctx.hx, 'top_hy': ctx.hy,
+                'x_min': -ctx.hx, 'x_max': ctx.hx, 'y_min': -ctx.hy, 'y_max': ctx.hy,
+                'roof_h': _prop(props, 'roof_height', 3.0),
+                'flare': _prop(props, 'roof_flare', 0.40),
+                'sway': _prop(props, 'roof_sway', 0.30),
+                'style': _prop(props, 'roof_style', 'SWAY'),
+                'ov': _prop(props, 'roof_overhang', 0.70),
+            },
+            # Log (Tier 1) buildings get a plain log annex, never half-timbering.
+            timber_framing=bool(_prop(props, 'has_timber_framing', True)) and tier != 'TIER_1',
+            diagonals=bool(_prop(props, 'timber_diagonals', True)),
+        )
 
 
 def build_architectural_accessories(bm, props, ctx):
@@ -389,11 +391,20 @@ def _place_banners(bm, props, ctx):
     front_left_x  = (px_min + gate_cx) * 0.5 if has_towers else x_min
     front_right_x = (px_max + gate_cx) * 0.5 if has_towers else x_max
 
+    has_gt = _prop(props, 'has_gate_towers', False)
+    gate_flank_x = 6.2 if has_gt else 3.4
+    if has_gt:
+        tower_rects = list(tower_rects) if tower_rects else []
+        gt_dist = 1.4 + 1.9 + 0.15
+        for sgn in (-1.0, 1.0):
+            gx = gate_cx + sgn * gt_dist
+            tower_rects.append((gx - 2.2, gx + 2.2, y_min - 2.8, y_min + 2.8))
+
     cands = [
         (front_left_x,           y_min, (0.0, -1.0)),               # Front-left mid
         (front_right_x,          y_min, (0.0, -1.0)),               # Front-right mid
-        (gate_cx - 3.4,          y_min, (0.0, -1.0)),               # Front gate left
-        (gate_cx + 3.4,          y_min, (0.0, -1.0)),               # Front gate right
+        (gate_cx - gate_flank_x, y_min, (0.0, -1.0)),               # Front gate left
+        (gate_cx + gate_flank_x, y_min, (0.0, -1.0)),               # Front gate right
         (x_max,                  y_max, (0.0,  1.0)),               # Back-right corner
         (x_min,                  y_max, (0.0,  1.0)),               # Back-left corner
         (x_min, (y_min + y_max) * 0.5, (-1.0, 0.0)),               # Left side flank

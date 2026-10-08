@@ -169,7 +169,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('ALL', "All Presets", "Show all building style presets"),
             ('CIVIC', "Civic", "Town halls and civic estates"),
-            ('ESTATE', "Estate", "Estate outbuildings such as stables and carriage barns"),
+            ('ESTATE', "Estate", "Manors, palatial compounds, stables and country estates"),
             ('ARTISAN', "Artisan", "Artisans, workshops, and trade shops"),
             ('MILITARY', "Military", "Barracks, ranges and military quarters"),
             ('INDUSTRIAL', "Industrial", "Warehouses, storage, and lumbermills"),
@@ -1525,6 +1525,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('LEFT', "Left (-X)", "Attach the annex to the left side wall"),
             ('RIGHT', "Right (+X)", "Attach the annex to the right side wall"),
+            ('BOTH', "Both Sides", "Attach annexes to both left and right side walls"),
         ],
         default='LEFT',
         update=on_property_updated
@@ -1560,7 +1561,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     palisade_offset: FloatProperty(
         name="Palisade Offset",
         description="Distance the stockade stands outside the building footprint",
-        min=0.8, max=35.0, default=3.0,
+        min=0.8, max=95.0, default=3.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1568,7 +1569,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     palisade_offset_x: FloatProperty(
         name="Palisade Offset X",
         description="Custom X distance the palisade stands outside the building (0 = use Palisade Offset)",
-        min=0.0, max=35.0, default=0.0,
+        min=0.0, max=95.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1576,7 +1577,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     palisade_offset_y: FloatProperty(
         name="Palisade Offset Y",
         description="Custom Y distance the palisade stands outside the building (0 = use Palisade Offset)",
-        min=0.0, max=35.0, default=0.0,
+        min=0.0, max=95.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1584,7 +1585,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     palisade_depth_extra: FloatProperty(
         name="Palisade Depth Extra",
         description="Extra distance to push the rear palisade wall back beyond the normal offset",
-        min=0.0, max=25.0, default=0.0,
+        min=0.0, max=80.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1790,6 +1791,19 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    bastion_tower_style: EnumProperty(
+        name="Bastion Style",
+        description="Construction style for the corner fortification towers",
+        items=[
+            ('AUTO', "Auto", "Choose based on defenses: timber watchtowers with palisades, stone bastions with curtain walls"),
+            ('WOOD', "Timber Watchtower", "Open timber lookout tower with cross-bracing and pitched watch-hut"),
+            ('STONE', "Stone Bastion", "Solid ashlar masonry bastion with arrow slits, machicolations and fighting deck"),
+            ('GRAND', "Grand Citadel Bastion", "Monumental stone bastion with corner spires, heraldic shields and battle pennants"),
+        ],
+        default='AUTO',
+        update=on_property_updated
+    )
+
     bastion_tower_count: IntProperty(
         name="Bastion Towers",
         description="Number of corner bastion towers (2 for front corners, 4 for full enclosure)",
@@ -1800,7 +1814,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     bastion_tower_size: FloatProperty(
         name="Bastion Size",
         description="Square shaft width of the bastion towers in meters",
-        min=2.0, max=5.0, default=3.2,
+        min=2.0, max=6.0, default=3.2,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1808,7 +1822,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     bastion_tower_height: FloatProperty(
         name="Bastion Height",
         description="Overall height of the bastion towers in meters",
-        min=5.0, max=14.0, default=8.2,
+        min=5.0, max=16.0, default=8.2,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1823,7 +1837,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     curtain_wall_height: FloatProperty(
         name="Curtain Height",
         description="Height of the stone curtain wall in meters",
-        min=2.4, max=4.5, default=3.2,
+        min=2.4, max=8.0, default=3.2,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1831,7 +1845,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     curtain_wall_thickness: FloatProperty(
         name="Curtain Thickness",
         description="Thickness of the stone curtain wall in meters",
-        min=0.35, max=0.90, default=0.55,
+        min=0.35, max=1.20, default=0.55,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1839,7 +1853,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     curtain_wall_offset: FloatProperty(
         name="Curtain Offset",
         description="Distance the curtain wall stands outside the building footprint",
-        min=1.5, max=35.0, default=3.0,
+        min=1.5, max=95.0, default=3.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1847,7 +1861,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     curtain_wall_offset_x: FloatProperty(
         name="Curtain Offset X",
         description="Custom X distance the curtain wall stands outside the building (0 = use Curtain Offset)",
-        min=0.0, max=35.0, default=0.0,
+        min=0.0, max=95.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1855,7 +1869,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     curtain_wall_offset_y: FloatProperty(
         name="Curtain Offset Y",
         description="Custom Y distance the curtain wall stands outside the building (0 = use Curtain Offset)",
-        min=0.0, max=35.0, default=0.0,
+        min=0.0, max=95.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1863,7 +1877,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     curtain_wall_depth_extra: FloatProperty(
         name="Curtain Depth Extra",
         description="Extra distance to push the rear curtain wall back beyond the normal offset",
-        min=0.0, max=25.0, default=0.0,
+        min=0.0, max=80.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1871,6 +1885,28 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     has_portcullis: BoolProperty(
         name="Gate Portcullis",
         description="Hang an iron portcullis grille in the curtain-wall gatehouse",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_drawbridge: BoolProperty(
+        name="Gate Drawbridge",
+        description="Oak plank drawbridge with heavy forged iron chains and ditch apron at the gatehouse",
+        default=False,
+        update=on_property_updated
+    )
+
+    drawbridge_angle: FloatProperty(
+        name="Drawbridge Angle",
+        description="Angle of the drawbridge (0° flat spanning for player entry, 22° defensive tilt, 75° closed)",
+        min=0.0, max=80.0, default=0.0,
+        unit='ROTATION',
+        update=on_property_updated
+    )
+
+    has_gate_towers: BoolProperty(
+        name="Flanking Gate Towers",
+        description="Twin D-bastion gate towers flanking the curtain-wall gatehouse with arrow slits and crenellated battlements",
         default=False,
         update=on_property_updated
     )
@@ -1919,6 +1955,34 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    has_estate_guardhouse: BoolProperty(
+        name="Gate Guardhouse",
+        description="Detached gate guardhouse & watch lodge near the estate entrance",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_estate_forge: BoolProperty(
+        name="Estate Armory & Forge",
+        description="Detached estate smithy and armorer workshop with forge hearth, chimney and anvil",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_estate_granary: BoolProperty(
+        name="Estate Granary",
+        description="Detached timber granary and provisions storehouse",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_estate_chapel: BoolProperty(
+        name="Estate Chantry Chapel",
+        description="Detached ashlar chantry chapel and treasury with arched windows, consecrated portal and bell-cote",
+        default=False,
+        update=on_property_updated
+    )
+
     has_estate_fountain: BoolProperty(
         name="Courtyard Fountain",
         description="Multi-tiered stone fountain basin for the central honor court",
@@ -1926,10 +1990,17 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    has_estate_training_grounds: BoolProperty(
+        name="Estate Training Grounds",
+        description="Courtyard military drill yard with sparring arena, archery butts, training pells and weapon racks",
+        default=False,
+        update=on_property_updated
+    )
+
     outbuilding_offset_x: FloatProperty(
         name="Outbuilding Spread",
         description="Lateral distance of outbuildings from the estate central axis in meters",
-        min=8.0, max=45.0, default=24.0,
+        min=8.0, max=95.0, default=24.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1937,7 +2008,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     outbuilding_offset_y: FloatProperty(
         name="Outbuilding Forecourt Pos",
         description="Forward positioning of outbuildings along the courtyard depth in meters",
-        min=-35.0, max=15.0, default=-10.0,
+        min=-95.0, max=50.0, default=-10.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1945,7 +2016,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     plot_setback: FloatProperty(
         name="Manor Plot Setback",
         description="Distance to push the main manor back on the plot, deepening the front honor court while the outbuildings, fountain and perimeter walls stay put",
-        min=0.0, max=40.0, default=0.0,
+        min=0.0, max=90.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -1953,7 +2024,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     plot_offset_x: FloatProperty(
         name="Plot Offset X",
         description="Sideways shift of the main building on its plot (plot-borne props such as the archery range stay put)",
-        min=-30.0, max=30.0, default=0.0,
+        min=-60.0, max=60.0, default=0.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -2270,10 +2341,18 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('CIVIC', "Civic", "Great halls, council chambers, offices, archives"),
             ('MILITARY', "Military", "Drill halls, mess halls, armouries, dormitories"),
             ('SACRED', "Sacred", "Chapel halls, infirmaries, studies"),
+            ('PALACE', "Palace / Castle", "Throne room, banquet hall, council chamber, treasury, master bed"),
             ('COMMERCIAL', "Commercial / Artisan", "Shop + workshop below, home above"),
             ('INDUSTRIAL', "Industrial / Warehouse", "Workshops, stores and offices only - no bedrooms, kitchens or rugs"),
         ],
         default='AUTO',
+        update=on_property_updated
+    )
+
+    has_throne_room: BoolProperty(
+        name="Castle Throne Room",
+        description="Designate the grand hall as a royal throne room with raised dais, throne chair, red ceremonial carpet, banners, and braziers",
+        default=False,
         update=on_property_updated
     )
 
@@ -2306,6 +2385,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Prop",
         description="Individual furniture/prop piece to create (same builder as interior furnishing)",
         items=[
+            ('ROYAL_THRONE', "Royal Throne", "Carved royal throne chair on a stepped dais with heraldic crest and velvet cushion"),
             ('BED', "Bed", "Timber bed with straw mattress + blanket"),
             ('CHAIR', "Chair", "High-back tavern chair"),
             ('INDOOR_TABLE', "Dining Table", "Rectangular indoor table"),
