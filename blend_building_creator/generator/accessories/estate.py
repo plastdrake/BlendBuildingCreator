@@ -1213,70 +1213,67 @@ def build_estate_outbuildings(bm, props, ctx):
     if is_grand_plot and tier == 'TIER_3':
         # =========================================================================
         # TIER 3: CITADEL MINI-CITY (Walled Medieval Town Inside the Bailey)
-        # Strategic, cozy, non-overlapping street layout organized into distinct wards:
-        # - West Ward: Military, Equestrian, Armory & Training Arena
-        # - East Ward: Retainers' Court, Civil Administration, Chapel & Gate Watch
-        # - North Flanks: Substantial 3-storey Tenements & Provisions Depots
-        # - Central Processional Way: Unobstructed grand court with monumental fountain
+        # Organic, creative layout: buildings hug the perimeter curtain walls with
+        # varied angles, forming charming perimeter wards and leaving the center open.
         # =========================================================================
 
-        # --- 1. WEST BAILEY: MILITARY & EQUESTRIAN QUARTER ---
-        # 1a. Master Equestrian Stables (22m x 10m barn + enclosed paddock yard)
-        if has_stable:
-            build_stable(bm, props, pos=(-58.0, -22.0, 0.0), rot_z=math.pi * 0.5,
-                         tier=tier, width=22.0, depth=10.0)
-            stable_slot = (-58.0, -22.0, math.pi * 0.5, 22.0)
-
-        # 1b. Master of Horse / Chamberlain's House (upscale 2-storey retainer residence)
-        build_retainer_house(bm, props, pos=(-26.0, -22.0, 0.0), rot_z=0.0,
-                             tier=tier, width=15.0, depth=9.0, floors=2, name="Chamberlain")
-
-        # 1c. Ducal Armory & Foundry (16m x 9.5m 2-storey fortified armory)
+        # --- 1. WEST BAILEY: MILITARY, EQUESTRIAN & GARRISON QUARTER ---
+        # 1a. Ducal Armory & Foundry (16m x 9.5m, tucked against South-West corner)
         if has_forge:
-            build_estate_forge(bm, props, pos=(-58.0, -56.0, 0.0), rot_z=math.pi * 0.5,
+            build_estate_forge(bm, props, pos=(-68.0, -64.0, 0.0), rot_z=math.radians(72.0),
                                tier=tier, width=16.0, depth=9.5, floors=2)
 
-        # 1d. Military Training Grounds & Archery Yard (26m x 18m enclosed drill arena)
+        # 1b. Military Training Grounds & Archery Yard (26m x 18m in open forecourt)
         if has_training:
-            build_estate_training_grounds(bm, pos=(-27.0, -56.0, 0.0), rot_z=0.0,
+            build_estate_training_grounds(bm, pos=(-36.0, -64.0, 0.0), rot_z=math.radians(8.0),
                                           tier=tier, width=26.0, depth=18.0)
 
-        # 1e. Garrison Barracks Tenement (Massive 3-storey 24m x 11m tenement block)
-        build_tenement_building(bm, props, pos=(-50.0, 2.0, 0.0), rot_z=0.0,
+        # 1c. Master Equestrian Stables (22m x 10m, backed directly against West curtain wall)
+        if has_stable:
+            build_stable(bm, props, pos=(-70.0, -20.0, 0.0), rot_z=math.radians(90.0),
+                         tier=tier, width=22.0, depth=10.0)
+            stable_slot = (-70.0, -20.0, math.radians(90.0), 22.0)
+
+        # 1d. Chamberlain's House (angled across from stables, forming cozy curved lane)
+        build_retainer_house(bm, props, pos=(-38.0, -18.0, 0.0), rot_z=math.radians(-16.0),
+                             tier=tier, width=15.0, depth=9.0, floors=2, name="Chamberlain")
+
+        # 1e. Garrison Barracks Tenement (Massive 3-storey block nestled along North-West wall)
+        build_tenement_building(bm, props, pos=(-66.0, 20.0, 0.0), rot_z=math.radians(84.0),
                                 tier=tier, width=24.0, depth=11.0, floors=3)
 
-        # 1f. Provisions Depot & Granary Storehouse (16m x 9m 2-storey depot)
+        # 1f. Granary & Provisions Depot (Tucked into North-West corner bastion angle)
         if has_granary:
-            build_estate_granary(bm, props, pos=(-50.0, 22.0, 0.0), rot_z=0.0,
+            build_estate_granary(bm, props, pos=(-62.0, 56.0, 0.0), rot_z=math.radians(45.0),
                                  tier=tier, width=16.0, depth=9.0, floors=2)
 
         # --- 2. EAST BAILEY: CIVIL, SACRED & RETAINERS' QUARTER ---
-        # 2a. Castellan's Grand Manor House (upscale 18m x 10m 2-storey knight's residence)
-        if has_servants:
-            build_retainer_house(bm, props, pos=(58.0, -22.0, 0.0), rot_z=-math.pi * 0.5,
-                                 tier=tier, width=18.0, depth=10.0, floors=2, name="Castellan")
-            servant_slot = (58.0, -22.0, -math.pi * 0.5, 18.0)
-
-        # 2b. High Steward's Chancellor Manor (upscale 15m x 9m 2-storey residence)
-        build_retainer_house(bm, props, pos=(26.0, -22.0, 0.0), rot_z=0.0,
-                             tier=tier, width=15.0, depth=9.0, floors=2, name="HighSteward")
-
-        # 2c. Gatehouse Watch Barracks (16m x 8.5m 2-storey gate watch lodge)
+        # 2a. Gatehouse Watch Barracks (16m x 8.5m, tucked along South-East front wall)
         if has_guardhouse:
-            build_guardhouse(bm, props, pos=(58.0, -56.0, 0.0), rot_z=-math.pi * 0.5,
+            build_guardhouse(bm, props, pos=(68.0, -64.0, 0.0), rot_z=math.radians(-75.0),
                              tier=tier, width=16.0, depth=8.5, floors=2)
 
-        # 2d. Consecrated Chantry Chapel (15m x 9m high-vaulted Gothic sanctuary)
+        # 2b. Consecrated Chantry Chapel (15m x 9m in sacred sanctuary nook)
         if has_chapel:
-            build_estate_chapel(bm, props, pos=(27.0, -56.0, 0.0), rot_z=0.0,
+            build_estate_chapel(bm, props, pos=(36.0, -62.0, 0.0), rot_z=math.radians(-12.0),
                                 tier=tier, width=15.0, depth=9.0, floors=1)
 
-        # 2e. Servants' & Craftsmen Tenement Block (Massive 3-storey 24m x 11m tenement block)
-        build_tenement_building(bm, props, pos=(50.0, 2.0, 0.0), rot_z=0.0,
+        # 2c. Castellan's Grand Manor House (18m x 10m, backed directly against East curtain wall)
+        if has_servants:
+            build_retainer_house(bm, props, pos=(70.0, -20.0, 0.0), rot_z=math.radians(-90.0),
+                                 tier=tier, width=18.0, depth=10.0, floors=2, name="Castellan")
+            servant_slot = (70.0, -20.0, math.radians(-90.0), 18.0)
+
+        # 2d. High Steward's Chancellor Manor (angled across from Castellan, forming noble square)
+        build_retainer_house(bm, props, pos=(38.0, -18.0, 0.0), rot_z=math.radians(16.0),
+                             tier=tier, width=15.0, depth=9.0, floors=2, name="HighSteward")
+
+        # 2e. Servants' & Craftsmen Tenement (Massive 3-storey block nestled along North-East wall)
+        build_tenement_building(bm, props, pos=(66.0, 20.0, 0.0), rot_z=math.radians(-84.0),
                                 tier=tier, width=24.0, depth=11.0, floors=3)
 
-        # 2f. Almoner & Scholar Retainer Residence (15m x 9m 2-storey residence)
-        build_retainer_house(bm, props, pos=(50.0, 22.0, 0.0), rot_z=0.0,
+        # 2f. Almoner & Scholar Retainer Residence (Tucked into North-East corner bastion angle)
+        build_retainer_house(bm, props, pos=(62.0, 56.0, 0.0), rot_z=math.radians(-45.0),
                              tier=tier, width=15.0, depth=9.0, floors=2, name="Almoner")
 
         # --- 3. COURTYARD AWNINGS & SUPPLY STORES ---
@@ -1284,6 +1281,7 @@ def build_estate_outbuildings(bm, props, ctx):
             _place_estate_awnings(bm, props, tier, spread_x, fore_y,
                                   stable=stable_slot, servant=servant_slot)
         return
+
 
 
     if is_grand_plot and tier == 'TIER_2':

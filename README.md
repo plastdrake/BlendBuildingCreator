@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.31.86-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.31.87-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 78 ready-made presets across three material tiers.
@@ -66,6 +66,7 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - Structural floor slabs and ceiling joists trimmed around stair openings.
 - Timber walk-through portals between wings and the main hall.
 - **Royal Throne Room**: 3-tier cut-stone dais, velvet runner, lion-paw royal throne chair, fabric baldachin canopy with valance, dual brass braziers, halberd racks, guard benches, and iron chandeliers.
+- **Subterranean Adventure Level**: Walkable vaulted Wine Cellar with rustic oak barrel racks and stone pillars, Castle Dungeon with iron-barred cell gates and torture pells, and Secret Mural Passages running through the fortress foundations (ready for interactive secret doors in Unreal Engine).
 
 **Civic landmarks** (Town Hall & Citadel)
 - Attached clock tower, square corner turrets, elevated rampart walk with timber railing, side annex and oriels.
@@ -86,6 +87,16 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.31.87
+
+- **Nasher's Manor Tier 3 Citadel & Castle Redesign**:
+  - **Asymmetrical & Artistic Castle Silhouette**: Completely reshaped the main castle keep with an L-shaped projecting wing, soaring central donjon keep (45m tall), elevated corbelled skybridge, and front barbican gatehouse.
+  - **Strict Tower Roof Typology**: Pure architectural distinction between towers — towers with pointy conical roofs have ZERO merlons (Scholar's Tower, rear watchtower, central keep spire), while fortress bastions feature open flat stone fighting decks with crenellated merlons and machicolations with ZERO conical roofs.
+  - **Walkable Ramparts Wing**: The right wing features a flat stone roof deck with crenellated merlons and perimeter walkways over solid ashlar masonry.
+  - **Subterranean Adventure Level**: Fully walkable subterranean level ($Z = -3.6\text{m}$) featuring a vaulted Wine Cellar with stone pillars and barrel racks, Castle Dungeon with iron-barred cell gates, and Secret Mural Passages tunnelled inside the thick stone walls connecting the cellar to upper levels.
+  - **Great Ballroom**: Stately interior hall with hammerbeam ceiling trusses, monumental double-flue fireplace, and raised dais.
+  - **Organic Bailey Town Layout**: Outbuildings are repositioned along the perimeter curtain walls with varied organic rotations, clearing a magnificent open Cour d'Honneur around the fountain and training grounds with zero unnatural grid institutionalization.
 
 ## What's new in 1.31.85
 
