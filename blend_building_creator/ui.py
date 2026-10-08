@@ -497,6 +497,9 @@ class VIEW3D_PT_fantasy_building_civic(bpy.types.Panel):
         if props.has_corner_turrets:
             layout.prop(props, "corner_turret_size")
         layout.prop(props, "has_castle_citadel")
+        if props.has_castle_citadel:
+            layout.prop(props, "castle_tier")
+        layout.prop(props, "has_dungeon")
         layout.prop(props, "has_side_rampart")
         if props.has_side_rampart:
             layout.prop(props, "rampart_side")
@@ -507,6 +510,7 @@ class VIEW3D_PT_fantasy_building_civic(bpy.types.Panel):
         layout.prop(props, "has_entry_ramp")
         layout.separator()
         layout.prop(props, "has_side_annex")
+        layout.prop(props, "has_tower_annex")
         if props.has_side_annex:
             layout.prop(props, "annex_floors")
             if not props.town_hall_composer:
@@ -645,6 +649,10 @@ class VIEW3D_PT_fantasy_building_estate(bpy.types.Panel):
             col.prop(props, "outbuilding_offset_x")
             col.prop(props, "outbuilding_offset_y")
             col.prop(props, "plot_setback")
+
+        layout.separator()
+        layout.label(text="Environment & Terrain", icon='WORLD')
+        layout.prop(props, "has_cliffs")
 
 
 # ---------------------------------------------------------------------------

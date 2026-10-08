@@ -168,6 +168,7 @@ _OUTHOUSE_DISABLED = (
     'has_veranda', 'has_trade_sign', 'has_flower_boxes',
     'has_outdoor_decor', 'has_well', 'has_arched_porch',
     'has_side_rampart', 'has_pillared_overhang',
+    'has_castle_citadel',
 )
 
 _INHERITED = (

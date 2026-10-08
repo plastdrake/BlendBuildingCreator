@@ -1437,6 +1437,25 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    castle_tier: EnumProperty(
+        name="Castle Progression Tier",
+        description="Lineage progression tier for the fantasy castle system",
+        items=[
+            ('TIER_1', "Tier 1: Frontier Stronghold", "Original wooden and rough stone stronghold, small keep, palisade bailey, basic gatehouse"),
+            ('TIER_2', "Tier 2: Regional Fortress", "Expanded fortress built around the original keep, stone curtain walls, barracks, chapel, extra towers"),
+            ('TIER_3', "Tier 3: Fantasy Capital Castle", "Grand sprawling city-fortress with multi-level districts, skybridges, landmark spires, deep dungeons"),
+        ],
+        default='TIER_3',
+        update=on_property_updated
+    )
+
+    has_dungeon: BoolProperty(
+        name="Subterranean Dungeon Level",
+        description="Deep underground level with vaulted wine cellar, prison cells, and secret mural passages",
+        default=False,
+        update=on_property_updated
+    )
+
 
     has_roof_clock_spire: BoolProperty(
         name="Roof Clock Spire",
@@ -1516,6 +1535,20 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     has_side_annex: BoolProperty(
         name="Side Annex",
         description="Half-timbered side volume with its own perpendicular gable roof and oriel",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_tower_annex: BoolProperty(
+        name="Tower Annexes",
+        description="Massive flat-roofed stone towers attached to the main building with battlements",
+        default=False,
+        update=on_property_updated
+    )
+    
+    has_cliffs: BoolProperty(
+        name="Terrain Cliffs",
+        description="Generate dramatic rocky cliffs underneath the castle foundation",
         default=False,
         update=on_property_updated
     )
@@ -1807,6 +1840,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('WOOD', "Timber Watchtower", "Open timber lookout tower with cross-bracing and pitched watch-hut"),
             ('STONE', "Stone Bastion", "Solid ashlar masonry bastion with arrow slits, machicolations and fighting deck"),
             ('GRAND', "Grand Citadel Bastion", "Monumental stone bastion with corner spires, heraldic shields and battle pennants"),
+            ('ROUND_STONE', "Round Stone Tower", "Enterable cylindrical stone bastion tower with fighting deck and battlements"),
         ],
         default='AUTO',
         update=on_property_updated

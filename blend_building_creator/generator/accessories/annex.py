@@ -392,3 +392,136 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             build_valley_rafters(bm, (_cx0, _cy0), die, _main_fn, _annex_fn)
 
     return outer_x
+
+
+def build_tower_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
+                      found_h=0.6, floors=3, floor_h=4.0, tier='TIER_3',
+                      width=10.0, depth=8.0, main_bounds_by_floor=None):
+    """Massive stone tower annex with flat battlements."""
+    overlap = 1.0
+    wall_h = floors * floor_h
+    top_z = found_h + wall_h
+    wall_t = 0.65
+
+    outer_x = side_sgn * (main_hx + depth - overlap)
+    cy = (main_cy0 + main_cy1) * 0.5
+    y0, y1 = cy - width * 0.5, cy + width * 0.5
+
+    def _floor_inner(f):
+        if main_bounds_by_floor:
+            keys = sorted(main_bounds_by_floor.keys())
+            k = f if f in main_bounds_by_floor else keys[-1]
+            b = main_bounds_by_floor[k]
+            return b[0] if side_sgn < 0 else b[1]
+        return side_sgn * main_hx
+
+    # Foundation
+    g_inner = _floor_inner(0)
+    g_span = abs(outer_x - g_inner)
+    g_cx = (g_inner + outer_x) * 0.5
+    create_beveled_box(bm, size=(g_span + 0.16, width + 0.16, found_h),
+                       location=(g_cx + side_sgn * 0.08, cy, z_ground + found_h * 0.5),
+                       mat_index=MAT_INDEX_STONE, bevel_amount=0.025)
+
+    out_normal = (1.0, 0.0) if side_sgn > 0 else (-1.0, 0.0)
+    for f in range(floors):
+        fz0 = found_h + f * floor_h
+        fz1 = fz0 + floor_h
+        inner_x = _floor_inner(f)
+        outer_wall_x = outer_x - side_sgn * wall_t * 0.5
+        front_wall_y = y0 + wall_t * 0.5
+        back_wall_y = y1 - wall_t * 0.5
+        win_w = 1.2
+        win_h = min(1.8, floor_h * 0.5)
+        sill = fz0 + floor_h * 0.35
+
+        # Floor slab
+        _fx_inner = inner_x - side_sgn * (wall_t * 0.5 + 0.02)
+        _fx_outer = outer_x - side_sgn * wall_t * 0.5
+        _fx_min, _fx_max = min(_fx_inner, _fx_outer), max(_fx_inner, _fx_outer)
+        create_beveled_box(
+            bm, size=(max(0.1, _fx_max - _fx_min), max(0.1, (y1 - wall_t) - (y0 + wall_t)), 0.12),
+            location=((_fx_min + _fx_max) * 0.5, cy, fz0 + 0.05 - 0.06),
+            mat_index=MAT_INDEX_FLOOR, bevel_amount=0.008)
+
+        # Windows
+        uc = width * 0.5
+        outer_ops = [{'u_start': uc - win_w * 0.5 - 0.12, 'u_end': uc + win_w * 0.5 + 0.12,
+                      'z_start': sill, 'z_end': sill + win_h}] if f > 0 else []
+        
+        build_wall_with_opening(
+            bm, (outer_wall_x, y0), (outer_wall_x, y1), fz0, fz1, wall_t,
+            list(outer_ops), mat_ext=MAT_INDEX_STONE, normal_vec=out_normal, tier=tier, physical_siding=False,
+            plank_direction='HORIZONTAL', seed=42)
+        
+        if f > 0:
+            build_window_assembly(bm, (outer_wall_x, cy), sill, win_w, win_h, wall_t,
+                                  normal_vec=out_normal, shape='ARCHED', has_shutters=False,
+                                  tier=tier, depth_offset=0.06)
+
+        ucx = abs(outer_x - inner_x) * 0.5
+        for wy, nvec in ((front_wall_y, (0.0, -1.0)), (back_wall_y, (0.0, 1.0))):
+            _fb_ops = [{'u_start': ucx - win_w * 0.5 - 0.12, 'u_end': ucx + win_w * 0.5 + 0.12,
+                        'z_start': sill, 'z_end': sill + win_h}] if f > 0 else []
+            build_wall_with_opening(
+                bm, (inner_x, wy), (outer_x, wy), fz0, fz1, wall_t,
+                list(_fb_ops), mat_ext=MAT_INDEX_STONE, normal_vec=nvec, tier=tier, physical_siding=False,
+                is_corner_start=False, is_corner_end=True, plank_direction='HORIZONTAL', seed=42)
+            if f > 0:
+                wx = (inner_x + outer_x) * 0.5
+                build_window_assembly(bm, (wx, wy), sill, win_w, win_h, wall_t,
+                                      normal_vec=nvec, shape='ARCHED', has_shutters=False,
+                                      tier=tier, depth_offset=0.06)
+                                      
+        # Internal staircase (straight)
+        if f < floors - 1:
+            from .interior import build_straight_stairs
+            stair_x = (_fx_min + _fx_max) * 0.5 + (1.0 if side_sgn > 0 else -1.0)
+            build_straight_stairs(bm, start_pos=(stair_x, front_wall_y + 1.0, fz0 + 0.05),
+                                  target_z=fz1 + 0.05, width=1.4, length=4.5,
+                                  direction=Vector((0, 1, 0)), has_railings=True)
+        else:
+            # Final stair up to roof deck
+            from .interior import build_straight_stairs
+            stair_x = (_fx_min + _fx_max) * 0.5 + (1.0 if side_sgn > 0 else -1.0)
+            build_straight_stairs(bm, start_pos=(stair_x, front_wall_y + 1.0, fz0 + 0.05),
+                                  target_z=top_z + 0.35, width=1.4, length=4.5,
+                                  direction=Vector((0, 1, 0)), has_railings=True)
+                                  
+    # Flat Roof Battlements
+    roof_z = top_z
+    _ix = _floor_inner(floors - 1)
+    _ox = outer_x
+    _deck_cx = (_ix + _ox) * 0.5
+    _deck_w = abs(_ox - _ix)
+    
+    # Roof slab
+    create_beveled_box(bm, size=(_deck_w, width, 0.3),
+                       location=(_deck_cx, cy, roof_z + 0.15),
+                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                       
+    # Stair bulkhead on roof
+    create_beveled_box(bm, size=(2.0, 5.0, 2.8),
+                       location=(stair_x, front_wall_y + 3.25, roof_z + 0.30 + 1.4),
+                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03)
+                       
+    # Merlons around 3 exposed sides
+    merlon_h = 1.2
+    merlon_w = 1.0
+    gap = 0.8
+    n_front = int(_deck_w / (merlon_w + gap))
+    for i in range(n_front):
+        mx = min(_ix, _ox) + 0.5 + i * (merlon_w + gap)
+        create_beveled_box(bm, size=(merlon_w, 0.4, merlon_h),
+                           location=(mx, y0 + 0.2, roof_z + 0.30 + merlon_h * 0.5),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+        create_beveled_box(bm, size=(merlon_w, 0.4, merlon_h),
+                           location=(mx, y1 - 0.2, roof_z + 0.30 + merlon_h * 0.5),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+    n_outer = int(width / (merlon_w + gap))
+    for i in range(n_outer):
+        my = y0 + 0.5 + i * (merlon_w + gap)
+        create_beveled_box(bm, size=(0.4, merlon_w, merlon_h),
+                           location=(outer_x - side_sgn * 0.2, my, roof_z + 0.30 + merlon_h * 0.5),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+    return outer_x

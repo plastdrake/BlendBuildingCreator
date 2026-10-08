@@ -111,6 +111,7 @@ MAT_INDEX_BOTTLE_GLASS  = 38
 MAT_INDEX_PUMPKIN_STEM  = 39
 MAT_INDEX_OPEN_BOOK     = 40
 MAT_INDEX_WATER         = 41
+MAT_INDEX_CLIFFS        = 42
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +495,81 @@ def create_stylized_stone(name="M_Building_Stone", color=None, tier='TIER_3'):
         _apply_ao(tree, bsdf, macro, strength=0.48, distance=0.14)
         _setup_pbr(tree, bsdf, out, roughness=0.65)
         return mat
+
+
+def create_stylized_cliffs(name="M_Building_Cliffs"):
+    """
+    Stylized bedrock cliff and mountain massif material for castle terraced foundations:
+    Layered horizontal rock strata, rugged weathered crag tones (slate, granite, and warm earthen fissures).
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-1000)
+
+    # 1. Stratified mapping: stretched horizontally (X, Y) relative to Z
+    mapping = tree.nodes.new("ShaderNodeMapping")
+    mapping.location = (-800, 100)
+    mapping.inputs["Scale"].default_value = (0.35, 0.35, 1.8)
+    tree.links.new(c.outputs["UV"], mapping.inputs["Vector"])
+
+    # 2. Primary rock strata noise
+    noise1 = tree.nodes.new("ShaderNodeTexNoise")
+    noise1.location = (-600, 100)
+    noise1.inputs["Scale"].default_value = 1.6
+    noise1.inputs["Detail"].default_value = 2.5
+    try:
+        noise1.inputs["Roughness"].default_value = 0.65
+    except Exception:
+        pass
+    tree.links.new(mapping.outputs["Vector"], noise1.inputs["Vector"])
+
+    # 3. Secondary fine rock crag noise
+    noise2 = tree.nodes.new("ShaderNodeTexNoise")
+    noise2.location = (-600, -120)
+    noise2.inputs["Scale"].default_value = 4.2
+    noise2.inputs["Detail"].default_value = 1.8
+    try:
+        noise2.inputs["Roughness"].default_value = 0.50
+    except Exception:
+        pass
+    tree.links.new(c.outputs["UV"], noise2.inputs["Vector"])
+
+    # Blend primary + secondary
+    mix_fac = tree.nodes.new("ShaderNodeMix")
+    mix_fac.data_type = 'FLOAT'
+    mix_fac.location = (-400, 40)
+    mix_fac.inputs["Factor"].default_value = 0.30
+    tree.links.new(noise1.outputs["Fac"], mix_fac.inputs[2])
+    tree.links.new(noise2.outputs["Fac"], mix_fac.inputs[3])
+
+    # 4. Color ramp: dark slate fissures, weathered granite, warm earth
+    ramp = tree.nodes.new("ShaderNodeValToRGB")
+    ramp.location = (-200, 40)
+    ramp.color_ramp.interpolation = 'LINEAR'
+    ramp.color_ramp.elements[0].position = 0.0
+    ramp.color_ramp.elements[0].color = (0.24, 0.23, 0.25, 1.0)
+    el1 = ramp.color_ramp.elements.new(0.35)
+    el1.color = (0.36, 0.34, 0.32, 1.0)
+    el2 = ramp.color_ramp.elements.new(0.68)
+    el2.color = (0.45, 0.44, 0.42, 1.0)
+    ramp.color_ramp.elements[1].position = 1.0
+    ramp.color_ramp.elements[1].color = (0.52, 0.53, 0.52, 1.0)
+    tree.links.new(mix_fac.outputs["Result"], ramp.inputs["Fac"])
+
+    painted = _warm_painterly_pass(tree, c, ramp.outputs["Color"], loc_x=20, loc_y=-210, strength=0.08, scale=1.0)
+    macro = _anti_repetition_wash(tree, c, painted, loc_x=240, loc_y=-210, strength=0.15, scale=0.20)
+    _apply_ao(tree, bsdf, macro, strength=0.65, distance=0.35)
+    _setup_pbr(tree, bsdf, out, roughness=0.88, metallic=0.0)
+
+    # Bump map for crag relief
+    bump = tree.nodes.new("ShaderNodeBump")
+    bump.location = (600, -210)
+    bump.inputs["Strength"].default_value = 0.35
+    bump.inputs["Distance"].default_value = 0.05
+    tree.links.new(mix_fac.outputs["Result"], bump.inputs["Height"])
+    tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+
+    return mat
 
 
 def create_stylized_cut_stone(name="M_Building_Cut_Stone", color=None, tier='TIER_3'):
@@ -2627,6 +2703,7 @@ def setup_building_material_slots(obj, props):
     mat_open_book = (getattr(props, 'custom_open_book', None)
                      or create_stylized_open_book("M_Building_Open_Book"))
     mat_water = getattr(props, 'custom_water', None) or create_stylized_water("M_Water")
+    mat_cliffs = create_stylized_cliffs("M_Building_Cliffs")
 
     # Assemble canonical slots in strict order
     required_mats = [
@@ -2671,7 +2748,8 @@ def setup_building_material_slots(obj, props):
         mat_bottle_glass,   # 38 MAT_INDEX_BOTTLE_GLASS
         mat_pumpkin_stem,   # 39 MAT_INDEX_PUMPKIN_STEM
         mat_open_book,      # 40 MAT_INDEX_OPEN_BOOK
-        mat_water,            # 41 MAT_INDEX_WATER
+        mat_water,          # 41 MAT_INDEX_WATER
+        mat_cliffs,         # 42 MAT_INDEX_CLIFFS
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -2726,6 +2804,7 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Pumpkin_Stem",  # 39
     "M_Building_Open_Book",     # 40
     "M_Water",                  # 41
+    "M_Building_Cliffs",        # 42
 )
 
 

@@ -3137,7 +3137,12 @@ PRESETS = {
             'has_arched_porch': True,
             'has_mounted_shields': True,
             'has_gable_crest': True,
+            'has_castle_citadel': True,
+            'castle_tier': 'TIER_1',
             'has_well': True,
+            'has_dungeon': True,
+            'has_tower_annex': True,
+            'has_cliffs': True,
             'has_mini_wing': False,
             'mini_wing_count': 0,
             # 4 outbuildings for Tier 1
@@ -3238,6 +3243,11 @@ PRESETS = {
             'has_corner_turrets': True,
             'corner_turret_size': 1.8,
             'has_arched_porch': True,
+            'has_castle_citadel': True,
+            'castle_tier': 'TIER_2',
+            'has_dungeon': True,
+            'has_tower_annex': True,
+            'has_cliffs': True,
             'has_balcony': True,
             'balcony_width': 3.2,
             'balcony_depth': 1.4,
@@ -3304,9 +3314,8 @@ PRESETS = {
         'description': "Monumental asymmetrical fantasy fortress castle and walled ducal citadel (200m x 200m plot): dramatic varied rooflines with high gothic gables and flat stone ramparts with merlons, soaring Scholar's Tower with conical witch-hat spire (no merlons), open Fortress Bastion with flat fighting deck (no pointy roof), Central Donjon Keep rising 45m, walkable skybridge, and a full subterranean adventure level (vaulted Wine Cellar, Dungeon prison cells, and two secret mural passages).",
         'settings': {
             **base_settings(),
-            'building_shape': 'L_SHAPE',
+            'building_shape': 'U_SHAPE',
             'wing_placement': 'FRONT',
-            'wing_side': 'LEFT',
             'material_tier': 'TIER_3',
             'wall_material_override': 'STONE',
             'open_timber_frame': False,
@@ -3315,8 +3324,9 @@ PRESETS = {
             'floor_height': 4.6,
             'width': 48.0,
             'depth': 16.0,
-            'wing_width': 13.0,
+            'wing_width': 12.0,
             'wing_depth': 18.0,
+            'courtyard_width': 22.0,
             'wall_thickness': 0.65,
             'has_cantilever': False,
             'cantilever_overhang': 0.0,
@@ -3360,20 +3370,27 @@ PRESETS = {
             'chimney_pos_x': 0.65,
             'chimney_pos_y': -0.25,
             'has_castle_citadel': True,
-            'has_corner_turrets': False,
-            'corner_turret_size': 3.2,
+            'castle_tier': 'TIER_3',
+            'has_dungeon': True,
+            'has_tower_annex': True,
+            'has_cliffs': True,
+            'has_corner_turrets': True,
+            'corner_turret_size': 2.5,
             'has_clock_tower': False,
-            'has_arched_porch': False,
-            'has_balcony': False,
+            'has_arched_porch': True,
+            'has_balcony': True,
+            'balcony_width': 4.0,
+            'balcony_depth': 1.6,
             # Royal Throne Room
             'has_throne_room': True,
             'interior_program': 'PALACE',
             'has_side_annex': False,
             'annex_floors': 2,
             'annex_side': 'BOTH',
-            # No cluttered oriel boxes on front facade - clean, powerful castle walls!
-            'has_mini_wing': False,
-            'mini_wing_count': 0,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 3.0,
+            'mini_wing_depth': 1.8,
             # Complete Walled Mini-City Inside the Bailey:
             'has_stable': True,
             'stable_side': 'LEFT',
@@ -3400,10 +3417,10 @@ PRESETS = {
             'drawbridge_angle': 0.0,
             'has_gate_towers': True,
             'has_bastion_towers': True,
-            'bastion_tower_style': 'GRAND',
+            'bastion_tower_style': 'STONE',
             'bastion_tower_count': 4,
-            'bastion_tower_size': 4.5,
-            'bastion_tower_height': 13.0,
+            'bastion_tower_size': 8.0,
+            'bastion_tower_height': 15.0,
             'has_battlements': True,
             'battlement_style': 'STONE',
             'has_mounted_shields': True,
@@ -6669,7 +6686,10 @@ def apply_preset(props, preset_key):
         
     for k, v in data.items():
         if hasattr(props, k):
-            setattr(props, k, v)
+            try:
+                setattr(props, k, v)
+            except Exception:
+                pass
 
     # New defaults: open door frames (no leaves) + furnished interiors.
     # Older preset dicts omit these keys, so enforce the defaults here

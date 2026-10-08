@@ -250,11 +250,32 @@ def _build_civic_landmarks(bm, props, ctx, tier):
     # Generic reusable side annex for any other building/preset.
     elif _prop(props, 'has_side_annex', False):
         _build_generic_annex(bm, props, ctx, tier)
+    elif _prop(props, 'has_tower_annex', False):
+        _build_massive_tower_annex(bm, props, ctx, tier)
     # Rampart walk for any other footprint (the T-shaped composer owns its own).
     elif _prop(props, 'has_side_rampart', False):
         build_side_rampart_for_shape(bm, props, ctx)
     if _prop(props, 'has_exterior_stairs', False):
         build_exterior_stairs(bm, props, ctx, tier)
+
+def _build_massive_tower_annex(bm, props, ctx, tier):
+    """Attach massive stone tower annex to the building."""
+    from .annex import build_tower_annex
+    a_side = _prop(props, 'annex_side', 'LEFT')
+    side_sgns = [-1.0, 1.0] if a_side == 'BOTH' else ([1.0] if a_side == 'RIGHT' else [-1.0])
+    a_floors = ctx.num_floors
+    base_hx = ctx.base_w * 0.5
+    base_hy = ctx.base_d * 0.5
+    a_w = 12.0
+    a_d = 8.0
+    for side_sgn in side_sgns:
+        build_tower_annex(
+            bm, side_sgn=side_sgn, main_hx=base_hx,
+            main_cy0=-base_hy, main_cy1=base_hy,
+            z_ground=0.0, found_h=ctx.found_h, floors=a_floors, floor_h=ctx.floor_h,
+            tier=tier, width=a_w, depth=a_d,
+            main_bounds_by_floor=ctx.floor_wall_bounds
+        )
 
 
 def _build_generic_annex(bm, props, ctx, tier):

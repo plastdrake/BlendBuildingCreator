@@ -225,23 +225,29 @@ def build_floors(bm, props, ctx):
     # upper storey is reachable from inside the hall.
     _is_hall_annex = (getattr(props, 'town_hall_composer', False) and shape == 'T_SHAPE')
     _is_generic_annex = (not getattr(props, 'town_hall_composer', False))
-    _annex_on = bool(getattr(props, 'has_side_annex', False)) and (_is_hall_annex or _is_generic_annex)
+    _has_tower_annex = bool(getattr(props, 'has_tower_annex', False))
+    _annex_on = (bool(getattr(props, 'has_side_annex', False)) and (_is_hall_annex or _is_generic_annex)) or _has_tower_annex
     _annex_floors = 0
     _annex_side = None
     _annex_y_span = None
     if _annex_on:
-        _annex_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
-        if _is_hall_annex:
-            _annex_side = 'LEFT' if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else 'RIGHT'
-            _a_w = 5.2 if getattr(props, 'material_tier', 'TIER_3') != 'TIER_1' else 4.4
-            _annex_y_span = (-_a_w * 0.5 - 0.5, _a_w * 0.5 + 0.5)
-        else:
-            # Generic side annex mirrors _build_generic_annex (centred on the
-            # middle of the side wall) so the portal lines up with the annex room.
+        if _has_tower_annex:
+            _annex_floors = num_floors
             _raw_side = getattr(props, 'annex_side', 'LEFT')
             _annex_side = _raw_side if _raw_side in ('LEFT', 'RIGHT', 'BOTH') else 'LEFT'
-            _a_w = min(6.0, max(3.6, base_d * 0.72))
+            _a_w = 12.0
             _annex_y_span = (-_a_w * 0.5 - 0.1, _a_w * 0.5 + 0.1)
+        else:
+            _annex_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
+            if _is_hall_annex:
+                _annex_side = 'LEFT' if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else 'RIGHT'
+                _a_w = 5.2 if getattr(props, 'material_tier', 'TIER_3') != 'TIER_1' else 4.4
+                _annex_y_span = (-_a_w * 0.5 - 0.5, _a_w * 0.5 + 0.5)
+            else:
+                _raw_side = getattr(props, 'annex_side', 'LEFT')
+                _annex_side = _raw_side if _raw_side in ('LEFT', 'RIGHT', 'BOTH') else 'LEFT'
+                _a_w = min(6.0, max(3.6, base_d * 0.72))
+                _annex_y_span = (-_a_w * 0.5 - 0.1, _a_w * 0.5 + 0.1)
 
     # Square corner turrets bolt onto the outside of the BACK wall, so each one
     # connects through a doorway cut in the back wall (clear of the stairs).

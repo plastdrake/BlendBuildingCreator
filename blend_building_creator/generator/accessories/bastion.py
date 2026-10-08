@@ -976,23 +976,33 @@ def build_bastion_courtyard_towers(bm, props, ctx):
             build_rickety_frame_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,
                                       height=t_height, door_dir=d_dir)
         else:
-            # Shift the courtyard doorway sideways off the adjoining side
-            # wall (which otherwise laps the door jamb) and push the frame
-            # slightly proud into the courtyard so all four stay walkable.
-            # Left towers step east, right towers step west.
-            _ddx, _ddy = d_dir
-            _side = -1.0 if cx < 0.0 else 1.0
-            _world_shift_x = -_side * 0.55
-            # Convert the world X shift into the tower's local lateral axis.
-            _rlx, _rly = -_ddy, _ddx
-            _shift = _world_shift_x * _rlx
-            # Clamp so the shifted opening never leaves the tower face.
-            _half_s = max(0.5, t_size * 0.5)
-            _max_shift = max(0.0, _half_s - 0.85)
-            _shift = max(-_max_shift, min(_max_shift, _shift))
-            build_bastion_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,
-                                height=t_height, mat_index=t_mat,
-                                door_dir=d_dir, trim_mat=t_trim,
-                                door_shift=_shift, door_push=0.03,
-                                is_grand=is_grand)
+            if style == 'ROUND_STONE':
+                from .castle import build_walkable_round_tower
+                build_walkable_round_tower(
+                    bm, cx, cy, z_base=0.0,
+                    radius=t_size * 0.5,
+                    num_floors=int(t_height // 4.5),
+                    floor_h=4.5,
+                    tower_type='BATTLEMENTS'
+                )
+            else:
+                # Shift the courtyard doorway sideways off the adjoining side
+                # wall (which otherwise laps the door jamb) and push the frame
+                # slightly proud into the courtyard so all four stay walkable.
+                # Left towers step east, right towers step west.
+                _ddx, _ddy = d_dir
+                _side = -1.0 if cx < 0.0 else 1.0
+                _world_shift_x = -_side * 0.55
+                # Convert the world X shift into the tower's local lateral axis.
+                _rlx, _rly = -_ddy, _ddx
+                _shift = _world_shift_x * _rlx
+                # Clamp so the shifted opening never leaves the tower face.
+                _half_s = max(0.5, t_size * 0.5)
+                _max_shift = max(0.0, _half_s - 0.85)
+                _shift = max(-_max_shift, min(_max_shift, _shift))
+                build_bastion_tower(bm, cx, cy, z_ground=0.0, base_size=t_size,
+                                    height=t_height, mat_index=t_mat,
+                                    door_dir=d_dir, trim_mat=t_trim,
+                                    door_shift=_shift, door_push=0.03,
+                                    is_grand=is_grand)
 

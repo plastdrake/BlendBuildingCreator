@@ -439,6 +439,46 @@ def _build_foundation(bm, props, ctx):
         w_fcx = (wb[0] + wb[1]) * 0.5
         w_fcy = (wb[2] + wb[3]) * 0.5
         _build_foundation_block(bm, w_fw, w_fd, w_fcx, w_fcy, found_h, found_type)
+        
+    if getattr(props, 'has_dungeon', False):
+        from .accessories.castle import build_subterranean_dungeon_level
+        build_subterranean_dungeon_level(bm, cx=fcx, cy=fcy, z_floor=-7.5, width=fw, depth=fd)
+
+    if getattr(props, 'has_cliffs', False):
+        from .materials import MAT_INDEX_CLIFFS
+        from .mesh_utils import create_beveled_box
+        # Clean, tiered, blocky stylized rock terraces establishing solid cliff foundation
+        # Tier 1: Direct pedestal cradling the foundation
+        create_beveled_box(bm, size=(fw + 2.5, fd + 2.5, 2.5),
+                           location=(fcx, fcy, -1.25),
+                           mat_index=MAT_INDEX_CLIFFS, bevel_amount=0.35)
+        # Tier 2: Mid-level stepped rock shelf
+        create_beveled_box(bm, size=(fw + 6.0, fd + 6.0, 3.5),
+                           location=(fcx, fcy, -3.75),
+                           mat_index=MAT_INDEX_CLIFFS, bevel_amount=0.50)
+        # Tier 3: Broad bedrock base shelf
+        create_beveled_box(bm, size=(fw + 10.0, fd + 10.0, 4.5),
+                           location=(fcx, fcy, -7.0),
+                           mat_index=MAT_INDEX_CLIFFS, bevel_amount=0.65)
+
+        # Stepped rock corner buttresses supporting the outer angles
+        for sgn_x in (-1.0, 1.0):
+            for sgn_y in (-1.0, 1.0):
+                bx = fcx + sgn_x * (fw * 0.5 + 2.2)
+                by = fcy + sgn_y * (fd * 0.5 + 2.2)
+                create_beveled_box(bm, size=(5.0, 5.0, 7.0),
+                                   location=(bx, by, -3.5),
+                                   mat_index=MAT_INDEX_CLIFFS, bevel_amount=0.55)
+
+        # If tower annex is active, build an elevated cliff promontory under it
+        if getattr(props, 'has_tower_annex', False):
+            a_side = getattr(props, 'annex_side', 'LEFT')
+            t_sgns = [-1.0, 1.0] if a_side == 'BOTH' else ([1.0] if a_side == 'RIGHT' else [-1.0])
+            for sgn in t_sgns:
+                tx = fcx + sgn * (fw * 0.5 + 4.5)
+                create_beveled_box(bm, size=(10.0, 14.0, 8.5),
+                                   location=(tx, fcy, -2.5),
+                                   mat_index=MAT_INDEX_CLIFFS, bevel_amount=0.60)
 
 
 def _finalize_building(obj, bm, props, ctx):

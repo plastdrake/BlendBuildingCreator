@@ -27,6 +27,18 @@ Or copy the `blend_building_creator` folder into:
    - **Materials & Colors** — material tier and surface colors.
 4. Click **Finalize Mesh** to bake the result into a standard editable mesh.
 
+## Documentation
+
+Full architectural guides, developer references, and system breakdowns are available in the [`docs/`](docs/README.md) directory:
+
+- 📖 **[Documentation Hub](docs/README.md)** — Complete index and system overview.
+- 🏗️ **[Architecture & Pipeline](docs/ARCHITECTURE_AND_PIPELINE.md)** — BMesh pipeline, context data flow, UV mapping, and baking.
+- 🔨 **[Builders & Modular Components](docs/BUILDERS_AND_COMPONENTS.md)** — Footprints, walls, roofs, stairs, interiors, and accessories.
+- 🏰 **[Fortifications & Fantasy Castle System](docs/FORTIFICATIONS_AND_CASTLES.md)** — Curtain walls, gatehouses, and the multi-tier castle generator.
+- 🎨 **[Materials & Stylized Shaders](docs/MATERIALS_AND_SHADERS.md)** — 43-slot material index, procedural shaders, and UE export prep.
+- 🏡 **[Presets & Compound Estates](docs/PRESETS_AND_ESTATES.md)** — All 78 presets across 3 tiers, training grounds, and outbuildings.
+- 💻 **[Developer & Contributor Guide](docs/DEVELOPER_GUIDE.md)** — Adding builders, UI bindings, extension deployment, and headless testing.
+
 ## Presets
 
 There are 78 presets (26 building families in 3 tiers each). Filter them by category in the preset panel.
