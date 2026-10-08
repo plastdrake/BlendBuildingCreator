@@ -1425,7 +1425,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     corner_turret_size: FloatProperty(
         name="Turret Size",
         description="Radius of the rear corner turrets",
-        min=1.0, max=2.0, default=1.35,
+        min=1.0, max=4.0, default=1.35,
         unit='LENGTH',
         update=on_property_updated
     )

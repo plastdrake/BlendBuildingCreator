@@ -277,17 +277,26 @@ def _stable_dims(tier):
         return 12.0, 8.0
 
 
-def build_stable(bm, props, pos=(-24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_1'):
+def build_stable(bm, props, pos=(-24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_1',
+                 width=None, depth=None):
     """Detached horse stable & carriage barn.
 
-    The ``STABLE_<tier>`` preset is the single source of truth for the barn (walls,
-    timber door, roof — no foundation, no steps, no dormers), so a standalone stable
-    built from that preset matches this estate outbuilding exactly. The working yard
-    (stall row + paddock pen) is added by the same shared yard builder.
+    The ``STABLE_<tier>`` preset is the baseline for the barn (walls, timber door, roof),
+    optionally scaled up for grand estate compounds and castles. The working yard
+    (stall row + paddock pen) matches the footprint dynamically.
     """
-    _merge_generated_building(bm, props, {}, pos=pos, rot_z=rot_z,
+    overrides = {}
+    if width is not None:
+        overrides['width'] = width
+    if depth is not None:
+        overrides['depth'] = depth
+    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z,
                               preset_key=_stable_key(tier))
     bw, bd = _stable_dims(tier)
+    if width is not None:
+        bw = width
+    if depth is not None:
+        bd = depth
     t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
     _build_stable_yard(bm, t, bw, bd, tier)
 
@@ -737,6 +746,105 @@ def build_estate_chapel(bm, props, pos=(28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_3
     except Exception:
         pass
 
+def build_tenement_building(bm, props, pos=(24.0, 10.0, 0.0), rot_z=0.0, tier='TIER_3',
+                            width=24.0, depth=8.5, floors=2, floor_h=3.2):
+    """Substantial multi-storey tenement block for castle servants, craftsmen, or garrison."""
+    overrides = {
+        'building_shape': 'RECTANGLE',
+        'num_floors': max(1, floors),
+        'floor_height': floor_h,
+        'width': width,
+        'depth': depth,
+        'wall_thickness': 0.32,
+        'has_cantilever': floors > 1 and tier != 'TIER_1',
+        'overhang_mode': 'SECOND_FLOOR_ONLY',
+        'cantilever_overhang': 0.28,
+        'wonkiness': 0.0,
+        'has_foundation': True,
+        'foundation_height': 0.60,
+        'ground_floor_stone': True,
+        'has_ceiling_beams': False,
+        'has_stairs': floors > 1,
+        'stair_style': 'STRAIGHT',
+        'has_front_door': True,
+        'door_width': 1.60,
+        'door_height': 2.40,
+        'door_shape': 'ARCHED' if tier == 'TIER_3' else 'AUTO',
+        'has_windows': True,
+        'window_spacing': 2.3,
+        'has_shutters': True,
+        'shutter_state': 'OPEN',
+        'has_timber_framing': True,
+        'timber_diagonals': True,
+        'roof_style': 'GABLE' if tier == 'TIER_3' else 'SWAY',
+        'roof_orientation': 'LEFT_RIGHT',
+        'roof_height': 3.2,
+        'roof_overhang': 0.65,
+        'has_roof_shingles': True,
+        'has_dormers': True,
+        'dormer_count': 3,
+        'dormer_sides': 'FRONT',
+        'has_chimney': True,
+        'chimney_pos_x': 0.60,
+        'has_balcony': floors > 1,
+        'balcony_side': 'FRONT',
+        'balcony_width': 2.6,
+        'balcony_depth': 1.2,
+    }
+    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+
+
+def build_retainer_house(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_3',
+                         width=15.5, depth=9.0, floors=2, floor_h=3.4, name="Castellan"):
+    """Dignified upscale 2-storey manor residence for a key castle retainer (Castellan, High Steward, Chamberlain)."""
+    overrides = {
+        'building_shape': 'RECTANGLE',
+        'num_floors': max(1, floors),
+        'floor_height': floor_h,
+        'width': width,
+        'depth': depth,
+        'wall_thickness': 0.32,
+        'has_cantilever': floors > 1 and tier != 'TIER_1',
+        'overhang_mode': 'SECOND_FLOOR_ONLY',
+        'cantilever_overhang': 0.30,
+        'wonkiness': 0.0,
+        'has_foundation': True,
+        'foundation_height': 0.65,
+        'ground_floor_stone': True,
+        'has_ceiling_beams': True,
+        'has_stairs': floors > 1,
+        'stair_style': 'STRAIGHT',
+        'has_front_door': True,
+        'door_width': 1.60,
+        'door_height': 2.50,
+        'door_shape': 'ARCHED',
+        'has_windows': True,
+        'window_spacing': 2.5,
+        'has_shutters': True,
+        'shutter_state': 'OPEN',
+        'has_timber_framing': True,
+        'timber_diagonals': True,
+        'roof_style': 'GABLE' if tier == 'TIER_3' else 'SWAY',
+        'roof_orientation': 'LEFT_RIGHT',
+        'roof_height': 3.4,
+        'roof_overhang': 0.70,
+        'has_roof_shingles': True,
+        'has_dormers': True,
+        'dormer_count': 2,
+        'dormer_sides': 'FRONT',
+        'has_chimney': True,
+        'chimney_pos_x': 0.65,
+        'has_balcony': True,
+        'balcony_side': 'FRONT',
+        'balcony_width': 3.0,
+        'balcony_depth': 1.3,
+        'has_mini_wing': True,
+        'mini_wing_count': 1,
+        'mini_wing_width': 2.2,
+        'mini_wing_depth': 1.2,
+    }
+    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+
 
 def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='TIER_3',
                                    width=32.0, depth=22.0):
@@ -1097,6 +1205,125 @@ def build_estate_outbuildings(bm, props, ctx):
     stable_slot = None
     servant_slot = None
 
+    # On grand estate compounds (such as the 200m x 200m Nasher's Manor plot where spread_x > 35m):
+    # Outbuildings scale dramatically across tiers, culminating in a complete citadel mini-city in Tier 3!
+    is_grand_plot = spread_x > 35.0
+
+    if is_grand_plot and tier == 'TIER_3':
+        # =========================================================================
+        # TIER 3: CITADEL MINI-CITY (Walled Medieval Town Inside the Bailey)
+        # =========================================================================
+        # 1. West Ward: Military, Equestrian & Garrison District
+        # 1a. Master Equestrian Stables Complex (grand 26m x 12m, 2 floors with groom lofts)
+        if has_stable:
+            build_stable(bm, props, pos=(-54.0, -16.0, 0.0), rot_z=math.pi * 0.5,
+                         tier=tier, width=26.0, depth=12.0)
+            stable_slot = (-54.0, -16.0, math.pi * 0.5, 26.0)
+
+        # 1b. Master of Horse / Chamberlain's House (upscale 2-storey retainer residence)
+        build_retainer_house(bm, props, pos=(-32.0, -16.0, 0.0), rot_z=0.0,
+                             tier=tier, width=14.5, depth=8.5, floors=2, name="Chamberlain")
+
+        # 1c. Garrison Tenement Barracks (long 26m x 9m 2-storey tenement block for garrison)
+        build_tenement_building(bm, props, pos=(-54.0, 16.0, 0.0), rot_z=math.pi * 0.5,
+                                tier=tier, width=26.0, depth=9.0, floors=2)
+
+        # 1d. Provisions Depot & Granary Storehouse (15m x 8.5m 2-storey depot)
+        if has_granary:
+            build_estate_granary(bm, props, pos=(-32.0, 16.0, 0.0), rot_z=0.0,
+                                 tier=tier, width=15.0, depth=8.5, floors=2)
+
+        # 1e. Ducal Armory & Foundry (16m x 8.5m 2-storey fortified armory)
+        if has_forge:
+            build_estate_forge(bm, props, pos=(-58.0, -48.0, 0.0), rot_z=math.pi * 0.5,
+                               tier=tier, width=16.0, depth=8.5, floors=2)
+
+        # 1f. Military Training Grounds & Archery Yard (32m x 22m enclosed drill arena)
+        if has_training:
+            build_estate_training_grounds(bm, pos=(-34.0, -52.0, 0.0), rot_z=0.0,
+                                          tier=tier, width=32.0, depth=22.0)
+
+        # 2. East Ward: Retainers' Quarter, Civil & Sacred District
+        # 2a. Castellan's Manor House (upscale 16.5m x 9.5m 2-storey knight's residence)
+        if has_servants:
+            build_retainer_house(bm, props, pos=(54.0, -16.0, 0.0), rot_z=-math.pi * 0.5,
+                                 tier=tier, width=16.5, depth=9.5, floors=2, name="Castellan")
+            servant_slot = (54.0, -16.0, -math.pi * 0.5, 16.5)
+
+        # 2b. High Steward's House (upscale 15m x 9m 2-storey chancellor residence)
+        build_retainer_house(bm, props, pos=(32.0, -16.0, 0.0), rot_z=0.0,
+                             tier=tier, width=15.0, depth=9.0, floors=2, name="HighSteward")
+
+        # 2c. Servants' & Craftsmen Tenement Block (long 24m x 8.5m 2-storey tenement)
+        build_tenement_building(bm, props, pos=(54.0, 16.0, 0.0), rot_z=-math.pi * 0.5,
+                                tier=tier, width=24.0, depth=8.5, floors=2)
+
+        # 2d. Almoner / Scholar Retainer Residence (14m x 8.5m 2-storey house)
+        build_retainer_house(bm, props, pos=(32.0, 16.0, 0.0), rot_z=0.0,
+                             tier=tier, width=14.0, depth=8.5, floors=2, name="Almoner")
+
+        # 2e. Gatehouse Watch Barracks (14m x 8m 2-storey gate watch lodge)
+        if has_guardhouse:
+            build_guardhouse(bm, props, pos=(58.0, -48.0, 0.0), rot_z=-math.pi * 0.5,
+                             tier=tier, width=14.0, depth=8.0, floors=2)
+
+        # 2f. Consecrated Chantry Chapel (14m x 8m Gothic stone sanctuary)
+        if has_chapel:
+            build_estate_chapel(bm, props, pos=(34.0, -48.0, 0.0), rot_z=0.0,
+                                tier=tier, width=14.0, depth=8.0, floors=1)
+
+        # 3. Central Courtyard Awnings & Supply Lean-tos
+        if has_awnings:
+            _place_estate_awnings(bm, props, tier, spread_x, fore_y,
+                                  stable=stable_slot, servant=servant_slot)
+        return
+
+    if is_grand_plot and tier == 'TIER_2':
+        # =========================================================================
+        # TIER 2: SEIGNORIAL CHATELET (6 Outbuildings Growing with Tier)
+        # =========================================================================
+        # Master Stables (20m x 10m)
+        if has_stable:
+            build_stable(bm, props, pos=(-56.0, -16.0, 0.0), rot_z=math.pi * 0.5,
+                         tier=tier, width=20.0, depth=10.0)
+            stable_slot = (-56.0, -16.0, math.pi * 0.5, 20.0)
+
+        # Retainers' Hall (16m x 8.5m, 2 floors)
+        if has_servants:
+            build_retainer_house(bm, props, pos=(56.0, -16.0, 0.0), rot_z=-math.pi * 0.5,
+                                 tier=tier, width=16.0, depth=8.5, floors=2, name="Retainers")
+            servant_slot = (56.0, -16.0, -math.pi * 0.5, 16.0)
+
+        # Servants' Quarters (16m x 8m, 2 floors)
+        build_servant_quarters(bm, props, pos=(56.0, 14.0, 0.0), rot_z=-math.pi * 0.5,
+                               tier=tier, width=16.0, depth=8.0, floors=2)
+
+        # Gate Guardhouse (13.5m x 7m, 2 floors)
+        if has_guardhouse:
+            build_guardhouse(bm, props, pos=(56.0, -46.0, 0.0), rot_z=-math.pi * 0.5,
+                             tier=tier, width=13.5, depth=7.0, floors=2)
+
+        # Armory Forge (13m x 7.5m)
+        if has_forge:
+            build_estate_forge(bm, props, pos=(-56.0, -46.0, 0.0), rot_z=math.pi * 0.5,
+                               tier=tier, width=13.0, depth=7.5, floors=1)
+
+        # Granary (12m x 7m)
+        if has_granary:
+            build_estate_granary(bm, props, pos=(-56.0, 14.0, 0.0), rot_z=math.pi * 0.5,
+                                 tier=tier, width=12.0, depth=7.0, floors=1)
+
+        # Training Grounds (28m x 20m)
+        if has_training:
+            build_estate_training_grounds(bm, pos=(-32.0, -50.0, 0.0), rot_z=0.0,
+                                          tier=tier, width=28.0, depth=20.0)
+
+        if has_awnings:
+            _place_estate_awnings(bm, props, tier, spread_x, fore_y,
+                                  stable=stable_slot, servant=servant_slot)
+        return
+
+    # Standard Plot / Tier 1 Layout
     # 2. Horse Stable & Carriage Barn
     if has_stable:
         st_sgn = -1.0 if stable_side == 'LEFT' else 1.0
@@ -1104,8 +1331,11 @@ def build_estate_outbuildings(bm, props, ctx):
         st_y = fore_y
         _rot_on = getattr(props, 'stable_rotate', False) or spread_x > 18.0
         st_rot = -math.pi * 0.5 * st_sgn if _rot_on else 0.0
-        build_stable(bm, props, pos=(st_x, st_y, 0.0), rot_z=st_rot, tier=tier)
-        stable_slot = (st_x, st_y, st_rot, _stable_dims(tier)[0])
+        st_w = 16.0 if is_grand_plot else None
+        st_d = 9.0 if is_grand_plot else None
+        build_stable(bm, props, pos=(st_x, st_y, 0.0), rot_z=st_rot, tier=tier,
+                     width=st_w, depth=st_d)
+        stable_slot = (st_x, st_y, st_rot, st_w if st_w else _stable_dims(tier)[0])
 
     # 3. Servant Quarters / Steward Lodge
     if has_servants:
@@ -1113,16 +1343,16 @@ def build_estate_outbuildings(bm, props, ctx):
         sq_x = sq_sgn * spread_x
         sq_y = fore_y
         sq_rot = -math.pi * 0.5 * sq_sgn if spread_x > 18.0 else 0.0
-        sq_w = 13.5 if tier == 'TIER_3' else (12.0 if tier == 'TIER_2' else 10.5)
+        sq_w = 14.0 if is_grand_plot else (13.5 if tier == 'TIER_3' else (12.0 if tier == 'TIER_2' else 10.5))
         sq_d = 7.5 if tier == 'TIER_3' else 6.8
-        sq_fl = 2 if tier in ('TIER_2', 'TIER_3') else 1
+        sq_fl = 2 if (tier in ('TIER_2', 'TIER_3') or is_grand_plot) else 1
         build_servant_quarters(
             bm, props, pos=(sq_x, sq_y, 0.0), rot_z=sq_rot, tier=tier,
             width=sq_w, depth=sq_d, floors=sq_fl
         )
         servant_slot = (sq_x, sq_y, sq_rot, sq_w)
 
-    # 4. Gate Guardhouse & Watch Lodge (front right flank)
+    # 4. Gate Guardhouse & Watch Lodge
     if has_guardhouse:
         gh_sgn = 1.0 if servant_side == 'RIGHT' else -1.0
         gh_x = gh_sgn * (spread_x * 0.98 if spread_x > 26.0 else spread_x * 0.90)
@@ -1131,10 +1361,10 @@ def build_estate_outbuildings(bm, props, ctx):
         gh_fl = 2 if tier == 'TIER_3' else 1
         build_guardhouse(
             bm, props, pos=(gh_x, gh_y, 0.0), rot_z=gh_rot, tier=tier,
-            width=11.5 if tier == 'TIER_3' else 10.0, depth=6.5, floors=gh_fl
+            width=11.5 if is_grand_plot else 10.0, depth=6.5, floors=gh_fl
         )
 
-    # 5. Estate Armory & Forge (front left flank)
+    # 5. Estate Armory & Forge
     if has_forge:
         fg_sgn = -1.0 if stable_side == 'LEFT' else 1.0
         fg_x = fg_sgn * (spread_x * 0.98 if spread_x > 26.0 else spread_x * 0.90)
@@ -1143,10 +1373,10 @@ def build_estate_outbuildings(bm, props, ctx):
         fg_fl = 1
         build_estate_forge(
             bm, props, pos=(fg_x, fg_y, 0.0), rot_z=fg_rot, tier=tier,
-            width=11.0 if tier == 'TIER_3' else 10.0, depth=6.5, floors=fg_fl
+            width=11.0 if is_grand_plot else 10.0, depth=6.5, floors=fg_fl
         )
 
-    # 6. Estate Granary & Provisions Storehouse (rear left service flank)
+    # 6. Estate Granary & Provisions Storehouse
     if has_granary:
         gn_sgn = -1.0 if stable_side == 'LEFT' else 1.0
         gn_x = gn_sgn * (spread_x + 1.8 if spread_x > 26.0 else spread_x * 1.05)
@@ -1157,7 +1387,7 @@ def build_estate_outbuildings(bm, props, ctx):
             width=9.5, depth=6.0, floors=1
         )
 
-    # 7. Estate Chantry Chapel & Treasury (rear right service flank)
+    # 7. Estate Chantry Chapel & Treasury
     if has_chapel:
         ch_sgn = 1.0 if servant_side == 'RIGHT' else -1.0
         ch_x = ch_sgn * (spread_x + 1.8 if spread_x > 26.0 else spread_x * 1.05)
@@ -1168,11 +1398,9 @@ def build_estate_outbuildings(bm, props, ctx):
             width=11.0 if tier == 'TIER_3' else 9.5, depth=6.5, floors=1
         )
 
-    # 8. Estate Training Grounds & Archery Yard (outer bailey forward flank)
+    # 8. Estate Training Grounds & Archery Yard
     if has_training:
         tr_sgn = -1.0 if stable_side == 'LEFT' else 1.0
-        # Sited in the forward military bailey beside the armory/forge,
-        # completely clear of the stable front apron and carriage path.
         tr_w = 32.0 if tier == 'TIER_3' else 26.0
         tr_d = 22.0 if tier == 'TIER_3' else 18.0
         tr_x = tr_sgn * (spread_x * 0.46)

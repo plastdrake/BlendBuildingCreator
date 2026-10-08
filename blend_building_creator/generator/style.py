@@ -5,7 +5,7 @@ material language is defined in exactly one place (previously duplicated as a
 private ``_tier_wall_mat`` in the civic and town-hall modules).
 """
 
-from .materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_WOOD
+from .materials import MAT_INDEX_PLASTER_EXT, MAT_INDEX_WOOD, MAT_INDEX_STONE
 
 
 def is_tier1_wattle_daub(props):
@@ -87,13 +87,16 @@ def get_effective_wall_material(props):
 def tier_wall_mat(tier, props=None):
     """Wall material for satellite volumes (towers, annexes).
 
+    Stone override: solid fortress ashlar masonry.
     Tier 3: dressed ivory stucco/plaster.
     Tier 1 (wattle & daub): wattle & daub plaster.
     Tier 1 (logs) & Tier 2: wooden planks / siding.
     """
     if props:
         eff_wall = get_effective_wall_material(props)
-        if eff_wall in ('WATTLE_DAUB', 'STUCCO'):
+        if eff_wall == 'STONE':
+            return MAT_INDEX_STONE
+        elif eff_wall in ('WATTLE_DAUB', 'STUCCO'):
             return MAT_INDEX_PLASTER_EXT
         elif eff_wall in ('LOGS', 'WOOD_PLANKS'):
             return MAT_INDEX_WOOD

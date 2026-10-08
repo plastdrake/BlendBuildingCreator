@@ -655,7 +655,7 @@ def plan_outcrop_spread(props, base_w, base_d, num_floors, wings, has_wing,
             _spans.setdefault('FRONT', []).append(
                 (main_door_cx - _porch_half, main_door_cx + _porch_half))
         if getattr(props, 'has_corner_turrets', False) and not open_timber:
-            _thalf = max(1.0, min(2.0, getattr(props, 'corner_turret_size', 1.35)))
+            _thalf = max(1.0, min(3.5, getattr(props, 'corner_turret_size', 1.35)))
             _tw = min(2.0 * _thalf, _hxb)
             _spans.setdefault('BACK', []).extend([
                 (-_hxb, -(_hxb - _tw) + 0.40), ((_hxb - _tw) - 0.40, _hxb)])

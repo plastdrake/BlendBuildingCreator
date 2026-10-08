@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.31.82-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.31.83-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 78 ready-made presets across three material tiers.
@@ -74,7 +74,7 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - Mini-wing outcrops (with optional random width/depth), multi-balconies and a pillared overhang.
 - Archetype props: warehouse crane, lumbermill sawmill, blacksmith forge, windmill sails, watchtower parapet, tavern porch, fisherman pier and bakery oven.
 - **Hospitality dressing** (reusable on any building): covered veranda, hanging textured trade sign, soil-filled window boxes, courtyard well, barrels, crates, sacks, stools, benches, picnic tables, post/hanging lanterns, notice boards and cloth awnings.
-- **Estate Compounds & Training Yard**: Stables, barracks, blacksmith forge, steward lodge, guardhouse, chapel, storehouse, and an enclosed 26m × 18m military training grounds with straw target butts, swivel quintains, pell post, weapon racks, and tournament shields.
+- **Estate Compounds & Training Yard**: Stables, barracks, blacksmith forge, steward lodge, guardhouse, chapel, storehouse, and an enclosed 32m × 22m military training grounds with octagonal sparring ring, perimeter fence, hay-bale archery targets on the long side, swivel quintains, pell post, and weapon racks.
 
 **Fortifications** (reusable on any preset/footprint)
 - **Palisade** stockade: rough stakes or neat pickets enclosing the compound with a front gate (style, height and offset controls).
@@ -86,6 +86,23 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.31.83
+
+- **Nasher's Manor Tier 3 Citadel & Walled Mini-City**:
+  - **Castle Keep Transformation**: Redesigned the main keep as a monolithic ashlar stone fortress (no domestic timber framing, no wooden jetties, 0.65m fortress walls, 1.50m battered stone foundation, and stately castle embrasure fenestration with 3.8m spacing).
+  - **Oriel Clutter Removed**: Completely eliminated oriel box clutter from the front facade, giving the keep clean, powerful fortress masonry.
+  - **Colossal Corner Defense Towers**: Upgraded corner defense towers (size up to 3.2m–3.5m) with massive stone walls rising high above the citadel keep.
+  - **Monumental Castle Portal & Royal Speech Balcony**: Arched stone entrance portal (2.6m × 3.4m) with a dedicated royal speech loggia balcony overhead for Lord Nasher to address the compound.
+  - **Tier-Scaled Outbuildings & Walled Town Plan**: Outbuildings scale dynamically across tiers. Tier 3 features 11 distinct buildings forming an authentic medieval town inside the 200m bailey:
+    - **Tenement Blocks**: Two-storey Garrison Tenement (26m × 9m) and Servants' & Craftsmen Tenement (24m × 8.5m).
+    - **Noble Retainer Residences**: Multi-room 2-storey manors for key officials (Castellan, High Steward, Chamberlain, and Almoner) with noble dormers and private solar balconies.
+    - **Civic & Military Infrastructure**: Master Equestrian Stables (26m × 12m), Ducal Armory & Foundry (16m × 8.5m), Granary Storehouse (15m × 8.5m), Gatehouse Watch Barracks (14m × 8m), Consecrated Chantry Chapel (14m × 8m), and 32m × 22m military drill arena.
+    - **Clear Royal Avenue**: A grand 36m wide central thoroughfare runs unobstructed from the drawbridge and Cour d'Honneur fountain directly to the castle keep portal.
+- **Tier Progression Alignment**:
+  - **Tier 1**: Frontier baronial log manor with rustic interlocking logs, wood shingles, palisade stockade, and 4 rustic outbuildings.
+  - **Tier 2**: Seignorial manor morphing into a fortress with stone ground floor, half-timbered upper levels, corner turrets, stone curtain wall, drawbridge, gate towers, and 6 medium-large outbuildings.
+  - **Tier 3**: Full-blown monumental stone fortress castle citadel and complete walled mini-city.
 
 ## What's new in 1.31.81
 

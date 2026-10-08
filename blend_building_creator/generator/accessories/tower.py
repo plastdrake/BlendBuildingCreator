@@ -479,7 +479,7 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
                         floor_levels=None, floor_h=3.0, main_wall_top=None,
                         attach_tuck=0.32, plank_direction='VERTICAL', seed=42,
                         side_sign=0.0, block_height=0.0,
-                        skip_ground_entry=False):
+                        skip_ground_entry=False, props=None):
     """Square corner tower bolted onto the outside of the hall, annex-style.
 
     out_dir is the axis the tower projects along; the opposite side (toward the
@@ -488,7 +488,7 @@ def build_corner_turret(bm, cx, cy, z_ground=0.0, half=1.35, wall_top_z=6.0,
     a floor slab per main level, capped with a square shingled spire. Works for
     both side-wall and back-wall mounts.
     """
-    wall_mat = tier_wall_mat(tier)
+    wall_mat = tier_wall_mat(tier, props)
     t = 0.34
     levels = list(floor_levels) if floor_levels else [z_ground + floor_h, z_ground + 2.0 * floor_h]
     ox, oy = out_dir

@@ -247,7 +247,7 @@ def build_floors(bm, props, ctx):
     # connects through a doorway cut in the back wall (clear of the stairs).
     _turrets = []
     if getattr(props, 'has_corner_turrets', False) and not open_timber:
-        _thalf = max(1.0, min(2.0, getattr(props, 'corner_turret_size', 1.35)))
+        _thalf = max(1.0, min(3.5, getattr(props, 'corner_turret_size', 1.35)))
         # The turret centres on the OUTERMOST (top-storey) wall face, so the
         # doorway must use that same reference or it lands off the tower and a
         # wall blocks the way in.
