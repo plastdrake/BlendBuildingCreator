@@ -1,7 +1,7 @@
 # BlendBuildingCreator
 
 [![Blender](https://img.shields.io/badge/Blender-5.2%20LTS-orange.svg)](https://www.blender.org/)
-[![Version](https://img.shields.io/badge/Version-1.31.80-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
+[![Version](https://img.shields.io/badge/Version-1.31.82-blue.svg)](https://github.com/plastdrake/BlendBuildingCreator)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 
 A procedural building generator add-on for **Blender 5.2 LTS** (4.2+). It builds complete stylized fantasy, medieval and rustic buildings in one click — exterior, roof and a full walkable interior — with 78 ready-made presets across three material tiers.
@@ -79,13 +79,23 @@ Every building comes in three material tiers: **Tier 1 Logs**, **Tier 2 Planks**
 **Fortifications** (reusable on any preset/footprint)
 - **Palisade** stockade: rough stakes or neat pickets enclosing the compound with a front gate (style, height and offset controls).
 - **Stone curtain wall**: ashlar enclosing wall on a battered plinth with a wall-walk, crenellated merlons and a gated gatehouse (height, thickness and offset controls). Supersedes the palisade on the same defensive line.
-- **Inner wall depth & safety parapet**: structural inner buttress piers and corbelled arched vaulting supporting the rampart walk, plus a cut-stone inner safety parapet curb with bevelled coping.
-- **Castle drawbridge & suspension chains**: functional drawbridge with iron hinge sleeves, pit curb, stone ramp abutment, and real 3D interlocking torus iron suspension chain runs anchored to the gatehouse archway.
-- **Gatehouse fortifications & rampart stairs**: dual flanking D-bastion gate towers with outward-facing battlements, open hoisted portcullis, wall-mounted torch sconces, heraldic ground banner standards, and stone rampart access stairs flanking the gate courtyard.
+- **Inner wall depth & crenellated inner parapets**: structural inner buttress piers and corbelled arched vaulting supporting the rampart walk, plus stone crenellated merlons with cut-stone caps matching the exterior battlements along the courtyard edge (with open breaches at stair landings so access is never blocked).
+- **Castle drawbridge, stone causeway & parallel suspension chains**: functional drawbridge with iron hinge sleeves, grounded stone gateway threshold platform, 4-tier courtyard inner stone ramp, outer stone ditch abutment landing, and 5-tier outer stone approach ramp. Parallel 3D interlocking torus iron suspension chain runs anchored cleanly without criss-crossing.
+- **Gatehouse fortifications, wide rampart stairs & tower access**: dual flanking D-bastion gate towers with outward-facing battlements, vertically oriented hoisted portcullis with downward-pointing spiked feet, wide (1.65m) stone rampart stairs with stepped stone balustrade parapets and newel posts, direct unobstructed access to the curtain wall-walk, and dedicated stone steps ascending directly onto the gate tower roof terraces.
 - **Real arrow slits**: pierced arrow loops (with cut-stone reveals and a crosslet transom) in the bastion towers and curtain walls — genuine through-holes, not surface appliqués.
 - **Banner** standards: timber poles with waving cloth banners and a heraldic **Banner colour**.
 - **Crenellated battlements**: stone merlons or boxed timber hoarding capping the rampart walk.
 - **Military props**: archery targets with painted rings, weapon racks and padded hay-filled training pells arranged along the courtyard walls, plus a wall-mounted shield over the entrance (the target face uses a dedicated ring shader and the pells use a handpainted hay shader).
+
+## What's new in 1.31.81
+
+- **Gatehouse, Drawbridge & Ramparts Overhaul**:
+  - **Portcullis Rotation & Position**: Iron bars are strictly vertical, spiked cone tips face downwards, and the entire portcullis gate is hoisted overhead to ensure an unobstructed walkthrough portal for players.
+  - **Parallel Suspension Chains**: Corrected chain geometry to run parallel on each side directly from deck corners to wall hawse holes, completely eliminating the criss-crossing "X".
+  - **Stone Causeway Platform & Approach Ramps**: Added an elevated stone threshold platform flush with the drawbridge deck, a wide 4-tier stone approach ramp sloping into the courtyard bailey with side curbs, and an outer stone abutment landing across the ditch with a 5-tier ramp descending smoothly to outside ground level.
+  - **Wide Rampart Access Stairs**: Widened courtyard rampart stairs to 1.65m with solid stepped cut-stone balustrades, coping, and pyramid-capped entrance newel posts.
+  - **Wall-Walk & Gate Tower Direct Access**: Left generous open breaches at the upper stair landings so the curtain wall-walk is directly accessible, and added dedicated solid cut-stone flights of stairs with balustrades rising directly from the rampart landing onto the flanking gate tower roof terraces.
+  - **Crenellated Inner Battlements ("Sticky-Up Bits")**: Replaced the solid plain cut-stone parapet along the inner bailey edge with authentic crenellated stone merlons with cut-stone caps matching the outer battlements.
 
 ## What's new in 1.31.0
 

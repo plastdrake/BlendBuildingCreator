@@ -53,12 +53,14 @@ def build_portcullis(bm, cx, cy, z_ground=0.0, width=2.6, height=2.9,
         u = -width * 0.5 + i * step
         bx = cx + tx * u
         by = cy + ty * u
+        # Vertical iron bars: cylinder is along Z by default, rotation=(0.0, 0.0, ang) keeps it strictly vertical
         create_cylinder(bm, radius=0.045, height=z1 - z0, segments=6,
                         location=(bx, by, (z0 + z1) * 0.5),
-                        rotation=(1.5707963, 0.0, ang), mat_index=MAT_INDEX_IRON)
+                        rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_IRON)
+        # Pointed cone spike at the bottom of each bar: rotation=(math.pi, 0.0, ang) flips tip downward
         create_cone(bm, radius1=0.05, radius2=0.0, height=0.16, segments=6,
                     location=(bx, by, z0 - 0.08),
-                    rotation=(0.0, math.pi, ang), mat_index=MAT_INDEX_IRON)
+                    rotation=(math.pi, 0.0, ang), mat_index=MAT_INDEX_IRON)
 
     # Horizontal rails across the grille.
     for rz in (z0 + 0.12, (z0 + z1) * 0.5, z1 - 0.12):
@@ -122,33 +124,105 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
     rot_mat = Matrix.Rotation(ang_gate, 4, 'Z') @ Matrix.Rotation(pitch_rad, 4, 'X')
     rot_euler = rot_mat.to_euler('XYZ')
 
-    p_hinge = Vector((cx, cy, z_ground + 0.08))
+    p_hinge = Vector((cx, cy, z_ground + 0.12))
+    deck_thick = 0.14
+    plank_thick = 0.06
 
-    # 1. Moat / Dry Ditch stone pit curb under the bridge
-    ditch_depth = 0.45
+    # 1. Causeway, Gateway Platform, and Approach Ramps
+    # a. Solid cut-stone Gateway Threshold Platform under the portal arch
+    plat_w = width + 1.20
+    plat_len = 2.40
+    plat_cx = cx - ox * 0.40
+    plat_cy = cy - oy * 0.40
+    create_beveled_box(bm, size=(plat_w, plat_len, 0.28),
+                       location=(plat_cx, plat_cy, z_ground + 0.02),
+                       rotation=(0.0, 0.0, ang_gate),
+                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
+
+    # b. Courtyard Approach Ramp (Inside): gentle cut-stone incline extending into the bailey
+    ramp_in_len = 2.80
+    ramp_in_w = width + 0.80
+    ramp_in_cx = cx - ox * (plat_len * 0.5 + ramp_in_len * 0.5 + 0.30)
+    ramp_in_cy = cy - oy * (plat_len * 0.5 + ramp_in_len * 0.5 + 0.30)
+    n_in_tiers = 4
+    for ri in range(n_in_tiers):
+        t_frac = ri / n_in_tiers
+        step_len = ramp_in_len / n_in_tiers
+        tier_cx = cx - ox * (plat_len * 0.5 + 0.40 + (ri + 0.5) * step_len)
+        tier_cy = cy - oy * (plat_len * 0.5 + 0.40 + (ri + 0.5) * step_len)
+        tier_z = z_ground + (1.0 - t_frac) * 0.14
+        create_beveled_box(bm, size=(ramp_in_w, step_len + 0.04, tier_z + 0.02),
+                           location=(tier_cx, tier_cy, tier_z * 0.5),
+                           rotation=(0.0, 0.0, ang_gate),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+    # Retaining curb beams framing courtyard ramp
+    for sgn in (-1.0, 1.0):
+        crb_x = ramp_in_cx + tx * (sgn * (ramp_in_w * 0.5 + 0.14))
+        crb_y = ramp_in_cy + ty * (sgn * (ramp_in_w * 0.5 + 0.14))
+        create_beveled_box(bm, size=(0.28, ramp_in_len + 0.40, 0.28),
+                           location=(crb_x, crb_y, z_ground + 0.14),
+                           rotation=(0.0, 0.0, ang_gate),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+
+    # c. Moat / Dry Ditch stone pit curb under the bridge
+    ditch_depth = 0.50
     pit_len = length * 1.05
     pit_cx = cx + ox * (pit_len * 0.5)
     pit_cy = cy + oy * (pit_len * 0.5)
-    # Side curb walls of the ditch
     for sgn in (-1.0, 1.0):
         kx = pit_cx + tx * (sgn * (width * 0.5 + 0.35))
         ky = pit_cy + ty * (sgn * (width * 0.5 + 0.35))
-        create_beveled_box(bm, size=(0.40, pit_len, ditch_depth + 0.20),
+        create_beveled_box(bm, size=(0.40, pit_len, ditch_depth + 0.25),
                            location=(kx, ky, z_ground - ditch_depth * 0.5),
                            rotation=(0.0, 0.0, ang_gate),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-    # Outer stone abutment landing across the ditch
-    ab_pos = p_hinge + Vector((ox, oy, 0.0)) * (length + 0.45)
-    create_beveled_box(bm, size=(width + 1.30, 0.90, ditch_depth + 0.25),
-                       location=(ab_pos.x, ab_pos.y, z_ground - ditch_depth * 0.5),
-                       rotation=(0.0, 0.0, ang_wall),
-                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+
+    # d. Outer stone abutment landing across the ditch
+    ab_len = 2.40
+    ab_w = width + 1.80
+    ab_pos = p_hinge + Vector((ox, oy, 0.0)) * (length + ab_len * 0.5 + 0.05)
+    create_beveled_box(bm, size=(ab_w, ab_len, ditch_depth + 0.26),
+                       location=(ab_pos.x, ab_pos.y, z_ground - ditch_depth * 0.5 + 0.13),
+                       rotation=(0.0, 0.0, ang_gate),
+                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
+    # Low protective stone curbs framing the outer abutment landing
+    for sgn in (-1.0, 1.0):
+        ab_crb_x = ab_pos.x + tx * (sgn * (ab_w * 0.5 - 0.15))
+        ab_crb_y = ab_pos.y + ty * (sgn * (ab_w * 0.5 - 0.15))
+        create_beveled_box(bm, size=(0.32, ab_len + 0.10, 0.42),
+                           location=(ab_crb_x, ab_crb_y, z_ground + 0.26 + 0.21),
+                           rotation=(0.0, 0.0, ang_gate),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+
+    # e. Outer Stone Approach Ramp (Outside): gentle stone incline sloping down to ground level
+    ramp_out_len = 3.60
+    ramp_out_w = width + 1.40
+    ramp_out_cx = ab_pos.x + ox * (ab_len * 0.5 + ramp_out_len * 0.5)
+    ramp_out_cy = ab_pos.y + oy * (ab_len * 0.5 + ramp_out_len * 0.5)
+    n_out_tiers = 5
+    for ro in range(n_out_tiers):
+        t_frac = ro / n_out_tiers
+        step_len = ramp_out_len / n_out_tiers
+        tier_cx = ab_pos.x + ox * (ab_len * 0.5 + (ro + 0.5) * step_len)
+        tier_cy = ab_pos.y + oy * (ab_len * 0.5 + (ro + 0.5) * step_len)
+        tier_z = z_ground + (1.0 - t_frac) * 0.24
+        create_beveled_box(bm, size=(ramp_out_w, step_len + 0.05, tier_z + 0.02),
+                           location=(tier_cx, tier_cy, tier_z * 0.5),
+                           rotation=(0.0, 0.0, ang_gate),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+    # Retaining side curbs on outer ramp
+    for sgn in (-1.0, 1.0):
+        o_crb_x = ramp_out_cx + tx * (sgn * (ramp_out_w * 0.5 + 0.14))
+        o_crb_y = ramp_out_cy + ty * (sgn * (ramp_out_w * 0.5 + 0.14))
+        create_beveled_box(bm, size=(0.28, ramp_out_len + 0.30, 0.30),
+                           location=(o_crb_x, o_crb_y, z_ground + 0.15),
+                           rotation=(0.0, 0.0, ang_gate),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
 
     # 2. Drawbridge Deck
     # Base longitudinal timber beams
     n_beams = max(3, int(width / 0.70))
     b_step = (width - 0.24) / max(1, n_beams - 1)
-    deck_thick = 0.14
     for bi in range(n_beams):
         lx = -width * 0.5 + 0.12 + bi * b_step
         b_mid = p_hinge + (rot_mat @ Vector((lx, length * 0.5, deck_thick * 0.5))).to_3d()
@@ -158,7 +232,6 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
 
     # Cross transverse oak planks
-    plank_thick = 0.06
     deck_mid = p_hinge + (rot_mat @ Vector((0.0, length * 0.5, deck_thick + plank_thick * 0.5))).to_3d()
     create_beveled_box(bm, size=(width, length, plank_thick),
                        location=(deck_mid.x, deck_mid.y, deck_mid.z),
@@ -179,26 +252,32 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
         hx = cx + tx * (sgn * (width * 0.5 - 0.20))
         hy = cy + ty * (sgn * (width * 0.5 - 0.20))
         create_beveled_box(bm, size=(0.14, 0.45, 0.12),
-                           location=(hx, hy, z_ground + 0.06),
+                           location=(hx, hy, z_ground + 0.12),
                            rotation=(0.0, 0.0, ang_wall),
                            mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
 
-    # 3. Forged Iron Suspension Chains
+    # 3. Forged Iron Suspension Chains (Strictly Parallel Runs, Zero Criss-Crossing!)
     if has_chains:
-        p_corner_L = p_hinge + (rot_mat @ Vector((-width * 0.5 + 0.15, length - 0.20, deck_thick + plank_thick + 0.04))).to_3d()
-        p_corner_R = p_hinge + (rot_mat @ Vector((width * 0.5 - 0.15, length - 0.20, deck_thick + plank_thick + 0.04))).to_3d()
+        reach = length - 0.25
+        deck_fwd = Vector((ox, oy, 0.0)) * math.cos(pitch_rad) + Vector((0.0, 0.0, 1.0)) * math.sin(pitch_rad)
+        deck_z_lift = (deck_thick + plank_thick + 0.04) * math.cos(pitch_rad)
 
-        # Eyelets on bridge corners
+        # Left deck eyelet: in negative tangent direction (-tx, -ty)
+        p_corner_L = p_hinge + deck_fwd * reach - Vector((tx, ty, 0.0)) * (width * 0.5 - 0.15) + Vector((0.0, 0.0, deck_z_lift))
+        # Right deck eyelet: in positive tangent direction (+tx, +ty)
+        p_corner_R = p_hinge + deck_fwd * reach + Vector((tx, ty, 0.0)) * (width * 0.5 - 0.15) + Vector((0.0, 0.0, deck_z_lift))
+
         for cp in (p_corner_L, p_corner_R):
             create_torus_ring(bm, location=cp, rotation=rot_euler,
                               major_radius=0.075, minor_radius=0.016, mat_index=MAT_INDEX_IRON)
 
         # High chain portals in gate piers
         chain_h = max(2.6, pier_h + 0.35)
-        p_wall_L = Vector((cx, cy, z_ground + chain_h)) + Vector((tx, ty, 0.0)) * (-width * 0.5 - 0.45) + Vector((ox, oy, 0.0)) * 0.20
-        p_wall_R = Vector((cx, cy, z_ground + chain_h)) + Vector((tx, ty, 0.0)) * (width * 0.5 + 0.45) + Vector((ox, oy, 0.0)) * 0.20
+        # Left wall hawse: in negative tangent direction (-tx, -ty)
+        p_wall_L = Vector((cx, cy, z_ground + chain_h)) - Vector((tx, ty, 0.0)) * (width * 0.5 + 0.42) + Vector((ox, oy, 0.0)) * 0.25
+        # Right wall hawse: in positive tangent direction (+tx, +ty)
+        p_wall_R = Vector((cx, cy, z_ground + chain_h)) + Vector((tx, ty, 0.0)) * (width * 0.5 + 0.42) + Vector((ox, oy, 0.0)) * 0.25
 
-        # Wall hawse brackets
         for wp in (p_wall_L, p_wall_R):
             create_beveled_box(bm, size=(0.28, 0.28, 0.28),
                                location=(wp.x, wp.y, wp.z),
@@ -208,7 +287,7 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
                               rotation=(1.5708, 0.0, ang_wall),
                               major_radius=0.080, minor_radius=0.018, mat_index=MAT_INDEX_IRON)
 
-        # Run interlocking 3D chains
+        # Interlocking 3D chains: strictly parallel Left-to-Left and Right-to-Right!
         build_chain_run(bm, p_corner_L, p_wall_L, major_r=0.062, minor_r=0.014, pitch=0.084)
         build_chain_run(bm, p_corner_R, p_wall_R, major_r=0.062, minor_r=0.014, pitch=0.084)
 
@@ -216,7 +295,8 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
 def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
                                wall_t=0.55, outward=(0.0, -1.0), tower_r=1.90, tower_h=None):
     """Twin semicircular / D-shaped flanking bastion gate towers projecting forward
-    from the curtain wall with arrow slits, cut-stone corbels and crenellated tops."""
+    from the curtain wall with arrow slits, cut-stone corbels, crenellated battlements,
+    and direct stone access steps connecting the curtain wall-walk to the tower roof terrace."""
     from mathutils import Vector
     from ..materials import MAT_INDEX_STONE, MAT_INDEX_CUT_STONE
     from .battlement import build_battlement_run
@@ -290,7 +370,7 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
 
-        # Parapet merlon runs around the 3 exposed sides
+        # Parapet merlon runs around the 3 exposed sides (rear kept open for walk-up stair access!)
         # Front face battlements
         p_front_s = (tc_x + tx * (deck_w * 0.5) + ox * (deck_w * 0.5),
                      tc_y + ty * (deck_w * 0.5) + oy * (deck_w * 0.5))
@@ -314,3 +394,31 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
                   tc_y - ty * (sgn * deck_w * 0.5) - oy * (deck_w * 0.20))
         build_battlement_run(bm, p_in_s, p_in_e, top_z + 0.09, height=0.82,
                              thickness=0.30, style='STONE')
+
+        # 6. Solid cut-stone access steps from curtain wall-walk up to gate tower roof deck
+        diff_h = H - (wall_h + 0.16)
+        if diff_h > 0.4:
+            n_tsteps = 6
+            tstep_h = diff_h / n_tsteps
+            tstep_w = 0.72
+            tstep_d = (tower_r * 1.40) / n_tsteps
+            rear_lat = tower_r * 0.42 - tower_r - tstep_w * 0.5
+            for ti in range(n_tsteps):
+                step_u = sgn * (tc_dist - tower_r * 0.70 + (ti + 0.5) * tstep_d)
+                st_x = cx + tx * step_u + ox * rear_lat
+                st_y = cy + ty * step_u + oy * rear_lat
+                st_h_solid = (ti + 1) * tstep_h
+                st_z = z_ground + wall_h + 0.16 + st_h_solid * 0.5
+                create_beveled_box(bm, size=(tstep_d + 0.02, tstep_w, st_h_solid),
+                                   location=(st_x, st_y, st_z),
+                                   rotation=(0.0, 0.0, ang),
+                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+                # Outer stepped stone balustrade along courtyard edge of the steps
+                bal_x = st_x - ox * (tstep_w * 0.5 - 0.08)
+                bal_y = st_y - oy * (tstep_w * 0.5 - 0.08)
+                bal_h = 0.65
+                bal_z = z_ground + wall_h + 0.16 + (ti + 1) * tstep_h + bal_h * 0.5
+                create_beveled_box(bm, size=(tstep_d + 0.02, 0.16, bal_h),
+                                   location=(bal_x, bal_y, bal_z),
+                                   rotation=(0.0, 0.0, ang),
+                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
