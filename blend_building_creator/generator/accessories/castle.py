@@ -186,8 +186,9 @@ def build_walkable_round_tower(
     door_ang = door_angs[0][1] if door_angs else 0.0
     a0 = door_ang + 0.8
 
-    create_cylinder(bm, radius=radius + 0.5, height=4.0, segments=segments,
-                    location=(cx, cy, z_base - 2.0), mat_index=MAT_INDEX_STONE)
+    # Deep foundation plinth extending well below steep cliff surfaces
+    create_cylinder(bm, radius=radius + 0.5, height=7.0, segments=segments,
+                    location=(cx, cy, z_base - 3.5), mat_index=MAT_INDEX_STONE)
     create_cylinder(bm, radius=radius + 0.5, height=0.6, segments=segments,
                     location=(cx, cy, z_base + 0.3), mat_index=MAT_INDEX_STONE)
     create_cylinder(bm, radius=radius + 0.25, height=0.4, segments=segments,
@@ -197,8 +198,12 @@ def build_walkable_round_tower(
     z_top = z0 + num_floors * floor_h
     flights = num_floors if tower_type == 'BATTLEMENTS' else num_floors - 1
 
-    ring_slab(bm, r_in=0.05, r_out=r_wall_in + 0.1, z=z0 - 0.15, segments=segments, offset=0.0,
-              mat_index=MAT_INDEX_CUT_STONE, height=0.3, center=(cx, cy))
+    # Ground floor timber planking (wooden floors throughout, no redundant stone discs)
+    _build_watertight_floor(
+        bm, r_floor=r_wall_in + 0.04, z_floor=z0 + 0.06,
+        stair_arc=None, shaft_r_in=r_wall_in,
+        cx=cx, cy=cy
+    )
 
     for fl in range(num_floors):
         z_fl = z0 + fl * floor_h
@@ -242,11 +247,11 @@ def build_walkable_round_tower(
             elif fl > 0 and k % 4 == 2:
                 sill_h, head_h, slit_w = 1.05, 2.35, 0.3
                 create_beveled_box(bm, size=(wall_t, chord, sill_h),
-                                   location=(fx, fy, z_fl + sill_h * 0.5),
-                                   rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+                                       location=(fx, fy, z_fl + sill_h * 0.5),
+                                       rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
                 create_beveled_box(bm, size=(wall_t, chord, floor_h - head_h),
-                                   location=(fx, fy, z_fl + head_h + (floor_h - head_h) * 0.5),
-                                   rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+                                       location=(fx, fy, z_fl + head_h + (floor_h - head_h) * 0.5),
+                                       rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
                 jamb = (chord - slit_w) * 0.5
                 for s in (-1.0, 1.0):
                     create_beveled_box(
@@ -279,8 +284,10 @@ def build_walkable_round_tower(
                                        rotation=(0.0, 0.0, ja), mat_index=MAT_INDEX_CUT_STONE,
                                        bevel_amount=0.02)
 
-        create_cylinder(bm, radius=radius + 0.12, height=0.22, segments=segments,
-                        location=(cx, cy, z_ceil), mat_index=MAT_INDEX_CUT_STONE)
+        # Exterior cut-stone belt course molding around tower perimeter (never penetrates room interior)
+        ring_slab(bm, r_in=radius - 0.04, r_out=radius + 0.14, z=z_ceil - 0.11,
+                  segments=segments, offset=0.0, mat_index=MAT_INDEX_CUT_STONE,
+                  height=0.22, center=(cx, cy))
 
     corbel_r = radius + 0.5
     n_corbel = max(corbel_count, int(radius * 5))
@@ -291,8 +298,9 @@ def build_walkable_round_tower(
                            location=(cx + (radius + 0.18) * ca, cy + (radius + 0.18) * sa, z_top - 0.3),
                            rotation=(0.0, 0.0, ang + math.pi * 0.5),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-    create_cylinder(bm, radius=corbel_r, height=0.35, segments=segments,
-                    location=(cx, cy, z_top + 0.175), mat_index=MAT_INDEX_CUT_STONE)
+    # Outer corbel projection ring table (open center so stairwell emerges onto the roof deck)
+    ring_slab(bm, r_in=r_wall_in - 0.02, r_out=corbel_r, z=z_top, segments=segments,
+              offset=0.0, mat_index=MAT_INDEX_CUT_STONE, height=0.35, center=(cx, cy))
 
     if tower_type == 'SPIRE':
         _witch_hat_roof(bm, cx, cy, z_top + 0.35, radius=corbel_r, height=spire_h,
@@ -304,11 +312,15 @@ def build_walkable_round_tower(
                    location=(cx + 0.42, cy, tip + 1.7), mat_index=MAT_INDEX_IRON)
         return
 
+    # Roof battlement deck with open stairwell cutout (walk straight onto the roof deck)
     deck_z = z_top + 0.35
-    _tower_floor(bm, cx, cy, deck_z, r_free, r_wall_in, a0 + arc, a0 + 2.0 * math.pi,
-                 MAT_INDEX_CUT_STONE)
-    _tower_floor(bm, cx, cy, deck_z, r_free, r_wall_in, a0, a0 + arc - 1.8,
-                 MAT_INDEX_CUT_STONE, disk=False)
+    deck_s_arc = _stair_arc_deg(flights - 1) if flights > 0 else None
+    _build_watertight_floor(
+        bm, r_floor=r_wall_in + 0.04, z_floor=deck_z + 0.30,
+        stair_arc=deck_s_arc, shaft_r_in=r_wall_in,
+        thickness=0.30, cx=cx, cy=cy
+    )
+    # Outer cut-stone parapet walkway ring
     ring_slab(bm, r_in=r_wall_in - 0.02, r_out=corbel_r, z=deck_z + 0.15, segments=segments,
               offset=0.0, mat_index=MAT_INDEX_CUT_STONE, height=0.30, center=(cx, cy))
     m_h = 1.05

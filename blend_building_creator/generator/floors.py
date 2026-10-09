@@ -155,12 +155,17 @@ def build_floors(bm, props, ctx):
     # BESIDE the lower one and never stacks on top of it (which made the run
     # below unwalkable).  Tenements keep their own single-wall tandem scheme.
     lane_gap = 0.20
-    lane_cx_0 = fl0_ix_min + 0.08 + stair_w * 0.5
+    stair_side_opt = getattr(props, 'stair_placement', 'LEFT')
     stair_switchback = (
         not is_tenement_stairs
         and getattr(props, 'stair_style', 'STRAIGHT') != 'SPIRAL'
     )
-    lane_cx_1 = lane_cx_0 + stair_w + lane_gap
+    if stair_side_opt == 'RIGHT':
+        lane_cx_0 = fl0_ix_max - 0.08 - stair_w * 0.5
+        lane_cx_1 = lane_cx_0 - stair_w - lane_gap
+    else:
+        lane_cx_0 = fl0_ix_min + 0.08 + stair_w * 0.5
+        lane_cx_1 = lane_cx_0 + stair_w + lane_gap
     # Room planning needs the whole switchback well centre; the single-lane
     # tenement/tandem stair just uses its one lane.
     stair_cx = (lane_cx_0 + lane_cx_1) * 0.5 if stair_switchback else lane_cx_0
@@ -1507,6 +1512,15 @@ def build_floors(bm, props, ctx):
                 _stair_door_spots = {}
         _plan_doorways = list(ctx.floor_doorways.get(fl_idx, []))
         _plan_doorways.extend(_stair_door_spots.get(fl_idx, []))
+        for ed in getattr(props, 'extra_doorways', []):
+            if ed.get('floor_idx', 0) == fl_idx:
+                sax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
+                if sax == 'Y':
+                    xf = ix_min if ed.get('facade') == 'LEFT' else ix_max
+                    _plan_doorways.append({'x': xf, 'y': ed.get('pos', 0.0), 'axis': 'Y', 'w': ed.get('w', 1.8)})
+                else:
+                    yf = iy_max if ed.get('facade') == 'BACK' else iy_min
+                    _plan_doorways.append({'x': ed.get('pos', 0.0), 'y': yf, 'axis': 'X', 'w': ed.get('w', 1.8)})
         fl_rooms, fl_interior_walls = plan_floor_rooms(
             fl_idx, (ix_min, ix_max, iy_min, iy_max),
             stair_hole=cur_stair_hole or next_stair_hole,
@@ -2789,3 +2803,43 @@ def _place_exterior_stair_doors(bm, props, ctx, fl_idx, z_floor,
                 ground_floor_stone=False,
                 normal_axis=('+Y' if facade == 'BACK' else '-Y'),
                 include_leaf=getattr(props, 'include_door_leaves', True))
+
+    for ed in getattr(props, 'extra_doorways', []):
+        if ed.get('floor_idx', 0) != fl_idx:
+            continue
+        facade = ed.get('facade', 'RIGHT')
+        dw_w = ed.get('w', 1.80)
+        dw_h = ed.get('h', 2.60)
+        pos = ed.get('pos', 0.0)
+        top_z = z_floor + dw_h + e_margin
+        is_portal = ed.get('is_portal', True)
+        if facade in ('LEFT', 'RIGHT'):
+            xf = x_min if facade == 'LEFT' else x_max
+            ops = left_openings if facade == 'LEFT' else right_openings
+            ops.append({'u_start': (pos - dw_w * 0.5 - e_margin) - y_min,
+                        'u_end': (pos + dw_w * 0.5 + e_margin) - y_min,
+                        'z_start': z_floor, 'z_end': top_z})
+            ctx.floor_doorways.setdefault(fl_idx, []).append({'x': xf, 'y': pos, 'axis': 'Y', 'w': dw_w})
+            build_door_assembly(
+                bm, center_x=xf, y_front=pos, z_base=z_floor,
+                wall_thickness=wall_t, door_w=dw_w, door_h=dw_h,
+                door_angle_deg=props.door_angle,
+                door_shape='ARCHED',
+                ground_floor_stone=False,
+                normal_axis=('-X' if facade == 'LEFT' else '+X'),
+                include_leaf=not is_portal)
+        else:
+            yf = y_max if facade == 'BACK' else y_min
+            ops = back_openings if facade == 'BACK' else front_openings
+            ops.append({'u_start': (pos - dw_w * 0.5 - e_margin) - x_min,
+                        'u_end': (pos + dw_w * 0.5 + e_margin) - x_min,
+                        'z_start': z_floor, 'z_end': top_z})
+            ctx.floor_doorways.setdefault(fl_idx, []).append({'x': pos, 'y': yf, 'axis': 'X', 'w': dw_w})
+            build_door_assembly(
+                bm, center_x=pos, y_front=yf, z_base=z_floor,
+                wall_thickness=wall_t, door_w=dw_w, door_h=dw_h,
+                door_angle_deg=props.door_angle,
+                door_shape='ARCHED',
+                ground_floor_stone=False,
+                normal_axis=('+Y' if facade == 'BACK' else '-Y'),
+                include_leaf=not is_portal)

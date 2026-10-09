@@ -132,24 +132,32 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
     # a. Solid cut-stone Gateway Threshold Platform under the portal arch
     plat_w = width + 1.20
     plat_len = 2.40
-    plat_cx = cx - ox * 0.40
-    plat_cy = cy - oy * 0.40
+    # Recess the platform inwards into the gateway passage so its outer edge stops
+    # cleanly behind the hinge without coplanar collision with the drawbridge deck
+    plat_cx = cx - ox * (plat_len * 0.5 + 0.12)
+    plat_cy = cy - oy * (plat_len * 0.5 + 0.12)
     create_beveled_box(bm, size=(plat_w, plat_len, 0.28),
                        location=(plat_cx, plat_cy, z_ground + 0.02),
                        rotation=(0.0, 0.0, ang_gate),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
 
+    # Threshold rebate curb under the hinge line
+    create_beveled_box(bm, size=(plat_w, 0.24, 0.26),
+                       location=(cx - ox * 0.02, cy - oy * 0.02, z_ground - 0.01),
+                       rotation=(0.0, 0.0, ang_gate),
+                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+
     # b. Courtyard Approach Ramp (Inside): gentle cut-stone incline extending into the bailey
     ramp_in_len = 2.80
     ramp_in_w = width + 0.80
-    ramp_in_cx = cx - ox * (plat_len * 0.5 + ramp_in_len * 0.5 + 0.30)
-    ramp_in_cy = cy - oy * (plat_len * 0.5 + ramp_in_len * 0.5 + 0.30)
+    ramp_in_cx = plat_cx - ox * (plat_len * 0.5 + ramp_in_len * 0.5)
+    ramp_in_cy = plat_cy - oy * (plat_len * 0.5 + ramp_in_len * 0.5)
     n_in_tiers = 4
     for ri in range(n_in_tiers):
         t_frac = ri / n_in_tiers
         step_len = ramp_in_len / n_in_tiers
-        tier_cx = cx - ox * (plat_len * 0.5 + 0.40 + (ri + 0.5) * step_len)
-        tier_cy = cy - oy * (plat_len * 0.5 + 0.40 + (ri + 0.5) * step_len)
+        tier_cx = plat_cx - ox * (plat_len * 0.5 + (ri + 0.5) * step_len)
+        tier_cy = plat_cy - oy * (plat_len * 0.5 + (ri + 0.5) * step_len)
         tier_z = z_ground + (1.0 - t_frac) * 0.14
         create_beveled_box(bm, size=(ramp_in_w, step_len + 0.04, tier_z + 0.02),
                            location=(tier_cx, tier_cy, tier_z * 0.5),
@@ -164,11 +172,11 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
                            rotation=(0.0, 0.0, ang_gate),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
 
-    # c. Moat / Dry Ditch stone pit curb under the bridge
+    # c. Moat / Dry Ditch stone pit curb under the bridge (fits drawbridge deck in gap below)
     ditch_depth = 0.50
-    pit_len = length * 1.05
-    pit_cx = cx + ox * (pit_len * 0.5)
-    pit_cy = cy + oy * (pit_len * 0.5)
+    pit_len = length + 0.45
+    pit_cx = cx + ox * (length * 0.5 - 0.10)
+    pit_cy = cy + oy * (length * 0.5 - 0.10)
     for sgn in (-1.0, 1.0):
         kx = pit_cx + tx * (sgn * (width * 0.5 + 0.35))
         ky = pit_cy + ty * (sgn * (width * 0.5 + 0.35))
@@ -293,7 +301,8 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
 
 
 def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
-                               wall_t=0.55, outward=(0.0, -1.0), tower_r=1.90, tower_h=None):
+                               wall_t=0.55, outward=(0.0, -1.0), tower_r=1.90, tower_h=None,
+                               rear_door=None):
     """Twin semicircular / D-shaped flanking bastion gate towers projecting forward
     from the curtain wall with arrow slits, cut-stone corbels, crenellated battlements,
     and direct stone access steps connecting the curtain wall-walk to the tower roof terrace."""
@@ -320,6 +329,13 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
         # Tower centered to frame gate opening cleanly without pinching the passage
         tc_x = cx + tx * (sgn * tc_dist) + ox * (tower_r * 0.42)
         tc_y = cy + ty * (sgn * tc_dist) + oy * (tower_r * 0.42)
+
+        # Foundation plinth extending down into cliff rock so corners sit below terrain
+        found_d = 2.5
+        create_beveled_box(bm, size=(pier_w + 0.45, pier_w + 0.45, found_d),
+                           location=(tc_x, tc_y, z_ground - found_d * 0.5),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_STONE, bevel_amount=0.035)
 
         # 1. Battered talus base
         create_beveled_box(bm, size=(pier_w + 0.40, pier_w + 0.40, talus_h),
@@ -370,55 +386,57 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
 
-        # Parapet merlon runs around the 3 exposed sides (rear kept open for walk-up stair access!)
-        # Front face battlements
-        p_front_s = (tc_x + tx * (deck_w * 0.5) + ox * (deck_w * 0.5),
-                     tc_y + ty * (deck_w * 0.5) + oy * (deck_w * 0.5))
-        p_front_e = (tc_x - tx * (deck_w * 0.5) + ox * (deck_w * 0.5),
-                     tc_y - ty * (deck_w * 0.5) + oy * (deck_w * 0.5))
-        build_battlement_run(bm, p_front_s, p_front_e, top_z + 0.09, height=0.82,
+        # Parapet merlon runs around ALL 4 SIDES with FULL closed corners!
+        # Only leave a dedicated opening where the continuous wall stair landing arrives.
+        hw = deck_w * 0.5
+        # Corner coordinates of the deck:
+        # Front Outer
+        c_fo = (tc_x + tx * (sgn * hw) + ox * hw, tc_y + ty * (sgn * hw) + oy * hw)
+        # Front Inner
+        c_fi = (tc_x - tx * (sgn * hw) + ox * hw, tc_y - ty * (sgn * hw) + oy * hw)
+        # Rear Outer
+        c_ro = (tc_x + tx * (sgn * hw) - ox * hw, tc_y + ty * (sgn * hw) - oy * hw)
+        # Rear Inner
+        c_ri = (tc_x - tx * (sgn * hw) - ox * hw, tc_y - ty * (sgn * hw) - oy * hw)
+
+        # A. Front face run (c_fi -> c_fo)
+        build_battlement_run(bm, c_fi, c_fo, top_z + 0.09, height=0.82,
                              thickness=0.30, style='STONE')
 
-        # Outer flank battlements
-        p_out_s = (tc_x + tx * (sgn * deck_w * 0.5) + ox * (deck_w * 0.5),
-                   tc_y + ty * (sgn * deck_w * 0.5) + oy * (deck_w * 0.5))
-        p_out_e = (tc_x + tx * (sgn * deck_w * 0.5) - ox * (deck_w * 0.5),
-                   tc_y + ty * (sgn * deck_w * 0.5) - oy * (deck_w * 0.5))
-        build_battlement_run(bm, p_out_s, p_out_e, top_z + 0.09, height=0.82,
+        # B. Outer flank run (c_fo -> c_ro)
+        build_battlement_run(bm, c_fo, c_ro, top_z + 0.09, height=0.82,
                              thickness=0.30, style='STONE')
 
-        # Inner flank battlements (facing gatehouse)
-        p_in_s = (tc_x - tx * (sgn * deck_w * 0.5) + ox * (deck_w * 0.5),
-                  tc_y - ty * (sgn * deck_w * 0.5) + oy * (deck_w * 0.5))
-        p_in_e = (tc_x - tx * (sgn * deck_w * 0.5) - ox * (deck_w * 0.20),
-                  tc_y - ty * (sgn * deck_w * 0.5) - oy * (deck_w * 0.20))
-        build_battlement_run(bm, p_in_s, p_in_e, top_z + 0.09, height=0.82,
+        # C. Inner flank run (c_ri -> c_fi)
+        build_battlement_run(bm, c_ri, c_fi, top_z + 0.09, height=0.82,
                              thickness=0.30, style='STONE')
 
-        # 6. Solid cut-stone access steps from curtain wall-walk up to gate tower roof deck
-        diff_h = H - (wall_h + 0.16)
-        if diff_h > 0.4:
-            n_tsteps = 6
-            tstep_h = diff_h / n_tsteps
-            tstep_w = 0.72
-            tstep_d = (tower_r * 1.40) / n_tsteps
-            rear_lat = tower_r * 0.42 - tower_r - tstep_w * 0.5
-            for ti in range(n_tsteps):
-                step_u = sgn * (tc_dist - tower_r * 0.70 + (ti + 0.5) * tstep_d)
-                st_x = cx + tx * step_u + ox * rear_lat
-                st_y = cy + ty * step_u + oy * rear_lat
-                st_h_solid = (ti + 1) * tstep_h
-                st_z = z_ground + wall_h + 0.16 + st_h_solid * 0.5
-                create_beveled_box(bm, size=(tstep_d, tstep_w, st_h_solid),
-                                   location=(st_x, st_y, st_z),
-                                   rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
-                # Outer stepped stone balustrade along courtyard edge of the steps
-                bal_x = st_x - ox * (tstep_w * 0.5 + 0.08)
-                bal_y = st_y - oy * (tstep_w * 0.5 + 0.08)
-                bal_h = 0.65
-                bal_z = z_ground + wall_h + 0.16 + (ti + 1) * tstep_h + bal_h * 0.5
-                create_beveled_box(bm, size=(tstep_d, 0.16, bal_h),
-                                   location=(bal_x, bal_y, bal_z),
-                                   rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
+        # D. Rear face: covers both sides of the stair landing opening, with closed corners!
+        # The opening sits exactly where the wall-walk continuation stair
+        # landing laps over the deck edge (rear_door=(mid_u, half_w) in tower
+        # local tangent coords); without stairs it stays a narrow centered notch.
+        if rear_door is None:
+            door_w_half = 0.65
+            door_mid_u = -hw * 0.25  # slightly towards the inner flank
+        else:
+            door_mid_u, door_w_half = rear_door
+            door_mid_u = max(-hw + 0.45 + door_w_half,
+                             min(hw - 0.45 - door_w_half, door_mid_u))
+        door_p0 = (tc_x + tx * (sgn * (door_mid_u + door_w_half)) - ox * hw,
+                   tc_y + ty * (sgn * (door_mid_u + door_w_half)) - oy * hw)
+        door_p1 = (tc_x + tx * (sgn * (door_mid_u - door_w_half)) - ox * hw,
+                   tc_y + ty * (sgn * (door_mid_u - door_w_half)) - oy * hw)
+
+        # Segment from Rear Outer corner to door outer edge
+        build_battlement_run(bm, c_ro, door_p0, top_z + 0.09, height=0.82,
+                             thickness=0.30, style='STONE')
+        # Segment from door inner edge to Rear Inner corner
+        build_battlement_run(bm, door_p1, c_ri, top_z + 0.09, height=0.82,
+                             thickness=0.30, style='STONE')
+
+        # Terminal cut-stone piers flanking the stair opening
+        for dp in (door_p0, door_p1):
+            create_beveled_box(bm, size=(0.32, 0.32, 0.90),
+                               location=(dp[0], dp[1], top_z + 0.45),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)

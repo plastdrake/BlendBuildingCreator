@@ -32,9 +32,9 @@ _HALLS = (
 # x, y, radius, floors, spire_h, first_tier, rank, spire_roof. Every tower is walkable inside
 # (2 m wide wall stair), so none is thinner than 4.4 m; each stands against a building or rock outcrop.
 _TOWERS = (
-    (-26.5, -6.0, 4.4, 4, 10.0, 2, 'major', False),
-    (26.5, -6.0, 4.4, 4, 10.0, 2, 'major', False),
-    (-25.5, 42.0, 4.4, 5, 14.0, 2, 'landmark', True),
+    (-30.5, -8.0, 4.2, 4, 10.0, 2, 'major', False),
+    (30.5, -8.0, 4.2, 4, 10.0, 2, 'major', False),
+    (-27.6, 40.0, 4.2, 5, 14.0, 2, 'landmark', True),
     (48.0, 26.0, 4.4, 4, 10.0, 3, 'major', False),
 )
 
@@ -104,39 +104,110 @@ def _build_halls(bm, props, tier):
             continue
         fl = _hall_floors(tier, floors, hid)
         ov = _hall_overrides(tier, w, d, fl, shape, facade, ww, wd, rh * 1.3)
-        if hid == "keep":
+        extra_doors = []
+        if hid == "great_hall":
+            # Floor 3 skybridge doorway on East facade (-X in world = RIGHT (+X) in local space)
+            if tier >= 2:
+                extra_doors.append({'floor_idx': 3, 'facade': 'RIGHT', 'pos': -3.6, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+                # Flank-tower vestibule doorways (stacked, landing inside the hall)
+                for _vf in (0, 1, 2):
+                    extra_doors.append({'floor_idx': _vf, 'facade': 'LEFT', 'pos': -4.2, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+            # Floor 0 connecting wing doorway on North facade (+Y in world = BACK in local space)
+            if tier == 3:
+                extra_doors.append({'floor_idx': 0, 'facade': 'BACK', 'pos': 0.5, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+        elif hid == "east_hall":
+            ov['stair_placement'] = 'RIGHT'
+            # Floor 3 skybridge doorway on West facade (+X in world = LEFT (-X) in local space)
+            if tier >= 2:
+                extra_doors.append({'floor_idx': 3, 'facade': 'LEFT', 'pos': -3.6, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+                # Flank-tower vestibule doorways (stacked, landing inside the hall)
+                for _vf in (0, 1, 2):
+                    extra_doors.append({'floor_idx': _vf, 'facade': 'RIGHT', 'pos': -4.2, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+            # Floor 0 connecting wing doorway on North facade (+Y in world = BACK in local space)
+            if tier == 3:
+                extra_doors.append({'floor_idx': 0, 'facade': 'BACK', 'pos': 1.5, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+        elif hid == "keep":
             ov['has_basement_stair'] = True
+            ov['window_left'] = False
+            # Floor 0 west connecting wing doorway on South facade (-Y in world = FRONT in local space)
+            if tier == 3:
+                extra_doors.append({'floor_idx': 0, 'facade': 'FRONT', 'pos': -14.5, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+            # Floor 0 chapel-link doorway on West facade (-X in world = LEFT in local space)
+            if tier >= 2:
+                extra_doors.append({'floor_idx': 0, 'facade': 'LEFT', 'pos': 0.0, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+        elif hid == "archive_hall":
+            # Floor 0 east connecting wing doorway on South facade (-Y in world = FRONT in local space)
+            if tier == 3:
+                extra_doors.append({'floor_idx': 0, 'facade': 'FRONT', 'pos': -4.0, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+        if extra_doors:
+            ov['extra_doorways'] = extra_doors
         _merge_generated_building(bm, props, ov, pos=(x, y, pz - 0.3), rot_z=math.radians(rot))
     if tier >= 2:
-        build_estate_chapel(bm, props, pos=(-16.25, 40.0, 13.7), rot_z=0.0,
-                            tier=f"TIER_{tier}", width=8.5, depth=14.0, floors=1)
+        # Chapel positioned cleanly between Keep (x=-12.0) and Wizard Tower (x=-27.6, r=4.2)
+        # with no side windows embedded into adjacent walls
+        build_estate_chapel(
+            bm, props, pos=(-18.2, 40.0, 13.7), rot_z=0.0,
+            tier=f"TIER_{tier}", width=7.6, depth=12.0, floors=1,
+            extra_overrides={'window_left': False, 'window_right': False, 'roof_overhang': 0.50}
+        )
+        # Architectural connecting link joining Chapel east wall to Keep west wall
+        # (deck flush with the Keep ground floor; a two-tread stoop steps down
+        # to the lower chapel floor at the east end)
+        from .building_connector import build_skybridge_link
+        build_skybridge_link(
+            bm,
+            p1=(-14.4, 40.0),
+            p2=(-12.0, 40.0),
+            width=3.8,
+            floor_z=14.86,
+            ceiling_h=3.2,
+            has_underpass_arch=False,
+            roof_style='GABLE',
+            has_windows=False,
+            has_portals=True
+        )
+        from ..mesh_utils import create_beveled_box as _cbb
+        from ..materials import MAT_INDEX_CUT_STONE as _MCS
+        # Entrance steps down from the link deck (14.90) to the chapel floor
+        # (14.40): the deck-slab tongue forms the first tread, two solid stone
+        # boxes grounded on the chapel floor slab complete the stair.
+        for _sx0, _sx1, _stop in ((-15.00, -14.70, 14.72), (-15.32, -15.00, 14.56)):
+            _sh = _stop - 14.38
+            _cbb(bm, size=(_sx1 - _sx0, 1.90, _sh),
+                 location=((_sx0 + _sx1) * 0.5, 40.0, 14.38 + _sh * 0.5),
+                 mat_index=_MCS, bevel_amount=0.01)
 
 
 def _gate_link(bm, tier):
-    """Enclosed skybridge link joining the two raised terrace halls high above the grand stair passage."""
+    """Enclosed skybridge link joining the two raised terrace halls high above the grand stair passage.
+
+    Narrow walkway shifted south of the hall midline (toward the gates); the
+    deck sits exactly on the halls' 3rd-storey floor level (19.9) so both portals
+    open flush with no step.
+    """
     from .building_connector import build_skybridge_link
-    fz = 8.0 + (3 if tier == 3 else 2) * _FLOOR_H
+    fz = 19.9
     build_skybridge_link(
         bm,
-        p1=(-4.0, 0.0),
-        p2=(4.0, 0.0),
-        width=9.6,
+        p1=(-4.0, -3.6),
+        p2=(4.0, -3.6),
+        width=3.4,
         floor_z=fz,
-        ceiling_h=3.6,
+        ceiling_h=3.7,
         wall_thickness=0.55,
         roof_style='BATTLEMENTS',
         has_windows=True,
         num_windows=2,
         has_portals=True,
         has_underpass_arch=True,
-        underpass_spring_z=10.8,
+        underpass_spring_z=14.5,
     )
 
 
 def _tower_base(x, y, r):
-    pts = [(x, y)] + [(x + r * math.cos(a), y + r * math.sin(a)) for a in
-                      (i * math.pi / 4.0 for i in range(8))]
-    return min(ground_z(px, py) for px, py in pts) - 0.3
+    pts = [(x, y)] + [(x + (r + 0.5) * math.cos(a), y + (r + 0.5) * math.sin(a)) for a in
+                      (i * math.pi / 8.0 for i in range(16))]
+    return min(ground_z(px, py) for px, py in pts) - 1.2
 
 
 def _build_towers(bm, registry, tier):
@@ -146,13 +217,15 @@ def _build_towers(bm, registry, tier):
             continue
         z = _tower_base(x, y, r)
         roofed = spire and tier == 3
-        # Direct door orientations connecting into adjacent buildings or bridge
-        if abs(x - (-26.5)) < 1.0:
-            door_angs = ((0, 0.0), (1, 0.0), (2, 0.0))
-        elif abs(x - 26.5) < 1.0:
-            door_angs = ((0, math.pi), (1, math.pi), (2, math.pi))
-        elif abs(x - (-25.5)) < 1.0:
-            door_angs = ((0, 0.0), (1, 0.0))
+        # Direct door orientations connecting into adjacent buildings or bridge.
+        # Flank towers aim their doors at the vestibule corridor (y=-4.2),
+        # which lands inside both tower and hall footprints.
+        if abs(x - (-30.5)) < 1.0:
+            door_angs = ((0, 1.178), (1, 1.178), (2, 1.178))
+        elif abs(x - 30.5) < 1.0:
+            door_angs = ((0, 1.9635), (1, 1.9635), (2, 1.9635))
+        elif abs(x - (-27.6)) < 1.0:
+            door_angs = ((0, 0.0), (1, 0.0))  # East-facing doorways connecting into Chapel
         elif abs(x - 48.0) < 1.0:
             door_angs = ((1, math.pi),)  # West-facing doorway on Floor 1 to receive the wooden bridge
         else:
@@ -165,24 +238,26 @@ def _build_towers(bm, registry, tier):
             tower_type='SPIRE' if roofed else 'BATTLEMENTS', spire_h=spire_h,
             door_angs=door_angs)
 
-        # Architectural connector vestibule tying the tower into the house facade
-        if abs(x - (-26.5)) < 1.0:
+        # Architectural connector vestibule tying the tower into the house facade.
+        # Flank corridors run at y=-4.2 so they land inside both footprints.
+        if abs(x - (-30.5)) < 1.0:
             build_tower_building_connector(
                 bm, tower_cx=x, tower_cy=y, tower_r=r, tower_z_base=z,
                 bld_wall_x=-26.0, bld_y_span=(-5.0, 5.0),
-                floor_zs=(8.0, 11.7, 15.4)
+                floor_zs=(8.0, 11.7, 15.4), corridor_y=-4.2
             )
-        elif abs(x - 26.5) < 1.0:
+        elif abs(x - 30.5) < 1.0:
             build_tower_building_connector(
                 bm, tower_cx=x, tower_cy=y, tower_r=r, tower_z_base=z,
                 bld_wall_x=26.0, bld_y_span=(-5.0, 5.0),
-                floor_zs=(8.0, 11.7, 15.4)
+                floor_zs=(8.0, 11.7, 15.4), corridor_y=-4.2
             )
-        elif abs(x - (-25.5)) < 1.0:
+        elif abs(x - (-27.6)) < 1.0:
             build_tower_building_connector(
                 bm, tower_cx=x, tower_cy=y, tower_r=r, tower_z_base=z,
-                bld_wall_x=-20.5, bld_y_span=(35.0, 47.0),
-                floor_zs=(14.0, 17.7)
+                bld_wall_x=-22.0, bld_y_span=(34.0, 46.0),
+                floor_zs=(14.0,),
+                max_vest_z=17.2, hall_step=0.40
             )
 
         height = z + floors * 4.1 + (spire_h if roofed else 0.0)
@@ -261,12 +336,12 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
     build_ramp_stairs(bm)
 
     if tier == 2:
+        from .nasher_site import build_upper_citadel_perimeter_wall
         bld_forecourt = ((-29.0, -15.0, -39.5, -30.5), (15.0, 29.0, -39.5, -30.5))
         bld_terrace = ((-26.0, -4.0, -5.0, 5.0), (4.0, 26.0, -5.0, 5.0))
         build_rim_walls(bm, FORECOURT, 185.0, 355.0, height=3.0, thick=0.85, inset=0.98,
                         gate=True, bld_boxes=bld_forecourt)
-        build_rim_walls(bm, TERRACE, 175.0, 365.0, height=3.4, thick=0.90, inset=0.98,
-                        gate=True, bld_boxes=bld_terrace)
+        build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=bld_terrace, tier=2)
     elif tier == 3:
         from .nasher_site import build_upper_citadel_perimeter_wall
         bld_forecourt = ((-29.0, -15.0, -39.5, -30.5), (15.0, 29.0, -39.5, -30.5))
@@ -275,12 +350,12 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
             (-18.5, -10.5, 4.5, 34.5), (12.5, 20.5, 4.5, 34.5),   # West & East Connecting Wings
             (-12.5, 12.5, 31.5, 48.5),                              # Keep
             (12.0, 29.0, 34.5, 45.5),                               # Archive Hall
-            (-30.5, -20.5, 36.5, 47.5),                             # Wizard's Spire
+            (-33.0, -22.5, 35.0, 45.0),                             # Wizard's Spire
             (43.0, 53.0, 21.0, 31.0),                             # East Bluff Tower
         )
         build_rim_walls(bm, FORECOURT, 185.0, 355.0, height=3.0, thick=0.85, inset=0.98,
                         gate=True, bld_boxes=bld_forecourt)
-        build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=bld_upper)
+        build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=bld_upper, tier=3)
 
     _build_halls(bm, props, tier)
     if tier >= 2:
@@ -288,16 +363,19 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
 
     if tier == 3:
         from .building_connector import build_connecting_wing, build_wooden_bridge
-        # West Connecting Wing linking Great Hall (y=5.0) to Keep (y=34.0)
+        # West Connecting Wing linking Great Hall (y=5.0) to Keep (south wall y=32.0).
+        # Decks sit flush with the connected ground floors (8.86 / 14.86).
         build_connecting_wing(
             bm, cx=-14.5, y_start=5.0, y_end=34.0, width=6.6,
-            z_low=8.0, z_high=14.0, stair_y_start=16.5, stair_y_end=22.5
+            z_low=8.86, z_high=14.86, stair_y_start=15.0, stair_y_end=24.0,
+            wall_y_north=32.0, roof_y_end_north=32.0
         )
-        # East Connecting Wing linking East Hall (y=5.0) to Archive Hall (y=34.0)
+        # East Connecting Wing linking East Hall (y=5.0) to Archive Hall (south wall y=35.0)
         build_connecting_wing(
-            bm, cx=16.5, y_start=5.0, y_end=34.0, width=6.6,
-            z_low=8.0, z_high=14.0, stair_y_start=16.5, stair_y_end=22.5,
-            has_bridge_door=True, bridge_door_y=26.0
+            bm, cx=16.5, y_start=5.0, y_end=36.5, width=6.6,
+            z_low=8.86, z_high=14.86, stair_y_start=15.0, stair_y_end=24.0,
+            has_bridge_door=True, bridge_door_y=26.0,
+            wall_y_north=35.0, roof_y_end_north=35.0
         )
         # Cozy covered wooden bridge spanning across the chasm to East Bluff Tower
         build_wooden_bridge(

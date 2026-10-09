@@ -358,17 +358,17 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
         outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
         zs = ground_z(s[0], s[1])
         ze = ground_z(e[0], e[1])
-        base_z = min(zs, ze) - 0.35
-        eff_h = height + max(zs, ze) - base_z
+        base_z = min(zs, ze) - 1.20
+        eff_h = height + (max(zs, ze) - min(zs, ze)) + 1.20
         build_curtain_wall_run(bm, s, e, outward, base_z, eff_h, thick,
                                slits=False, seed=i + int(base_z))
 
 
-def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=()):
+def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(), tier=3):
     """
     Constructs the complete perimeter curtain wall loop encircling the entire upper
-    castle complex and the East Bluff plateau (Yellow Line in user sketch), conforming
-    continuously to the undulating cliff terrain.
+    castle complex and the East Bluff plateau, conforming continuously to the
+    undulating cliff terrain and extending down 1.2m into the cliffs.
     """
     from .curtain_wall import build_curtain_wall_run
     from .building_connector import build_curtain_wall_gate_portal
@@ -384,44 +384,65 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=())
         raised_portcullis=True
     )
 
-    # 2. Control waypoints tracing the yellow loop along the cliff rims
+    # 2. Control waypoints tracing the perimeter along the cliff rims, shifted outwards to clear all buildings
     waypoints = [
         # Gate right flank (East arm of Terrace rim)
         (2.8, -19.5),
         (10.0, -19.0),
         (18.0, -18.2),
-        (24.0, -16.8),
-        (27.0, -13.0),
-        # East terrace flank
-        (27.5, -5.0),
-        (27.5, 6.0),
-        (33.0, 13.0),
-        # Promontory around East Bluff (encircling the green tower)
-        (42.0, 14.0),
-        (52.0, 15.0),
-        (60.0, 20.0),
-        (63.0, 26.0),
-        (60.0, 32.0),
-        (52.0, 37.0),
-        (42.0, 38.0),
-        (34.0, 39.0),
-        # Citadel north-east flank to north back rim
-        (26.0, 44.0),
-        (18.0, 49.0),
-        (10.0, 52.0),
-        (0.0, 53.0),
-        (-10.0, 52.0),
-        (-18.0, 49.0),
-        (-25.0, 45.0),
-        # West flank around the Wizard's Spire and terrace
-        (-28.0, 42.0),
-        (-28.0, 35.0),
-        (-27.5, 25.0),
-        (-27.5, 15.0),
-        (-28.0, 5.0),
-        (-27.5, -5.0),
-        (-27.0, -13.0),
-        (-24.0, -16.8),
+        (25.0, -16.8),
+        (29.0, -13.5),
+        # East terrace flank (shifted out to clear East Hall and East Flank Tower)
+        (35.5, -9.0),
+        (36.0, -3.0),
+        (35.5, 6.0),
+        (34.0, 13.0),
+    ]
+
+    if tier >= 3:
+        # Promontory around East Bluff (encircling the East Bluff Bastion Tower)
+        waypoints += [
+            (40.0, 14.0),
+            (52.0, 14.0),
+            (62.0, 19.0),
+            (66.0, 26.0),
+            (62.0, 33.0),
+            (52.0, 38.0),
+            (40.0, 39.0),
+            (34.0, 41.0),
+        ]
+    else:
+        # Tier 2 direct east flank up to upper citadel rim
+        waypoints += [
+            (34.0, 20.0),
+            (33.0, 28.0),
+            (32.0, 36.0),
+            (31.0, 42.0),
+        ]
+
+    waypoints += [
+        # Citadel north rim behind Archive Hall and Keep
+        (28.0, 48.0),
+        (20.0, 52.0),
+        (10.0, 54.5),
+        (0.0, 55.5),
+        (-10.0, 54.5),
+        (-20.0, 52.0),
+        (-28.0, 48.0),
+        # West flank around the Wizard's Spire (shifted outwards to clear spire)
+        (-34.5, 45.0),
+        (-35.5, 40.0),
+        (-34.5, 33.0),
+        # West flank outside West Connecting Wing and Great Hall
+        (-33.0, 24.0),
+        (-33.0, 14.0),
+        (-34.5, 5.0),
+        # Passing outside West Flank Tower
+        (-35.5, -3.0),
+        (-35.5, -9.0),
+        # Return to gate left flank
+        (-29.0, -13.5),
+        (-25.0, -16.8),
         (-18.0, -18.2),
         (-10.0, -19.0),
         (-2.8, -19.5),
@@ -459,8 +480,8 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=())
         outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
         zs = ground_z(s[0], s[1])
         ze = ground_z(e[0], e[1])
-        base_z = min(zs, ze) - 0.35
-        eff_h = height + max(zs, ze) - base_z
+        base_z = min(zs, ze) - 1.20
+        eff_h = height + (max(zs, ze) - min(zs, ze)) + 1.20
         build_curtain_wall_run(
             bm, s, e, outward, base_z, eff_h, thick,
             slits=False, seed=i + int(base_z * 7)
@@ -582,6 +603,7 @@ def _trim_leg(leg, c0, r0, c1, r1):
 def _build_ring_towers(bm, tier):
     from .castle import build_walkable_round_tower
     from .bastion import build_rickety_frame_tower
+    from .building_connector import carve_pass_through_portal
     for x, y, r, floors in ring_towers(tier):
         face_in = math.atan2(-y, -x)
         if tier == 1:
@@ -590,8 +612,18 @@ def _build_ring_towers(bm, tier):
                 bm, x + math.cos(face_in) * inset, y + math.sin(face_in) * inset, z_ground=0.0,
                 base_size=r * 0.75, height=9.5, door_dir=(math.cos(face_in), math.sin(face_in)))
         else:
+            # Guarantee the circular interior of the tower is completely open and walkable
+            wall_t = 0.75 if r >= 3.4 else 0.6
+            inner_r = r - wall_t
+            to_del = [f for f in bm.faces if f.is_valid and
+                      math.hypot(f.calc_center_median().x - x, f.calc_center_median().y - y) < inner_r - 0.05 and
+                      0.0 <= f.calc_center_median().z <= (floors + 2) * 4.2]
+            if to_del:
+                import bmesh
+                bmesh.ops.delete(bm, geom=to_del, context='FACES')
+            z_base = min(0.0, ground_z(x, y) - 0.5)
             build_walkable_round_tower(
-                bm, cx=x, cy=y, z_base=0.0, radius=r,
+                bm, cx=x, cy=y, z_base=z_base, radius=r,
                 num_floors=floors if tier == 2 else floors + 1,
                 floor_h=4.0 if tier == 2 else 4.2, tower_type='BATTLEMENTS',
                 door_angs=((0, face_in),))
@@ -620,7 +652,8 @@ def build_nasher_enclosure(bm, props, ctx):
         if tier == 1:
             pts = [(p[0], p[1]) for p in leg]
         else:
-            pts = _trim_leg(leg, ca[:2], ca[2] * 0.9, cb[:2], cb[2] * 0.9)
+            # Cut at radius + thick * 0.55 so the full width of the curtain wall stops at the tower outer face
+            pts = _trim_leg(leg, ca[:2], ca[2] + thick * 0.55, cb[:2], cb[2] + thick * 0.55)
 
         if gate_leg:
             parts = (_pieces(pts[0], (-_GATE_SPAN, _GATE_Y))

@@ -455,7 +455,8 @@ def _build_stable_yard(bm, t, barn_w, barn_d, tier):
 
 
 def build_servant_quarters(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_1',
-                           width=12.0, depth=7.0, floors=2, floor_h=2.7):
+                           width=12.0, depth=7.0, floors=2, floor_h=2.7,
+                           extra_overrides=None):
     """Detached servant lodge / steward residence, generated with the main building pipeline."""
     overrides = {
         'building_shape': 'RECTANGLE',
@@ -505,6 +506,8 @@ def build_servant_quarters(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='T
         'balcony_width': 2.2,
         'balcony_depth': 1.1,
     }
+    if extra_overrides:
+        overrides.update(extra_overrides)
     _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
 
 
@@ -1238,52 +1241,14 @@ def build_estate_outbuildings(bm, props, ctx):
         # distinct functional medieval quarters, clearing a massive Cour d'Honneur.
         # =========================================================================
 
-        # --- 1. SOUTH-WEST: ARMORER'S & MILITARY TRAINING QUARTER ---
-        # 1a. Ducal Armory & Foundry (Heavy masonry base with slate roof)
-        if has_forge:
-            build_estate_forge(bm, props, pos=(-72.0, -70.0, 0.0), rot_z=math.radians(65.0),
-                               tier=tier, width=16.0, depth=9.5, floors=2,
-                               extra_overrides={'wall_material_override': 'STONE',
-                                                'roof_material_override': 'SLATE',
-                                                'color_shingles': (0.18, 0.18, 0.20, 1.0)})
+        def _inward_rot(bx, by):
+            # Rotates local -Y front entrance to face inward towards castle mount center (0, 5)
+            return math.atan2(bx - 0.0, by - 5.0)
 
-        # 1b. Military Training Grounds & Archery Yard (South-West bailey yard, clear of central avenue)
-        if has_training:
-            build_estate_training_grounds(bm, pos=(-56.0, -46.0, 0.0), rot_z=math.radians(90.0),
-                                          tier=tier, width=26.0, depth=18.0)
-
-        # --- 2. WEST: EQUESTRIAN & RETAINERS QUARTER ---
-        # 2a. Master Equestrian Stables (Rustic horizontal timber planks with wood shingles)
-        if has_stable:
-            build_stable(bm, props, pos=(-75.0, -14.0, 0.0), rot_z=math.radians(88.0),
-                         tier=tier, width=22.0, depth=10.0,
-                         extra_overrides={'wall_material_override': 'WOOD_PLANKS',
-                                          'plank_direction': 'HORIZONTAL',
-                                          'ground_floor_stone': False,
-                                          'roof_material_override': 'WOOD_SHINGLES',
-                                          'color_shingles': (0.42, 0.32, 0.22, 1.0)})
-            stable_slot = (-75.0, -14.0, math.radians(88.0), 22.0)
-
-        # 2b. Chamberlain's Residence (Upscale half-timbered stucco with terracotta roof)
-        build_retainer_house(bm, props, pos=(-73.0, 24.0, 0.0), rot_z=math.radians(92.0),
-                             tier=tier, width=15.0, depth=9.0, floors=2, name="Chamberlain",
-                             extra_overrides={'wall_material_override': 'STUCCO',
-                                              'ground_floor_stone': True,
-                                              'roof_material_override': 'TERRACOTTA',
-                                              'color_shingles': (0.72, 0.32, 0.16, 1.0)})
-
-        # --- 3. NORTH-WEST: GARRISON & GRANARY CORNER ---
-        # 3a. Garrison Barracks Tenement (3-storey half-timbered stucco with slate roof)
-        build_tenement_building(bm, props, pos=(-68.0, 58.0, 0.0), rot_z=math.radians(75.0),
-                                tier=tier, width=24.0, depth=11.0, floors=3,
-                                extra_overrides={'wall_material_override': 'STUCCO',
-                                                 'ground_floor_stone': True,
-                                                 'roof_material_override': 'SLATE',
-                                                 'color_shingles': (0.22, 0.25, 0.30, 1.0)})
-
-        # 3b. Provisions Granary (Rustic timber storehouse with wood shingles)
+        # --- 1. NORTH-WEST: PROVISIONS STORE ---
         if has_granary:
-            build_estate_granary(bm, props, pos=(-32.0, 78.0, 0.0), rot_z=math.radians(12.0),
+            p_gr = (-70.0, 22.0, 0.0)
+            build_estate_granary(bm, props, pos=p_gr, rot_z=_inward_rot(p_gr[0], p_gr[1]),
                                  tier=tier, width=16.0, depth=9.0, floors=2,
                                  extra_overrides={'wall_material_override': 'WOOD_PLANKS',
                                                   'plank_direction': 'HORIZONTAL',
@@ -1292,62 +1257,77 @@ def build_estate_outbuildings(bm, props, ctx):
                                                   'roof_material_override': 'WOOD_SHINGLES',
                                                   'color_shingles': (0.40, 0.30, 0.22, 1.0)})
 
-        # --- 4. SOUTH-EAST: GATE WATCH & SANCTUARY NOOK ---
-        # 4a. Gatehouse Watch Barracks (Stucco upper level with slate roof)
+        # --- 2. WEST: EQUESTRIAN STABLES ---
+        if has_stable:
+            p_st = (-74.0, -14.0, 0.0)
+            r_st = _inward_rot(p_st[0], p_st[1])
+            build_stable(bm, props, pos=p_st, rot_z=r_st,
+                         tier=tier, width=22.0, depth=10.0,
+                         extra_overrides={'wall_material_override': 'WOOD_PLANKS',
+                                          'plank_direction': 'HORIZONTAL',
+                                          'ground_floor_stone': False,
+                                          'roof_material_override': 'WOOD_SHINGLES',
+                                          'color_shingles': (0.42, 0.32, 0.22, 1.0)})
+            stable_slot = (-74.0, -14.0, r_st, 22.0)
+
+        # --- 3. SOUTH-WEST: TRAINING GROUNDS & ARCHERY YARD ---
+        if has_training:
+            p_tr = (-56.0, -48.0, 0.0)
+            build_estate_training_grounds(bm, pos=p_tr, rot_z=_inward_rot(p_tr[0], p_tr[1]),
+                                          tier=tier, width=28.0, depth=18.0)
+
+        # --- 4. SOUTH-WEST FLANK: FORGE & ARMORY WORKSHOP ---
+        if has_forge:
+            p_fg = (-28.0, -68.0, 0.0)
+            build_estate_forge(bm, props, pos=p_fg, rot_z=_inward_rot(p_fg[0], p_fg[1]),
+                               tier=tier, width=16.0, depth=9.0, floors=2,
+                               extra_overrides={'wall_material_override': 'STUCCO',
+                                                'ground_floor_stone': True,
+                                                'roof_material_override': 'SLATE',
+                                                'color_shingles': (0.22, 0.22, 0.24, 1.0)})
+
+        # --- 5. SOUTH-EAST FLANK: GATE GUARDHOUSE ---
         if has_guardhouse:
-            build_guardhouse(bm, props, pos=(72.0, -70.0, 0.0), rot_z=math.radians(-65.0),
+            p_gh = (28.0, -68.0, 0.0)
+            build_guardhouse(bm, props, pos=p_gh, rot_z=_inward_rot(p_gh[0], p_gh[1]),
                              tier=tier, width=16.0, depth=8.5, floors=2,
                              extra_overrides={'wall_material_override': 'STUCCO',
                                               'ground_floor_stone': True,
                                               'roof_material_override': 'SLATE',
                                               'color_shingles': (0.20, 0.24, 0.28, 1.0)})
 
-        # 4b. Consecrated Chantry Chapel (Ashlar stone with slate roof)
-        if has_chapel:
-            build_estate_chapel(bm, props, pos=(52.0, -62.0, 0.0), rot_z=math.radians(-15.0),
-                                tier=tier, width=15.0, depth=9.0, floors=1,
-                                extra_overrides={'wall_material_override': 'STONE',
-                                                 'roof_material_override': 'SLATE',
-                                                 'color_shingles': (0.20, 0.24, 0.28, 1.0)})
+        # --- 6. SOUTH-EAST: CHAMBERLAIN RESIDENCE ---
+        p_ch = (56.0, -48.0, 0.0)
+        build_retainer_house(bm, props, pos=p_ch, rot_z=_inward_rot(p_ch[0], p_ch[1]),
+                             tier=tier, width=16.0, depth=9.0, floors=2, name="Chamberlain",
+                             extra_overrides={'wall_material_override': 'STUCCO',
+                                              'ground_floor_stone': True,
+                                              'roof_material_override': 'TERRACOTTA',
+                                              'color_shingles': (0.72, 0.32, 0.16, 1.0)})
 
-        # --- 5. EAST: NOBLE RETAINERS QUARTER ---
-        # 5a. Castellan's Grand Manor House (Half-timbered stucco with warm terracotta roof)
+        # --- 7. EAST: CASTELLAN MANOR / SERVANTS LODGE ---
         if has_servants:
-            build_retainer_house(bm, props, pos=(74.0, -18.0, 0.0), rot_z=math.radians(-88.0),
+            p_sv = (74.0, -14.0, 0.0)
+            r_sv = _inward_rot(p_sv[0], p_sv[1])
+            build_retainer_house(bm, props, pos=p_sv, rot_z=r_sv,
                                  tier=tier, width=18.0, depth=10.0, floors=2, name="Castellan",
                                  extra_overrides={'wall_material_override': 'STUCCO',
                                                   'ground_floor_stone': True,
                                                   'roof_material_override': 'TERRACOTTA',
                                                   'color_shingles': (0.68, 0.28, 0.14, 1.0)})
-            servant_slot = (74.0, -18.0, math.radians(-88.0), 18.0)
+            servant_slot = (74.0, -14.0, r_sv, 18.0)
 
-        # 5b. High Steward's Chancellor Manor (Stucco with dark slate roof)
-        build_retainer_house(bm, props, pos=(73.0, 20.0, 0.0), rot_z=math.radians(-92.0),
-                             tier=tier, width=15.0, depth=9.0, floors=2, name="HighSteward",
-                             extra_overrides={'wall_material_override': 'STUCCO',
-                                              'ground_floor_stone': True,
-                                              'roof_material_override': 'SLATE',
-                                              'color_shingles': (0.22, 0.26, 0.32, 1.0)})
-
-        # --- 6. NORTH-EAST: CRAFTSMEN & SCHOLAR CORNER ---
-        # 6a. Servants' & Craftsmen Tenement (Horizontal timber planks with terracotta roof)
-        build_tenement_building(bm, props, pos=(68.0, 56.0, 0.0), rot_z=math.radians(-48.0),
-                                tier=tier, width=24.0, depth=11.0, floors=3,
-                                extra_overrides={'wall_material_override': 'WOOD_PLANKS',
-                                                 'plank_direction': 'HORIZONTAL',
+        # --- 8. NORTH-EAST: SANCTUARY CHANTRY CHAPEL ---
+        if has_chapel:
+            p_cp = (70.0, 22.0, 0.0)
+            build_estate_chapel(bm, props, pos=p_cp, rot_z=_inward_rot(p_cp[0], p_cp[1]),
+                                tier=tier, width=15.0, depth=9.0, floors=1,
+                                extra_overrides={'wall_material_override': 'STUCCO',
                                                  'ground_floor_stone': True,
-                                                 'roof_material_override': 'TERRACOTTA',
-                                                 'color_shingles': (0.70, 0.30, 0.15, 1.0)})
+                                                 'roof_material_override': 'SLATE',
+                                                 'color_shingles': (0.20, 0.24, 0.28, 1.0)})
 
-        # 6b. Almoner & Scholar Retainer Residence (Half-timbered stucco with wood shingles)
-        build_retainer_house(bm, props, pos=(32.0, 78.0, 0.0), rot_z=math.radians(-12.0),
-                             tier=tier, width=15.0, depth=9.0, floors=2, name="Almoner",
-                             extra_overrides={'wall_material_override': 'STUCCO',
-                                              'ground_floor_stone': True,
-                                              'roof_material_override': 'WOOD_SHINGLES',
-                                              'color_shingles': (0.38, 0.28, 0.20, 1.0)})
-
-        # --- 7. COURTYARD AWNINGS & SUPPLY STORES ---
+        # --- 9. COURTYARD AWNINGS & SUPPLY STORES ---
         if has_awnings:
             _place_estate_awnings(bm, props, tier, spread_x, fore_y,
                                   stable=stable_slot, servant=servant_slot)
@@ -1357,43 +1337,67 @@ def build_estate_outbuildings(bm, props, ctx):
 
     if is_grand_plot and tier == 'TIER_2':
         # =========================================================================
-        # TIER 2: SEIGNORIAL CHATELET (6 Outbuildings Growing with Tier)
+        # TIER 2: SEIGNORIAL CHATELET (Semi-Circle Arc Facing Inwards)
         # =========================================================================
-        # Master Stables (20m x 10m)
+        def _inward_rot_t2(bx, by):
+            return math.atan2(bx - 0.0, by - 5.0)
+
+        # Master Stables (20m x 10m) - Wood Planks
         if has_stable:
-            build_stable(bm, props, pos=(-74.0, -16.0, 0.0), rot_z=math.pi * 0.5,
-                         tier=tier, width=20.0, depth=10.0)
-            stable_slot = (-74.0, -16.0, math.pi * 0.5, 20.0)
+            p_st = (-74.0, -14.0, 0.0)
+            r_st = _inward_rot_t2(p_st[0], p_st[1])
+            build_stable(bm, props, pos=p_st, rot_z=r_st,
+                         tier=tier, width=20.0, depth=10.0,
+                         extra_overrides={'wall_material_override': 'WOOD_PLANKS',
+                                          'ground_floor_stone': False})
+            stable_slot = (-74.0, -14.0, r_st, 20.0)
 
-        # Retainers' Hall (16m x 8.5m, 2 floors)
-        if has_servants:
-            build_retainer_house(bm, props, pos=(74.0, -16.0, 0.0), rot_z=-math.pi * 0.5,
-                                 tier=tier, width=16.0, depth=8.5, floors=2, name="Retainers")
-            servant_slot = (74.0, -16.0, -math.pi * 0.5, 16.0)
-
-        # Servants' Quarters (16m x 8m, 2 floors)
-        build_servant_quarters(bm, props, pos=(74.0, 14.0, 0.0), rot_z=-math.pi * 0.5,
-                               tier=tier, width=16.0, depth=8.0, floors=2)
-
-        # Gate Guardhouse (13.5m x 7m, 2 floors)
-        if has_guardhouse:
-            build_guardhouse(bm, props, pos=(72.0, -56.0, 0.0), rot_z=-math.pi * 0.5,
-                             tier=tier, width=13.5, depth=7.0, floors=2)
-
-        # Armory Forge (13m x 7.5m)
-        if has_forge:
-            build_estate_forge(bm, props, pos=(-72.0, -56.0, 0.0), rot_z=math.pi * 0.5,
-                               tier=tier, width=13.0, depth=7.5, floors=1)
-
-        # Granary (12m x 7m)
-        if has_granary:
-            build_estate_granary(bm, props, pos=(-74.0, 14.0, 0.0), rot_z=math.pi * 0.5,
-                                 tier=tier, width=12.0, depth=7.0, floors=1)
-
-        # Training Grounds (28m x 20m)
+        # Training Grounds (28m x 18m)
         if has_training:
-            build_estate_training_grounds(bm, pos=(-34.0, -72.0, 0.0), rot_z=0.0,
-                                          tier=tier, width=28.0, depth=20.0)
+            p_tr = (-56.0, -48.0, 0.0)
+            build_estate_training_grounds(bm, pos=p_tr, rot_z=_inward_rot_t2(p_tr[0], p_tr[1]),
+                                          tier=tier, width=28.0, depth=18.0)
+
+        # Armory Forge (13m x 7.5m) - Stucco
+        if has_forge:
+            p_fg = (-28.0, -68.0, 0.0)
+            build_estate_forge(bm, props, pos=p_fg, rot_z=_inward_rot_t2(p_fg[0], p_fg[1]),
+                               tier=tier, width=13.0, depth=7.5, floors=1,
+                               extra_overrides={'wall_material_override': 'STUCCO',
+                                                'ground_floor_stone': True})
+
+        # Gate Guardhouse (13.5m x 7m, 2 floors) - Stucco
+        if has_guardhouse:
+            p_gh = (28.0, -68.0, 0.0)
+            build_guardhouse(bm, props, pos=p_gh, rot_z=_inward_rot_t2(p_gh[0], p_gh[1]),
+                             tier=tier, width=13.5, depth=7.0, floors=2,
+                             extra_overrides={'wall_material_override': 'STUCCO',
+                                              'ground_floor_stone': True})
+
+        # Retainers' Hall (16m x 8.5m, 2 floors) - Stucco
+        if has_servants:
+            p_sv = (56.0, -48.0, 0.0)
+            r_sv = _inward_rot_t2(p_sv[0], p_sv[1])
+            build_retainer_house(bm, props, pos=p_sv, rot_z=r_sv,
+                                 tier=tier, width=16.0, depth=8.5, floors=2, name="Retainers",
+                                 extra_overrides={'wall_material_override': 'STUCCO',
+                                                  'ground_floor_stone': True})
+            servant_slot = (56.0, -48.0, r_sv, 16.0)
+
+        # Servants' Quarters (16m x 8m, 2 floors) - Stucco
+        p_sq = (74.0, -14.0, 0.0)
+        build_servant_quarters(bm, props, pos=p_sq, rot_z=_inward_rot_t2(p_sq[0], p_sq[1]),
+                               tier=tier, width=16.0, depth=8.0, floors=2,
+                               extra_overrides={'wall_material_override': 'STUCCO',
+                                                'ground_floor_stone': True})
+
+        # Granary (12m x 7m) - Wood Planks
+        if has_granary:
+            p_gr = (-70.0, 18.0, 0.0)
+            build_estate_granary(bm, props, pos=p_gr, rot_z=_inward_rot_t2(p_gr[0], p_gr[1]),
+                                 tier=tier, width=12.0, depth=7.0, floors=1,
+                                 extra_overrides={'wall_material_override': 'WOOD_PLANKS',
+                                                  'ground_floor_stone': False})
 
         if has_awnings:
             _place_estate_awnings(bm, props, tier, spread_x, fore_y,

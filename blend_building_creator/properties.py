@@ -648,6 +648,17 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    stair_placement: EnumProperty(
+        name="Stair Placement",
+        description="Wall side where interior staircase is placed (LEFT or RIGHT)",
+        items=[
+            ('LEFT', 'Left Wall', 'Place interior stairs against the left wall'),
+            ('RIGHT', 'Right Wall', 'Place interior stairs against the right wall'),
+        ],
+        default='LEFT',
+        update=on_property_updated
+    )
+
     has_exterior_stairs: BoolProperty(
         name="Exterior Stairs",
         description="Heavy timber exterior staircase and landing providing outdoor access to upper floor apartments",
