@@ -124,7 +124,7 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
     rot_mat = Matrix.Rotation(ang_gate, 4, 'Z') @ Matrix.Rotation(pitch_rad, 4, 'X')
     rot_euler = rot_mat.to_euler('XYZ')
 
-    p_hinge = Vector((cx, cy, z_ground + 0.12))
+    p_hinge = Vector((cx, cy, z_ground - 0.04))
     deck_thick = 0.14
     plank_thick = 0.06
 
@@ -182,7 +182,7 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
     ab_w = width + 1.80
     ab_pos = p_hinge + Vector((ox, oy, 0.0)) * (length + ab_len * 0.5 + 0.05)
     create_beveled_box(bm, size=(ab_w, ab_len, ditch_depth + 0.26),
-                       location=(ab_pos.x, ab_pos.y, z_ground - ditch_depth * 0.5 + 0.13),
+                       location=(ab_pos.x, ab_pos.y, z_ground - ditch_depth * 0.5 + 0.03),
                        rotation=(0.0, 0.0, ang_gate),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
     # Low protective stone curbs framing the outer abutment landing
@@ -205,7 +205,7 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
         step_len = ramp_out_len / n_out_tiers
         tier_cx = ab_pos.x + ox * (ab_len * 0.5 + (ro + 0.5) * step_len)
         tier_cy = ab_pos.y + oy * (ab_len * 0.5 + (ro + 0.5) * step_len)
-        tier_z = z_ground + (1.0 - t_frac) * 0.24
+        tier_z = z_ground + (1.0 - t_frac) * 0.16
         create_beveled_box(bm, size=(ramp_out_w, step_len + 0.05, tier_z + 0.02),
                            location=(tier_cx, tier_cy, tier_z * 0.5),
                            rotation=(0.0, 0.0, ang_gate),
@@ -252,7 +252,7 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
         hx = cx + tx * (sgn * (width * 0.5 - 0.20))
         hy = cy + ty * (sgn * (width * 0.5 - 0.20))
         create_beveled_box(bm, size=(0.14, 0.45, 0.12),
-                           location=(hx, hy, z_ground + 0.12),
+                           location=(hx, hy, z_ground + 0.02),
                            rotation=(0.0, 0.0, ang_wall),
                            mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
 
@@ -409,16 +409,16 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
                 st_y = cy + ty * step_u + oy * rear_lat
                 st_h_solid = (ti + 1) * tstep_h
                 st_z = z_ground + wall_h + 0.16 + st_h_solid * 0.5
-                create_beveled_box(bm, size=(tstep_d + 0.02, tstep_w, st_h_solid),
+                create_beveled_box(bm, size=(tstep_d, tstep_w, st_h_solid),
                                    location=(st_x, st_y, st_z),
                                    rotation=(0.0, 0.0, ang),
                                    mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
                 # Outer stepped stone balustrade along courtyard edge of the steps
-                bal_x = st_x - ox * (tstep_w * 0.5 - 0.08)
-                bal_y = st_y - oy * (tstep_w * 0.5 - 0.08)
+                bal_x = st_x - ox * (tstep_w * 0.5 + 0.08)
+                bal_y = st_y - oy * (tstep_w * 0.5 + 0.08)
                 bal_h = 0.65
                 bal_z = z_ground + wall_h + 0.16 + (ti + 1) * tstep_h + bal_h * 0.5
-                create_beveled_box(bm, size=(tstep_d + 0.02, 0.16, bal_h),
+                create_beveled_box(bm, size=(tstep_d, 0.16, bal_h),
                                    location=(bal_x, bal_y, bal_z),
                                    rotation=(0.0, 0.0, ang),
                                    mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)

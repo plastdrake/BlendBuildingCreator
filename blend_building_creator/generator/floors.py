@@ -212,6 +212,16 @@ def build_floors(bm, props, ctx):
 
     # Track stair holes, rooms, interior walls and wall bounds per floor
     floor_stair_holes = {}
+    if getattr(props, 'has_basement_stair', False):
+        bs_ix_min = -base_w * 0.5 + wall_t * 0.5
+        bs_w = 1.40
+        bs_cx = bs_ix_min + 0.10 + bs_w * 0.5
+        bs_x0 = bs_cx - bs_w * 0.5 - 0.15
+        bs_x1 = bs_cx + bs_w * 0.5 + 0.15
+        # North half of the room, keeping south flight of upper stairs clear
+        bs_y0 = -1.0
+        bs_y1 = min(base_d * 0.5 - wall_t * 0.5 - 0.40, 6.8)
+        floor_stair_holes[0] = (bs_x0, bs_x1, bs_y0, bs_y1)
     floor_wall_bounds = {}
     floor_rooms = {}
     floor_interior_walls = {}
@@ -426,7 +436,7 @@ def build_floors(bm, props, ctx):
                 y_min=slab_ymin, y_max=slab_ymax,
                 z_level=slab_z,
                 thickness=0.12,
-                stair_hole=cur_stair_hole if (fl_idx > 0 and props.has_stairs) else None,
+                stair_hole=cur_stair_hole if ((fl_idx > 0 and props.has_stairs) or (fl_idx == 0 and getattr(props, 'has_basement_stair', False))) else None,
                 mat_idx=floor_mat
             )
         

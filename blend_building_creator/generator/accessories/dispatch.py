@@ -514,6 +514,11 @@ def _build_manor_fortifications(bm, props, ctx):
 def _build_plot_fortifications(bm, props, ctx):
     """Plot-level fortifications that stay anchored to the estate grounds:
     palisades, curtain walls, bastions, banners and military drill props."""
+    if _prop(props, 'has_castle_citadel', False):
+        from .nasher_site import build_nasher_enclosure
+        build_nasher_enclosure(bm, props, ctx)
+        return
+
     # 1. Corner bastion towers (Citadel Tier 3)
     if _prop(props, 'has_bastion_towers', False):
         from .bastion import build_bastion_courtyard_towers

@@ -112,6 +112,9 @@ MAT_INDEX_PUMPKIN_STEM  = 39
 MAT_INDEX_OPEN_BOOK     = 40
 MAT_INDEX_WATER         = 41
 MAT_INDEX_CLIFFS        = 42
+MAT_INDEX_DUNGEON_WALL  = 43
+MAT_INDEX_DUNGEON_FLOOR = 44
+MAT_INDEX_DUNGEON_BEAM  = 45
 
 
 # ---------------------------------------------------------------------------
@@ -547,13 +550,13 @@ def create_stylized_cliffs(name="M_Building_Cliffs"):
     ramp.location = (-200, 40)
     ramp.color_ramp.interpolation = 'LINEAR'
     ramp.color_ramp.elements[0].position = 0.0
-    ramp.color_ramp.elements[0].color = (0.24, 0.23, 0.25, 1.0)
+    ramp.color_ramp.elements[0].color = (0.13, 0.13, 0.15, 1.0)
     el1 = ramp.color_ramp.elements.new(0.35)
-    el1.color = (0.36, 0.34, 0.32, 1.0)
+    el1.color = (0.20, 0.20, 0.22, 1.0)
     el2 = ramp.color_ramp.elements.new(0.68)
-    el2.color = (0.45, 0.44, 0.42, 1.0)
+    el2.color = (0.28, 0.28, 0.29, 1.0)
     ramp.color_ramp.elements[1].position = 1.0
-    ramp.color_ramp.elements[1].color = (0.52, 0.53, 0.52, 1.0)
+    ramp.color_ramp.elements[1].color = (0.36, 0.37, 0.38, 1.0)
     tree.links.new(mix_fac.outputs["Result"], ramp.inputs["Fac"])
 
     painted = _warm_painterly_pass(tree, c, ramp.outputs["Color"], loc_x=20, loc_y=-210, strength=0.08, scale=1.0)
@@ -569,6 +572,41 @@ def create_stylized_cliffs(name="M_Building_Cliffs"):
     tree.links.new(mix_fac.outputs["Result"], bump.inputs["Height"])
     tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
 
+    return mat
+
+
+def create_dungeon_material(name, filenames, tint, scale, roughness=0.9, bump=0.5):
+    """Dark undercroft surface. Uses the first packaged texture found in ``filenames``
+    (drop a dedicated file such as dungeon_wall_diffuse.jpg into textures/ to override
+    the fallback), multiplied by ``tint`` and given a little bump relief."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    c = _coord(tree, loc_x=-900)
+    tex = None
+    for fn in filenames:
+        tex = _load_image_texture(tree, fn, c, loc_x=-660, loc_y=100, scale=scale)
+        if tex is not None:
+            break
+    if tex is None:
+        _set_bsdf_input(bsdf, "Base Color", tint)
+        _set_bsdf_input(bsdf, "Roughness", roughness)
+        tree.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+        return mat
+    mix = tree.nodes.new("ShaderNodeMix")
+    mix.data_type = 'RGBA'
+    mix.blend_type = 'MULTIPLY'
+    mix.location = (-200, 100)
+    mix.inputs["Factor"].default_value = 0.85
+    tree.links.new(tex.outputs["Color"], mix.inputs["A"])
+    mix.inputs["B"].default_value = tint
+    _apply_ao(tree, bsdf, mix.outputs["Result"], strength=0.6, distance=0.2)
+    _setup_pbr(tree, bsdf, out, roughness=roughness)
+    b = tree.nodes.new("ShaderNodeBump")
+    b.location = (600, -210)
+    b.inputs["Strength"].default_value = bump
+    b.inputs["Distance"].default_value = 0.03
+    tree.links.new(tex.outputs["Color"], b.inputs["Height"])
+    tree.links.new(b.outputs["Normal"], bsdf.inputs["Normal"])
     return mat
 
 
@@ -2704,6 +2742,15 @@ def setup_building_material_slots(obj, props):
                      or create_stylized_open_book("M_Building_Open_Book"))
     mat_water = getattr(props, 'custom_water', None) or create_stylized_water("M_Water")
     mat_cliffs = create_stylized_cliffs("M_Building_Cliffs")
+    mat_dg_wall = create_dungeon_material(
+        "M_Building_Dungeon_Wall", ("dungeon_wall_diffuse.jpg", "stone_wall_diffuse.jpg"),
+        (0.42, 0.42, 0.46, 1.0), (0.45, 0.45, 1.0))
+    mat_dg_floor = create_dungeon_material(
+        "M_Building_Dungeon_Floor", ("dungeon_floor_diffuse.jpg", "cut_stone_diffuse.jpg"),
+        (0.34, 0.34, 0.36, 1.0), (0.6, 0.6, 1.0), roughness=0.8)
+    mat_dg_beam = create_dungeon_material(
+        "M_Building_Dungeon_Beam", ("dungeon_beam_diffuse.jpg", "timber_beam_diffuse.jpg"),
+        (0.42, 0.30, 0.22, 1.0), (1.0, 1.0, 1.0), roughness=0.85, bump=0.3)
 
     # Assemble canonical slots in strict order
     required_mats = [
@@ -2750,6 +2797,9 @@ def setup_building_material_slots(obj, props):
         mat_open_book,      # 40 MAT_INDEX_OPEN_BOOK
         mat_water,          # 41 MAT_INDEX_WATER
         mat_cliffs,         # 42 MAT_INDEX_CLIFFS
+        mat_dg_wall,        # 43 MAT_INDEX_DUNGEON_WALL
+        mat_dg_floor,       # 44 MAT_INDEX_DUNGEON_FLOOR
+        mat_dg_beam,        # 45 MAT_INDEX_DUNGEON_BEAM
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -2805,6 +2855,9 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Open_Book",     # 40
     "M_Water",                  # 41
     "M_Building_Cliffs",        # 42
+    "M_Building_Dungeon_Wall",  # 43
+    "M_Building_Dungeon_Floor",  # 44
+    "M_Building_Dungeon_Beam",  # 45
 )
 
 

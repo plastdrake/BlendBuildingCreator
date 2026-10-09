@@ -1456,6 +1456,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    has_basement_stair: BoolProperty(
+        name="Basement Stair Opening",
+        description="Creates an opening in the ground floor slab for stairs descending to a basement or dungeon",
+        default=False,
+        update=on_property_updated
+    )
+
 
     has_roof_clock_spire: BoolProperty(
         name="Roof Clock Spire",

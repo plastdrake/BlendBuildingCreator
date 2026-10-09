@@ -77,7 +77,7 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
                     loop[uv_layer].uv = Vector((co.y, co.x))
                 f.tag = True
     
-    if stair_hole is None or floor_idx == 0:
+    if stair_hole is None:
         # Timber floors are the planks themselves—no duplicate hidden slab below.
         add_floor_region(x_min, x_max, y_min, y_max, floor_idx)
         return

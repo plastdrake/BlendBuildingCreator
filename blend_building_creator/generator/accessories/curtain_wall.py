@@ -195,8 +195,9 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
         merlon_end = 0.40
         if gate_gap:
             # Leave generous breaches across the gatehouse, gate towers, and stair landings
-            g_left = gate_gap[0] - 3.20
-            g_right = gate_gap[1] + 3.20
+            breach = gate.get('breach', 3.20)
+            g_left = gate_gap[0] - breach
+            g_right = gate_gap[1] + breach
             if g_left > u0 + merlon_end + 1.0:
                 build_battlement_run(bm, at(u0 + merlon_end, inner_edge_lat),
                                      at(g_left, inner_edge_lat),
@@ -253,11 +254,20 @@ def _build_corner_post(bm, cx, cy, thickness, walk_top, ground_z=0.0):
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
 
 
+def gate_stair_top_offset(gate_towers):
+    """Distance from the gate opening edge to the centre of the wall-walk stair landing."""
+    return 0.8 + (2.0 * 1.9 + 0.45 if gate_towers else 0.0)
+
+
 def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
-                                  wall_h=3.2, thickness=0.55):
-    """Stone rampart stairs on the inner courtyard side flanking the gatehouse,
-    allowing the player to walk up from the bailey ground onto the curtain wall and gate towers."""
-    from mathutils import Vector
+                                  wall_h=3.2, thickness=0.55, top_off=0.8):
+    """Walkable stone stairs on the bailey side of the wall, one each side of the gate.
+
+    Each flight climbs away from the gate to a landing level with the wall-walk,
+    standing clear of the wall piers and inner parapet (the wall run breaches its
+    parapet at the landing). Steps are plain solid blocks: no stacked carriage, so no
+    coplanar faces.
+    """
     ox, oy = outward
     on = math.hypot(ox, oy)
     if on < 1e-5:
@@ -267,79 +277,48 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
     tx, ty = -oy, ox
     ang = math.atan2(ty, tx)
 
-    v_tang = Vector((tx, ty, 0.0))
-    v_in = Vector((-ox, -oy, 0.0))
+    stair_w, run, land_len, bal_t = 1.65, 0.34, 1.6, 0.26
+    deck_top = ground_z + wall_h + 0.25
+    n = max(4, int(math.ceil((deck_top - ground_z) / 0.2)))
+    rise = (deck_top - ground_z) / n
+    inner_lat = thickness * 0.5 + 1.25
+    lat_c = inner_lat + stair_w * 0.5
 
-    stair_w = 1.65
-    stair_l = 4.4
-    n_steps = 14
-    step_l = stair_l / n_steps
-    step_h = wall_h / n_steps
+    def at(u, lat):
+        # lat grows toward the bailey (opposite of outward)
+        return cx + tx * u - ox * lat, cy + ty * u - oy * lat
 
     for sgn in (-1.0, 1.0):
-        # Starts in the courtyard and ascends towards the gatehouse
-        start_u = sgn * (gap_w * 0.5 + 0.50 + stair_l)
-        end_u = sgn * (gap_w * 0.5 + 0.50)
-        stair_lat = thickness * 0.5 + stair_w * 0.5 + 0.08
+        u_land = sgn * (gap_w * 0.5 + top_off)
+        lat0 = thickness * 0.5 + 0.35
+        lat1 = inner_lat + stair_w
+        px, py = at(u_land, (lat0 + lat1) * 0.5)
+        create_beveled_box(bm, size=(land_len, lat1 - lat0, deck_top - ground_z),
+                           location=(px, py, ground_z + (deck_top - ground_z) * 0.5),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_STONE, bevel_amount=0.01)
+        bx, by = at(u_land, lat1 + bal_t * 0.5)
+        create_beveled_box(bm, size=(land_len, bal_t, 0.85),
+                           location=(bx, by, deck_top + 0.425),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
 
-        for i in range(n_steps):
-            t_frac = (i + 0.5) / n_steps
-            u_pos = start_u + (end_u - start_u) * t_frac
-            sz = ground_z + i * step_h
-            sp = Vector((cx, cy, 0.0)) + v_tang * u_pos + v_in * stair_lat + Vector((0.0, 0.0, sz + step_h * 0.5))
-
-            # Cut-stone step tread
-            create_beveled_box(bm, size=(step_l + 0.06, stair_w, step_h + 0.04),
-                               location=(sp.x, sp.y, sp.z),
+        for k in range(n):
+            top = deck_top - (k + 1) * rise
+            if top <= ground_z + 0.03:
+                break
+            u = u_land + sgn * (land_len * 0.5 + run * (k + 0.5))
+            sx, sy = at(u, lat_c)
+            create_beveled_box(bm, size=(run, stair_w, top - ground_z),
+                               location=(sx, sy, ground_z + (top - ground_z) * 0.5),
                                rotation=(0.0, 0.0, ang),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-
-            # Solid stone carriage underneath step
-            if sz > ground_z + 0.05:
-                car_h = sz
-                car_p = Vector((cx, cy, 0.0)) + v_tang * u_pos + v_in * stair_lat + Vector((0.0, 0.0, ground_z + car_h * 0.5))
-                create_beveled_box(bm, size=(step_l + 0.02, stair_w, car_h),
-                                   location=(car_p.x, car_p.y, car_p.z),
+                               mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
+            for side in (-1.0, 1.0):
+                bx, by = at(u, lat_c + side * (stair_w * 0.5 + bal_t * 0.5))
+                create_beveled_box(bm, size=(run, bal_t, top - ground_z + 0.8),
+                                   location=(bx, by, ground_z + (top - ground_z + 0.8) * 0.5),
                                    rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_STONE, bevel_amount=0.010)
-
-            # Solid cut-stone stepped balustrade parapet along outer courtyard edge
-            bal_p = Vector((cx, cy, 0.0)) + v_tang * u_pos + v_in * (stair_lat + stair_w * 0.5 - 0.12)
-            bal_h = 0.70 + step_h
-            create_beveled_box(bm, size=(step_l + 0.04, 0.24, bal_h),
-                               location=(bal_p.x, bal_p.y, sz + bal_h * 0.5),
-                               rotation=(0.0, 0.0, ang),
-                               mat_index=MAT_INDEX_STONE, bevel_amount=0.012)
-            # Cut-stone coping atop balustrade
-            create_beveled_box(bm, size=(step_l + 0.06, 0.30, 0.08),
-                               location=(bal_p.x, bal_p.y, sz + bal_h + 0.04),
-                               rotation=(0.0, 0.0, ang),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
-
-        # Ground-level entrance newel post
-        newel_bot = Vector((cx, cy, 0.0)) + v_tang * (start_u + sgn * 0.20) + v_in * (stair_lat + stair_w * 0.5 - 0.12)
-        create_beveled_box(bm, size=(0.32, 0.32, 1.10),
-                           location=(newel_bot.x, newel_bot.y, ground_z + 0.55),
-                           rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-        create_cone(bm, radius1=0.20, radius2=0.0, height=0.14, segments=4,
-                    location=(newel_bot.x, newel_bot.y, ground_z + 1.17),
-                    rotation=(0.0, 0.0, ang + math.pi * 0.25), mat_index=MAT_INDEX_CUT_STONE)
-
-        # Upper landing at wall_h + 0.16 (flush with wall-walk deck!)
-        landing_u = end_u - sgn * 0.75
-        land_p = Vector((cx, cy, 0.0)) + v_tang * landing_u + v_in * (stair_lat - 0.20) + Vector((0.0, 0.0, ground_z + wall_h + 0.16))
-        create_beveled_box(bm, size=(1.60, stair_w + 0.45, 0.16),
-                           location=(land_p.x, land_p.y, land_p.z),
-                           rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-
-        # Top landing newel post
-        newel_top = Vector((cx, cy, 0.0)) + v_tang * (end_u - sgn * 1.45) + v_in * (stair_lat + stair_w * 0.5 - 0.12)
-        create_beveled_box(bm, size=(0.32, 0.32, 0.95),
-                           location=(newel_top.x, newel_top.y, ground_z + wall_h + 0.16 + 0.47),
-                           rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.005)
 
 
 def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
@@ -397,7 +376,8 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
 
     # Courtyard rampart access stairs flanking the gate
     build_gatehouse_access_stairs(bm, cx, cy, (ox, oy), gap_w, ground_z,
-                                  wall_h=wall_h, thickness=thickness)
+                                  wall_h=wall_h, thickness=thickness,
+                                  top_off=gate_stair_top_offset(gate_towers))
 
 
 def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
@@ -453,7 +433,8 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
     # Front run with the gate opening.
     build_curtain_wall_run(
         bm, (front_x0, y_min), (front_x1, y_min), (0.0, -1.0), 0.0, H, T,
-        gate={'u0': g0 - front_x0, 'u1': g1 - front_x0, 'h': gate_h},
+        gate={'u0': g0 - front_x0, 'u1': g1 - front_x0, 'h': gate_h,
+              'breach': gate_stair_top_offset(getattr(props, 'has_gate_towers', False)) + 1.5},
         merlon_end_clear=(
             _post_clr if (_post_FL and front_x0 <= x_min + 0.01) else 0.0,
             _post_clr if (_post_FR and front_x1 >= x_max - 0.01) else 0.0),

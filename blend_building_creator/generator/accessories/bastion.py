@@ -824,8 +824,12 @@ def build_rickety_frame_tower(bm, x, y, z_ground=0.0, base_size=3.2, height=8.2,
         _dir = dv.normalized()
         p_eave_ext = p_eave + _dir * 0.18
         ln = (p_eave_ext - p_top).length
-        e = zup.rotation_difference(_dir).to_euler()
         mid = (p_top + p_eave_ext) * 0.5
+        x_axis = d_right.normalized()
+        z_axis = _dir
+        y_axis = z_axis.cross(x_axis).normalized()
+        R = Matrix((x_axis, y_axis, z_axis)).transposed()
+        e = R.to_euler('XYZ')
         rf = create_beveled_box(bm, size=(hut_w + 0.60, 0.07, ln),
                                 location=mid, rotation=(e.x, e.y, e.z),
                                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)

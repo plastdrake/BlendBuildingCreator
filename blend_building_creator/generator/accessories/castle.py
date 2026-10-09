@@ -106,224 +106,222 @@ class CastleRegistry:
 # 1. ENTERABLE ROUND TOWER BUILDER (Hierarchy: Landmark, Major, Secondary, Turret)
 # =============================================================================
 
+def _helix_rail(bm, p0, p1, w=0.09):
+    """Stone handrail segment between two 3D points."""
+    d = p1 - p0
+    ln = d.length
+    if ln < 1e-4:
+        return
+    e = Vector((0.0, 0.0, 1.0)).rotation_difference(d.normalized()).to_euler()
+    create_beveled_box(bm, size=(w, w, ln), location=(p0 + p1) * 0.5,
+                       rotation=(e.x, e.y, e.z), mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
+
+
+def _tower_wall_stairs(bm, cx, cy, r_stair_out, stair_w, z0, z1, a0, arc):
+    """Stone flight hugging the inside of a round tower wall, climbing counter-clockwise."""
+    dz = z1 - z0
+    n = max(10, int(math.ceil(dz / 0.2)))
+    rise = dz / n
+    d_ang = arc / n
+    r_in = r_stair_out - stair_w
+    r_mid = (r_stair_out + r_in) * 0.5
+    pts = []
+    for i in range(n):
+        ang = a0 + (i + 0.5) * d_ang
+        top = z0 + (i + 1) * rise
+        ca, sa = math.cos(ang), math.sin(ang)
+        thick = min(top - z0, 0.5)
+        chord = 2.0 * r_mid * math.tan(d_ang * 0.5) * 1.03
+        create_beveled_box(bm, size=(stair_w, chord, thick),
+                           location=(cx + r_mid * ca, cy + r_mid * sa, top - thick * 0.5),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
+        pts.append((cx + r_in * ca, cy + r_in * sa, top))
+        if i % 4 == 0:
+            create_beveled_box(bm, size=(0.16, 0.16, 1.0),
+                               location=(cx + r_in * ca, cy + r_in * sa, top + 0.5),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+    for i in range(n - 1):
+        _helix_rail(bm, Vector((pts[i][0], pts[i][1], pts[i][2] + 0.95)),
+                    Vector((pts[i + 1][0], pts[i + 1][1], pts[i + 1][2] + 0.95)))
+
+
+def _tower_floor(bm, cx, cy, z, r_free, r_wall_in, a_land0, a_land1, mat, disk=True):
+    """Central disc plus the landing wedge where a stair flight arrives."""
+    if disk:
+        ring_slab(bm, r_in=0.05, r_out=r_free, z=z - 0.1, segments=32, offset=0.0,
+                  mat_index=mat, height=0.2, center=(cx, cy))
+    steps = max(1, int(math.ceil((a_land1 - a_land0) / (2.0 * math.pi / 32))))
+    d = (a_land1 - a_land0) / steps
+    r_mid = (r_free + r_wall_in) * 0.5
+    chord = 2.0 * r_mid * math.tan(d * 0.5) * 1.04
+    for i in range(steps):
+        ang = a_land0 + (i + 0.5) * d
+        create_beveled_box(bm, size=(r_wall_in - r_free + 0.04, chord, 0.2),
+                           location=(cx + r_mid * math.cos(ang), cy + r_mid * math.sin(ang), z - 0.1),
+                           rotation=(0.0, 0.0, ang), mat_index=mat, bevel_amount=0.01)
+
+
 def build_walkable_round_tower(
     bm, cx, cy, z_base, radius, num_floors, floor_h,
     tower_type='SPIRE', spire_h=12.0, has_oriel=False, oriel_ang=0.0,
     corbel_count=18, door_angs=((0, 0.0),), deck_door=True
 ):
+    """Enterable round tower: 32-sided fieldstone shaft framed with cut-stone pilasters and
+    belts, a stone stair hugging the inside wall (like the mage tower), arrow slits and a
+    doorway. SPIRE towers get a shingled bell-cast witch-hat roof, BATTLEMENTS towers a
+    crenellated deck.
     """
-    Constructs an authentic enterable, walkable round tower with hollow interior,
-    circular floor slabs, walkable spiral staircases, and precisely cut walk-through doorways.
+    from ..mage_tower import _witch_hat_roof, _build_curved_wall_stairs, _build_watertight_floor, _stair_arc_deg
 
-    STRICT RULES:
-    - If tower_type == 'SPIRE': Steep conical witch-hat roof, ZERO merlons!
-    - If tower_type == 'BATTLEMENTS': Flat stone fighting deck with crenellated merlons, ZERO pointy roof!
-    """
-    wall_t = 0.55
-    segments = 20
+    segments = 32
+    wall_t = 0.75 if radius >= 3.4 else 0.6
+    d_ang = 2.0 * math.pi / segments
+    r_wall_in = radius - wall_t
+    stair_w = min(1.85, r_wall_in * 0.45)
+    r_stair_in = r_wall_in - 0.02 - stair_w
+    r_free = r_stair_in - 0.05
+    arc = math.radians(300.0)
+    door_ang = door_angs[0][1] if door_angs else 0.0
+    a0 = door_ang + 0.8
 
-    # 1. Stepped plinth foundation
-    p0_h, p1_h = 0.60, 0.40
-    create_cylinder(bm, radius=radius + 0.45, height=p0_h, segments=segments,
-                    location=(cx, cy, z_base + p0_h * 0.5), mat_index=MAT_INDEX_STONE)
-    create_cylinder(bm, radius=radius + 0.22, height=p1_h, segments=segments,
-                    location=(cx, cy, z_base + p0_h + p1_h * 0.5), mat_index=MAT_INDEX_CUT_STONE)
+    create_cylinder(bm, radius=radius + 0.5, height=4.0, segments=segments,
+                    location=(cx, cy, z_base - 2.0), mat_index=MAT_INDEX_STONE)
+    create_cylinder(bm, radius=radius + 0.5, height=0.6, segments=segments,
+                    location=(cx, cy, z_base + 0.3), mat_index=MAT_INDEX_STONE)
+    create_cylinder(bm, radius=radius + 0.25, height=0.4, segments=segments,
+                    location=(cx, cy, z_base + 0.8), mat_index=MAT_INDEX_CUT_STONE)
 
-    z0 = z_base + p0_h + p1_h
-    d_ang_step = 2.0 * math.pi / segments
+    z0 = z_base + 1.0
+    z_top = z0 + num_floors * floor_h
+    flights = num_floors if tower_type == 'BATTLEMENTS' else num_floors - 1
 
-    # 2. Per-floor construction
+    ring_slab(bm, r_in=0.05, r_out=r_wall_in + 0.1, z=z0 - 0.15, segments=segments, offset=0.0,
+              mat_index=MAT_INDEX_CUT_STONE, height=0.3, center=(cx, cy))
+
     for fl in range(num_floors):
         z_fl = z0 + fl * floor_h
         z_ceil = z_fl + floor_h
-
-        # Floor slab
-        if fl == 0:
-            create_cylinder(bm, radius=radius - 0.05, height=0.15, segments=segments,
-                            location=(cx, cy, z_fl + 0.075), mat_index=MAT_INDEX_CUT_STONE)
-        else:
-            ring_slab(bm, r_in=1.30, r_out=radius - 0.04, z=z_fl + 0.06, segments=segments,
-                      offset=0.0, mat_index=MAT_INDEX_FLOOR, height=0.12, center=(cx, cy))
-
-        # Spiral staircase ascending to next floor
-        if fl < num_floors - 1 or tower_type == 'BATTLEMENTS':
-            build_spiral_staircase(
-                bm, center_pos=(cx, cy, z_fl + 0.05),
-                target_z=z_ceil + 0.05, radius=1.15,
-                num_steps=18, start_ang_deg=-90.0, total_angle_deg=360.0
+        s_arc = _stair_arc_deg(fl - 1) if fl > 0 else None
+        if fl > 0:
+            _build_watertight_floor(
+                bm, r_floor=r_wall_in + 0.04, z_floor=z_fl + 0.06,
+                stair_arc=s_arc, shaft_r_in=r_wall_in,
+                cx=cx, cy=cy
             )
-            # Landing slab bridging to annular floor
-            if fl > 0:
-                landing_ang = math.radians(-90.0)
-                landing_chord = 2.0 * 0.75 * math.tan(math.pi / 4) * 1.5
-                create_beveled_box(bm, size=(1.14, landing_chord, 0.12),
-                                   location=(cx + 0.73 * math.cos(landing_ang),
-                                             cy + 0.73 * math.sin(landing_ang),
-                                             z_fl + 0.06),
-                                   rotation=(0.0, 0.0, landing_ang),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.01)
+        if fl < flights:
+            s_deg, e_deg = _stair_arc_deg(fl)
+            _build_curved_wall_stairs(
+                bm, cur_r=radius, wall_t=wall_t,
+                z0=z_fl + 0.06, z1=z_ceil + 0.06,
+                start_ang_deg=s_deg, arc_deg=135.0, stair_w=stair_w,
+                cx=cx, cy=cy
+            )
 
-        # Hollow outer wall segments
         for k in range(segments):
-            ang = (k + 0.5) * d_ang_step
+            ang = (k + 0.5) * d_ang
             ca, sa = math.cos(ang), math.sin(ang)
             r_mid = radius - wall_t * 0.5
-            fx = cx + r_mid * ca
-            fy = cy + r_mid * sa
-            chord = 2.0 * radius * math.sin(d_ang_step * 0.5) * 1.06
+            fx, fy = cx + r_mid * ca, cy + r_mid * sa
+            chord = 2.0 * radius * math.sin(d_ang * 0.5) * 1.06
 
-            # Check if this facet has a walk-through doorway opening
             is_door = False
-            for d_fl, d_ang in door_angs:
+            for d_fl, d_a in door_angs:
                 if d_fl == fl:
-                    diff_ang = (ang - d_ang + math.pi) % (2.0 * math.pi) - math.pi
-                    if abs(diff_ang) < d_ang_step * 0.55:
+                    diff = (ang - d_a + math.pi) % (2.0 * math.pi) - math.pi
+                    if abs(diff) < d_ang * 1.1:
                         is_door = True
-                        break
-
             if is_door:
-                dh = 2.50
-                lh = floor_h - dh
-                if lh > 0.05:
-                    create_beveled_box(bm, size=(wall_t, chord, lh),
-                                       location=(fx, fy, z_fl + dh + lh * 0.5),
-                                       rotation=(0.0, 0.0, ang),
-                                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-                j_w = 0.16
-                for sgn_j in (-1.0, 1.0):
-                    jx = fx - sgn_j * sa * (chord * 0.5 - j_w * 0.5)
-                    jy = fy + sgn_j * ca * (chord * 0.5 - j_w * 0.5)
-                    create_beveled_box(bm, size=(wall_t + 0.04, j_w, dh),
-                                       location=(jx, jy, z_fl + dh * 0.5),
-                                       rotation=(0.0, 0.0, ang),
-                                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-            elif (fl > 0 and k % 5 == 2):
-                # Arrow slit loophole
-                sill_h = 1.05
-                head_h = 2.35
+                dh = 2.6
+                if floor_h - dh > 0.05:
+                    create_beveled_box(bm, size=(wall_t, chord, floor_h - dh),
+                                       location=(fx, fy, z_fl + dh + (floor_h - dh) * 0.5),
+                                       rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE,
+                                       bevel_amount=0.02)
+            elif fl > 0 and k % 4 == 2:
+                sill_h, head_h, slit_w = 1.05, 2.35, 0.3
                 create_beveled_box(bm, size=(wall_t, chord, sill_h),
                                    location=(fx, fy, z_fl + sill_h * 0.5),
-                                   rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
-                top_h = floor_h - head_h
-                create_beveled_box(bm, size=(wall_t, chord, top_h),
-                                   location=(fx, fy, z_fl + head_h + top_h * 0.5),
-                                   rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
-                slit_w = 0.35
-                jamb_w = (chord - slit_w) * 0.5
-                slit_h = head_h - sill_h
-                for sgn_j in (-1.0, 1.0):
-                    jx = fx - sgn_j * sa * (chord * 0.5 - jamb_w * 0.5)
-                    jy = fy + sgn_j * ca * (chord * 0.5 - jamb_w * 0.5)
-                    create_beveled_box(bm, size=(wall_t, jamb_w, slit_h),
-                                       location=(jx, jy, z_fl + sill_h + slit_h * 0.5),
-                                       rotation=(0.0, 0.0, ang),
-                                       mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
+                                   rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+                create_beveled_box(bm, size=(wall_t, chord, floor_h - head_h),
+                                   location=(fx, fy, z_fl + head_h + (floor_h - head_h) * 0.5),
+                                   rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+                jamb = (chord - slit_w) * 0.5
+                for s in (-1.0, 1.0):
+                    create_beveled_box(
+                        bm, size=(wall_t, jamb, head_h - sill_h),
+                        location=(fx - s * sa * (chord * 0.5 - jamb * 0.5),
+                                  fy + s * ca * (chord * 0.5 - jamb * 0.5),
+                                  z_fl + sill_h + (head_h - sill_h) * 0.5),
+                        rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
             else:
                 create_beveled_box(bm, size=(wall_t, chord, floor_h),
                                    location=(fx, fy, z_fl + floor_h * 0.5),
-                                   rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+                                   rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
 
-        # Belt moulding dividing storeys
-        create_cylinder(bm, radius=radius + 0.10, height=0.20, segments=segments,
+            # Cut-stone framing pilasters up the shaft.
+            if k % 4 == 0 and not is_door:
+                pr = radius - wall_t * 0.5 + 0.08
+                create_beveled_box(bm, size=(wall_t + 0.16, 0.34, floor_h),
+                                   location=(cx + pr * ca, cy + pr * sa, z_fl + floor_h * 0.5),
+                                   rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_CUT_STONE,
+                                   bevel_amount=0.02)
+
+        # Door jambs and lintel frame in cut stone.
+        for d_fl, d_a in door_angs:
+            if d_fl == fl:
+                for s in (-1.0, 1.0):
+                    ja = d_a + s * d_ang * 1.6
+                    jr = radius - wall_t * 0.5
+                    create_beveled_box(bm, size=(wall_t + 0.1, 0.3, 2.6),
+                                       location=(cx + jr * math.cos(ja), cy + jr * math.sin(ja), z_fl + 1.3),
+                                       rotation=(0.0, 0.0, ja), mat_index=MAT_INDEX_CUT_STONE,
+                                       bevel_amount=0.02)
+
+        create_cylinder(bm, radius=radius + 0.12, height=0.22, segments=segments,
                         location=(cx, cy, z_ceil), mat_index=MAT_INDEX_CUT_STONE)
 
-    # 3. Corbelled machicolations cornice
-    z_top = z0 + num_floors * floor_h
-    corbel_r = radius + 0.45
-    for i in range(corbel_count):
-        ang = (2.0 * math.pi * i) / corbel_count
+    corbel_r = radius + 0.5
+    n_corbel = max(corbel_count, int(radius * 5))
+    for i in range(n_corbel):
+        ang = 2.0 * math.pi * i / n_corbel
         ca, sa = math.cos(ang), math.sin(ang)
         create_beveled_box(bm, size=(0.28, 0.42, 0.65),
-                           location=(cx + (radius + 0.18) * ca, cy + (radius + 0.18) * sa, z_top - 0.30),
+                           location=(cx + (radius + 0.18) * ca, cy + (radius + 0.18) * sa, z_top - 0.3),
                            rotation=(0.0, 0.0, ang + math.pi * 0.5),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-
     create_cylinder(bm, radius=corbel_r, height=0.35, segments=segments,
                     location=(cx, cy, z_top + 0.175), mat_index=MAT_INDEX_CUT_STONE)
 
-    # 4. Roof finish: Witch-hat Spire vs Flat Battlements Deck
     if tower_type == 'SPIRE':
-        create_cylinder(bm, radius=corbel_r - 0.05, height=0.20, segments=segments,
-                        location=(cx, cy, z_top + 0.35 + 0.10), mat_index=MAT_INDEX_FLOOR)
-        spire_z = z_top + 0.45
-        create_cone(bm, radius1=corbel_r + 0.25, radius2=0.08, height=spire_h, segments=segments,
-                    location=(cx, cy, spire_z + spire_h * 0.5), mat_index=MAT_INDEX_SHINGLES)
-        create_cylinder(bm, radius=corbel_r + 0.28, height=0.18, segments=segments,
-                        location=(cx, cy, spire_z + 0.09), mat_index=MAT_INDEX_TIMBER)
-        # Iron needle finial & pennon
-        fn_z = spire_z + spire_h
+        _witch_hat_roof(bm, cx, cy, z_top + 0.35, radius=corbel_r, height=spire_h,
+                        segments=segments, corbels=False, finial=False)
+        tip = z_top + 0.35 + spire_h
         create_cylinder(bm, radius=0.045, height=2.4, segments=8,
-                        location=(cx, cy, fn_z + 1.2), mat_index=MAT_INDEX_IRON)
+                        location=(cx, cy, tip + 1.0), mat_index=MAT_INDEX_IRON)
         create_box(bm, size=(0.85, 0.03, 0.45),
-                   location=(cx + 0.42, cy, fn_z + 1.8), mat_index=MAT_INDEX_IRON)
+                   location=(cx + 0.42, cy, tip + 1.7), mat_index=MAT_INDEX_IRON)
+        return
 
-        if has_oriel:
-            oca, osa = math.cos(oriel_ang), math.sin(oriel_ang)
-            oriel_x = cx + (radius + 0.45) * oca
-            oriel_y = cy + (radius + 0.45) * osa
-            oriel_z = z_top - floor_h * 0.8
-            create_cone(bm, radius1=0.20, radius2=1.10, height=0.85, segments=8,
-                        location=(oriel_x, oriel_y, oriel_z - 0.425), mat_index=MAT_INDEX_CUT_STONE)
-            create_cylinder(bm, radius=1.05, height=2.2, segments=8,
-                            location=(oriel_x, oriel_y, oriel_z + 1.1), mat_index=MAT_INDEX_STONE)
-            create_cone(bm, radius1=1.20, radius2=0.05, height=2.4, segments=8,
-                        location=(oriel_x, oriel_y, oriel_z + 2.2 + 1.2), mat_index=MAT_INDEX_SHINGLES)
-
-    elif tower_type == 'BATTLEMENTS':
-        deck_z = z_top + 0.35
-        ring_slab(bm, r_in=1.30, r_out=corbel_r, z=deck_z, segments=segments,
-                  offset=0.0, mat_index=MAT_INDEX_CUT_STONE, height=0.30, center=(cx, cy))
-        landing_ang = math.radians(-90.0)
-        landing_chord = 2.0 * 0.75 * math.tan(math.pi / 4) * 1.5
-        create_beveled_box(bm, size=(1.14, landing_chord, 0.30),
-                           location=(cx + 0.73 * math.cos(landing_ang),
-                                     cy + 0.73 * math.sin(landing_ang),
-                                     deck_z + 0.15),
-                           rotation=(0.0, 0.0, landing_ang),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01)
-
-        if deck_door:
-            # Arched stone companionway enclosure over stair hatch
-            ch_w, ch_d, ch_h = 1.50, 1.30, 1.90
-            create_beveled_box(bm, size=(ch_w, ch_d, ch_h),
-                               location=(cx, cy - 0.70, deck_z + 0.30 + ch_h * 0.5),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03)
-            # Pitched stone hood cap
-            create_cone(bm, radius1=1.10, radius2=0.04, height=0.55, segments=4,
-                        location=(cx, cy - 0.70, deck_z + 0.30 + ch_h + 0.275),
-                        rotation=(0.0, 0.0, math.pi * 0.25), mat_index=MAT_INDEX_CUT_STONE)
-
-        parapet_mid_r = corbel_r - 0.18
-        merlon_count = corbel_count
-        m_h = 1.05
-        for i in range(merlon_count):
-            if i % 2 == 0:
-                ang = (2.0 * math.pi * i) / merlon_count
-                ca, sa = math.cos(ang), math.sin(ang)
-                m_w = (2.0 * math.pi * parapet_mid_r / merlon_count) * 0.88
-                create_beveled_box(bm, size=(m_w, 0.34, m_h),
-                                   location=(cx + parapet_mid_r * ca, cy + parapet_mid_r * sa,
-                                             deck_z + 0.30 + m_h * 0.5),
-                                   rotation=(0.0, 0.0, ang + math.pi * 0.5),
-                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-                create_cone(bm, radius1=m_w * 0.55, radius2=0.02, height=0.18, segments=4,
-                            location=(cx + parapet_mid_r * ca, cy + parapet_mid_r * sa,
-                                      deck_z + 0.30 + m_h + 0.09),
-                            rotation=(0.0, 0.0, ang + math.pi * 0.25), mat_index=MAT_INDEX_CUT_STONE)
-
-        # Open deck tripod signal fire brazier
-        br_z = deck_z + 0.30
-        br_y = cy + (corbel_r - 1.5)
-        create_cylinder(bm, radius=0.45, height=0.32, segments=12,
-                        location=(cx, br_y, br_z + 0.75), mat_index=MAT_INDEX_IRON)
-        for leg_ang in (0.0, math.pi * 0.66, math.pi * 1.33):
-            lca, lsa = math.cos(leg_ang), math.sin(leg_ang)
-            create_cylinder(bm, radius=0.04, height=0.75, segments=6,
-                            location=(cx + 0.35 * lca, br_y + 0.35 * lsa, br_z + 0.375),
-                            rotation=(0.15 * lsa, -0.15 * lca, 0.0), mat_index=MAT_INDEX_IRON)
+    deck_z = z_top + 0.35
+    _tower_floor(bm, cx, cy, deck_z, r_free, r_wall_in, a0 + arc, a0 + 2.0 * math.pi,
+                 MAT_INDEX_CUT_STONE)
+    _tower_floor(bm, cx, cy, deck_z, r_free, r_wall_in, a0, a0 + arc - 1.8,
+                 MAT_INDEX_CUT_STONE, disk=False)
+    ring_slab(bm, r_in=r_wall_in - 0.02, r_out=corbel_r, z=deck_z + 0.15, segments=segments,
+              offset=0.0, mat_index=MAT_INDEX_CUT_STONE, height=0.30, center=(cx, cy))
+    m_h = 1.05
+    parapet_r = corbel_r - 0.18
+    n_m = max(corbel_count, int(radius * 5))
+    for i in range(0, n_m, 2):
+        ang = 2.0 * math.pi * i / n_m
+        ca, sa = math.cos(ang), math.sin(ang)
+        m_w = (2.0 * math.pi * parapet_r / n_m) * 0.88
+        create_beveled_box(bm, size=(m_w, 0.34, m_h),
+                           location=(cx + parapet_r * ca, cy + parapet_r * sa, deck_z + 0.3 + m_h * 0.5),
+                           rotation=(0.0, 0.0, ang + math.pi * 0.5),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
 
 
 # =============================================================================
@@ -861,6 +859,11 @@ def build_barracks_and_armory(
 # =============================================================================
 # 7. PROGRESSIVE DUNGEON SYSTEMS (Levels -1, -2, -3, -4 with Narrative Secret Passages)
 # =============================================================================
+
+def build_subterranean_dungeon_level(bm, cx=0.0, cy=0.0, z_floor=-7.5, width=12.0, depth=12.0):
+    """Compatibility wrapper for subterranean dungeon builder."""
+    build_tier1_cellar_dungeon(bm, cx=cx, cy=cy, z_ground=z_floor + 3.4)
+
 
 def build_tier1_cellar_dungeon(bm, cx=0.0, cy=10.0, z_ground=0.0):
     """
@@ -1812,293 +1815,6 @@ def validate_castle_generation(registry, tier):
 
 
 # =============================================================================
-# 13. TIER 1 GENERATOR: ORIGINAL FRONTIER STRONGHOLD
-# =============================================================================
-
-def build_castle_tier_1_stronghold(bm, props, ctx, registry):
-    """
-    Tier 1 = Original Frontier Stronghold:
-    - Ancestral Old Keep at (0, 10) built of rough fieldstone and crude heavy timbers.
-    - Square frontier lookout watchtower at (-12, 12).
-    - Primitive timber gatehouse at (0, -8).
-    - Palisade bailey enclosing small courtyard with well, archery target, supply barrels.
-    - Subterranean cellar dungeon (Level -1) with holding pit and secret trapdoor escape.
-    """
-    z_base = 0.0
-
-    # Low rock plinth
-    create_beveled_box(bm, size=(38.0, 32.0, 1.4), location=(0.0, 5.0, 0.7),
-                       mat_index=MAT_INDEX_STONE, bevel_amount=0.30)
-
-    # 1. Ancestral Old Keep (Historic core)
-    build_primitive_old_keep(bm, cx=0.0, cy=10.0, z_base=z_base, width=14.0, depth=12.0, height=9.5, is_reinforced=False)
-    registry.register_landmark("The Ancestral Old Keep", "Frontier rough fieldstone and timber stronghold keep")
-    registry.register_interior("Chieftain's Great Hall", "Ancestral hearth, banquet table, weapon racks")
-    registry.register_interior("Chieftain's Quarters", "Timber bed, chest, council table")
-
-    # 2. Square Frontier Watchtower
-    build_square_watchtower(bm, cx=-12.0, cy=12.0, z_base=z_base, width=4.6, height=11.5, is_stone=False)
-    registry.register_landmark("Frontier Lookout Watchtower", "Stout fieldstone and timber watchtower with alarm bell")
-    registry.register_tower("major", "Frontier Lookout Watchtower", 11.5, (-12.0, 12.0))
-
-    # 3. Primitive Timber Gatehouse
-    build_primitive_timber_gatehouse(bm, cx=0.0, cy=-8.0, z_base=z_base, width=6.5, depth=4.5, height=5.5)
-    registry.register_landmark("Primitive Timber Gatehouse", "Heavy log gate with sentry walk and barred doors")
-
-    # 4. Palisade Bailey Courtyard
-    build_tier1_palisade_bailey(bm, cx=0.0, cy=4.0, z_base=z_base, width=32.0, depth=26.0, gate_w=3.8)
-    registry.register_courtyard("The Frontier Bailey")
-
-    # 5. Small Dungeon & Cellar
-    build_tier1_cellar_dungeon(bm, cx=0.0, cy=10.0, z_ground=z_base)
-    registry.register_dungeon_level(-1, "Provisions Cellar & Holding Pit", "Rough stone storage cellar with holding pit")
-    registry.register_secret_passage("Cellar Trapdoor", "Rock Escarpment Exit", "Hidden emergency escape route through bedrock")
-
-    # Traversal routes
-    registry.register_route("Public", "Timber Gate -> Bailey -> Keep Fore-Door")
-    registry.register_route("Military", "Sentry Walkway -> Palisade Breastwork")
-    registry.register_route("Hidden", "Cellar Trapdoor -> Escarpment Egress")
-
-
-# =============================================================================
-# 14. TIER 2 GENERATOR: EXPANDED REGIONAL FORTRESS
-# =============================================================================
-
-def build_castle_tier_2_fortress(bm, props, ctx, registry):
-    """
-    Tier 2 = Expanded Regional Fortress:
-    Visibly evolves around Tier 1!
-    - The Ancestral Old Keep at (0, 10) is preserved and reinforced in cut-stone ashlar with battlements!
-    - Stone curtain walls with wall-walks and crenellated merlons replace the palisade.
-    - Twin-tower stone gatehouse at (0, -12) with hoisted iron portcullis.
-    - Northwest stone watchtower at (-14, 12) reinforced in ashlar.
-    - Southeast fortress bastion tower at (22, -8) with flat stone fighting deck and merlons.
-    - Sanctuary chantry chapel at (-18, 4) with stained glass, altar, bell-cote, and crypt entrance.
-    - Garrison barracks & armory wing at (18, 4) with bunk beds, weapon racks, and training yard.
-    - Multiple courtyards: Lower Bailey and Upper Inner Ward.
-    - 2-level dungeon system with secret escape passage.
-    """
-    z_base = 0.0
-
-    # Terraced stone foundation
-    create_beveled_box(bm, size=(48.0, 42.0, 1.8), location=(0.0, 4.0, 0.9),
-                       mat_index=MAT_INDEX_STONE, bevel_amount=0.40)
-    create_beveled_box(bm, size=(28.0, 24.0, 1.8), location=(0.0, 9.0, 2.7),
-                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.30)
-
-    # 1. Reinforced Ancestral Old Keep at (0, 10)
-    build_primitive_old_keep(bm, cx=0.0, cy=10.0, z_base=1.8, width=14.0, depth=12.0, height=9.5, is_reinforced=True)
-    registry.register_landmark("The Ancestral Old Keep (Reinforced)", "Upgraded with cut-stone ashlar and battlement deck")
-    registry.register_interior("Keep Great Hall", "Ancestral hearth, oak council table, armory racks")
-    registry.register_interior("Keep Lord's Chamber", "Bed, chests, council desk")
-
-    # 2. Sanctuary Chantry Chapel
-    build_sanctuary_chapel(bm, cx=-18.0, cy=4.0, z_base=z_base, width=8.5, depth=14.0, height=8.8)
-    registry.register_landmark("Sanctuary Chantry Chapel", "Cut-stone chapel with stained glass, altar, and crypt descent")
-    registry.register_district("Religious District")
-    registry.register_interior("Chapel Nave & Sanctuary", "Altar, candlesticks, worship pews, crypt trapdoor")
-
-    # 3. Garrison Barracks & Armory
-    build_barracks_and_armory(bm, cx=18.0, cy=4.0, z_base=z_base, width=9.0, depth=16.0, height=7.5)
-    registry.register_landmark("Garrison Barracks & Armory", "2-storey military quarters with armory, smithy, and bunks")
-    registry.register_district("Military District")
-    registry.register_interior("Garrison Armory", "Weapon racks, smithy forge, armor chests")
-    registry.register_interior("Barracks Quarters", "Soldiers' bunk beds and footlockers")
-
-    # 4. Towers: Northwest Watchtower & Southeast Bastion
-    build_square_watchtower(bm, cx=-14.0, cy=12.0, z_base=z_base, width=5.2, height=13.5, is_stone=True)
-    registry.register_landmark("Northwest Stone Watchtower", "Reinforced ashlar stone watchtower with battlements")
-    registry.register_tower("major", "Northwest Stone Watchtower", 13.5, (-14.0, 12.0))
-
-    build_walkable_round_tower(
-        bm, cx=22.0, cy=-8.0, z_base=z_base, radius=4.2, num_floors=3, floor_h=4.0,
-        tower_type='BATTLEMENTS', corbel_count=18, door_angs=((0, math.pi),)
-    )
-    registry.register_landmark("Southeast Fortress Bastion", "Cylindrical stone bastion with flat fighting deck and merlons")
-    registry.register_tower("major", "Southeast Fortress Bastion", 12.0, (22.0, -8.0))
-
-    # 5. Stone Curtain Wall & Gatehouse
-    build_grand_castle_portal(bm, cx=0.0, front_y=-10.0, z_base=z_base, width=10.0, depth=6.5, height=7.2)
-    registry.register_landmark("Twin Bastion Gatehouse", "Heavy cut-stone gatehouse with hoisted iron portcullis")
-
-    # 6. Courtyards
-    registry.register_courtyard("The Lower Bailey")
-    registry.register_courtyard("The Upper Inner Ward")
-
-    # 7. 2-Level Dungeon System
-    build_tier2_expanded_dungeon(bm, cx=0.0, cy=8.0, z_ground=z_base)
-    registry.register_dungeon_level(-1, "Vaulted Provisions & Wine Cellar", "Stone pillars and barrel storage")
-    registry.register_dungeon_level(-2, "Stone Prison Complex & Cells", "Iron-barred holding cells and guard station")
-    registry.register_secret_passage("Chapel Altar Trapdoor", "Subterranean Crypt", "Secret access to ancient crypts")
-    registry.register_secret_passage("Dungeon Cells", "Garrison Armory Escape", "Hidden passage connecting cells to armory")
-
-    # Traversal routes
-    registry.register_route("Public", "Gatehouse -> Lower Bailey -> Terrace Stairs -> Inner Ward -> Keep")
-    registry.register_route("Military", "Curtain Ramparts -> Bastion Fighting Deck -> Watchtower")
-    registry.register_route("Hidden", "Chapel Trapdoor -> Crypt -> Cliff Egress")
-
-
-# =============================================================================
-# 15. TIER 3 GENERATOR: GRAND FANTASY CAPITAL CITADEL CASTLE
-# =============================================================================
-
-def build_castle_tier_3_citadel(bm, props, ctx, registry):
-    """
-    Tier 3 = Grand Fantasy Capital Castle:
-    Monumental city-fortress perched upon stylized cliff massifs (MAT_INDEX_CLIFFS):
-    - Architectural Lineage: The ancestral Old Keep at (0, 10) forms the lower core of the
-      Monumental Donjon Keep rising 46-58m!
-    - Full District System:
-      1. Royal District: Donjon Keep summit, Great Ballroom & Palace Wing, 3-tier Royal Dais, thrones.
-      2. Military District: Fortress Citadel Ramparts Wing with 100% flat fighting deck,
-         Southeast Bastion (with signal fire tripod brazier) and Northeast Artillery Bastion.
-      3. Religious District: Grand Chantry Chapel of the Silver Flame with stained glass lancets and rose window.
-      4. Arcane District: High Scholar's Wing and soaring 42m Wizard Spire (conical witch-hat roof,
-         needle finial, oriel lookout bay), furnished with arcane circle, alchemy station, orrery,
-         spellbook pedestal, scrying pool, and grand bookcases.
-      5. Service / Noble District: Vaulted lower halls, provisions, and wine cellar.
-      6. Dungeon District: 4-Level Deep Subterranean Citadel Complex with 4 narrative secret passages.
-      7. Courtyard & Terrace District: Lower Barbican Forecourt, Upper Inner Ward, Terraced Cliff Gardens.
-    - Landmark System: 10 authentically named landmarks.
-    - Tower Hierarchy: 1 Landmark Tower, 3 Major Towers, 4 Secondary Towers, 8+ Minor Turrets/Bartizans.
-    - Elevated Armored Skybridge and connecting cliff staircases bridging all heights.
-    """
-    floor_h = 4.6
-    z_ground = 0.0
-    z_ramparts = 6.0
-    z_west = 7.5
-    z_keep = 10.5
-
-    # 1. Monumental Layered Cliff Terraces (MAT_INDEX_CLIFFS, slot 42)
-    build_castle_cliff_terraces(bm)
-
-    # 2. 4-Level Deep Subterranean Citadel Complex with 4 Narrative Secret Passages
-    build_subterranean_citadel_progressive(bm, cx=0.0, cy=6.0, z_ground=z_ground, width=54.0, depth=24.0)
-    registry.register_district("Dungeon District")
-    registry.register_landmark("The Subterranean Vaults of the Deep King", "4-level progressive underground dungeon and crypts")
-    registry.register_dungeon_level(-1, "Vaulted Great Wine Cellar", "Stone pillars, oak barrel racks, and tasting table")
-    registry.register_dungeon_level(-2, "Castle Prison Complex", "Iron-barred holding cells, wall shackles, guard post")
-    registry.register_dungeon_level(-3, "Deep Dungeon & Torture Chamber", "Iron gibbet cages, torture rack, chains")
-    registry.register_dungeon_level(-4, "Ancient Crypts & Forgotten Ruins", "Stone sarcophagi, ruined arches, secret tunnel")
-    registry.register_secret_passage("Ballroom Grand Fireplace", "Castle Dungeon", "Secret stone stairs behind fireplace down to cells")
-    registry.register_secret_passage("Vaulted Wine Cellar", "Wizard Spire Base", "Secret mural corridor ascending to tower")
-    registry.register_secret_passage("Donjon Royal Chambers", "Bedrock Escarpment", "Hidden escape tunnel through mountain crag")
-    registry.register_secret_passage("Grand Chantry Chapel", "Ancient Crypts", "Iron trapdoor descent into ancient ruins")
-
-    # 3. Monumental Central Donjon Keep (Perched atop mountain crag at Z = 10.5m)
-    build_donjon_citadel_keep(bm, cx=0.0, cy=10.0, z_base=z_keep, width=22.0, depth=20.0, height=28.0, roof_h=18.0)
-    registry.register_district("Royal District")
-    registry.register_landmark("The Donjon of the High King (Ancestral Old Keep Core)", "Ancestral mountain keep soaring 58m with corner bartizans")
-    registry.register_tower("secondary", "Donjon Northwest Bartizan", 6.5, (-11.4, 20.4))
-    registry.register_tower("secondary", "Donjon Northeast Bartizan", 6.5, (11.4, 20.4))
-    registry.register_tower("secondary", "Donjon Southwest Bartizan", 6.5, (-11.4, -0.4))
-    registry.register_tower("secondary", "Donjon Southeast Bartizan", 6.5, (11.4, -0.4))
-    registry.register_interior("Donjon Council Chambers", "Map tables, high chairs, spiral staircase")
-
-    # 4. Great Royal Ballroom & Palace Wing (Western Cliff Terrace at Z = 7.5m)
-    build_great_ballroom_wing(bm, x0=-40.0, x1=-11.0, y0=-12.0, y1=8.0, z_base=z_west, height=13.8, roof_h=8.5)
-    registry.register_landmark("The Great Royal Hall of Thrones", "Double-height ballroom with 3-tier dais, royal thrones, hammerbeam roof")
-    registry.register_interior("Grand Ballroom & Throne Dais", "Royal thrones, monumental fireplace, hammerbeam trusses")
-
-    # 5. Fortress Citadel Ramparts Wing (Eastern Cliff Terrace at Z = 6.0m, FLAT ROOF & MERLONS)
-    build_fortress_ramparts_wing(bm, x0=11.0, x1=44.0, y0=-12.0, y1=12.0, z_base=z_ramparts, height=11.2)
-    registry.register_district("Military District")
-    registry.register_landmark("The High Fortress Ramparts", "2-storey military ramparts with 100% flat stone fighting deck")
-    registry.register_interior("Garrison Rampart Quarters", "Bunk beds, weapon storage, guard stations")
-
-    # 6. High Scholar's Wing (Arcane District at Z = 7.5m)
-    build_scholars_wing(bm, x0=-46.0, x1=-28.0, y0=-22.0, y1=2.0, z_base=z_west, height=13.8, roof_h=7.5)
-    registry.register_district("Arcane District")
-    registry.register_landmark("The High Scholar's Wing & Library", "3-storey arcane academy with cantilevered oriel lookouts")
-    registry.register_interior("High Scholar's Library", "Grand bookcases, reading desks, arcane lecterns")
-
-    # 7. Grand Castle Entrance Portal (Barbican at Forecourt Z = 0.0m)
-    build_grand_castle_portal(bm, cx=0.0, front_y=-3.5, z_base=z_ground, width=9.0, depth=6.5, height=6.8)
-    registry.register_landmark("The Barbican of the Sun Gate", "Open gothic portal archway with hoisted iron portcullis & flared stairs")
-
-    # 8. Grand Chantry Chapel of the Silver Flame (Religious District)
-    build_sanctuary_chapel(bm, cx=-24.0, cy=18.0, z_base=z_west, width=9.5, depth=16.0, height=10.2)
-    registry.register_district("Religious District")
-    registry.register_landmark("The Grand Chantry of the Silver Flame", "Gothic chapel with traceried lancets, rose window, sanctus bell-tower")
-    registry.register_interior("Sanctuary of the Silver Flame", "Stone altar, brass candlesticks, worship pews, crypt descent")
-
-    # 9. Walkable Towers Network perched on cliffs
-    # 9a. Landmark Tower: High Scholar's Spire (Wizard Spire, 42m high, conical witch-hat roof, ZERO merlons)
-    sch_x, sch_y = -42.0, -20.0
-    build_walkable_round_tower(
-        bm, cx=sch_x, cy=sch_y, z_base=z_west,
-        radius=4.4, num_floors=5, floor_h=floor_h,
-        tower_type='SPIRE', spire_h=13.5, has_oriel=True, oriel_ang=-0.35,
-        door_angs=((0, 0.0),)
-    )
-    registry.register_landmark("The Wizard's Spire of Eldath", "Soaring 42m landmark arcane tower with conical witch-hat roof")
-    registry.register_tower("landmark", "The Wizard's Spire of Eldath", 42.0, (sch_x, sch_y))
-    build_arcane_chamber_furnishings(bm, cx=sch_x, cy=sch_y, z_floor=z_west + 0.1)
-    registry.register_interior("Wizard's Upper Arcane Chamber", "Arcane circle, alchemy station, orrery, spellbook pedestal, scrying pool")
-
-    # 9b. Major Tower: Southeast Fortress Bastion (FLAT DECK WITH MERLONS & BRAZIER, ZERO POINTY ROOF)
-    bast_x, bast_y = 42.0, -12.0
-    build_walkable_round_tower(
-        bm, cx=bast_x, cy=bast_y, z_base=z_ramparts,
-        radius=5.2, num_floors=3, floor_h=floor_h,
-        tower_type='BATTLEMENTS', corbel_count=22,
-        door_angs=((0, math.pi),)
-    )
-    registry.register_landmark("The Bastion of Iron Dawn", "Southeast fortress bastion with flat fighting deck, merlons, signal brazier")
-    registry.register_tower("major", "The Bastion of Iron Dawn", 18.0, (bast_x, bast_y))
-
-    # 9c. Major Tower: Northwest High Spire Watchtower
-    rl_x, rl_y = -42.0, 10.0
-    build_walkable_round_tower(
-        bm, cx=rl_x, cy=rl_y, z_base=z_west,
-        radius=3.8, num_floors=4, floor_h=floor_h,
-        tower_type='SPIRE', spire_h=11.5,
-        door_angs=((0, 0.0),)
-    )
-    registry.register_landmark("Northwest High Spire Watchtower", "Spire watchtower guarding palace flank")
-    registry.register_tower("major", "Northwest High Spire Watchtower", 22.0, (rl_x, rl_y))
-
-    # 9d. Major Tower: Northeast Artillery Bastion (FLAT DECK WITH MERLONS)
-    rr_x, rr_y = 42.0, 12.0
-    build_walkable_round_tower(
-        bm, cx=rr_x, cy=rr_y, z_base=z_ramparts,
-        radius=4.8, num_floors=3, floor_h=floor_h,
-        tower_type='BATTLEMENTS', corbel_count=20,
-        door_angs=((0, math.pi),)
-    )
-    registry.register_landmark("Northeast Artillery Bastion", "Heavy fortress artillery bastion with flat fighting deck and merlons")
-    registry.register_tower("major", "Northeast Artillery Bastion", 18.0, (rr_x, rr_y))
-
-    # 10. Elevated High Armored Skybridge
-    bridge_start = (sch_x + 2.5, sch_y + 2.5)
-    bridge_end = (-11.0, 10.0)
-    build_high_skybridge(bm, bridge_start, bridge_end, z_level=17.5, width=2.4, height=3.4)
-    registry.register_landmark("The Armored Skybridge of the Stars", "Elevated stone skybridge connecting Wizard Spire to Keep")
-
-    # 11. Connecting Cliff Staircases (Physical traversal between terraces)
-    build_cliff_staircase(bm, start_pt=(9.0, -14.0, 0.0), end_pt=(9.0, -3.0, z_ramparts),
-                         num_steps=20, width=2.2, parapet_side='RIGHT')
-    build_cliff_staircase(bm, start_pt=(-9.0, -16.0, 0.0), end_pt=(-9.0, -3.0, z_west),
-                         num_steps=24, width=2.2, parapet_side='LEFT')
-    build_cliff_staircase(bm, start_pt=(0.0, -1.0, 6.8), end_pt=(0.0, 0.5, z_keep + 1.8),
-                         num_steps=16, width=3.2, parapet_side='BOTH')
-    build_cliff_staircase(bm, start_pt=(-11.0, 4.0, z_west + 1.8), end_pt=(-8.0, 4.0, z_keep + 1.8),
-                         num_steps=10, width=2.4, parapet_side='NONE')
-    build_cliff_staircase(bm, start_pt=(11.0, 2.0, z_ramparts + 1.8), end_pt=(11.0, 8.0, z_keep + 1.8),
-                         num_steps=15, width=2.0, parapet_side='RIGHT')
-
-    # Courtyards & Circulation
-    registry.register_district("Courtyard & Terrace District")
-    registry.register_courtyard("The Barbican Forecourt Plaza")
-    registry.register_courtyard("The Upper Inner Ward")
-    registry.register_courtyard("The Terraced Cliff Gardens")
-    registry.register_route("Public", "Sun Gate -> Forecourt -> Grand Cliff Stairs -> Palace & Keep")
-    registry.register_route("Military", "Ramparts Deck -> Wall Walks -> Bastions -> Guard Posts")
-    registry.register_route("Service", "Provisions Cellar -> Kitchens -> Pantry")
-    registry.register_route("Hidden", "Ballroom Fireplace Secret Stairs -> Subterranean Dungeon Complex")
-
-
-# =============================================================================
 # 16. MASTER ORCHESTRATOR & ENTRY POINTS
 # =============================================================================
 
@@ -2107,22 +1823,14 @@ def build_castle(bm, props, ctx):
     Master Dispatcher for Procedural Fantasy Castle Generation:
     1. Resolves castle progression tier: TIER_1, TIER_2, or TIER_3.
     2. Instantiates CastleRegistry to record all structures and lineage.
-    3. Dispatches to the corresponding tier constructor.
-    4. Executes Silhouette Optimization Pass.
-    5. Runs the Final Validation Pass (validate_castle_generation) asserting all requirements.
+    3. Composes the castle on the shared rock mount for that tier.
+    4. Runs the Final Validation Pass (validate_castle_generation) asserting all requirements.
     """
     tier = getattr(props, 'castle_tier', 'TIER_3')
     registry = CastleRegistry(tier)
 
-    if tier == 'TIER_1':
-        build_castle_tier_1_stronghold(bm, props, ctx, registry)
-    elif tier == 'TIER_2':
-        build_castle_tier_2_fortress(bm, props, ctx, registry)
-    else:
-        build_castle_tier_3_citadel(bm, props, ctx, registry)
-
-    # Skyline silhouette optimization pass
-    optimize_castle_silhouette(bm, registry, tier)
+    from .nasher_castle import build_nasher_castle
+    build_nasher_castle(bm, props, ctx, registry, {'TIER_1': 1, 'TIER_2': 2}.get(tier, 3))
 
     # Strict Final Validation Pass
     validate_castle_generation(registry, tier)

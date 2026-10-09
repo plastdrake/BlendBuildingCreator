@@ -787,7 +787,7 @@ def _build_seamless_wall_ring(bm, r_out, r_in, z0, z1, bays=BAYS, offset=OFFSET,
 
 def _sweep_helical_beam(bm, r_helix, theta_start, theta_end, z_start, z_end,
                         cross_w, cross_h, z_offset, mat_index,
-                        segments=48):
+                        segments=48, cx=0.0, cy=0.0):
     """Generate a continuous 3D helical swept beam along a circular arc.
 
     cross_w: Radial horizontal width of the beam.
@@ -821,10 +821,10 @@ def _sweep_helical_beam(bm, r_helix, theta_start, theta_end, z_start, z_end,
         r_out = r_helix + hw
         r_in  = r_helix - hw
 
-        v0 = bm.verts.new((r_out * ca, r_out * sa, z_c + hh))
-        v1 = bm.verts.new((r_in  * ca, r_in  * sa, z_c + hh))
-        v2 = bm.verts.new((r_in  * ca, r_in  * sa, z_c - hh))
-        v3 = bm.verts.new((r_out * ca, r_out * sa, z_c - hh))
+        v0 = bm.verts.new((cx + r_out * ca, cy + r_out * sa, z_c + hh))
+        v1 = bm.verts.new((cx + r_in  * ca, cy + r_in  * sa, z_c + hh))
+        v2 = bm.verts.new((cx + r_in  * ca, cy + r_in  * sa, z_c - hh))
+        v3 = bm.verts.new((cx + r_out * ca, cy + r_out * sa, z_c - hh))
         ring_verts.append((v0, v1, v2, v3))
 
     def _set_quad_uv(face, s0, s1, p0, p1):
@@ -884,7 +884,7 @@ def _sweep_helical_beam(bm, r_helix, theta_start, theta_end, z_start, z_end,
 # CURVED WALL STAIRCASE (CONTINUOUS HELICAL RAILING, STEP 0 TO LANDING)
 # =============================================================================
 
-def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=STAIR_ARC, stair_w=STAIR_W):
+def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=STAIR_ARC, stair_w=STAIR_W, cx=0.0, cy=0.0):
     """Curved castle staircase running along the inside perimeter of the stone wall.
 
     - Treads hug the inner face of the wall.
@@ -905,19 +905,14 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
     start_ang_rad = math.radians(start_ang_deg)
     tread_thick = 0.065
 
-    # 1. Step treads hugging the outer wall. The floor slab itself is the top
-    # landing, so we build one tread per riser *below* it (no flush top tread,
-    # which would read as a missing step and coplanar-fight the floor).
-    # The whole flight is shifted half a step toward the top (i + 1.5) so the
-    # last tread lands exactly on the floor-opening edge - otherwise the top of
-    # the flight stops short and leaves a hole where it passes through the floor.
+    # 1. Step treads hugging the outer wall.
     for i in range(num_steps - 1):
         mid_ang = start_ang_rad + (i + 1.5) * step_ang_rad
         cur_z = z0 + (i + 1) * step_h
         chord_mult = 1.08
 
-        sx = r_mid * math.cos(mid_ang)
-        sy = r_mid * math.sin(mid_ang)
+        sx = cx + r_mid * math.cos(mid_ang)
+        sy = cy + r_mid * math.sin(mid_ang)
         chord_w = 2.0 * r_mid * math.tan(step_ang_rad * 0.5) * chord_mult
 
         # Step wedge plank (UVs aligned along radial length so wood fibers flow along the tread).
@@ -958,46 +953,44 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
     # Top of the dropped base stringer beam, so posts can sit down onto it.
     beam_top = -0.085 + 0.055
 
-    # Continuous base stringer rail, dropped just below the tread line so it
-    # reads as the beam carrying the treads rather than a rail on top of them.
+    # Continuous base stringer rail
     _sweep_helical_beam(bm, r_helix=r_stair_in,
                         theta_start=theta_start, theta_end=theta_end,
                         z_start=z_start, z_end=z_end,
                         cross_w=0.13, cross_h=0.11, z_offset=-0.085,
-                        mat_index=MAT_INDEX_TIMBER, segments=48)
+                        mat_index=MAT_INDEX_TIMBER, segments=48, cx=cx, cy=cy)
 
     # Continuous lower stringer rail
     _sweep_helical_beam(bm, r_helix=r_stair_in,
                         theta_start=theta_start, theta_end=theta_end,
                         z_start=z_start, z_end=z_end,
                         cross_w=0.07, cross_h=0.05, z_offset=0.28,
-                        mat_index=MAT_INDEX_TIMBER, segments=48)
+                        mat_index=MAT_INDEX_TIMBER, segments=48, cx=cx, cy=cy)
 
     # Continuous mid stringer rail
     _sweep_helical_beam(bm, r_helix=r_stair_in,
                         theta_start=theta_start, theta_end=theta_end,
                         z_start=z_start, z_end=z_end,
                         cross_w=0.07, cross_h=0.05, z_offset=0.52,
-                        mat_index=MAT_INDEX_TIMBER, segments=48)
+                        mat_index=MAT_INDEX_TIMBER, segments=48, cx=cx, cy=cy)
 
     # Continuous main handrail beam (under cap)
     _sweep_helical_beam(bm, r_helix=r_stair_in,
                         theta_start=theta_start, theta_end=theta_end,
                         z_start=z_start, z_end=z_end,
                         cross_w=0.13, cross_h=0.09, z_offset=rail_h - 0.06,
-                        mat_index=MAT_INDEX_TIMBER, segments=48)
+                        mat_index=MAT_INDEX_TIMBER, segments=48, cx=cx, cy=cy)
 
     # Continuous wide handrail cap board (light wood, with longitudinal wood grain along curve)
     _sweep_helical_beam(bm, r_helix=r_stair_in,
                         theta_start=theta_start, theta_end=theta_end,
                         z_start=z_start, z_end=z_end,
                         cross_w=0.19, cross_h=0.045, z_offset=rail_h + 0.015,
-                        mat_index=MAT_INDEX_WOOD, segments=48)
+                        mat_index=MAT_INDEX_WOOD, segments=48, cx=cx, cy=cy)
 
     # 3. Sturdy Newel Posts at start (floor z0) and stop (floor z1)
-    # A. Bottom Newel Post: firmly rooted on floor z0 at step 0
-    p0_x = r_stair_in * math.cos(theta_start)
-    p0_y = r_stair_in * math.sin(theta_start)
+    p0_x = cx + r_stair_in * math.cos(theta_start)
+    p0_y = cy + r_stair_in * math.sin(theta_start)
     bot_post_h = step_h + rail_h + 0.10
     create_beveled_box(bm, size=(0.16, 0.16, bot_post_h),
                        location=(p0_x, p0_y, z0 + bot_post_h * 0.5),
@@ -1008,9 +1001,8 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
                        rotation=(0.0, 0.0, theta_start),
                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
 
-    # B. Top Newel Post: firmly rooted on floor z1 at landing
-    p1_x = r_stair_in * math.cos(theta_end)
-    p1_y = r_stair_in * math.sin(theta_end)
+    p1_x = cx + r_stair_in * math.cos(theta_end)
+    p1_y = cy + r_stair_in * math.sin(theta_end)
     top_post_h = rail_h + 0.10
     create_beveled_box(bm, size=(0.16, 0.16, top_post_h),
                        location=(p1_x, p1_y, z1 + top_post_h * 0.5),
@@ -1024,12 +1016,8 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
     # 4. Vertical balusters / pickets placed at every step
     for i in range(num_steps - 1):
         mid_ang = start_ang_rad + (i + 1.5) * step_ang_rad
-        px = r_stair_in * math.cos(mid_ang)
-        py = r_stair_in * math.sin(mid_ang)
-        # Balusters run from the handrail down onto the base stringer beam.
-        # Top is measured on the helix line (not the tread height, which sits a
-        # full step lower) and tucked up into the main handrail beam so the rail
-        # never floats above the pickets.
+        px = cx + r_stair_in * math.cos(mid_ang)
+        py = cy + r_stair_in * math.sin(mid_ang)
         bot_z = _helix_z(mid_ang) + beam_top
         top_z = _helix_z(mid_ang) + (rail_h - 0.06) + 0.02
         if top_z - bot_z > 0.20:
@@ -1043,10 +1031,8 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
     for frac in (0.33, 0.67):
         i_step = int((num_steps - 1) * frac)
         p_ang = start_ang_rad + (i_step + 1.5) * step_ang_rad
-        px = r_stair_in * math.cos(p_ang)
-        py = r_stair_in * math.sin(p_ang)
-        # Intermediate posts drop all the way down onto the base stringer beam.
-        # Top measured on the helix line so it reaches up into the handrail beam.
+        px = cx + r_stair_in * math.cos(p_ang)
+        py = cy + r_stair_in * math.sin(p_ang)
         top_z = _helix_z(p_ang) + (rail_h - 0.06) + 0.02
         bot_z = _helix_z(p_ang) + beam_top
         create_beveled_box(bm, size=(0.09, 0.09, top_z - bot_z),
@@ -1061,28 +1047,24 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
         p_ang = start_ang_rad + (step_idx + 1.5) * step_ang_rad
         p_z = z0 + (step_idx + 1) * step_h
         post_r = r_stair_in + 0.08
-        px = post_r * math.cos(p_ang)
-        py = post_r * math.sin(p_ang)
+        px = cx + post_r * math.cos(p_ang)
+        py = cy + post_r * math.sin(p_ang)
         h_total = p_z - tread_thick - z0
         if h_total > 0.60:
             foot_h = min(0.35, h_total * 0.20)
             col_h = h_total - foot_h - 0.12
-            # 1. Beveled timber base foot collar (no stone plinth indoors on wood floor!)
             create_beveled_box(bm, size=(0.26, 0.26, foot_h),
                                location=(px, py, z0 + foot_h * 0.5),
                                rotation=(0.0, 0.0, p_ang),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-            # 2. Heavy vertical timber post
             create_beveled_box(bm, size=(0.18, 0.18, col_h),
                                location=(px, py, z0 + foot_h + col_h * 0.5),
                                rotation=(0.0, 0.0, p_ang),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-            # 3. Capital collar bracket under the stair stringer
             create_beveled_box(bm, size=(0.28, 0.28, 0.12),
                                location=(px, py, p_z - tread_thick - 0.06),
                                rotation=(0.0, 0.0, p_ang),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
-            # 4. Diagonal timber brace out to the step
             out_x = px + math.cos(p_ang) * 0.28
             out_y = py + math.sin(p_ang) * 0.28
             _beam(bm, (px, py), (out_x, out_y),
@@ -1096,7 +1078,7 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
 
 def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=None,
                             thickness=0.14, segments=32, offset=0.0,
-                            stair_inner_r=None, stair_outer_r=None):
+                            stair_inner_r=None, stair_outer_r=None, cx=0.0, cy=0.0):
     """Build a unified gap-free timber floor slab with an open stairwell cutout.
 
     - The entire floor and ceiling is built as a single unified radial disc:
@@ -1149,8 +1131,8 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
         else:
             return a >= s or a <= e
 
-    v_c_top = bm.verts.new((0.0, 0.0, z_top))
-    v_c_bot = bm.verts.new((0.0, 0.0, z_bot))
+    v_c_top = bm.verts.new((cx, cy, z_top))
+    v_c_bot = bm.verts.new((cx, cy, z_bot))
 
     sector_cut = []
     for j in range(N):
@@ -1170,10 +1152,10 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
 
         if not is_c:
             # Full solid sector from 0 to r_floor
-            vt0 = bm.verts.new((r_floor * ca0, r_floor * sa0, z_top))
-            vt1 = bm.verts.new((r_floor * ca1, r_floor * sa1, z_top))
-            vb0 = bm.verts.new((r_floor * ca0, r_floor * sa0, z_bot))
-            vb1 = bm.verts.new((r_floor * ca1, r_floor * sa1, z_bot))
+            vt0 = bm.verts.new((cx + r_floor * ca0, cy + r_floor * sa0, z_top))
+            vt1 = bm.verts.new((cx + r_floor * ca1, cy + r_floor * sa1, z_top))
+            vb0 = bm.verts.new((cx + r_floor * ca0, cy + r_floor * sa0, z_bot))
+            vb1 = bm.verts.new((cx + r_floor * ca1, cy + r_floor * sa1, z_bot))
 
             ft = bm.faces.new([v_c_top, vt0, vt1])
             fb = bm.faces.new([v_c_bot, vb1, vb0])
@@ -1185,10 +1167,10 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
             created_faces.extend([ft, fb, fe])
         else:
             # 1. Inner solid sector from 0 to r_cut_in
-            vi_t0 = bm.verts.new((r_cut_in * ca0, r_cut_in * sa0, z_top))
-            vi_t1 = bm.verts.new((r_cut_in * ca1, r_cut_in * sa1, z_top))
-            vi_b0 = bm.verts.new((r_cut_in * ca0, r_cut_in * sa0, z_bot))
-            vi_b1 = bm.verts.new((r_cut_in * ca1, r_cut_in * sa1, z_bot))
+            vi_t0 = bm.verts.new((cx + r_cut_in * ca0, cy + r_cut_in * sa0, z_top))
+            vi_t1 = bm.verts.new((cx + r_cut_in * ca1, cy + r_cut_in * sa1, z_top))
+            vi_b0 = bm.verts.new((cx + r_cut_in * ca0, cy + r_cut_in * sa0, z_bot))
+            vi_b1 = bm.verts.new((cx + r_cut_in * ca1, cy + r_cut_in * sa1, z_bot))
 
             fit = bm.faces.new([v_c_top, vi_t0, vi_t1])
             fib = bm.faces.new([v_c_bot, vi_b1, vi_b0])
@@ -1201,15 +1183,15 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
 
             # 2. Outer solid ring (if belvedere overhang outside shaft)
             if has_outer_ring:
-                vo_t0 = bm.verts.new((r_cut_out * ca0, r_cut_out * sa0, z_top))
-                vo_t1 = bm.verts.new((r_cut_out * ca1, r_cut_out * sa1, z_top))
-                vo_b0 = bm.verts.new((r_cut_out * ca0, r_cut_out * sa0, z_bot))
-                vo_b1 = bm.verts.new((r_cut_out * ca1, r_cut_out * sa1, z_bot))
+                vo_t0 = bm.verts.new((cx + r_cut_out * ca0, cy + r_cut_out * sa0, z_top))
+                vo_t1 = bm.verts.new((cx + r_cut_out * ca1, cy + r_cut_out * sa1, z_top))
+                vo_b0 = bm.verts.new((cx + r_cut_out * ca0, cy + r_cut_out * sa0, z_bot))
+                vo_b1 = bm.verts.new((cx + r_cut_out * ca1, cy + r_cut_out * sa1, z_bot))
 
-                vf_t0 = bm.verts.new((r_floor * ca0, r_floor * sa0, z_top))
-                vf_t1 = bm.verts.new((r_floor * ca1, r_floor * sa1, z_top))
-                vf_b0 = bm.verts.new((r_floor * ca0, r_floor * sa0, z_bot))
-                vf_b1 = bm.verts.new((r_floor * ca1, r_floor * sa1, z_bot))
+                vf_t0 = bm.verts.new((cx + r_floor * ca0, cy + r_floor * sa0, z_top))
+                vf_t1 = bm.verts.new((cx + r_floor * ca1, cy + r_floor * sa1, z_top))
+                vf_b0 = bm.verts.new((cx + r_floor * ca0, cy + r_floor * sa0, z_bot))
+                vf_b1 = bm.verts.new((cx + r_floor * ca1, cy + r_floor * sa1, z_bot))
 
                 fot = bm.faces.new([vo_t0, vf_t0, vf_t1, vo_t1])
                 fob = bm.faces.new([vo_b1, vf_b1, vf_b0, vo_b0])
@@ -1225,10 +1207,10 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
         # Boundary radial face at cutout transitions
         jp = (j - 1) % N
         if sector_cut[jp] != sector_cut[j]:
-            v_rad_i_t = bm.verts.new((r_cut_in * ca0, r_cut_in * sa0, z_top))
-            v_rad_i_b = bm.verts.new((r_cut_in * ca0, r_cut_in * sa0, z_bot))
-            v_rad_o_t = bm.verts.new((r_cut_out * ca0, r_cut_out * sa0, z_top))
-            v_rad_o_b = bm.verts.new((r_cut_out * ca0, r_cut_out * sa0, z_bot))
+            v_rad_i_t = bm.verts.new((cx + r_cut_in * ca0, cy + r_cut_in * sa0, z_top))
+            v_rad_i_b = bm.verts.new((cx + r_cut_in * ca0, cy + r_cut_in * sa0, z_bot))
+            v_rad_o_t = bm.verts.new((cx + r_cut_out * ca0, cy + r_cut_out * sa0, z_top))
+            v_rad_o_b = bm.verts.new((cx + r_cut_out * ca0, cy + r_cut_out * sa0, z_bot))
 
             if sector_cut[j]:
                 frad = bm.faces.new([v_rad_i_b, v_rad_o_b, v_rad_o_t, v_rad_i_t])
@@ -1248,18 +1230,9 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
                 lp[uv_layer].uv = Vector((co.x * 0.5, co.z * 1.5))
 
     # -------------------------------------------------------------------------
-    # Protective guard railing around the stair opening, built with the very
-    # same joinery as the staircase banister: a few continuous swept rails plus
-    # chunky posts and balusters (bigger, singular parts - no fiddly add-ons).
-    # It closes the whole lip: the inner arc AND the radial back edge, so the
-    # opening is fully fenced.
+    # Protective guard railing around the stair opening
     # -------------------------------------------------------------------------
     if stair_arc is not None:
-        # Snap the railing to the *actual* cutout boundaries (the opening is
-        # quantised to whole sectors), so no unfenced sliver is left open.
-        # The cut sectors must be treated as one contiguous run on the circle:
-        # when the opening wraps across 0 degrees, min()/max() of the cut
-        # indices would span the whole disc and draw a full-circle railing.
         cut_idx = [j for j in range(N) if sector_cut[j]]
         if len(cut_idx) > 1:
             srt = sorted(cut_idx)
@@ -1286,15 +1259,15 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
                                  (0.19, 0.045, h + 0.015, MAT_INDEX_WOOD)):
             _sweep_helical_beam(bm, r_helix=r_rail, theta_start=th_s, theta_end=th_e,
                                 z_start=z_floor, z_end=z_floor, cross_w=cw, cross_h=ch_,
-                                z_offset=zo, mat_index=m, segments=n_seg)
+                                z_offset=zo, mat_index=m, segments=n_seg, cx=cx, cy=cy)
 
         def _guard_post(px, py, ang):
             create_beveled_box(bm, size=(0.15, 0.15, h + 0.10),
-                               location=(px, py, z_floor + (h + 0.10) * 0.5),
+                               location=(cx + px, cy + py, z_floor + (h + 0.10) * 0.5),
                                rotation=(0.0, 0.0, ang),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
             create_beveled_box(bm, size=(0.21, 0.21, 0.05),
-                               location=(px, py, z_floor + h + 0.115),
+                               location=(cx + px, cy + py, z_floor + h + 0.115),
                                rotation=(0.0, 0.0, ang),
                                mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
 
@@ -1305,21 +1278,21 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
         for k in range(1, n_bal + 1):
             ta = th_s + (th_e - th_s) * (k / (n_bal + 1))
             create_beveled_box(bm, size=(0.09, 0.09, h - 0.16),
-                               location=(r_rail * math.cos(ta), r_rail * math.sin(ta),
+                               location=(cx + r_rail * math.cos(ta), cy + r_rail * math.sin(ta),
                                          z_floor + 0.05 + (h - 0.16) * 0.5),
                                rotation=(0.0, 0.0, ta),
                                mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
 
         # Radial return fencing the free (back) edge of the opening.
-        p_in = (r_rail * math.cos(th_s), r_rail * math.sin(th_s))
+        p_in = (cx + r_rail * math.cos(th_s), cy + r_rail * math.sin(th_s))
         r_outb = r_cut_out + 0.02
-        p_out = (r_outb * math.cos(th_s), r_outb * math.sin(th_s))
+        p_out = (cx + r_outb * math.cos(th_s), cy + r_outb * math.sin(th_s))
         for (cw, ch_, zo, m) in ((0.12, 0.09, 0.05, MAT_INDEX_TIMBER),
                                  (0.07, 0.05, 0.52, MAT_INDEX_TIMBER),
                                  (0.13, 0.09, h - 0.06, MAT_INDEX_TIMBER),
                                  (0.19, 0.045, h + 0.015, MAT_INDEX_WOOD)):
             _beam(bm, p_in, p_out, z_floor + zo, z_floor + zo, cw, ch_, m, bevel=0.010)
-        _guard_post((p_in[0] + p_out[0]) * 0.5, (p_in[1] + p_out[1]) * 0.5, th_s)
+        _guard_post(r_rail * math.cos(th_s), r_rail * math.sin(th_s), th_s)
 
 
 # =============================================================================
