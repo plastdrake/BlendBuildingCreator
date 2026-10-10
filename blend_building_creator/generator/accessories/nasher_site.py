@@ -408,10 +408,39 @@ def _spline_curve(waypoints, sample_step=1.8):
     return pts
 
 
+def _build_step_riser_wall(bm, p, u_tangent, n_outward, z_a, z_b, thick, walk_w=0.95):
+    """Fills the vertical step gap between two adjacent wall runs of differing elevations
+    with a solid stone brick wall riser (MAT_INDEX_STONE).
+    """
+    z_low = min(z_a, z_b)
+    z_high = max(z_a, z_b)
+    dz = z_high - z_low
+    if dz < 0.05:
+        return
+    ux, uy = u_tangent
+    ang = math.atan2(uy, ux)
+    nx, ny = n_outward
+    total_w = thick + walk_w + 0.16
+    lat_center = -(walk_w * 0.5 - 0.02)
+    cx = p[0] + nx * lat_center
+    cy = p[1] + ny * lat_center
+    h_riser = dz + 0.32
+    z_mid = z_low + dz * 0.5 + 0.08
+    create_beveled_box(
+        bm,
+        size=(0.55, total_w, h_riser),
+        location=(cx, cy, z_mid),
+        rotation=(0.0, 0.0, ang),
+        mat_index=MAT_INDEX_STONE,
+        bevel_amount=0.015
+    )
+
+
 def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=(), top_z_forecourt=None, top_z_upper=None):
     """Build connecting curtain wall runs on the east and west flanks linking
     the lower forecourt rim wall to the upper citadel perimeter wall, closing
-    the defensive perimeter gap.
+    the defensive perimeter gap. All step height differences are covered with
+    solid stone brick wall risers.
     """
     from .curtain_wall import build_curtain_wall_run
 
@@ -432,12 +461,10 @@ def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=(), top_z
         sub_pts = _spline_curve(chain, sample_step=1.8)
         n_segs = max(1, len(sub_pts) - 1)
 
+        # 1. Precalculate top_z for each segment
+        seg_top_z = []
         for i in range(n_segs):
             s, e = sub_pts[i], sub_pts[i + 1]
-            ln = math.hypot(e[0] - s[0], e[1] - s[1])
-            if ln < 0.2:
-                continue
-            outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
             zs = ground_z(s[0], s[1])
             ze = ground_z(e[0], e[1])
             t = (i + 0.5) / n_segs
@@ -446,11 +473,59 @@ def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=(), top_z
             else:
                 top_z = top_z_upper + t * (top_z_forecourt - top_z_upper)
             top_z = max(top_z, max(zs, ze) + height)
+            seg_top_z.append(top_z)
+
+        # 2. Build clipped curtain wall runs for each segment
+        for i in range(n_segs):
+            s, e = sub_pts[i], sub_pts[i + 1]
+            ln = math.hypot(e[0] - s[0], e[1] - s[1])
+            if ln < 0.2:
+                continue
+            outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
+            top_z = seg_top_z[i]
             ux, uy = (e[0] - s[0]) / ln, (e[1] - s[1]) / ln
             p0 = (s[0] - ux * 0.40, s[1] - uy * 0.40)
             p1 = (e[0] + ux * 0.40, e[1] + uy * 0.40)
             _build_clipped_wall_run(bm, build_curtain_wall_run, p0, p1, outward,
                                     bld_boxes, top_z, thick, seed=seed_base + i)
+
+        # 3. Cover all step riser holes between height differences with stone brick walls
+        for i in range(n_segs - 1):
+            P = sub_pts[i + 1]
+            s_prev = sub_pts[i]
+            e_next = sub_pts[i + 2]
+            tx = e_next[0] - s_prev[0]
+            ty = e_next[1] - s_prev[1]
+            t_len = math.hypot(tx, ty)
+            u_tan = (tx / t_len, ty / t_len) if t_len > 1e-4 else (1.0, 0.0)
+            n_out = (u_tan[1], -u_tan[0])
+            ref_out = (-1.0, 0.0) if not is_ascending else (1.0, 0.0)
+            if n_out[0] * ref_out[0] + n_out[1] * ref_out[1] < 0:
+                n_out = (-n_out[0], -n_out[1])
+            _build_step_riser_wall(bm, P, u_tan, n_out, seg_top_z[i], seg_top_z[i + 1], thick)
+
+        # 4. Boundary step risers at start and end connections
+        z_start_target = top_z_upper if not is_ascending else top_z_forecourt
+        z_end_target = top_z_forecourt if not is_ascending else top_z_upper
+        p_start_tan = (sub_pts[1][0] - sub_pts[0][0], sub_pts[1][1] - sub_pts[0][1])
+        st_len = math.hypot(p_start_tan[0], p_start_tan[1])
+        if st_len > 1e-4:
+            u_st = (p_start_tan[0] / st_len, p_start_tan[1] / st_len)
+            n_st = (u_st[1], -u_st[0])
+            ref_out = (-1.0, 0.0) if not is_ascending else (1.0, 0.0)
+            if n_st[0] * ref_out[0] + n_st[1] * ref_out[1] < 0:
+                n_st = (-n_st[0], -n_st[1])
+            _build_step_riser_wall(bm, sub_pts[0], u_st, n_st, z_start_target, seg_top_z[0], thick)
+
+        p_end_tan = (sub_pts[-1][0] - sub_pts[-2][0], sub_pts[-1][1] - sub_pts[-2][1])
+        et_len = math.hypot(p_end_tan[0], p_end_tan[1])
+        if et_len > 1e-4:
+            u_et = (p_end_tan[0] / et_len, p_end_tan[1] / et_len)
+            n_et = (u_et[1], -u_et[0])
+            ref_out = (-1.0, 0.0) if not is_ascending else (1.0, 0.0)
+            if n_et[0] * ref_out[0] + n_et[1] * ref_out[1] < 0:
+                n_et = (-n_et[0], -n_et[1])
+            _build_step_riser_wall(bm, sub_pts[-1], u_et, n_et, seg_top_z[-1], z_end_target, thick)
 
 
 def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.98,

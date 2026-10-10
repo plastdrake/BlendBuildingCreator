@@ -103,17 +103,27 @@ def _bread_fbx_mat():
     return MAT_INDEX_BREAD_FBX
 
 
+def _stamp_baked_local(bm, faces, fbx_file, lx, ly, lz, yaw, length,
+                       mat_index, long_axis='AUTO', pre_rot=(0.0, 0.0, 0.0)):
+    """Stamp a baked mesh in a caller's LOCAL frame, appending the new faces
+    to ``faces`` so they ride along with the caller's own final transform."""
+    _n0 = len(bm.faces)
+    try:
+        if _build_fbx_prop(bm, fbx_file, None, lx, ly, lz, yaw, length,
+                           mat_index, long_axis=long_axis, pre_rot=pre_rot):
+            faces += [f for f in list(bm.faces)[_n0:] if f.is_valid]
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _stamp_bread(bm, faces, lx, ly, lz, yaw=0.0, length=0.30):
     """One loaf in a LOCAL frame: the baked artist bread when available,
     else the stylized domed loaf. Faces are appended to ``faces`` (local)."""
-    _n0 = len(bm.faces)
-    try:
-        if _build_fbx_prop(bm, 'bread.fbx', None, lx, ly, lz, yaw, length,
-                           _bread_fbx_mat(), long_axis='AUTO'):
-            faces += [f for f in list(bm.faces)[_n0:] if f.is_valid]
-            return faces
-    except Exception:
-        pass
+    if _stamp_baked_local(bm, faces, 'bread.fbx', lx, ly, lz, yaw, length,
+                          _bread_fbx_mat(), long_axis='AUTO'):
+        return faces
     local = []
     _loaf(bm, local, lx, ly, lz, yaw=yaw, length=length)
     faces += local
@@ -326,40 +336,55 @@ def build_butcher_block(bm, x, y, z_ground=0.0, ang=0.0):
 
 
 def build_sausage_string(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
-    """Butcher's hanging rail with strings of linked sausages."""
+    """Butcher's hanging meat rail: full-width base skid, twin posts, a top
+    rail, and the artist's meat cuts hanging on ropes (local -Y faces the
+    room)."""
     faces = []
-    post_s = 0.07
+    post_s = 0.09
+    h = 1.62
+    # One clean full-width foot beam under both posts (a single skid reads
+    # far better than floating cross-feet).
+    faces += create_beveled_box(
+        bm, size=(width + 0.18, 0.20, 0.09),
+        location=(0.0, 0.0, 0.045),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+    )
     for sx in (-width * 0.5 + post_s * 0.5, width * 0.5 - post_s * 0.5):
         faces += create_beveled_box(
-            bm, size=(post_s, post_s, 1.55),
-            location=(sx, 0.0, 0.775),
+            bm, size=(post_s, post_s, h),
+            location=(sx, 0.0, 0.09 + h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010
         )
-        for fz in (-0.16, 0.16):
-            faces += create_beveled_box(
-                bm, size=(0.30, post_s, 0.06),
-                location=(sx, fz, 0.03),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
-            )
+        # Knee brace from post down to the skid.
+        faces += create_beveled_box(
+            bm, size=(0.06, 0.06, 0.40),
+            location=(sx, 0.11, 0.30),
+            rotation=(0.70, 0.0, 0.0),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
+        )
+    # Top hanging rail.
+    rail_z = 0.09 + h - 0.07
     faces += create_cylinder(
-        bm, radius=0.032, height=width - 0.05, segments=8,
-        location=(0.0, 0.0, 1.50),
+        bm, radius=0.034, height=width - 0.02, segments=8,
+        location=(0.0, 0.0, rail_z),
         rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_WOOD
     )
-    n = max(3, int(width / 0.26))
+    # Hang the artist's cuts at alternating heights, laid flat to the room.
+    n = max(3, int(width / 0.24))
     for i in range(n):
-        hx = -width * 0.5 + 0.20 + i * ((width - 0.40) / max(1, n - 1))
+        hx = -width * 0.5 + 0.22 + i * ((width - 0.44) / max(1, n - 1))
+        rope_len = 0.24 + (0.07 if i % 2 else 0.0)
         faces += create_cylinder(
-            bm, radius=0.008, height=0.30, segments=6,
-            location=(hx, 0.0, 1.50 - 0.15), mat_index=MAT_INDEX_ROPE
+            bm, radius=0.007, height=rope_len, segments=6,
+            location=(hx, 0.0, rail_z - rope_len * 0.5),
+            mat_index=MAT_INDEX_ROPE
         )
-        for li in range(3):
-            faces += create_cylinder(
-                bm, radius=0.034, height=0.095, segments=8,
-                location=(hx, 0.0, 1.50 - 0.30 - 0.045 - li * 0.10),
-                rotation=(0.0, math.pi * 0.5 if li % 2 else 0.0, 0.0),
-                mat_index=MAT_INDEX_LEATHER
-            )
+        _stamp_baked_local(
+            bm, faces, 'meat.fbx' if i % 2 else 'meat1.fbx',
+            hx, 0.0, rail_z - rope_len - 0.02, 0.0,
+            0.30 if i % 2 else 0.24, _meat_mat(), long_axis='Y',
+            pre_rot=(math.pi * 0.5, 0.0, 0.0)
+        )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
@@ -943,14 +968,17 @@ def _meat_mat():
 
 
 def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
-                    mat_index, final=None, long_axis='Y'):
+                    mat_index, final=None, long_axis='Y',
+                    pre_rot=(0.0, 0.0, 0.0)):
     """Stamp a baked artist prop mesh normalized to ``length`` with ``mat_index``.
 
     ``fbx_file`` names the source art (e.g. ``bread.fbx``); the geometry comes
     from the baked table in :mod:`artisan_meshdata` so no FBX operator runs at
     generation time (``bpy.ops.import_scene.fbx`` fails inside property-update
     and depsgraph contexts). ``long_axis`` is the local axis that must end up
-    pointing along the prop's +X length. Returns True, raises on any problem.
+    pointing along the prop's +X length. ``pre_rot`` is an extra Euler applied
+    AFTER that axis fix (used to lay hanging cuts flat toward the room).
+    Returns True, raises on any problem.
     """
     from mathutils import Matrix as _M, Vector as _V
     from .artisan_meshdata import PROP_MESHES
@@ -976,9 +1004,10 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
     cx, cy, z0 = ((min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5,
                   min(zs))
     fix = _M.Rotation(yaw_fix, 4, 'Z')
+    pre = _M.Euler(pre_rot).to_matrix().to_4x4()
     local = (_M.Translation((x, y, z_ground)) @ _M.Rotation(ang, 4, 'Z'))
     place = (local if final is None else (final @ local))
-    place = place @ _M.Diagonal((s, s, s, 1.0))
+    place = place @ pre @ fix @ _M.Diagonal((s, s, s, 1.0))
     base = _M.Translation((-cx, -cy, -z0))
     uv_layer = bm.loops.layers.uv.verify()
     seen = set()
