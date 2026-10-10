@@ -2293,6 +2293,14 @@ def _place_floor_prop(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
                 tracker.occupy(cx - hw, cx + hw, cy - hd, cy + hd)
                 build_prop(bm, key, cx, cy, z_floor, yaw, **params)
                 return (cx, cy, yaw)
+    # Fallback: grid-scan for ANY fitting spot so tight rooms still get
+    # their workstation instead of staying bare.
+    _spot = _freest_spot(tracker, rng)
+    if _spot is not None and _spot[2] >= max(half_w, half_d) - 1e-6:
+        _sx, _sy = _spot[0], _spot[1]
+        tracker.occupy(_sx - half_w, _sx + half_w, _sy - half_d, _sy + half_d)
+        build_prop(bm, key, _sx, _sy, z_floor, rng.uniform(0.0, 6.28), **params)
+        return (_sx, _sy, 0.0)
     return None
 
 
@@ -2608,6 +2616,13 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     _try_place_wall_prop(bm, 'FISH_DRYING_RACK', 1.60, 0.80, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'))
     _place_floor_prop(bm, tracker, z_floor, rng, 'ROPE_COIL', 0.28, 0.28)
+    # Curing stringers hung from the beams: zero floor footprint, so even
+    # the smallest fishery shows its trade (grid-scanned, not just centre).
+    _spot = _freest_spot(tracker, rng)
+    if _spot is not None and _spot[2] >= 0.20 - 1e-6:
+        tracker.occupy(_spot[0] - 0.20, _spot[0] + 0.20,
+                       _spot[1] - 0.20, _spot[1] + 0.20)
+        build_prop(bm, 'FISH_STRINGER', _spot[0], _spot[1], z_ceil, 0.0)
 
     _place_goods_row(bm, tracker, z_floor, rng, 'CRATE', count=3, box=0.36)  # fish boxes
     _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)  # salt barrels

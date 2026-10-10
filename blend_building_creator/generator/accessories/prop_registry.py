@@ -240,6 +240,8 @@ for _s in (
           'artisan_props', 'build_fish_drying_rack', 1.00, width=1.60),
     _spec('ROPE_COIL', "Rope Coil", 'WORK', "Coiled mooring rope",
           'artisan_props', 'build_rope_coil', 0.30),
+    _spec('FISH_STRINGER', "Fish Stringer", 'WORK', "Ceiling-hung curing fish on rope drops",
+          'artisan_props', 'build_fish_stringer', 0.30, drops=3),
 ):
     PROP_REGISTRY[_s.key] = _s
 
@@ -268,7 +270,7 @@ def prop_enum_items(category: str = 'ALL'):
     return [(s.key, s.label, s.description) for s in list_props(category)]
 
 
-CEILING_MOUNTED = {'CHAIN_LANTERN', 'CHANDELIER'}
+CEILING_MOUNTED = {'CHAIN_LANTERN', 'CHANDELIER', 'FISH_STRINGER'}
 
 
 def build_prop(bm, key: str, x: float = 0.0, y: float = 0.0,
@@ -285,6 +287,9 @@ def build_prop(bm, key: str, x: float = 0.0, y: float = 0.0,
     kwargs = dict(spec.defaults)
     kwargs.update(params or {})
     if key == 'CHAIN_LANTERN':
+        kwargs.pop('ang', None)
+        return fn(bm, x, y, z_ceiling=z, **kwargs)
+    if key == 'FISH_STRINGER':
         kwargs.pop('ang', None)
         return fn(bm, x, y, z_ceiling=z, **kwargs)
     if key == 'CHANDELIER':

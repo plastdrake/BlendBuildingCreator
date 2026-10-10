@@ -856,3 +856,43 @@ def build_rope_coil(bm, x, y, z_ground=0.0, ang=0.0):
         )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
+
+def build_fish_stringer(bm, x, y, z_ceiling=3.0, ang=0.0, drops=3):
+    """Ceiling-hung curing stringer for low fishery rooms: rope drops with
+    tail-tied smoked fish lashed to a crossbar. Hangs from z_ceiling, so it
+    needs no floor footprint (placed via the CEILING_MOUNTED path)."""
+    faces = []
+    span = drops * 0.28 + 0.15
+    faces += create_beveled_box(
+        bm, size=(span, 0.05, 0.06),
+        location=(0.0, 0.0, -0.03),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+    )
+    for i in range(drops):
+        lx = (i - (drops - 1) * 0.5) * 0.28
+        faces += create_cylinder(
+            bm, radius=0.006, height=0.14, segments=6,
+            location=(lx, 0.0, -0.06 - 0.07), mat_index=MAT_INDEX_ROPE
+        )
+        # Tail knot, hanging body, head (top to bottom).
+        faces += create_beveled_box(
+            bm, size=(0.070, 0.070, 0.020),
+            location=(lx, 0.0, -0.20),
+            rotation=(0.0, 0.0, math.pi * 0.25 + i * 0.12),
+            mat_index=MAT_INDEX_LEATHER, bevel_amount=0.005
+        )
+        faces += create_beveled_box(
+            bm, size=(0.085, 0.062, 0.26),
+            location=(lx, 0.0, -0.21 - 0.13),
+            rotation=(0.0, 0.0, (0.06 if i % 2 else -0.06)),
+            mat_index=MAT_INDEX_LEATHER, bevel_amount=0.026
+        )
+        faces += create_beveled_box(
+            bm, size=(0.095, 0.072, 0.07),
+            location=(lx, 0.0, -0.21 - 0.26 - 0.02),
+            rotation=(0.0, 0.0, (0.06 if i % 2 else -0.06)),
+            mat_index=MAT_INDEX_LEATHER, bevel_amount=0.022
+        )
+    transform_faces(faces, _place(x, y, z_ceiling, ang))
+    return faces
