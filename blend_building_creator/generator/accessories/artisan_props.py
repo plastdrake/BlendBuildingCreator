@@ -1197,8 +1197,9 @@ def build_wine_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.10):
     """Cellar wine rack: a timber frame with three solid shelves, each
     holding a row of the detailed mage-tower wine bottles LYING flat.
 
-    Shelves sit *between* the posts (inset 2cm) so no face is coplanar with
-    a post, and each bottle rests on a shelf top (never floating).
+    Shelves fit *between* the posts with a 2cm gap (no overlap), and every
+    bottle rests on a shelf top with the neck/cork toward the room (-Y) —
+    identical on every shelf.
     """
     faces = []
     h = 1.34
@@ -1214,29 +1215,33 @@ def build_wine_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.10):
             location=(sx, 0.0, h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
-    # Solid shelves inset between the posts.
+    # Shelves sized to sit between the posts (1cm clear each side).
+    shelf_w = max(0.30, width - 2.0 * post_w - 0.02)
     for sz in shelf_zs:
         faces += create_beveled_box(
-            bm, size=(width - post_w - 0.04, depth, shelf_t),
+            bm, size=(shelf_w, depth - 0.02, shelf_t),
             location=(0.0, 0.0, sz),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
         )
     # Back rail tying the frame together.
     faces += create_beveled_box(
-        bm, size=(width - post_w - 0.04, 0.05, 0.06),
+        bm, size=(shelf_w, 0.05, 0.06),
         location=(0.0, depth * 0.5 - 0.05, h - 0.06),
         mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
     )
-    # Lying bottles resting on each shelf, laid front-to-back with the necks
-    # toward the room (-Y), evenly spread across the shelf.
+    # Lying bottles on each shelf: axis along Y, cork toward the room (-Y),
+    # resting on the shelf top. Identical on every shelf.
     from .interior_furniture import build_bottle
-    per_shelf = max(2, int((width - 0.30) / 0.26))
+    per_shelf = max(2, min(4, int((shelf_w - 0.06) / 0.26)))
     for sz in shelf_zs:
-        top = sz + shelf_t * 0.5
+        axis_z = sz + shelf_t * 0.5 + 0.040  # shelf top + bottle radius
         for i in range(per_shelf):
-            bx = -width * 0.5 + 0.30 + i * ((width - 0.60) / max(1, per_shelf - 1))
+            if per_shelf == 1:
+                bx = 0.0
+            else:
+                bx = -shelf_w * 0.5 + 0.13 + i * ((shelf_w - 0.26) / (per_shelf - 1))
             bf = build_bottle(bm, 0.0, 0.0, 0.0, 0.0, bottle_type='WINE')
-            m = (Matrix.Translation((bx, 0.14, top + 0.05))
+            m = (Matrix.Translation((bx, 0.16, axis_z))
                  @ Matrix.Rotation(math.pi * 0.5, 4, 'X'))
             transform_faces(bf, m)
             faces += bf

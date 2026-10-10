@@ -57,7 +57,10 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
 
     # Basement room = wing footprint inset a little.
     bx0, bx1 = wx1 + 0.25, wx2 - 0.25
-    by0, by1 = wy1 + 0.25, wy2 - 0.25
+    by0 = wy1 + 0.25
+    # Extend the cellar past the wing's +Y wall (under the main block) so the
+    # stair, which descends toward +Y, has clear landing room at its foot.
+    by1 = wy2 + 1.40
     bcx, bcy = (bx0 + bx1) * 0.5, (by0 + by1) * 0.5
     bw, bd = bx1 - bx0, by1 - by0
 
@@ -96,12 +99,6 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
         bm, (shx, shy + stair_depth * 0.5, z_floor), z_ground,
         stair_width=stair_w, stair_depth=stair_depth, num_steps=steps,
         direction_y=-1
-    )
-    # Small stone landing at the foot of the stair.
-    faces += create_beveled_box(
-        bm, size=(stair_w + 0.6, 0.9, 0.06),
-        location=(shx, shy + stair_depth * 0.5 + 0.45, z_floor + 0.03),
-        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.01
     )
 
     # 4. Wine racks along the far walls (clear of the stair shaft).
