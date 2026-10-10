@@ -82,11 +82,26 @@ def _loaf(bm, faces, lx, ly, lz, yaw=0.0, length=0.30):
 
 
 def build_bread_loaf(bm, x, y, z_ground=0.0, ang=0.0, length=0.30):
-    """Single crusty loaf for counters and tables."""
+    """Single crusty loaf for counters and tables.
+
+    Uses the artist's bread FBX (props/bread.fbx, textured by bread.png);
+    falls back to the stylized domed loaf whenever the FBX cannot load.
+    """
+    try:
+        if _build_fbx_prop(bm, 'bread.fbx', None, x, y, z_ground, ang,
+                           length, _bread_fbx_mat(), long_axis='AUTO'):
+            return True
+    except Exception:
+        pass
     faces = []
     _loaf(bm, faces, 0.0, 0.0, 0.0, yaw=0.0, length=length)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
+
+def _bread_fbx_mat():
+    from ..materials import MAT_INDEX_BREAD_FBX
+    return MAT_INDEX_BREAD_FBX
 
 
 def build_bread_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.50):
@@ -265,9 +280,9 @@ def build_butcher_block(bm, x, y, z_ground=0.0, ang=0.0):
     _n0 = len(bm.faces)
     try:
         _build_fbx_prop(bm, 'meat.fbx', None, -0.08, 0.05, top_z, 0.30,
-                        0.22, _meat_mat(), final=_M2.Identity(4))
+                        0.22, _meat_mat(), final=_M2.Identity(4), long_axis='Y')
         _build_fbx_prop(bm, 'meat1.fbx', None, 0.10, -0.07, top_z, -0.40,
-                        0.16, _meat_mat(), final=_M2.Identity(4))
+                        0.16, _meat_mat(), final=_M2.Identity(4), long_axis='Y')
     except Exception:
         for ox, oy, yaw in ((-0.10, 0.08, 0.25), (0.11, -0.06, -0.35)):
             faces += create_beveled_box(
@@ -871,7 +886,7 @@ def build_fish(bm, x, y, z_ground=0.0, ang=0.0, length=0.34, smoked=False):
     if not smoked:
         try:
             if _build_fbx_prop(bm, 'fish.fbx', None, x, y, z_ground, ang,
-                               length, _fish_mat()):
+                               length, _fish_mat(), long_axis='AUTO'):
                 return True
         except Exception:
             pass
@@ -888,7 +903,8 @@ def build_meat(bm, x, y, z_ground=0.0, ang=0.0, length=0.30, variant=0):
     cut whenever the FBX cannot be loaded."""
     try:
         if _build_fbx_prop(bm, 'meat.fbx' if variant == 0 else 'meat1.fbx',
-                           None, x, y, z_ground, ang, length, _meat_mat()):
+                           None, x, y, z_ground, ang, length, _meat_mat(),
+                           long_axis='Y'):
             return True
     except Exception:
         pass
@@ -980,25 +996,31 @@ def _import_fbx_template(fbx_path):
 
 
 def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
-                    mat_index, final=None):
+                    mat_index, final=None, long_axis='Y'):
     """Stamp an artist FBX mesh normalized to ``length`` with ``mat_index``.
 
-    Shared by the fish/meat display meshes (all unwrapped to their own
-    atlas). Returns True, raises on any problem (caller falls back).
-    Pass ``final`` (a Matrix) to place in a local frame instead of world.
+    Shared by the fish/meat/bread display meshes (each unwrapped to its own
+    atlas). ``long_axis`` is the local axis that must end up pointing along
+    the prop's +X length. Returns True, raises on any problem.
     """
     from mathutils import Matrix as _M
     items = _import_fbx_template(os.path.join(_addon_root(), 'props', fbx_file))
     if not items:
         raise RuntimeError(f'{fbx_file} unavailable')
-    # Combined bounds: longest horizontal axis becomes the length.
+    # Fit the mesh's largest horizontal axis: X-native needs nothing, a
+    # Y-native prop is yawed -90 so its length points along +X.
     all_v = [v for it in items for v in it['verts']]
     xs = [v[0] for v in all_v]
     ys = [v[1] for v in all_v]
     zs = [v[2] for v in all_v]
     dx, dy = max(xs) - min(xs), max(ys) - min(ys)
-    yaw_fix = 0.0 if dx >= dy else -math.pi * 0.5
-    span = max(dx, dy) or 1.0
+    if long_axis == 'AUTO':
+        yaw_fix = 0.0 if dx >= dy else -math.pi * 0.5
+    else:
+        yaw_fix = 0.0 if long_axis == 'X' else -math.pi * 0.5
+    span = (dx if long_axis == 'X' else dy) if long_axis in ('X', 'Y') \
+        else max(dx, dy)
+    span = span or 1.0
     s = length / span
     cx, cy, z0 = ((min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5,
                   min(zs))
@@ -1170,7 +1192,45 @@ def build_horseshoe(bm, x, y, z_ground=0.0, ang=0.0):
     return faces
 
 
-def build_wooden_bowl(bm, x, y, z_ground=0.0, ang=0.0):    """Turned wooden bowl with a spoon resting across the rim."""
+def build_wine_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.10):
+    """Cellar wine rack: vertical frame with three rows of bottle cubbies
+    (six slots, one lying bottle each), leaning against a wall."""
+    faces = []
+    h = 1.30
+    depth = 0.42
+    for sx in (-width * 0.5 + 0.035, width * 0.5 - 0.035):
+        faces += create_beveled_box(
+            bm, size=(0.07, depth, h),
+            location=(sx, 0.0, h * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+    for rz in (0.12, 0.52, 0.92, 1.28):
+        faces += create_beveled_box(
+            bm, size=(width, depth, 0.05),
+            location=(0.0, 0.0, rz),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
+        )
+    # Lying bottles front-facing in each cubby.
+    for ri, rz in enumerate((0.30, 0.70, 1.06)):
+        for bx in (-width * 0.24, width * 0.24):
+            faces += create_cylinder(
+                bm, radius=0.038, height=0.30, segments=10,
+                location=(bx, -0.02, rz),
+                rotation=(math.pi * 0.5, 0.0, 0.0),
+                mat_index=MAT_INDEX_BOTTLE_GLASS, smooth=True
+            )
+            faces += create_cylinder(
+                bm, radius=0.013, height=0.06, segments=8,
+                location=(bx, -0.02 - 0.175, rz),
+                rotation=(math.pi * 0.5, 0.0, 0.0),
+                mat_index=MAT_INDEX_WAX
+            )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_wooden_bowl(bm, x, y, z_ground=0.0, ang=0.0):
+    """Turned wooden bowl with a spoon resting across the rim."""
     faces = []
     faces += create_hollow_dish(
         bm, radius_base=0.045, radius_rim=0.105, inner_radius_rim=0.092,

@@ -800,6 +800,13 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
         _build_warehouse_kit(bm, props, ctx, tier, hx, hy, shape, wings, seed)
     if _kit_on(props, ctx, 'kit_lumbermill', 'LUMBERMILL'):
         _build_lumbermill_kit(bm, props, ctx, hx, hy, base_w, shape, wings, open_timber, seed)
+    # Brewery cellar: sunken courtyard undercroft (tier-scaled).
+    if getattr(ctx, 'effective_archetype', '') == 'BREWERY':
+        try:
+            from .cellar import build_brewery_cellar
+            build_brewery_cellar(bm, props, ctx, tier)
+        except Exception:
+            pass
 
     # 4.5b Optional gable loft hatch frame, open leaf and leaning ladder.
     # The wall opening itself was left by the roof builders from _loft_arg.

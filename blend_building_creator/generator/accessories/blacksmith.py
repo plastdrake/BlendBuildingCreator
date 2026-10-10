@@ -156,3 +156,56 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
         mat_index=MAT_INDEX_TIMBER_FRAME,
         bevel_amount=0.008
     )
+
+    # -------------------------------------------------------------------------
+    # Forge hearth under the canopy: cut-stone forge with a glowing fire
+    # chamber, iron hood and a masonry flue rising through the canopy.
+    # -------------------------------------------------------------------------
+    from ..materials import MAT_INDEX_CUT_STONE, MAT_INDEX_IRON, MAT_INDEX_LANTERN
+    forge_x = wall_x + 0.90
+    forge_y = canopy_cy
+    forge_w, forge_d, forge_h = 1.30, 1.05, 0.95
+    # Stone body.
+    create_beveled_box(
+        bm, size=(forge_w, forge_d, forge_h),
+        location=(forge_x, forge_y, z_ground + forge_h * 0.5),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+    )
+    # Fire chamber recess in the front face (facing the yard, -Y).
+    create_beveled_box(
+        bm, size=(0.70, 0.34, 0.34),
+        location=(forge_x, forge_y - forge_d * 0.5 + 0.17,
+                  z_ground + forge_h * 0.62),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.015
+    )
+    # Glowing embers in the chamber mouth.
+    create_beveled_box(
+        bm, size=(0.56, 0.10, 0.24),
+        location=(forge_x, forge_y - forge_d * 0.5 + 0.06,
+                  z_ground + forge_h * 0.60),
+        mat_index=MAT_INDEX_LANTERN, bevel_amount=0.012
+    )
+    # Iron hood tapering up from the forge crown.
+    create_beveled_box(
+        bm, size=(forge_w - 0.10, forge_d - 0.10, 0.16),
+        location=(forge_x, forge_y, z_ground + forge_h + 0.08),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.012
+    )
+    # Masonry flue rising through the canopy roof.
+    flue_h = canopy_h + 0.40
+    create_beveled_box(
+        bm, size=(0.52, 0.52, flue_h),
+        location=(forge_x, forge_y, z_ground + forge_h + 0.16 + flue_h * 0.5),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+    )
+    # Quench trough beside the forge.
+    create_beveled_box(
+        bm, size=(0.70, 0.44, 0.34),
+        location=(forge_x, forge_y + forge_d * 0.5 + 0.42, z_ground + 0.17),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+    )
+    create_beveled_box(
+        bm, size=(0.60, 0.34, 0.05),
+        location=(forge_x, forge_y + forge_d * 0.5 + 0.42, z_ground + 0.315),
+        mat_index=MAT_INDEX_STONE, bevel_amount=0.008
+    )
