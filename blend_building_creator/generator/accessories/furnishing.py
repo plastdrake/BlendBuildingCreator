@@ -2304,6 +2304,29 @@ def _place_floor_prop(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
     return None
 
 
+def _place_corner_prop(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
+                       key: str, half_w: float, half_d: float, **params):
+    """Freestanding prop tucked into a room corner facing the centre (dress
+    forms, floor scales); falls back to open-floor placement."""
+    rcx = (tracker.rx0 + tracker.rx1) * 0.5
+    rcy = (tracker.ry0 + tracker.ry1) * 0.5
+    corners = [
+        (tracker.rx0 + half_w + 0.06, tracker.ry0 + half_d + 0.06),
+        (tracker.rx1 - half_w - 0.06, tracker.ry0 + half_d + 0.06),
+        (tracker.rx0 + half_w + 0.06, tracker.ry1 - half_d - 0.06),
+        (tracker.rx1 - half_w - 0.06, tracker.ry1 - half_d - 0.06),
+    ]
+    rng.shuffle(corners)
+    for cx, cy in corners:
+        if tracker.is_free(cx - half_w, cx + half_w, cy - half_d, cy + half_d):
+            tracker.occupy(cx - half_w, cx + half_w, cy - half_d, cy + half_d)
+            yaw = math.atan2(rcy - cy, rcx - cx)
+            build_prop(bm, key, cx, cy, z_floor, yaw, **params)
+            return (cx, cy, yaw)
+    return _place_floor_prop(bm, tracker, z_floor, rng, key,
+                             half_w, half_d, **params)
+
+
 def _dress_craft_table(bm, tx: float, ty: float, yaw: float, z_table: float,
                        rng, goods):
     """Lay trade goods in a row along a work table top."""
@@ -2477,8 +2500,9 @@ def _furnish_tailor_atelier(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
                          candidate_walls=('EAST', 'NORTH', 'WEST'))  # cloth bolts
     _try_place_wall_prop(bm, 'WARDROBE', 1.20, 0.55, tracker, z_floor,
                          candidate_walls=('WEST', 'EAST', 'NORTH'))
-    # Dress form in the freest corner, bolt bin along a free wall.
-    _place_floor_prop(bm, tracker, z_floor, rng, 'DRESS_FORM', 0.30, 0.30)
+    # Dress form tucked into a free corner facing the room, bolt bin along
+    # a free wall.
+    _place_corner_prop(bm, tracker, z_floor, rng, 'DRESS_FORM', 0.30, 0.30)
     _try_place_wall_prop(bm, 'CLOTH_BOLT_BIN', 0.60, 0.48, tracker, z_floor,
                          candidate_walls=('WEST', 'EAST', 'NORTH'))
     _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
@@ -2657,7 +2681,7 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'BAKERY': ['BREAD_LOAF', 'BREAD_LOAF', 'DOUGH_BOWL'],
         'BUTCHER': ['FOODPREP_CLUTTER'],
         'FISHERMAN': ['FISH', 'FISH', 'FOODPREP_CLUTTER'],
-        'JEWELER': ['GEM_TRAY', 'BOTTLE_CLUSTER'],
+        'JEWELER': ['BOTTLE_CLUSTER', 'BOTTLE', 'BOTTLE'],
         'BREWERY': ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'BOTTLE_CLUSTER'],
     }.get(arch)
     if not table_goods:
@@ -2672,13 +2696,13 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         _try_place_wall_prop(bm, 'SAUSAGE_STRING', 1.00, 0.35, tracker, z_floor,
                              candidate_walls=('NORTH', 'EAST', 'WEST'))
     elif arch == 'TAILOR':
-        _place_floor_prop(bm, tracker, z_floor, rng, 'DRESS_FORM', 0.30, 0.30)
+        _place_corner_prop(bm, tracker, z_floor, rng, 'DRESS_FORM', 0.30, 0.30)
         _try_place_wall_prop(bm, 'CLOTH_BOLT_BIN', 0.60, 0.48, tracker, z_floor,
                              candidate_walls=('WEST', 'EAST', 'NORTH'))
     elif arch == 'JEWELER':
-        _place_floor_prop(bm, tracker, z_floor, rng, 'BALANCE_SCALE', 0.30, 0.30)
-        _try_place_wall_prop(bm, 'STRONGBOX', 0.66, 0.44, tracker, z_floor,
-                             candidate_walls=('SOUTH', 'WEST', 'EAST'))
+        _lay_out_jeweler_counter(bm, tracker, z_floor, rng)
+    # Stepped market display near the entrance, dressed with sale goods.
+    _place_market_display(bm, tracker, z_floor, rng, arch)
     is_round = (arch == 'BREWERY')
     for tx, ty in ((rcx, rcy), (rcx - 1.0, rcy), (rcx + 1.0, rcy),
                    (rcx, rcy - 1.0), (rcx, rcy + 1.0)):
@@ -2693,6 +2717,102 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
             if t is not None:
                 _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng, table_goods)
                 return
+
+
+def _lay_out_jeweler_counter(bm, tracker: RoomOccupancyTracker, z_floor: float,
+                             rng) -> None:
+    """Merchant counter ensemble: gem tray + plant on the counter top, the
+    standing scale tucked in the merchant zone behind, strongbox at the end."""
+    cc = getattr(tracker, 'shop_counter', None)
+    if cc is None:
+        _place_corner_prop(bm, tracker, z_floor, rng, 'BALANCE_SCALE', 0.30, 0.30)
+        _try_place_wall_prop(bm, 'STRONGBOX', 0.66, 0.44, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'))
+        return
+    # Gem tray centre counter, plant at one end.
+    build_prop(bm, 'GEM_TRAY', cc['cx'], cc['cy'], cc['top_z'], cc['yaw'])
+    _ex = cc['cx'] + math.cos(cc['yaw']) * (cc['length'] * 0.5 - 0.22)
+    _ey = cc['cy'] + math.sin(cc['yaw']) * (cc['length'] * 0.5 - 0.22)
+    build_prop(bm, 'POTTED_PLANT_SMALL', _ex, _ey, cc['top_z'],
+               rng.uniform(0.0, 6.28))
+    # Scale behind the counter when there is a merchant zone, else a corner.
+    if cc.get('freestanding'):
+        _scx = cc['cx'] + cc['mdx'] * 0.62
+        _scy = cc['cy'] + cc['mdy'] * 0.62
+        if tracker.is_free(_scx - 0.30, _scx + 0.30, _scy - 0.30, _scy + 0.30):
+            tracker.occupy(_scx - 0.30, _scx + 0.30, _scy - 0.30, _scy + 0.30)
+            build_prop(bm, 'BALANCE_SCALE', _scx, _scy, z_floor,
+                       rng.uniform(0.0, 6.28))
+        else:
+            _place_corner_prop(bm, tracker, z_floor, rng, 'BALANCE_SCALE',
+                               0.30, 0.30)
+    else:
+        _place_corner_prop(bm, tracker, z_floor, rng, 'BALANCE_SCALE',
+                           0.30, 0.30)
+    _try_place_wall_prop(bm, 'STRONGBOX', 0.66, 0.44, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'WEST', 'EAST'))
+
+
+def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
+                          rng, arch: str) -> None:
+    """Stepped three-tier goods display near the shop entrance, dressed with
+    the trade's own sale goods. Faces the street door."""
+    _tier_goods = {
+        'BAKERY': [['BREAD_LOAF', 'BREAD_LOAF'], ['BREAD_LOAF', 'BREAD_LOAF'],
+                   ['BREAD_LOAF', 'BREAD_LOAF']],
+        'BREWERY': [['BOTTLE', 'BOTTLE'], ['PEWTER_TANKARD', 'PEWTER_TANKARD'],
+                    ['BOTTLE_CLUSTER']],
+        'BUTCHER': [['FOODPREP_CLUTTER'], ['CLAY_POT', 'CLAY_POT'],
+                    ['FOODPREP_CLUTTER']],
+        'TAILOR': [['FOLDED_CLOTH', 'FOLDED_CLOTH'],
+                   ['FOLDED_CLOTH', 'FOLDED_CLOTH'],
+                   ['BOOK_PILE_SMALL', 'FOLDED_CLOTH']],
+        'JEWELER': [['FOLDED_CLOTH', 'FOLDED_CLOTH'], ['GEM_TRAY'],
+                    ['BOTTLE_CLUSTER']],
+        'BLACKSMITH': [['HORSESHOE', 'HORSESHOE'], ['HORSESHOE', 'HORSESHOE'],
+                       ['CLAY_POT', 'HORSESHOE']],
+        'TOOLSMITH': [['HORSESHOE', 'HORSESHOE'], ['HORSESHOE', 'HORSESHOE'],
+                      ['CLAY_POT', 'HORSESHOE']],
+        'FURNITURE_MAKER': [['WOODEN_BOWL', 'WOODEN_BOWL'],
+                            ['WOODEN_BOWL', 'WOODEN_BOWL'],
+                            ['WOODEN_BOWL', 'CLAY_POT']],
+        'FISHERMAN': [['FISH', 'FISH'], ['FISH', 'FISH'],
+                      ['CLAY_POT', 'FISH']],
+    }.get(arch)
+    if not _tier_goods:
+        return
+    # Street door = the front-most doorway; display faces it.
+    _door = None
+    for d in tracker.doorways:
+        if d.get('axis', 'X') == 'X' and (_door is None or d.get('y', 0.0) < _door.get('y', 0.0)):
+            _door = d
+    rcx = (tracker.rx0 + tracker.rx1) * 0.5
+    _hw, _hd = 0.85, 0.575
+    for _ox in (0.0, -1.4, 1.4, -2.4, 2.4):
+        _cx, _cy = rcx + _ox + _jit(rng, 0.10), tracker.ry0 + 2.05
+        if _cy - _hd < tracker.ry0 or _cy + _hd > tracker.ry1:
+            continue
+        if not tracker.is_free(_cx - _hw, _cx + _hw, _cy - _hd, _cy + _hd):
+            continue
+        if _door is not None:
+            _yaw = math.atan2(_door.get('x', rcx) - _cx, _door.get('y', _cy - 1.0) - _cy)
+        else:
+            _yaw = math.pi
+        tracker.occupy(_cx - _hw, _cx + _hw, _cy - _hd, _cy + _hd)
+        build_prop(bm, 'MARKET_DISPLAY', _cx, _cy, z_floor, _yaw, width=1.50)
+        # Dress the tiers (mirror the builder: boards at local y +0.30/0/-0.30,
+        # tops at z 0.475/0.825/1.175; two slots per tier at x +/-0.33).
+        _cyaw = _yaw
+        _cos, _sin = math.cos(_cyaw), math.sin(_cyaw)
+        for (_ly, _lz), _goods in zip(((0.30, 0.475), (0.0, 0.825), (-0.30, 1.175)),
+                                     _tier_goods):
+            for _i, _g in enumerate(_goods):
+                _lx = (-0.33 if _i % 2 == 0 else 0.33) if len(_goods) > 1 else 0.0
+                _gx = _cx + _lx * _cos - _ly * _sin
+                _gy = _cy + _lx * _sin + _ly * _cos
+                build_prop(bm, _g, _gx, _gy, z_floor + _lz,
+                           _cyaw + rng.uniform(-0.15, 0.15))
+        return
 
 
 def _furnish_chapel(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3195,19 +3315,72 @@ def _furnish_armory(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
 
 def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                   rng, density: float):
-    """Furnishes an artisan retail storefront / shop with counter, display shelves, and trade crates."""
+    """Artisan storefront: merchant counter with a working side for the
+    seller and a browsing side for customers, display shelves, crates, rug.
+
+    The counter prefers freestanding across the rear (merchant stool and
+    side table tucked behind it, rug and displays in front); small shops
+    fall back to the classic wall-backed counter. Counter placement is
+    stashed on the tracker for the trade dresser (jeweler scale & tray).
+    """
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
+    tracker.shop_counter = None
 
-    # 1. Storefront counter
-    counter_len = min(2.0, rw * 0.45)
-    _d_counter = _try_place_wall_prop(bm, 'COUNTER', counter_len, 0.60, tracker, z_floor,
-                                      candidate_walls=('NORTH', 'EAST', 'WEST'), length=counter_len)
-    if _d_counter:
-        cx, cy, cyaw = _d_counter
-        build_prop(bm, 'POTTED_PLANT_SMALL', cx, cy, z_floor + 1.075, rng.uniform(0.0, 6.28))
+    # 1. Merchant counter: freestanding across a wall with a working strip
+    # behind it, else wall-backed.
+    _counter_len = min(2.0, max(1.2, min(rw, rd) * 0.45))
+    _placed_counter = None
+    # (wall, yaw so the plank front faces the room, merchant dir into wall)
+    for _wall, _yaw, _mdx, _mdy in (('NORTH', 0.0, 0.0, 1.0),
+                                    ('EAST', -math.pi * 0.5, 1.0, 0.0),
+                                    ('WEST', math.pi * 0.5, -1.0, 0.0),
+                                    ('SOUTH', math.pi, 0.0, -1.0)):
+        _run = rw if _wall in ('NORTH', 'SOUTH') else rd
+        _clen = min(2.0, max(1.2, _run * 0.45))
+        if _wall == 'NORTH':
+            _ccx, _ccy = rcx, tracker.ry1 - 1.05 - 0.30
+        elif _wall == 'SOUTH':
+            _ccx, _ccy = rcx, tracker.ry0 + 1.05 + 0.30
+        elif _wall == 'EAST':
+            _ccx, _ccy = tracker.rx1 - 1.05 - 0.30, rcy
+        else:
+            _ccx, _ccy = tracker.rx0 + 1.05 + 0.30, rcy
+        _hw = (_clen * 0.5 + 0.15) if _wall in ('NORTH', 'SOUTH') else 0.45
+        _hd = 0.45 if _wall in ('NORTH', 'SOUTH') else (_clen * 0.5 + 0.15)
+        if not tracker.is_free(_ccx - _hw, _ccx + _hw, _ccy - _hd, _ccy + _hd):
+            continue
+        # Merchant stool spot behind the counter.
+        _stx, _sty = _ccx + _mdx * 0.72, _ccy + _mdy * 0.72
+        if not tracker.is_free(_stx - 0.26, _stx + 0.26, _sty - 0.26, _sty + 0.26):
+            continue
+        tracker.occupy(_ccx - _hw, _ccx + _hw, _ccy - _hd, _ccy + _hd)
+        build_prop(bm, 'COUNTER', _ccx, _ccy, z_floor, _yaw, length=_clen)
+        tracker.occupy(_stx - 0.26, _stx + 0.26, _sty - 0.26, _sty + 0.26)
+        build_prop(bm, 'STOOL', _stx, _sty, z_floor,
+                   math.atan2(-_mdx, -_mdy))
+        _placed_counter = {'cx': _ccx, 'cy': _ccy, 'yaw': _yaw,
+                           'wall': _wall, 'freestanding': True,
+                           'mdx': _mdx, 'mdy': _mdy, 'length': _clen,
+                           'top_z': z_floor + 1.075}
+        break
+    if _placed_counter is None:
+        _d_counter = _try_place_wall_prop(bm, 'COUNTER', _counter_len, 0.60, tracker, z_floor,
+                                          candidate_walls=('NORTH', 'EAST', 'WEST'), length=_counter_len)
+        if _d_counter:
+            _placed_counter = {'cx': _d_counter[0], 'cy': _d_counter[1],
+                               'yaw': _d_counter[2], 'wall': None,
+                               'freestanding': False, 'mdx': 0.0, 'mdy': 0.0,
+                               'length': _counter_len, 'top_z': z_floor + 1.075}
+    tracker.shop_counter = _placed_counter
+    if _placed_counter:
+        _cc = _placed_counter
+        if tracker.archetype != 'JEWELER':
+            # Countertop plant (jeweler gets the gem tray instead).
+            build_prop(bm, 'POTTED_PLANT_SMALL', _cc['cx'], _cc['cy'],
+                       _cc['top_z'], rng.uniform(0.0, 6.28))
 
     # 2. Display shelves on perimeter walls
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
@@ -3223,14 +3396,19 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
                 prop = 'CRATE' if rng.random() < 0.6 else 'BARREL'
                 build_prop(bm, prop, cx, cy, z_floor, 0.0)
 
-    # 4. Area rug in customer browse zone (skipped in a bare industrial store).
+    # 4. Area rug in the customer browse zone (in front of a freestanding
+    # counter, else room centre; skipped in a bare industrial store).
     if not getattr(tracker, 'no_rugs', False):
         rug_choice = rng.choice(['RUG_SAPPHIRE', 'RUG_FOREST'])
         rug_w = min(3.00, max(1.80, rw * 0.58))
         rug_l = min(4.20, max(2.40, rd * 0.58))
         rug_w = min(rug_w, max(1.2, rw - 0.40))
         rug_l = min(rug_l, max(1.5, rd - 0.40))
-        _lay_rug(bm, tracker, rm, rng, rug_choice, rcx, rcy, z_floor, rug_w, rug_l)
+        _rug_cx, _rug_cy = rcx, rcy
+        if _placed_counter and _placed_counter.get('freestanding'):
+            _rug_cx = _placed_counter['cx'] - _placed_counter['mdx'] * 1.60
+            _rug_cy = _placed_counter['cy'] - _placed_counter['mdy'] * 1.60
+        _lay_rug(bm, tracker, rm, rng, rug_choice, _rug_cx, _rug_cy, z_floor, rug_w, rug_l)
 
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 

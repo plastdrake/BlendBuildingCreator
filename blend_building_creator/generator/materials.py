@@ -115,6 +115,8 @@ MAT_INDEX_CLIFFS        = 42
 MAT_INDEX_DUNGEON_WALL  = 43
 MAT_INDEX_DUNGEON_FLOOR = 44
 MAT_INDEX_DUNGEON_BEAM  = 45
+MAT_INDEX_CANVAS        = 46
+MAT_INDEX_FISH          = 47
 
 
 # ---------------------------------------------------------------------------
@@ -2480,6 +2482,27 @@ def create_stylized_bread(name="M_Building_Bread"):
     return create_stylized_fabric(name, "bread_crust_diffuse.jpg", color=(1.0, 0.95, 0.90, 1.0), roughness=0.88)
 
 
+def create_stylized_canvas(name="M_Building_Canvas"):
+    """Plain woven canvas sacking (canvas.png) for grain sacks and covers."""
+    return create_stylized_fabric(name, "canvas.png", color=(1.0, 0.98, 0.94, 1.0), roughness=0.90)
+
+
+def create_stylized_fish(name="M_Building_Fish"):
+    """Handpainted fish (fish.png): exact 0-1 atlas UVs, no tiling crop."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    c = _coord(tree, loc_x=-1000)
+    tex_node = _load_image_texture(tree, "fish.png", c, loc_x=-700, loc_y=120,
+                                   scale=(1.0, 1.0, 1.0))
+    if tex_node is not None:
+        tree.links.new(tex_node.outputs["Color"], bsdf.inputs["Base Color"])
+        _setup_pbr(tree, bsdf, out, roughness=0.45, metallic=0.0)
+        return mat
+    _set_bsdf_input(bsdf, "Base Color", (0.35, 0.50, 0.55, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.45, metallic=0.0)
+    return mat
+
+
 def create_stylized_upholstery(name="M_Building_Upholstery"):
     """Rich medieval damask brocade velvet upholstery for sofas and armchairs."""
     return create_stylized_fabric(name, "upholstery_damask_diffuse.jpg", color=(1.0, 1.0, 1.0, 1.0), roughness=0.75)
@@ -2751,6 +2774,10 @@ def setup_building_material_slots(obj, props):
     mat_dg_beam = create_dungeon_material(
         "M_Building_Dungeon_Beam", ("dungeon_beam_diffuse.jpg", "timber_beam_diffuse.jpg"),
         (0.42, 0.30, 0.22, 1.0), (1.0, 1.0, 1.0), roughness=0.85, bump=0.3)
+    mat_canvas = (getattr(props, 'custom_canvas', None)
+                  or create_stylized_canvas("M_Building_Canvas"))
+    mat_fish = (getattr(props, 'custom_fish', None)
+                or create_stylized_fish("M_Building_Fish"))
 
     # Assemble canonical slots in strict order
     required_mats = [
@@ -2800,6 +2827,8 @@ def setup_building_material_slots(obj, props):
         mat_dg_wall,        # 43 MAT_INDEX_DUNGEON_WALL
         mat_dg_floor,       # 44 MAT_INDEX_DUNGEON_FLOOR
         mat_dg_beam,        # 45 MAT_INDEX_DUNGEON_BEAM
+        mat_canvas,         # 46 MAT_INDEX_CANVAS
+        mat_fish,           # 47 MAT_INDEX_FISH
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -2858,6 +2887,8 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Dungeon_Wall",  # 43
     "M_Building_Dungeon_Floor",  # 44
     "M_Building_Dungeon_Beam",  # 45
+    "M_Building_Canvas",        # 46
+    "M_Building_Fish",          # 47
 )
 
 

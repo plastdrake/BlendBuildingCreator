@@ -21,7 +21,7 @@ from ..mesh_utils import (
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_IRON, MAT_INDEX_WOOD,
-    MAT_INDEX_CLAY, MAT_INDEX_HAY, MAT_INDEX_ROPE,
+    MAT_INDEX_CLAY, MAT_INDEX_HAY, MAT_INDEX_ROPE, MAT_INDEX_CANVAS,
 )
 
 
@@ -396,12 +396,11 @@ def build_clay_pot(bm, x, y, z_ground=0.0, ang=0.0, radius=0.22, height=0.48, po
 
 
 def build_sack(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
-    """A plump tied burlap sack: lathe-turned body, cinched neck, rope tie.
+    """A plump tied canvas grain sack: lathe-turned body, cinched neck, rope tie.
 
     Modelled as a proper sack silhouette (wide belly, gathered neck, frilled
-    mouth) with two stitched patches, matching the stylized bag reference.
+    mouth) in undyed woven canvas.
     """
-    from ..materials import MAT_INDEX_ROPE, MAT_INDEX_FABRIC_RED
     s = scale
     h = 0.55 * s
     # Squat slouchy silhouette: fat belly, gently gathered neck, wrinkled
@@ -432,7 +431,7 @@ def build_sack(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
             j = (i + 1) % segments
             f = bm.faces.new([rings[si][i], rings[si][j],
                               rings[si + 1][j], rings[si + 1][i]])
-            f.material_index = MAT_INDEX_HAY
+            f.material_index = MAT_INDEX_CANVAS
             f.loops[0][uv_layer].uv = (i / segments, v0)
             f.loops[1][uv_layer].uv = ((i + 1) / segments, v0)
             f.loops[2][uv_layer].uv = ((i + 1) / segments, v1)
@@ -441,14 +440,14 @@ def build_sack(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
             faces.append(f)
     # Closed bottom + gathered mouth cap.
     bot = bm.faces.new(list(reversed(rings[0])))
-    bot.material_index = MAT_INDEX_HAY
+    bot.material_index = MAT_INDEX_CANVAS
     for loop in bot.loops:
         loop[uv_layer].uv = (loop.vert.co.x / (2 * base_r) + 0.5,
                              loop.vert.co.y / (2 * base_r) + 0.5)
     bot.tag = True
     faces.append(bot)
     mouth = bm.faces.new(rings[-1])
-    mouth.material_index = MAT_INDEX_HAY
+    mouth.material_index = MAT_INDEX_CANVAS
     for loop in mouth.loops:
         loop[uv_layer].uv = (loop.vert.co.x / (2 * base_r) + 0.5,
                              loop.vert.co.y / (2 * base_r) + 0.5)
@@ -457,7 +456,7 @@ def build_sack(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
     # Tied knot nub closing the gathered mouth.
     faces += create_cylinder(bm, radius=0.045 * s, height=0.05 * s, segments=10,
                              location=(lean, 0.0, h + 0.015 * s),
-                             mat_index=MAT_INDEX_HAY)
+                             mat_index=MAT_INDEX_CANVAS)
     # Rope tie cord sunk into the gathered neck below the mouth.
     tie_z = 0.84 * h
     tie_r = base_r * 0.575 + 0.008
@@ -465,17 +464,6 @@ def build_sack(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
                                major_radius=tie_r, minor_radius=0.020 * s,
                                major_segments=12, minor_segments=6,
                                mat_index=MAT_INDEX_ROPE)
-    # Two stitched patches tangent to the belly, centres sunk 5mm.
-    for ang_off, ph, pr_frac in ((0.3, 0.28 * h, 1.00), (2.6, 0.40 * h, 0.967)):
-        zn = ph / h
-        pr = base_r * pr_frac - 0.005
-        px = lean * zn * zn + math.cos(ang_off) * pr
-        py = math.sin(ang_off) * pr
-        faces += create_beveled_box(bm, size=(0.10 * s, 0.02, 0.08 * s),
-                                    location=(px, py, ph),
-                                    rotation=(0.0, 0.0, ang_off + math.pi / 2),
-                                    mat_index=MAT_INDEX_FABRIC_RED,
-                                    bevel_amount=0.004)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 

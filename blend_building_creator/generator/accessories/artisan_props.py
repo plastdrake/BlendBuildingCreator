@@ -13,6 +13,7 @@ Workstations (floor pieces for the craft rooms):
 """
 
 import math
+import os
 from mathutils import Matrix
 
 from ..mesh_utils import (
@@ -22,7 +23,7 @@ from ..mesh_utils import (
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON,
-    MAT_INDEX_CLAY, MAT_INDEX_WAX,
+    MAT_INDEX_CLAY, MAT_INDEX_WAX, MAT_INDEX_FABRIC_WHITE,
     MAT_INDEX_FABRIC_RED, MAT_INDEX_FABRIC_STITCHED,
     MAT_INDEX_CLOTH_LINEN, MAT_INDEX_BOTTLE_GLASS, MAT_INDEX_GLASS,
     MAT_INDEX_LEATHER, MAT_INDEX_BREAD, MAT_INDEX_WATER,
@@ -37,13 +38,46 @@ def _place(x, y, z_ground=0.0, ang=0.0):
 
 
 def _loaf(bm, faces, lx, ly, lz, yaw=0.0, length=0.30):
-    """One crusty loaf resting on a surface at (lx, ly, lz)."""
-    faces += create_beveled_box(
-        bm, size=(length, length * 0.55, 0.105),
-        location=(lx, ly, lz + 0.0525),
-        rotation=(0.0, 0.0, yaw),
-        mat_index=MAT_INDEX_BREAD, bevel_amount=0.032
+    """One crusty loaf: low base with a domed crown and pale slash cuts.
+
+    Built axis-aligned in a sublist, then yawed rigidly (avoids composed
+    Euler ambiguity between the barrel-laid crown and the loaf direction).
+    """
+    w = length * 0.58
+    crown_r = length * 0.25
+    crown_cz = 0.055 + crown_r - 0.030
+    local = []
+    # Base slab.
+    local += create_beveled_box(
+        bm, size=(length, w, 0.055),
+        location=(0.0, 0.0, 0.0275),
+        mat_index=MAT_INDEX_BREAD, bevel_amount=0.018
     )
+    # Domed crown (barrel laid along the loaf).
+    local += create_cylinder(
+        bm, radius=crown_r, height=length * 0.92, segments=12,
+        location=(0.0, 0.0, crown_cz),
+        rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_BREAD,
+        smooth=True
+    )
+    # Pale slash cuts along the crown ridge.
+    for i, sx in enumerate((-0.062, 0.0, 0.062)):
+        local += create_beveled_box(
+            bm, size=(0.080, 0.018, 0.012),
+            location=(sx, 0.0, crown_cz + crown_r - 0.007),
+            rotation=(0.0, 0.0, (0.35 if i % 2 else -0.35)),
+            mat_index=MAT_INDEX_WAX, bevel_amount=0.002
+        )
+    # Flour-dusted pad the loaf sits on.
+    local += create_beveled_box(
+        bm, size=(length + 0.06, w + 0.05, 0.006),
+        location=(0.0, 0.0, 0.003),
+        mat_index=MAT_INDEX_WAX, bevel_amount=0.002
+    )
+    transform_faces(local,
+                    Matrix.Translation((lx, ly, lz)) @ Matrix.Rotation(yaw, 4, 'Z'))
+    faces += local
+    return faces
     return faces
 
 
@@ -89,7 +123,7 @@ def build_bread_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.50):
 
 
 def build_dough_bowl(bm, x, y, z_ground=0.0, ang=0.0):
-    """Clay proving bowl with a risen dough dome, for kneading tables."""
+    """Clay proving bowl with a risen dough dome mounding over the rim."""
     faces = []
     faces += create_hollow_dish(
         bm, radius_base=0.075, radius_rim=0.150, inner_radius_rim=0.132,
@@ -97,12 +131,13 @@ def build_dough_bowl(bm, x, y, z_ground=0.0, ang=0.0):
         segments=18, location=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_CLAY,
         smooth=True
     )
-    faces += create_beveled_box(
-        bm, size=(0.20, 0.20, 0.085),
-        location=(0.0, 0.0, 0.075),
-        rotation=(0.0, 0.0, 0.20),
-        mat_index=MAT_INDEX_WAX, bevel_amount=0.030
-    )
+    # Risen dough: soft stepped dome spilling over the rim (pale, smooth).
+    for dr, dh, dz in ((0.105, 0.055, 0.055), (0.088, 0.045, 0.105),
+                       (0.058, 0.040, 0.145)):
+        faces += create_cylinder(
+            bm, radius=dr, height=dh, segments=14,
+            location=(0.0, 0.0, dz), mat_index=MAT_INDEX_WAX, smooth=True
+        )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
@@ -288,50 +323,66 @@ def build_sausage_string(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
 
 
 def build_dress_form(bm, x, y, z_ground=0.0, ang=0.0):
-    """Tailor's dress form: linen torso on a turned stand with waist sash."""
+    """Tailor's dress form: smoothly tapered linen torso on a turned stand.
+
+    Hip/waist/bust flow into each other (cones, no stacked-roll seams), a
+    red sash covers the waist joint, a pinned red overskirt hides the hip
+    joint, and the wooden neck knob grows out of the shoulder cap.
+    """
     faces = []
     faces += create_cylinder(
         bm, radius=0.20, height=0.055, segments=14,
         location=(0.0, 0.0, 0.0275), mat_index=MAT_INDEX_WOOD
     )
     faces += create_cylinder(
-        bm, radius=0.030, height=1.00, segments=10,
+        bm, radius=0.028, height=1.00, segments=10,
         location=(0.0, 0.0, 0.055 + 0.50), mat_index=MAT_INDEX_WOOD
     )
-    # Torso: hip, waist, bust stacked in stitched linen.
-    faces += create_cylinder(
-        bm, radius=0.165, height=0.26, segments=14,
-        location=(0.0, 0.0, 0.555 + 0.13), mat_index=MAT_INDEX_CLOTH_LINEN,
-        smooth=True
-    )
-    faces += create_cylinder(
-        bm, radius=0.125, height=0.20, segments=14,
-        location=(0.0, 0.0, 0.815 + 0.10), mat_index=MAT_INDEX_CLOTH_LINEN,
-        smooth=True
-    )
-    faces += create_cylinder(
-        bm, radius=0.160, height=0.24, segments=14,
-        location=(0.0, 0.0, 1.015 + 0.12), mat_index=MAT_INDEX_CLOTH_LINEN,
-        smooth=True
-    )
-    faces += create_cylinder(
-        bm, radius=0.055, height=0.09, segments=10,
-        location=(0.0, 0.0, 1.255 + 0.045), mat_index=MAT_INDEX_WOOD
-    )
+    # Hips taper in toward the waist.
     faces += create_cone(
-        bm, radius1=0.055, radius2=0.008, height=0.07, segments=10,
-        location=(0.0, 0.0, 1.345 + 0.035), mat_index=MAT_INDEX_WOOD
+        bm, radius1=0.165, radius2=0.125, height=0.24, segments=14,
+        location=(0.0, 0.0, 0.95 + 0.12), mat_index=MAT_INDEX_FABRIC_WHITE,
     )
-    # Waist sash ring + measuring tape over the shoulder.
+    # Waist column.
+    faces += create_cylinder(
+        bm, radius=0.122, height=0.16, segments=14,
+        location=(0.0, 0.0, 1.19 + 0.08), mat_index=MAT_INDEX_FABRIC_WHITE,
+    )
+    # Bust flares back out.
+    faces += create_cone(
+        bm, radius1=0.120, radius2=0.158, height=0.24, segments=14,
+        location=(0.0, 0.0, 1.35 + 0.12), mat_index=MAT_INDEX_FABRIC_WHITE,
+    )
+    # Shoulder cap closing the torso.
+    faces += create_cone(
+        bm, radius1=0.158, radius2=0.060, height=0.09, segments=14,
+        location=(0.0, 0.0, 1.59 + 0.045), mat_index=MAT_INDEX_FABRIC_WHITE,
+    )
+    # Wooden neck knob rooted in the cap.
+    faces += create_cylinder(
+        bm, radius=0.045, height=0.07, segments=10,
+        location=(0.0, 0.0, 1.66), mat_index=MAT_INDEX_WOOD
+    )
+    faces += create_cylinder(
+        bm, radius=0.026, height=0.045, segments=10,
+        location=(0.0, 0.0, 1.695 + 0.0225), mat_index=MAT_INDEX_WOOD
+    )
+    # Pinned red overskirt over the hips.
+    faces += create_cone(
+        bm, radius1=0.190, radius2=0.150, height=0.30, segments=14,
+        location=(0.0, 0.0, 0.88 + 0.15), mat_index=MAT_INDEX_FABRIC_RED,
+    )
+    # Waist sash ring.
     faces += create_torus_ring(
-        bm, location=(0.0, 0.0, 0.915), rotation=(0.0, 0.0, 0.0),
-        major_radius=0.132, minor_radius=0.024,
+        bm, location=(0.0, 0.0, 1.27), rotation=(0.0, 0.0, 0.0),
+        major_radius=0.130, minor_radius=0.022,
         major_segments=18, minor_segments=8, mat_index=MAT_INDEX_FABRIC_RED
     )
+    # Measuring tape over one shoulder.
     faces += create_beveled_box(
-        bm, size=(0.025, 0.012, 0.55),
-        location=(0.10, 0.06, 1.02),
-        rotation=(0.12, 0.0, 0.10),
+        bm, size=(0.022, 0.012, 0.50),
+        location=(0.095, 0.045, 1.32),
+        rotation=(0.10, 0.0, 0.08),
         mat_index=MAT_INDEX_WAX, bevel_amount=0.003
     )
     transform_faces(faces, _place(x, y, z_ground, ang))
@@ -414,16 +465,17 @@ def build_strongbox(bm, x, y, z_ground=0.0, ang=0.0):
     return faces
 
 
-def _gem(bm, faces, lx, ly, lz, mat, size=0.024):
-    """One faceted cut gem (octahedron from two cones)."""
+def _gem(bm, faces, lx, ly, lz, mat, size=0.024, yaw=0.0, tilt=0.0):
+    """One faceted cut gem (octahedron from two cones), varied yaw/tilt."""
     faces += create_cone(
-        bm, radius1=size, radius2=size * 0.25, height=size * 0.9, segments=6,
-        location=(lx, ly, lz + size * 0.45), mat_index=mat
+        bm, radius1=size, radius2=size * 0.25, height=size * 0.9, segments=8,
+        location=(lx, ly, lz + size * 0.45),
+        rotation=(tilt, 0.0, yaw), mat_index=mat
     )
     faces += create_cone(
-        bm, radius1=size * 0.25, radius2=size, height=size * 0.9, segments=6,
+        bm, radius1=size * 0.25, radius2=size, height=size * 0.9, segments=8,
         location=(lx, ly, lz - size * 0.45),
-        rotation=(math.pi, 0.0, 0.0), mat_index=mat
+        rotation=(math.pi + tilt, 0.0, yaw), mat_index=mat
     )
     return faces
 
@@ -456,13 +508,27 @@ def build_gem_tray(bm, x, y, z_ground=0.0, ang=0.0):
         mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.003
     )
     gems = (
-        (-0.10, 0.045, MAT_INDEX_BOTTLE_GLASS, 0.026),
-        (-0.03, -0.035, MAT_INDEX_GLASS, 0.022),
-        (0.045, 0.050, MAT_INDEX_BOTTLE_GLASS, 0.024),
-        (0.115, -0.030, MAT_INDEX_GLASS, 0.027),
+        (-0.10, 0.045, MAT_INDEX_BOTTLE_GLASS, 0.026, 0.3, 0.06),
+        (-0.03, -0.035, MAT_INDEX_GLASS, 0.022, 1.1, -0.05),
+        (0.045, 0.050, MAT_INDEX_BOTTLE_GLASS, 0.024, 2.2, 0.08),
+        (0.115, -0.030, MAT_INDEX_GLASS, 0.027, 2.9, -0.07),
     )
-    for gx, gy, mat, gs in gems:
-        _gem(bm, faces, gx, gy, 0.042, mat, size=gs)
+    for gx, gy, mat, gs, gyaw, gtilt in gems:
+        _gem(bm, faces, gx, gy, 0.042, mat, size=gs, yaw=gyaw, tilt=gtilt)
+    # Gold rings: two flat, one standing against the rim.
+    for rx, ry in ((-0.062, -0.068), (0.015, 0.062)):
+        faces += create_torus_ring(
+            bm, location=(rx, ry, 0.048 + 0.008),
+            rotation=(0.0, 0.0, rx * 10.0),
+            major_radius=0.023, minor_radius=0.008,
+            major_segments=14, minor_segments=6, mat_index=MAT_INDEX_WAX
+        )
+    faces += create_torus_ring(
+        bm, location=(0.125, 0.045, 0.048 + 0.024),
+        rotation=(math.pi * 0.5, 0.0, 0.2),
+        major_radius=0.023, minor_radius=0.008,
+        major_segments=14, minor_segments=6, mat_index=MAT_INDEX_WAX
+    )
     for cx, cy in ((0.10, 0.055), (0.135, 0.030), (-0.065, -0.055)):
         faces += create_cylinder(
             bm, radius=0.020, height=0.008, segments=10,
@@ -516,40 +582,46 @@ def build_balance_scale(bm, x, y, z_ground=0.0, ang=0.0):
 
 
 def build_anvil(bm, x, y, z_ground=0.0, ang=0.0):
-    """Smith's anvil on a stump: waist, face, stepped horn and heel."""
+    """Smith's anvil on a stump: tapered waist, full face, conical horn."""
     faces = []
     faces += create_cylinder(
         bm, radius=0.26, height=0.44, segments=14,
         location=(0.0, 0.0, 0.22), mat_index=MAT_INDEX_LOG
     )
+    # Foot spreading onto the stump.
     faces += create_beveled_box(
-        bm, size=(0.46, 0.24, 0.10),
+        bm, size=(0.48, 0.26, 0.10),
         location=(0.0, 0.0, 0.44 + 0.05),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.012
     )
+    # Waist tapering up in two steps.
     faces += create_beveled_box(
-        bm, size=(0.22, 0.19, 0.16),
-        location=(-0.02, 0.0, 0.54 + 0.08),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.012
+        bm, size=(0.26, 0.20, 0.13),
+        location=(-0.01, 0.0, 0.54 + 0.065),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.014
     )
     faces += create_beveled_box(
-        bm, size=(0.60, 0.25, 0.13),
-        location=(0.0, 0.0, 0.70 + 0.065),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.012
+        bm, size=(0.32, 0.23, 0.11),
+        location=(0.0, 0.0, 0.67 + 0.055),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.014
     )
-    # Stepped horn tapering forward.
-    horn_z = 0.70 + 0.065
-    for i, (hl, hw, hh) in enumerate(((0.20, 0.20, 0.11), (0.16, 0.15, 0.085), (0.13, 0.10, 0.06))):
-        faces += create_beveled_box(
-            bm, size=(hl, hw, hh),
-            location=(0.30 + 0.10 + i * 0.155, 0.0, horn_z),
-            mat_index=MAT_INDEX_IRON, bevel_amount=0.010
-        )
+    # Face plate with a slight overhang.
+    faces += create_beveled_box(
+        bm, size=(0.46, 0.26, 0.10),
+        location=(0.0, 0.0, 0.78 + 0.05),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.010
+    )
+    # Conical horn reaching forward (+X).
+    faces += create_cone(
+        bm, radius1=0.105, radius2=0.014, height=0.36, segments=12,
+        location=(0.23 + 0.18, 0.0, 0.78 + 0.05),
+        rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_IRON
+    )
     # Heel block at the back.
     faces += create_beveled_box(
-        bm, size=(0.12, 0.25, 0.13),
-        location=(-0.30 - 0.05, 0.0, horn_z),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.012
+        bm, size=(0.12, 0.26, 0.10),
+        location=(-0.23 - 0.05, 0.0, 0.78 + 0.05),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.010
     )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -577,7 +649,7 @@ def build_grindstone(bm, x, y, z_ground=0.0, ang=0.0):
     faces += create_cylinder(
         bm, radius=0.32, height=0.085, segments=20,
         location=(0.0, 0.0, 0.66),
-        rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_STONE,
+        rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_CUT_STONE,
         smooth=True
     )
     # Water trough the wheel dips into.
@@ -611,27 +683,27 @@ def build_tool_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.20):
             location=(0.0, 0.0, bz),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
-    # Sledge hammer.
+    # Sledge hammer: handle down from the bar, head at its foot.
     faces += create_cylinder(
-        bm, radius=0.018, height=0.62, segments=8,
-        location=(-width * 0.5 + 0.24, 0.0, 1.38 - 0.33),
+        bm, radius=0.020, height=0.52, segments=8,
+        location=(-width * 0.5 + 0.24, 0.0, 1.38 - 0.28),
         mat_index=MAT_INDEX_WOOD
     )
     faces += create_beveled_box(
-        bm, size=(0.10, 0.10, 0.22),
-        location=(-width * 0.5 + 0.24, 0.0, 1.38 - 0.06),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.010
+        bm, size=(0.16, 0.09, 0.10),
+        location=(-width * 0.5 + 0.24, 0.0, 1.38 - 0.60),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.012
     )
     # Hand hammer.
     faces += create_cylinder(
-        bm, radius=0.014, height=0.40, segments=8,
-        location=(-width * 0.5 + 0.48, 0.0, 1.38 - 0.22),
+        bm, radius=0.016, height=0.38, segments=8,
+        location=(-width * 0.5 + 0.50, 0.0, 1.38 - 0.21),
         mat_index=MAT_INDEX_WOOD
     )
     faces += create_beveled_box(
-        bm, size=(0.07, 0.07, 0.13),
-        location=(-width * 0.5 + 0.48, 0.0, 1.38 - 0.045),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.008
+        bm, size=(0.13, 0.075, 0.085),
+        location=(-width * 0.5 + 0.50, 0.0, 1.38 - 0.445),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.010
     )
     # Tongs: two long jaws with hinge ring.
     for jx in (-0.025, 0.025):
@@ -780,12 +852,140 @@ def _fish_body(bm, faces, lx, ly, lz, yaw=0.0, length=0.34, mat=MAT_INDEX_IRON):
 
 
 def build_fish(bm, x, y, z_ground=0.0, ang=0.0, length=0.34, smoked=False):
-    """Single fish for stall tables and racks (smoked fish are brown)."""
+    """Single fish for stall tables and racks.
+
+    Fresh fish use the artist's FBX mesh (props/fish.fbx, textured by
+    fish.png); smoked fish keep the stylized brown box body. Falls back to
+    the box body whenever the FBX cannot be loaded.
+    """
+    if not smoked:
+        try:
+            if _build_fbx_fish(bm, x, y, z_ground, ang, length):
+                return True
+        except Exception:
+            pass
     faces = []
     _fish_body(bm, faces, 0.0, 0.0, 0.0, yaw=0.0, length=length,
                mat=MAT_INDEX_LEATHER if smoked else MAT_INDEX_IRON)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
+
+_FBX_TEMPLATE_CACHE = {}
+
+
+def _addon_root():
+    return os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+
+
+def _import_fbx_template(fbx_path):
+    """Import an FBX prop once per session; harvest world-space verts, face
+    index loops and UVs per mesh, then remove the import again. Returns a
+    list of dicts or None when the import is unavailable."""
+    key = os.path.abspath(fbx_path)
+    if key in _FBX_TEMPLATE_CACHE:
+        return _FBX_TEMPLATE_CACHE[key]
+    try:
+        import bpy
+        before_objs = set(bpy.data.objects[:])
+        before_meshes = set(bpy.data.meshes[:])
+        before_mats = set(bpy.data.materials[:])
+        bpy.ops.import_scene.fbx(filepath=key)
+        items = []
+        new_objs = [o for o in bpy.data.objects if o not in before_objs]
+        for o in new_objs:
+            if o.type == 'MESH':
+                me = o.data
+                if len(me.vertices) and len(me.polygons):
+                    M = o.matrix_world
+                    verts = [M @ v.co for v in me.vertices]
+                    uv_data = me.uv_layers[0].data if len(me.uv_layers) else None
+                    polys = []
+                    for poly in me.polygons:
+                        idx = list(poly.loop_indices)
+                        uvs = ([tuple(uv_data[li].uv) for li in idx]
+                               if uv_data is not None else None)
+                        polys.append((idx, uvs))
+                    items.append({'verts': verts, 'polys': polys})
+        for o in new_objs:
+            me = o.data if o.type == 'MESH' else None
+            try:
+                bpy.data.objects.remove(o, do_unlink=True)
+            except Exception:
+                pass
+            if me is not None:
+                try:
+                    if me.users == 0:
+                        bpy.data.meshes.remove(me)
+                except Exception:
+                    pass
+        for m in list(bpy.data.materials):
+            if m not in before_mats:
+                try:
+                    if m.users == 0:
+                        bpy.data.materials.remove(m)
+                except Exception:
+                    pass
+        for m in list(bpy.data.meshes):
+            if m not in before_meshes:
+                try:
+                    if m.users == 0:
+                        bpy.data.meshes.remove(m)
+                except Exception:
+                    pass
+        _FBX_TEMPLATE_CACHE[key] = items or None
+        return _FBX_TEMPLATE_CACHE[key]
+    except Exception:
+        _FBX_TEMPLATE_CACHE[key] = None
+        return None
+
+
+def _build_fbx_fish(bm, x, y, z_ground, ang, length):
+    """Stamp the artist's fish mesh normalized to ``length``. Returns True,
+    raises on any problem (caller falls back to the box body)."""
+    from ..materials import MAT_INDEX_FISH
+    items = _import_fbx_template(os.path.join(_addon_root(), 'props', 'fish.fbx'))
+    if not items:
+        raise RuntimeError('fish FBX unavailable')
+    # Combined bounds: longest horizontal axis becomes the fish length.
+    all_v = [v for it in items for v in it['verts']]
+    xs = [v[0] for v in all_v]
+    ys = [v[1] for v in all_v]
+    zs = [v[2] for v in all_v]
+    dx, dy = max(xs) - min(xs), max(ys) - min(ys)
+    yaw_fix = 0.0 if dx >= dy else -math.pi * 0.5
+    span = max(dx, dy) or 1.0
+    s = length / span
+    cx, cy, z0 = ((min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5,
+                  min(zs))
+    from mathutils import Matrix as _M, Euler as _E
+    fix = _M.Rotation(yaw_fix, 4, 'Z')
+    place = (_M.Translation((x, y, z_ground)) @ _M.Rotation(ang, 4, 'Z')
+             @ _M.Diagonal((s, s, s, 1.0)))
+    base = _M.Translation((-cx, -cy, -z0))
+    uv_layer = bm.loops.layers.uv.verify()
+    seen = set()
+    for it in items:
+        remap = {}
+        used = set(i for poly, _ in it['polys'] for i in poly)
+        for i in used:
+            v = it['verts'][i]
+            remap[i] = bm.verts.new(place @ (fix @ (base @ v)))
+        for idx, uvs in it['polys']:
+            if len(set(idx)) < 3:
+                continue  # degenerate loop
+            key = tuple(sorted(idx))
+            if key in seen:
+                continue  # duplicate face
+            seen.add(key)
+            f = bm.faces.new([remap[i] for i in idx])
+            f.material_index = MAT_INDEX_FISH
+            f.smooth = True
+            if uvs is not None:
+                for loop, uv in zip(f.loops, uvs):
+                    loop[uv_layer].uv = uv
+    return True
 
 
 def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):
@@ -854,6 +1054,100 @@ def build_rope_coil(bm, x, y, z_ground=0.0, ang=0.0):
             major_radius=major, minor_radius=0.034,
             major_segments=20, minor_segments=8, mat_index=MAT_INDEX_ROPE
         )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_market_display(bm, x, y, z_ground=0.0, ang=0.0, width=1.50):
+    """Stepped market display stand: three ascending goods boards with a
+    tall backdrop, front (+Y local) facing the customer.
+
+    Tier tops (local): front (y=+0.30, z=0.475), mid (y=0.0, z=0.825),
+    back (y=-0.30, z=1.175). Furnishing mirrors these numbers for slots.
+    """
+    faces = []
+    bd = 0.95
+    # Side uprights: low front posts, tall back posts.
+    for sx in (-width * 0.5 + 0.04, width * 0.5 - 0.04):
+        faces += create_beveled_box(
+            bm, size=(0.07, 0.07, 0.50),
+            location=(sx, 0.30, 0.25),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+        faces += create_beveled_box(
+            bm, size=(0.07, 0.07, 1.30),
+            location=(sx, -0.30, 0.65),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
+        # Stepped side panel under the boards.
+        for i, (py, pz) in enumerate(((0.30, 0.225), (0.0, 0.575), (-0.30, 0.925))):
+            faces += create_beveled_box(
+                bm, size=(0.06, 0.30, 0.42 - i * 0.10),
+                location=(sx, py, pz - (0.42 - i * 0.10) * 0.5 + 0.21),
+                mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
+            )
+    # Three stepped goods boards.
+    for py, pz in ((0.30, 0.45), (0.0, 0.80), (-0.30, 1.15)):
+        faces += create_beveled_box(
+            bm, size=(width - 0.08, 0.34, 0.05),
+            location=(0.0, py, pz - 0.025),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
+        )
+    # Tall backdrop board behind the top tier.
+    faces += create_beveled_box(
+        bm, size=(width - 0.08, 0.06, 0.55),
+        location=(0.0, -0.445, 1.175 + 0.20),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+    )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_horseshoe(bm, x, y, z_ground=0.0, ang=0.0):
+    """Lucky iron horseshoe lying flat (U opening toward +Y local)."""
+    faces = []
+    for sx in (-0.045, 0.045):
+        faces += create_beveled_box(
+            bm, size=(0.035, 0.11, 0.030),
+            location=(sx, 0.02, 0.015),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.005
+        )
+    faces += create_beveled_box(
+        bm, size=(0.125, 0.035, 0.030),
+        location=(0.0, -0.035, 0.015),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.005
+    )
+    for sx in (-0.045, 0.045):
+        for sy in (-0.01, 0.055):
+            faces += create_cylinder(
+                bm, radius=0.007, height=0.014, segments=6,
+                location=(sx, sy, 0.030 + 0.007), mat_index=MAT_INDEX_IRON
+            )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_wooden_bowl(bm, x, y, z_ground=0.0, ang=0.0):
+    """Turned wooden bowl with a spoon resting across the rim."""
+    faces = []
+    faces += create_hollow_dish(
+        bm, radius_base=0.045, radius_rim=0.105, inner_radius_rim=0.092,
+        inner_radius_base=0.038, height=0.075, inner_depth=0.055,
+        segments=16, location=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_WOOD,
+        smooth=True
+    )
+    faces += create_beveled_box(
+        bm, size=(0.020, 0.20, 0.010),
+        location=(0.03, 0.02, 0.078),
+        rotation=(0.0, 0.0, 0.35),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.002
+    )
+    faces += create_beveled_box(
+        bm, size=(0.045, 0.055, 0.012),
+        location=(0.085, 0.075, 0.078),
+        rotation=(0.0, 0.0, 0.35),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.003
+    )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 

@@ -242,6 +242,12 @@ for _s in (
           'artisan_props', 'build_rope_coil', 0.30),
     _spec('FISH_STRINGER', "Fish Stringer", 'WORK', "Ceiling-hung curing fish on rope drops",
           'artisan_props', 'build_fish_stringer', 0.30, drops=3),
+    _spec('MARKET_DISPLAY', "Market Display", 'WORK', "Stepped three-tier goods display with backdrop",
+          'artisan_props', 'build_market_display', 1.10, width=1.50),
+    _spec('HORSESHOE', "Horseshoe", 'WORK', "Lucky iron horseshoe",
+          'artisan_props', 'build_horseshoe', 0.20),
+    _spec('WOODEN_BOWL', "Wooden Bowl", 'WORK', "Turned bowl with spoon",
+          'artisan_props', 'build_wooden_bowl', 0.25),
 ):
     PROP_REGISTRY[_s.key] = _s
 
