@@ -2353,12 +2353,13 @@ def _place_corner_prop(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
 
 def _dress_craft_table(bm, tx: float, ty: float, yaw: float, z_table: float,
                        rng, goods):
-    """Lay trade goods in a row along a work table top."""
+    """Lay trade goods in a row along a work table top (lifted a hair so
+    flat goods like fish/meat never z-fight the table surface)."""
     n = len(goods)
     for i, g in enumerate(goods):
         off = (i - (n - 1) * 0.5) * 0.45
         gx, gy = _table_offset(tx, ty, off, 0.0, yaw)
-        build_prop(bm, g, gx, gy, z_table, rng.uniform(0.0, 6.28))
+        build_prop(bm, g, gx, gy, z_table + 0.012, rng.uniform(0.0, 6.28))
 
 
 def _stool_near(bm, tracker: RoomOccupancyTracker, tx: float, ty: float,
@@ -2904,7 +2905,7 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
             _lx = (-_cx_off if _i % 2 == 0 else _cx_off) if len(_goods) > 1 else 0.0
             _gx = _cx + _lx * _cos - _ly * _sin
             _gy = _cy + _lx * _sin + _ly * _cos
-            build_prop(bm, _g, _gx, _gy, z_floor + _lz,
+            build_prop(bm, _g, _gx, _gy, z_floor + _lz + 0.012,
                        _cyaw + rng.uniform(-0.15, 0.15))
     return
 

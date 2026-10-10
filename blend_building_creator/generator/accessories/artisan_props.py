@@ -308,9 +308,9 @@ def build_butcher_block(bm, x, y, z_ground=0.0, ang=0.0):
     from mathutils import Matrix as _M2
     _n0 = len(bm.faces)
     try:
-        _build_fbx_prop(bm, 'meat.fbx', None, -0.08, 0.05, top_z, 0.30,
+        _build_fbx_prop(bm, 'meat.fbx', None, -0.08, 0.05, top_z + 0.01, 0.30,
                         0.22, _meat_mat(), final=_M2.Identity(4), long_axis='Y')
-        _build_fbx_prop(bm, 'meat1.fbx', None, 0.10, -0.07, top_z, -0.40,
+        _build_fbx_prop(bm, 'meat1.fbx', None, 0.10, -0.07, top_z + 0.01, -0.40,
                         0.16, _meat_mat(), final=_M2.Identity(4), long_axis='Y')
     except Exception:
         for ox, oy, yaw in ((-0.10, 0.08, 0.25), (0.11, -0.06, -0.35)):
@@ -945,10 +945,13 @@ def _fish_body(bm, faces, lx, ly, lz, yaw=0.0, length=0.34, mat=MAT_INDEX_IRON):
 
 def build_fish(bm, x, y, z_ground=0.0, ang=0.0, length=0.34, smoked=False):
     """Single fish for stall tables and racks: the artist's FBX mesh
-    (props/fish.fbx, textured by fish.png). ``smoked`` only nudges the size
-    now — the stylized box body is a last-resort fallback."""
+    (props/fish.fbx, textured by fish.png). Lifted a hair off the surface it
+    rests on so the flat fish never z-fights the table/floor beneath it.
+    ``smoked`` only nudges the size now — the stylized box body is a
+    last-resort fallback."""
+    _lift = 0.015
     try:
-        if _build_fbx_prop(bm, 'fish.fbx', None, x, y, z_ground, ang,
+        if _build_fbx_prop(bm, 'fish.fbx', None, x, y, z_ground + _lift, ang,
                            length, _fish_mat(), long_axis='AUTO'):
             return True
     except Exception:
@@ -970,12 +973,13 @@ def _hang_mat():
 
 def build_meat(bm, x, y, z_ground=0.0, ang=0.0, length=0.30, variant=0):
     """Artist's butcher cuts (props/meat.fbx, meat1.fbx textured by
-    meat.jpg); variant 0/1 selects the file. Falls back to a stylized box
-    cut whenever the FBX cannot be loaded."""
+    meat.jpg); variant 0/1 selects the file. Lifted a hair off the surface
+    it rests on so the flat cut never z-fights the block/table beneath it.
+    Falls back to a stylized box cut when the FBX cannot be loaded."""
     try:
         if _build_fbx_prop(bm, 'meat.fbx' if variant == 0 else 'meat1.fbx',
-                           None, x, y, z_ground, ang, length, _meat_mat(),
-                           long_axis='Y'):
+                           None, x, y, z_ground + 0.012, ang, length,
+                           _meat_mat(), long_axis='Y'):
             return True
     except Exception:
         pass
@@ -1058,8 +1062,14 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
         f.material_index = mat_index
         f.smooth = True
         f.tag = True  # protect the atlas UVs from the final cubic UV pass
-        for loop, (_, uv) in zip(f.loops, poly):
-            loop[uv_layer].uv = uv
+        # Assign UVs keyed to the ACTUAL source vertex behind each loop, so
+        # bmesh loop order/winding can never scramble the atlas mapping.
+        uv_by_vi = {vi: uv for vi, uv in poly}
+        src_of = {remap[i]: i for i in idx}
+        for loop in f.loops:
+            src = src_of.get(loop.vert)
+            if src is not None and src in uv_by_vi:
+                loop[uv_layer].uv = uv_by_vi[src]
     return True
 
 
