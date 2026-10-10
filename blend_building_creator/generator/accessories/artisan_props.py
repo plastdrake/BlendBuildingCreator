@@ -1222,17 +1222,17 @@ def build_wine_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.10):
         location=(0.0, depth * 0.5 - 0.05, h - 0.06),
         mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
     )
-    # Lying bottles resting on each shelf, axis along the shelf (X),
-    # necks toward the room (-Y side).
+    # Lying bottles resting on each shelf, laid front-to-back with the necks
+    # toward the room (-Y), evenly spread across the shelf.
     from .interior_furniture import build_bottle
-    per_shelf = max(2, int((width - 0.30) / 0.22))
+    per_shelf = max(2, int((width - 0.30) / 0.26))
     for sz in shelf_zs:
         top = sz + shelf_t * 0.5
         for i in range(per_shelf):
-            bx = -width * 0.5 + 0.26 + i * ((width - 0.52) / max(1, per_shelf - 1))
+            bx = -width * 0.5 + 0.30 + i * ((width - 0.60) / max(1, per_shelf - 1))
             bf = build_bottle(bm, 0.0, 0.0, 0.0, 0.0, bottle_type='WINE')
-            m = (Matrix.Translation((bx, 0.04, top + 0.05))
-                 @ Matrix.Rotation(math.pi * 0.5, 4, 'Y'))
+            m = (Matrix.Translation((bx, 0.14, top + 0.05))
+                 @ Matrix.Rotation(math.pi * 0.5, 4, 'X'))
             transform_faces(bf, m)
             faces += bf
     transform_faces(faces, _place(x, y, z_ground, ang))
