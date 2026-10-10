@@ -2669,9 +2669,13 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     for _ in range(2 if min(rw, rd) >= 3.4 else 1):
         t = _place_craft_table(bm, tracker, z_floor, rng)
         if t is None:
+            # Compact gutting table for the small fishery chambers.
+            t = _place_craft_table(bm, tracker, z_floor, rng,
+                                   length=0.95, width=0.62)
+        if t is None:
             break
         _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                           ['FISH', 'FISH', 'FISH', 'FOODPREP_CLUTTER'])
+                           ['FISH', 'FISH', 'FOODPREP_CLUTTER'])
     # A third table of sorted catch when there is room.
     t3 = _place_craft_table(bm, tracker, z_floor, rng, length=1.20, width=0.75)
     if t3 is not None:
