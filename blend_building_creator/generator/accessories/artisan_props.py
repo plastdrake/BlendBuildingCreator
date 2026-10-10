@@ -1135,40 +1135,35 @@ def build_market_display(bm, x, y, z_ground=0.0, ang=0.0, width=1.50):
     """Stepped market display: three solid ascending tiers against a tall
     backboard, front (+Y local) facing the customer.
 
-    Each tier is a SOLID box resting on the floor (no floating shelves, no
-    coplanar seams: adjacent boxes overlap in Y by 2cm). Tier tops (local):
-    front (y=+0.18, z=0.50), mid (y=-0.18, z=0.85), back (y=-0.54, z=1.20).
-    Furnishing mirrors these numbers for the goods slots.
+    A clean stepped plinth — each tier is one solid box resting on the floor
+    (no protruding side posts, no thin shelves, no coplanar seams: adjacent
+    boxes overlap by 2cm). Tier tops (local): front (y=+0.17, z=0.50),
+    mid (y=-0.16, z=0.85), back (y=-0.50, z=1.20). Furnishing mirrors these.
     """
     faces = []
-    d = 0.38
-    tiers = ((0.18, 0.50), (-0.18, 0.85), (-0.54, 1.20))
-    for (ty, tz) in tiers:
+    d = 0.34
+    steps = (
+        (0.17, 0.34, 0.50),   # (centre y, depth, top z)
+        (-0.16, 0.36, 0.85),
+        (-0.50, 0.36, 1.20),
+    )
+    for ty, td, tz in steps:
         faces += create_beveled_box(
-            bm, size=(width - 0.04, d + 0.02, tz),
+            bm, size=(width, td, tz),
             location=(0.0, ty, tz * 0.5),
-            mat_index=MAT_INDEX_WOOD, bevel_amount=0.010
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.012
         )
-    # Timber corner posts framing the steps (proud of the boxes, so no
-    # coplanar face ever coincides with a tier box).
-    for sx in (-width * 0.5 + 0.05, width * 0.5 - 0.05):
-        faces += create_beveled_box(
-            bm, size=(0.10, d * 3.0 + 0.10, 1.26),
-            location=(sx, -0.18, 0.63),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010
-        )
-    # Top shelf lip on each tier (slightly proud, insets the goods).
-    for (ty, tz) in tiers:
-        faces += create_beveled_box(
-            bm, size=(width + 0.03, d + 0.06, 0.05),
-            location=(0.0, ty, tz - 0.02),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
-        )
-    # Tall backboard rising behind the top tier.
+    # Tall backboard rising flush behind the top tier (no side overhang).
     faces += create_beveled_box(
-        bm, size=(width - 0.02, 0.06, 0.62),
-        location=(0.0, -0.74, 1.20 + 0.30),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        bm, size=(width, 0.06, 0.70),
+        location=(0.0, -0.71, 1.45),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010
+    )
+    # Slim front kick rail along the base of the bottom step.
+    faces += create_beveled_box(
+        bm, size=(width, 0.05, 0.12),
+        location=(0.0, 0.335, 0.06),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
     )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces

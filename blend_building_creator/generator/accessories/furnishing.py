@@ -2852,19 +2852,10 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
                 '+X': math.pi * 0.5}[w]
 
     def _try_place(hw, hd):
-        """Search wall-hugging spots (stair nook first, then corners/midpoints)
-        for a free patch of the given half-size. Returns (cx, cy, yaw) or None."""
+        """Search WALL-hugging spots for a free patch of the given half-size.
+        Corners first (ordered by closeness to the staircase so it lands under
+        the stairs when it can), then wall midpoints. Never mid-room."""
         _spots = []
-        _sw = getattr(tracker, 'stair_hole', None)
-        if _sw is not None:
-            _sxc = (_sw[0] + _sw[1]) * 0.5
-            _syc = (_sw[2] + _sw[3]) * 0.5
-            _spots += [
-                (_sxc, _sw[3] + 0.90 + hd + 0.10),
-                (_sxc, _sw[2] - 0.90 - hd - 0.10),
-                (_sw[1] + 0.60 + hw + 0.10, _syc),
-                (_sw[0] - 0.60 - hw - 0.10, _syc),
-            ]
         _nf = _ry0 + hd + 0.10
         _nb = _ry1 - hd - 0.10
         _nl = _rx0 + hw + 0.10
@@ -2874,6 +2865,13 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
             _py = _ry0 + (_ry1 - _ry0) * _f
             _px = _rx0 + (_rx1 - _rx0) * _f
             _spots += [(_nl, _py), (_nr, _py), (_px, _nf), (_px, _nb)]
+        # Order by closeness to the stairwell so the nearest wall nook wins.
+        _sw = getattr(tracker, 'stair_hole', None)
+        if _sw is not None:
+            _sxc = (_sw[0] + _sw[1]) * 0.5
+            _syc = (_sw[2] + _sw[3]) * 0.5
+            _spots.sort(key=lambda p: (_check(p, hw, hd), 
+                                       math.hypot(p[0] - _sxc, p[1] - _syc)))
         for _sx, _sy in _spots:
             _sx += _jit(rng, 0.06)
             _sy += _jit(rng, 0.06)
@@ -2882,6 +2880,9 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
             tracker.occupy(_sx - hw, _sx + hw, _sy - hd, _sy + hd)
             return (_sx, _sy, _yaw_away(_sx, _sy))
         return None
+
+    def _check(p, hw, hd):
+        return 0 if tracker.is_free(p[0] - hw, p[0] + hw, p[1] - hd, p[1] + hd) else 1
 
     # Full-size display first, then a compact one for cramped shops.
     _placed = _try_place(0.85, 0.575)
@@ -2899,7 +2900,7 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
     _cx_off = (_disp_w - 0.08) * 0.23
     _cyaw = _yaw
     _cos, _sin = math.cos(_cyaw), math.sin(_cyaw)
-    for (_ly, _lz), _goods in zip(((0.18, 0.50), (-0.18, 0.85), (-0.54, 1.20)),
+    for (_ly, _lz), _goods in zip(((0.17, 0.50), (-0.16, 0.85), (-0.50, 1.20)),
                                  _tier_goods):
         for _i, _g in enumerate(_goods):
             _lx = (-_cx_off if _i % 2 == 0 else _cx_off) if len(_goods) > 1 else 0.0
@@ -3483,13 +3484,16 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('WEST', 'NORTH', 'SOUTH'))
 
-    # 3. Goods crates and merchandise barrels
-    for cx in (rm.bounds[0] + 0.40, rm.bounds[1] - 0.40):
-        for cy in (rm.bounds[2] + 0.40, rm.bounds[3] - 0.40):
-            if tracker.is_free(cx - 0.25, cx + 0.25, cy - 0.25, cy + 0.25):
-                tracker.occupy(cx - 0.25, cx + 0.25, cy - 0.25, cy + 0.25)
-                prop = 'CRATE' if rng.random() < 0.6 else 'BARREL'
-                build_prop(bm, prop, cx, cy, z_floor, 0.0)
+    # 3. Goods crates and merchandise barrels — kept OFF the corners so the
+    #    wall corners stay free for the trade display (placed next).
+    _mid_y = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    _mid_x = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    for cx, cy in ((rm.bounds[0] + 0.40, _mid_y), (rm.bounds[1] - 0.40, _mid_y),
+                   (_mid_x, rm.bounds[2] + 0.40), (_mid_x, rm.bounds[3] - 0.40)):
+        if tracker.is_free(cx - 0.25, cx + 0.25, cy - 0.25, cy + 0.25):
+            tracker.occupy(cx - 0.25, cx + 0.25, cy - 0.25, cy + 0.25)
+            prop = 'CRATE' if rng.random() < 0.6 else 'BARREL'
+            build_prop(bm, prop, cx, cy, z_floor, 0.0)
 
     # 4. Area rug in the customer browse zone (in front of a freestanding
     # counter, else room centre; skipped in a bare industrial store).
