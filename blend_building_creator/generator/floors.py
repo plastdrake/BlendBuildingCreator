@@ -1837,6 +1837,14 @@ def build_floors(bm, props, ctx):
                     wy_p = iw['pos']
                     right_excludes.append((wy_p - 0.50, wy_p + 0.50))
 
+            # Bakery hearth oven: fixed depth-centre slot against the +X wall.
+            # Keep glazing clear of it so the room planner can reserve one
+            # uncut bakehouse chamber (oven body + work apron) around it.
+            if fl_idx == 0 and effective_archetype == 'BAKERY':
+                from .accessories.bakery import OVEN_WIN_CLEAR
+                _ocy = (y_min + y_max) * 0.5
+                right_excludes.append((_ocy - OVEN_WIN_CLEAR, _ocy + OVEN_WIN_CLEAR))
+
             if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT':
                 sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)
                 right_excludes.append((s_cy - sd_clr, s_cy + sd_clr))

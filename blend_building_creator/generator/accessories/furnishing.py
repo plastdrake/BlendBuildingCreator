@@ -40,11 +40,13 @@ class RoomOccupancyTracker:
         self.doorways = doorways or []
         self.occupied_boxes: List[Tuple[float, float, float, float]] = []
 
-        # Reserve stairwell clearance (generous: covers the flight below and its
-        # approach so props never block the stairs, not just the bare opening).
+        # Reserve stairwell clearance (flight below plus its approach so props
+        # never block the stairs, not just the bare opening). Kept snug on
+        # purpose: the upper guardrail already protects the opening edge, and
+        # oversized pads used to starve whole rooms of furniture.
         if stair_hole is not None:
             sx0, sx1, sy0, sy1 = stair_hole
-            self.occupied_boxes.append((sx0 - 0.90, sx1 + 0.90, sy0 - 1.20, sy1 + 1.20))
+            self.occupied_boxes.append((sx0 - 0.60, sx1 + 0.60, sy0 - 0.90, sy1 + 0.90))
 
         # 2. Reserve walking corridors around all doorways (interior, front, wing, annex)
         if doorways:
@@ -53,7 +55,7 @@ class RoomOccupancyTracker:
                 dcy = d.get('y', (ry0 + ry1) * 0.5)
                 axis = d.get('axis', 'X')
                 dw = d.get('w', 0.95)
-                clr = 1.25  # clear walking corridor depth inside room
+                clr = 1.05  # clear walking corridor depth inside room
                 w_margin = dw * 0.5 + 0.25
                 if axis == 'X':
                     self.occupied_boxes.append((dcx - w_margin, dcx + w_margin,
@@ -130,6 +132,80 @@ def _try_place_chair(bm, tracker: RoomOccupancyTracker, cx: float, cy: float,
         build_prop(bm, 'CHAIR', cx, cy, z_floor, yaw, seat_h=seat_h)
         return True
     return False
+
+
+def _freest_spot(tracker: RoomOccupancyTracker, rng, step: float = 0.40):
+    """Grid-scan for the room point with the most clear space around it.
+
+    Returns (cx, cy, half) where half is the largest free square half-side
+    there (doorways, stairwell, chimney and placed props all count as
+    blocked). Used for sitting nooks and minimum-dressing fallbacks.
+    """
+    xs, ys = [], []
+    x = tracker.rx0 + 0.30
+    while x <= tracker.rx1 - 0.30 + 1e-6:
+        xs.append(x)
+        x += step
+    y = tracker.ry0 + 0.30
+    while y <= tracker.ry1 - 0.30 + 1e-6:
+        ys.append(y)
+        y += step
+    if not xs or not ys:
+        return None
+    pts = [(x, y) for x in xs for y in ys]
+    if rng is not None:
+        rng.shuffle(pts)
+    best = None
+    for cx, cy in pts:
+        h = 0.0
+        while h < 3.00:
+            nh = round(h + 0.20, 2)
+            if tracker.is_free(cx - nh, cx + nh, cy - nh, cy + nh):
+                h = nh
+            else:
+                break
+        if best is None or h > best[2]:
+            best = (cx, cy, h)
+            if h >= 2.20:
+                break
+    return best
+
+
+def _place_nook_set(bm, tracker: RoomOccupancyTracker, cx: float, cy: float,
+                    z_floor: float, rng, radius: float = 0.50) -> bool:
+    """Round table + two stools facing it. Returns False when they do not fit."""
+    if not tracker.is_free(cx - 0.60, cx + 0.60, cy - 0.60, cy + 0.60):
+        return False
+    tracker.occupy(cx - 0.60, cx + 0.60, cy - 0.60, cy + 0.60)
+    build_prop(bm, 'ROUND_TABLE', cx, cy, z_floor, rng.uniform(0.0, 6.28),
+               radius=radius)
+    for sx, sy in ((cx - 0.90, cy), (cx + 0.90, cy)):
+        if tracker.is_free(sx - 0.25, sx + 0.25, sy - 0.25, sy + 0.25):
+            tracker.occupy(sx - 0.25, sx + 0.25, sy - 0.25, sy + 0.25)
+            build_prop(bm, 'STOOL', sx, sy, z_floor, rng.uniform(0.0, 6.28))
+    return True
+
+
+def _ensure_minimum_dressing(bm, tracker: RoomOccupancyTracker, rm,
+                             z_floor: float, rng) -> None:
+    """Last-resort sitting nook so a living room never reads empty, whatever
+    the regular recipe managed to place (e.g. an awkward stairwell eating the
+    centre). Skips small rooms: a cupboard-sized room is fine bare."""
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    if rw * rd < 12.0:
+        return
+    spot = _freest_spot(tracker, rng)
+    if spot is None:
+        return
+    cx, cy, h = spot
+    if h >= 0.85:
+        _place_nook_set(bm, tracker, cx, cy, z_floor, rng)
+    elif h >= 0.55:
+        for sx, sy in ((cx - 0.35, cy), (cx + 0.35, cy)):
+            if tracker.is_free(sx - 0.25, sx + 0.25, sy - 0.25, sy + 0.25):
+                tracker.occupy(sx - 0.25, sx + 0.25, sy - 0.25, sy + 0.25)
+                build_prop(bm, 'STOOL', sx, sy, z_floor, rng.uniform(0.0, 6.28))
 
 
 def _sofa_fabric(rng):
@@ -2799,6 +2875,15 @@ def _furnish_corridor(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
     _try_place_wall_prop(bm, 'BENCH', 1.40, 0.45, tracker, z_floor,
                          candidate_walls=('SOUTH', 'NORTH', 'WEST', 'EAST'), length=1.40)
 
+    # 2b. Large landings double as sitting nooks so big upper halls never
+    # read empty: table + stools at the freest point, plus a shelf.
+    if rw * rd >= 20.0 and density >= 0.4:
+        _spot = _freest_spot(tracker, rng, step=0.50)
+        if _spot is not None:
+            _place_nook_set(bm, tracker, _spot[0], _spot[1], z_floor, rng)
+        _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                             candidate_walls=('NORTH', 'WEST', 'EAST', 'SOUTH'))
+
     # 3. Ceiling chain lantern
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
@@ -3146,6 +3231,23 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     )
     tracker.rng = rng
     tracker.archetype = getattr(ctx, 'effective_archetype', 'NONE') if ctx is not None else 'NONE'
+    if getattr(ctx, 'effective_archetype', 'NONE') == 'BAKERY' and ctx is not None:
+        # Hearth-oven masonry keep-out: the ground-floor bakehouse reserves
+        # the oven body + work apron, and upper storeys reserve the flue
+        # shaft rising through them, so props never intersect the masonry.
+        try:
+            from .bakery import bakery_oven_rect, _pick_oven_y
+            _hx = float(getattr(ctx, 'hx', 0.0))
+            _hy = float(getattr(ctx, 'hy', 0.0))
+            _wt = float(getattr(ctx, 'wall_t', 0.30))
+            _oy = _pick_oven_y(ctx, _hy, _wt, 0.975)
+            if rm.floor_idx == 0 and rm.role == 'BAKEHOUSE':
+                tracker.occupy(*bakery_oven_rect(_hx, _wt, _oy))
+            elif rm.floor_idx > 0:
+                _fx = (_hx - _wt) - 1.35 * 0.5
+                tracker.occupy(_fx - 0.50, _fx + 0.50, _oy - 0.50, _oy + 0.50)
+        except Exception:
+            pass
     tracker.bare_stockpile = bool(getattr(ctx, 'bare_stockpile', False)) if ctx is not None else False
     tracker.is_quarry = (tracker.archetype == 'QUARRY')
     tracker.industrial = getattr(ctx, 'industrial', False) or (tracker.archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY'))
@@ -3178,6 +3280,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     tracker.no_rugs = _bare
 
     role = rm.role
+    _occ_before = len(tracker.occupied_boxes)
     try:
         if tracker.bare_stockpile and role in ('STORE', 'WORKSHOP', 'SMITHY', 'STORAGE',
                                                'CELLAR', 'PANTRY', 'STONE_STORE', 'OFFICE',
@@ -3252,6 +3355,17 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     except Exception:
         if _STRICT_FURNISH:
             raise
+
+    # Minimum-dressing guarantee: a living room the recipe left almost empty
+    # (awkward stairwell, door-heavy plan) still gets a sitting nook. Bare
+    # industrial fit-outs, walkways and stables are exempt by design.
+    if (not _bare and role not in ('STAIR_LANDING', 'CORRIDOR', 'STABLE_HALL')
+            and len(tracker.occupied_boxes) - _occ_before < 3):
+        try:
+            _ensure_minimum_dressing(bm, tracker, rm, z_floor, rng)
+        except Exception:
+            if _STRICT_FURNISH:
+                raise
 
     # Every room gets at least one rug, except back-of-house rooms in an
     # industrial fit-out (warehouses/lumbermills stay bare).

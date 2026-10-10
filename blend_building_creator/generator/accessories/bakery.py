@@ -36,12 +36,34 @@ def bakery_oven_slot(hx, hy, wall_t):
     return oven_x, oven_y
 
 
+# Fixed hearth-oven slot shared by the wall, room-planning and furnishing
+# phases. The oven body is 1.75m wide (Y) x 1.35m deep (X) with its back
+# flush to the +X interior wall and its mouth facing into the room; the
+# ground-floor RIGHT facade keeps glazing clear of OVEN_WIN_CLEAR so the
+# oven always lands at depth-centre, and no cross-partition may enter
+# OVEN_WALL_CLEAR (which also covers the flue rising through the storeys
+# above, plus a working apron in front of the mouth for the furnisher).
+OVEN_HALF_W = 0.875
+OVEN_WIN_CLEAR = 1.50
+OVEN_WALL_CLEAR = 1.85
+
+
+def bakery_oven_rect(hx, wall_t, base_y=0.0):
+    """World-space keep-out for the hearth oven: masonry body + landing shelf
+    plus a 1m working apron in front of the mouth."""
+    base_x = (hx - wall_t) - 1.35 * 0.5
+    return (base_x - (1.35 * 0.5 + 0.24 + 1.00), hx - wall_t + 0.05,
+            base_y - 1.05, base_y + 1.05)
+
+
 def _right_window_ys(ctx):
+    # Ground-floor RIGHT windows only: the oven stands on the ground storey,
+    # so only its own facade glazing constrains the slot (the flue shaft
+    # above stands clear of the wall plane).
     ys = []
     wc = getattr(ctx, 'window_centers', None) or {}
-    for facades in wc.values():
-        for _wx, wy, _sz in facades.get('RIGHT', []):
-            ys.append(wy)
+    for _wx, wy, _sz in (wc.get(0) or {}).get('RIGHT', []):
+        ys.append(wy)
     return ys
 
 

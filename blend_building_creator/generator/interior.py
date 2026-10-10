@@ -1536,6 +1536,48 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
     door_cx = front_door_info[0] if (front_door_info and fl_idx == 0) else None
 
+    # Bakery hearth oven: fixed slot at depth-centre against the +X wall
+    # (glazing keeps clear of it in floors.py; geometry in accessories/bakery.py).
+    # Cross-partitions must never slice through the masonry, and the flue
+    # rises through the same slot on every storey, so each bakery floor keeps
+    # this band free: the oven always stands whole inside one bakehouse chamber.
+    oven_band = None
+    if effective_archetype == 'BAKERY' and has_interior_walls \
+            and partition_style in ('AUTO', 'HALL_CHAMBERS') and D >= 7.0:
+        from .accessories.bakery import OVEN_WALL_CLEAR
+        _ocy = (iy_min + iy_max) * 0.5
+        oven_band = (_ocy - OVEN_WALL_CLEAR, _ocy + OVEN_WALL_CLEAR)
+
+    def _dodge_oven_band(pos, lo, hi):
+        if oven_band is None:
+            return pos
+        b0, b1 = oven_band
+        if b0 <= pos <= b1:
+            pos = b0 if (pos - b0) <= (b1 - pos) else b1
+        return min(hi, max(lo, pos))
+
+    def _force_bakehouse_chamber(room_list):
+        """The chamber holding the oven masonry serves as the bakehouse."""
+        if oven_band is None:
+            return
+        oy = (oven_band[0] + oven_band[1]) * 0.5
+        ox0, ox1 = ix_max - 1.50, ix_max - 0.05
+        holder = None
+        for r in room_list:
+            if getattr(r, 'is_wing', False):
+                continue
+            x0, x1, y0, y1 = r.bounds
+            if x0 <= ox0 and ox1 <= x1 and y0 <= oy <= y1:
+                holder = r
+                break
+        if holder is None or holder.role == 'BAKEHOUSE':
+            return
+        for r in room_list:
+            if r is not holder and r.role == 'BAKEHOUSE' \
+                    and not getattr(r, 'is_wing', False):
+                r.role, holder.role = holder.role, r.role
+                return
+
     # Decide layout mode
     is_deep = (D > W * 1.25 and D >= 6.5
                and effective_archetype != 'TENEMENT')
@@ -1898,6 +1940,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                                             hi=iy_min + D * _k2 - 1.6)
             split_y2 = _clear_doorway_span(iy_min + D * _k2, axis='Y',
                                             lo=split_y1 + 1.6)
+            if oven_band is not None:
+                # Keep both chamber lines out of the oven masonry, preserving
+                # their order and a walkable 1.6m minimum chamber depth.
+                split_y1 = _dodge_oven_band(split_y1, iy_min + 1.6, iy_max - 3.2)
+                split_y2 = _dodge_oven_band(max(split_y2, split_y1 + 1.6),
+                                            split_y1 + 1.6, iy_max - 1.6)
+                if oven_band[0] <= split_y2 <= oven_band[1]:
+                    split_y2 = min(iy_max - 1.6, oven_band[1])
 
             dw_y1 = (iy_min + split_y1) * 0.5
             dw_y2 = (split_y1 + split_y2) * 0.5
@@ -1960,6 +2010,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 exterior_facades={'BACK': (split_x, ix_max), 'RIGHT': (split_y2, iy_max)}
             )
             rooms = [rm0, rm1, rm2, rm3]
+            _force_bakehouse_chamber(rooms)
 
         elif can_3_rooms and (D >= 5.4) and (ix_max - split_x >= 2.2):
             # 3 Rooms total (Landing/Corridor on Left + 2 Chambers on Right)
@@ -1967,6 +2018,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             # One bigger kitchen: the kitchen chamber takes ~58% of the strip.
             _kf = 0.58 if (len(roles) > 1 and roles[1] == 'KITCHEN') else 0.50
             split_y = _clear_doorway_span(iy_min + D * _kf, axis='Y')
+            split_y = _dodge_oven_band(split_y, iy_min + 1.8, iy_max - 1.8)
 
             dw_y1 = (iy_min + split_y) * 0.5
             dw_y2 = (split_y + iy_max) * 0.5
@@ -2011,6 +2063,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 exterior_facades={'BACK': (split_x, ix_max), 'RIGHT': (split_y, iy_max)}
             )
             rooms = [rm0, rm1, rm2]
+            _force_bakehouse_chamber(rooms)
 
         else:
             # 2 Rooms along Y (Left Room + Right Room)
@@ -2121,6 +2174,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             split_y = min(iy_max - 2.3, split_y)
         split_y = _clear_doorway_span(split_y, axis='Y',
                                       lo=iy_min + 2.3, hi=iy_max - 1.8)
+        split_y = _dodge_oven_band(split_y, iy_min + 2.3, iy_max - 1.8)
 
         dw_x = (ix_min + ix_max) * 0.5
         if abs(dw_x - (door_cx or 0.0)) < 0.4:
@@ -2152,6 +2206,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (split_y, iy_max), 'RIGHT': (split_y, iy_max)}
         )
         rooms = [rm0, rm1]
+        _force_bakehouse_chamber(rooms)
 
     # Add any wing rooms (the exterior-entrance tenement layout above already
     # created its own wing apartments, so never add duplicates).
