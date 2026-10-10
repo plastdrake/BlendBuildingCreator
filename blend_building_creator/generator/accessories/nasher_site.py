@@ -370,6 +370,39 @@ def _build_clipped_wall_run(bm, build_run, s, e, outward, boxes, top_z, thick, s
     return
 
 
+def _spline_curve(waypoints, sample_step=1.8):
+    """Generates a smooth Catmull-Rom spline passing through waypoints."""
+    if len(waypoints) < 2:
+        return list(waypoints)
+    n = len(waypoints)
+    p_ext_start = (2 * waypoints[0][0] - waypoints[1][0], 2 * waypoints[0][1] - waypoints[1][1])
+    p_ext_end = (2 * waypoints[-1][0] - waypoints[-2][0], 2 * waypoints[-1][1] - waypoints[-2][1])
+    extended = [p_ext_start] + list(waypoints) + [p_ext_end]
+
+    pts = []
+    for i in range(1, n):
+        p0 = extended[i - 1]
+        p1 = extended[i]
+        p2 = extended[i + 1]
+        p3 = extended[i + 2]
+        pts.append(p1)
+        dist = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+        steps = max(1, int(math.ceil(dist / sample_step)))
+        for s in range(1, steps):
+            t = s / steps
+            t2 = t * t
+            t3 = t2 * t
+            x = 0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * t
+                       + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2
+                       + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3)
+            y = 0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * t
+                       + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2
+                       + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3)
+            pts.append((x, y))
+    pts.append(waypoints[-1])
+    return pts
+
+
 def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=()):
     """Build connecting curtain wall runs on the east and west flanks linking
     the lower forecourt rim wall to the upper citadel perimeter wall, closing
@@ -377,24 +410,16 @@ def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=()):
     """
     from .curtain_wall import build_curtain_wall_run
 
-    # West flank: from upper wall at (-29.0, -13.5) down to forecourt rim at (-33.33, -35.39)
+    # West flank: from upper wall at (-31.0, -14.5) down to forecourt rim at (-33.33, -35.39)
     # Goes south so outward vector naturally faces west (exterior).
-    chain_west = [(-29.0, -13.5), (-29.5, -18.5), (-30.5, -24.0), (-32.0, -30.0), (-33.33, -35.39)]
+    chain_west = [(-31.0, -14.5), (-31.2, -18.5), (-31.8, -24.0), (-32.5, -30.0), (-33.33, -35.39)]
 
-    # East flank: from forecourt rim at (32.00, -35.34) up to upper wall at (29.0, -13.5)
+    # East flank: from forecourt rim at (32.00, -35.34) up to upper wall at (31.0, -14.5)
     # Goes north so outward vector naturally faces east (exterior).
-    chain_east = [(32.00, -35.34), (31.5, -30.0), (30.0, -24.0), (29.5, -18.5), (29.0, -13.5)]
+    chain_east = [(32.00, -35.34), (32.5, -30.0), (31.8, -24.0), (31.2, -18.5), (31.0, -14.5)]
 
     for chain, seed_base in ((chain_west, 201), (chain_east, 251)):
-        sub_pts = []
-        for i in range(len(chain) - 1):
-            p0, p1 = chain[i], chain[i + 1]
-            dist = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
-            sub_n = max(1, int(math.ceil(dist / 3.0)))
-            for s in range(sub_n):
-                t = s / sub_n
-                sub_pts.append((p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t))
-        sub_pts.append(chain[-1])
+        sub_pts = _spline_curve(chain, sample_step=1.8)
 
         for i in range(len(sub_pts) - 1):
             s, e = sub_pts[i], sub_pts[i + 1]
@@ -420,7 +445,7 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
     from .curtain_wall import build_curtain_wall_run
     from .building_connector import build_curtain_wall_gate_portal
     z = spec[5]
-    steps = max(2, int(abs(a1 - a0) / 4.5))
+    steps = max(4, int(abs(a1 - a0) / 2.0))
     pts = [pad_point(spec, a0 + (a1 - a0) * i / steps, inset) for i in range(steps + 1)]
 
     # 1. Curtain wall top elevation matches terrain plus wall height
@@ -486,7 +511,7 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         (10.0, -19.0),
         (18.0, -18.2),
         (25.0, -16.8),
-        (29.0, -13.5),
+        (31.0, -14.5),
         # East terrace flank passing cleanly outside the free-standing East Flank Tower
         (39.0, -11.0),
         (39.5, -8.0),
@@ -538,23 +563,14 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         (-39.5, -8.0),
         (-39.0, -11.0),
         # Return to gate left flank (clear of the gatehouse towers)
-        (-29.0, -13.5),
+        (-31.0, -14.5),
         (-25.0, -16.8),
         (-18.0, -18.2),
         (-10.0, -19.0),
         (-7.2, -19.5),
     ]
 
-    pts = []
-    for i in range(len(waypoints) - 1):
-        p0 = waypoints[i]
-        p1 = waypoints[i + 1]
-        dist = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
-        sub_n = max(1, int(math.ceil(dist / 3.2)))
-        for s in range(sub_n):
-            t = s / sub_n
-            pts.append((p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t))
-    pts.append(waypoints[-1])
+    pts = _spline_curve(waypoints, sample_step=1.8)
 
     # 2. Wall top elevation across loop: max terrain + height
     top_z = max([ground_z(px, py) for px, py in pts]) + height
