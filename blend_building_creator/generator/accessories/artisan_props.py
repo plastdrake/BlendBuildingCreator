@@ -980,7 +980,7 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
     AFTER that axis fix (used to lay hanging cuts flat toward the room).
     Returns True, raises on any problem.
     """
-    from mathutils import Matrix as _M, Vector as _V
+    from mathutils import Matrix as _M, Vector as _V, Euler as _E
     from .artisan_meshdata import PROP_MESHES
     key = fbx_file[:-4] if fbx_file.lower().endswith('.fbx') else fbx_file
     it = PROP_MESHES.get(key)
@@ -1004,7 +1004,7 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
     cx, cy, z0 = ((min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5,
                   min(zs))
     fix = _M.Rotation(yaw_fix, 4, 'Z')
-    pre = _M.Euler(pre_rot).to_matrix().to_4x4()
+    pre = _E(pre_rot).to_matrix().to_4x4()
     local = (_M.Translation((x, y, z_ground)) @ _M.Rotation(ang, 4, 'Z'))
     place = (local if final is None else (final @ local))
     place = place @ pre @ fix @ _M.Diagonal((s, s, s, 1.0))
