@@ -331,7 +331,8 @@ def _in_boxes(x, y, boxes, margin):
     return False
 
 
-def _build_clipped_wall_run(bm, build_run, s, e, outward, boxes, top_z, thick, seed):
+def _build_clipped_wall_run(bm, build_run, s, e, outward, boxes, top_z, thick, seed,
+                            extend_start=True, extend_end=True, merlon_end_clear=(0.0, 0.0)):
     """Build a wall run clipped around building boxes with no pinhole gaps.
 
     The run is split into quarters; pieces inside a box (0.3 margin) are dropped
@@ -360,15 +361,17 @@ def _build_clipped_wall_run(bm, build_run, s, e, outward, boxes, top_z, thick, s
         return
     ux, uy = (e[0] - s[0]) / ln, (e[1] - s[1]) / ln
     for t0, t1 in merged:
-        p0 = (s[0] + (e[0] - s[0]) * t0 - ux * 0.40, s[1] + (e[1] - s[1]) * t0 - uy * 0.40)
-        p1 = (s[0] + (e[0] - s[0]) * t1 + ux * 0.40, s[1] + (e[1] - s[1]) * t1 + uy * 0.40)
+        ext0 = 0.40 if (t0 > 0.0 or extend_start) else 0.0
+        ext1 = 0.40 if (t1 < 1.0 or extend_end) else 0.0
+        p0 = (s[0] + (e[0] - s[0]) * t0 - ux * ext0, s[1] + (e[1] - s[1]) * t0 - uy * ext0)
+        p1 = (s[0] + (e[0] - s[0]) * t1 + ux * ext1, s[1] + (e[1] - s[1]) * t1 + uy * ext1)
         zs = ground_z(p0[0], p0[1])
         ze = ground_z(p1[0], p1[1])
         # Extend base deep into the cliff rock so walls never float on slopes
         min_g = min(zs, ze)
         base_z = min(-0.50, min_g - 2.50) if min_g <= 4.0 else (min_g - 2.50)
         build_run(bm, p0, p1, outward, base_z, top_z - base_z, thick,
-                  slits=False, seed=seed)
+                  slits=False, seed=seed, merlon_end_clear=merlon_end_clear)
     return
 
 
@@ -510,30 +513,39 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
     Constructs the complete perimeter curtain wall loop encircling the entire upper
     castle complex and the East Bluff plateau, conforming continuously to the
     undulating cliff terrain and extending down 1.2m into the cliffs.
+    Connects cleanly into the free-standing flank towers with dressed ashlar abutments
+    and embedded joints, matching the construction of the outer perimeter wall.
     """
     from .curtain_wall import build_curtain_wall_run
     from .building_connector import build_curtain_wall_gate_portal
 
-    # 1. Control waypoints tracing the perimeter along the cliff rims, shifted outwards to clear all buildings.
-    # The loop starts/ends clear of the gatehouse towers (outer faces at +-6.9).
-    waypoints = [
-        # Gate right flank (East arm of Terrace rim)
+    # Filter out flank tower bounding boxes if present, so wall runs connect directly into them
+    bld_boxes = [b for b in bld_boxes
+                 if not (b[0] < 33.5 < b[1] and b[2] < -8.0 < b[3])
+                 and not (b[0] < -33.5 < b[1] and b[2] < -8.0 < b[3])]
+
+    c_east = (33.5, -8.0)
+    c_west = (-33.5, -8.0)
+    tower_r = 4.2
+    r_embed = tower_r - 0.45  # 3.75: embeds 0.45m into the 0.75m stone tower wall, clear of inner room (r=3.45)
+
+    # 1. Three legs connecting Gate and Flank Towers
+    # Leg 1: Gate right flank (East arm of Terrace rim) into East Flank Tower
+    leg1_way = [
         (7.2, -19.5),
         (10.0, -19.0),
         (18.0, -18.2),
         (25.0, -16.8),
         (31.0, -14.5),
-        # East terrace flank passing cleanly outside the free-standing East Flank Tower
-        (39.0, -11.0),
-        (39.5, -8.0),
-        (39.5, -3.0),
-        (37.5, 6.0),
-        (36.0, 13.0),
+        c_east,
     ]
+    pts1 = _spline_curve(leg1_way, sample_step=1.8)
+    pts1 = _trim_leg(pts1, None, 0.0, c_east, r_embed)
 
+    # Leg 2: East Flank Tower along North/East bluff rim to West Flank Tower
+    leg2_way = [c_east, (35.5, -1.0), (37.5, 6.0), (36.0, 13.0)]
     if tier >= 3:
-        # Promontory along East Bluff cliff crest (Z~8.8-9.0, encircling East Bluff Bastion Tower)
-        waypoints += [
+        leg2_way += [
             (42.0, 14.5),
             (48.0, 16.5),
             (55.0, 19.5),
@@ -544,15 +556,13 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
             (33.0, 42.0),
         ]
     else:
-        # Tier 2 direct east flank up to upper citadel rim
-        waypoints += [
+        leg2_way += [
             (34.0, 20.0),
             (33.0, 28.0),
             (32.0, 36.0),
             (31.0, 42.0),
         ]
-
-    waypoints += [
+    leg2_way += [
         # Citadel north rim behind Archive Hall and Keep
         (28.0, 48.0),
         (20.0, 52.0),
@@ -561,7 +571,7 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         (-10.0, 54.5),
         (-20.0, 52.0),
         (-28.0, 48.0),
-        # West flank around the Wizard's Spire (shifted outwards to clear spire)
+        # West flank around the Wizard's Spire
         (-34.5, 45.0),
         (-35.5, 40.0),
         (-34.5, 33.0),
@@ -569,22 +579,27 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         (-36.0, 24.0),
         (-36.0, 14.0),
         (-37.0, 5.0),
-        # Passing cleanly outside the free-standing West Flank Tower
-        (-39.5, -3.0),
-        (-39.5, -8.0),
-        (-39.0, -11.0),
-        # Return to gate left flank (clear of the gatehouse towers)
+        (-35.5, -1.0),
+        c_west,
+    ]
+    pts2 = _spline_curve(leg2_way, sample_step=1.8)
+    pts2 = _trim_leg(pts2, c_east, r_embed, c_west, r_embed)
+
+    # Leg 3: West Flank Tower into Gate left flank
+    leg3_way = [
+        c_west,
         (-31.0, -14.5),
         (-25.0, -16.8),
         (-18.0, -18.2),
         (-10.0, -19.0),
         (-7.2, -19.5),
     ]
-
-    pts = _spline_curve(waypoints, sample_step=1.8)
+    pts3 = _spline_curve(leg3_way, sample_step=1.8)
+    pts3 = _trim_leg(pts3, c_west, r_embed, None, 0.0)
 
     # 2. Wall top elevation across loop: max terrain + height
-    top_z = max([ground_z(px, py) for px, py in pts]) + height
+    all_pts = pts1 + pts2 + pts3
+    top_z = max([ground_z(px, py) for px, py in all_pts]) + height
 
     # 3. Fortified Gatehouse with twin flanking gate towers matching the wall height exactly
     gate_cx = 0.0
@@ -598,17 +613,85 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         raised_portcullis=True
     )
 
-    # 4. Curtain wall runs clipped around buildings with overlapping ends (no gaps).
-    for i in range(len(pts) - 1):
-        s, e = pts[i], pts[i + 1]
+    # 4. Build curtain wall runs for each leg
+    legs = [
+        (pts1, False, True),   # Leg 1: gate to c_east (end touches tower)
+        (pts2, True, True),    # Leg 2: c_east to c_west (start & end touch towers)
+        (pts3, True, False),   # Leg 3: c_west to gate (start touches tower)
+    ]
+    for leg_idx, (leg_pts, touches_tower_start, touches_tower_end) in enumerate(legs):
+        n_segs = len(leg_pts) - 1
+        for i in range(n_segs):
+            s, e = leg_pts[i], leg_pts[i + 1]
+            ln = math.hypot(e[0] - s[0], e[1] - s[1])
+            if ln < 0.2:
+                continue
 
-        ln = math.hypot(e[0] - s[0], e[1] - s[1])
-        if ln < 0.6:
-            continue
+            outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
+            is_first = (i == 0)
+            is_last = (i == n_segs - 1)
 
-        outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
-        _build_clipped_wall_run(bm, build_curtain_wall_run, s, e, outward,
-                                bld_boxes, top_z, thick, seed=i + 101)
+            mc_start = 0.50 if (is_first and touches_tower_start) else 0.0
+            mc_end = 0.50 if (is_last and touches_tower_end) else 0.0
+            ext_start = not (is_first and touches_tower_start)
+            ext_end = not (is_last and touches_tower_end)
+
+            seed = 101 + leg_idx * 50 + i
+            _build_clipped_wall_run(
+                bm, build_curtain_wall_run, s, e, outward,
+                bld_boxes, top_z, thick, seed=seed,
+                extend_start=ext_start, extend_end=ext_end,
+                merlon_end_clear=(mc_start, mc_end)
+            )
+
+    # 5. Dressed cut-stone junction abutment clasps at all 4 tower wall intersections
+    # Leg 1 end -> East Flank Tower
+    p_s, p_e = pts1[-2], pts1[-1]
+    d = math.hypot(p_e[0] - p_s[0], p_e[1] - p_s[1])
+    if d > 1e-4:
+        u_dir = ((p_e[0] - p_s[0]) / d, (p_e[1] - p_s[1]) / d)
+        outward = (u_dir[1], -u_dir[0])
+        zg = ground_z(p_e[0], p_e[1])
+        _build_tower_wall_abutment(
+            bm, c_east, tower_r, p_e, u_dir, outward,
+            height=(top_z - zg) + 0.40, thick=thick, z_base=zg - 0.40
+        )
+
+    # Leg 2 start -> East Flank Tower
+    p_s, p_e = pts2[0], pts2[1]
+    d = math.hypot(p_e[0] - p_s[0], p_e[1] - p_s[1])
+    if d > 1e-4:
+        u_dir = ((p_e[0] - p_s[0]) / d, (p_e[1] - p_s[1]) / d)
+        outward = (u_dir[1], -u_dir[0])
+        zg = ground_z(p_s[0], p_s[1])
+        _build_tower_wall_abutment(
+            bm, c_east, tower_r, p_s, u_dir, outward,
+            height=(top_z - zg) + 0.40, thick=thick, z_base=zg - 0.40
+        )
+
+    # Leg 2 end -> West Flank Tower
+    p_s, p_e = pts2[-2], pts2[-1]
+    d = math.hypot(p_e[0] - p_s[0], p_e[1] - p_s[1])
+    if d > 1e-4:
+        u_dir = ((p_e[0] - p_s[0]) / d, (p_e[1] - p_s[1]) / d)
+        outward = (u_dir[1], -u_dir[0])
+        zg = ground_z(p_e[0], p_e[1])
+        _build_tower_wall_abutment(
+            bm, c_west, tower_r, p_e, u_dir, outward,
+            height=(top_z - zg) + 0.40, thick=thick, z_base=zg - 0.40
+        )
+
+    # Leg 3 start -> West Flank Tower
+    p_s, p_e = pts3[0], pts3[1]
+    d = math.hypot(p_e[0] - p_s[0], p_e[1] - p_s[1])
+    if d > 1e-4:
+        u_dir = ((p_e[0] - p_s[0]) / d, (p_e[1] - p_s[1]) / d)
+        outward = (u_dir[1], -u_dir[0])
+        zg = ground_z(p_s[0], p_s[1])
+        _build_tower_wall_abutment(
+            bm, c_west, tower_r, p_s, u_dir, outward,
+            height=(top_z - zg) + 0.40, thick=thick, z_base=zg - 0.40
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -762,7 +845,7 @@ def _pieces(p0, p1, max_len=_SAMPLE):
     return list(zip(pts[:-1], pts[1:]))
 
 
-def _build_tower_wall_abutment(bm, tower_c, tower_r, wall_p, wall_dir, outward, height, thick, walk_width=0.95):
+def _build_tower_wall_abutment(bm, tower_c, tower_r, wall_p, wall_dir, outward, height, thick, walk_width=0.95, z_base=0.0):
     """
     Constructs an authentic dressed cut-stone junction clasp / abutment quoin
     at the intersection of a curtain wall and a round tower.
@@ -796,14 +879,14 @@ def _build_tower_wall_abutment(bm, tower_c, tower_r, wall_p, wall_dir, outward, 
     # Dressed ashlar body
     create_beveled_box(
         bm, size=(ab_t, ab_w, ab_h),
-        location=(c_x, c_y, ab_h * 0.5),
+        location=(c_x, c_y, z_base + ab_h * 0.5),
         rotation=(0.0, 0.0, ang),
         mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025
     )
     # Beveled coping stone crown cap
     create_beveled_box(
         bm, size=(ab_t + 0.10, ab_w + 0.10, 0.16),
-        location=(c_x, c_y, ab_h + 0.08),
+        location=(c_x, c_y, z_base + ab_h + 0.08),
         rotation=(0.0, 0.0, ang),
         mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
     )

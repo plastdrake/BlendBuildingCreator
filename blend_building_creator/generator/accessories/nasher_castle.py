@@ -322,8 +322,7 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
     if tier == 2:
         from .nasher_site import build_upper_citadel_perimeter_wall
         bld_forecourt = ((-27.5, -12.5, -34.0, -23.0), (12.5, 27.5, -34.0, -23.0))
-        bld_terrace = ((-26.0, -4.0, -5.0, 5.0), (4.0, 26.0, -5.0, 5.0),
-                       (-38.2, -28.8, -12.7, -3.3), (28.8, 38.2, -12.7, -3.3))
+        bld_terrace = ((-26.0, -4.0, -5.0, 5.0), (4.0, 26.0, -5.0, 5.0))
         build_rim_walls(bm, FORECOURT, 185.0, 355.0, height=3.0, thick=0.85, inset=0.98,
                         gate=True, bld_boxes=bld_forecourt)
         build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=bld_terrace, tier=2)
@@ -337,7 +336,6 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
             (12.0, 29.0, 34.5, 45.5),                               # Archive Hall
             (-33.0, -22.5, 35.0, 45.0),                             # Wizard's Spire
             (43.0, 53.0, 21.0, 31.0),                             # East Bluff Tower
-            (-38.2, -28.8, -12.7, -3.3), (28.8, 38.2, -12.7, -3.3),  # Flank Towers
         )
         build_rim_walls(bm, FORECOURT, 185.0, 355.0, height=3.0, thick=0.85, inset=0.98,
                         gate=True, bld_boxes=bld_forecourt)
