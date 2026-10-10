@@ -65,18 +65,6 @@ class RoomOccupancyTracker:
                     self.occupied_boxes.append((dcx - clr, dcx + clr,
                                                 dcy - w_margin, dcy + w_margin))
 
-    def is_near_door(self, x: float, y: float, radius: float = 1.40) -> bool:
-        """Returns True if (x, y) is within clearance distance of any doorway."""
-        for d in self.doorways:
-            dcx = d.get('x', (self.rx0 + self.rx1) * 0.5)
-            dcy = d.get('y', (self.ry0 + self.ry1) * 0.5)
-            dw = d.get('w', 0.95)
-            is_p = bool(d.get('is_portal', False) or dw >= 1.5)
-            r = max(radius, (dw * 0.5 + 0.60) if not is_p else (dw * 0.5 + 1.20))
-            if math.hypot(x - dcx, y - dcy) < r:
-                return True
-        return False
-
         # 3. Reserve window clearance along exterior walls so tall props never block windows
         self.window_boxes: List[Tuple[float, float, float, float]] = []
         if windows:
@@ -102,6 +90,18 @@ class RoomOccupancyTracker:
                 if near_wall and (self.rx0 - 0.6 <= cx <= self.rx1 + 0.6) and (self.ry0 - 0.6 <= cy <= self.ry1 + 0.6):
                     self.chimney_boxes.append((cx - 0.42, cx + 0.42, cy - 0.42, cy + 0.42))
         self.chimney_box = self.chimney_boxes[0] if self.chimney_boxes else None
+
+    def is_near_door(self, x: float, y: float, radius: float = 1.40) -> bool:
+        """Returns True if (x, y) is within clearance distance of any doorway."""
+        for d in self.doorways:
+            dcx = d.get('x', (self.rx0 + self.rx1) * 0.5)
+            dcy = d.get('y', (self.ry0 + self.ry1) * 0.5)
+            dw = d.get('w', 0.95)
+            is_p = bool(d.get('is_portal', False) or dw >= 1.5)
+            r = max(radius, (dw * 0.5 + 0.60) if not is_p else (dw * 0.5 + 1.20))
+            if math.hypot(x - dcx, y - dcy) < r:
+                return True
+        return False
 
     def is_free(self, bx0: float, bx1: float, by0: float, by1: float, margin: float = 0.03,
                 ignore_chimney: bool = False, check_windows: bool = False) -> bool:
@@ -2809,6 +2809,9 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
     }.get(arch)
     if not _tier_goods:
         return
+    if getattr(tracker, '_market_display_done', False):
+        return
+    tracker._market_display_done = True
     rcx = (tracker.rx0 + tracker.rx1) * 0.5
     rcy = (tracker.ry0 + tracker.ry1) * 0.5
     _hw, _hd = 0.85, 0.575

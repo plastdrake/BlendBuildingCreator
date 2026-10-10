@@ -1185,21 +1185,16 @@ def build_wine_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.10):
             location=(0.0, 0.0, rz),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
         )
-    # Lying bottles front-facing in each cubby.
-    for ri, rz in enumerate((0.30, 0.70, 1.06)):
+    # Lying wine bottles in each cubby, necks out toward the room (-Y),
+    # re-using the detailed mage-tower bottle.
+    from .interior_furniture import build_bottle
+    for rz in (0.30, 0.70, 1.06):
         for bx in (-width * 0.24, width * 0.24):
-            faces += create_cylinder(
-                bm, radius=0.038, height=0.30, segments=10,
-                location=(bx, -0.02, rz),
-                rotation=(math.pi * 0.5, 0.0, 0.0),
-                mat_index=MAT_INDEX_BOTTLE_GLASS, smooth=True
-            )
-            faces += create_cylinder(
-                bm, radius=0.013, height=0.06, segments=8,
-                location=(bx, -0.02 - 0.175, rz),
-                rotation=(math.pi * 0.5, 0.0, 0.0),
-                mat_index=MAT_INDEX_WAX
-            )
+            bf = build_bottle(bm, 0.0, 0.0, 0.0, 0.0, bottle_type='WINE')
+            bm_mat = (Matrix.Translation((bx, 0.15, rz + 0.07))
+                      @ Matrix.Rotation(math.pi * 0.5, 4, 'X'))
+            transform_faces(bf, bm_mat)
+            faces += bf
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 

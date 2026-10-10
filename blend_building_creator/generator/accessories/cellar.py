@@ -53,7 +53,7 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
     else:
         depth = 3.20
     z_floor = -depth
-    z_ceil = 0.30  # just under the ground-floor slab
+    z_ceil = z_ground + 0.03  # meet the ground-floor slab, no gap at the top
 
     # Basement room = wing footprint inset a little.
     bx0, bx1 = wx1 + 0.25, wx2 - 0.25
@@ -97,13 +97,6 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
         stair_width=stair_w, stair_depth=stair_depth, num_steps=steps,
         direction_y=-1
     )
-    # Stringer walls so the shaft reads as a proper stairwell well.
-    for sx in (shx - stair_w * 0.5 - 0.18, shx + stair_w * 0.5 + 0.18):
-        faces += create_beveled_box(
-            bm, size=(0.16, stair_depth, z_ground - z_floor),
-            location=(sx, shy, (z_floor + z_ground) * 0.5),
-            mat_index=MAT_INDEX_STONE, bevel_amount=0.014
-        )
     # Small stone landing at the foot of the stair.
     faces += create_beveled_box(
         bm, size=(stair_w + 0.6, 0.9, 0.06),
