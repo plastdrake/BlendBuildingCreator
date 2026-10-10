@@ -2464,10 +2464,22 @@ def _furnish_butchery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
         t = _place_craft_table(bm, tracker, z_floor, rng)
         if t is not None:
             _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                               ['FOODPREP_CLUTTER'])
-    # Hanging sausage rail along a free wall.
+                               ['MEAT', 'MEAT_SMALL'])
+    # A prep table laid with cuts either way.
+    t = _place_craft_table(bm, tracker, z_floor, rng)
+    if t is not None:
+        _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
+                           ['MEAT', 'MEAT_SMALL', 'MEAT'])
+    # Two hanging meat rails along free walls.
     _try_place_wall_prop(bm, 'SAUSAGE_STRING', 1.30, 0.35, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'))
+    _try_place_wall_prop(bm, 'SAUSAGE_STRING', 1.10, 0.35, tracker, z_floor,
+                         candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'))
+    # More cuts laid out on a second table when space allows.
+    t2 = _place_craft_table(bm, tracker, z_floor, rng, length=1.20, width=0.75)
+    if t2 is not None:
+        _dress_craft_table(bm, t2[0], t2[1], t2[2], z_table, rng,
+                           ['MEAT_SMALL', 'MEAT_SMALL', 'FOODPREP_CLUTTER'])
 
     _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=3, box=0.40)  # brine
     _place_goods_row(bm, tracker, z_floor, rng, 'SACK', count=2)  # salt
@@ -2629,24 +2641,35 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     rd = rm.bounds[3] - rm.bounds[2]
     z_table = z_floor + 0.775
 
+    # Gutting tables laden with the day's catch (lots of fish).
     for _ in range(2 if min(rw, rd) >= 3.4 else 1):
         t = _place_craft_table(bm, tracker, z_floor, rng)
         if t is None:
             break
         _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                           ['FISH', 'FISH', 'FOODPREP_CLUTTER'])  # catch display
+                           ['FISH', 'FISH', 'FISH', 'FOODPREP_CLUTTER'])
+    # A third table of sorted catch when there is room.
+    t3 = _place_craft_table(bm, tracker, z_floor, rng, length=1.20, width=0.75)
+    if t3 is not None:
+        _dress_craft_table(bm, t3[0], t3[1], t3[2], z_table, rng,
+                           ['FISH', 'FISH'])
+    # Two stacked crates of fish on the floor (a full catch).
+    for _ci in range(2):
+        _place_goods_row(bm, tracker, z_floor, rng, 'FISH', count=3, box=0.24)
 
     # Drying rack with smoked fish along a free wall, rope coil in a corner.
     _try_place_wall_prop(bm, 'FISH_DRYING_RACK', 1.60, 0.80, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'))
     _place_floor_prop(bm, tracker, z_floor, rng, 'ROPE_COIL', 0.28, 0.28)
-    # Curing stringers hung from the beams: zero floor footprint, so even
-    # the smallest fishery shows its trade (grid-scanned, not just centre).
-    _spot = _freest_spot(tracker, rng)
-    if _spot is not None and _spot[2] >= 0.20 - 1e-6:
-        tracker.occupy(_spot[0] - 0.20, _spot[0] + 0.20,
-                       _spot[1] - 0.20, _spot[1] + 0.20)
-        build_prop(bm, 'FISH_STRINGER', _spot[0], _spot[1], z_ceil, 0.0)
+    # Curing stringers hung from the beams (two when there is room).
+    for _si in range(2):
+        _spot = _freest_spot(tracker, rng)
+        if _spot is not None and _spot[2] >= 0.20 - 1e-6:
+            tracker.occupy(_spot[0] - 0.20, _spot[0] + 0.20,
+                           _spot[1] - 0.20, _spot[1] + 0.20)
+            build_prop(bm, 'FISH_STRINGER', _spot[0], _spot[1], z_ceil, 0.0)
+        else:
+            break
 
     _place_goods_row(bm, tracker, z_floor, rng, 'CRATE', count=3, box=0.36)  # fish boxes
     _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)  # salt barrels
@@ -2679,8 +2702,8 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
     table_goods = {
         'TAILOR': ['FOLDED_CLOTH', 'FOLDED_CLOTH'],
         'BAKERY': ['BREAD_LOAF', 'BREAD_LOAF', 'DOUGH_BOWL'],
-        'BUTCHER': ['MEAT', 'MEAT_SMALL'],
-        'FISHERMAN': ['FISH', 'FISH', 'FOODPREP_CLUTTER'],
+        'BUTCHER': ['MEAT', 'MEAT_SMALL', 'MEAT'],
+        'FISHERMAN': ['FISH', 'FISH', 'FISH', 'FOODPREP_CLUTTER'],
         'JEWELER': ['BOTTLE_CLUSTER', 'BOTTLE', 'BOTTLE'],
         'BREWERY': ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'BOTTLE_CLUSTER'],
     }.get(arch)
@@ -2762,8 +2785,8 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
                    ['BREAD_LOAF', 'BREAD_LOAF']],
         'BREWERY': [['BOTTLE', 'BOTTLE'], ['PEWTER_TANKARD', 'PEWTER_TANKARD'],
                     ['BOTTLE_CLUSTER']],
-        'BUTCHER': [['MEAT'], ['CLAY_POT', 'CLAY_POT'],
-                    ['MEAT_SMALL', 'MEAT']],
+        'BUTCHER': [['MEAT', 'MEAT_SMALL'], ['MEAT_SMALL', 'MEAT'],
+                    ['MEAT', 'MEAT']],
         'TAILOR': [['FOLDED_CLOTH', 'FOLDED_CLOTH'],
                    ['FOLDED_CLOTH', 'FOLDED_CLOTH'],
                    ['BOOK_PILE_SMALL', 'FOLDED_CLOTH']],
@@ -2777,7 +2800,7 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
                             ['WOODEN_BOWL', 'WOODEN_BOWL'],
                             ['WOODEN_BOWL', 'CLAY_POT']],
         'FISHERMAN': [['FISH', 'FISH'], ['FISH', 'FISH'],
-                      ['CLAY_POT', 'FISH']],
+                      ['FISH', 'FISH', 'FISH']],
     }.get(arch)
     if not _tier_goods:
         return
