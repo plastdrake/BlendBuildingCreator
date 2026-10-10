@@ -2204,9 +2204,9 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         # ground floors stay at 2 big rooms (shop + workshop); upper floors
         # get at most 3 spacious multi-use bands. Falls back to the legacy
         # 2-room split when the stairwell leaves no room for more bands.
-        if fl_idx == 0 and (archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
-                                          'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER',
-                                          'FURNITURE_MAKER') or archetype.startswith('ARTISAN')):
+        if fl_idx == 0 and (effective_archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
+                                                 'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER',
+                                                 'FURNITURE_MAKER') or effective_archetype.startswith('ARTISAN')):
             _deep_target = 2
         else:
             _deep_target = 4 if D >= 16.8 else (3 if D >= 10.5 else 2)
