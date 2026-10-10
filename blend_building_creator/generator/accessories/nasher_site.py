@@ -309,6 +309,52 @@ def build_ramp_stairs(bm, width=4.4):
             _stair_flight(bm, y0, z0, y1, z1, width)
 
 
+def _in_boxes(x, y, boxes, margin):
+    for bx0, bx1, by0, by1 in boxes:
+        if (bx0 - margin <= x <= bx1 + margin) and (by0 - margin <= y <= by1 + margin):
+            return True
+    return False
+
+
+def _build_clipped_wall_run(bm, build_run, s, e, outward, boxes, top_z, thick, seed):
+    """Build a wall run clipped around building boxes with no pinhole gaps.
+
+    The run is split into quarters; pieces inside a box (0.3 margin) are dropped
+    while kept pieces extend 0.35 past their ends so consecutive runs overlap.
+    Every piece shares the loop-wide top elevation and reaches 1.5 m into the rock.
+    """
+    segs = []
+    for q in range(4):
+        t0, t1 = q / 4.0, (q + 1) / 4.0
+        mx = s[0] + (e[0] - s[0]) * (t0 + t1) * 0.5
+        my = s[1] + (e[1] - s[1]) * (t0 + t1) * 0.5
+        if not _in_boxes(mx, my, boxes, 0.30):
+            segs.append((t0, t1))
+    if not segs:
+        return
+    # Merge adjacent kept quarters, then extend each merged piece 0.35 past
+    # its ends so runs overlap instead of gapping.
+    merged = [segs[0]]
+    for t0, t1 in segs[1:]:
+        if abs(t0 - merged[-1][1]) < 1e-6:
+            merged[-1] = (merged[-1][0], t1)
+        else:
+            merged.append((t0, t1))
+    ln = math.hypot(e[0] - s[0], e[1] - s[1])
+    if ln < 0.8:
+        return
+    ux, uy = (e[0] - s[0]) / ln, (e[1] - s[1]) / ln
+    for t0, t1 in merged:
+        p0 = (s[0] + (e[0] - s[0]) * t0 - ux * 0.35, s[1] + (e[1] - s[1]) * t0 - uy * 0.35)
+        p1 = (s[0] + (e[0] - s[0]) * t1 + ux * 0.35, s[1] + (e[1] - s[1]) * t1 + uy * 0.35)
+        zs = ground_z(p0[0], p0[1])
+        ze = ground_z(p1[0], p1[1])
+        base_z = min(zs, ze) - 1.50
+        build_run(bm, p0, p1, outward, base_z, top_z - base_z, thick,
+                  slits=False, seed=seed)
+    return
+
+
 def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.98,
                     gate=True, gate_y=None, bld_boxes=()):
     """Crenellated retaining curtain wall along a plateau pad's rim, conforming to cliff terrain with fortified gate and portcullis."""
@@ -336,32 +382,25 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
             raised_portcullis=True
         )
 
-    # 2. Curtain wall runs along the plateau rim conforming to local ground_z
+    # 2. Curtain wall runs along the plateau rim: one level top everywhere,
+    # bases driven 1.5 m through the cliffs, clipped (never gapped) at buildings.
+    # The gate opening stays clear including the flanking gate towers.
+    top_z = max([ground_z(px, py) for px, py in pts]) + height
     for i in range(steps):
         s, e = pts[i], pts[i + 1]
         mid_x = (s[0] + e[0]) * 0.5
         mid_y = (s[1] + e[1]) * 0.5
         if abs(mid_x) < gap_x:
             continue
-        # Check clearance against building boxes to never block buildings
-        blocked = False
-        for bx0, bx1, by0, by1 in bld_boxes:
-            if (bx0 - 1.5 <= mid_x <= bx1 + 1.5) and (by0 - 1.5 <= mid_y <= by1 + 1.5):
-                blocked = True
-                break
-        if blocked:
+        if gate and eff_gate_y is not None and abs(mid_x) < 7.2 and abs(mid_y - eff_gate_y) < 6.0:
             continue
 
         ln = math.hypot(e[0] - s[0], e[1] - s[1])
         if ln < 0.8:
             continue
         outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
-        zs = ground_z(s[0], s[1])
-        ze = ground_z(e[0], e[1])
-        base_z = min(zs, ze) - 1.20
-        eff_h = height + (max(zs, ze) - min(zs, ze)) + 1.20
-        build_curtain_wall_run(bm, s, e, outward, base_z, eff_h, thick,
-                               slits=False, seed=i + int(base_z))
+        _build_clipped_wall_run(bm, build_curtain_wall_run, s, e, outward,
+                                bld_boxes, top_z, thick, seed=i + 7)
 
 
 def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(), tier=3):
@@ -384,19 +423,20 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         raised_portcullis=True
     )
 
-    # 2. Control waypoints tracing the perimeter along the cliff rims, shifted outwards to clear all buildings
+    # 2. Control waypoints tracing the perimeter along the cliff rims, shifted outwards to clear all buildings.
+    # The loop starts/ends clear of the gatehouse towers (outer faces at +-6.9).
     waypoints = [
         # Gate right flank (East arm of Terrace rim)
-        (2.8, -19.5),
+        (7.2, -19.5),
         (10.0, -19.0),
         (18.0, -18.2),
         (25.0, -16.8),
         (29.0, -13.5),
         # East terrace flank (shifted out to clear East Hall and East Flank Tower)
-        (35.5, -9.0),
-        (36.0, -3.0),
-        (35.5, 6.0),
-        (34.0, 13.0),
+        (37.5, -9.0),
+        (38.0, -3.0),
+        (37.5, 6.0),
+        (36.0, 13.0),
     ]
 
     if tier >= 3:
@@ -434,18 +474,18 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         (-35.5, 40.0),
         (-34.5, 33.0),
         # West flank outside West Connecting Wing and Great Hall
-        (-33.0, 24.0),
-        (-33.0, 14.0),
-        (-34.5, 5.0),
+        (-36.0, 24.0),
+        (-36.0, 14.0),
+        (-37.0, 5.0),
         # Passing outside West Flank Tower
-        (-35.5, -3.0),
-        (-35.5, -9.0),
-        # Return to gate left flank
+        (-38.0, -3.0),
+        (-37.5, -9.0),
+        # Return to gate left flank (clear of the gatehouse towers)
         (-29.0, -13.5),
         (-25.0, -16.8),
         (-18.0, -18.2),
         (-10.0, -19.0),
-        (-2.8, -19.5),
+        (-7.2, -19.5),
     ]
 
     pts = []
@@ -459,33 +499,19 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
             pts.append((p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t))
     pts.append(waypoints[-1])
 
+    # One level wall top everywhere (max terrain + height), bases 1.5 m into
+    # the rock, runs clipped around buildings with overlapping ends (no gaps).
+    top_z = max([ground_z(px, py) for px, py in pts]) + height
     for i in range(len(pts) - 1):
         s, e = pts[i], pts[i + 1]
-        mid_x = (s[0] + e[0]) * 0.5
-        mid_y = (s[1] + e[1]) * 0.5
-
-        # Check clearance against building boxes
-        blocked = False
-        for bx0, bx1, by0, by1 in bld_boxes:
-            if (bx0 - 1.2 <= mid_x <= bx1 + 1.2) and (by0 - 1.2 <= mid_y <= by1 + 1.2):
-                blocked = True
-                break
-        if blocked:
-            continue
 
         ln = math.hypot(e[0] - s[0], e[1] - s[1])
         if ln < 0.6:
             continue
 
         outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
-        zs = ground_z(s[0], s[1])
-        ze = ground_z(e[0], e[1])
-        base_z = min(zs, ze) - 1.20
-        eff_h = height + (max(zs, ze) - min(zs, ze)) + 1.20
-        build_curtain_wall_run(
-            bm, s, e, outward, base_z, eff_h, thick,
-            slits=False, seed=i + int(base_z * 7)
-        )
+        _build_clipped_wall_run(bm, build_curtain_wall_run, s, e, outward,
+                                bld_boxes, top_z, thick, seed=i + 101)
 
 
 # ---------------------------------------------------------------------------
@@ -652,8 +678,11 @@ def build_nasher_enclosure(bm, props, ctx):
         if tier == 1:
             pts = [(p[0], p[1]) for p in leg]
         else:
-            # Cut at radius + thick * 0.55 so the full width of the curtain wall stops at the tower outer face
-            pts = _trim_leg(leg, ca[:2], ca[2] + thick * 0.55, cb[:2], cb[2] + thick * 0.55)
+            # Embed the full wall width into the tower masonry (trim inside the
+            # tower wall, never short of its face) so no gap opens at the joint
+            # and no wall face survives inside the tower room (the tower wall
+            # is 0.6-0.75 thick solid stone, hiding the embed completely).
+            pts = _trim_leg(leg, ca[:2], max(0.5, ca[2] - 0.45), cb[:2], max(0.5, cb[2] - 0.45))
 
         if gate_leg:
             parts = (_pieces(pts[0], (-_GATE_SPAN, _GATE_Y))

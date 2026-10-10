@@ -457,6 +457,28 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                                            rotation=(0.0, 0.0, ang),
                                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
 
+            # Top-landing guard railing along the exposed outer edge, continuing
+            # the flight handrail line (posts + double rail with pyramid caps)
+            land_outer_lat = tow_lat_c - 0.50 + (t_w + 1.00) * 0.5 - 0.06
+            for post_du in (-0.60, 0.0, 0.60):
+                pl_x, pl_y = at(top_land_u + post_du, land_outer_lat)
+                create_beveled_box(bm, size=(post_size, post_size, rail_h + 0.08),
+                                   location=(pl_x, pl_y, top_z + (rail_h + 0.08) * 0.5),
+                                   rotation=(0.0, 0.0, ang),
+                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+                create_cone(bm, radius1=0.10, radius2=0.0, height=0.08, segments=4,
+                            location=(pl_x, pl_y, top_z + rail_h + 0.12),
+                            rotation=(0.0, 0.0, ang + math.pi * 0.25), mat_index=MAT_INDEX_TIMBER)
+            rl_x, rl_y = at(top_land_u, land_outer_lat)
+            create_beveled_box(bm, size=(1.35, 0.12, 0.08),
+                               location=(rl_x, rl_y, top_z + rail_h),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+            create_beveled_box(bm, size=(1.35, 0.08, 0.06),
+                               location=(rl_x, rl_y, top_z + rail_h * 0.5),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
             # Continuation flight railing
             n_tow_posts = 3
             for tpi in range(n_tow_posts):

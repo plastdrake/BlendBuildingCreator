@@ -125,20 +125,21 @@ def _post(bm, x, y, zf):
     _box(bm, x - 0.32, x + 0.32, y - 0.32, y + 0.32, zf + WALL_H - 0.3, zf + WALL_H, BEAM, long_axis=2)
 
 
-def _stair(bm, x_top, x_bot, z_top, z_bot):
+def _stair(bm, x_top, x_bot, z_top, z_bot, y0=None, y1=None):
     n = max(6, int(math.ceil((z_top - z_bot) / 0.2)))
     sgn = 1.0 if x_bot > x_top else -1.0
     run = abs(x_bot - x_top) / n
     rise = (z_top - z_bot) / n
+    sy0, sy1 = (STAIR_Y if y0 is None else (y0, y1))
     for i in range(n):
         top = z_top - (i + 1) * rise
         if top <= z_bot + 0.03:
             break
         xa = x_top + sgn * i * run
         xb = xa + sgn * run
-        _box(bm, min(xa, xb), max(xa, xb), STAIR_Y[0], STAIR_Y[1], z_bot, top, FLOOR)
-        for y0 in (STAIR_Y[0] - 0.2, STAIR_Y[1]):
-            _box(bm, min(xa, xb), max(xa, xb), y0, y0 + 0.2, z_bot, top + 0.9, BEAM, long_axis=2)
+        _box(bm, min(xa, xb), max(xa, xb), sy0, sy1, z_bot, top, FLOOR)
+        for yy0 in (sy0 - 0.2, sy1):
+            _box(bm, min(xa, xb), max(xa, xb), yy0, yy0 + 0.2, z_bot, top + 0.9, BEAM, long_axis=2)
 
 
 def _hole(i):
@@ -220,8 +221,10 @@ def _level(bm, i, zf, depart_hole):
     _wall(bm, False, X1, Y0, Y1, zf)
 
     # Two halls at the ends open onto the corridor; the central block holds four small rooms.
+    # On level 0 the east hall gains a second doorway where the Keep stair arrives.
     for hx in (-6.0, 6.0):
-        _wall(bm, False, hx, Y0, Y1, zf, doors=((38.0, 2.4),))
+        _hx_doors = ((38.0, 2.4),) + (((44.7, 1.8),) if (i == 0 and hx > 0.0) else ())
+        _wall(bm, False, hx, Y0, Y1, zf, doors=_hx_doors)
     centres = (-3.0, 3.0)
     _wall(bm, True, CORR_S, -6.0, 6.0, zf, doors=tuple((c, 1.6) for c in centres))
     _wall(bm, True, CORR_N, -6.0, 6.0, zf, doors=tuple((c, 1.6) for c in centres))
@@ -245,7 +248,6 @@ def _level(bm, i, zf, depart_hole):
 
 def build_nasher_dungeon(bm, tier):
     """Four walled underground levels with logical indoor stairs from the Keep."""
-    from ..interior import build_straight_staircase, build_stair_guardrail
     from .building_connector import carve_pass_through_portal
     levels = {1: 1, 2: 2}.get(tier, 4)
 
@@ -255,46 +257,52 @@ def build_nasher_dungeon(bm, tier):
         if i < levels - 1:
             _stair(bm, STAIRS[i][0], STAIRS[i][1], LEVEL_Z[i], LEVEL_Z[i + 1])
 
-    # 2. Ceiling slab over Level 0 with an open stairwell cutout under the Keep
-    # Sits flush at Z=13.2 (bottom at 13.2, top at 13.5), perfectly matching Level 0 walls (height 3.7 above 9.5)
-    # with 0 gap, and sits 0.5m safely below Citadel rock pad at 14.0 (no coplanar z-fighting).
-    stair_hole_keep = (-11.85, -10.15, 38.8, 46.6)
+    # 2. Ceiling slab over Level 0 with an open stairwell cutout under the Keep's
+    # rear stair hall (sits flush at Z=13.2/13.5, 0.5 m below the citadel pad).
+    stair_hole_keep = (0.35, 6.05, 43.9, 45.6)
     _slab(bm, 13.5, hole=stair_hole_keep)
 
     z_keep_floor = 14.95
 
     # 3. Clear shaft volume through rock / foundation
-    carve_pass_through_portal(bm, x_span=(-11.85, -10.15), y_span=(38.8, 46.6), z_span=(12.8, 15.3))
+    carve_pass_through_portal(bm, x_span=(0.35, 6.05), y_span=(43.9, 45.6), z_span=(12.8, 15.3))
 
     # Clean masonry shaft casing walls lining the opening
-    _box(bm, -12.15, -9.85, 46.6, 46.9, 13.2, z_keep_floor, WALL)
-    _box(bm, -10.15, -9.85, 38.8, 46.9, 13.2, z_keep_floor, WALL)
-    _box(bm, -12.15, -11.85, 38.8, 46.9, 13.2, z_keep_floor, WALL)
-    _box(bm, -12.15, -9.85, 38.5, 38.8, 13.2, z_keep_floor, WALL)
+    _box(bm, 0.05, 6.35, 45.6, 45.9, 13.2, z_keep_floor, WALL)
+    _box(bm, 0.05, 6.35, 43.6, 43.9, 13.2, z_keep_floor, WALL)
+    _box(bm, 0.05, 0.35, 43.6, 45.9, 13.2, z_keep_floor, WALL)
+    _box(bm, 6.05, 6.35, 43.6, 45.9, 13.2, z_keep_floor, WALL)
 
-    # 4. Logical indoor stairs descending from Keep Ground Floor (Z=14.95) into Level 0 (Z=9.5)
-    # Stair descends from Keep floor at Y=39.0 to West Hall floor at Y=45.8, far north of
-    # the corridor doorway at X=-6.0, Y=38.0 so the corridor passage is 100% unobstructed.
-    stair_w = 1.40
-    stair_cx = -10.90
-    build_straight_staircase(
-        bm,
-        start_pos=(stair_cx, 45.8, LEVEL_Z[0]),
-        target_z=z_keep_floor,
-        stair_width=stair_w,
-        stair_depth=6.8,
-        num_steps=26,
-        direction_y=-1
-    )
+    # 4. Straight stair flight along X in the rear hall: top step flush with the
+    # Keep floor at the west end, descending eastward into Level 0 and exiting
+    # through the new east-hall doorway (never facing a blank wall).
+    _stair(bm, 0.60, 5.50, z_keep_floor, LEVEL_Z[0], y0=44.05, y1=45.45)
 
-    # 5. Upper safety guard railings around the stairwell opening on the Keep floor (Z=14.95)
-    build_stair_guardrail(
-        bm,
-        rail_x=-10.05,
-        y_start=39.8,
-        y_end=46.8,
-        floor_z=z_keep_floor,
-        rail_h=0.95,
-        return_y=46.8,
-        x_start=-11.85
-    )
+    # 5. Timber guard railing around the stairwell opening on the Keep floor:
+    # both long sides plus the east end (entry is from the west at deck level).
+    from ..mesh_utils import create_beveled_box as _bb, create_cone as _cc
+    from ..materials import MAT_INDEX_TIMBER as _TM
+    for _gy in (43.9, 45.6):
+        for _gx in (0.9, 3.2, 5.5):
+            _bb(bm, size=(0.14, 0.14, 1.00),
+                location=(_gx, _gy, z_keep_floor + 0.50),
+                mat_index=_TM, bevel_amount=0.012)
+            _cc(bm, radius1=0.10, radius2=0.0, height=0.08, segments=4,
+                location=(_gx, _gy, z_keep_floor + 1.04),
+                rotation=(0.0, 0.0, math.pi * 0.25), mat_index=_TM)
+        _bb(bm, size=(5.20, 0.12, 0.08),
+            location=(3.20, _gy, z_keep_floor + 0.92),
+            mat_index=_TM, bevel_amount=0.01)
+        _bb(bm, size=(5.20, 0.08, 0.06),
+            location=(3.20, _gy, z_keep_floor + 0.47),
+            mat_index=_TM, bevel_amount=0.008)
+    for _gx in (0.9, 5.5):
+        _bb(bm, size=(0.14, 0.14, 1.00),
+            location=(_gx, 44.75, z_keep_floor + 0.50),
+            mat_index=_TM, bevel_amount=0.012)
+    _bb(bm, size=(0.12, 1.85, 0.08),
+        location=(6.05, 44.75, z_keep_floor + 0.92),
+        mat_index=_TM, bevel_amount=0.01)
+    _bb(bm, size=(0.08, 1.85, 0.06),
+        location=(6.05, 44.75, z_keep_floor + 0.47),
+        mat_index=_TM, bevel_amount=0.008)

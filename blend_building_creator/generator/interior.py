@@ -106,6 +106,43 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
     if sy_max < y_max - 0.02:
         add_floor_region(sx_min, sx_max, sy_max, y_max, floor_idx + 23)
 
+def _wood_beam(bm, size, location, bevel_amount=0.015):
+    """A ``create_beveled_box`` oak beam (MAT_INDEX_WOOD) re-unwrapped so the
+    plank grain runs ALONG the beam's length on every face.
+
+    The WOOD shader stretches fibers along U (unlike TIMBER's V), so this maps
+    U down the longest axis and V across it — the mirror of ``map_beam_uvs``.
+    Faces are tagged so the final world UV pass preserves the mapping.
+    Only ever used for horizontal beams here; pillars/post UVs elsewhere are
+    deliberately left untouched.
+    """
+    from .mesh_utils import create_beveled_box
+    faces = create_beveled_box(bm, size=size, location=location,
+                               mat_index=MAT_INDEX_WOOD, bevel_amount=bevel_amount)
+    dx, dy, dz = (float(size[0]), float(size[1]), float(size[2]))
+    long_ax = 0 if (dx >= dy and dx >= dz) else (1 if dy >= dz else 2)
+    shorts = [a for a in range(3) if a != long_ax]
+    ox, oy, oz = (float(location[0]), float(location[1]), float(location[2]))
+    uv = bm.loops.layers.uv.verify()
+    bm.normal_update()
+    for f in faces:
+        if not f.is_valid:
+            continue
+        f.tag = True
+        n = f.normal
+        la = (abs(n.x), abs(n.y), abs(n.z))
+        dom = 0 if (la[0] >= la[1] and la[0] >= la[2]) else (1 if la[1] >= la[2] else 2)
+        for loop in f.loops:
+            co = loop.vert.co
+            c = (co.x - ox, co.y - oy, co.z - oz)
+            if dom == long_ax:
+                loop[uv].uv = (c[shorts[0]] * 1.2, c[shorts[1]] * 1.2)
+            else:
+                v_ax = shorts[0] if dom == shorts[1] else shorts[1]
+                loop[uv].uv = (c[long_ax] * 0.40, c[v_ax] * 1.2)
+    return [f for f in faces if f.is_valid]
+
+
 def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, beam_w=0.14, beam_d=0.18, stair_hole=None):
     """
     Builds rustic timber cross-beams under the ceiling for that classic fantasy tavern interior.
@@ -124,11 +161,10 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
             sh_xmin, sh_xmax, sh_ymin, sh_ymax = stair_hole
             trimmer_len = (sh_ymax - sh_ymin) + 0.3
             trimmer_cy = (sh_ymin + sh_ymax) * 0.5
-            create_beveled_box(
+            _wood_beam(
                 bm,
                 size=(beam_w, trimmer_len, beam_d),
                 location=(sh_xmax, trimmer_cy, beam_cz),
-                mat_index=MAT_INDEX_WOOD,
                 bevel_amount=0.015
             )
 
@@ -144,22 +180,20 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
                     if sh_xmax < x_max - 0.3:
                         w = (x_max + 0.02) - sh_xmax
                         cx = sh_xmax + w * 0.5
-                        create_beveled_box(
+                        _wood_beam(
                             bm,
                             size=(w, beam_w, beam_d),
                             location=(cx, by, beam_cz),
-                            mat_index=MAT_INDEX_WOOD,
                             bevel_amount=0.015
                         )
                     # Also span beam on the left if there is floor on the left
                     if sh_xmin > x_min + 0.4:
                         w_left = sh_xmin - (x_min - 0.02)
                         cx_left = (x_min - 0.02) + w_left * 0.5
-                        create_beveled_box(
+                        _wood_beam(
                             bm,
                             size=(w_left, beam_w, beam_d),
                             location=(cx_left, by, beam_cz),
-                            mat_index=MAT_INDEX_WOOD,
                             bevel_amount=0.015
                         )
                     continue
@@ -167,11 +201,10 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
             # Full width beam � embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
             beam_length = (x_max - x_min) + 0.04
             beam_cx = (x_min + x_max) * 0.5
-            create_beveled_box(
+            _wood_beam(
                 bm,
                 size=(beam_length, beam_w, beam_d),
                 location=(beam_cx, by, beam_cz),
-                mat_index=MAT_INDEX_WOOD,
                 bevel_amount=0.015
             )
         return
@@ -186,11 +219,10 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
         trimmer_len = (sh_xmax - sh_xmin) + 0.3
         trimmer_cx = (sh_xmin + sh_xmax) * 0.5
         trim_edge = sh_ymax if (y_max - sh_ymax) >= (sh_ymin - y_min) else sh_ymin
-        create_beveled_box(
+        _wood_beam(
             bm,
             size=(trimmer_len, beam_w, beam_d),
             location=(trimmer_cx, trim_edge, beam_cz),
-            mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.015
         )
 
@@ -206,22 +238,20 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
                 if sh_ymax < y_max - 0.3:
                     h = (y_max + 0.02) - sh_ymax
                     cy = sh_ymax + h * 0.5
-                    create_beveled_box(
+                    _wood_beam(
                         bm,
                         size=(beam_w, h, beam_d),
                         location=(bx, cy, beam_cz),
-                        mat_index=MAT_INDEX_WOOD,
                         bevel_amount=0.015
                     )
                 # Also span beam on the near side if there is floor there
                 if sh_ymin > y_min + 0.4:
                     h_far = sh_ymin - (y_min - 0.02)
                     cy_far = (y_min - 0.02) + h_far * 0.5
-                    create_beveled_box(
+                    _wood_beam(
                         bm,
                         size=(beam_w, h_far, beam_d),
                         location=(bx, cy_far, beam_cz),
-                        mat_index=MAT_INDEX_WOOD,
                         bevel_amount=0.015
                     )
                 continue
@@ -229,11 +259,10 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
         # Full depth beam � embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
         beam_length = (y_max - y_min) + 0.04
         beam_cy = (y_min + y_max) * 0.5
-        create_beveled_box(
+        _wood_beam(
             bm,
             size=(beam_w, beam_length, beam_d),
             location=(bx, beam_cy, beam_cz),
-            mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.015
         )
 
@@ -1354,6 +1383,15 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     dw_w = 1.30
     dw_h = min(2.65, floor_h - 0.35)
 
+    def _holds_stair(rb):
+        if stair_hole is None:
+            return None
+        pad = 0.30
+        if rb[1] < stair_hole[0] - pad or rb[0] > stair_hole[1] + pad \
+                or rb[3] < stair_hole[2] - pad or rb[2] > stair_hole[3] + pad:
+            return None
+        return stair_hole
+
     # Grand manor plan: wide noble footprints use a dedicated 4-column grid
     # (full-depth stair hall + kitchen/pantry + banquet hall + library/study)
     # so rooms stay at sensible domestic sizes and the stairs never sit
@@ -1576,14 +1614,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     id=f"fl{fl_idx}_great_hall", floor_idx=fl_idx, role='GREAT_HALL',
                     bounds=(ix_min, split_x, iy_min, iy_max),
                     doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
-                    stair_hole=stair_hole,
+                    stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
                     exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
                 )
                 rm1 = Room(
                     id=f"fl{fl_idx}_archive", floor_idx=fl_idx, role='ARCHIVE',
                     bounds=(split_x, ix_max, iy_min, iy_max),
                     doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
-                    stair_hole=None,
+                    stair_hole=_holds_stair((split_x, ix_max, iy_min, iy_max)),
                     exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
                 )
                 rooms = [rm0, rm1]
@@ -1610,14 +1648,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 id=f"fl{fl_idx}_taproom", floor_idx=fl_idx, role='TAVERN_TAPROOM',
                 bounds=(ix_min, split_x, iy_min, iy_max),
                 doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=stair_hole,
+                stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
                 exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
             )
             rm1 = Room(
                 id=f"fl{fl_idx}_kitchen", floor_idx=fl_idx, role='KITCHEN',
                 bounds=(split_x, ix_max, iy_min, iy_max),
                 doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=None,
+                stair_hole=_holds_stair((split_x, ix_max, iy_min, iy_max)),
                 exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
             )
             rooms = [rm0, rm1]
@@ -1869,28 +1907,28 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     {'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w},
                     {'x': split_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w},
                 ],
-                stair_hole=stair_hole,
+                stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
                 exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
             )
             rm1 = Room(
                 id=f"fl{fl_idx}_chamber_1", floor_idx=fl_idx, role=roles[1],
                 bounds=(split_x, ix_max, iy_min, split_y1),
                 doorways=[{'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=None,
+                stair_hole=_holds_stair((split_x, ix_max, iy_min, split_y1)),
                 exterior_facades={'FRONT': (split_x, ix_max), 'RIGHT': (iy_min, split_y1)}
             )
             rm2 = Room(
                 id=f"fl{fl_idx}_chamber_2", floor_idx=fl_idx, role=roles[2],
                 bounds=(split_x, ix_max, split_y1, split_y2),
                 doorways=[{'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=None,
+                stair_hole=_holds_stair((split_x, ix_max, split_y1, split_y2)),
                 exterior_facades={'RIGHT': (split_y1, split_y2)}
             )
             rm3 = Room(
                 id=f"fl{fl_idx}_chamber_3", floor_idx=fl_idx, role=roles[3],
                 bounds=(split_x, ix_max, split_y2, iy_max),
                 doorways=[{'x': split_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=None,
+                stair_hole=_holds_stair((split_x, ix_max, split_y2, iy_max)),
                 exterior_facades={'BACK': (split_x, ix_max), 'RIGHT': (split_y2, iy_max)}
             )
             rooms = [rm0, rm1, rm2, rm3]
@@ -1927,21 +1965,21 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     {'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w},
                     {'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w}
                 ],
-                stair_hole=stair_hole,
+                stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
                 exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
             )
             rm1 = Room(
                 id=f"fl{fl_idx}_chamber_se", floor_idx=fl_idx, role=roles[1],
                 bounds=(split_x, ix_max, iy_min, split_y),
                 doorways=[{'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=None,
+                stair_hole=_holds_stair((split_x, ix_max, iy_min, split_y)),
                 exterior_facades={'FRONT': (split_x, ix_max), 'RIGHT': (iy_min, split_y)}
             )
             rm2 = Room(
                 id=f"fl{fl_idx}_chamber_ne", floor_idx=fl_idx, role=roles[2],
                 bounds=(split_x, ix_max, split_y, iy_max),
                 doorways=[{'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=None,
+                stair_hole=_holds_stair((split_x, ix_max, split_y, iy_max)),
                 exterior_facades={'BACK': (split_x, ix_max), 'RIGHT': (split_y, iy_max)}
             )
             rooms = [rm0, rm1, rm2]
@@ -1959,14 +1997,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 id=f"fl{fl_idx}_hall", floor_idx=fl_idx, role=roles[0],
                 bounds=(ix_min, split_x, iy_min, iy_max),
                 doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=stair_hole,
+                stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
                 exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
             )
             rm1 = Room(
                 id=f"fl{fl_idx}_chamber", floor_idx=fl_idx, role=roles[1],
                 bounds=(split_x, ix_max, iy_min, iy_max),
                 doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=None,
+                stair_hole=_holds_stair((split_x, ix_max, iy_min, iy_max)),
                 exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
             )
             rooms = [rm0, rm1]
@@ -2016,12 +2054,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                         role='CORRIDOR' if fl_idx == 0 else 'STAIR_LANDING',
                         bounds=(_hx0, _bay, iy_min, iy_max),
                         doorways=list(_bay_dw),
-                        stair_hole=stair_hole,
+                        stair_hole=_holds_stair((_hx0, _bay, iy_min, iy_max)),
                         exterior_facades={'FRONT': (_hx0, _bay),
                                           'BACK': (_hx0, _bay),
                                           'LEFT': (iy_min, iy_max)})
                     _hall.bounds = (_bay, _hx1, iy_min, iy_max)
-                    _hall.stair_hole = None
+                    _hall.stair_hole = _holds_stair((_bay, _hx1, iy_min, iy_max))
                     _hall.doorways = list(_hall.doorways) + list(_bay_dw)
                     if fl_idx > 0:
                         # The bay is the landing now, so the leftover hall
@@ -2075,14 +2113,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             id=f"fl{fl_idx}_front", floor_idx=fl_idx, role=front_role,
             bounds=(ix_min, ix_max, iy_min, split_y),
             doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-            stair_hole=stair_hole if (has_stairs_landing and not stair_guards_north) else None,
+            stair_hole=_holds_stair((ix_min, ix_max, iy_min, split_y)),
             exterior_facades={'FRONT': (ix_min, ix_max), 'LEFT': (iy_min, split_y), 'RIGHT': (iy_min, split_y)}
         )
         rm1 = Room(
             id=f"fl{fl_idx}_back", floor_idx=fl_idx, role=back_role,
             bounds=(ix_min, ix_max, split_y, iy_max),
             doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-            stair_hole=stair_hole if (has_stairs_landing and stair_guards_north) else None,
+            stair_hole=_holds_stair((ix_min, ix_max, split_y, iy_max)),
             exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (split_y, iy_max), 'RIGHT': (split_y, iy_max)}
         )
         rooms = [rm0, rm1]

@@ -303,8 +303,10 @@ def build_walkable_round_tower(
               offset=0.0, mat_index=MAT_INDEX_CUT_STONE, height=0.35, center=(cx, cy))
 
     if tower_type == 'SPIRE':
+        # Mage-tower trim: fascia disc + soffit + corbels sealing the eaves so
+        # no gap shows backfaces under the witch hat (finial stays plain iron).
         _witch_hat_roof(bm, cx, cy, z_top + 0.35, radius=corbel_r, height=spire_h,
-                        segments=segments, corbels=False, finial=False)
+                        segments=segments, corbels=True, finial=False)
         tip = z_top + 0.35 + spire_h
         create_cylinder(bm, radius=0.045, height=2.4, segments=8,
                         location=(cx, cy, tip + 1.0), mat_index=MAT_INDEX_IRON)

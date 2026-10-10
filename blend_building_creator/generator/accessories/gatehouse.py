@@ -434,9 +434,5 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
         build_battlement_run(bm, door_p1, c_ri, top_z + 0.09, height=0.82,
                              thickness=0.30, style='STONE')
 
-        # Terminal cut-stone piers flanking the stair opening
-        for dp in (door_p0, door_p1):
-            create_beveled_box(bm, size=(0.32, 0.32, 0.90),
-                               location=(dp[0], dp[1], top_z + 0.45),
-                               rotation=(0.0, 0.0, ang),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+        # (No terminal piers: the stair landing carries its own timber railing
+        # continuing the flight handrail line.)

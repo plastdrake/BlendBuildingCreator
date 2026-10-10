@@ -744,13 +744,14 @@ def build_connecting_wing(
         mat_index=wall_mat, bevel_amount=0.03
     )
 
-    # 2. INTERIOR STAIRCASE (Fully walkable climb between z_low and z_high)
-    n_steps = 28
+    # 2. INTERIOR STAIRCASE (Fully walkable climb between z_low and z_high).
+    # Full interior width (no side gaps to see the drop through) with nosing caps.
+    n_steps = 30
     stair_len = stair_y_end - stair_y_start
     stair_h = z_high - z_low
     step_run = stair_len / n_steps
     step_rise = stair_h / n_steps
-    stair_w = width - wall_t * 2 - 0.40
+    stair_w = width - wall_t * 2 - 0.06
     for i in range(n_steps):
         yc = stair_y_start + (i + 0.5) * step_run
         step_top = z_low + (i + 1) * step_rise
@@ -763,6 +764,15 @@ def build_connecting_wing(
             bm, size=(stair_w + 0.04, step_run + 0.06, 0.08),
             location=(cx, yc, step_top - 0.04),
             mat_index=trim_mat, bevel_amount=0.01
+        )
+    # Solid side stringers closing the stair edges (no see-through slots)
+    for s_side in (-1.0, 1.0):
+        str_x = cx + s_side * (stair_w * 0.5 + 0.02)
+        create_beveled_box(
+            bm, size=(0.10, stair_len + 0.10, stair_h + 1.30),
+            location=(str_x, (stair_y_start + stair_y_end) * 0.5,
+                      (z_low + z_high) * 0.5 - 0.55),
+            mat_index=timber_mat, bevel_amount=0.01
         )
     # Flanking handrails along the stair run
     stair_pitch = math.atan2(stair_h, stair_len)
@@ -799,29 +809,33 @@ def build_connecting_wing(
             mat_index=timber_mat, bevel_amount=0.015
         )
 
-        # Lower section windows
+        # Lower section windows: real carved openings with framed assemblies
+        # (no more glass patches pasted on solid walls)
+        from ..openings import build_window_assembly
         for wy in (y_start + 3.2, y_start + 7.8):
             wcz = z_low + 1.8
-            create_beveled_box(
-                bm, size=(wall_t + 0.08, 1.10, 1.60),
-                location=(wx, wy, wcz),
-                mat_index=MAT_INDEX_GLASS, bevel_amount=0.005
+            carve_pass_through_portal(
+                bm,
+                x_span=(wx - wall_t * 0.8, wx + wall_t * 0.8),
+                y_span=(wy - 0.65, wy + 0.65),
+                z_span=(wcz - 0.90, wcz + 0.90)
             )
-            create_beveled_box(
-                bm, size=(wall_t + 0.16, 1.34, 0.18),
-                location=(wx, wy, wcz - 0.85),
-                mat_index=trim_mat, bevel_amount=0.015
-            )
-            create_beveled_box(
-                bm, size=(wall_t + 0.16, 1.34, 0.22),
-                location=(wx, wy, wcz + 0.85),
-                mat_index=trim_mat, bevel_amount=0.015
+            build_window_assembly(
+                bm,
+                center=(wx, wy, wcz),
+                size=(1.10, 1.60),
+                wall_thickness=wall_t,
+                normal_axis=s_side * math.pi * 0.5,
+                has_shutters=True,
+                shutters_closed=False
             )
 
-        # B. Stair transition section walls (Raking masonry enclosure)
+        # B. Stair transition section walls (tall masonry enclosure rising to
+        # meet the upper roof over the stair zone)
+        stair_wall_h = (z_high + floor_h * 2.0) - z_low + 0.30
         create_beveled_box(
-            bm, size=(wall_t, stair_len, stair_h + floor_h * 1.6),
-            location=(wx, mid_stair_y, (z_low + z_high) * 0.5 + floor_h * 0.8),
+            bm, size=(wall_t, stair_len, stair_wall_h),
+            location=(wx, mid_stair_y, z_low + stair_wall_h * 0.5),
             mat_index=wall_mat, bevel_amount=0.02
         )
 
@@ -842,25 +856,26 @@ def build_connecting_wing(
             mat_index=timber_mat, bevel_amount=0.015
         )
 
-        # Upper section windows (or bridge door on east facade)
+        # Upper section windows (or bridge door on east facade): carved openings
+        # with framed assemblies
         for wy in (stair_y_end + 3.0, stair_y_end + 7.5):
             if has_bridge_door and s_side > 0 and abs(wy - bridge_door_y) < 2.0:
                 continue
             wcz = z_high + 1.8
-            create_beveled_box(
-                bm, size=(wall_t + 0.08, 1.10, 1.60),
-                location=(wx, wy, wcz),
-                mat_index=MAT_INDEX_GLASS, bevel_amount=0.005
+            carve_pass_through_portal(
+                bm,
+                x_span=(wx - wall_t * 0.8, wx + wall_t * 0.8),
+                y_span=(wy - 0.65, wy + 0.65),
+                z_span=(wcz - 0.90, wcz + 0.90)
             )
-            create_beveled_box(
-                bm, size=(wall_t + 0.16, 1.34, 0.18),
-                location=(wx, wy, wcz - 0.85),
-                mat_index=trim_mat, bevel_amount=0.015
-            )
-            create_beveled_box(
-                bm, size=(wall_t + 0.16, 1.34, 0.22),
-                location=(wx, wy, wcz + 0.85),
-                mat_index=trim_mat, bevel_amount=0.015
+            build_window_assembly(
+                bm,
+                center=(wx, wy, wcz),
+                size=(1.10, 1.60),
+                wall_thickness=wall_t,
+                normal_axis=s_side * math.pi * 0.5,
+                has_shutters=True,
+                shutters_closed=False
             )
 
         # Bridge door on east facade
@@ -883,7 +898,53 @@ def build_connecting_wing(
                     mat_index=trim_mat, bevel_amount=0.02
                 )
 
-    # 4. STEPPED GABLE SHINGLE ROOFS (Proper roof builder with flush abutments)
+    # Interior lining partitions covering the bare stone inside the passage:
+    # plaster panels with timber studwork, split around windows and doors.
+    def _line_section(s_side, y0, y1, z_deck, exclusions=()):
+        spans = [(y0, y1)]
+        for ex0, ex1 in exclusions:
+            nxt = []
+            for s0, s1 in spans:
+                if ex1 <= s0 or ex0 >= s1:
+                    nxt.append((s0, s1))
+                    continue
+                if ex0 - s0 >= 0.30:
+                    nxt.append((s0, ex0))
+                if s1 - ex1 >= 0.30:
+                    nxt.append((ex1, s1))
+            spans = nxt
+        lx = cx + s_side * (half_w - wall_t - 0.04)
+        for s0, s1 in spans:
+            create_beveled_box(
+                bm, size=(0.08, s1 - s0, 2.60),
+                location=(lx, (s0 + s1) * 0.5, z_deck + 1.30),
+                mat_index=MAT_INDEX_PLASTER_EXT, bevel_amount=0.008
+            )
+            for ex in (s0 + 0.10, s1 - 0.10):
+                create_beveled_box(
+                    bm, size=(0.12, 0.16, 2.60),
+                    location=(lx, ex, z_deck + 1.30),
+                    mat_index=timber_mat, bevel_amount=0.012
+                )
+        create_beveled_box(
+            bm, size=(0.12, y1 - y0, 0.16),
+            location=(lx, (y0 + y1) * 0.5, z_deck + 2.62),
+            mat_index=timber_mat, bevel_amount=0.012
+        )
+
+    for s_side in (-1.0, 1.0):
+        _line_section(s_side, y_start + 0.3, stair_y_start - 0.3, z_low,
+                      [(y_start + 3.2 - 0.85, y_start + 3.2 + 0.85),
+                       (y_start + 7.8 - 0.85, y_start + 7.8 + 0.85)])
+        _up_ex = [(stair_y_end + 3.0 - 0.85, stair_y_end + 3.0 + 0.85),
+                  (stair_y_end + 7.5 - 0.85, stair_y_end + 7.5 + 0.85)]
+        if has_bridge_door and s_side > 0:
+            _up_ex.append((bridge_door_y - 1.30, bridge_door_y + 1.30))
+        _line_section(s_side, stair_y_end + 0.3, deck_n - 0.3, z_high, _up_ex)
+    # 4. STEPPED GABLE SHINGLE ROOFS (proper roof builder, flush abutments).
+    # The upper roof runs all the way down over the stair zone so the middle
+    # of the wing is roofed; its front gable closes the step while the
+    # walkway stays open below (no blocking parapet wall across the path).
     from ..roof.gable_roof import build_gable_roof
     # Lower section gable roof (abuts South building facade flush with zero overhang)
     build_gable_roof(
@@ -901,12 +962,13 @@ def build_connecting_wing(
         gable_walls=True,
     )
 
-    # Upper section gable roof (abuts North building facade flush with zero overhang)
+    # Upper section gable roof (runs over the stair zone and abuts the North
+    # building facade flush with zero overhang)
     build_gable_roof(
         bm,
         x_min=cx - half_w,
         x_max=cx + half_w,
-        y_min=stair_y_end - 0.5,
+        y_min=stair_y_start,
         y_max=roof_n,
         z_base=z_high + floor_h * 2.0,
         roof_height=2.6,
@@ -917,13 +979,16 @@ def build_connecting_wing(
         gable_walls=True,
     )
 
-    # Stepped stone parapet gable wall connecting lower and upper roofs at the step
-    r_low_eave = z_low + floor_h * 2.0
-    r_high_ridge = z_high + floor_h * 2.0 + 2.6
+    # (No parapet block across the step: the front gable closes the roof while
+    # the walkway passes freely beneath it.)
+    # Step-closing wall panel on the south face between the lower ridge and
+    # the upper eave (high above head height: seals the envelope, never the path)
+    _step_lo = z_low + floor_h * 2.0 + 2.6
+    _step_hi = z_high + floor_h * 2.0
     create_beveled_box(
-        bm, size=(width + 0.60, 0.70, (r_high_ridge - r_low_eave) + 0.8),
-        location=(cx, stair_y_end, (r_low_eave + r_high_ridge) * 0.5),
-        mat_index=trim_mat, bevel_amount=0.03
+        bm, size=(width, 0.45, _step_hi - _step_lo),
+        location=(cx, stair_y_start, (_step_lo + _step_hi) * 0.5),
+        mat_index=wall_mat, bevel_amount=0.02
     )
 
     # 5. CONNECTION PORTALS AT BOTH BUILDING ENDS (straddling the wall planes,
@@ -1083,14 +1148,15 @@ def build_wooden_bridge(
     roof_mat=MAT_INDEX_SHINGLES,
 ):
     """
-    Constructs a cozy covered wooden trestle bridge spanning between the East Wing
+    Constructs an open-timbered trestle bridge spanning between the East Wing
     and the East Bluff Tower across the cliff chasm.
 
     Features:
     - Vertical braced timber trestle bents anchored in bedrock.
     - Heavy timber longitudinal stringers supporting an oak plank deck.
-    - Timber balustrades with diagonal X-braced railings.
-    - Cozy gabled shingle canopy roof with king-post trusses.
+    - Varied timber balustrades (X-brace bays alternate with baluster bays),
+      lantern king posts with pyramid finials, and hanging lanterns.
+    - Timber entry arch portals at both ends.
     - Fully walkable from East Wing to East Bluff Tower.
     """
     from .nasher_site import ground_z
@@ -1173,7 +1239,8 @@ def build_wooden_bridge(
             mat_index=timber_mat, bevel_amount=0.01
         )
 
-    # 4. TIMBER BALUSTRADES & HANDRAILS
+    # 4. TIMBER BALUSTRADES & HANDRAILS (varied bays: X-brace alternates with
+    # vertical balusters; every third post rises as a lantern king post)
     n_posts = max(4, int(span_len / 2.2))
     post_step = span_len / n_posts
     for side in (-1.0, 1.0):
@@ -1192,56 +1259,119 @@ def build_wooden_bridge(
         )
         for pi in range(n_posts + 1):
             px = x0 + pi * post_step
+            is_king = (pi % 3 == 0)
+            post_h = 2.30 if is_king else 1.15
             create_beveled_box(
-                bm, size=(0.16, 0.16, 2.70),
-                location=(px, py, floor_z + 1.35),
+                bm, size=(0.16, 0.16, post_h),
+                location=(px, py, floor_z + post_h * 0.5),
                 rotation=(0.0, 0.0, yaw),
                 mat_index=timber_mat, bevel_amount=0.01
             )
+            if is_king:
+                # Pyramid finial cap
+                create_cone(
+                    bm, radius1=0.13, radius2=0.0, height=0.16, segments=4,
+                    location=(px, py, floor_z + post_h + 0.08),
+                    rotation=(0.0, 0.0, yaw + math.pi * 0.25),
+                    mat_index=timber_mat
+                )
             if pi < n_posts:
                 mid_px = px + post_step * 0.5
-                create_beveled_box(
-                    bm, size=(post_step * 0.95, 0.06, 0.08),
-                    location=(mid_px, py, floor_z + 0.82),
-                    rotation=(0.0, 0.28, yaw),
-                    mat_index=timber_mat, bevel_amount=0.005
-                )
-                create_beveled_box(
-                    bm, size=(post_step * 0.95, 0.06, 0.08),
-                    location=(mid_px, py, floor_z + 0.82),
-                    rotation=(0.0, -0.28, yaw),
-                    mat_index=timber_mat, bevel_amount=0.005
-                )
+                if pi % 2 == 0:
+                    create_beveled_box(
+                        bm, size=(post_step * 0.95, 0.06, 0.08),
+                        location=(mid_px, py, floor_z + 0.82),
+                        rotation=(0.0, 0.28, yaw),
+                        mat_index=timber_mat, bevel_amount=0.005
+                    )
+                    create_beveled_box(
+                        bm, size=(post_step * 0.95, 0.06, 0.08),
+                        location=(mid_px, py, floor_z + 0.82),
+                        rotation=(0.0, -0.28, yaw),
+                        mat_index=timber_mat, bevel_amount=0.005
+                    )
+                else:
+                    for bi in range(3):
+                        bx = px + post_step * (0.25 + 0.25 * bi)
+                        create_beveled_box(
+                            bm, size=(0.07, 0.07, 0.95),
+                            location=(bx, py, floor_z + 0.62),
+                            rotation=(0.0, 0.0, yaw),
+                            mat_index=timber_mat, bevel_amount=0.005
+                        )
 
-    # 5. COZY COVERED SHINGLE ROOF CANOPY
-    eave_z = floor_z + 2.70
-    ridge_z = eave_z + 1.20
-    roof_w = width + 0.70
-    pitch_len = math.hypot(roof_w * 0.5, ridge_z - eave_z)
-    pitch_ang = math.atan2(ridge_z - eave_z, roof_w * 0.5)
-
-    for side in (-1.0, 1.0):
-        r_py = cy + side * (roof_w * 0.25)
+    # 5. OPEN SKY ABOVE (no roof): timber entry arch portals, hanging lanterns
+    for end_sign, ex in ((-1.0, x0), (1.0, x1)):
+        ey = y0 + dy * (ex - x0)
+        for side in (-1.0, 1.0):
+            gx = ex + dx * end_sign * 0.35
+            gy = ey + side * (half_w - 0.10)
+            create_beveled_box(
+                bm, size=(0.22, 0.22, 3.10),
+                location=(gx, gy, floor_z + 1.55),
+                rotation=(0.0, 0.0, yaw),
+                mat_index=timber_mat, bevel_amount=0.015
+            )
+            create_cone(
+                bm, radius1=0.16, radius2=0.0, height=0.20, segments=4,
+                location=(gx, gy, floor_z + 3.20),
+                rotation=(0.0, 0.0, yaw + math.pi * 0.25),
+                mat_index=timber_mat
+            )
+        # Crossbeam with knee braces framing the entry
         create_beveled_box(
-            bm, size=(span_len + 0.60, pitch_len, 0.12),
-            location=(cx, r_py, (eave_z + ridge_z) * 0.5),
-            rotation=(side * pitch_ang, 0.0, yaw),
-            mat_index=roof_mat, bevel_amount=0.015
-        )
-    create_beveled_box(
-        bm, size=(span_len + 0.70, 0.20, 0.18),
-        location=(cx, cy, ridge_z + 0.05),
-        rotation=(0.0, 0.0, yaw),
-        mat_index=timber_mat, bevel_amount=0.01
-    )
-    for pi in range(n_posts + 1):
-        px = x0 + pi * post_step
-        create_beveled_box(
-            bm, size=(0.14, width + 0.10, 0.18),
-            location=(px, cy, eave_z),
+            bm, size=(0.20, width + 0.30, 0.24),
+            location=(ex + dx * end_sign * 0.35, ey, floor_z + 2.95),
             rotation=(0.0, 0.0, yaw),
-            mat_index=timber_mat, bevel_amount=0.01
+            mat_index=timber_mat, bevel_amount=0.015
         )
+        for side in (-1.0, 1.0):
+            create_beveled_box(
+                bm, size=(0.12, 0.12, 1.10),
+                location=(ex + dx * end_sign * 0.75,
+                          ey + side * (half_w - 0.55), floor_z + 2.45),
+                rotation=(0.0, side * end_sign * 0.6, yaw),
+                mat_index=timber_mat, bevel_amount=0.01
+            )
+    # Lanterns on alternating king posts (timber arm + iron cage + glass core)
+    for side in (-1.0, 1.0):
+        py = cy + side * (half_w - 0.10)
+        for pi in range(n_posts + 1):
+            if pi % 3 != (0 if side < 0 else 1):
+                continue
+            if pi >= n_posts:
+                continue
+            px = x0 + pi * post_step
+            create_beveled_box(
+                bm, size=(0.50, 0.10, 0.10),
+                location=(px, py - side * 0.28, floor_z + 2.10),
+                rotation=(0.0, 0.0, yaw),
+                mat_index=timber_mat, bevel_amount=0.01
+            )
+            lx, ly = px, py - side * 0.48
+            create_beveled_box(
+                bm, size=(0.03, 0.03, 0.16),
+                location=(lx, ly, floor_z + 2.02),
+                rotation=(0.0, 0.0, yaw),
+                mat_index=MAT_INDEX_IRON, bevel_amount=0.004
+            )
+            for ox_, oz_, sz_ in ((-0.09, 0.0, (0.03, 0.16, 0.30)), (0.09, 0.0, (0.03, 0.16, 0.30)),
+                                  (0.0, 0.14, (0.21, 0.03, 0.30)), (0.0, -0.14, (0.21, 0.03, 0.30)),
+                                  (0.0, 0.17, (0.25, 0.05, 0.05)), (0.0, -0.05, (0.25, 0.25, 0.05))):
+                create_beveled_box(
+                    bm, size=sz_,
+                    location=(lx + ox_, ly, floor_z + 1.80 + oz_),
+                    rotation=(0.0, 0.0, yaw),
+                    mat_index=MAT_INDEX_IRON, bevel_amount=0.005
+                )
+            create_beveled_box(
+                bm, size=(0.11, 0.11, 0.22),
+                location=(lx, ly, floor_z + 1.80),
+                rotation=(0.0, 0.0, yaw),
+                mat_index=MAT_INDEX_GLASS, bevel_amount=0.005
+            )
+
+    # (No roof canopy: open sky above the walkway by design.)
 
 
 def chain_buildings(bm, building_nodes, links_spec):

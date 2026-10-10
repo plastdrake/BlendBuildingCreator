@@ -20,8 +20,9 @@ from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_TIMBER,
     MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_SHINGLES,
     MAT_INDEX_PLASTER_EXT, MAT_INDEX_IRON, MAT_INDEX_GLASS,
-    MAT_INDEX_FLOOR, MAT_INDEX_TARP, MAT_INDEX_WATER
+    MAT_INDEX_FLOOR, MAT_INDEX_TARP, MAT_INDEX_WATER, MAT_INDEX_DIRT
 )
+from ..poly import ring_slab
 from .furniture import build_barrel, build_crate, build_clay_pot
 
 
@@ -1234,21 +1235,29 @@ def build_estate_outbuildings(bm, props, ctx):
     # Outbuildings scale dramatically across tiers, culminating in a complete citadel mini-city in Tier 3!
     is_grand_plot = spread_x > 35.0
 
+    if is_grand_plot:
+        # Ring road circling the mount: every outbuilding stands just outside
+        # it with its entrance facing the road (toward the mount). Slots are
+        # identical in every tier: T1 builds the frontier subset in place, T2
+        # upgrades it, T3 completes the ring.
+        ring_slab(bm, r_in=54.0, r_out=62.0, z=0.06, segments=56, offset=0.0,
+                  mat_index=MAT_INDEX_DIRT, height=0.12, center=(0.0, 5.0))
+
+        def _road_rot(bx, by):
+            # Face the ring road (all outbuildings stand outside it, so facing
+            # the road == facing the mount centre): deterministic, never random.
+            return math.atan2(bx - 0.0, by - 5.0)
+
     if is_grand_plot and tier == 'TIER_3':
         # =========================================================================
-        # TIER 3: CITADEL MINI-CITY (Walled Medieval Town Inside the Bailey)
-        # Organic, creative layout: buildings hug the perimeter curtain walls in
-        # distinct functional medieval quarters, clearing a massive Cour d'Honneur.
+        # TIER 3: CITADEL MINI-CITY (ring slots shared with every tier: T1
+        # builds the frontier subset in place, T2 upgrades it, T3 completes it)
         # =========================================================================
-
-        def _inward_rot(bx, by):
-            # Rotates local -Y front entrance to face inward towards castle mount center (0, 5)
-            return math.atan2(bx - 0.0, by - 5.0)
 
         # --- 1. NORTH-WEST: PROVISIONS STORE ---
         if has_granary:
             p_gr = (-70.0, 22.0, 0.0)
-            build_estate_granary(bm, props, pos=p_gr, rot_z=_inward_rot(p_gr[0], p_gr[1]),
+            build_estate_granary(bm, props, pos=p_gr, rot_z=_road_rot(p_gr[0], p_gr[1]),
                                  tier=tier, width=16.0, depth=9.0, floors=2,
                                  extra_overrides={'wall_material_override': 'WOOD_PLANKS',
                                                   'plank_direction': 'HORIZONTAL',
@@ -1260,7 +1269,7 @@ def build_estate_outbuildings(bm, props, ctx):
         # --- 2. WEST: EQUESTRIAN STABLES ---
         if has_stable:
             p_st = (-74.0, -14.0, 0.0)
-            r_st = _inward_rot(p_st[0], p_st[1])
+            r_st = _road_rot(p_st[0], p_st[1])
             build_stable(bm, props, pos=p_st, rot_z=r_st,
                          tier=tier, width=22.0, depth=10.0,
                          extra_overrides={'wall_material_override': 'WOOD_PLANKS',
@@ -1273,46 +1282,54 @@ def build_estate_outbuildings(bm, props, ctx):
         # --- 3. SOUTH-WEST: TRAINING GROUNDS & ARCHERY YARD ---
         if has_training:
             p_tr = (-56.0, -48.0, 0.0)
-            build_estate_training_grounds(bm, pos=p_tr, rot_z=_inward_rot(p_tr[0], p_tr[1]),
+            build_estate_training_grounds(bm, pos=p_tr, rot_z=_road_rot(p_tr[0], p_tr[1]),
                                           tier=tier, width=28.0, depth=18.0)
 
         # --- 4. SOUTH-WEST FLANK: FORGE & ARMORY WORKSHOP ---
         if has_forge:
             p_fg = (-28.0, -68.0, 0.0)
-            build_estate_forge(bm, props, pos=p_fg, rot_z=_inward_rot(p_fg[0], p_fg[1]),
+            build_estate_forge(bm, props, pos=p_fg, rot_z=_road_rot(p_fg[0], p_fg[1]),
                                tier=tier, width=16.0, depth=9.0, floors=2,
                                extra_overrides={'wall_material_override': 'STUCCO',
-                                                'ground_floor_stone': True,
+                                                'ground_floor_stone': False,
+                                                'has_timber_framing': True,
+                                                'timber_diagonals': True,
                                                 'roof_material_override': 'SLATE',
                                                 'color_shingles': (0.22, 0.22, 0.24, 1.0)})
 
         # --- 5. SOUTH-EAST FLANK: GATE GUARDHOUSE ---
         if has_guardhouse:
             p_gh = (28.0, -68.0, 0.0)
-            build_guardhouse(bm, props, pos=p_gh, rot_z=_inward_rot(p_gh[0], p_gh[1]),
+            build_guardhouse(bm, props, pos=p_gh, rot_z=_road_rot(p_gh[0], p_gh[1]),
                              tier=tier, width=16.0, depth=8.5, floors=2,
                              extra_overrides={'wall_material_override': 'STUCCO',
-                                              'ground_floor_stone': True,
+                                              'ground_floor_stone': False,
+                                              'has_timber_framing': True,
+                                              'timber_diagonals': True,
                                               'roof_material_override': 'SLATE',
                                               'color_shingles': (0.20, 0.24, 0.28, 1.0)})
 
         # --- 6. SOUTH-EAST: CHAMBERLAIN RESIDENCE ---
         p_ch = (56.0, -48.0, 0.0)
-        build_retainer_house(bm, props, pos=p_ch, rot_z=_inward_rot(p_ch[0], p_ch[1]),
+        build_retainer_house(bm, props, pos=p_ch, rot_z=_road_rot(p_ch[0], p_ch[1]),
                              tier=tier, width=16.0, depth=9.0, floors=2, name="Chamberlain",
                              extra_overrides={'wall_material_override': 'STUCCO',
-                                              'ground_floor_stone': True,
+                                              'ground_floor_stone': False,
+                                              'has_timber_framing': True,
+                                              'timber_diagonals': True,
                                               'roof_material_override': 'TERRACOTTA',
                                               'color_shingles': (0.72, 0.32, 0.16, 1.0)})
 
         # --- 7. EAST: CASTELLAN MANOR / SERVANTS LODGE ---
         if has_servants:
             p_sv = (74.0, -14.0, 0.0)
-            r_sv = _inward_rot(p_sv[0], p_sv[1])
+            r_sv = _road_rot(p_sv[0], p_sv[1])
             build_retainer_house(bm, props, pos=p_sv, rot_z=r_sv,
                                  tier=tier, width=18.0, depth=10.0, floors=2, name="Castellan",
                                  extra_overrides={'wall_material_override': 'STUCCO',
-                                                  'ground_floor_stone': True,
+                                                  'ground_floor_stone': False,
+                                                  'has_timber_framing': True,
+                                                  'timber_diagonals': True,
                                                   'roof_material_override': 'TERRACOTTA',
                                                   'color_shingles': (0.68, 0.28, 0.14, 1.0)})
             servant_slot = (74.0, -14.0, r_sv, 18.0)
@@ -1320,10 +1337,12 @@ def build_estate_outbuildings(bm, props, ctx):
         # --- 8. NORTH-EAST: SANCTUARY CHANTRY CHAPEL ---
         if has_chapel:
             p_cp = (70.0, 22.0, 0.0)
-            build_estate_chapel(bm, props, pos=p_cp, rot_z=_inward_rot(p_cp[0], p_cp[1]),
+            build_estate_chapel(bm, props, pos=p_cp, rot_z=_road_rot(p_cp[0], p_cp[1]),
                                 tier=tier, width=15.0, depth=9.0, floors=1,
                                 extra_overrides={'wall_material_override': 'STUCCO',
-                                                 'ground_floor_stone': True,
+                                                 'ground_floor_stone': False,
+                                                 'has_timber_framing': True,
+                                                 'timber_diagonals': True,
                                                  'roof_material_override': 'SLATE',
                                                  'color_shingles': (0.20, 0.24, 0.28, 1.0)})
 
@@ -1337,15 +1356,12 @@ def build_estate_outbuildings(bm, props, ctx):
 
     if is_grand_plot and tier == 'TIER_2':
         # =========================================================================
-        # TIER 2: SEIGNORIAL CHATELET (Semi-Circle Arc Facing Inwards)
+        # TIER 2: SEIGNORIAL CHATELET (same ring slots as T1/T3: upgrades in place)
         # =========================================================================
-        def _inward_rot_t2(bx, by):
-            return math.atan2(bx - 0.0, by - 5.0)
-
         # Master Stables (20m x 10m) - Wood Planks
         if has_stable:
             p_st = (-74.0, -14.0, 0.0)
-            r_st = _inward_rot_t2(p_st[0], p_st[1])
+            r_st = _road_rot(p_st[0], p_st[1])
             build_stable(bm, props, pos=p_st, rot_z=r_st,
                          tier=tier, width=20.0, depth=10.0,
                          extra_overrides={'wall_material_override': 'WOOD_PLANKS',
@@ -1355,49 +1371,100 @@ def build_estate_outbuildings(bm, props, ctx):
         # Training Grounds (28m x 18m)
         if has_training:
             p_tr = (-56.0, -48.0, 0.0)
-            build_estate_training_grounds(bm, pos=p_tr, rot_z=_inward_rot_t2(p_tr[0], p_tr[1]),
+            build_estate_training_grounds(bm, pos=p_tr, rot_z=_road_rot(p_tr[0], p_tr[1]),
                                           tier=tier, width=28.0, depth=18.0)
 
-        # Armory Forge (13m x 7.5m) - Stucco
+        # Armory Forge (13m x 7.5m) - full stucco, Fachwerk timbers, no stone
         if has_forge:
             p_fg = (-28.0, -68.0, 0.0)
-            build_estate_forge(bm, props, pos=p_fg, rot_z=_inward_rot_t2(p_fg[0], p_fg[1]),
+            build_estate_forge(bm, props, pos=p_fg, rot_z=_road_rot(p_fg[0], p_fg[1]),
                                tier=tier, width=13.0, depth=7.5, floors=1,
                                extra_overrides={'wall_material_override': 'STUCCO',
-                                                'ground_floor_stone': True})
+                                                'ground_floor_stone': False,
+                                                'has_timber_framing': True,
+                                                'timber_diagonals': True})
 
-        # Gate Guardhouse (13.5m x 7m, 2 floors) - Stucco
+        # Gate Guardhouse (13.5m x 7m, 2 floors) - full stucco, no stone
         if has_guardhouse:
             p_gh = (28.0, -68.0, 0.0)
-            build_guardhouse(bm, props, pos=p_gh, rot_z=_inward_rot_t2(p_gh[0], p_gh[1]),
+            build_guardhouse(bm, props, pos=p_gh, rot_z=_road_rot(p_gh[0], p_gh[1]),
                              tier=tier, width=13.5, depth=7.0, floors=2,
                              extra_overrides={'wall_material_override': 'STUCCO',
-                                              'ground_floor_stone': True})
+                                              'ground_floor_stone': False,
+                                              'has_timber_framing': True,
+                                              'timber_diagonals': True})
 
-        # Retainers' Hall (16m x 8.5m, 2 floors) - Stucco
+        # Retainers' Hall (16m x 8.5m, 2 floors) - full stucco, no stone
         if has_servants:
             p_sv = (56.0, -48.0, 0.0)
-            r_sv = _inward_rot_t2(p_sv[0], p_sv[1])
+            r_sv = _road_rot(p_sv[0], p_sv[1])
             build_retainer_house(bm, props, pos=p_sv, rot_z=r_sv,
                                  tier=tier, width=16.0, depth=8.5, floors=2, name="Retainers",
                                  extra_overrides={'wall_material_override': 'STUCCO',
-                                                  'ground_floor_stone': True})
+                                                  'ground_floor_stone': False,
+                                                  'has_timber_framing': True,
+                                                  'timber_diagonals': True})
             servant_slot = (56.0, -48.0, r_sv, 16.0)
 
-        # Servants' Quarters (16m x 8m, 2 floors) - Stucco
+        # Servants' Quarters (16m x 8m, 2 floors) - full stucco, no stone
         p_sq = (74.0, -14.0, 0.0)
-        build_servant_quarters(bm, props, pos=p_sq, rot_z=_inward_rot_t2(p_sq[0], p_sq[1]),
+        build_servant_quarters(bm, props, pos=p_sq, rot_z=_road_rot(p_sq[0], p_sq[1]),
                                tier=tier, width=16.0, depth=8.0, floors=2,
                                extra_overrides={'wall_material_override': 'STUCCO',
-                                                'ground_floor_stone': True})
+                                                'ground_floor_stone': False,
+                                                'has_timber_framing': True,
+                                                'timber_diagonals': True})
 
-        # Granary (12m x 7m) - Wood Planks
+        # Granary (12m x 7m) - Wood Planks (same slot as Tier 3)
         if has_granary:
-            p_gr = (-70.0, 18.0, 0.0)
-            build_estate_granary(bm, props, pos=p_gr, rot_z=_inward_rot_t2(p_gr[0], p_gr[1]),
+            p_gr = (-70.0, 22.0, 0.0)
+            build_estate_granary(bm, props, pos=p_gr, rot_z=_road_rot(p_gr[0], p_gr[1]),
                                  tier=tier, width=12.0, depth=7.0, floors=1,
                                  extra_overrides={'wall_material_override': 'WOOD_PLANKS',
                                                   'ground_floor_stone': False})
+
+        if has_awnings:
+            _place_estate_awnings(bm, props, tier, spread_x, fore_y,
+                                  stable=stable_slot, servant=servant_slot)
+        return
+
+    if is_grand_plot and tier == 'TIER_1':
+        # =========================================================================
+        # TIER 1: FRONTIER RING (same ring slots as T2/T3: buildings stay put and
+        # upgrade in place; timber frontier styling, entrances on the ring road)
+        # =========================================================================
+        if has_stable:
+            p_st = (-74.0, -14.0, 0.0)
+            r_st = _road_rot(p_st[0], p_st[1])
+            build_stable(bm, props, pos=p_st, rot_z=r_st,
+                         tier=tier, width=16.0, depth=9.0,
+                         extra_overrides={'ground_floor_stone': False})
+            stable_slot = (-74.0, -14.0, r_st, 16.0)
+
+        if has_training:
+            p_tr = (-56.0, -48.0, 0.0)
+            build_estate_training_grounds(bm, pos=p_tr, rot_z=_road_rot(p_tr[0], p_tr[1]),
+                                           tier=tier, width=28.0, depth=18.0)
+
+        if has_forge:
+            p_fg = (-28.0, -68.0, 0.0)
+            build_estate_forge(bm, props, pos=p_fg, rot_z=_road_rot(p_fg[0], p_fg[1]),
+                               tier=tier, width=11.5, depth=6.5, floors=1,
+                               extra_overrides={'ground_floor_stone': False})
+
+        if has_guardhouse:
+            p_gh = (28.0, -68.0, 0.0)
+            build_guardhouse(bm, props, pos=p_gh, rot_z=_road_rot(p_gh[0], p_gh[1]),
+                             tier=tier, width=11.5, depth=6.5, floors=1,
+                             extra_overrides={'ground_floor_stone': False})
+
+        if has_servants:
+            p_sq = (74.0, -14.0, 0.0)
+            r_sq = _road_rot(p_sq[0], p_sq[1])
+            build_servant_quarters(bm, props, pos=p_sq, rot_z=r_sq,
+                                   tier=tier, width=12.0, depth=7.0, floors=1,
+                                   extra_overrides={'ground_floor_stone': False})
+            servant_slot = (74.0, -14.0, r_sq, 12.0)
 
         if has_awnings:
             _place_estate_awnings(bm, props, tier, spread_x, fore_y,

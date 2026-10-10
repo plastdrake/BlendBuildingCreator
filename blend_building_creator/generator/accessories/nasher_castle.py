@@ -31,15 +31,16 @@ _HALLS = (
 
 # x, y, radius, floors, spire_h, first_tier, rank, spire_roof. Every tower is walkable inside
 # (2 m wide wall stair), so none is thinner than 4.4 m; each stands against a building or rock outcrop.
+# Flank towers stand 1.3 m clear of the hall walls (vestibule spans the gap).
 _TOWERS = (
-    (-30.5, -8.0, 4.2, 4, 10.0, 2, 'major', False),
-    (30.5, -8.0, 4.2, 4, 10.0, 2, 'major', False),
+    (-32.0, -8.0, 4.2, 4, 10.0, 2, 'major', False),
+    (32.0, -8.0, 4.2, 4, 10.0, 2, 'major', False),
     (-27.6, 40.0, 4.2, 5, 14.0, 2, 'landmark', True),
     (48.0, 26.0, 4.4, 4, 10.0, 3, 'major', False),
 )
 
 
-def _hall_overrides(tier, w, d, floors, shape, facade, ww, wd, roof_h):
+def _hall_overrides(tier, w, d, floors, shape, facade, ww, wd, roof_h, hid=""):
     o = {
         'building_shape': shape,
         'num_floors': floors,
@@ -86,7 +87,10 @@ def _hall_overrides(tier, w, d, floors, shape, facade, ww, wd, roof_h):
     }
     if shape != 'RECTANGLE':
         o.update({'wing_placement': facade, 'wing_width': ww, 'wing_depth': wd,
-                  'wing_floors': max(1, floors - 1), 'wing_side': 'RIGHT'})
+                  'wing_floors': max(1, floors - 1),
+                  # East hall's wing sits on the free (west) side so it never
+                  # overlaps the east connecting wing.
+                  'wing_side': 'LEFT' if hid == 'east_hall' else 'RIGHT'})
     return o
 
 
@@ -103,7 +107,7 @@ def _build_halls(bm, props, tier):
         if first > tier:
             continue
         fl = _hall_floors(tier, floors, hid)
-        ov = _hall_overrides(tier, w, d, fl, shape, facade, ww, wd, rh * 1.3)
+        ov = _hall_overrides(tier, w, d, fl, shape, facade, ww, wd, rh * 1.3, hid)
         extra_doors = []
         if hid == "great_hall":
             # Floor 3 skybridge doorway on East facade (-X in world = RIGHT (+X) in local space)
@@ -220,9 +224,9 @@ def _build_towers(bm, registry, tier):
         # Direct door orientations connecting into adjacent buildings or bridge.
         # Flank towers aim their doors at the vestibule corridor (y=-4.2),
         # which lands inside both tower and hall footprints.
-        if abs(x - (-30.5)) < 1.0:
+        if abs(x - (-32.0)) < 1.0:
             door_angs = ((0, 1.178), (1, 1.178), (2, 1.178))
-        elif abs(x - 30.5) < 1.0:
+        elif abs(x - 32.0) < 1.0:
             door_angs = ((0, 1.9635), (1, 1.9635), (2, 1.9635))
         elif abs(x - (-27.6)) < 1.0:
             door_angs = ((0, 0.0), (1, 0.0))  # East-facing doorways connecting into Chapel
@@ -240,13 +244,13 @@ def _build_towers(bm, registry, tier):
 
         # Architectural connector vestibule tying the tower into the house facade.
         # Flank corridors run at y=-4.2 so they land inside both footprints.
-        if abs(x - (-30.5)) < 1.0:
+        if abs(x - (-32.0)) < 1.0:
             build_tower_building_connector(
                 bm, tower_cx=x, tower_cy=y, tower_r=r, tower_z_base=z,
                 bld_wall_x=-26.0, bld_y_span=(-5.0, 5.0),
                 floor_zs=(8.0, 11.7, 15.4), corridor_y=-4.2
             )
-        elif abs(x - 30.5) < 1.0:
+        elif abs(x - 32.0) < 1.0:
             build_tower_building_connector(
                 bm, tower_cx=x, tower_cy=y, tower_r=r, tower_z_base=z,
                 bld_wall_x=26.0, bld_y_span=(-5.0, 5.0),
@@ -338,7 +342,8 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
     if tier == 2:
         from .nasher_site import build_upper_citadel_perimeter_wall
         bld_forecourt = ((-29.0, -15.0, -39.5, -30.5), (15.0, 29.0, -39.5, -30.5))
-        bld_terrace = ((-26.0, -4.0, -5.0, 5.0), (4.0, 26.0, -5.0, 5.0))
+        bld_terrace = ((-26.0, -4.0, -5.0, 5.0), (4.0, 26.0, -5.0, 5.0),
+                       (-36.7, -27.3, -12.7, -3.3), (27.3, 36.7, -12.7, -3.3))
         build_rim_walls(bm, FORECOURT, 185.0, 355.0, height=3.0, thick=0.85, inset=0.98,
                         gate=True, bld_boxes=bld_forecourt)
         build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=bld_terrace, tier=2)
@@ -352,6 +357,7 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
             (12.0, 29.0, 34.5, 45.5),                               # Archive Hall
             (-33.0, -22.5, 35.0, 45.0),                             # Wizard's Spire
             (43.0, 53.0, 21.0, 31.0),                             # East Bluff Tower
+            (-36.7, -27.3, -12.7, -3.3), (27.3, 36.7, -12.7, -3.3),  # Flank Towers
         )
         build_rim_walls(bm, FORECOURT, 185.0, 355.0, height=3.0, thick=0.85, inset=0.98,
                         gate=True, bld_boxes=bld_forecourt)
