@@ -16,13 +16,17 @@ def apply_organic_shading(obj, angle_deg=42.0):
     Uses the Blender 4.1+ 'Smooth by Angle' operator, with a flat shade_smooth fallback.
     """
     try:
-        prev_active = bpy.context.view_layer.objects.active
-        bpy.context.view_layer.objects.active = obj
-        was_selected = obj.select_get()
-        obj.select_set(True)
-        bpy.ops.object.shade_auto_smooth(angle=math.radians(angle_deg))
-        obj.select_set(was_selected)
-        bpy.context.view_layer.objects.active = prev_active
+        if hasattr(bpy.context, 'view_layer') and obj.name in bpy.context.view_layer.objects:
+            prev_active = bpy.context.view_layer.objects.active
+            bpy.context.view_layer.objects.active = obj
+            was_selected = obj.select_get()
+            obj.select_set(True)
+            bpy.ops.object.shade_auto_smooth(angle=math.radians(angle_deg))
+            obj.select_set(was_selected)
+            bpy.context.view_layer.objects.active = prev_active
+        else:
+            for poly in obj.data.polygons:
+                poly.use_smooth = True
     except Exception:
         try:
             for poly in obj.data.polygons:

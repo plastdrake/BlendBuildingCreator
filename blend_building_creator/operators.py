@@ -213,7 +213,12 @@ class BUILDING_OT_apply_preset(bpy.types.Operator):
     
     def execute(self, context):
         props = context.scene.fantasy_building_settings
-        apply_preset(props, self.preset_key)
+        old_auto = getattr(props, 'auto_update', True)
+        props.auto_update = False
+        try:
+            apply_preset(props, self.preset_key)
+        finally:
+            props.auto_update = old_auto
         
         obj = context.active_object
         if obj and obj.get("is_fantasy_building", False):

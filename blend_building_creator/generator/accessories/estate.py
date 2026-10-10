@@ -179,7 +179,138 @@ _INHERITED = (
 )
 
 
-def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, preset_key=None):
+def cleanup_outbuilding_objects(host_obj):
+    """Remove any outbuilding child objects previously generated for host_obj."""
+    if not host_obj:
+        return
+    import bpy
+    # 1. Direct children tagged as outbuilding
+    for child in list(host_obj.children):
+        if child.get("is_castle_outbuilding", False) or child.get("is_estate_outbuilding", False):
+            m = child.data
+            bpy.data.objects.remove(child, do_unlink=True)
+            if m and m.users == 0:
+                bpy.data.meshes.remove(m)
+    # 2. Objects sharing the prefix in scene
+    prefix = f"{host_obj.name}_"
+    for o in list(bpy.data.objects):
+        if o != host_obj and o.name.startswith(prefix) and (o.get("is_castle_outbuilding", False) or o.get("is_estate_outbuilding", False)):
+            m = o.data
+            bpy.data.objects.remove(o, do_unlink=True)
+            if m and m.users == 0:
+                bpy.data.meshes.remove(m)
+
+
+def _create_detached_outbuilding(base_props, overrides, pos=(0.0, 0.0, 0.0), rot_z=0.0,
+                                preset_key=None, name="Outbuilding", host_obj=None):
+    """Generate an independent detached outbuilding as its own Blender object.
+    
+    The object gets its own mesh and material slots (using M_Outbuilding_ materials),
+    is placed in the active collection, positioned at pos / rot_z, and parented
+    to host_obj.
+    """
+    import bpy
+    from mathutils import Vector, Euler
+    from ..building import generate_building
+
+    col = None
+    if host_obj and host_obj.users_collection:
+        col = host_obj.users_collection[0]
+    if col is None:
+        col = bpy.context.collection or bpy.context.scene.collection
+
+    obj_name = f"{host_obj.name}_{name}" if host_obj else name
+    mesh_name = f"{obj_name}_Mesh"
+
+    mesh = bpy.data.meshes.new(mesh_name)
+    out_obj = bpy.data.objects.new(obj_name, mesh)
+    col.objects.link(out_obj)
+
+    out_obj.location = Vector(pos)
+    out_obj.rotation_euler = Euler((0.0, 0.0, rot_z), 'XYZ')
+    if host_obj:
+        out_obj.parent = host_obj
+        out_obj.matrix_parent_inverse = host_obj.matrix_world.inverted()
+
+    out_obj["is_fantasy_building"] = True
+    out_obj["is_castle_outbuilding"] = True
+    out_obj["is_estate_outbuilding"] = True
+
+    scene = bpy.data.scenes.new("_bbc_outhouse")
+    try:
+        op = scene.fantasy_building_settings
+        op.auto_update = False
+        op.building_archetype = 'NONE'
+        _is_stable = bool(preset_key) and str(preset_key).startswith('STABLE')
+        if preset_key:
+            try:
+                from ...presets import PRESETS, apply_preset
+                if preset_key in PRESETS:
+                    apply_preset(op, preset_key)
+                    op.auto_update = False
+                    op.building_archetype = 'STABLE' if _is_stable else 'NONE'
+            except Exception:
+                pass
+        op.material_tier = getattr(base_props, 'material_tier', 'TIER_1')
+        for _ck in _INHERITED:
+            if hasattr(base_props, _ck) and hasattr(op, _ck):
+                try:
+                    setattr(op, _ck, getattr(base_props, _ck))
+                except Exception:
+                    pass
+        for _fk in _OUTHOUSE_DISABLED:
+            if hasattr(op, _fk):
+                try:
+                    setattr(op, _fk, False)
+                except Exception:
+                    pass
+        for k, v in overrides.items():
+            try:
+                setattr(op, k, v)
+            except Exception:
+                try:
+                    op[k] = v
+                except Exception:
+                    pass
+
+        # Outbuildings must use authentic tier wall materials, NEVER ashlar stone!
+        # Tier 3: STUCCO, Tier 2: WOOD_PLANKS, Tier 1: LOGS / WATTLE_DAUB
+        op.ground_floor_stone = False
+        tier_val = getattr(op, 'material_tier', getattr(base_props, 'material_tier', 'TIER_1'))
+        current_wall = getattr(op, 'wall_material_override', 'AUTO')
+        if current_wall in ('AUTO', 'STONE'):
+            if tier_val == 'TIER_3':
+                op.wall_material_override = 'STUCCO'
+            elif tier_val == 'TIER_2':
+                op.wall_material_override = 'WOOD_PLANKS'
+            else:
+                from ..style import is_tier1_wattle_daub
+                t1_style = getattr(base_props, 'tier1_wall_style', 'AUTO')
+                if t1_style in ('LOGS', 'WATTLE_DAUB'):
+                    op.wall_material_override = t1_style
+                else:
+                    op.wall_material_override = 'WATTLE_DAUB' if is_tier1_wattle_daub(base_props) else 'LOGS'
+
+        if 'roof_material_override' in overrides and hasattr(op, 'color_shingles'):
+            rm = overrides['roof_material_override']
+            if 'color_shingles' in overrides:
+                op.color_shingles = overrides['color_shingles']
+            elif rm == 'TERRACOTTA':
+                op.color_shingles = (0.72, 0.32, 0.16, 1.0)
+            elif rm == 'WOOD_SHINGLES':
+                op.color_shingles = (0.40, 0.30, 0.22, 1.0)
+            elif rm == 'SLATE':
+                op.color_shingles = (0.20, 0.24, 0.28, 1.0)
+
+        generate_building(out_obj, op)
+    finally:
+        bpy.data.scenes.remove(scene)
+
+    return out_obj
+
+
+def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, preset_key=None,
+                              host_obj=None, name="Outbuilding"):
     """Generate a detached building with the real pipeline and merge it into ``bm``.
 
     Builds a genuine miniature building using :func:`generate_building` (same walls,
@@ -194,6 +325,12 @@ def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, pre
     preset (e.g. the dedicated STABLE barn presets), with ``overrides`` then tuning the
     footprint and the placement.
     """
+    if host_obj is not None:
+        return _create_detached_outbuilding(
+            base_props, overrides, pos=pos, rot_z=rot_z,
+            preset_key=preset_key, name=name, host_obj=host_obj
+        )
+
     import bpy
     from ..building import generate_building
 
@@ -312,7 +449,7 @@ def _stable_dims(tier):
 
 
 def build_stable(bm, props, pos=(-24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_1',
-                 width=None, depth=None, extra_overrides=None):
+                 width=None, depth=None, extra_overrides=None, host_obj=None):
     """Detached horse stable & carriage barn."""
     overrides = {}
     if width is not None:
@@ -321,15 +458,33 @@ def build_stable(bm, props, pos=(-24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_1',
         overrides['depth'] = depth
     if extra_overrides:
         overrides.update(extra_overrides)
-    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z,
-                              preset_key=_stable_key(tier))
     bw, bd = _stable_dims(tier)
     if width is not None:
         bw = width
     if depth is not None:
         bd = depth
-    t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
-    _build_stable_yard(bm, t, bw, bd, tier)
+
+    if host_obj is not None:
+        out_obj = _create_detached_outbuilding(
+            props, overrides, pos=pos, rot_z=rot_z,
+            preset_key=_stable_key(tier), name="Stables", host_obj=host_obj
+        )
+        try:
+            import bmesh
+            out_bm = bmesh.new()
+            out_bm.from_mesh(out_obj.data)
+            _build_stable_yard(out_bm, Matrix.Identity(4), bw, bd, tier)
+            out_bm.to_mesh(out_obj.data)
+            out_bm.free()
+            out_obj.data.update()
+        except Exception:
+            pass
+        return out_obj
+    else:
+        _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z,
+                                  preset_key=_stable_key(tier))
+        t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+        _build_stable_yard(bm, t, bw, bd, tier)
 
 
 def build_stable_yard_for_building(bm, props, ctx):
@@ -479,7 +634,7 @@ def _build_stable_yard(bm, t, barn_w, barn_d, tier):
 
 def build_servant_quarters(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_1',
                            width=12.0, depth=7.0, floors=2, floor_h=2.7,
-                           extra_overrides=None):
+                           extra_overrides=None, host_obj=None):
     """Detached servant lodge / steward residence, generated with the main building pipeline."""
     overrides = {
         'building_shape': 'RECTANGLE',
@@ -531,11 +686,18 @@ def build_servant_quarters(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='T
     }
     if extra_overrides:
         overrides.update(extra_overrides)
-    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+    if host_obj is not None:
+        return _create_detached_outbuilding(
+            props, overrides, pos=pos, rot_z=rot_z,
+            name="Servants_Quarters", host_obj=host_obj
+        )
+    else:
+        _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
 
 
 def build_guardhouse(bm, props, pos=(24.0, -28.0, 0.0), rot_z=0.0, tier='TIER_1',
-                     width=10.5, depth=6.5, floors=1, floor_h=2.8, extra_overrides=None):
+                     width=10.5, depth=6.5, floors=1, floor_h=2.8, extra_overrides=None,
+                     host_obj=None):
     """Detached gate guardhouse & watch lodge."""
     is_t3 = tier == 'TIER_3'
     is_t1 = tier == 'TIER_1'
@@ -590,19 +752,40 @@ def build_guardhouse(bm, props, pos=(24.0, -28.0, 0.0), rot_z=0.0, tier='TIER_1'
     }
     if extra_overrides:
         overrides.update(extra_overrides)
-    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
-    try:
-        from .military_props import build_weapon_rack
-        t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
-        rw_pos = t @ Vector((-width * 0.28, -depth * 0.5 - 0.75, 0.0))
-        nrm = t.to_3x3() @ Vector((0.0, -1.0, 0.0))
-        build_weapon_rack(bm, rw_pos.x, rw_pos.y, 0.0, normal=(nrm.x, nrm.y, 0.0))
-    except Exception:
-        pass
+    if host_obj is not None:
+        out_obj = _create_detached_outbuilding(
+            props, overrides, pos=pos, rot_z=rot_z,
+            name="Gate_Guardhouse", host_obj=host_obj
+        )
+        try:
+            from .military_props import build_weapon_rack
+            import bmesh
+            out_bm = bmesh.new()
+            out_bm.from_mesh(out_obj.data)
+            rw_pos = Vector((-width * 0.28, -depth * 0.5 - 0.75, 0.0))
+            nrm = Vector((0.0, -1.0, 0.0))
+            build_weapon_rack(out_bm, rw_pos.x, rw_pos.y, 0.0, normal=(nrm.x, nrm.y, 0.0))
+            out_bm.to_mesh(out_obj.data)
+            out_bm.free()
+            out_obj.data.update()
+        except Exception:
+            pass
+        return out_obj
+    else:
+        _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+        try:
+            from .military_props import build_weapon_rack
+            t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+            rw_pos = t @ Vector((-width * 0.28, -depth * 0.5 - 0.75, 0.0))
+            nrm = t.to_3x3() @ Vector((0.0, -1.0, 0.0))
+            build_weapon_rack(bm, rw_pos.x, rw_pos.y, 0.0, normal=(nrm.x, nrm.y, 0.0))
+        except Exception:
+            pass
 
 
 def build_estate_forge(bm, props, pos=(-24.0, -28.0, 0.0), rot_z=0.0, tier='TIER_1',
-                       width=10.5, depth=6.5, floors=1, floor_h=2.8, extra_overrides=None):
+                       width=10.5, depth=6.5, floors=1, floor_h=2.8, extra_overrides=None,
+                       host_obj=None):
     """Detached estate armory & blacksmith forge."""
     is_t3 = tier == 'TIER_3'
     is_t1 = tier == 'TIER_1'
@@ -647,34 +830,73 @@ def build_estate_forge(bm, props, pos=(-24.0, -28.0, 0.0), rot_z=0.0, tier='TIER
     }
     if extra_overrides:
         overrides.update(extra_overrides)
-    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
-    try:
-        t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
-        anv_loc = t @ Vector((width * 0.25, -depth * 0.5 - 1.25, 0.0))
-        create_cylinder(bm, radius=0.34, height=0.58, segments=16,
-                        location=(anv_loc.x, anv_loc.y, 0.29), mat_index=MAT_INDEX_TIMBER)
-        ang_z = rot_z + 0.3
-        create_beveled_box(bm, size=(0.58, 0.26, 0.28),
-                           location=(anv_loc.x, anv_loc.y, 0.58 + 0.14),
-                           rotation=(0.0, 0.0, ang_z),
-                           mat_index=MAT_INDEX_IRON, bevel_amount=0.015)
-        ax = math.cos(ang_z)
-        ay = math.sin(ang_z)
-        horn_pos = anv_loc + Vector((ax * 0.36, ay * 0.36, 0.58 + 0.14))
-        create_cone(bm, radius1=0.09, radius2=0.015, height=0.22, segments=12,
-                    location=horn_pos,
-                    rotation=(0.0, 1.5708, ang_z),
-                    mat_index=MAT_INDEX_IRON)
-        tub_loc = t @ Vector((width * 0.25 + 1.10, -depth * 0.5 - 1.30, 0.0))
-        build_barrel(bm, x=tub_loc.x, y=tub_loc.y, z_ground=0.0, radius=0.36, height=0.75)
-        crate_loc = t @ Vector((width * 0.25 - 1.05, -depth * 0.5 - 1.20, 0.0))
-        build_crate(bm, x=crate_loc.x, y=crate_loc.y, z_ground=0.0, size=0.60, height=0.52)
-    except Exception:
-        pass
+    if host_obj is not None:
+        out_obj = _create_detached_outbuilding(
+            props, overrides, pos=pos, rot_z=rot_z,
+            name="Forge", host_obj=host_obj
+        )
+        try:
+            import bmesh
+            from ..materials import MAT_INDEX_TIMBER, MAT_INDEX_IRON
+            from ..mesh_utils import create_cylinder, create_beveled_box, create_cone
+            from .furniture import build_barrel, build_crate
+            out_bm = bmesh.new()
+            out_bm.from_mesh(out_obj.data)
+            anv_loc = Vector((width * 0.25, -depth * 0.5 - 1.25, 0.0))
+            create_cylinder(out_bm, radius=0.34, height=0.58, segments=16,
+                            location=(anv_loc.x, anv_loc.y, 0.29), mat_index=MAT_INDEX_TIMBER)
+            ang_z = 0.3
+            create_beveled_box(out_bm, size=(0.58, 0.26, 0.28),
+                               location=(anv_loc.x, anv_loc.y, 0.58 + 0.14),
+                               rotation=(0.0, 0.0, ang_z),
+                               mat_index=MAT_INDEX_IRON, bevel_amount=0.015)
+            ax = math.cos(ang_z)
+            ay = math.sin(ang_z)
+            horn_pos = anv_loc + Vector((ax * 0.36, ay * 0.36, 0.58 + 0.14))
+            create_cone(out_bm, radius1=0.09, radius2=0.015, height=0.22, segments=12,
+                        location=horn_pos,
+                        rotation=(0.0, 1.5708, ang_z),
+                        mat_index=MAT_INDEX_IRON)
+            tub_loc = Vector((width * 0.25 + 1.10, -depth * 0.5 - 1.30, 0.0))
+            build_barrel(out_bm, x=tub_loc.x, y=tub_loc.y, z_ground=0.0, radius=0.36, height=0.75)
+            crate_loc = Vector((width * 0.25 - 1.05, -depth * 0.5 - 1.20, 0.0))
+            build_crate(out_bm, x=crate_loc.x, y=crate_loc.y, z_ground=0.0, size=0.60, height=0.52)
+            out_bm.to_mesh(out_obj.data)
+            out_bm.free()
+            out_obj.data.update()
+        except Exception:
+            pass
+        return out_obj
+    else:
+        _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+        try:
+            t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+            anv_loc = t @ Vector((width * 0.25, -depth * 0.5 - 1.25, 0.0))
+            create_cylinder(bm, radius=0.34, height=0.58, segments=16,
+                            location=(anv_loc.x, anv_loc.y, 0.29), mat_index=MAT_INDEX_TIMBER)
+            ang_z = rot_z + 0.3
+            create_beveled_box(bm, size=(0.58, 0.26, 0.28),
+                               location=(anv_loc.x, anv_loc.y, 0.58 + 0.14),
+                               rotation=(0.0, 0.0, ang_z),
+                               mat_index=MAT_INDEX_IRON, bevel_amount=0.015)
+            ax = math.cos(ang_z)
+            ay = math.sin(ang_z)
+            horn_pos = anv_loc + Vector((ax * 0.36, ay * 0.36, 0.58 + 0.14))
+            create_cone(bm, radius1=0.09, radius2=0.015, height=0.22, segments=12,
+                        location=horn_pos,
+                        rotation=(0.0, 1.5708, ang_z),
+                        mat_index=MAT_INDEX_IRON)
+            tub_loc = t @ Vector((width * 0.25 + 1.10, -depth * 0.5 - 1.30, 0.0))
+            build_barrel(bm, x=tub_loc.x, y=tub_loc.y, z_ground=0.0, radius=0.36, height=0.75)
+            crate_loc = t @ Vector((width * 0.25 - 1.05, -depth * 0.5 - 1.20, 0.0))
+            build_crate(bm, x=crate_loc.x, y=crate_loc.y, z_ground=0.0, size=0.60, height=0.52)
+        except Exception:
+            pass
 
 
 def build_estate_granary(bm, props, pos=(-28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_1',
-                         width=9.5, depth=6.0, floors=1, floor_h=2.8, extra_overrides=None):
+                         width=9.5, depth=6.0, floors=1, floor_h=2.8, extra_overrides=None,
+                         host_obj=None):
     """Detached estate granary & provisions storehouse."""
     overrides = {
         'building_shape': 'RECTANGLE',
@@ -715,19 +937,41 @@ def build_estate_granary(bm, props, pos=(-28.0, 8.0, 0.0), rot_z=0.0, tier='TIER
     }
     if extra_overrides:
         overrides.update(extra_overrides)
-    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
-    try:
-        t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
-        c1 = t @ Vector((-width * 0.30, -depth * 0.5 - 0.70, 0.0))
-        build_crate(bm, x=c1.x, y=c1.y, z_ground=0.0, size=0.55, height=0.50)
-        c2 = t @ Vector((-width * 0.30 + 0.60, -depth * 0.5 - 0.65, 0.0))
-        build_barrel(bm, x=c2.x, y=c2.y, z_ground=0.0, radius=0.30, height=0.68)
-    except Exception:
-        pass
+    if host_obj is not None:
+        out_obj = _create_detached_outbuilding(
+            props, overrides, pos=pos, rot_z=rot_z,
+            name="Granary", host_obj=host_obj
+        )
+        try:
+            import bmesh
+            from .furniture import build_barrel, build_crate
+            out_bm = bmesh.new()
+            out_bm.from_mesh(out_obj.data)
+            c1 = Vector((-width * 0.30, -depth * 0.5 - 0.70, 0.0))
+            build_crate(out_bm, x=c1.x, y=c1.y, z_ground=0.0, size=0.55, height=0.50)
+            c2 = Vector((-width * 0.30 + 0.60, -depth * 0.5 - 0.65, 0.0))
+            build_barrel(out_bm, x=c2.x, y=c2.y, z_ground=0.0, radius=0.30, height=0.68)
+            out_bm.to_mesh(out_obj.data)
+            out_bm.free()
+            out_obj.data.update()
+        except Exception:
+            pass
+        return out_obj
+    else:
+        _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+        try:
+            t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+            c1 = t @ Vector((-width * 0.30, -depth * 0.5 - 0.70, 0.0))
+            build_crate(bm, x=c1.x, y=c1.y, z_ground=0.0, size=0.55, height=0.50)
+            c2 = t @ Vector((-width * 0.30 + 0.60, -depth * 0.5 - 0.65, 0.0))
+            build_barrel(bm, x=c2.x, y=c2.y, z_ground=0.0, radius=0.30, height=0.68)
+        except Exception:
+            pass
 
 
 def build_estate_chapel(bm, props, pos=(28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_3',
-                        width=10.5, depth=6.5, floors=1, floor_h=3.6, extra_overrides=None):
+                        width=10.5, depth=6.5, floors=1, floor_h=3.6, extra_overrides=None,
+                        host_obj=None):
     """Detached estate chantry chapel & treasury (consecrated private sanctuary)."""
     overrides = {
         'building_shape': 'RECTANGLE',
@@ -764,33 +1008,67 @@ def build_estate_chapel(bm, props, pos=(28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_3
     }
     if extra_overrides:
         overrides.update(extra_overrides)
-    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
-    try:
-        t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
-        # Front arched stone bell-cote / sanctus bell turret over entrance gable
-        z_ridge = 0.75 + floor_h + 3.4
-        create_beveled_box(bm, size=(1.20, 0.45, 1.40),
-                           location=(t @ Vector((0.0, 0.0, z_ridge + 0.70))),
-                           rotation=(0.0, 0.0, rot_z),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03)
-        create_cylinder(bm, radius=0.22, height=0.35, segments=16,
-                        location=(t @ Vector((0.0, 0.0, z_ridge + 0.65))),
-                        rotation=(1.5708, 0.0, rot_z),
-                        mat_index=MAT_INDEX_IRON)
-        # Stone steps leading to chapel arched entrance
-        create_beveled_box(bm, size=(2.40, 0.85, 0.22),
-                           location=(t @ Vector((0.0, -depth * 0.5 - 0.42, 0.11))),
-                           rotation=(0.0, 0.0, rot_z),
-                           mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
-        create_beveled_box(bm, size=(2.10, 0.65, 0.22),
-                           location=(t @ Vector((0.0, -depth * 0.5 - 0.25, 0.33))),
-                           rotation=(0.0, 0.0, rot_z),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-    except Exception:
-        pass
+    if host_obj is not None:
+        out_obj = _create_detached_outbuilding(
+            props, overrides, pos=pos, rot_z=rot_z,
+            name="Chapel", host_obj=host_obj
+        )
+        try:
+            import bmesh
+            from ..materials import MAT_INDEX_CUT_STONE, MAT_INDEX_STONE, MAT_INDEX_IRON
+            from ..mesh_utils import create_beveled_box, create_cylinder
+            out_bm = bmesh.new()
+            out_bm.from_mesh(out_obj.data)
+            z_ridge = 0.75 + floor_h + 3.4
+            create_beveled_box(out_bm, size=(1.20, 0.45, 1.40),
+                               location=(0.0, 0.0, z_ridge + 0.70),
+                               rotation=(0.0, 0.0, 0.0),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03)
+            create_cylinder(out_bm, radius=0.22, height=0.35, segments=16,
+                            location=(0.0, 0.0, z_ridge + 0.65),
+                            rotation=(1.5708, 0.0, 0.0),
+                            mat_index=MAT_INDEX_IRON)
+            create_beveled_box(out_bm, size=(2.40, 0.85, 0.22),
+                               location=(0.0, -depth * 0.5 - 0.42, 0.11),
+                               rotation=(0.0, 0.0, 0.0),
+                               mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+            create_beveled_box(out_bm, size=(2.10, 0.65, 0.22),
+                               location=(0.0, -depth * 0.5 - 0.25, 0.33),
+                               rotation=(0.0, 0.0, 0.0),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+            out_bm.to_mesh(out_obj.data)
+            out_bm.free()
+            out_obj.data.update()
+        except Exception:
+            pass
+        return out_obj
+    else:
+        _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+        try:
+            t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+            z_ridge = 0.75 + floor_h + 3.4
+            create_beveled_box(bm, size=(1.20, 0.45, 1.40),
+                               location=(t @ Vector((0.0, 0.0, z_ridge + 0.70))),
+                               rotation=(0.0, 0.0, rot_z),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03)
+            create_cylinder(bm, radius=0.22, height=0.35, segments=16,
+                            location=(t @ Vector((0.0, 0.0, z_ridge + 0.65))),
+                            rotation=(1.5708, 0.0, rot_z),
+                            mat_index=MAT_INDEX_IRON)
+            create_beveled_box(bm, size=(2.40, 0.85, 0.22),
+                               location=(t @ Vector((0.0, -depth * 0.5 - 0.42, 0.11))),
+                               rotation=(0.0, 0.0, rot_z),
+                               mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+            create_beveled_box(bm, size=(2.10, 0.65, 0.22),
+                               location=(t @ Vector((0.0, -depth * 0.5 - 0.25, 0.33))),
+                               rotation=(0.0, 0.0, rot_z),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+        except Exception:
+            pass
 
 def build_tenement_building(bm, props, pos=(24.0, 10.0, 0.0), rot_z=0.0, tier='TIER_3',
-                            width=24.0, depth=11.0, floors=3, floor_h=3.4, extra_overrides=None):
+                            width=24.0, depth=11.0, floors=3, floor_h=3.4, extra_overrides=None,
+                            host_obj=None):
     """Substantial multi-storey tenement block for castle servants, craftsmen, or garrison."""
     overrides = {
         'building_shape': 'RECTANGLE',
@@ -836,13 +1114,19 @@ def build_tenement_building(bm, props, pos=(24.0, 10.0, 0.0), rot_z=0.0, tier='T
     }
     if extra_overrides:
         overrides.update(extra_overrides)
-    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+    if host_obj is not None:
+        return _create_detached_outbuilding(
+            props, overrides, pos=pos, rot_z=rot_z,
+            name="Tenement", host_obj=host_obj
+        )
+    else:
+        _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
 
 
 
 def build_retainer_house(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_3',
                          width=15.5, depth=9.0, floors=2, floor_h=3.4, name="Castellan",
-                         extra_overrides=None):
+                         extra_overrides=None, host_obj=None):
     """Dignified upscale 2-storey manor residence for a key castle retainer (Castellan, High Steward, Chamberlain)."""
     overrides = {
         'building_shape': 'RECTANGLE',
@@ -892,7 +1176,13 @@ def build_retainer_house(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='TIE
     }
     if extra_overrides:
         overrides.update(extra_overrides)
-    _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
+    if host_obj is not None:
+        return _create_detached_outbuilding(
+            props, overrides, pos=pos, rot_z=rot_z,
+            name=name or "Retainer_House", host_obj=host_obj
+        )
+    else:
+        _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
 
 
 def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='TIER_3',
@@ -1217,7 +1507,7 @@ def _place_estate_awnings(bm, props, tier, spread_x, fore_y, stable=None, servan
         _stock_shelter(bm, cx, cy, 1.0 if cx >= 0.0 else -1.0)
 
 
-def build_estate_outbuildings(bm, props, ctx):
+def build_estate_outbuildings(bm, props, ctx, host_obj=None):
     """
     High-level orchestrator called during architectural accessories dispatch.
     Places the detached stables, servant quarters, guardhouse, forge, granary,
@@ -1236,6 +1526,12 @@ def build_estate_outbuildings(bm, props, ctx):
 
     if not (has_stable or has_servants or has_guardhouse or has_forge or has_granary or has_chapel or has_training or has_fountain or has_awnings):
         return
+
+    if host_obj is None:
+        import bpy
+        host_obj = getattr(ctx, 'host_obj', None) or bpy.context.active_object
+    if host_obj is not None:
+        cleanup_outbuilding_objects(host_obj)
 
     spread_x = getattr(props, 'outbuilding_offset_x', 24.0)
     fore_y = getattr(props, 'outbuilding_offset_y', -10.0)
@@ -1285,7 +1581,8 @@ def build_estate_outbuildings(bm, props, ctx):
                                                   'has_timber_framing': True,
                                                   'timber_diagonals': True,
                                                   'roof_material_override': 'SLATE',
-                                                  'color_shingles': (0.20, 0.24, 0.28, 1.0)})
+                                                  'color_shingles': (0.20, 0.24, 0.28, 1.0)},
+                                 host_obj=host_obj)
 
         # --- 2. SOUTH-EAST: EQUESTRIAN STABLES ---
         if has_stable:
@@ -1298,7 +1595,8 @@ def build_estate_outbuildings(bm, props, ctx):
                                           'has_timber_framing': True,
                                           'timber_diagonals': True,
                                           'roof_material_override': 'TERRACOTTA',
-                                          'color_shingles': (0.68, 0.28, 0.14, 1.0)})
+                                          'color_shingles': (0.68, 0.28, 0.14, 1.0)},
+                         host_obj=host_obj)
             stable_slot = (p_st[0], p_st[1], r_st, 22.0)
 
         # --- 3. SOUTH-WEST: TRAINING GROUNDS & ARCHERY YARD ---
@@ -1317,7 +1615,8 @@ def build_estate_outbuildings(bm, props, ctx):
                                               'has_timber_framing': True,
                                               'timber_diagonals': True,
                                               'roof_material_override': 'SLATE',
-                                              'color_shingles': (0.20, 0.24, 0.28, 1.0)})
+                                              'color_shingles': (0.20, 0.24, 0.28, 1.0)},
+                             host_obj=host_obj)
 
         # --- 5. WEST FLANK: FORGE & ARMORY WORKSHOP ---
         if has_forge:
@@ -1329,7 +1628,8 @@ def build_estate_outbuildings(bm, props, ctx):
                                                 'has_timber_framing': True,
                                                 'timber_diagonals': True,
                                                 'roof_material_override': 'SLATE',
-                                                'color_shingles': (0.22, 0.22, 0.24, 1.0)})
+                                                'color_shingles': (0.22, 0.22, 0.24, 1.0)},
+                               host_obj=host_obj)
 
         # --- 6. EAST LOWER: CASTELLAN MANOR / SERVANTS LODGE ---
         if has_servants:
@@ -1342,7 +1642,8 @@ def build_estate_outbuildings(bm, props, ctx):
                                                   'has_timber_framing': True,
                                                   'timber_diagonals': True,
                                                   'roof_material_override': 'TERRACOTTA',
-                                                  'color_shingles': (0.68, 0.28, 0.14, 1.0)})
+                                                  'color_shingles': (0.68, 0.28, 0.14, 1.0)},
+                                 host_obj=host_obj)
             servant_slot = (p_sv[0], p_sv[1], r_sv, 18.0)
 
         # --- 7. EAST UPPER: CHAMBERLAIN RESIDENCE ---
@@ -1354,7 +1655,8 @@ def build_estate_outbuildings(bm, props, ctx):
                                               'has_timber_framing': True,
                                               'timber_diagonals': True,
                                               'roof_material_override': 'TERRACOTTA',
-                                              'color_shingles': (0.72, 0.32, 0.16, 1.0)})
+                                              'color_shingles': (0.72, 0.32, 0.16, 1.0)},
+                             host_obj=host_obj)
 
         # --- 8. NORTH-EAST: SANCTUARY CHANTRY CHAPEL ---
         if has_chapel:
@@ -1366,7 +1668,8 @@ def build_estate_outbuildings(bm, props, ctx):
                                                  'has_timber_framing': True,
                                                  'timber_diagonals': True,
                                                  'roof_material_override': 'SLATE',
-                                                 'color_shingles': (0.20, 0.24, 0.28, 1.0)})
+                                                 'color_shingles': (0.20, 0.24, 0.28, 1.0)},
+                                host_obj=host_obj)
 
         # --- 9. COURTYARD AWNINGS & SUPPLY STORES ---
         if has_awnings:
@@ -1385,7 +1688,8 @@ def build_estate_outbuildings(bm, props, ctx):
             build_stable(bm, props, pos=p_st, rot_z=r_st,
                          tier=tier, width=20.0, depth=10.0,
                          extra_overrides={'wall_material_override': 'WOOD_PLANKS',
-                                          'ground_floor_stone': False})
+                                          'ground_floor_stone': False},
+                         host_obj=host_obj)
             stable_slot = (p_st[0], p_st[1], r_st, 20.0)
 
         # Training Grounds (28m x 18m) (South-West corner)
@@ -1402,7 +1706,8 @@ def build_estate_outbuildings(bm, props, ctx):
                              extra_overrides={'wall_material_override': 'WOOD_PLANKS',
                                               'ground_floor_stone': False,
                                               'has_timber_framing': True,
-                                              'timber_diagonals': True})
+                                              'timber_diagonals': True},
+                             host_obj=host_obj)
 
         # Armory Forge (13m x 7.5m) (West flank)
         if has_forge:
@@ -1412,7 +1717,8 @@ def build_estate_outbuildings(bm, props, ctx):
                                extra_overrides={'wall_material_override': 'WOOD_PLANKS',
                                                 'ground_floor_stone': False,
                                                 'has_timber_framing': True,
-                                                'timber_diagonals': True})
+                                                'timber_diagonals': True},
+                               host_obj=host_obj)
 
         # Retainers' Hall (16m x 8.5m, 2 floors) (East lower bailey)
         if has_servants:
@@ -1423,7 +1729,8 @@ def build_estate_outbuildings(bm, props, ctx):
                                  extra_overrides={'wall_material_override': 'WOOD_PLANKS',
                                                   'ground_floor_stone': False,
                                                   'has_timber_framing': True,
-                                                  'timber_diagonals': True})
+                                                  'timber_diagonals': True},
+                                 host_obj=host_obj)
             servant_slot = (p_sv[0], p_sv[1], r_sv, 16.0)
 
         # Servants' Quarters (16m x 8m, 2 floors) (East upper bailey)
@@ -1433,7 +1740,8 @@ def build_estate_outbuildings(bm, props, ctx):
                                extra_overrides={'wall_material_override': 'WOOD_PLANKS',
                                                 'ground_floor_stone': False,
                                                 'has_timber_framing': True,
-                                                'timber_diagonals': True})
+                                                'timber_diagonals': True},
+                               host_obj=host_obj)
 
         # Granary (12m x 7m) - Wood Planks (North-West)
         if has_granary:
@@ -1441,7 +1749,8 @@ def build_estate_outbuildings(bm, props, ctx):
             build_estate_granary(bm, props, pos=p_gr, rot_z=_inward_rot(p_gr[0], p_gr[1]),
                                  tier=tier, width=12.0, depth=7.0, floors=1,
                                  extra_overrides={'wall_material_override': 'WOOD_PLANKS',
-                                                  'ground_floor_stone': False})
+                                                  'ground_floor_stone': False},
+                                 host_obj=host_obj)
 
         if has_awnings:
             _place_estate_awnings(bm, props, tier, spread_x, fore_y,
@@ -1463,7 +1772,8 @@ def build_estate_outbuildings(bm, props, ctx):
             build_stable(bm, props, pos=p_st, rot_z=r_st,
                          tier=tier, width=16.0, depth=9.0,
                          extra_overrides={'wall_material_override': t1_wall_mat,
-                                          'ground_floor_stone': False})
+                                          'ground_floor_stone': False},
+                         host_obj=host_obj)
             stable_slot = (p_st[0], p_st[1], r_st, 16.0)
 
         # Training Grounds & Archery Yard (South-West corner)
@@ -1478,7 +1788,8 @@ def build_estate_outbuildings(bm, props, ctx):
             build_guardhouse(bm, props, pos=p_gh, rot_z=_inward_rot(p_gh[0], p_gh[1]),
                              tier=tier, width=11.5, depth=6.5, floors=1,
                              extra_overrides={'wall_material_override': t1_wall_mat,
-                                              'ground_floor_stone': False})
+                                              'ground_floor_stone': False},
+                             host_obj=host_obj)
 
         # Servants' Quarters (East lower bailey)
         if has_servants:
@@ -1487,7 +1798,8 @@ def build_estate_outbuildings(bm, props, ctx):
             build_servant_quarters(bm, props, pos=p_sq, rot_z=r_sq,
                                    tier=tier, width=12.0, depth=7.0, floors=1,
                                    extra_overrides={'wall_material_override': t1_wall_mat,
-                                                    'ground_floor_stone': False})
+                                                    'ground_floor_stone': False},
+                                   host_obj=host_obj)
             servant_slot = (p_sq[0], p_sq[1], r_sq, 12.0)
 
         # Armory Forge (East upper bailey)
@@ -1496,7 +1808,8 @@ def build_estate_outbuildings(bm, props, ctx):
             build_estate_forge(bm, props, pos=p_fg, rot_z=_inward_rot(p_fg[0], p_fg[1]),
                                tier=tier, width=11.5, depth=6.5, floors=1,
                                extra_overrides={'wall_material_override': t1_wall_mat,
-                                                'ground_floor_stone': False})
+                                                'ground_floor_stone': False},
+                               host_obj=host_obj)
 
         if has_awnings:
             _place_estate_awnings(bm, props, tier, spread_x, fore_y,
@@ -1514,7 +1827,7 @@ def build_estate_outbuildings(bm, props, ctx):
         st_w = 16.0 if is_grand_plot else None
         st_d = 9.0 if is_grand_plot else None
         build_stable(bm, props, pos=(st_x, st_y, 0.0), rot_z=st_rot, tier=tier,
-                     width=st_w, depth=st_d)
+                     width=st_w, depth=st_d, host_obj=host_obj)
         stable_slot = (st_x, st_y, st_rot, st_w if st_w else _stable_dims(tier)[0])
 
     # 3. Servant Quarters / Steward Lodge
@@ -1528,7 +1841,7 @@ def build_estate_outbuildings(bm, props, ctx):
         sq_fl = 2 if (tier in ('TIER_2', 'TIER_3') or is_grand_plot) else 1
         build_servant_quarters(
             bm, props, pos=(sq_x, sq_y, 0.0), rot_z=sq_rot, tier=tier,
-            width=sq_w, depth=sq_d, floors=sq_fl
+            width=sq_w, depth=sq_d, floors=sq_fl, host_obj=host_obj
         )
         servant_slot = (sq_x, sq_y, sq_rot, sq_w)
 
@@ -1541,7 +1854,8 @@ def build_estate_outbuildings(bm, props, ctx):
         gh_fl = 2 if tier == 'TIER_3' else 1
         build_guardhouse(
             bm, props, pos=(gh_x, gh_y, 0.0), rot_z=gh_rot, tier=tier,
-            width=11.5 if is_grand_plot else 10.0, depth=6.5, floors=gh_fl
+            width=11.5 if is_grand_plot else 10.0, depth=6.5, floors=gh_fl,
+            host_obj=host_obj
         )
 
     # 5. Estate Armory & Forge
@@ -1553,7 +1867,8 @@ def build_estate_outbuildings(bm, props, ctx):
         fg_fl = 1
         build_estate_forge(
             bm, props, pos=(fg_x, fg_y, 0.0), rot_z=fg_rot, tier=tier,
-            width=11.0 if is_grand_plot else 10.0, depth=6.5, floors=fg_fl
+            width=11.0 if is_grand_plot else 10.0, depth=6.5, floors=fg_fl,
+            host_obj=host_obj
         )
 
     # 6. Estate Granary & Provisions Storehouse
@@ -1564,7 +1879,7 @@ def build_estate_outbuildings(bm, props, ctx):
         gn_rot = -math.pi * 0.5 * gn_sgn
         build_estate_granary(
             bm, props, pos=(gn_x, gn_y, 0.0), rot_z=gn_rot, tier=tier,
-            width=9.5, depth=6.0, floors=1
+            width=9.5, depth=6.0, floors=1, host_obj=host_obj
         )
 
     # 7. Estate Chantry Chapel & Treasury
@@ -1575,7 +1890,8 @@ def build_estate_outbuildings(bm, props, ctx):
         ch_rot = -math.pi * 0.5 * ch_sgn
         build_estate_chapel(
             bm, props, pos=(ch_x, ch_y, 0.0), rot_z=ch_rot, tier=tier,
-            width=11.0 if tier == 'TIER_3' else 9.5, depth=6.5, floors=1
+            width=11.0 if tier == 'TIER_3' else 9.5, depth=6.5, floors=1,
+            host_obj=host_obj
         )
 
     # 8. Estate Training Grounds & Archery Yard

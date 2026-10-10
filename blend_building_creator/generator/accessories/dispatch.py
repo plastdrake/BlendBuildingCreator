@@ -365,7 +365,7 @@ def build_architectural_accessories(bm, props, ctx):
 def _build_estate_grounds(bm, props, ctx):
     """Procedurally construct detached outbuildings and courtyard fountain."""
     from .estate import build_estate_outbuildings
-    build_estate_outbuildings(bm, props, ctx)
+    build_estate_outbuildings(bm, props, ctx, host_obj=getattr(ctx, 'host_obj', None))
 
 
 def _place_banners(bm, props, ctx):

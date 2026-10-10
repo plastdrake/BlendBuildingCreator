@@ -96,6 +96,7 @@ def generate_building(obj, props):
         return
 
     ctx = _create_building_context(props)
+    ctx.host_obj = obj
     _build_foundation(bm, props, ctx)
     build_floors(bm, props, ctx)
     loft_spec = build_roof_and_attic(bm, props, ctx)
@@ -111,11 +112,15 @@ def _build_castle_citadel_building(obj, bm, props):
     walkable spiral staircases, great ballroom, flat stone ramparts with merlons,
     and complete subterranean dungeons and wine cellar.
     """
+    from .accessories.estate import cleanup_outbuilding_objects
+    cleanup_outbuilding_objects(obj)
+
     ctx = _create_building_context(props)
+    ctx.host_obj = obj
     from .accessories.castle import build_modular_castle_citadel
     build_modular_castle_citadel(bm, props, ctx)
     from .accessories.estate import build_estate_outbuildings
-    build_estate_outbuildings(bm, props, ctx)
+    build_estate_outbuildings(bm, props, ctx, host_obj=obj)
     from .accessories.dispatch import _build_plot_fortifications
     _build_plot_fortifications(bm, props, ctx)
     _finalize_building(obj, bm, props, ctx)
