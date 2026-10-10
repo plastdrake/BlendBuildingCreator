@@ -114,10 +114,40 @@ def _ramp(x, y):
     return 0.0, 0.0
 
 
+def _connector_wing_corridor(x, y, z):
+    """Caps bedrock height under the West and East connecting wings so the stairs and floors are 100% clear."""
+    for cx, y_max in ((-14.5, 33.5), (16.5, 36.5)):
+        dx = abs(x - cx)
+        if dx > 4.4:
+            continue
+        if not (3.5 <= y <= y_max + 1.0):
+            continue
+        wx = 1.0 - _smooth((dx - 3.4) / 1.0)
+        wy = 1.0
+        if y < 4.5:
+            wy = _smooth((y - 3.5) / 1.0)
+        elif y > y_max:
+            wy = 1.0 - _smooth((y - y_max) / 1.0)
+        w = wx * wy
+        if w <= 0.0:
+            continue
+        if y <= 15.0:
+            fl_z = 8.86
+        elif y >= 24.0:
+            fl_z = 14.86
+        else:
+            fl_z = 8.86 + 6.0 * (y - 15.0) / 9.0
+        z_target = fl_z - 0.60
+        if z > z_target:
+            z = z + (z_target - z) * w
+    return z
+
+
 def _mesh_z(spec, x, y):
     z = _height(spec, x, y)
     w, zr = _ramp(x, y)
-    return z + (zr - z) * w if w > 0.0 else z
+    z = z + (zr - z) * w if w > 0.0 else z
+    return _connector_wing_corridor(x, y, z)
 
 
 def ground_z(x, y):
@@ -128,7 +158,8 @@ def ground_z(x, y):
             continue
         best = max(best, _height(spec, x, y))
     w, zr = _ramp(x, y)
-    return best + (zr - best) * w if w > 0.0 else best
+    best = best + (zr - best) * w if w > 0.0 else best
+    return _connector_wing_corridor(x, y, best)
 
 
 def pad_point(spec, angle, inset=0.97):
@@ -249,7 +280,7 @@ def build_citadel_mount(bm):
             rr = _outline(spec, a) * (0.97 + 0.07 * math.sin(n * 7.1))
             x = spec[1] + spec[3] * rr * math.cos(a)
             y = spec[2] + spec[4] * rr * math.sin(a)
-            if abs(x) < 10.0 or (-14.0 < x < 0.0 and 17.0 < y < 35.0):
+            if abs(x) < 10.0 or (-19.0 <= x <= -10.0 and 4.0 <= y <= 35.0) or (12.0 <= x <= 21.0 and 4.0 <= y <= 37.0) or (-14.0 < x < 0.0 and 17.0 < y < 35.0):
                 continue
             faces += _boulder(bm, x, y, 0.9 + 1.6 * (0.5 + 0.5 * math.sin(n * 3.3)), n)
     cliff_faces = [f for f in bm.faces if f.is_valid and f.material_index == MAT_INDEX_CLIFFS]

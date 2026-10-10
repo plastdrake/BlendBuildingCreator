@@ -104,13 +104,15 @@ def _bread_fbx_mat():
 
 
 def _stamp_baked_local(bm, faces, fbx_file, lx, ly, lz, yaw, length,
-                       mat_index, long_axis='AUTO', pre_rot=(0.0, 0.0, 0.0)):
+                       mat_index, long_axis='AUTO', pre_rot=(0.0, 0.0, 0.0),
+                       pre_mat=None):
     """Stamp a baked mesh in a caller's LOCAL frame, appending the new faces
     to ``faces`` so they ride along with the caller's own final transform."""
     _n0 = len(bm.faces)
     try:
         if _build_fbx_prop(bm, fbx_file, None, lx, ly, lz, yaw, length,
-                           mat_index, long_axis=long_axis, pre_rot=pre_rot):
+                           mat_index, long_axis=long_axis, pre_rot=pre_rot,
+                           pre_mat=pre_mat):
             faces += [f for f in list(bm.faces)[_n0:] if f.is_valid]
             return True
     except Exception:
@@ -919,24 +921,28 @@ def _fish_body(bm, faces, lx, ly, lz, yaw=0.0, length=0.34, mat=MAT_INDEX_IRON):
 
 
 def build_fish(bm, x, y, z_ground=0.0, ang=0.0, length=0.34, smoked=False):
-    """Single fish for stall tables and racks.
-
-    Fresh fish use the artist's FBX mesh (props/fish.fbx, textured by
-    fish.png); smoked fish keep the stylized brown box body. Falls back to
-    the box body whenever the FBX cannot be loaded.
-    """
-    if not smoked:
-        try:
-            if _build_fbx_prop(bm, 'fish.fbx', None, x, y, z_ground, ang,
-                               length, _fish_mat(), long_axis='AUTO'):
-                return True
-        except Exception:
-            pass
+    """Single fish for stall tables and racks: the artist's FBX mesh
+    (props/fish.fbx, textured by fish.png). ``smoked`` only nudges the size
+    now — the stylized box body is a last-resort fallback."""
+    try:
+        if _build_fbx_prop(bm, 'fish.fbx', None, x, y, z_ground, ang,
+                           length, _fish_mat(), long_axis='AUTO'):
+            return True
+    except Exception:
+        pass
     faces = []
     _fish_body(bm, faces, 0.0, 0.0, 0.0, yaw=0.0, length=length,
                mat=MAT_INDEX_LEATHER if smoked else MAT_INDEX_IRON)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
+
+# Hanging orientation for the flat fish mesh: length (local X) points down
+# (-Z), the flat face (local Z) faces the room (-Y), width (local Y) runs
+# across (X).
+def _hang_mat():
+    from mathutils import Matrix as _M
+    return _M(((0.0, 1.0, 0.0), (0.0, 0.0, -1.0), (-1.0, 0.0, 0.0)))
 
 
 def build_meat(bm, x, y, z_ground=0.0, ang=0.0, length=0.30, variant=0):
@@ -969,15 +975,15 @@ def _meat_mat():
 
 def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
                     mat_index, final=None, long_axis='Y',
-                    pre_rot=(0.0, 0.0, 0.0)):
+                    pre_rot=(0.0, 0.0, 0.0), pre_mat=None):
     """Stamp a baked artist prop mesh normalized to ``length`` with ``mat_index``.
 
     ``fbx_file`` names the source art (e.g. ``bread.fbx``); the geometry comes
     from the baked table in :mod:`artisan_meshdata` so no FBX operator runs at
     generation time (``bpy.ops.import_scene.fbx`` fails inside property-update
     and depsgraph contexts). ``long_axis`` is the local axis that must end up
-    pointing along the prop's +X length. ``pre_rot`` is an extra Euler applied
-    AFTER that axis fix (used to lay hanging cuts flat toward the room).
+    pointing along the prop's +X length. ``pre_rot`` (Euler) or ``pre_mat``
+    (Matrix) is applied AFTER that axis fix — used to hang cuts/fish.
     Returns True, raises on any problem.
     """
     from mathutils import Matrix as _M, Vector as _V, Euler as _E
@@ -1004,7 +1010,8 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
     cx, cy, z0 = ((min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5,
                   min(zs))
     fix = _M.Rotation(yaw_fix, 4, 'Z')
-    pre = _E(pre_rot).to_matrix().to_4x4()
+    pre = (pre_mat.to_4x4() if hasattr(pre_mat, 'to_4x4') else pre_mat) \
+        if pre_mat is not None else _E(pre_rot).to_matrix().to_4x4()
     local = (_M.Translation((x, y, z_ground)) @ _M.Rotation(ang, 4, 'Z'))
     place = (local if final is None else (final @ local))
     place = place @ pre @ fix @ _M.Diagonal((s, s, s, 1.0))
@@ -1059,32 +1066,20 @@ def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):
             location=(0.0, bar_y, bar_z),
             rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_WOOD
         )
-    n = max(4, int(width / 0.26))
+    n = max(4, int(width / 0.30))
     for row, (bar_y, bar_z) in enumerate(((0.23, 1.55), (0.03, 0.95))):
         for i in range(n):
             hx = -width * 0.5 + 0.24 + i * ((width - 0.48) / max(1, n - 1))
+            # Rope hanger.
             faces += create_cylinder(
                 bm, radius=0.006, height=0.10, segments=6,
                 location=(hx, bar_y, bar_z - 0.05), mat_index=MAT_INDEX_ROPE
             )
-            # Tail knot, hanging body, head (top to bottom).
-            faces += create_beveled_box(
-                bm, size=(0.075, 0.075, 0.020),
-                location=(hx, bar_y, bar_z - 0.115),
-                rotation=(0.0, 0.0, math.pi * 0.25 + i * 0.1),
-                mat_index=MAT_INDEX_LEATHER, bevel_amount=0.005
-            )
-            faces += create_beveled_box(
-                bm, size=(0.085, 0.062, 0.26),
-                location=(hx, bar_y, bar_z - 0.125 - 0.13),
-                rotation=(0.0, 0.0, (0.06 if (i + row) % 2 else -0.06)),
-                mat_index=MAT_INDEX_LEATHER, bevel_amount=0.026
-            )
-            faces += create_beveled_box(
-                bm, size=(0.095, 0.072, 0.07),
-                location=(hx, bar_y, bar_z - 0.125 - 0.26 - 0.02),
-                rotation=(0.0, 0.0, (0.06 if (i + row) % 2 else -0.06)),
-                mat_index=MAT_INDEX_LEATHER, bevel_amount=0.022
+            # The artist's fish hanging nose-down, face to the room.
+            _stamp_baked_local(
+                bm, faces, 'fish.fbx', hx, bar_y - 0.005, bar_z - 0.11,
+                0.0, 0.30, _fish_mat(), long_axis='X',
+                pre_mat=_hang_mat()
             )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -1251,24 +1246,10 @@ def build_fish_stringer(bm, x, y, z_ceiling=3.0, ang=0.0, drops=3):
             bm, radius=0.006, height=0.14, segments=6,
             location=(lx, 0.0, -0.06 - 0.07), mat_index=MAT_INDEX_ROPE
         )
-        # Tail knot, hanging body, head (top to bottom).
-        faces += create_beveled_box(
-            bm, size=(0.070, 0.070, 0.020),
-            location=(lx, 0.0, -0.20),
-            rotation=(0.0, 0.0, math.pi * 0.25 + i * 0.12),
-            mat_index=MAT_INDEX_LEATHER, bevel_amount=0.005
-        )
-        faces += create_beveled_box(
-            bm, size=(0.085, 0.062, 0.26),
-            location=(lx, 0.0, -0.21 - 0.13),
-            rotation=(0.0, 0.0, (0.06 if i % 2 else -0.06)),
-            mat_index=MAT_INDEX_LEATHER, bevel_amount=0.026
-        )
-        faces += create_beveled_box(
-            bm, size=(0.095, 0.072, 0.07),
-            location=(lx, 0.0, -0.21 - 0.26 - 0.02),
-            rotation=(0.0, 0.0, (0.06 if i % 2 else -0.06)),
-            mat_index=MAT_INDEX_LEATHER, bevel_amount=0.022
+        # The artist's fish hanging nose-down off the bar.
+        _stamp_baked_local(
+            bm, faces, 'fish.fbx', lx, -0.005, -0.13, 0.0, 0.30,
+            _fish_mat(), long_axis='X', pre_mat=_hang_mat()
         )
     transform_faces(faces, _place(x, y, z_ceiling, ang))
     return faces

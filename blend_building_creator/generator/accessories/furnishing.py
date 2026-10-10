@@ -2802,58 +2802,65 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
     }.get(arch)
     if not _tier_goods:
         return
-    # Street door = the front-most doorway; display faces it.
-    _door = None
-    for d in tracker.doorways:
-        if d.get('axis', 'X') == 'X' and (_door is None or d.get('y', 0.0) < _door.get('y', 0.0)):
-            _door = d
     rcx = (tracker.rx0 + tracker.rx1) * 0.5
     rcy = (tracker.ry0 + tracker.ry1) * 0.5
     _hw, _hd = 0.85, 0.575
+    _rx0, _rx1 = tracker.rx0, tracker.rx1
+    _ry0, _ry1 = tracker.ry0, tracker.ry1
 
-    # Keep the display out of the walking centre: hug the front wall, then
-    # the side walls, always tucked toward a corner.
-    _near_front = tracker.ry0 + _hd + 0.10
-    _near_back = tracker.ry1 - _hd - 0.10
-    _near_left = tracker.rx0 + _hw + 0.10
-    _near_right = tracker.rx1 - _hw - 0.10
-    _spots = [
-        (_near_left, _near_front), (_near_right, _near_front),
-        (_near_left, _near_back), (_near_right, _near_back),
-        (rcx, _near_front), (rcx, _near_back),
-    ]
-    # Wall-hugging midpoints either side (when the corners hold crates).
+    def _yaw_away(cx, cy):
+        """Face the display away from its nearest wall (back to the wall)."""
+        d = {'-Y': cy - _ry0, '+Y': _ry1 - cy,
+             '-X': cx - _rx0, '+X': _rx1 - cx}
+        w = min(d, key=d.get)
+        return {'-Y': 0.0, '+Y': math.pi, '-X': -math.pi * 0.5,
+                '+X': math.pi * 0.5}[w]
+
+    # 1. Best spot: beside/under the staircase dead space (just outside the
+    #    reserved stairwell footprint, hugging the wall run).
+    _spots = []
+    _sw = getattr(tracker, 'stair_hole', None)
+    if _sw is not None:
+        _sxc = (_sw[0] + _sw[1]) * 0.5
+        _syc = (_sw[2] + _sw[3]) * 0.5
+        _spots += [
+            (_sxc, _sw[3] + 0.90 + _hd + 0.10),
+            (_sxc, _sw[2] - 0.90 - _hd - 0.10),
+            (_sw[1] + 0.60 + _hw + 0.10, _syc),
+            (_sw[0] - 0.60 - _hw - 0.10, _syc),
+        ]
+    # 2. Wall corners, then wall midpoints (all hugging a wall, out of the way).
+    _near_front = _ry0 + _hd + 0.10
+    _near_back = _ry1 - _hd - 0.10
+    _near_left = _rx0 + _hw + 0.10
+    _near_right = _rx1 - _hw - 0.10
+    _spots += [(_near_left, _near_front), (_near_right, _near_front),
+               (_near_left, _near_back), (_near_right, _near_back)]
     for _f in (0.30, 0.70):
-        _py = tracker.ry0 + (tracker.ry1 - tracker.ry0) * _f
-        _px = tracker.rx0 + (tracker.rx1 - tracker.rx0) * _f
+        _py = _ry0 + (_ry1 - _ry0) * _f
+        _px = _rx0 + (_rx1 - _rx0) * _f
         _spots += [(_near_left, _py), (_near_right, _py),
                    (_px, _near_front), (_px, _near_back)]
     _placed = False
-    for _cx, _cy in _spots:
-        _cx += _jit(rng, 0.08)
-        _cy += _jit(rng, 0.08)
-        if not tracker.is_free(_cx - _hw, _cx + _hw, _cy - _hd, _cy + _hd):
+    _cx = _cy = _yaw = 0.0
+    for _sx, _sy in _spots:
+        _sx += _jit(rng, 0.06)
+        _sy += _jit(rng, 0.06)
+        if not tracker.is_free(_sx - _hw, _sx + _hw, _sy - _hd, _sy + _hd):
             continue
-        if _door is not None:
-            _yaw = math.atan2(_door.get('x', rcx) - _cx,
-                              _door.get('y', _cy - 1.0) - _cy)
-        else:
-            _yaw = math.pi
-        tracker.occupy(_cx - _hw, _cx + _hw, _cy - _hd, _cy + _hd)
-        build_prop(bm, 'MARKET_DISPLAY', _cx, _cy, z_floor, _yaw, width=1.50)
+        _yaw = _yaw_away(_sx, _sy)
+        tracker.occupy(_sx - _hw, _sx + _hw, _sy - _hd, _sy + _hd)
+        _cx, _cy = _sx, _sy
         _placed = True
         break
     if not _placed:
-        # Last resort: any open floor patch, still facing the door.
         _spot = _place_floor_prop(bm, tracker, z_floor, rng, 'MARKET_DISPLAY',
                                   _hw, _hd, width=1.50)
-        if _spot is not None:
-            _cx, _cy = _spot[0], _spot[1]
-            _yaw = (math.atan2(_door.get('x', rcx) - _cx,
-                               _door.get('y', _cy - 1.0) - _cy)
-                    if _door is not None else math.pi)
-        else:
+        if _spot is None:
             return
+        _cx, _cy = _spot[0], _spot[1]
+        _yaw = _yaw_away(_cx, _cy)
+    build_prop(bm, 'MARKET_DISPLAY', _cx, _cy, z_floor, _yaw, width=1.50)
     # Dress the tiers (mirror the builder: boards at local y +0.30/0/-0.30,
     # tops at z 0.475/0.825/1.175; two slots per tier at x +/-0.33).
     _cyaw = _yaw
@@ -3544,13 +3551,21 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     elif not chimney_positions:
         chimney_positions = []
 
+    # Stairwell footprint for this floor: the room's own hole, else the
+    # ceiling slab's hole one storey up (the stairs rising from here). Both
+    # are reserved so no prop or display ever sits inside the staircase.
+    _stair_well = rm.stair_hole
+    if _stair_well is None and ctx is not None:
+        _stair_well = (getattr(ctx, 'floor_stair_holes', None) or {}).get(
+            rm.floor_idx + 1)
     tracker = RoomOccupancyTracker(
         rx0 + inset, rx1 - inset, ry0 + inset, ry1 - inset,
-        stair_hole=rm.stair_hole,
+        stair_hole=_stair_well,
         doorways=all_doorways,
         windows=room_windows,
         chimney=chimney_positions
     )
+    tracker.stair_hole = _stair_well
     tracker.rng = rng
     tracker.archetype = getattr(ctx, 'effective_archetype', 'NONE') if ctx is not None else 'NONE'
     if getattr(ctx, 'effective_archetype', 'NONE') == 'BAKERY' and ctx is not None:

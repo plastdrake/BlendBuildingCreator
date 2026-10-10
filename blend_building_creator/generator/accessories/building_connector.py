@@ -31,6 +31,23 @@ from ..openings import build_window_assembly
 
 
 
+def _merge_sub_bmesh(dst_bm, src_bm, transform_mat=None):
+    """Transforms and merges geometry from src_bm into dst_bm preserving UVs and materials."""
+    import bmesh
+    if transform_mat is not None:
+        bmesh.ops.transform(src_bm, matrix=transform_mat, verts=src_bm.verts)
+    src_uv = src_bm.loops.layers.uv.verify()
+    dst_uv = dst_bm.loops.layers.uv.verify()
+    v_map = {}
+    for v in src_bm.verts:
+        v_map[v] = dst_bm.verts.new(v.co)
+    for f in src_bm.faces:
+        nf = dst_bm.faces.new([v_map[v] for v in f.verts])
+        nf.material_index = f.material_index
+        for loop, nloop in zip(f.loops, nf.loops):
+            nloop[dst_uv].uv = loop[src_uv].uv
+
+
 def carve_pass_through_portal(bm, x_span, y_span, z_span):
     """Cuts through existing geometry in a box [x0, x1] x [y0, y1] x [z0, z1]
     so that doorways / portals are clear of intersecting walls and furniture."""
@@ -376,50 +393,37 @@ def build_skybridge_link(
                     mat_index=trim_mat, bevel_amount=0.02
                 )
     elif roof_style == 'GABLE':
-        # Traditional pitched shingle roof with the ridge running ALONG the
-        # span (same proven construction as the covered wooden bridge): slopes
-        # shed to the sides, gable ends stop flush at both facades with zero
-        # penetration into either building.
+        # Traditional pitched shingle roof with the ridge running ALONG the span:
+        # authentic steep gable roof built via build_gable_roof, stopping flush
+        # against both facades with zero penetration into either building.
+        from ..roof.gable_roof import build_gable_roof
+        import bmesh
+        roof_bm = bmesh.new()
         ridge_h = min(width * 0.42, 1.70)
-        eave_z = roof_z
-        ridge_z = eave_z + ridge_h
-        roof_w = width + 0.50
-        pitch_len = math.hypot(roof_w * 0.5, ridge_h)
-        pitch_ang = math.atan2(ridge_h, roof_w * 0.5)
-        for side in (-1.0, 1.0):
-            side_pos = center + trans_dir * (side * roof_w * 0.25)
-            create_beveled_box(
-                bm, size=(span_len + 0.10, pitch_len + 0.15, 0.12),
-                location=(side_pos.x, side_pos.y, (eave_z + ridge_z) * 0.5),
-                rotation=(side * pitch_ang, 0.0, yaw),
-                mat_index=MAT_INDEX_SHINGLES, bevel_amount=0.01
-            )
-        # Ridge beam capping
-        create_beveled_box(
-            bm, size=(span_len + 0.12, 0.20, 0.18),
-            location=(center.x, center.y, ridge_z + 0.05),
-            rotation=(0.0, 0.0, yaw),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
+        roof_w = width + 0.35
+        build_gable_roof(
+            roof_bm,
+            x_min=-roof_w * 0.5,
+            x_max=roof_w * 0.5,
+            y_min=-span_len * 0.5,
+            y_max=span_len * 0.5,
+            z_base=0.0,
+            roof_height=ridge_h,
+            overhang=0.20,
+            abut_front=True,
+            abut_back=True,
+            gable_ends=('FRONT', 'BACK'),
+            gable_walls=True,
         )
-        # Stepped timber gable ends set flush against each building facade
-        # (abut: no overhang, no penetration into the buildings)
-        n_gsteps = 3
-        for end_sign, pt in ((-1.0, v1), (1.0, v2)):
-            g_c = pt - span_dir * (end_sign * 0.12)
-            for gi in range(n_gsteps):
-                frac0 = gi / n_gsteps
-                frac1 = (gi + 1) / n_gsteps
-                gz0 = eave_z + ridge_h * frac0
-                gz1 = eave_z + ridge_h * frac1
-                gw = roof_w * (1.0 - frac0) - 0.10
-                if gw < 0.15:
-                    continue
-                create_beveled_box(
-                    bm, size=(0.18, gw, gz1 - gz0),
-                    location=(g_c.x, g_c.y, (gz0 + gz1) * 0.5),
-                    rotation=(0.0, 0.0, yaw),
-                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01
-                )
+        # Coordinate transform: local Y is along span, local X is transverse, local Z is vertical
+        tr_mat = Matrix((
+            (trans_dir.x, span_dir.x, 0.0, center.x),
+            (trans_dir.y, span_dir.y, 0.0, center.y),
+            (0.0,         0.0,        1.0, roof_z),
+            (0.0,         0.0,        0.0, 1.0)
+        ))
+        _merge_sub_bmesh(bm, roof_bm, tr_mat)
+        roof_bm.free()
 
 
 def build_tower_building_connector(
@@ -715,6 +719,27 @@ def build_connecting_wing(
     # plus (east wing) the lane from the stair head to the bridge door.
     lane_half = 1.25
     door_lane = (bridge_door_y - 1.35, bridge_door_y + 1.35) if has_bridge_door else None
+
+    # 0. CARVE INTERIOR WALKWAY (Guarantees zero rock or terrain clipping inside corridor)
+    walk_w = width - wall_t * 2.0 - 0.20
+    carve_pass_through_portal(
+        bm,
+        x_span=(cx - walk_w * 0.5, cx + walk_w * 0.5),
+        y_span=(y_start - 0.2, stair_y_start + 0.2),
+        z_span=(z_low + 0.05, z_low + 3.80)
+    )
+    carve_pass_through_portal(
+        bm,
+        x_span=(cx - walk_w * 0.5, cx + walk_w * 0.5),
+        y_span=(stair_y_start - 0.2, stair_y_end + 0.2),
+        z_span=(z_low + 0.05, z_high + 3.80)
+    )
+    carve_pass_through_portal(
+        bm,
+        x_span=(cx - walk_w * 0.5, cx + walk_w * 0.5),
+        y_span=(stair_y_end - 0.2, deck_n + 0.2),
+        z_span=(z_high + 0.05, z_high + 3.80)
+    )
 
     # 1. FLOORS & FOUNDATION
     # Lower section floor deck (y_start to stair_y_start)
