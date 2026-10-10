@@ -998,6 +998,7 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
         f = bm.faces.new([remap[i] for i in idx])
         f.material_index = mat_index
         f.smooth = True
+        f.tag = True  # protect the atlas UVs from the final cubic UV pass
         for loop, (_, uv) in zip(f.loops, poly):
             loop[uv_layer].uv = uv
     return True
