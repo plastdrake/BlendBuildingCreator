@@ -230,11 +230,14 @@ def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, pre
                 except Exception:
                     pass
         for k, v in overrides.items():
-            if hasattr(op, k):
+            try:
+                setattr(op, k, v)
+            except Exception:
                 try:
-                    setattr(op, k, v)
+                    op[k] = v
                 except Exception:
                     pass
+
 
         # Outbuildings must use authentic tier wall materials, NEVER ashlar stone!
         # Tier 3: STUCCO, Tier 2: WOOD_PLANKS, Tier 1: LOGS / WATTLE_DAUB

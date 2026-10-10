@@ -208,7 +208,10 @@ def build_skybridge_link(
             win_top_z = sill_z + win_h
 
             # Lower spandrel wall beneath sills (extended into facades to eliminate gaps)
-            spandrel_h = sill_z - floor_z
+            # Window assembly has exterior timber sill 0.13m thick and interior stool 0.07m.
+            # Lower stone spandrel stops cleanly below sill assembly.
+            spandrel_top_z = sill_z - 0.14
+            spandrel_h = spandrel_top_z - floor_z
             create_beveled_box(
                 bm, size=(span_len + 0.70, wall_thickness, spandrel_h),
                 location=(wall_pos.x, wall_pos.y, floor_z + spandrel_h * 0.5),
@@ -217,15 +220,20 @@ def build_skybridge_link(
             )
 
             # Upper lintel wall above window heads (extended into facades)
-            lintel_h = (floor_z + wall_h) - win_top_z
+            # Window assembly has exterior casing header 0.16m and interior lintel 0.15m.
+            # Upper stone wall starts cleanly above window head assembly.
+            lintel_bot_z = win_top_z + 0.17
+            lintel_h = (floor_z + wall_h) - lintel_bot_z
             create_beveled_box(
                 bm, size=(span_len + 0.70, wall_thickness, lintel_h),
-                location=(wall_pos.x, wall_pos.y, win_top_z + lintel_h * 0.5),
+                location=(wall_pos.x, wall_pos.y, lintel_bot_z + lintel_h * 0.5),
                 rotation=(0.0, 0.0, yaw),
                 mat_index=wall_mat, bevel_amount=0.02
             )
 
             # Piers flanking and separating the windows
+            pier_h = lintel_bot_z - spandrel_top_z
+            pier_cz = (lintel_bot_z + spandrel_top_z) * 0.5
             step_w = span_len / (num_windows + 1)
             u_prev = -span_len * 0.5 - 0.35
             for wi in range(1, num_windows + 1):
@@ -236,15 +244,31 @@ def build_skybridge_link(
                     p_center_u = (u_prev + u_win_left) * 0.5
                     p_pos = wall_pos + span_dir * p_center_u
                     create_beveled_box(
-                        bm, size=(pier_w, wall_thickness, win_h),
-                        location=(p_pos.x, p_pos.y, win_cz),
+                        bm, size=(pier_w, wall_thickness, pier_h),
+                        location=(p_pos.x, p_pos.y, pier_cz),
                         rotation=(0.0, 0.0, yaw),
                         mat_index=wall_mat, bevel_amount=0.02
                     )
                 u_prev = u_win + win_w * 0.5
 
-                # Build stylized fantasy window assembly with timber frames and open shutters
+                # Dressed cut-stone masonry sill slab under window aperture
                 win_pos = wall_pos + span_dir * u_win
+                create_beveled_box(
+                    bm, size=(win_w + 0.30, wall_thickness + 0.06, 0.14),
+                    location=(win_pos.x, win_pos.y, spandrel_top_z + 0.07),
+                    rotation=(0.0, 0.0, yaw),
+                    mat_index=trim_mat, bevel_amount=0.02
+                )
+
+                # Dressed cut-stone masonry lintel block above window aperture
+                create_beveled_box(
+                    bm, size=(win_w + 0.34, wall_thickness + 0.06, 0.17),
+                    location=(win_pos.x, win_pos.y, win_top_z + 0.085),
+                    rotation=(0.0, 0.0, yaw),
+                    mat_index=trim_mat, bevel_amount=0.02
+                )
+
+                # Build stylized fantasy window assembly with timber frames and open shutters
                 build_window_assembly(
                     bm,
                     center=(win_pos.x, win_pos.y, win_cz),
@@ -262,8 +286,8 @@ def build_skybridge_link(
                 p_center_u = (u_prev + u_end) * 0.5
                 p_pos = wall_pos + span_dir * p_center_u
                 create_beveled_box(
-                    bm, size=(final_pier_w, wall_thickness, win_h),
-                    location=(p_pos.x, p_pos.y, win_cz),
+                    bm, size=(final_pier_w, wall_thickness, pier_h),
+                    location=(p_pos.x, p_pos.y, pier_cz),
                     rotation=(0.0, 0.0, yaw),
                     mat_index=wall_mat, bevel_amount=0.02
                 )
@@ -294,44 +318,99 @@ def build_skybridge_link(
         portal_w = 2.00
         portal_h = 2.70
         # Carve pass-through doorways through any existing wall or furniture geometry,
-        # reaching 2.6m into adjacent buildings to guarantee a completely walkable passage.
+        # reaching 2.8m into adjacent buildings to guarantee a completely walkable passage.
         # The carve starts just above deck level so the bridge deck, boards and flat
         # rugs survive while walls, interior partitions and furniture are cleared.
         for end_sign, pt in ((-1.0, v1), (1.0, v2)):
-            inward_vec = -end_sign * span_dir
-            carve_c = pt + inward_vec * 1.30
-            dx = abs(inward_vec.x * 2.8) + abs(trans_dir.x * (portal_w * 0.7))
-            dy = abs(inward_vec.y * 2.8) + abs(trans_dir.y * (portal_w * 0.7))
+            into_bld_vec = end_sign * span_dir
+            carve_c = pt + into_bld_vec * 1.40
+            dx = abs(into_bld_vec.x * 2.8) + abs(trans_dir.x * (portal_w * 0.65))
+            dy = abs(into_bld_vec.y * 2.8) + abs(trans_dir.y * (portal_w * 0.65))
             carve_pass_through_portal(
                 bm,
-                x_span=(carve_c.x - max(1.3, dx * 0.5), carve_c.x + max(1.3, dx * 0.5)),
-                y_span=(carve_c.y - max(1.3, dy * 0.5), carve_c.y + max(1.3, dy * 0.5)),
-                z_span=(floor_z + 0.06, floor_z + portal_h + 0.30)
+                x_span=(carve_c.x - max(1.4, dx * 0.5), carve_c.x + max(1.4, dx * 0.5)),
+                y_span=(carve_c.y - max(1.4, dy * 0.5), carve_c.y + max(1.4, dy * 0.5)),
+                z_span=(floor_z + 0.04, floor_z + portal_h + 0.35)
             )
 
         for end_sign, pt in ((-1.0, v1), (1.0, v2)):
-            # Stone portal surround frame facing into the building
-            p_cz = floor_z + portal_h * 0.5
-            p_face_pos = pt - span_dir * (end_sign * 0.08)
-            # Arched lintel block
+            into_bld_vec = end_sign * span_dir
+
+            # 1. Raised dressed cut-stone threshold slab spanning across the wall opening:
+            # Eliminates coplanar z-fighting with floorboards and conceals all floor cut edges
+            thresh_c = pt + into_bld_vec * 0.30
             create_beveled_box(
-                bm, size=(0.36, portal_w + 0.60, 0.45),
+                bm, size=(1.40, portal_w + 0.40, 0.06),
+                location=(thresh_c.x, thresh_c.y, floor_z + 0.03),
+                rotation=(0.0, 0.0, yaw),
+                mat_index=trim_mat, bevel_amount=0.012
+            )
+
+            # 2. Bridge-side stone portal surround facing into the bridge
+            p_face_pos = pt - into_bld_vec * 0.08
+            # Stone arched lintel block
+            create_beveled_box(
+                bm, size=(0.34, portal_w + 0.60, 0.45),
                 location=(p_face_pos.x, p_face_pos.y, floor_z + portal_h + 0.22),
                 rotation=(0.0, 0.0, yaw),
                 mat_index=trim_mat, bevel_amount=0.03
             )
-            # Side jamb piers
+            # Stone side jamb piers
             for js in (-1.0, 1.0):
                 j_pos = p_face_pos + trans_dir * (js * (portal_w * 0.5 + 0.18))
                 create_beveled_box(
-                    bm, size=(0.34, 0.38, portal_h + 0.40),
+                    bm, size=(0.32, 0.38, portal_h + 0.40),
                     location=(j_pos.x, j_pos.y, floor_z + (portal_h + 0.40) * 0.5),
                     rotation=(0.0, 0.0, yaw),
                     mat_index=trim_mat, bevel_amount=0.025
                 )
 
-            # Interior lining partition wall inside the bridge covering the connected building's exterior wall
-            lining_pos = pt + span_dir * (end_sign * 0.08)
+            # 3. Full-depth reveal lining sleeve through the wall thickness
+            # Completely covers rough cut masonry and interior voids
+            rev_c = pt + into_bld_vec * 0.35
+            rev_d = 0.85
+            for js in (-1.0, 1.0):
+                jrev_pos = rev_c + trans_dir * (js * (portal_w * 0.5 - 0.03))
+                create_beveled_box(
+                    bm, size=(rev_d, 0.08, portal_h),
+                    location=(jrev_pos.x, jrev_pos.y, floor_z + portal_h * 0.5),
+                    rotation=(0.0, 0.0, yaw),
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+                )
+            create_beveled_box(
+                bm, size=(rev_d, portal_w - 0.04, 0.08),
+                location=(rev_c.x, rev_c.y, floor_z + portal_h - 0.04),
+                rotation=(0.0, 0.0, yaw),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+            )
+
+            # 4. Room-side architectural timber casing & portal framing:
+            # Sits inside the wood-paneled room, cleanly capping wall edges, wood siding cuts,
+            # and masonry so the room interior looks master-crafted!
+            room_face_pos = pt + into_bld_vec * 0.72
+            for js in (-1.0, 1.0):
+                rj_pos = room_face_pos + trans_dir * (js * (portal_w * 0.5 + 0.12))
+                create_beveled_box(
+                    bm, size=(0.20, 0.28, portal_h + 0.20),
+                    location=(rj_pos.x, rj_pos.y, floor_z + (portal_h + 0.20) * 0.5),
+                    rotation=(0.0, 0.0, yaw),
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.018
+                )
+            create_beveled_box(
+                bm, size=(0.22, portal_w + 0.65, 0.28),
+                location=(room_face_pos.x, room_face_pos.y, floor_z + portal_h + 0.14),
+                rotation=(0.0, 0.0, yaw),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.018
+            )
+            create_beveled_box(
+                bm, size=(0.16, portal_w + 0.45, 0.32),
+                location=(room_face_pos.x, room_face_pos.y, floor_z + portal_h + 0.42),
+                rotation=(0.0, 0.0, yaw),
+                mat_index=MAT_INDEX_WOOD, bevel_amount=0.015
+            )
+
+            # 5. Bridge-side interior lining partition & studs
+            lining_pos = pt - into_bld_vec * 0.08
             lining_w = width - wall_thickness * 2.0
             for js in (-1.0, 1.0):
                 flank_w = max(0.1, (lining_w - portal_w) * 0.5)
@@ -342,8 +421,6 @@ def build_skybridge_link(
                     rotation=(0.0, 0.0, yaw),
                     mat_index=MAT_INDEX_PLASTER_EXT, bevel_amount=0.01
                 )
-                # Timber-framed studwork across the lining: jamb posts plus
-                # two intermediate studs per flank and a head beam
                 for stud_k in range(3):
                     stud_off = portal_w * 0.5 + 0.08 + (flank_w - 0.16) * (stud_k / 2.0)
                     tpost_c = lining_pos + trans_dir * (js * stud_off)
@@ -353,13 +430,13 @@ def build_skybridge_link(
                         rotation=(0.0, 0.0, yaw),
                         mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
                     )
-            # Timber lintel beam covering above doorway
             create_beveled_box(
                 bm, size=(0.14, portal_w + 0.20, 0.18),
                 location=(lining_pos.x, lining_pos.y, floor_z + portal_h + 0.09),
                 rotation=(0.0, 0.0, yaw),
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
             )
+
 
     # 6. ROOF STRUCTURE
     roof_z = ceil_z + ceil_thick

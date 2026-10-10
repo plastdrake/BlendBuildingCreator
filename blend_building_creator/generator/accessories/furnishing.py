@@ -395,6 +395,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             min_x = rx0 + width * 0.5 + 0.15
             max_x = rx1 - width * 0.5 - 0.15
             for cx in _sample_wall_positions(rcx + offset_bias + jit, min_x, max_x, step=0.30):
+                if tracker.is_near_door(cx, cy, radius=1.40):
+                    continue
                 b = (cx - width * 0.5, cx + width * 0.5, cy - depth * 0.5, cy + depth * 0.5)
                 if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
                     tracker.occupy(b[0], b[1], b[2], b[3])
@@ -408,6 +410,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             min_x = rx0 + width * 0.5 + 0.15
             max_x = rx1 - width * 0.5 - 0.15
             for cx in _sample_wall_positions(rcx + offset_bias + jit, min_x, max_x, step=0.30):
+                if tracker.is_near_door(cx, cy, radius=1.40):
+                    continue
                 b = (cx - width * 0.5, cx + width * 0.5, cy - depth * 0.5, cy + depth * 0.5)
                 if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
                     tracker.occupy(b[0], b[1], b[2], b[3])
@@ -421,6 +425,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             min_y = ry0 + width * 0.5 + 0.15
             max_y = ry1 - width * 0.5 - 0.15
             for cy in _sample_wall_positions(rcy + offset_bias + jit, min_y, max_y, step=0.30):
+                if tracker.is_near_door(cx, cy, radius=1.40):
+                    continue
                 b = (cx - depth * 0.5, cx + depth * 0.5, cy - width * 0.5, cy + width * 0.5)
                 if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
                     tracker.occupy(b[0], b[1], b[2], b[3])
@@ -434,6 +440,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             min_y = ry0 + width * 0.5 + 0.15
             max_y = ry1 - width * 0.5 - 0.15
             for cy in _sample_wall_positions(rcy + offset_bias + jit, min_y, max_y, step=0.30):
+                if tracker.is_near_door(cx, cy, radius=1.40):
+                    continue
                 b = (cx - depth * 0.5, cx + depth * 0.5, cy - width * 0.5, cy + width * 0.5)
                 if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
                     tracker.occupy(b[0], b[1], b[2], b[3])
@@ -478,6 +486,8 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
     min_y = ry0 + width * 0.5 + 0.15
     max_y = ry1 - width * 0.5 - 0.15
     for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
+        if tracker.is_near_door(cx, cy, radius=1.60):
+            continue
         b = (cx - length * 0.5, cx + length * 0.5, cy - width * 0.5, cy + width * 0.5)
         if tracker.is_free(b[0], b[1], b[2], b[3]):
             tracker.occupy(b[0], b[1], b[2], b[3])
@@ -487,6 +497,8 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
     # 2. Try East wall (headboard at +X, bed extends -X into room)
     cx = rx1 - length * 0.5 - 0.03
     for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
+        if tracker.is_near_door(cx, cy, radius=1.60):
+            continue
         b = (cx - length * 0.5, cx + length * 0.5, cy - width * 0.5, cy + width * 0.5)
         if tracker.is_free(b[0], b[1], b[2], b[3]):
             tracker.occupy(b[0], b[1], b[2], b[3])
@@ -498,6 +510,8 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
     min_x = rx0 + width * 0.5 + 0.15
     max_x = rx1 - width * 0.5 - 0.15
     for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
+        if tracker.is_near_door(cx, cy, radius=1.60):
+            continue
         b = (cx - width * 0.5, cx + width * 0.5, cy - length * 0.5, cy + length * 0.5)
         if tracker.is_free(b[0], b[1], b[2], b[3]):
             tracker.occupy(b[0], b[1], b[2], b[3])
@@ -507,6 +521,8 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
     # 4. Try South wall (headboard at -Y, bed extends +Y into room)
     cy = ry0 + length * 0.5 + 0.03
     for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
+        if tracker.is_near_door(cx, cy, radius=1.60):
+            continue
         b = (cx - width * 0.5, cx + width * 0.5, cy - length * 0.5, cy + length * 0.5)
         if tracker.is_free(b[0], b[1], b[2], b[3]):
             tracker.occupy(b[0], b[1], b[2], b[3])
@@ -514,6 +530,7 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
             return (cx, cy, math.pi / 2)
 
     return None
+
 
 
 def _try_place_plant(bm, tracker, z_floor: float, rng,
@@ -2659,10 +2676,11 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     t3 = _place_craft_table(bm, tracker, z_floor, rng, length=1.20, width=0.75)
     if t3 is not None:
         _dress_craft_table(bm, t3[0], t3[1], t3[2], z_table, rng,
-                           ['FISH', 'FISH'])
-    # Two stacked crates of fish on the floor (a full catch).
+                           ['FISH', 'FISH', 'FOODPREP_CLUTTER'])
+    # Fish boxes: fish kept in slatted crates, never loose on the bare floor.
     for _ci in range(2):
-        _place_goods_row(bm, tracker, z_floor, rng, 'FISH', count=3, box=0.24)
+        _place_floor_prop(bm, tracker, z_floor, rng, 'CRATE', 0.30, 0.30)
+        _place_goods_row(bm, tracker, z_floor, rng, 'CRATE', count=1, box=0.30)
 
     # Drying rack with smoked fish along a free wall, rope coil in a corner.
     _try_place_wall_prop(bm, 'FISH_DRYING_RACK', 1.60, 0.80, tracker, z_floor,
@@ -2814,7 +2832,6 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
     tracker._market_display_done = True
     rcx = (tracker.rx0 + tracker.rx1) * 0.5
     rcy = (tracker.ry0 + tracker.ry1) * 0.5
-    _hw, _hd = 0.85, 0.575
     _rx0, _rx1 = tracker.rx0, tracker.rx1
     _ry0, _ry1 = tracker.ry0, tracker.ry1
 
@@ -2826,59 +2843,62 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         return {'-Y': 0.0, '+Y': math.pi, '-X': -math.pi * 0.5,
                 '+X': math.pi * 0.5}[w]
 
-    # 1. Best spot: beside/under the staircase dead space (just outside the
-    #    reserved stairwell footprint, hugging the wall run).
-    _spots = []
-    _sw = getattr(tracker, 'stair_hole', None)
-    if _sw is not None:
-        _sxc = (_sw[0] + _sw[1]) * 0.5
-        _syc = (_sw[2] + _sw[3]) * 0.5
-        _spots += [
-            (_sxc, _sw[3] + 0.90 + _hd + 0.10),
-            (_sxc, _sw[2] - 0.90 - _hd - 0.10),
-            (_sw[1] + 0.60 + _hw + 0.10, _syc),
-            (_sw[0] - 0.60 - _hw - 0.10, _syc),
-        ]
-    # 2. Wall corners, then wall midpoints (all hugging a wall, out of the way).
-    _near_front = _ry0 + _hd + 0.10
-    _near_back = _ry1 - _hd - 0.10
-    _near_left = _rx0 + _hw + 0.10
-    _near_right = _rx1 - _hw - 0.10
-    _spots += [(_near_left, _near_front), (_near_right, _near_front),
-               (_near_left, _near_back), (_near_right, _near_back)]
-    for _f in (0.30, 0.70):
-        _py = _ry0 + (_ry1 - _ry0) * _f
-        _px = _rx0 + (_rx1 - _rx0) * _f
-        _spots += [(_near_left, _py), (_near_right, _py),
-                   (_px, _near_front), (_px, _near_back)]
-    _placed = False
-    _cx = _cy = _yaw = 0.0
-    for _sx, _sy in _spots:
-        _sx += _jit(rng, 0.06)
-        _sy += _jit(rng, 0.06)
-        if not tracker.is_free(_sx - _hw, _sx + _hw, _sy - _hd, _sy + _hd):
-            continue
-        _yaw = _yaw_away(_sx, _sy)
-        tracker.occupy(_sx - _hw, _sx + _hw, _sy - _hd, _sy + _hd)
-        _cx, _cy = _sx, _sy
-        _placed = True
-        break
-    if not _placed:
+    def _try_place(hw, hd):
+        """Search wall-hugging spots (stair nook first, then corners/midpoints)
+        for a free patch of the given half-size. Returns (cx, cy, yaw) or None."""
+        _spots = []
+        _sw = getattr(tracker, 'stair_hole', None)
+        if _sw is not None:
+            _sxc = (_sw[0] + _sw[1]) * 0.5
+            _syc = (_sw[2] + _sw[3]) * 0.5
+            _spots += [
+                (_sxc, _sw[3] + 0.90 + hd + 0.10),
+                (_sxc, _sw[2] - 0.90 - hd - 0.10),
+                (_sw[1] + 0.60 + hw + 0.10, _syc),
+                (_sw[0] - 0.60 - hw - 0.10, _syc),
+            ]
+        _nf = _ry0 + hd + 0.10
+        _nb = _ry1 - hd - 0.10
+        _nl = _rx0 + hw + 0.10
+        _nr = _rx1 - hw - 0.10
+        _spots += [(_nl, _nf), (_nr, _nf), (_nl, _nb), (_nr, _nb)]
+        for _f in (0.30, 0.70):
+            _py = _ry0 + (_ry1 - _ry0) * _f
+            _px = _rx0 + (_rx1 - _rx0) * _f
+            _spots += [(_nl, _py), (_nr, _py), (_px, _nf), (_px, _nb)]
+        for _sx, _sy in _spots:
+            _sx += _jit(rng, 0.06)
+            _sy += _jit(rng, 0.06)
+            if not tracker.is_free(_sx - hw, _sx + hw, _sy - hd, _sy + hd):
+                continue
+            tracker.occupy(_sx - hw, _sx + hw, _sy - hd, _sy + hd)
+            return (_sx, _sy, _yaw_away(_sx, _sy))
+        return None
+
+    # Full-size display first, then a compact one for cramped shops.
+    _placed = _try_place(0.85, 0.575)
+    _disp_w = 1.50
+    if _placed is None:
+        _placed = _try_place(0.62, 0.50)
+        _disp_w = 1.05
+    if _placed is None:
         _spot = _place_floor_prop(bm, tracker, z_floor, rng, 'MARKET_DISPLAY',
-                                  _hw, _hd, width=1.50)
+                                  0.85, 0.575, width=1.50)
         if _spot is None:
             return
-        _cx, _cy = _spot[0], _spot[1]
-        _yaw = _yaw_away(_cx, _cy)
-    build_prop(bm, 'MARKET_DISPLAY', _cx, _cy, z_floor, _yaw, width=1.50)
+        _placed = (_spot[0], _spot[1], _yaw_away(_spot[0], _spot[1]))
+        _disp_w = 1.50
+    _cx, _cy, _yaw = _placed
+    build_prop(bm, 'MARKET_DISPLAY', _cx, _cy, z_floor, _yaw, width=_disp_w)
     # Dress the tiers (mirror the builder: boards at local y +0.30/0/-0.30,
-    # tops at z 0.475/0.825/1.175; two slots per tier at x +/-0.33).
+    # tops at z 0.475/0.825/1.175; slots at x scale with the display width).
+    _cx_off = (_disp_w - 0.08) * 0.23
     _cyaw = _yaw
     _cos, _sin = math.cos(_cyaw), math.sin(_cyaw)
     for (_ly, _lz), _goods in zip(((0.30, 0.475), (0.0, 0.825), (-0.30, 1.175)),
                                  _tier_goods):
         for _i, _g in enumerate(_goods):
-            _lx = (-0.33 if _i % 2 == 0 else 0.33) if len(_goods) > 1 else 0.0
+            _lx = (-_cx_off if _i % 2 == 0 else _cx_off) if len(_goods) > 1 else 0.0
             _gx = _cx + _lx * _cos - _ly * _sin
             _gy = _cy + _lx * _sin + _ly * _cos
             build_prop(bm, _g, _gx, _gy, z_floor + _lz,

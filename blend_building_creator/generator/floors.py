@@ -1593,6 +1593,11 @@ def build_floors(bm, props, ctx):
             ix_min, ix_max, iy_min, iy_max, fl_interior_walls,
             left_openings, right_openings, front_openings, back_openings)
 
+        _place_extra_doorways(
+            bm, props, ctx, fl_idx, z_floor,
+            x_min, x_max, y_min, y_max, wall_t,
+            left_openings, right_openings, front_openings, back_openings)
+
         # Dynamic Windows - Front Wall
         if props.has_windows and getattr(props, 'window_front', True) and not open_timber:
             front_excludes = list(get_facade_wing_exclusions('FRONT')) + get_turret_exclusions('FRONT')
@@ -2846,6 +2851,13 @@ def _place_exterior_stair_doors(bm, props, ctx, fl_idx, z_floor,
                 normal_axis=('+Y' if facade == 'BACK' else '-Y'),
                 include_leaf=getattr(props, 'include_door_leaves', True))
 
+
+def _place_extra_doorways(
+    bm, props, ctx, fl_idx, z_floor,
+    x_min, x_max, y_min, y_max, wall_t,
+    left_openings, right_openings, front_openings, back_openings
+):
+    e_margin = 0.12
     for ed in getattr(props, 'extra_doorways', []):
         if ed.get('floor_idx', 0) != fl_idx:
             continue
