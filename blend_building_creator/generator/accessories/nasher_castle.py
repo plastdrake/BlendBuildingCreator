@@ -24,17 +24,16 @@ _HALLS = (
     ("keep", 1, 0.0, 40.0, 14.0, 24.0, 16.0, 4, 0.0, 'T_SHAPE', 'BACK', 9.0, 5.0, 10.5),
     ("great_hall", 1, -15.0, 0.0, 8.0, 22.0, 10.0, 5, 0.0, 'T_SHAPE', 'FRONT', 8.0, 5.0, 7.5),
     ("east_hall", 2, 15.0, 0.0, 8.0, 22.0, 10.0, 5, 0.0, 'L_SHAPE', 'BACK', 7.0, 5.0, 7.0),
-    ("barracks", 2, -22.0, -35.0, 3.0, 14.0, 9.0, 2, 5.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 5.5),
-    ("armory", 2, 22.0, -35.0, 3.0, 14.0, 9.0, 2, -5.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 5.5),
+    ("barracks", 2, -20.0, -28.5, 3.0, 14.0, 9.0, 2, 5.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 5.5),
+    ("armory", 2, 20.0, -28.5, 3.0, 14.0, 9.0, 2, -5.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 5.5),
     ("archive_hall", 3, 20.5, 40.0, 14.0, 17.0, 10.0, 3, 0.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 7.0),
 )
 
 # x, y, radius, floors, spire_h, first_tier, rank, spire_roof. Every tower is walkable inside
-# (2 m wide wall stair), so none is thinner than 4.4 m; each stands against a building or rock outcrop.
-# Flank towers stand 1.3 m clear of the hall walls (vestibule spans the gap).
+# (2 m wide wall stair), so none is thinner than 4.4 m. Flank towers are free-standing with open courtyard access.
 _TOWERS = (
-    (-32.0, -8.0, 4.2, 4, 10.0, 2, 'major', False),
-    (32.0, -8.0, 4.2, 4, 10.0, 2, 'major', False),
+    (-33.5, -8.0, 4.2, 4, 10.0, 2, 'major', False),
+    (33.5, -8.0, 4.2, 4, 10.0, 2, 'major', False),
     (-27.6, 40.0, 4.2, 5, 14.0, 2, 'landmark', True),
     (48.0, 26.0, 4.4, 4, 10.0, 3, 'major', False),
 )
@@ -113,9 +112,6 @@ def _build_halls(bm, props, tier):
             # Floor 3 skybridge doorway on East facade (-X in world = RIGHT (+X) in local space)
             if tier >= 2:
                 extra_doors.append({'floor_idx': 3, 'facade': 'RIGHT', 'pos': -3.6, 'w': 2.0, 'h': 2.6, 'is_portal': True})
-                # Flank-tower vestibule doorways (stacked, landing inside the hall)
-                for _vf in (0, 1, 2):
-                    extra_doors.append({'floor_idx': _vf, 'facade': 'LEFT', 'pos': -4.2, 'w': 2.0, 'h': 2.6, 'is_portal': True})
             # Floor 0 connecting wing doorway on North facade (+Y in world = BACK in local space)
             if tier == 3:
                 extra_doors.append({'floor_idx': 0, 'facade': 'BACK', 'pos': 0.5, 'w': 2.0, 'h': 2.6, 'is_portal': True})
@@ -124,9 +120,6 @@ def _build_halls(bm, props, tier):
             # Floor 3 skybridge doorway on West facade (+X in world = LEFT (-X) in local space)
             if tier >= 2:
                 extra_doors.append({'floor_idx': 3, 'facade': 'LEFT', 'pos': -3.6, 'w': 2.0, 'h': 2.6, 'is_portal': True})
-                # Flank-tower vestibule doorways (stacked, landing inside the hall)
-                for _vf in (0, 1, 2):
-                    extra_doors.append({'floor_idx': _vf, 'facade': 'RIGHT', 'pos': -4.2, 'w': 2.0, 'h': 2.6, 'is_portal': True})
             # Floor 0 connecting wing doorway on North facade (+Y in world = BACK in local space)
             if tier == 3:
                 extra_doors.append({'floor_idx': 0, 'facade': 'BACK', 'pos': 1.5, 'w': 2.0, 'h': 2.6, 'is_portal': True})
@@ -224,10 +217,10 @@ def _build_towers(bm, registry, tier):
         # Direct door orientations connecting into adjacent buildings or bridge.
         # Flank towers aim their doors at the vestibule corridor (y=-4.2),
         # which lands inside both tower and hall footprints.
-        if abs(x - (-32.0)) < 1.0:
-            door_angs = ((0, 1.178), (1, 1.178), (2, 1.178))
-        elif abs(x - 32.0) < 1.0:
-            door_angs = ((0, 1.9635), (1, 1.9635), (2, 1.9635))
+        if abs(x - (-33.5)) < 1.0:
+            door_angs = ((0, 0.0),)  # East-facing doorway on Floor 0 opening toward Great Hall courtyard
+        elif abs(x - 33.5) < 1.0:
+            door_angs = ((0, math.pi),)  # West-facing doorway on Floor 0 opening toward East Hall courtyard
         elif abs(x - (-27.6)) < 1.0:
             door_angs = ((0, 0.0), (1, 0.0))  # East-facing doorways connecting into Chapel
         elif abs(x - 48.0) < 1.0:
@@ -242,21 +235,8 @@ def _build_towers(bm, registry, tier):
             tower_type='SPIRE' if roofed else 'BATTLEMENTS', spire_h=spire_h,
             door_angs=door_angs)
 
-        # Architectural connector vestibule tying the tower into the house facade.
-        # Flank corridors run at y=-4.2 so they land inside both footprints.
-        if abs(x - (-32.0)) < 1.0:
-            build_tower_building_connector(
-                bm, tower_cx=x, tower_cy=y, tower_r=r, tower_z_base=z,
-                bld_wall_x=-26.0, bld_y_span=(-5.0, 5.0),
-                floor_zs=(8.0, 11.7, 15.4), corridor_y=-4.2
-            )
-        elif abs(x - 32.0) < 1.0:
-            build_tower_building_connector(
-                bm, tower_cx=x, tower_cy=y, tower_r=r, tower_z_base=z,
-                bld_wall_x=26.0, bld_y_span=(-5.0, 5.0),
-                floor_zs=(8.0, 11.7, 15.4), corridor_y=-4.2
-            )
-        elif abs(x - (-27.6)) < 1.0:
+        # Architectural connector vestibule for the Wizard's Spire tying into the Chapel
+        if abs(x - (-27.6)) < 1.0:
             build_tower_building_connector(
                 bm, tower_cx=x, tower_cy=y, tower_r=r, tower_z_base=z,
                 bld_wall_x=-22.0, bld_y_span=(34.0, 46.0),
@@ -341,15 +321,15 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
 
     if tier == 2:
         from .nasher_site import build_upper_citadel_perimeter_wall
-        bld_forecourt = ((-29.0, -15.0, -39.5, -30.5), (15.0, 29.0, -39.5, -30.5))
+        bld_forecourt = ((-27.5, -12.5, -34.0, -23.0), (12.5, 27.5, -34.0, -23.0))
         bld_terrace = ((-26.0, -4.0, -5.0, 5.0), (4.0, 26.0, -5.0, 5.0),
-                       (-36.7, -27.3, -12.7, -3.3), (27.3, 36.7, -12.7, -3.3))
+                       (-38.2, -28.8, -12.7, -3.3), (28.8, 38.2, -12.7, -3.3))
         build_rim_walls(bm, FORECOURT, 185.0, 355.0, height=3.0, thick=0.85, inset=0.98,
                         gate=True, bld_boxes=bld_forecourt)
         build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=bld_terrace, tier=2)
     elif tier == 3:
         from .nasher_site import build_upper_citadel_perimeter_wall
-        bld_forecourt = ((-29.0, -15.0, -39.5, -30.5), (15.0, 29.0, -39.5, -30.5))
+        bld_forecourt = ((-27.5, -12.5, -34.0, -23.0), (12.5, 27.5, -34.0, -23.0))
         bld_upper = (
             (-26.0, -4.0, -5.0, 5.0), (4.0, 26.0, -5.0, 5.0),    # Great & East Halls
             (-18.5, -10.5, 4.5, 34.5), (12.5, 20.5, 4.5, 34.5),   # West & East Connecting Wings
@@ -357,7 +337,7 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
             (12.0, 29.0, 34.5, 45.5),                               # Archive Hall
             (-33.0, -22.5, 35.0, 45.0),                             # Wizard's Spire
             (43.0, 53.0, 21.0, 31.0),                             # East Bluff Tower
-            (-36.7, -27.3, -12.7, -3.3), (27.3, 36.7, -12.7, -3.3),  # Flank Towers
+            (-38.2, -28.8, -12.7, -3.3), (28.8, 38.2, -12.7, -3.3),  # Flank Towers
         )
         build_rim_walls(bm, FORECOURT, 185.0, 355.0, height=3.0, thick=0.85, inset=0.98,
                         gate=True, bld_boxes=bld_forecourt)

@@ -85,7 +85,22 @@ def _height(spec, x, y):
     f = s - math.floor(s)
     stepped = _STRATA * (math.floor(s) + _smooth(f * 1.7))
     z += (stepped - z) * min(1.0, ridge * 3.0)
-    return max(0.0, z)
+    z = max(0.0, z)
+    if spec[0] == "terrace_rock":
+        ax = abs(x)
+        if 5.0 <= ax <= 35.0 and y <= -18.5:
+            if ax < 9.0:
+                wx = _smooth((ax - 5.0) / 4.0)
+            elif ax > 30.0:
+                wx = 1.0 - _smooth((ax - 30.0) / 4.0)
+            else:
+                wx = 1.0
+            if y <= -22.5:
+                wy = 1.0
+            else:
+                wy = 1.0 - _smooth((y - (-22.5)) / 3.5)
+            z *= (1.0 - wx * wy)
+    return z
 
 
 def _ramp(x, y):
@@ -355,8 +370,52 @@ def _build_clipped_wall_run(bm, build_run, s, e, outward, boxes, top_z, thick, s
     return
 
 
+def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=()):
+    """Build connecting curtain wall runs on the east and west flanks linking
+    the lower forecourt rim wall to the upper citadel perimeter wall, closing
+    the defensive perimeter gap.
+    """
+    from .curtain_wall import build_curtain_wall_run
+
+    # West flank: from upper wall at (-29.0, -13.5) down to forecourt rim at (-33.33, -35.39)
+    # Goes south so outward vector naturally faces west (exterior).
+    chain_west = [(-29.0, -13.5), (-29.5, -18.5), (-30.5, -24.0), (-32.0, -30.0), (-33.33, -35.39)]
+
+    # East flank: from forecourt rim at (32.00, -35.34) up to upper wall at (29.0, -13.5)
+    # Goes north so outward vector naturally faces east (exterior).
+    chain_east = [(32.00, -35.34), (31.5, -30.0), (30.0, -24.0), (29.5, -18.5), (29.0, -13.5)]
+
+    for chain, seed_base in ((chain_west, 201), (chain_east, 251)):
+        sub_pts = []
+        for i in range(len(chain) - 1):
+            p0, p1 = chain[i], chain[i + 1]
+            dist = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
+            sub_n = max(1, int(math.ceil(dist / 3.0)))
+            for s in range(sub_n):
+                t = s / sub_n
+                sub_pts.append((p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t))
+        sub_pts.append(chain[-1])
+
+        for i in range(len(sub_pts) - 1):
+            s, e = sub_pts[i], sub_pts[i + 1]
+            ln = math.hypot(e[0] - s[0], e[1] - s[1])
+            if ln < 0.6:
+                continue
+            outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
+            zs = ground_z(s[0], s[1])
+            ze = ground_z(e[0], e[1])
+            base_z = min(zs, ze) - 1.50
+            top_z = max(zs, ze) + height
+            wall_h = top_z - base_z
+            ux, uy = (e[0] - s[0]) / ln, (e[1] - s[1]) / ln
+            p0 = (s[0] - ux * 0.35, s[1] - uy * 0.35)
+            p1 = (e[0] + ux * 0.35, e[1] + uy * 0.35)
+            _build_clipped_wall_run(bm, build_curtain_wall_run, p0, p1, outward,
+                                    bld_boxes, top_z, thick, seed=seed_base + i)
+
+
 def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.98,
-                    gate=True, gate_y=None, bld_boxes=()):
+                    gate=True, gate_y=None, bld_boxes=(), connect_upper=True):
     """Crenellated retaining curtain wall along a plateau pad's rim, conforming to cliff terrain with fortified gate and portcullis."""
     from .curtain_wall import build_curtain_wall_run
     from .building_connector import build_curtain_wall_gate_portal
@@ -364,7 +423,11 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
     steps = max(2, int(abs(a1 - a0) / 4.5))
     pts = [pad_point(spec, a0 + (a1 - a0) * i / steps, inset) for i in range(steps + 1)]
 
-    # 1. Gatehouse with portcullis at the central grand stair passage
+    # 1. Curtain wall top elevation matches terrain plus wall height
+    top_z = max([ground_z(px, py) for px, py in pts]) + height
+    eff_gate_wall_h = top_z - z
+
+    # 2. Gatehouse with portcullis at the central grand stair passage (towers matching wall height)
     eff_gate_y = gate_y
     if eff_gate_y is None:
         if spec[0] == "forecourt_rock":
@@ -377,15 +440,14 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
     if gate and eff_gate_y is not None:
         build_curtain_wall_gate_portal(
             bm, cx=0.0, cy=eff_gate_y, z_ground=z,
-            outward=(0.0, -1.0), gate_w=4.8, gate_h=height + 0.4,
-            wall_h=height + 1.2, thickness=thick + 0.35,
+            outward=(0.0, -1.0), gate_w=4.8, gate_h=min(eff_gate_wall_h - 0.6, height + 0.4),
+            wall_h=eff_gate_wall_h, tower_h=eff_gate_wall_h, thickness=thick + 0.35,
             raised_portcullis=True
         )
 
-    # 2. Curtain wall runs along the plateau rim: one level top everywhere,
+    # 3. Curtain wall runs along the plateau rim: one level top everywhere,
     # bases driven 1.5 m through the cliffs, clipped (never gapped) at buildings.
     # The gate opening stays clear including the flanking gate towers.
-    top_z = max([ground_z(px, py) for px, py in pts]) + height
     for i in range(steps):
         s, e = pts[i], pts[i + 1]
         mid_x = (s[0] + e[0]) * 0.5
@@ -402,6 +464,10 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
         _build_clipped_wall_run(bm, build_curtain_wall_run, s, e, outward,
                                 bld_boxes, top_z, thick, seed=i + 7)
 
+    # 4. Connecting walls linking the forecourt rim ends up to the upper citadel perimeter wall
+    if connect_upper and spec[0] == "forecourt_rock":
+        build_flank_connecting_walls(bm, height=height, thick=thick, bld_boxes=bld_boxes)
+
 
 def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(), tier=3):
     """
@@ -412,18 +478,7 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
     from .curtain_wall import build_curtain_wall_run
     from .building_connector import build_curtain_wall_gate_portal
 
-    # 1. Fortified Gatehouse with twin flanking gate towers and portcullis at the grand stair passage
-    gate_cx = 0.0
-    gate_cy = -19.5
-    gate_z = ground_z(gate_cx, gate_cy)
-    build_curtain_wall_gate_portal(
-        bm, cx=gate_cx, cy=gate_cy, z_ground=gate_z,
-        outward=(0.0, -1.0), gate_w=4.8, gate_h=height + 0.4,
-        wall_h=height + 1.2, thickness=thick + 0.35,
-        raised_portcullis=True
-    )
-
-    # 2. Control waypoints tracing the perimeter along the cliff rims, shifted outwards to clear all buildings.
+    # 1. Control waypoints tracing the perimeter along the cliff rims, shifted outwards to clear all buildings.
     # The loop starts/ends clear of the gatehouse towers (outer faces at +-6.9).
     waypoints = [
         # Gate right flank (East arm of Terrace rim)
@@ -432,9 +487,10 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         (18.0, -18.2),
         (25.0, -16.8),
         (29.0, -13.5),
-        # East terrace flank (shifted out to clear East Hall and East Flank Tower)
-        (37.5, -9.0),
-        (38.0, -3.0),
+        # East terrace flank passing cleanly outside the free-standing East Flank Tower
+        (39.0, -11.0),
+        (39.5, -8.0),
+        (39.5, -3.0),
         (37.5, 6.0),
         (36.0, 13.0),
     ]
@@ -477,9 +533,10 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         (-36.0, 24.0),
         (-36.0, 14.0),
         (-37.0, 5.0),
-        # Passing outside West Flank Tower
-        (-38.0, -3.0),
-        (-37.5, -9.0),
+        # Passing cleanly outside the free-standing West Flank Tower
+        (-39.5, -3.0),
+        (-39.5, -8.0),
+        (-39.0, -11.0),
         # Return to gate left flank (clear of the gatehouse towers)
         (-29.0, -13.5),
         (-25.0, -16.8),
@@ -499,9 +556,22 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
             pts.append((p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t))
     pts.append(waypoints[-1])
 
-    # One level wall top everywhere (max terrain + height), bases 1.5 m into
-    # the rock, runs clipped around buildings with overlapping ends (no gaps).
+    # 2. Wall top elevation across loop: max terrain + height
     top_z = max([ground_z(px, py) for px, py in pts]) + height
+
+    # 3. Fortified Gatehouse with twin flanking gate towers matching the wall height exactly
+    gate_cx = 0.0
+    gate_cy = -19.5
+    gate_z = ground_z(gate_cx, gate_cy)
+    gate_wall_h = top_z - gate_z
+    build_curtain_wall_gate_portal(
+        bm, cx=gate_cx, cy=gate_cy, z_ground=gate_z,
+        outward=(0.0, -1.0), gate_w=4.8, gate_h=min(gate_wall_h - 1.0, 4.5),
+        wall_h=gate_wall_h, tower_h=gate_wall_h, thickness=thick + 0.35,
+        raised_portcullis=True
+    )
+
+    # 4. Curtain wall runs clipped around buildings with overlapping ends (no gaps).
     for i in range(len(pts) - 1):
         s, e = pts[i], pts[i + 1]
 

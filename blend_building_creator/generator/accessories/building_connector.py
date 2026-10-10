@@ -584,6 +584,7 @@ def build_curtain_wall_gate_portal(
     wall_h=4.8,
     thickness=1.2,
     raised_portcullis=True,
+    tower_h=None,
     mat_stone=MAT_INDEX_STONE,
     mat_cut_stone=MAT_INDEX_CUT_STONE,
 ):
@@ -601,7 +602,7 @@ def build_curtain_wall_gate_portal(
 
     half_gate = gate_w * 0.5
     tower_rad = 2.10
-    tower_height = wall_h + 1.85
+    tower_height = tower_h if tower_h is not None else wall_h
 
     # 1. TWIN FLANKING D-SHAPED BASTION GATE TOWERS (matching main gate style)
     from .gatehouse import build_flanking_gate_towers
