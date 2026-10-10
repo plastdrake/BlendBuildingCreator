@@ -2787,15 +2787,28 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         if d.get('axis', 'X') == 'X' and (_door is None or d.get('y', 0.0) < _door.get('y', 0.0)):
             _door = d
     rcx = (tracker.rx0 + tracker.rx1) * 0.5
+    rcy = (tracker.ry0 + tracker.ry1) * 0.5
     _hw, _hd = 0.85, 0.575
-    for _ox in (0.0, -1.4, 1.4, -2.4, 2.4):
-        _cx, _cy = rcx + _ox + _jit(rng, 0.10), tracker.ry0 + 2.05
-        if _cy - _hd < tracker.ry0 or _cy + _hd > tracker.ry1:
-            continue
+
+    # Keep the display out of the walking centre: hug the front wall, then
+    # the side walls, always tucked toward a corner.
+    _near_front = tracker.ry0 + _hd + 0.10
+    _near_back = tracker.ry1 - _hd - 0.10
+    _near_left = tracker.rx0 + _hw + 0.10
+    _near_right = tracker.rx1 - _hw - 0.10
+    _spots = [
+        (_near_left, _near_front), (_near_right, _near_front),
+        (_near_left, _near_back), (_near_right, _near_back),
+        (rcx, _near_front), (rcx, _near_back),
+    ]
+    for _cx, _cy in _spots:
+        _cx += _jit(rng, 0.08)
+        _cy += _jit(rng, 0.08)
         if not tracker.is_free(_cx - _hw, _cx + _hw, _cy - _hd, _cy + _hd):
             continue
         if _door is not None:
-            _yaw = math.atan2(_door.get('x', rcx) - _cx, _door.get('y', _cy - 1.0) - _cy)
+            _yaw = math.atan2(_door.get('x', rcx) - _cx,
+                              _door.get('y', _cy - 1.0) - _cy)
         else:
             _yaw = math.pi
         tracker.occupy(_cx - _hw, _cx + _hw, _cy - _hd, _cy + _hd)

@@ -13,7 +13,6 @@ Workstations (floor pieces for the craft rooms):
 """
 
 import math
-import os
 from mathutils import Matrix
 
 from ..mesh_utils import (
@@ -925,94 +924,28 @@ def _meat_mat():
     return MAT_INDEX_MEAT
 
 
-_FBX_TEMPLATE_CACHE = {}
-
-
-def _addon_root():
-    return os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))))
-
-
-def _import_fbx_template(fbx_path):
-    """Import an FBX prop once per session; harvest world-space verts, face
-    index loops and UVs per mesh, then remove the import again. Returns a
-    list of dicts or None when the import is unavailable."""
-    key = os.path.abspath(fbx_path)
-    if key in _FBX_TEMPLATE_CACHE:
-        return _FBX_TEMPLATE_CACHE[key]
-    try:
-        import bpy
-        before_objs = set(bpy.data.objects[:])
-        before_meshes = set(bpy.data.meshes[:])
-        before_mats = set(bpy.data.materials[:])
-        bpy.ops.import_scene.fbx(filepath=key)
-        items = []
-        new_objs = [o for o in bpy.data.objects if o not in before_objs]
-        for o in new_objs:
-            if o.type == 'MESH':
-                me = o.data
-                if len(me.vertices) and len(me.polygons):
-                    M = o.matrix_world
-                    verts = [M @ v.co for v in me.vertices]
-                    uv_data = me.uv_layers[0].data if len(me.uv_layers) else None
-                    polys = []
-                    for poly in me.polygons:
-                        idx = list(poly.loop_indices)
-                        uvs = ([tuple(uv_data[li].uv) for li in idx]
-                               if uv_data is not None else None)
-                        polys.append((idx, uvs))
-                    items.append({'verts': verts, 'polys': polys})
-        for o in new_objs:
-            me = o.data if o.type == 'MESH' else None
-            try:
-                bpy.data.objects.remove(o, do_unlink=True)
-            except Exception:
-                pass
-            if me is not None:
-                try:
-                    if me.users == 0:
-                        bpy.data.meshes.remove(me)
-                except Exception:
-                    pass
-        for m in list(bpy.data.materials):
-            if m not in before_mats:
-                try:
-                    if m.users == 0:
-                        bpy.data.materials.remove(m)
-                except Exception:
-                    pass
-        for m in list(bpy.data.meshes):
-            if m not in before_meshes:
-                try:
-                    if m.users == 0:
-                        bpy.data.meshes.remove(m)
-                except Exception:
-                    pass
-        _FBX_TEMPLATE_CACHE[key] = items or None
-        return _FBX_TEMPLATE_CACHE[key]
-    except Exception:
-        _FBX_TEMPLATE_CACHE[key] = None
-        return None
-
-
 def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
                     mat_index, final=None, long_axis='Y'):
-    """Stamp an artist FBX mesh normalized to ``length`` with ``mat_index``.
+    """Stamp a baked artist prop mesh normalized to ``length`` with ``mat_index``.
 
-    Shared by the fish/meat/bread display meshes (each unwrapped to its own
-    atlas). ``long_axis`` is the local axis that must end up pointing along
-    the prop's +X length. Returns True, raises on any problem.
+    ``fbx_file`` names the source art (e.g. ``bread.fbx``); the geometry comes
+    from the baked table in :mod:`artisan_meshdata` so no FBX operator runs at
+    generation time (``bpy.ops.import_scene.fbx`` fails inside property-update
+    and depsgraph contexts). ``long_axis`` is the local axis that must end up
+    pointing along the prop's +X length. Returns True, raises on any problem.
     """
-    from mathutils import Matrix as _M
-    items = _import_fbx_template(os.path.join(_addon_root(), 'props', fbx_file))
-    if not items:
-        raise RuntimeError(f'{fbx_file} unavailable')
-    # Fit the mesh's largest horizontal axis: X-native needs nothing, a
+    from mathutils import Matrix as _M, Vector as _V
+    from .artisan_meshdata import PROP_MESHES
+    key = fbx_file[:-4] if fbx_file.lower().endswith('.fbx') else fbx_file
+    it = PROP_MESHES.get(key)
+    if not it:
+        raise RuntimeError(f'{fbx_file} not baked')
+    # Fit the mesh's chosen horizontal axis: X-native needs nothing, a
     # Y-native prop is yawed -90 so its length points along +X.
-    all_v = [v for it in items for v in it['verts']]
-    xs = [v[0] for v in all_v]
-    ys = [v[1] for v in all_v]
-    zs = [v[2] for v in all_v]
+    verts = it['verts']
+    xs = [v[0] for v in verts]
+    ys = [v[1] for v in verts]
+    zs = [v[2] for v in verts]
     dx, dy = max(xs) - min(xs), max(ys) - min(ys)
     if long_axis == 'AUTO':
         yaw_fix = 0.0 if dx >= dy else -math.pi * 0.5
@@ -1031,25 +964,24 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
     base = _M.Translation((-cx, -cy, -z0))
     uv_layer = bm.loops.layers.uv.verify()
     seen = set()
-    for it in items:
-        remap = {}
-        used = set(i for poly, _ in it['polys'] for i in poly)
-        for i in used:
-            v = it['verts'][i]
-            remap[i] = bm.verts.new(place @ (fix @ (base @ v)))
-        for idx, uvs in it['polys']:
-            if len(set(idx)) < 3:
-                continue  # degenerate loop
-            key = tuple(sorted(idx))
-            if key in seen:
-                continue  # duplicate face
-            seen.add(key)
-            f = bm.faces.new([remap[i] for i in idx])
-            f.material_index = mat_index
-            f.smooth = True
-            if uvs is not None:
-                for loop, uv in zip(f.loops, uvs):
-                    loop[uv_layer].uv = uv
+    remap = {}
+    used = set(vi for poly in it['polys'] for vi, _ in poly)
+    for i in used:
+        v = verts[i]
+        remap[i] = bm.verts.new(place @ (fix @ (base @ _V(v))))
+    for poly in it['polys']:
+        idx = [vi for vi, _ in poly]
+        if len(set(idx)) < 3:
+            continue  # degenerate loop
+        key_f = tuple(sorted(idx))
+        if key_f in seen:
+            continue  # duplicate face
+        seen.add(key_f)
+        f = bm.faces.new([remap[i] for i in idx])
+        f.material_index = mat_index
+        f.smooth = True
+        for loop, (_, uv) in zip(f.loops, poly):
+            loop[uv_layer].uv = uv
     return True
 
 
