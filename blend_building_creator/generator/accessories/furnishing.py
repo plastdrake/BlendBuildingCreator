@@ -2692,13 +2692,11 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
                              candidate_walls=('NORTH', 'EAST', 'WEST'))
         _try_place_wall_prop(bm, 'TOOL_RACK', 1.00, 0.30, tracker, z_floor,
                              candidate_walls=('EAST', 'WEST', 'NORTH'))
-        return
     if arch == 'FURNITURE_MAKER':  # showroom pieces
         _try_place_wall_prop(bm, 'CHAIR', 0.55, 0.55, tracker, z_floor,
                              candidate_walls=('NORTH', 'EAST', 'WEST'))
         _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
                              candidate_walls=('SOUTH', 'WEST', 'EAST'))
-        return
     table_goods = {
         'TAILOR': ['FOLDED_CLOTH', 'FOLDED_CLOTH'],
         'BAKERY': ['BREAD_LOAF', 'BREAD_LOAF', 'DOUGH_BOWL'],
@@ -2707,8 +2705,6 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'JEWELER': ['BOTTLE_CLUSTER', 'BOTTLE', 'BOTTLE'],
         'BREWERY': ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'BOTTLE_CLUSTER'],
     }.get(arch)
-    if not table_goods:
-        return
     # Trade showpieces that do not fit on the table.
     if arch == 'BAKERY':
         _try_place_wall_prop(bm, 'BREAD_RACK', 1.00, 0.50, tracker, z_floor,
@@ -2726,6 +2722,8 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         _lay_out_jeweler_counter(bm, tracker, z_floor, rng)
     # Stepped market display near the entrance, dressed with sale goods.
     _place_market_display(bm, tracker, z_floor, rng, arch)
+    if not table_goods:
+        return
     is_round = (arch == 'BREWERY')
     for tx, ty in ((rcx, rcy), (rcx - 1.0, rcy), (rcx + 1.0, rcy),
                    (rcx, rcy - 1.0), (rcx, rcy + 1.0)):
@@ -2824,6 +2822,13 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         (_near_left, _near_back), (_near_right, _near_back),
         (rcx, _near_front), (rcx, _near_back),
     ]
+    # Wall-hugging midpoints either side (when the corners hold crates).
+    for _f in (0.30, 0.70):
+        _py = tracker.ry0 + (tracker.ry1 - tracker.ry0) * _f
+        _px = tracker.rx0 + (tracker.rx1 - tracker.rx0) * _f
+        _spots += [(_near_left, _py), (_near_right, _py),
+                   (_px, _near_front), (_px, _near_back)]
+    _placed = False
     for _cx, _cy in _spots:
         _cx += _jit(rng, 0.08)
         _cy += _jit(rng, 0.08)
@@ -2836,19 +2841,32 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
             _yaw = math.pi
         tracker.occupy(_cx - _hw, _cx + _hw, _cy - _hd, _cy + _hd)
         build_prop(bm, 'MARKET_DISPLAY', _cx, _cy, z_floor, _yaw, width=1.50)
-        # Dress the tiers (mirror the builder: boards at local y +0.30/0/-0.30,
-        # tops at z 0.475/0.825/1.175; two slots per tier at x +/-0.33).
-        _cyaw = _yaw
-        _cos, _sin = math.cos(_cyaw), math.sin(_cyaw)
-        for (_ly, _lz), _goods in zip(((0.30, 0.475), (0.0, 0.825), (-0.30, 1.175)),
-                                     _tier_goods):
-            for _i, _g in enumerate(_goods):
-                _lx = (-0.33 if _i % 2 == 0 else 0.33) if len(_goods) > 1 else 0.0
-                _gx = _cx + _lx * _cos - _ly * _sin
-                _gy = _cy + _lx * _sin + _ly * _cos
-                build_prop(bm, _g, _gx, _gy, z_floor + _lz,
-                           _cyaw + rng.uniform(-0.15, 0.15))
-        return
+        _placed = True
+        break
+    if not _placed:
+        # Last resort: any open floor patch, still facing the door.
+        _spot = _place_floor_prop(bm, tracker, z_floor, rng, 'MARKET_DISPLAY',
+                                  _hw, _hd, width=1.50)
+        if _spot is not None:
+            _cx, _cy = _spot[0], _spot[1]
+            _yaw = (math.atan2(_door.get('x', rcx) - _cx,
+                               _door.get('y', _cy - 1.0) - _cy)
+                    if _door is not None else math.pi)
+        else:
+            return
+    # Dress the tiers (mirror the builder: boards at local y +0.30/0/-0.30,
+    # tops at z 0.475/0.825/1.175; two slots per tier at x +/-0.33).
+    _cyaw = _yaw
+    _cos, _sin = math.cos(_cyaw), math.sin(_cyaw)
+    for (_ly, _lz), _goods in zip(((0.30, 0.475), (0.0, 0.825), (-0.30, 1.175)),
+                                 _tier_goods):
+        for _i, _g in enumerate(_goods):
+            _lx = (-0.33 if _i % 2 == 0 else 0.33) if len(_goods) > 1 else 0.0
+            _gx = _cx + _lx * _cos - _ly * _sin
+            _gy = _cy + _lx * _sin + _ly * _cos
+            build_prop(bm, _g, _gx, _gy, z_floor + _lz,
+                       _cyaw + rng.uniform(-0.15, 0.15))
+    return
 
 
 def _furnish_chapel(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
