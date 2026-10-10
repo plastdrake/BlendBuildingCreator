@@ -85,7 +85,7 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
 
     # 3. Stair shaft in the wing (matches floors.py): a railed timber stair
     #    from the ground floor down to the cellar.
-    shx = wx1 + 1.05
+    shx = wx1 + 1.50
     shy = (wy1 + wy2) * 0.5
     riser = 0.185
     steps = max(8, int(round((z_ground - z_floor) / riser)))

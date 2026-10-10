@@ -337,15 +337,12 @@ def build_butcher_block(bm, x, y, z_ground=0.0, ang=0.0):
     return faces
 
 
-def build_sausage_string(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
-    """Butcher's hanging meat rail: full-width base skid, twin posts, a top
-    rail, and the artist's meat cuts hanging on ropes (local -Y faces the
-    room)."""
+def _hanging_rail_frame(bm, width):
+    """Shared butcher/fish hanging-rail frame: full-width foot skid, twin
+    posts, knee braces and a top rail. Returns (faces, rail_z)."""
     faces = []
     post_s = 0.09
     h = 1.62
-    # One clean full-width foot beam under both posts (a single skid reads
-    # far better than floating cross-feet).
     faces += create_beveled_box(
         bm, size=(width + 0.18, 0.20, 0.09),
         location=(0.0, 0.0, 0.045),
@@ -357,21 +354,25 @@ def build_sausage_string(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
             location=(sx, 0.0, 0.09 + h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010
         )
-        # Knee brace from post down to the skid.
         faces += create_beveled_box(
             bm, size=(0.06, 0.06, 0.40),
             location=(sx, 0.11, 0.30),
             rotation=(0.70, 0.0, 0.0),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
         )
-    # Top hanging rail.
     rail_z = 0.09 + h - 0.07
     faces += create_cylinder(
         bm, radius=0.034, height=width - 0.02, segments=8,
         location=(0.0, 0.0, rail_z),
         rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_WOOD
     )
-    # Hang the artist's cuts at alternating heights, laid flat to the room.
+    return faces, rail_z
+
+
+def build_sausage_string(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
+    """Butcher's hanging meat rail: the artist's meat cuts hang on ropes
+    (local -Y faces the room)."""
+    faces, rail_z = _hanging_rail_frame(bm, width)
     n = max(3, int(width / 0.24))
     for i in range(n):
         hx = -width * 0.5 + 0.22 + i * ((width - 0.44) / max(1, n - 1))
@@ -386,6 +387,28 @@ def build_sausage_string(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
             hx, 0.0, rail_z - rope_len - 0.02, 0.0,
             0.30 if i % 2 else 0.24, _meat_mat(), long_axis='Y',
             pre_rot=(math.pi * 0.5, 0.0, 0.0)
+        )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_fish_rail(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
+    """Fishmonger's hanging rail: the artist's fish hang nose-down on ropes,
+    like the butcher's cuts (local -Y faces the room)."""
+    faces, rail_z = _hanging_rail_frame(bm, width)
+    n = max(3, int(width / 0.26))
+    for i in range(n):
+        hx = -width * 0.5 + 0.22 + i * ((width - 0.44) / max(1, n - 1))
+        rope_len = 0.20 + (0.08 if i % 2 else 0.0)
+        faces += create_cylinder(
+            bm, radius=0.006, height=rope_len, segments=6,
+            location=(hx, 0.0, rail_z - rope_len * 0.5),
+            mat_index=MAT_INDEX_ROPE
+        )
+        _stamp_baked_local(
+            bm, faces, 'fish.fbx',
+            hx, -0.005, rail_z - rope_len - 0.02, 0.0,
+            0.30, _fish_mat(), long_axis='X', pre_mat=_hang_mat()
         )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -1099,44 +1122,42 @@ def build_rope_coil(bm, x, y, z_ground=0.0, ang=0.0):
 
 
 def build_market_display(bm, x, y, z_ground=0.0, ang=0.0, width=1.50):
-    """Stepped market display stand: three ascending goods boards with a
-    tall backdrop, front (+Y local) facing the customer.
+    """Stepped market display: three solid ascending tiers against a tall
+    backboard, front (+Y local) facing the customer.
 
-    Tier tops (local): front (y=+0.30, z=0.475), mid (y=0.0, z=0.825),
-    back (y=-0.30, z=1.175). Furnishing mirrors these numbers for slots.
+    Each tier is a SOLID box resting on the floor (no floating shelves, no
+    coplanar seams: adjacent boxes overlap in Y by 2cm). Tier tops (local):
+    front (y=+0.18, z=0.50), mid (y=-0.18, z=0.85), back (y=-0.54, z=1.20).
+    Furnishing mirrors these numbers for the goods slots.
     """
     faces = []
-    bd = 0.95
-    # Side uprights: low front posts, tall back posts.
-    for sx in (-width * 0.5 + 0.04, width * 0.5 - 0.04):
+    d = 0.38
+    tiers = ((0.18, 0.50), (-0.18, 0.85), (-0.54, 1.20))
+    for (ty, tz) in tiers:
         faces += create_beveled_box(
-            bm, size=(0.07, 0.07, 0.50),
-            location=(sx, 0.30, 0.25),
+            bm, size=(width - 0.04, d + 0.02, tz),
+            location=(0.0, ty, tz * 0.5),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.010
+        )
+    # Timber corner posts framing the steps (proud of the boxes, so no
+    # coplanar face ever coincides with a tier box).
+    for sx in (-width * 0.5 + 0.05, width * 0.5 - 0.05):
+        faces += create_beveled_box(
+            bm, size=(0.10, d * 3.0 + 0.10, 1.26),
+            location=(sx, -0.18, 0.63),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010
+        )
+    # Top shelf lip on each tier (slightly proud, insets the goods).
+    for (ty, tz) in tiers:
+        faces += create_beveled_box(
+            bm, size=(width + 0.03, d + 0.06, 0.05),
+            location=(0.0, ty, tz - 0.02),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
-        faces += create_beveled_box(
-            bm, size=(0.07, 0.07, 1.30),
-            location=(sx, -0.30, 0.65),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
-        )
-        # Stepped side panel under the boards.
-        for i, (py, pz) in enumerate(((0.30, 0.225), (0.0, 0.575), (-0.30, 0.925))):
-            faces += create_beveled_box(
-                bm, size=(0.06, 0.30, 0.42 - i * 0.10),
-                location=(sx, py, pz - (0.42 - i * 0.10) * 0.5 + 0.21),
-                mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
-            )
-    # Three stepped goods boards.
-    for py, pz in ((0.30, 0.45), (0.0, 0.80), (-0.30, 1.15)):
-        faces += create_beveled_box(
-            bm, size=(width - 0.08, 0.34, 0.05),
-            location=(0.0, py, pz - 0.025),
-            mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
-        )
-    # Tall backdrop board behind the top tier.
+    # Tall backboard rising behind the top tier.
     faces += create_beveled_box(
-        bm, size=(width - 0.08, 0.06, 0.55),
-        location=(0.0, -0.445, 1.175 + 0.20),
+        bm, size=(width - 0.02, 0.06, 0.62),
+        location=(0.0, -0.74, 1.20 + 0.30),
         mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
     )
     transform_faces(faces, _place(x, y, z_ground, ang))
@@ -1168,32 +1189,51 @@ def build_horseshoe(bm, x, y, z_ground=0.0, ang=0.0):
 
 
 def build_wine_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.10):
-    """Cellar wine rack: vertical frame with three rows of bottle cubbies
-    (six slots, one lying bottle each), leaning against a wall."""
+    """Cellar wine rack: a timber frame with three solid shelves, each
+    holding a row of the detailed mage-tower wine bottles LYING flat.
+
+    Shelves sit *between* the posts (inset 2cm) so no face is coplanar with
+    a post, and each bottle rests on a shelf top (never floating).
+    """
     faces = []
-    h = 1.30
-    depth = 0.42
-    for sx in (-width * 0.5 + 0.035, width * 0.5 - 0.035):
+    h = 1.34
+    depth = 0.44
+    post_w = 0.10
+    shelf_t = 0.06
+    shelf_zs = (0.22, 0.66, 1.10)
+    half = width * 0.5 - post_w * 0.5
+    # Posts.
+    for sx in (-half, half):
         faces += create_beveled_box(
-            bm, size=(0.07, depth, h),
+            bm, size=(post_w, depth, h),
             location=(sx, 0.0, h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
-    for rz in (0.12, 0.52, 0.92, 1.28):
+    # Solid shelves inset between the posts.
+    for sz in shelf_zs:
         faces += create_beveled_box(
-            bm, size=(width, depth, 0.05),
-            location=(0.0, 0.0, rz),
+            bm, size=(width - post_w - 0.04, depth, shelf_t),
+            location=(0.0, 0.0, sz),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
         )
-    # Lying wine bottles in each cubby, necks out toward the room (-Y),
-    # re-using the detailed mage-tower bottle.
+    # Back rail tying the frame together.
+    faces += create_beveled_box(
+        bm, size=(width - post_w - 0.04, 0.05, 0.06),
+        location=(0.0, depth * 0.5 - 0.05, h - 0.06),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
+    )
+    # Lying bottles resting on each shelf, axis along the shelf (X),
+    # necks toward the room (-Y side).
     from .interior_furniture import build_bottle
-    for rz in (0.30, 0.70, 1.06):
-        for bx in (-width * 0.24, width * 0.24):
+    per_shelf = max(2, int((width - 0.30) / 0.22))
+    for sz in shelf_zs:
+        top = sz + shelf_t * 0.5
+        for i in range(per_shelf):
+            bx = -width * 0.5 + 0.26 + i * ((width - 0.52) / max(1, per_shelf - 1))
             bf = build_bottle(bm, 0.0, 0.0, 0.0, 0.0, bottle_type='WINE')
-            bm_mat = (Matrix.Translation((bx, 0.15, rz + 0.07))
-                      @ Matrix.Rotation(math.pi * 0.5, 4, 'X'))
-            transform_faces(bf, bm_mat)
+            m = (Matrix.Translation((bx, 0.04, top + 0.05))
+                 @ Matrix.Rotation(math.pi * 0.5, 4, 'Y'))
+            transform_faces(bf, m)
             faces += bf
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces

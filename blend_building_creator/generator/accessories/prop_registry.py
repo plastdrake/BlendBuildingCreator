@@ -214,6 +214,8 @@ for _s in (
           'artisan_props', 'build_butcher_block', 0.55),
     _spec('SAUSAGE_STRING', "Sausage Rail", 'WORK', "Hanging rail with strings of linked sausages",
           'artisan_props', 'build_sausage_string', 0.85, width=1.30),
+    _spec('FISH_RAIL', "Fish Rail", 'WORK', "Hanging rail with the artist's fish",
+          'artisan_props', 'build_fish_rail', 0.85, width=1.30),
     _spec('DRESS_FORM', "Tailor Dress Form", 'WORK', "Linen torso on a stand with sash and tape",
           'artisan_props', 'build_dress_form', 0.45),
     _spec('CLOTH_BOLT_BIN', "Cloth Bolt Bin", 'WORK', "Open bin with three upright cloth bolts",

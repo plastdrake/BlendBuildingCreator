@@ -2686,9 +2686,12 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         _place_floor_prop(bm, tracker, z_floor, rng, 'CRATE', 0.30, 0.30)
         _place_goods_row(bm, tracker, z_floor, rng, 'CRATE', count=1, box=0.30)
 
-    # Drying rack with smoked fish along a free wall, rope coil in a corner.
+    # Fish drying rack + hanging fish rail along free walls (fish hang, they
+    # do not lie on the floor).
     _try_place_wall_prop(bm, 'FISH_DRYING_RACK', 1.60, 0.80, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'))
+    _try_place_wall_prop(bm, 'FISH_RAIL', 1.30, 0.35, tracker, z_floor,
+                         candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'))
     _place_floor_prop(bm, tracker, z_floor, rng, 'ROPE_COIL', 0.28, 0.28)
     # Curing stringers hung from the beams (two when there is room).
     for _si in range(2):
@@ -2886,20 +2889,16 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         _placed = _try_place(0.62, 0.50)
         _disp_w = 1.05
     if _placed is None:
-        _spot = _place_floor_prop(bm, tracker, z_floor, rng, 'MARKET_DISPLAY',
-                                  0.85, 0.575, width=1.50)
-        if _spot is None:
-            return
-        _placed = (_spot[0], _spot[1], _yaw_away(_spot[0], _spot[1]))
-        _disp_w = 1.50
+        # No wall-hugging spot big enough: never drop it mid-room. Skip.
+        return
     _cx, _cy, _yaw = _placed
     build_prop(bm, 'MARKET_DISPLAY', _cx, _cy, z_floor, _yaw, width=_disp_w)
-    # Dress the tiers (mirror the builder: boards at local y +0.30/0/-0.30,
-    # tops at z 0.475/0.825/1.175; slots at x scale with the display width).
+    # Dress the tiers (mirror the builder: tier tops at local y +0.18/-0.18/
+    # -0.54, z 0.50/0.85/1.20; slots at x scale with the display width).
     _cx_off = (_disp_w - 0.08) * 0.23
     _cyaw = _yaw
     _cos, _sin = math.cos(_cyaw), math.sin(_cyaw)
-    for (_ly, _lz), _goods in zip(((0.30, 0.475), (0.0, 0.825), (-0.30, 1.175)),
+    for (_ly, _lz), _goods in zip(((0.18, 0.50), (-0.18, 0.85), (-0.54, 1.20)),
                                  _tier_goods):
         for _i, _g in enumerate(_goods):
             _lx = (-_cx_off if _i % 2 == 0 else _cx_off) if len(_goods) > 1 else 0.0

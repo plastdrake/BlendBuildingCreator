@@ -225,7 +225,7 @@ def build_floors(bm, props, ctx):
                                   float(wings[0]['base'][1]),
                                   float(wings[0]['base'][2]),
                                   float(wings[0]['base'][3]))
-            _shx = wx1 + 1.05
+            _shx = wx1 + 1.50
             _shy = (wy1 + wy2) * 0.5
             floor_stair_holes[0] = (_shx - 0.80, _shx + 0.80,
                                     _shy - 1.80, _shy + 1.80)
