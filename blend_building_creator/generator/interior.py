@@ -1961,10 +1961,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             has_bs = (fl_idx == 0 and stair_hole is not None and getattr(props, 'has_basement_stair', False))
             if has_bs:
                 dw_y3 = (stair_hole[2] + stair_hole[3]) * 0.5
+                cellar_west_x = min(split_x, stair_hole[0] - 1.10)
                 stair_sep_x = max(split_x + 2.4, min(ix_max - 2.4, stair_hole[1] + 0.70))
                 dw_c3_x = (stair_sep_x + ix_max) * 0.5
             else:
                 dw_y3 = (split_y2 + iy_max) * 0.5
+                cellar_west_x = split_x
                 stair_sep_x = None
                 dw_c3_x = None
 
@@ -1978,19 +1980,27 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
                 'doorway': {'x': split_x, 'y': dw_y2, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
             })
-            interior_walls.append({
-                'p1': (split_x, split_y2), 'p2': (split_x, iy_max),
-                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
-                'doorway': {'x': split_x, 'y': dw_y3, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
-            })
+            if has_bs:
+                # West wall of the cellar stair room: placed WEST of stair landing with doorway opening from hall
+                interior_walls.append({
+                    'p1': (cellar_west_x, split_y2), 'p2': (cellar_west_x, iy_max),
+                    'axis': 'Y', 'pos': cellar_west_x, 'thickness': wall_t,
+                    'doorway': {'x': cellar_west_x, 'y': dw_y3, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+                })
+            else:
+                interior_walls.append({
+                    'p1': (split_x, split_y2), 'p2': (split_x, iy_max),
+                    'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                    'doorway': {'x': split_x, 'y': dw_y3, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+                })
             interior_walls.append({
                 'p1': (split_x, split_y1), 'p2': (ix_max, split_y1),
                 'axis': 'X', 'pos': split_y1, 'thickness': wall_t, 'doorway': None
             })
             if has_bs:
-                # South wall of the cellar stair room: solid wall (NO doorway)
+                # South wall of the cellar stair room: solid wall from cellar_west_x to stair_sep_x
                 interior_walls.append({
-                    'p1': (split_x, split_y2), 'p2': (stair_sep_x, split_y2),
+                    'p1': (cellar_west_x, split_y2), 'p2': (stair_sep_x, split_y2),
                     'axis': 'X', 'pos': split_y2, 'thickness': wall_t, 'doorway': None
                 })
                 # South wall of Chamber 3: doorway connecting into Chamber 2
@@ -2011,16 +2021,19 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     'axis': 'X', 'pos': split_y2, 'thickness': wall_t, 'doorway': None
                 })
 
+            _hall_dw_4 = [
+                {'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w},
+                {'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w},
+                {'x': cellar_west_x if has_bs else split_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w},
+            ]
             rm0 = Room(
                 id=f"fl{fl_idx}_hall", floor_idx=fl_idx, role=roles[0],
                 bounds=(ix_min, split_x, iy_min, iy_max),
-                doorways=[
-                    {'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w},
-                    {'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w},
-                    {'x': split_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w},
-                ],
-                stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
-                exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
+                doorways=_hall_dw_4,
+                stair_hole=None if has_bs else _holds_stair((ix_min, split_x, iy_min, iy_max)),
+                exterior_facades={'FRONT': (ix_min, split_x),
+                                  'BACK': (ix_min, cellar_west_x if has_bs else split_x),
+                                  'LEFT': (iy_min, iy_max)}
             )
             rm1 = Room(
                 id=f"fl{fl_idx}_chamber_1", floor_idx=fl_idx, role=roles[1],
@@ -2042,12 +2055,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 )
                 rm_stair = Room(
                     id=f"fl{fl_idx}_cellar_stair", floor_idx=fl_idx, role='STAIR_LANDING',
-                    bounds=(split_x, stair_sep_x, split_y2, iy_max),
+                    bounds=(cellar_west_x, stair_sep_x, split_y2, iy_max),
                     doorways=[
-                        {'x': split_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w},
+                        {'x': cellar_west_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w},
                     ],
                     stair_hole=stair_hole,
-                    exterior_facades={'BACK': (split_x, stair_sep_x)}
+                    exterior_facades={'BACK': (cellar_west_x, stair_sep_x)}
                 )
                 rm3 = Room(
                     id=f"fl{fl_idx}_chamber_3", floor_idx=fl_idx, role=roles[3],
@@ -2087,10 +2100,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             dw_y1 = (iy_min + split_y) * 0.5
             if has_bs:
                 dw_y2 = (stair_hole[2] + stair_hole[3]) * 0.5
+                cellar_west_x = min(split_x, stair_hole[0] - 1.10)
                 stair_sep_x = max(split_x + 2.4, min(ix_max - 2.4, stair_hole[1] + 0.70))
                 dw_c2_x = (stair_sep_x + ix_max) * 0.5
             else:
                 dw_y2 = (split_y + iy_max) * 0.5
+                cellar_west_x = split_x
                 stair_sep_x = None
                 dw_c2_x = None
 
@@ -2099,15 +2114,22 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
                 'doorway': {'x': split_x, 'y': dw_y1, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
             })
-            interior_walls.append({
-                'p1': (split_x, split_y), 'p2': (split_x, iy_max),
-                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
-                'doorway': {'x': split_x, 'y': dw_y2, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
-            })
+            if has_bs:
+                interior_walls.append({
+                    'p1': (cellar_west_x, split_y), 'p2': (cellar_west_x, iy_max),
+                    'axis': 'Y', 'pos': cellar_west_x, 'thickness': wall_t,
+                    'doorway': {'x': cellar_west_x, 'y': dw_y2, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+                })
+            else:
+                interior_walls.append({
+                    'p1': (split_x, split_y), 'p2': (split_x, iy_max),
+                    'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                    'doorway': {'x': split_x, 'y': dw_y2, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+                })
             if has_bs:
                 # South wall of the cellar stair room: solid wall (NO doorway)
                 interior_walls.append({
-                    'p1': (split_x, split_y), 'p2': (stair_sep_x, split_y),
+                    'p1': (cellar_west_x, split_y), 'p2': (stair_sep_x, split_y),
                     'axis': 'X', 'pos': split_y, 'thickness': wall_t, 'doorway': None
                 })
                 # South wall of North-East Chamber: doorway connecting into South-East Chamber
@@ -2128,15 +2150,18 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     'axis': 'X', 'pos': split_y, 'thickness': wall_t, 'doorway': None
                 })
 
+            _hall_dw_3 = [
+                {'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w},
+                {'x': cellar_west_x if has_bs else split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w}
+            ]
             rm0 = Room(
                 id=f"fl{fl_idx}_hall", floor_idx=fl_idx, role=roles[0],
                 bounds=(ix_min, split_x, iy_min, iy_max),
-                doorways=[
-                    {'x': split_x, 'y': dw_y1, 'axis': 'Y', 'w': dw_w},
-                    {'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w}
-                ],
-                stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
-                exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
+                doorways=_hall_dw_3,
+                stair_hole=None if has_bs else _holds_stair((ix_min, split_x, iy_min, iy_max)),
+                exterior_facades={'FRONT': (ix_min, split_x),
+                                  'BACK': (ix_min, cellar_west_x if has_bs else split_x),
+                                  'LEFT': (iy_min, iy_max)}
             )
             if has_bs:
                 rm1 = Room(
@@ -2151,12 +2176,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 )
                 rm_stair = Room(
                     id=f"fl{fl_idx}_cellar_stair", floor_idx=fl_idx, role='STAIR_LANDING',
-                    bounds=(split_x, stair_sep_x, split_y, iy_max),
+                    bounds=(cellar_west_x, stair_sep_x, split_y, iy_max),
                     doorways=[
-                        {'x': split_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w},
+                        {'x': cellar_west_x, 'y': dw_y2, 'axis': 'Y', 'w': dw_w},
                     ],
                     stair_hole=stair_hole,
-                    exterior_facades={'BACK': (split_x, stair_sep_x)}
+                    exterior_facades={'BACK': (cellar_west_x, stair_sep_x)}
                 )
                 rm2 = Room(
                     id=f"fl{fl_idx}_chamber_ne", floor_idx=fl_idx, role=roles[2],
