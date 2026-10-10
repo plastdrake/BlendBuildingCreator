@@ -38,7 +38,7 @@ def _box(bm, x0, x1, y0, y1, z0, z1, mat=WALL, long_axis=None):
     loc = ((x0 + x1) * 0.5, (y0 + y1) * 0.5, (z0 + z1) * 0.5)
     if mat == BEAM:
         from ..uv_utils import timber_box
-        timber_box(bm, size=(dx, dy, dz), location=loc, mat_index=mat, bevel_amount=0.01)
+        timber_box(bm, size=(dx, dy, dz), location=loc, mat_index=mat, bevel_amount=0.01, long_axis=long_axis)
     else:
         create_beveled_box(bm, size=(dx, dy, dz),
                            location=loc,
@@ -138,8 +138,15 @@ def _stair(bm, x_top, x_bot, z_top, z_bot, y0=None, y1=None):
         xa = x_top + sgn * i * run
         xb = xa + sgn * run
         _box(bm, min(xa, xb), max(xa, xb), sy0, sy1, z_bot, top, FLOOR)
-        for yy0 in (sy0 - 0.2, sy1):
-            _box(bm, min(xa, xb), max(xa, xb), yy0, yy0 + 0.2, z_bot, top + 0.9, BEAM, long_axis=2)
+
+    # Proper normal timber handrails following the stair flight slope on both sides
+    from ..railing import build_railing
+    for sy in (sy0, sy1):
+        build_railing(bm, (x_top, sy), (x_bot, sy),
+                      base_z=z_top, base_z_end=z_bot,
+                      height=0.95, post_spacing=1.80, baluster_spacing=0.25,
+                      braces=False)
+
 
 
 def _hole(i):
@@ -232,7 +239,11 @@ def _level(bm, i, zf, depart_hole):
     _wall(bm, False, 0.0, CORR_N, Y1, zf, posts=False)
 
     for jx in (-15.0, -9.0, -3.0, 3.0, 9.0, 15.0):
-        _box(bm, jx - 0.15, jx + 0.15, Y0 + 0.3, Y1 - 0.3, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=1)
+        if i == 0 and abs(jx - 3.0) < 0.1:
+            # Stop ceiling beam before the stairwell opening (y >= 43.7) to keep headroom open
+            _box(bm, jx - 0.15, jx + 0.15, Y0 + 0.3, 43.6, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=1)
+        else:
+            _box(bm, jx - 0.15, jx + 0.15, Y0 + 0.3, Y1 - 0.3, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=1)
 
     rooms, halls = _KINDS[i]
     for (rx, ry), kind in zip(((-3.0, 33.0), (3.0, 33.0), (-3.0, 43.0), (3.0, 43.0)), rooms):
@@ -249,6 +260,7 @@ def _level(bm, i, zf, depart_hole):
 def build_nasher_dungeon(bm, tier):
     """Four walled underground levels with logical indoor stairs from the Keep."""
     from .building_connector import carve_pass_through_portal
+    from ..railing import build_railing
     levels = {1: 1, 2: 2}.get(tier, 4)
 
     # 1. Build underground dungeon levels
@@ -259,50 +271,33 @@ def build_nasher_dungeon(bm, tier):
 
     # 2. Ceiling slab over Level 0 with an open stairwell cutout under the Keep's
     # rear stair hall (sits flush at Z=13.2/13.5, 0.5 m below the citadel pad).
-    stair_hole_keep = (0.35, 6.05, 43.9, 45.6)
+    stair_hole_keep = (1.10, 5.70, 44.00, 45.40)
     _slab(bm, 13.5, hole=stair_hole_keep)
 
     z_keep_floor = 14.95
 
-    # 3. Clear shaft volume through rock / foundation
-    carve_pass_through_portal(bm, x_span=(0.35, 6.05), y_span=(43.9, 45.6), z_span=(12.8, 15.3))
+    # 3. Clear shaft volume through rock / foundation below the Keep floor slab
+    carve_pass_through_portal(bm, x_span=(1.10, 5.70), y_span=(44.00, 45.40), z_span=(12.8, 14.82))
 
-    # Clean masonry shaft casing walls lining the opening
-    _box(bm, 0.05, 6.35, 45.6, 45.9, 13.2, z_keep_floor, WALL)
-    _box(bm, 0.05, 6.35, 43.6, 43.9, 13.2, z_keep_floor, WALL)
-    _box(bm, 0.05, 0.35, 43.6, 45.9, 13.2, z_keep_floor, WALL)
-    _box(bm, 6.05, 6.35, 43.6, 45.9, 13.2, z_keep_floor, WALL)
+    # Masonry shaft casing walls line the rock shaft cleanly under the floor slab
+    # (top terminates at z_keep_floor - 0.12 so it never sits coplanar with floor planks).
+    _box(bm, 0.90, 5.90, 45.40, 45.70, 13.2, z_keep_floor - 0.12, WALL)
+    _box(bm, 0.90, 5.90, 43.70, 44.00, 13.2, z_keep_floor - 0.12, WALL)
+    _box(bm, 0.90, 1.10, 43.70, 45.70, 13.2, z_keep_floor - 0.12, WALL)
+    _box(bm, 5.70, 5.90, 43.70, 45.70, 13.2, z_keep_floor - 0.12, WALL)
 
-    # 4. Straight stair flight along X in the rear hall: top step flush with the
-    # Keep floor at the west end, descending eastward into Level 0 and exiting
-    # through the new east-hall doorway (never facing a blank wall).
-    _stair(bm, 0.60, 5.50, z_keep_floor, LEVEL_Z[0], y0=44.05, y1=45.45)
+    # 4. Straight stair flight along X in the rear hall: top step starts at x=1.10,
+    # leaving a flat 1.1m landing in front of the central doorway, descending eastward
+    # into Level 0 and arriving directly before the east-hall doorway.
+    _stair(bm, 1.10, 5.50, z_keep_floor, LEVEL_Z[0], y0=44.05, y1=45.35)
 
-    # 5. Timber guard railing around the stairwell opening on the Keep floor:
-    # both long sides plus the east end (entry is from the west at deck level).
-    from ..mesh_utils import create_beveled_box as _bb, create_cone as _cc
-    from ..materials import MAT_INDEX_TIMBER as _TM
-    for _gy in (43.9, 45.6):
-        for _gx in (0.9, 3.2, 5.5):
-            _bb(bm, size=(0.14, 0.14, 1.00),
-                location=(_gx, _gy, z_keep_floor + 0.50),
-                mat_index=_TM, bevel_amount=0.012)
-            _cc(bm, radius1=0.10, radius2=0.0, height=0.08, segments=4,
-                location=(_gx, _gy, z_keep_floor + 1.04),
-                rotation=(0.0, 0.0, math.pi * 0.25), mat_index=_TM)
-        _bb(bm, size=(5.20, 0.12, 0.08),
-            location=(3.20, _gy, z_keep_floor + 0.92),
-            mat_index=_TM, bevel_amount=0.01)
-        _bb(bm, size=(5.20, 0.08, 0.06),
-            location=(3.20, _gy, z_keep_floor + 0.47),
-            mat_index=_TM, bevel_amount=0.008)
-    for _gx in (0.9, 5.5):
-        _bb(bm, size=(0.14, 0.14, 1.00),
-            location=(_gx, 44.75, z_keep_floor + 0.50),
-            mat_index=_TM, bevel_amount=0.012)
-    _bb(bm, size=(0.12, 1.85, 0.08),
-        location=(6.05, 44.75, z_keep_floor + 0.92),
-        mat_index=_TM, bevel_amount=0.01)
-    _bb(bm, size=(0.08, 1.85, 0.06),
-        location=(6.05, 44.75, z_keep_floor + 0.47),
-        mat_index=_TM, bevel_amount=0.008)
+    # 5. Proper normal timber guard railing around the stair opening on the Keep floor:
+    # both long sides (North and South) plus the closed East end (entry from landing at west).
+    build_railing(bm, (1.10, 45.40), (5.70, 45.40), z_keep_floor,
+                  height=0.95, post_spacing=1.60, baluster_spacing=0.25, braces=False)
+    build_railing(bm, (1.10, 44.00), (5.70, 44.00), z_keep_floor,
+                  height=0.95, post_spacing=1.60, baluster_spacing=0.25, braces=False)
+    build_railing(bm, (5.70, 44.00), (5.70, 45.40), z_keep_floor,
+                  height=0.95, post_spacing=1.60, baluster_spacing=0.25, braces=False,
+                  post_at_start=False, post_at_end=False)
+

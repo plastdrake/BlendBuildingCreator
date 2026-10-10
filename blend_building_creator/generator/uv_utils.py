@@ -121,7 +121,7 @@ def apply_roof_shingle_uvs(bm, faces, mat_index=MAT_INDEX_SHINGLES, scale=0.32, 
 
 
 def map_beam_uvs(bm, faces, size, location=(0.0, 0.0, 0.0),
-                 rotation=(0.0, 0.0, 0.0)):
+                 rotation=(0.0, 0.0, 0.0), long_axis=None):
     """Grain-along-length unwrap for a timber post/beam/pillar box.
 
     Uses the engine's own convention (wood grain runs along V, V follows the
@@ -134,7 +134,9 @@ def map_beam_uvs(bm, faces, size, location=(0.0, 0.0, 0.0),
     """
     uv = bm.loops.layers.uv.verify()
     dx, dy, dz = float(size[0]), float(size[1]), float(size[2])
-    if dz >= dx and dz >= dy:
+    if long_axis is not None:
+        long_ax = int(long_axis)
+    elif dz >= dx and dz >= dy:
         long_ax = 2
     elif dx >= dy and dx >= dz:
         long_ax = 0
@@ -167,7 +169,7 @@ def map_beam_uvs(bm, faces, size, location=(0.0, 0.0, 0.0),
 
 
 def timber_box(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=0,
-               bevel_amount=0.012):
+               bevel_amount=0.012, long_axis=None):
     """A ``create_beveled_box`` whose faces are all re-unwrapped afterwards so
     the wood grain provably runs along the beam's length on every face
     (flat faces and bevel strips alike), at any plan rotation.
@@ -176,5 +178,6 @@ def timber_box(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=0,
     faces = create_beveled_box(bm, size=size, location=location,
                                rotation=rotation, mat_index=mat_index,
                                bevel_amount=bevel_amount)
-    map_beam_uvs(bm, faces, size=size, location=location, rotation=rotation)
+    map_beam_uvs(bm, faces, size=size, location=location, rotation=rotation, long_axis=long_axis)
     return faces
+

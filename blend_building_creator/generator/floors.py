@@ -218,14 +218,13 @@ def build_floors(bm, props, ctx):
     # Track stair holes, rooms, interior walls and wall bounds per floor
     floor_stair_holes = {}
     if getattr(props, 'has_basement_stair', False):
-        # Dedicated rear stair hall (north strip), flight runs east-west
-        # (rotated 90° from a north-south shaft): clear of the west main-stair
-        # well, both connector portals, the T-wing door and the front door.
-        # Y is capped so the shaft always lands inside the dungeon footprint.
-        bs_y1 = min(base_d * 0.5 - wall_t * 0.5 - 0.40, 5.60)
-        bs_y0 = bs_y1 - 1.70
-        bs_x0 = max(-base_w * 0.5 + wall_t * 0.5 + 0.15, 0.35)
-        bs_x1 = min(base_w * 0.5 - wall_t * 0.5 - 0.15, 6.05)
+        # Dedicated rear stair hall (north strip), flight runs east-west.
+        # Top step starts at x=1.10 to leave a solid flat entrance landing
+        # between the central partition doorway at x=0.0 and the first tread.
+        bs_y0 = 4.00
+        bs_y1 = 5.40
+        bs_x0 = 1.10
+        bs_x1 = 5.70
         floor_stair_holes[0] = (bs_x0, bs_x1, bs_y0, bs_y1)
     floor_wall_bounds = {}
     floor_rooms = {}

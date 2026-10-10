@@ -1118,8 +1118,11 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
                           'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER') or archetype.startswith('ARTISAN'):
             # Artisan live/work house: trade below, family home above. Upper
             # storeys are strictly residential (no offices, no studies).
+            # Floor 2 pairs the bedroom with an eat-in kitchen (no separate
+            # hall on these narrow floors, so the kitchen lays its full
+            # dining set) instead of a third narrow chamber.
             if fl_idx == 1:
-                pool = ['STAIR_LANDING', 'HOUSE_HALL', 'BEDROOM', 'KITCHEN']
+                pool = ['STAIR_LANDING', 'BEDROOM', 'KITCHEN', 'HOUSE_HALL']
             else:
                 pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM']
             return pool[:num_rooms]
@@ -1154,7 +1157,7 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         return pool[:num_rooms]
 
     if archetype in ('TAVERN', 'INN'):
-        pool = ['TAVERN_TAPROOM', 'KITCHEN', 'PANTRY', 'CELLAR']
+        pool = ['TAVERN_TAPROOM', 'KITCHEN', 'CELLAR', 'PANTRY']
         return pool[:num_rooms]
 
     # Dedicated craft workshops per artisan trade: the street-facing shop plus
@@ -1558,7 +1561,9 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
     def _force_bakehouse_chamber(room_list):
         """The chamber holding the oven masonry serves as the bakehouse."""
-        if oven_band is None:
+        if oven_band is None or len(room_list) <= 2:
+            # Two-room floors keep street order (shop stays at the street);
+            # the masonry keep-out still protects props either way.
             return
         oy = (oven_band[0] + oven_band[1]) * 0.5
         ox0, ox1 = ix_max - 1.50, ix_max - 0.05
@@ -1951,7 +1956,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
             dw_y1 = (iy_min + split_y1) * 0.5
             dw_y2 = (split_y1 + split_y2) * 0.5
-            dw_y3 = (split_y2 + iy_max) * 0.5
+            has_bs = (fl_idx == 0 and stair_hole is not None and getattr(props, 'has_basement_stair', False))
+            if has_bs:
+                dw_y3 = (stair_hole[2] + stair_hole[3]) * 0.5
+                stair_sep_x = max(split_x + 2.4, min(ix_max - 2.4, stair_hole[1] + 0.70))
+            else:
+                dw_y3 = (split_y2 + iy_max) * 0.5
 
             interior_walls.append({
                 'p1': (split_x, iy_min), 'p2': (split_x, split_y1),
@@ -1976,6 +1986,13 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 'p1': (split_x, split_y2), 'p2': (ix_max, split_y2),
                 'axis': 'X', 'pos': split_y2, 'thickness': wall_t, 'doorway': None
             })
+            if has_bs:
+                # Partition wall enclosing the cellar stair hall from the east chamber
+                interior_walls.append({
+                    'p1': (stair_sep_x, split_y2), 'p2': (stair_sep_x, iy_max),
+                    'axis': 'Y', 'pos': stair_sep_x, 'thickness': wall_t,
+                    'doorway': {'x': stair_sep_x, 'y': dw_y3, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+                })
 
             rm0 = Room(
                 id=f"fl{fl_idx}_hall", floor_idx=fl_idx, role=roles[0],
@@ -2002,14 +2019,34 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 stair_hole=_holds_stair((split_x, ix_max, split_y1, split_y2)),
                 exterior_facades={'RIGHT': (split_y1, split_y2)}
             )
-            rm3 = Room(
-                id=f"fl{fl_idx}_chamber_3", floor_idx=fl_idx, role=roles[3],
-                bounds=(split_x, ix_max, split_y2, iy_max),
-                doorways=[{'x': split_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=_holds_stair((split_x, ix_max, split_y2, iy_max)),
-                exterior_facades={'BACK': (split_x, ix_max), 'RIGHT': (split_y2, iy_max)}
-            )
-            rooms = [rm0, rm1, rm2, rm3]
+            if has_bs:
+                rm_stair = Room(
+                    id=f"fl{fl_idx}_cellar_stair", floor_idx=fl_idx, role='STAIR_LANDING',
+                    bounds=(split_x, stair_sep_x, split_y2, iy_max),
+                    doorways=[
+                        {'x': split_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w},
+                        {'x': stair_sep_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w},
+                    ],
+                    stair_hole=stair_hole,
+                    exterior_facades={'BACK': (split_x, stair_sep_x)}
+                )
+                rm3 = Room(
+                    id=f"fl{fl_idx}_chamber_3", floor_idx=fl_idx, role=roles[3],
+                    bounds=(stair_sep_x, ix_max, split_y2, iy_max),
+                    doorways=[{'x': stair_sep_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w}],
+                    stair_hole=None,
+                    exterior_facades={'BACK': (stair_sep_x, ix_max), 'RIGHT': (split_y2, iy_max)}
+                )
+                rooms = [rm0, rm1, rm2, rm_stair, rm3]
+            else:
+                rm3 = Room(
+                    id=f"fl{fl_idx}_chamber_3", floor_idx=fl_idx, role=roles[3],
+                    bounds=(split_x, ix_max, split_y2, iy_max),
+                    doorways=[{'x': split_x, 'y': dw_y3, 'axis': 'Y', 'w': dw_w}],
+                    stair_hole=_holds_stair((split_x, ix_max, split_y2, iy_max)),
+                    exterior_facades={'BACK': (split_x, ix_max), 'RIGHT': (split_y2, iy_max)}
+                )
+                rooms = [rm0, rm1, rm2, rm3]
             _force_bakehouse_chamber(rooms)
 
         elif can_3_rooms and (D >= 5.4) and (ix_max - split_x >= 2.2):
@@ -2162,11 +2199,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     rooms = [_bay_room, _hall] + list(rooms[1:])
 
     else:
-        # Deep building: split the depth into 2-4 bands so long houses get
-        # proper apartments (hall, bedroom, kitchen) instead of one giant
-        # front/back pair. Falls back to the legacy 2-room split when the
-        # stairwell leaves no room for more bands.
-        _deep_target = 4 if D >= 13.5 else (3 if D >= 10.5 else 2)
+        # Deep building: split the depth into bands so long houses get
+        # proper apartments instead of one giant front/back pair. Artisan
+        # ground floors stay at 2 big rooms (shop + workshop); upper floors
+        # get at most 3 spacious multi-use bands. Falls back to the legacy
+        # 2-room split when the stairwell leaves no room for more bands.
+        if fl_idx == 0 and (archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
+                                          'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER',
+                                          'FURNITURE_MAKER') or archetype.startswith('ARTISAN')):
+            _deep_target = 2
+        else:
+            _deep_target = 4 if D >= 16.8 else (3 if D >= 10.5 else 2)
         _deep_splits = None
         if _deep_target >= 3:
             for _try_n in range(_deep_target, 2, -1):
