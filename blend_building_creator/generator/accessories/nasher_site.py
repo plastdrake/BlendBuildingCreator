@@ -356,15 +356,17 @@ def _build_clipped_wall_run(bm, build_run, s, e, outward, boxes, top_z, thick, s
         else:
             merged.append((t0, t1))
     ln = math.hypot(e[0] - s[0], e[1] - s[1])
-    if ln < 0.8:
+    if ln < 0.2:
         return
     ux, uy = (e[0] - s[0]) / ln, (e[1] - s[1]) / ln
     for t0, t1 in merged:
-        p0 = (s[0] + (e[0] - s[0]) * t0 - ux * 0.35, s[1] + (e[1] - s[1]) * t0 - uy * 0.35)
-        p1 = (s[0] + (e[0] - s[0]) * t1 + ux * 0.35, s[1] + (e[1] - s[1]) * t1 + uy * 0.35)
+        p0 = (s[0] + (e[0] - s[0]) * t0 - ux * 0.40, s[1] + (e[1] - s[1]) * t0 - uy * 0.40)
+        p1 = (s[0] + (e[0] - s[0]) * t1 + ux * 0.40, s[1] + (e[1] - s[1]) * t1 + uy * 0.40)
         zs = ground_z(p0[0], p0[1])
         ze = ground_z(p1[0], p1[1])
-        base_z = min(zs, ze) - 1.50
+        # Extend base deep into the cliff rock so walls never float on slopes
+        min_g = min(zs, ze)
+        base_z = min(-0.50, min_g - 2.50) if min_g <= 4.0 else (min_g - 2.50)
         build_run(bm, p0, p1, outward, base_z, top_z - base_z, thick,
                   slits=False, seed=seed)
     return
@@ -403,12 +405,17 @@ def _spline_curve(waypoints, sample_step=1.8):
     return pts
 
 
-def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=()):
+def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=(), top_z_forecourt=None, top_z_upper=None):
     """Build connecting curtain wall runs on the east and west flanks linking
     the lower forecourt rim wall to the upper citadel perimeter wall, closing
     the defensive perimeter gap.
     """
     from .curtain_wall import build_curtain_wall_run
+
+    if top_z_forecourt is None:
+        top_z_forecourt = 3.0 + height
+    if top_z_upper is None:
+        top_z_upper = 14.0 + 3.4
 
     # West flank: from upper wall at (-31.0, -14.5) down to forecourt rim at (-33.33, -35.39)
     # Goes south so outward vector naturally faces west (exterior).
@@ -418,23 +425,27 @@ def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=()):
     # Goes north so outward vector naturally faces east (exterior).
     chain_east = [(32.00, -35.34), (32.5, -30.0), (31.8, -24.0), (31.2, -18.5), (31.0, -14.5)]
 
-    for chain, seed_base in ((chain_west, 201), (chain_east, 251)):
+    for chain, seed_base, is_ascending in ((chain_west, 201, False), (chain_east, 251, True)):
         sub_pts = _spline_curve(chain, sample_step=1.8)
+        n_segs = max(1, len(sub_pts) - 1)
 
-        for i in range(len(sub_pts) - 1):
+        for i in range(n_segs):
             s, e = sub_pts[i], sub_pts[i + 1]
             ln = math.hypot(e[0] - s[0], e[1] - s[1])
-            if ln < 0.6:
+            if ln < 0.2:
                 continue
             outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
             zs = ground_z(s[0], s[1])
             ze = ground_z(e[0], e[1])
-            base_z = min(zs, ze) - 1.50
-            top_z = max(zs, ze) + height
-            wall_h = top_z - base_z
+            t = (i + 0.5) / n_segs
+            if is_ascending:
+                top_z = top_z_forecourt + t * (top_z_upper - top_z_forecourt)
+            else:
+                top_z = top_z_upper + t * (top_z_forecourt - top_z_upper)
+            top_z = max(top_z, max(zs, ze) + height)
             ux, uy = (e[0] - s[0]) / ln, (e[1] - s[1]) / ln
-            p0 = (s[0] - ux * 0.35, s[1] - uy * 0.35)
-            p1 = (e[0] + ux * 0.35, e[1] + uy * 0.35)
+            p0 = (s[0] - ux * 0.40, s[1] - uy * 0.40)
+            p1 = (e[0] + ux * 0.40, e[1] + uy * 0.40)
             _build_clipped_wall_run(bm, build_curtain_wall_run, p0, p1, outward,
                                     bld_boxes, top_z, thick, seed=seed_base + i)
 
@@ -448,7 +459,7 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
     steps = max(4, int(abs(a1 - a0) / 2.0))
     pts = [pad_point(spec, a0 + (a1 - a0) * i / steps, inset) for i in range(steps + 1)]
 
-    # 1. Curtain wall top elevation matches terrain plus wall height
+    # 1. Curtain wall top elevation: uniform set height across the entire rim, matching upper tier wall principle
     top_z = max([ground_z(px, py) for px, py in pts]) + height
     eff_gate_wall_h = top_z - z
 
@@ -471,9 +482,9 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
         )
 
     # 3. Curtain wall runs along the plateau rim: one level top everywhere,
-    # bases driven 1.5 m through the cliffs, clipped (never gapped) at buildings.
+    # bases driven deep through the cliffs, clipped (never gapped) at buildings.
     # The gate opening stays clear including the flanking gate towers.
-    for i in range(steps):
+    for i in range(len(pts) - 1):
         s, e = pts[i], pts[i + 1]
         mid_x = (s[0] + e[0]) * 0.5
         mid_y = (s[1] + e[1]) * 0.5
@@ -483,7 +494,7 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
             continue
 
         ln = math.hypot(e[0] - s[0], e[1] - s[1])
-        if ln < 0.8:
+        if ln < 0.2:
             continue
         outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
         _build_clipped_wall_run(bm, build_curtain_wall_run, s, e, outward,
@@ -491,7 +502,7 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
 
     # 4. Connecting walls linking the forecourt rim ends up to the upper citadel perimeter wall
     if connect_upper and spec[0] == "forecourt_rock":
-        build_flank_connecting_walls(bm, height=height, thick=thick, bld_boxes=bld_boxes)
+        build_flank_connecting_walls(bm, height=height, thick=thick, bld_boxes=bld_boxes, top_z_forecourt=top_z)
 
 
 def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(), tier=3):

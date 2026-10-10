@@ -622,8 +622,19 @@ def build_curtain_wall_gate_portal(
         mat_index=mat_cut_stone, bevel_amount=0.03
     )
 
-    # 3. FORTIFIED STONE PARAPET & MERLONS ATOP THE CENTRAL GATE ARCH
+    # Solid curtain wall fill above the portcullis lintel up to the parapet deck
+    lintel_top = lintel_cz + 0.35
     parapet_z = z_ground + wall_h
+    wall_fill_h = parapet_z - lintel_top
+    if wall_fill_h > 0.05:
+        create_beveled_box(
+            bm, size=(gate_w + 0.90, arch_thick, wall_fill_h),
+            location=(cx, cy, lintel_top + wall_fill_h * 0.5),
+            rotation=(0.0, 0.0, ang),
+            mat_index=mat_stone, bevel_amount=0.02
+        )
+
+    # 3. FORTIFIED STONE PARAPET & MERLONS ATOP THE CENTRAL GATE ARCH
     create_beveled_box(
         bm, size=(gate_w + 1.20, arch_thick + 0.20, 0.25),
         location=(cx, cy, parapet_z + 0.125),

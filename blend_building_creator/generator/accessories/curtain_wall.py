@@ -70,7 +70,7 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
     x2, y2 = p_end
     dx, dy = x2 - x1, y2 - y1
     length = math.hypot(dx, dy)
-    if length < 0.6:
+    if length < 0.2:
         return
     ux, uy = dx / length, dy / length
     ang = math.atan2(dy, dx)
