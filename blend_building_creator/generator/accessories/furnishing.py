@@ -2755,7 +2755,8 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         _lay_out_jeweler_counter(bm, tracker, z_floor, rng)
     # Stepped market display near the entrance, dressed with sale goods.
     _place_market_display(bm, tracker, z_floor, rng, arch)
-    if not table_goods:
+    # The fishmonger's goods live on the display case, not a generic table.
+    if not table_goods or arch == 'FISHERMAN':
         return
     is_round = (arch == 'BREWERY')
     for tx, ty in ((rcx, rcy), (rcx - 1.0, rcy), (rcx + 1.0, rcy),
@@ -3478,11 +3479,14 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
             build_prop(bm, 'POTTED_PLANT_SMALL', _cc['cx'], _cc['cy'],
                        _cc['top_z'], rng.uniform(0.0, 6.28))
 
-    # 2. Display shelves on perimeter walls
-    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
-                         candidate_walls=('EAST', 'WEST', 'NORTH'))
-    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
-                         candidate_walls=('WEST', 'NORTH', 'SOUTH'))
+    # 2. Display shelves on perimeter walls (the fishmonger swaps these for
+    #    the trade display case instead).
+    _arch0 = getattr(tracker, 'archetype', 'NONE')
+    if _arch0 not in ('FISHERMAN',):
+        _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                             candidate_walls=('EAST', 'WEST', 'NORTH'))
+        _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                             candidate_walls=('WEST', 'NORTH', 'SOUTH'))
 
     # 3. Goods crates and merchandise barrels — kept OFF the corners so the
     #    wall corners stay free for the trade display (placed next).

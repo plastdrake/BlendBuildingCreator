@@ -1153,9 +1153,17 @@ def build_market_display(bm, x, y, z_ground=0.0, ang=0.0, width=1.50):
             location=(0.0, ty, tz * 0.5),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.012
         )
+    # Timber side boards framing the plinth (classic display case). Offset
+    # 5mm clear of the tier faces so nothing is coplanar.
+    for sx in (-(width * 0.5 + 0.035), (width * 0.5 + 0.035)):
+        faces += create_beveled_box(
+            bm, size=(0.06, 1.06, 1.26),
+            location=(sx, -0.17, 0.63),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010
+        )
     # Tall backboard rising flush behind the top tier (no side overhang).
     faces += create_beveled_box(
-        bm, size=(width, 0.06, 0.70),
+        bm, size=(width + 0.07, 0.06, 0.70),
         location=(0.0, -0.71, 1.45),
         mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010
     )
