@@ -723,6 +723,7 @@ def build_estate_chapel(bm, props, pos=(28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_3
         'has_ceiling_beams': True,
         'has_stairs': False,
         'has_front_door': True,
+        'has_front_steps': False,
         'door_width': 1.60,
         'door_height': 2.70,
         'door_shape': 'ARCHED',
@@ -1237,12 +1238,13 @@ def build_estate_outbuildings(bm, props, ctx):
 
     if is_grand_plot:
         def _inward_rot(bx, by, jitter=0.0):
-            # Point entrance (local -Y) inward toward the cliff/mount center (0.0, 5.0).
+            # Point entrance (local -Y) inward toward the central cliff mount.
             # Local facade normal facing outward is (sin(theta), -cos(theta)).
             # To point towards target (cx - bx, cy - by):
             #   sin(theta) = (cx - bx) / d,  cos(theta) = -(cy - by) / d = (by - cy) / d
             #   theta = atan2(cx - bx, by - cy)
-            cx, cy = 0.0, 5.0
+            cx = 0.0
+            cy = max(-5.0, min(25.0, by))
             return math.atan2(cx - bx, by - cy) + jitter
 
     if is_grand_plot and tier == 'TIER_3':
@@ -1334,7 +1336,7 @@ def build_estate_outbuildings(bm, props, ctx):
 
         # --- 8. NORTH-EAST: SANCTUARY CHANTRY CHAPEL ---
         if has_chapel:
-            p_cp = (66.0, 42.0, 0.0)
+            p_cp = (74.0, 32.0, 0.0)
             build_estate_chapel(bm, props, pos=p_cp, rot_z=_inward_rot(p_cp[0], p_cp[1]),
                                 tier=tier, width=15.0, depth=9.0, floors=1,
                                 extra_overrides={'wall_material_override': 'STUCCO',

@@ -496,16 +496,16 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
     ]
 
     if tier >= 3:
-        # Promontory around East Bluff (encircling the East Bluff Bastion Tower)
+        # Promontory along East Bluff cliff crest (Z~8.8-9.0, encircling East Bluff Bastion Tower)
         waypoints += [
-            (40.0, 14.0),
-            (52.0, 14.0),
-            (62.0, 19.0),
-            (66.0, 26.0),
-            (62.0, 33.0),
-            (52.0, 38.0),
-            (40.0, 39.0),
-            (34.0, 41.0),
+            (42.0, 14.5),
+            (48.0, 16.5),
+            (55.0, 19.5),
+            (57.5, 26.0),
+            (55.0, 32.5),
+            (48.0, 34.5),
+            (40.0, 38.0),
+            (33.0, 42.0),
         ]
     else:
         # Tier 2 direct east flank up to upper citadel rim
