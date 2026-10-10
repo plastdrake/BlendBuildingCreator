@@ -58,10 +58,15 @@ def carve_pass_through_portal(bm, x_span, y_span, z_span):
 
     # 1. Bisect any intersecting faces along the box boundary planes
     pad = 0.8
-    cand_faces = [f for f in bm.faces if f.is_valid and
-                  (x0 - pad <= f.calc_center_median().x <= x1 + pad) and
-                  (y0 - pad <= f.calc_center_median().y <= y1 + pad) and
-                  (z0 - pad <= f.calc_center_median().z <= z1 + pad)]
+    def _face_overlaps_box(f):
+        xs = [v.co.x for v in f.verts]
+        ys = [v.co.y for v in f.verts]
+        zs = [v.co.z for v in f.verts]
+        return not (max(xs) < x0 - pad or min(xs) > x1 + pad or
+                    max(ys) < y0 - pad or min(ys) > y1 + pad or
+                    max(zs) < z0 - pad or min(zs) > z1 + pad)
+
+    cand_faces = [f for f in bm.faces if f.is_valid and _face_overlaps_box(f)]
     if cand_faces:
         geom = list({v for f in cand_faces for v in f.verts}) + list({e for f in cand_faces for e in f.edges}) + cand_faces
         planes = [
@@ -715,6 +720,7 @@ def build_connecting_wing(
     # carcass embeds past it so no gap can open between wing and building.
     wall_n = wall_y_north if wall_y_north is not None else y_end
     roof_n = roof_y_end_north if roof_y_end_north is not None else y_end
+    deck_n = wall_n + 0.15
     # Walking lanes that must stay clear of furniture: the central gallery lane
     # plus (east wing) the lane from the stair head to the bridge door.
     lane_half = 1.25

@@ -1518,7 +1518,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     is_wing=True,
                     wing_id=wi,
                     doorways=w_doorways,
-                    stair_hole=None,
+                    stair_hole=_holds_stair(wb),
                     exterior_facades={}
                 )
                 rooms.append(w_rm)
@@ -1671,7 +1671,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         _big_k3 = len(_r3) > 1 and _r3[1] == 'KITCHEN'
         _f4 = (0.42, 0.28, 0.30) if _big_k4 else (0.35, 0.33, 0.32)
         _f3 = (0.58, 0.42) if _big_k3 else (0.50, 0.50)
-        has_bs = (fl_idx == 0 and stair_hole is not None and getattr(props, 'has_basement_stair', False))
+        has_bs = (fl_idx == 0 and stair_hole is not None and getattr(props, 'has_basement_stair', False)
+                 and shape != 'L_SHAPE')
         if can_4_rooms and _cw_now >= 2.4 and not has_bs and not _strip_chunky(_hw_now, _cw_now, _f4):
             can_4_rooms = False
         if can_3_rooms and not has_bs and not _strip_chunky(_hw_now, _cw_now, _f3):
@@ -1958,7 +1959,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
             dw_y1 = (iy_min + split_y1) * 0.5
             dw_y2 = (split_y1 + split_y2) * 0.5
-            has_bs = (fl_idx == 0 and stair_hole is not None and getattr(props, 'has_basement_stair', False))
+            has_bs = (fl_idx == 0 and stair_hole is not None and getattr(props, 'has_basement_stair', False)
+                 and shape != 'L_SHAPE')
             if has_bs:
                 dw_y3 = (stair_hole[2] + stair_hole[3]) * 0.5
                 cellar_west_x = min(split_x, stair_hole[0] - 1.10)
@@ -2096,7 +2098,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             split_y = _clear_doorway_span(iy_min + D * _kf, axis='Y')
             split_y = _dodge_oven_band(split_y, iy_min + 1.8, iy_max - 1.8)
 
-            has_bs = (fl_idx == 0 and stair_hole is not None and getattr(props, 'has_basement_stair', False))
+            has_bs = (fl_idx == 0 and stair_hole is not None and getattr(props, 'has_basement_stair', False)
+                 and shape != 'L_SHAPE')
             dw_y1 = (iy_min + split_y) * 0.5
             if has_bs:
                 dw_y2 = (stair_hole[2] + stair_hole[3]) * 0.5

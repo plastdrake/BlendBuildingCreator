@@ -218,14 +218,26 @@ def build_floors(bm, props, ctx):
     # Track stair holes, rooms, interior walls and wall bounds per floor
     floor_stair_holes = {}
     if getattr(props, 'has_basement_stair', False):
-        # Dedicated rear stair hall (north strip), flight runs east-west.
-        # Top step starts at x=1.10 to leave a solid flat entrance landing
-        # between the central partition doorway at x=0.0 and the first tread.
-        bs_y0 = 4.00
-        bs_y1 = 5.40
-        bs_x0 = 1.10
-        bs_x1 = 5.70
-        floor_stair_holes[0] = (bs_x0, bs_x1, bs_y0, bs_y1)
+        if shape == 'L_SHAPE' and wings:
+            # Cellar stairwell: a shaft in the L-wing so the cellar can sit
+            # directly UNDER the wing. Hugs the outer (-X) side of the wing.
+            wx1, wx2, wy1, wy2 = (float(wings[0]['base'][0]),
+                                  float(wings[0]['base'][1]),
+                                  float(wings[0]['base'][2]),
+                                  float(wings[0]['base'][3]))
+            _shx = wx1 + 1.05
+            _shy = (wy1 + wy2) * 0.5
+            floor_stair_holes[0] = (_shx - 0.80, _shx + 0.80,
+                                    _shy - 1.80, _shy + 1.80)
+        else:
+            # Legacy rear stair hall (north strip), flight runs east-west.
+            # Top step starts at x=1.10 to leave a solid flat entrance landing
+            # between the central partition doorway at x=0.0 and the first tread.
+            bs_y0 = 4.00
+            bs_y1 = 5.40
+            bs_x0 = 1.10
+            bs_x1 = 5.70
+            floor_stair_holes[0] = (bs_x0, bs_x1, bs_y0, bs_y1)
     floor_wall_bounds = {}
     floor_rooms = {}
     floor_interior_walls = {}
@@ -433,6 +445,18 @@ def build_floors(bm, props, ctx):
             is_low_slab_t1 = (effective_archetype in ('LUMBERMILL', 'QUARRY') and fl_idx == 0
                               and getattr(props, 'material_tier', 'TIER_1') == 'TIER_1')
             slab_z = z_floor + 0.02 if is_low_slab_t1 else z_floor + 0.05
+            # Main-block slab takes the stair hole only when the hole is
+            # actually inside it (a wing-held cellar shaft belongs to the
+            # wing slab instead, so the main slab stays solid).
+            _main_hole = None
+            if fl_idx > 0 and props.has_stairs:
+                _main_hole = cur_stair_hole
+            elif (fl_idx == 0 and getattr(props, 'has_basement_stair', False)
+                  and cur_stair_hole is not None):
+                _h = cur_stair_hole
+                if not (_h[1] < slab_xmin or _h[0] > slab_xmax
+                        or _h[3] < slab_ymin or _h[2] > slab_ymax):
+                    _main_hole = _h
             build_floor_slab(
                 bm,
                 floor_idx=fl_idx,
@@ -440,7 +464,7 @@ def build_floors(bm, props, ctx):
                 y_min=slab_ymin, y_max=slab_ymax,
                 z_level=slab_z,
                 thickness=0.12,
-                stair_hole=cur_stair_hole if ((fl_idx > 0 and props.has_stairs) or (fl_idx == 0 and getattr(props, 'has_basement_stair', False))) else None,
+                stair_hole=_main_hole,
                 mat_idx=floor_mat
             )
         
@@ -519,6 +543,14 @@ def build_floors(bm, props, ctx):
                     w_slab_ymin = w_ymin + wall_t * 0.50 + 0.02
                     w_slab_ymax = w_ymax - wall_t * 0.50 - 0.02
 
+                _w_hole = None
+                if (fl_idx == 0 and getattr(props, 'has_basement_stair', False)
+                        and cur_stair_hole is not None):
+                    _h = cur_stair_hole
+                    if not (_h[1] < w_slab_xmin or _h[0] > w_slab_xmax
+                            or _h[3] < w_slab_ymin or _h[2] > w_slab_ymax):
+                        _w_hole = _h
+                # Slab (ground floor of wings is stone/timber/dirt; upper floors have stair cutout)
                 build_floor_slab(
                     bm,
                     floor_idx=fl_idx,
@@ -526,7 +558,7 @@ def build_floors(bm, props, ctx):
                     y_min=w_slab_ymin, y_max=w_slab_ymax,
                     z_level=z_floor + 0.05,
                     thickness=0.12,
-                    stair_hole=None,
+                    stair_hole=_w_hole,
                     mat_idx=floor_mat
                 )
                 if fl_idx > 0 and fl_overhang > prev_fl_overhang:
