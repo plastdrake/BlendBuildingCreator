@@ -2274,6 +2274,28 @@ def _place_craft_table(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
     return None
 
 
+def _place_floor_prop(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
+                      key: str, half_w: float, half_d: float, **params):
+    """Best-effort freestanding prop (workstation, rack, block) in the open
+    floor. Tries room centre first, then a ring around it, both yaw axes."""
+    rcx = (tracker.rx0 + tracker.rx1) * 0.5
+    rcy = (tracker.ry0 + tracker.ry1) * 0.5
+    cands = [(rcx, rcy), (rcx - 1.1, rcy), (rcx + 1.1, rcy),
+             (rcx, rcy - 1.1), (rcx, rcy + 1.1),
+             (rcx - 1.1, rcy - 1.1), (rcx + 1.1, rcy + 1.1),
+             (rcx - 1.1, rcy + 1.1), (rcx + 1.1, rcy - 1.1)]
+    rng.shuffle(cands)
+    for cx, cy in cands:
+        cx += _jit(rng, 0.15)
+        cy += _jit(rng, 0.15)
+        for yaw, hw, hd in ((0.0, half_w, half_d), (math.pi * 0.5, half_d, half_w)):
+            if tracker.is_free(cx - hw, cx + hw, cy - hd, cy + hd):
+                tracker.occupy(cx - hw, cx + hw, cy - hd, cy + hd)
+                build_prop(bm, key, cx, cy, z_floor, yaw, **params)
+                return (cx, cy, yaw)
+    return None
+
+
 def _dress_craft_table(bm, tx: float, ty: float, yaw: float, z_table: float,
                        rng, goods):
     """Lay trade goods in a row along a work table top."""
@@ -2330,13 +2352,21 @@ def _furnish_bakehouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
     rd = rm.bounds[3] - rm.bounds[2]
     z_table = z_floor + 0.775
 
-    for _ in range(2 if min(rw, rd) >= 3.4 else 1):
+    for _ti in range(2 if min(rw, rd) >= 3.4 else 1):
         t = _place_craft_table(bm, tracker, z_floor, rng)
         if t is None:
             break
-        _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                           ['FOODPREP_CLUTTER', 'FOODPREP_CLUTTER'])
+        if _ti == 0:  # kneading table: proving bowl and fresh loaves
+            _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
+                               ['DOUGH_BOWL', 'BREAD_LOAF', 'BREAD_LOAF'])
+        else:
+            _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
+                               ['FOODPREP_CLUTTER', 'BREAD_LOAF'])
         _stool_near(bm, tracker, t[0], t[1], t[2], z_floor, rng)
+
+    # Cooling rack laden with loaves along a free wall.
+    _try_place_wall_prop(bm, 'BREAD_RACK', 1.50, 0.50, tracker, z_floor,
+                         candidate_walls=('EAST', 'NORTH', 'WEST'))
 
     _place_goods_row(bm, tracker, z_floor, rng, 'SACK', count=4)  # flour
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
@@ -2362,17 +2392,16 @@ def _furnish_brewhouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rx0, rx1, ry1 = tracker.rx0, tracker.rx1, tracker.ry1
 
-    for i in range(2):  # great mash vats against the back wall
-        cx = rx0 + (rx1 - rx0) * (i + 1) / 3.0 + _jit(rng, 0.20)
-        cy = ry1 - 0.62
-        if tracker.is_free(cx - 0.60, cx + 0.60, cy - 0.60, cy + 0.60):
-            tracker.occupy(cx - 0.60, cx + 0.60, cy - 0.60, cy + 0.60)
-            build_prop(bm, 'BARREL', cx, cy, z_floor, 0.0, radius=0.55, height=1.10)
+    # Mash tun in the freest corner, keg rack along a free wall.
+    _place_floor_prop(bm, tracker, z_floor, rng, 'MASH_TUN', 0.62, 0.62)
+    _try_place_wall_prop(bm, 'KEG_RACK', 1.30, 0.62, tracker, z_floor,
+                         candidate_walls=('NORTH', 'EAST', 'WEST'))
 
-    _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=3, box=0.40)  # kegs
+    _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)  # spare kegs
     _place_goods_row(bm, tracker, z_floor, rng, 'SACK', count=3)  # malt
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('EAST', 'WEST', 'SOUTH'))
+    _place_floor_prop(bm, tracker, z_floor, rng, 'BOTTLE_CRATE', 0.33, 0.33)
     if rng.random() < density:  # tasting corner: round table, mugs, bottles
         for tx, ty in ((rcx, rcy), (rcx - 1.0, rcy), (rcx + 1.0, rcy)):
             if tracker.is_free(tx - 0.75, tx + 0.75, ty - 0.75, ty + 0.75):
@@ -2398,12 +2427,16 @@ def _furnish_butchery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
     rd = rm.bounds[3] - rm.bounds[2]
     z_table = z_floor + 0.775
 
-    for _ in range(2 if min(rw, rd) >= 3.4 else 1):
+    # Central stump block with cleaver and cuts; a prep table if the block
+    # finds no room.
+    if _place_floor_prop(bm, tracker, z_floor, rng, 'BUTCHER_BLOCK', 0.38, 0.38) is None:
         t = _place_craft_table(bm, tracker, z_floor, rng)
-        if t is None:
-            break
-        _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                           ['FOODPREP_CLUTTER'])  # cleaver block
+        if t is not None:
+            _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
+                               ['FOODPREP_CLUTTER'])
+    # Hanging sausage rail along a free wall.
+    _try_place_wall_prop(bm, 'SAUSAGE_STRING', 1.30, 0.35, tracker, z_floor,
+                         candidate_walls=('NORTH', 'EAST', 'WEST'))
 
     _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=3, box=0.40)  # brine
     _place_goods_row(bm, tracker, z_floor, rng, 'SACK', count=2)  # salt
@@ -2435,9 +2468,13 @@ def _furnish_tailor_atelier(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('EAST', 'NORTH', 'WEST'))  # cloth bolts
     _try_place_wall_prop(bm, 'WARDROBE', 1.20, 0.55, tracker, z_floor,
-                         candidate_walls=('WEST', 'EAST', 'NORTH'), width=1.2, height=1.9)
+                         candidate_walls=('WEST', 'EAST', 'NORTH'))
+    # Dress form in the freest corner, bolt bin along a free wall.
+    _place_floor_prop(bm, tracker, z_floor, rng, 'DRESS_FORM', 0.30, 0.30)
+    _try_place_wall_prop(bm, 'CLOTH_BOLT_BIN', 0.60, 0.48, tracker, z_floor,
+                         candidate_walls=('WEST', 'EAST', 'NORTH'))
     _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
-                         candidate_walls=('SOUTH', 'WEST', 'EAST'), width=0.9)
+                         candidate_walls=('SOUTH', 'WEST', 'EAST'))
 
     rug_w = min(2.60, max(1.60, rw * 0.55))
     rug_l = min(3.40, max(2.00, rd * 0.55))
@@ -2462,14 +2499,18 @@ def _furnish_goldsmith(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('EAST', 'NORTH', 'WEST'))  # display
     _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
-                         candidate_walls=('SOUTH', 'WEST', 'EAST'), width=0.9)  # strongbox
-    if rng.random() < density:  # gem-oil side table
+                         candidate_walls=('SOUTH', 'WEST', 'EAST'))  # strongbox
+    if rng.random() < density:  # gem side table with tray
         for tx, ty in ((rcx, rcy), (rcx - 1.0, rcy), (rcx + 1.0, rcy)):
             if tracker.is_free(tx - 0.60, tx + 0.60, ty - 0.60, ty + 0.60):
                 tracker.occupy(tx - 0.60, tx + 0.60, ty - 0.60, ty + 0.60)
                 build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=0.45)
-                build_prop(bm, 'BOTTLE_CLUSTER', tx, ty, z_floor + 0.775, 0.0)
+                build_prop(bm, 'GEM_TRAY', tx, ty, z_floor + 0.775, 0.0)
                 break
+    # Standing scale in the freest corner, strongbox along a free wall.
+    _place_floor_prop(bm, tracker, z_floor, rng, 'BALANCE_SCALE', 0.30, 0.30)
+    _try_place_wall_prop(bm, 'STRONGBOX', 0.66, 0.44, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'WEST', 'EAST'))
 
     rug_w = min(2.40, max(1.50, rw * 0.50))
     rug_l = min(3.00, max(1.80, rd * 0.50))
@@ -2488,6 +2529,11 @@ def _furnish_smithy(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
 
     _try_place_wall_prop(bm, 'WEAPON_RACK', 1.20, 0.45, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'))  # tool display
+    # Anvil and grindstone on the open floor, hanging tool rack on a wall.
+    _place_floor_prop(bm, tracker, z_floor, rng, 'ANVIL', 0.55, 0.40)
+    _place_floor_prop(bm, tracker, z_floor, rng, 'GRINDSTONE', 0.45, 0.40)
+    _try_place_wall_prop(bm, 'TOOL_RACK', 1.20, 0.30, tracker, z_floor,
+                         candidate_walls=('EAST', 'WEST', 'NORTH'))
     _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)  # quench
     _try_place_wall_prop(bm, 'LOG_PILE', 1.60, 0.55, tracker, z_floor,
                          candidate_walls=('SOUTH', 'WEST', 'EAST'),
@@ -2497,7 +2543,7 @@ def _furnish_smithy(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
                          candidate_walls=('EAST', 'WEST', 'NORTH'))
     if rng.random() < density:
         _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
-                             candidate_walls=('SOUTH', 'WEST', 'EAST'), width=0.9)
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'))
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
@@ -2512,15 +2558,20 @@ def _furnish_joinery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
 
-    for _ in range(2 if min(rw, rd) >= 3.4 else 1):
-        t = _place_craft_table(bm, tracker, z_floor, rng, length=1.60, width=0.90)
-        if t is None:
-            break
-        _stool_near(bm, tracker, t[0], t[1], t[2], z_floor, rng)
+    # Joiner's bench on the open floor (plain tables if it finds no room),
+    # sawbuck in the freest corner.
+    if _place_floor_prop(bm, tracker, z_floor, rng, 'JOINER_BENCH', 1.00, 0.65,
+                         length=1.70) is None:
+        for _ in range(2 if min(rw, rd) >= 3.4 else 1):
+            t = _place_craft_table(bm, tracker, z_floor, rng, length=1.60, width=0.90)
+            if t is None:
+                break
+            _stool_near(bm, tracker, t[0], t[1], t[2], z_floor, rng)
+    _place_floor_prop(bm, tracker, z_floor, rng, 'SAWBUCK', 0.75, 0.45)
 
     _try_place_wall_prop(bm, 'PLANK_PILE', 1.80, 0.55, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'),
-                         length=1.80, width=0.28, layers=5)  # seasoned boards
+                         length=1.80, layers=5)  # seasoned boards
     _try_place_wall_prop(bm, 'LOG_PILE', 1.60, 0.55, tracker, z_floor,
                          candidate_walls=('SOUTH', 'WEST', 'EAST'),
                          length=1.60, radius=0.17, rows=3)  # timber
@@ -2530,7 +2581,7 @@ def _furnish_joinery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         _try_place_wall_prop(bm, 'CHAIR', 0.55, 0.55, tracker, z_floor,
                              candidate_walls=('SOUTH', 'EAST', 'WEST'))
         _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
-                             candidate_walls=('SOUTH', 'WEST', 'EAST'), width=0.9)
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'))
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
@@ -2551,7 +2602,12 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         if t is None:
             break
         _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                           ['FOODPREP_CLUTTER'])  # catch prep board
+                           ['FISH', 'FISH', 'FOODPREP_CLUTTER'])  # catch display
+
+    # Drying rack with smoked fish along a free wall, rope coil in a corner.
+    _try_place_wall_prop(bm, 'FISH_DRYING_RACK', 1.60, 0.80, tracker, z_floor,
+                         candidate_walls=('NORTH', 'EAST', 'WEST'))
+    _place_floor_prop(bm, tracker, z_floor, rng, 'ROPE_COIL', 0.28, 0.28)
 
     _place_goods_row(bm, tracker, z_floor, rng, 'CRATE', count=3, box=0.36)  # fish boxes
     _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)  # salt barrels
@@ -2569,26 +2625,45 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
     rcx = (tracker.rx0 + tracker.rx1) * 0.5
     rcy = (tracker.ry0 + tracker.ry1) * 0.5
     z_table = z_floor + 0.775
-    if arch in ('BLACKSMITH', 'TOOLSMITH'):  # arms/tools display rack
+    if arch in ('BLACKSMITH', 'TOOLSMITH'):  # arms/tools display racks
         _try_place_wall_prop(bm, 'WEAPON_RACK', 1.20, 0.45, tracker, z_floor,
                              candidate_walls=('NORTH', 'EAST', 'WEST'))
+        _try_place_wall_prop(bm, 'TOOL_RACK', 1.00, 0.30, tracker, z_floor,
+                             candidate_walls=('EAST', 'WEST', 'NORTH'))
         return
     if arch == 'FURNITURE_MAKER':  # showroom pieces
         _try_place_wall_prop(bm, 'CHAIR', 0.55, 0.55, tracker, z_floor,
                              candidate_walls=('NORTH', 'EAST', 'WEST'))
         _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
-                             candidate_walls=('SOUTH', 'WEST', 'EAST'), width=0.9)
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'))
         return
     table_goods = {
         'TAILOR': ['FOLDED_CLOTH', 'FOLDED_CLOTH'],
-        'BAKERY': ['FOODPREP_CLUTTER', 'FOODPREP_CLUTTER'],
+        'BAKERY': ['BREAD_LOAF', 'BREAD_LOAF', 'DOUGH_BOWL'],
         'BUTCHER': ['FOODPREP_CLUTTER'],
-        'FISHERMAN': ['FOODPREP_CLUTTER'],
-        'JEWELER': ['FOLDED_CLOTH', 'BOTTLE_CLUSTER'],
+        'FISHERMAN': ['FISH', 'FISH', 'FOODPREP_CLUTTER'],
+        'JEWELER': ['GEM_TRAY', 'BOTTLE_CLUSTER'],
         'BREWERY': ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'BOTTLE_CLUSTER'],
     }.get(arch)
     if not table_goods:
         return
+    # Trade showpieces that do not fit on the table.
+    if arch == 'BAKERY':
+        _try_place_wall_prop(bm, 'BREAD_RACK', 1.00, 0.50, tracker, z_floor,
+                             candidate_walls=('NORTH', 'EAST', 'WEST'))
+    elif arch == 'BREWERY':
+        _place_floor_prop(bm, tracker, z_floor, rng, 'BOTTLE_CRATE', 0.33, 0.33)
+    elif arch == 'BUTCHER':
+        _try_place_wall_prop(bm, 'SAUSAGE_STRING', 1.00, 0.35, tracker, z_floor,
+                             candidate_walls=('NORTH', 'EAST', 'WEST'))
+    elif arch == 'TAILOR':
+        _place_floor_prop(bm, tracker, z_floor, rng, 'DRESS_FORM', 0.30, 0.30)
+        _try_place_wall_prop(bm, 'CLOTH_BOLT_BIN', 0.60, 0.48, tracker, z_floor,
+                             candidate_walls=('WEST', 'EAST', 'NORTH'))
+    elif arch == 'JEWELER':
+        _place_floor_prop(bm, tracker, z_floor, rng, 'BALANCE_SCALE', 0.30, 0.30)
+        _try_place_wall_prop(bm, 'STRONGBOX', 0.66, 0.44, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'))
     is_round = (arch == 'BREWERY')
     for tx, ty in ((rcx, rcy), (rcx - 1.0, rcy), (rcx + 1.0, rcy),
                    (rcx, rcy - 1.0), (rcx, rcy + 1.0)):
@@ -2925,7 +3000,7 @@ def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
 
     # Footlockers along a free wall, never in the walkway.
     _try_place_wall_prop(bm, 'CHEST', 0.95, 0.55, tracker, z_floor,
-                         candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'), width=0.9)
+                         candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'))
 
     # 2. Weapon rack along remaining free wall
     _try_place_wall_prop(bm, 'WEAPON_RACK', 1.40, 0.40, tracker, z_floor,
