@@ -673,7 +673,7 @@ def _trim_leg(leg, c0, r0, c1, r1):
     pts = [(p[0], p[1]) for p in leg]
 
     def cut(points, c, r):
-        while len(points) > 2 and math.hypot(points[0][0] - c[0], points[0][1] - c[1]) < r:
+        while len(points) >= 2 and math.hypot(points[0][0] - c[0], points[0][1] - c[1]) < r:
             if math.hypot(points[1][0] - c[0], points[1][1] - c[1]) >= r:
                 ax, ay = points[0]
                 bx, by = points[1]
@@ -686,7 +686,10 @@ def _trim_leg(leg, c0, r0, c1, r1):
                 t = (-b + math.sqrt(disc)) / (2 * a)
                 points[0] = (ax + dx * t, ay + dy * t)
                 return points
-            points.pop(0)
+            if len(points) > 2:
+                points.pop(0)
+            else:
+                break
         return points
 
     if r0:
@@ -732,6 +735,53 @@ def _pieces(p0, p1, max_len=_SAMPLE):
     return list(zip(pts[:-1], pts[1:]))
 
 
+def _build_tower_wall_abutment(bm, tower_c, tower_r, wall_p, wall_dir, outward, height, thick, walk_width=0.95):
+    """
+    Constructs an authentic dressed cut-stone junction clasp / abutment quoin
+    at the intersection of a curtain wall and a round tower.
+    Encases the end of the wall, walkway, plinth, and battlements, seamlessly
+    sealing the straight wall into the curved tower masonry with no gaps or broken ends.
+    """
+    ux, uy = wall_dir
+    ox, oy = outward
+    ang = math.atan2(uy, ux)
+
+    # Midpoint offset across the wall assembly (between outer face and inner walkway edge)
+    lat_mid = -0.5 * (walk_width - 0.05)
+
+    # Intersection point on the tower circumference (radius tower_r):
+    tc_x, tc_y = tower_c
+    dx, dy = wall_p[0] - tc_x, wall_p[1] - tc_y
+    d = math.hypot(dx, dy)
+    if d > 1e-4:
+        junc_x = tc_x + dx * (tower_r / d)
+        junc_y = tc_y + dy * (tower_r / d)
+    else:
+        junc_x, junc_y = wall_p
+
+    c_x = junc_x + ox * lat_mid
+    c_y = junc_y + oy * lat_mid
+
+    ab_t = 0.68  # along wall
+    ab_w = thick + walk_width + 0.16  # across wall (enclosing both outer and inner faces)
+    ab_h = height + 0.85  # matches the battlement top
+
+    # Dressed ashlar body
+    create_beveled_box(
+        bm, size=(ab_t, ab_w, ab_h),
+        location=(c_x, c_y, ab_h * 0.5),
+        rotation=(0.0, 0.0, ang),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025
+    )
+    # Beveled coping stone crown cap
+    create_beveled_box(
+        bm, size=(ab_t + 0.10, ab_w + 0.10, 0.16),
+        location=(c_x, c_y, ab_h + 0.08),
+        rotation=(0.0, 0.0, ang),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+    )
+
+
 def build_nasher_enclosure(bm, props, ctx):
     """Smooth curtain wall (palisade in T1) with a south gate; runs stop at tower surfaces."""
     from .curtain_wall import build_curtain_wall_run, build_gate_house, gate_stair_top_offset
@@ -761,6 +811,7 @@ def build_nasher_enclosure(bm, props, ctx):
         else:
             parts = list(zip(pts[:-1], pts[1:]))
 
+        n_parts = len(parts)
         for j, (s, e) in enumerate(parts):
             ln = math.hypot(e[0] - s[0], e[1] - s[1])
             if ln < 0.3:
@@ -777,7 +828,27 @@ def build_nasher_enclosure(bm, props, ctx):
                     gate={'u0': _GATE_SPAN - _GATE_HALF, 'u1': _GATE_SPAN + _GATE_HALF,
                           'h': 3.0, 'breach': gate_stair_top_offset(True) + 1.5})
             else:
-                build_curtain_wall_run(bm, s, e, outward, 0.0, height, thick, seed=seed)
+                mc_start = 0.50 if (j == 0 and tier > 1) else 0.0
+                mc_end = 0.50 if (j == n_parts - 1 and tier > 1) else 0.0
+                build_curtain_wall_run(
+                    bm, s, e, outward, 0.0, height, thick, seed=seed,
+                    merlon_end_clear=(mc_start, mc_end))
+
+        if tier > 1 and parts:
+            # Dressed cut-stone junction abutments at the start and end towers of this leg
+            p_first_s, p_first_e = parts[0]
+            d_first = math.hypot(p_first_e[0] - p_first_s[0], p_first_e[1] - p_first_s[1])
+            if d_first > 1e-4:
+                u_first = ((p_first_e[0] - p_first_s[0]) / d_first, (p_first_e[1] - p_first_s[1]) / d_first)
+                o_first = (u_first[1], -u_first[0])
+                _build_tower_wall_abutment(bm, ca[:2], ca[2], p_first_s, u_first, o_first, height, thick)
+
+            p_last_s, p_last_e = parts[-1]
+            d_last = math.hypot(p_last_e[0] - p_last_s[0], p_last_e[1] - p_last_s[1])
+            if d_last > 1e-4:
+                u_last = ((p_last_e[0] - p_last_s[0]) / d_last, (p_last_e[1] - p_last_s[1]) / d_last)
+                o_last = (u_last[1], -u_last[0])
+                _build_tower_wall_abutment(bm, cb[:2], cb[2], p_last_e, u_last, o_last, height, thick)
 
     _build_ring_towers(bm, tier)
 
