@@ -117,6 +117,7 @@ MAT_INDEX_DUNGEON_FLOOR = 44
 MAT_INDEX_DUNGEON_BEAM  = 45
 MAT_INDEX_CANVAS        = 46
 MAT_INDEX_FISH          = 47
+MAT_INDEX_MEAT          = 48
 
 
 # ---------------------------------------------------------------------------
@@ -2503,6 +2504,22 @@ def create_stylized_fish(name="M_Building_Fish"):
     return mat
 
 
+def create_stylized_meat(name="M_Building_Meat"):
+    """Handpainted butcher cuts (meat.jpg): exact 0-1 atlas UVs, no tiling."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    c = _coord(tree, loc_x=-1000)
+    tex_node = _load_image_texture(tree, "meat.jpg", c, loc_x=-700, loc_y=120,
+                                   scale=(1.0, 1.0, 1.0))
+    if tex_node is not None:
+        tree.links.new(tex_node.outputs["Color"], bsdf.inputs["Base Color"])
+        _setup_pbr(tree, bsdf, out, roughness=0.55, metallic=0.0)
+        return mat
+    _set_bsdf_input(bsdf, "Base Color", (0.55, 0.16, 0.14, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.55, metallic=0.0)
+    return mat
+
+
 def create_stylized_upholstery(name="M_Building_Upholstery"):
     """Rich medieval damask brocade velvet upholstery for sofas and armchairs."""
     return create_stylized_fabric(name, "upholstery_damask_diffuse.jpg", color=(1.0, 1.0, 1.0, 1.0), roughness=0.75)
@@ -2778,6 +2795,8 @@ def setup_building_material_slots(obj, props):
                   or create_stylized_canvas("M_Building_Canvas"))
     mat_fish = (getattr(props, 'custom_fish', None)
                 or create_stylized_fish("M_Building_Fish"))
+    mat_meat = (getattr(props, 'custom_meat', None)
+                or create_stylized_meat("M_Building_Meat"))
 
     # Assemble canonical slots in strict order
     required_mats = [
@@ -2829,6 +2848,7 @@ def setup_building_material_slots(obj, props):
         mat_dg_beam,        # 45 MAT_INDEX_DUNGEON_BEAM
         mat_canvas,         # 46 MAT_INDEX_CANVAS
         mat_fish,           # 47 MAT_INDEX_FISH
+        mat_meat,           # 48 MAT_INDEX_MEAT
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -2889,6 +2909,7 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Dungeon_Beam",  # 45
     "M_Building_Canvas",        # 46
     "M_Building_Fish",          # 47
+    "M_Building_Meat",          # 48
 )
 
 

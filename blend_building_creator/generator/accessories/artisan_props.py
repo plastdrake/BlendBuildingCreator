@@ -259,14 +259,24 @@ def build_butcher_block(bm, x, y, z_ground=0.0, ang=0.0):
         location=(0.0, 0.0, 0.52 + 0.035), mat_index=MAT_INDEX_WOOD
     )
     top_z = 0.52 + 0.07
-    # Fresh rib cuts waiting on the block.
-    for i, (ox, oy, yaw) in enumerate(((-0.10, 0.08, 0.25), (0.11, -0.06, -0.35))):
-        faces += create_beveled_box(
-            bm, size=(0.20, 0.13, 0.075 - i * 0.012),
-            location=(ox, oy, top_z + 0.037),
-            rotation=(0.0, 0.0, yaw),
-            mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.022
-        )
+    # Artist's butcher cuts laid on the block (fall back to red cuts if the
+    # FBX cannot load: newly added bmesh faces are tracked for the transform).
+    from mathutils import Matrix as _M2
+    _n0 = len(bm.faces)
+    try:
+        _build_fbx_prop(bm, 'meat.fbx', None, -0.08, 0.05, top_z, 0.30,
+                        0.22, _meat_mat(), final=_M2.Identity(4))
+        _build_fbx_prop(bm, 'meat1.fbx', None, 0.10, -0.07, top_z, -0.40,
+                        0.16, _meat_mat(), final=_M2.Identity(4))
+    except Exception:
+        for ox, oy, yaw in ((-0.10, 0.08, 0.25), (0.11, -0.06, -0.35)):
+            faces += create_beveled_box(
+                bm, size=(0.20, 0.13, 0.063),
+                location=(ox, oy, top_z + 0.031),
+                rotation=(0.0, 0.0, yaw),
+                mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.022
+            )
+    faces += [f for f in list(bm.faces)[_n0:] if f.is_valid]
     # Heavy cleaver buried in the block.
     faces += create_beveled_box(
         bm, size=(0.175, 0.018, 0.10),
@@ -860,7 +870,8 @@ def build_fish(bm, x, y, z_ground=0.0, ang=0.0, length=0.34, smoked=False):
     """
     if not smoked:
         try:
-            if _build_fbx_fish(bm, x, y, z_ground, ang, length):
+            if _build_fbx_prop(bm, 'fish.fbx', None, x, y, z_ground, ang,
+                               length, _fish_mat()):
                 return True
         except Exception:
             pass
@@ -869,6 +880,33 @@ def build_fish(bm, x, y, z_ground=0.0, ang=0.0, length=0.34, smoked=False):
                mat=MAT_INDEX_LEATHER if smoked else MAT_INDEX_IRON)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
+
+def build_meat(bm, x, y, z_ground=0.0, ang=0.0, length=0.30, variant=0):
+    """Artist's butcher cuts (props/meat.fbx, meat1.fbx textured by
+    meat.jpg); variant 0/1 selects the file. Falls back to a stylized box
+    cut whenever the FBX cannot be loaded."""
+    try:
+        if _build_fbx_prop(bm, 'meat.fbx' if variant == 0 else 'meat1.fbx',
+                           None, x, y, z_ground, ang, length, _meat_mat()):
+            return True
+    except Exception:
+        pass
+    faces = []
+    _fish_body(bm, faces, 0.0, 0.0, 0.0, yaw=0.0, length=length,
+               mat=MAT_INDEX_FABRIC_RED)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def _fish_mat():
+    from ..materials import MAT_INDEX_FISH
+    return MAT_INDEX_FISH
+
+
+def _meat_mat():
+    from ..materials import MAT_INDEX_MEAT
+    return MAT_INDEX_MEAT
 
 
 _FBX_TEMPLATE_CACHE = {}
@@ -941,14 +979,19 @@ def _import_fbx_template(fbx_path):
         return None
 
 
-def _build_fbx_fish(bm, x, y, z_ground, ang, length):
-    """Stamp the artist's fish mesh normalized to ``length``. Returns True,
-    raises on any problem (caller falls back to the box body)."""
-    from ..materials import MAT_INDEX_FISH
-    items = _import_fbx_template(os.path.join(_addon_root(), 'props', 'fish.fbx'))
+def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
+                    mat_index, final=None):
+    """Stamp an artist FBX mesh normalized to ``length`` with ``mat_index``.
+
+    Shared by the fish/meat display meshes (all unwrapped to their own
+    atlas). Returns True, raises on any problem (caller falls back).
+    Pass ``final`` (a Matrix) to place in a local frame instead of world.
+    """
+    from mathutils import Matrix as _M
+    items = _import_fbx_template(os.path.join(_addon_root(), 'props', fbx_file))
     if not items:
-        raise RuntimeError('fish FBX unavailable')
-    # Combined bounds: longest horizontal axis becomes the fish length.
+        raise RuntimeError(f'{fbx_file} unavailable')
+    # Combined bounds: longest horizontal axis becomes the length.
     all_v = [v for it in items for v in it['verts']]
     xs = [v[0] for v in all_v]
     ys = [v[1] for v in all_v]
@@ -959,10 +1002,10 @@ def _build_fbx_fish(bm, x, y, z_ground, ang, length):
     s = length / span
     cx, cy, z0 = ((min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5,
                   min(zs))
-    from mathutils import Matrix as _M, Euler as _E
     fix = _M.Rotation(yaw_fix, 4, 'Z')
-    place = (_M.Translation((x, y, z_ground)) @ _M.Rotation(ang, 4, 'Z')
-             @ _M.Diagonal((s, s, s, 1.0)))
+    local = (_M.Translation((x, y, z_ground)) @ _M.Rotation(ang, 4, 'Z'))
+    place = (local if final is None else (final @ local))
+    place = place @ _M.Diagonal((s, s, s, 1.0))
     base = _M.Translation((-cx, -cy, -z0))
     uv_layer = bm.loops.layers.uv.verify()
     seen = set()
@@ -980,7 +1023,7 @@ def _build_fbx_fish(bm, x, y, z_ground, ang, length):
                 continue  # duplicate face
             seen.add(key)
             f = bm.faces.new([remap[i] for i in idx])
-            f.material_index = MAT_INDEX_FISH
+            f.material_index = mat_index
             f.smooth = True
             if uvs is not None:
                 for loop, uv in zip(f.loops, uvs):
@@ -1127,8 +1170,7 @@ def build_horseshoe(bm, x, y, z_ground=0.0, ang=0.0):
     return faces
 
 
-def build_wooden_bowl(bm, x, y, z_ground=0.0, ang=0.0):
-    """Turned wooden bowl with a spoon resting across the rim."""
+def build_wooden_bowl(bm, x, y, z_ground=0.0, ang=0.0):    """Turned wooden bowl with a spoon resting across the rim."""
     faces = []
     faces += create_hollow_dish(
         bm, radius_base=0.045, radius_rim=0.105, inner_radius_rim=0.092,

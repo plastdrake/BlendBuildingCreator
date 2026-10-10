@@ -248,6 +248,10 @@ for _s in (
           'artisan_props', 'build_horseshoe', 0.20),
     _spec('WOODEN_BOWL', "Wooden Bowl", 'WORK', "Turned bowl with spoon",
           'artisan_props', 'build_wooden_bowl', 0.25),
+    _spec('MEAT', "Meat Cut", 'KITCHEN', "Artist butcher cut",
+          'artisan_props', 'build_meat', 0.25, length=0.24, variant=0),
+    _spec('MEAT_SMALL', "Meat Cut (Small)", 'KITCHEN', "Artist small butcher cut",
+          'artisan_props', 'build_meat', 0.20, length=0.18, variant=1),
 ):
     PROP_REGISTRY[_s.key] = _s
 
