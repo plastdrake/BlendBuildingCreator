@@ -807,6 +807,32 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
             build_brewery_cellar(bm, props, ctx, tier)
         except Exception:
             pass
+    # Fishmonger yard: fish drying racks / rails with the catch hanging out
+    # front, flanking the entrance (outside the footprint).
+    if getattr(ctx, 'effective_archetype', '') == 'FISHERMAN':
+        try:
+            import math as _m
+            from .artisan_props import build_fish_drying_rack, build_fish_rail
+            from .hospitality import is_point_outside_building
+            _dyf = getattr(ctx, 'main_door_yf', -hy)
+            _cands = [
+                (-hx - 2.2, _dyf + 0.2, 0.0, 'RACK'),
+                (hx + 2.2, _dyf + 0.2, _m.pi, 'RAIL'),
+                (-hx - 2.2, _dyf - 3.2, 0.0, 'RAIL'),
+                (hx + 2.2, _dyf - 3.2, _m.pi, 'RACK'),
+            ]
+            _n = 0
+            for _px, _py, _pyaw, _kind in _cands:
+                if _n >= 2:
+                    break
+                if is_point_outside_building(_px, _py, 1.2, ctx, margin=0.6):
+                    if _kind == 'RACK':
+                        build_fish_drying_rack(bm, _px, _py, 0.0, _pyaw, width=1.20)
+                    else:
+                        build_fish_rail(bm, _px, _py, 0.0, _pyaw, width=1.30)
+                    _n += 1
+        except Exception:
+            pass
 
     # 4.5b Optional gable loft hatch frame, open leaf and leaning ladder.
     # The wall opening itself was left by the roof builders from _loft_arg.
