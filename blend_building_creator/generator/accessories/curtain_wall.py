@@ -442,21 +442,6 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                                rotation=(0.0, 0.0, ang),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
 
-            # Graduated cut-stone corbel brackets projecting from the landing
-            # pier faces directly beneath the cap: visible support brackets.
-            # Outer-face corbels only: the tower-side face laps into the gate
-            # tower masonry, so brackets there would be buried invisibly.
-            land_face_lat = tow_lat_c + t_w * 0.5
-            for c_off in (-0.35, 0.35):
-                for face_sgn, face_lat in ((1.0, land_face_lat),):
-                    for step_i, (proj, drop, wdt) in enumerate(
-                            ((0.10, 0.78, 0.26), (0.20, 0.48, 0.28), (0.32, 0.20, 0.30))):
-                        cb_x, cb_y = at(top_land_u + c_off, face_lat + face_sgn * proj)
-                        create_beveled_box(bm, size=(wdt, 0.26, 0.24),
-                                           location=(cb_x, cb_y, top_z - drop),
-                                           rotation=(0.0, 0.0, ang),
-                                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-
             # Top-landing guard railing along the exposed outer edge, continuing
             # the flight handrail line (posts + double rail with pyramid caps)
             land_outer_lat = tow_lat_c - 0.50 + (t_w + 1.00) * 0.5 - 0.06
