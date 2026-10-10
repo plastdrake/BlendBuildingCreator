@@ -55,14 +55,27 @@ class RoomOccupancyTracker:
                 dcy = d.get('y', (ry0 + ry1) * 0.5)
                 axis = d.get('axis', 'X')
                 dw = d.get('w', 0.95)
-                clr = 1.05  # clear walking corridor depth inside room
-                w_margin = dw * 0.5 + 0.25
+                is_p = bool(d.get('is_portal', False) or dw >= 1.5)
+                clr = 2.40 if is_p else 1.25  # clear walking corridor depth inside room
+                w_margin = (dw * 0.5 + 0.50) if is_p else (dw * 0.5 + 0.25)
                 if axis == 'X':
                     self.occupied_boxes.append((dcx - w_margin, dcx + w_margin,
                                                 dcy - clr, dcy + clr))
                 else:
                     self.occupied_boxes.append((dcx - clr, dcx + clr,
                                                 dcy - w_margin, dcy + w_margin))
+
+    def is_near_door(self, x: float, y: float, radius: float = 1.40) -> bool:
+        """Returns True if (x, y) is within clearance distance of any doorway."""
+        for d in self.doorways:
+            dcx = d.get('x', (self.rx0 + self.rx1) * 0.5)
+            dcy = d.get('y', (self.ry0 + self.ry1) * 0.5)
+            dw = d.get('w', 0.95)
+            is_p = bool(d.get('is_portal', False) or dw >= 1.5)
+            r = max(radius, (dw * 0.5 + 0.60) if not is_p else (dw * 0.5 + 1.20))
+            if math.hypot(x - dcx, y - dcy) < r:
+                return True
+        return False
 
         # 3. Reserve window clearance along exterior walls so tall props never block windows
         self.window_boxes: List[Tuple[float, float, float, float]] = []
@@ -1234,9 +1247,7 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
                           p_y - pw * 0.5 - 0.04, p_y + pw * 0.5 + 0.04)
                     if tracker.is_free(sb[0], sb[1], sb[2], sb[3], check_windows=True) and \
                        tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True):
-                        if any(math.hypot(wall_x_stove - d.get('x', rcx), s_y - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
-                            continue
-                        if any(math.hypot(wall_x_table - d.get('x', rcx), p_y - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
+                        if tracker.is_near_door(wall_x_stove, s_y) or tracker.is_near_door(wall_x_table, p_y):
                             continue
                         tracker.occupy(sb[0], sb[1], sb[2], sb[3])
                         tracker.occupy(pb[0], pb[1], pb[2], pb[3])
@@ -1264,9 +1275,7 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
                           max(wall_y_table - pd*0.5, wall_y_table + pd*0.5) + 0.05)
                     if tracker.is_free(sb[0], sb[1], sb[2], sb[3], check_windows=True) and \
                        tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True):
-                        if any(math.hypot(s_x - d.get('x', rcx), wall_y_stove - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
-                            continue
-                        if any(math.hypot(p_x - d.get('x', rcx), wall_y_table - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
+                        if tracker.is_near_door(s_x, wall_y_stove) or tracker.is_near_door(p_x, wall_y_table):
                             continue
                         tracker.occupy(sb[0], sb[1], sb[2], sb[3])
                         tracker.occupy(pb[0], pb[1], pb[2], pb[3])
@@ -1291,9 +1300,7 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
         pb = (px - pw*0.5 - 0.04, px + pw*0.5 + 0.04, py - pd*0.5 - 0.04, py + pd*0.5 + 0.04)
         if tracker.is_free(sb[0], sb[1], sb[2], sb[3], check_windows=True) and \
            tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True):
-            if any(math.hypot(sx - d.get('x', rcx), sy - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
-                continue
-            if any(math.hypot(px - d.get('x', rcx), py - d.get('y', rcy)) < 1.15 for d in tracker.doorways):
+            if tracker.is_near_door(sx, sy) or tracker.is_near_door(px, py):
                 continue
             tracker.occupy(sb[0], sb[1], sb[2], sb[3])
             tracker.occupy(pb[0], pb[1], pb[2], pb[3])
@@ -3533,6 +3540,18 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                 if (dy + dw * 0.5 >= ry0 - 0.20 and dy - dw * 0.5 <= ry1 + 0.20) and (rx0 - 0.55 <= dx <= rx1 + 0.55):
                     if d not in all_doorways:
                         all_doorways.append(d)
+        _extras = getattr(ctx, 'extra_doorways', None) or getattr(getattr(ctx, 'props', None), 'extra_doorways', None) or []
+        for ed in _extras:
+            if ed.get('floor_idx', 0) == rm.floor_idx:
+                sax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
+                if sax == 'X':
+                    ed_x, ed_y = ed.get('pos', 0.0), (ry1 if ed.get('facade') == 'BACK' else ry0)
+                else:
+                    ed_x, ed_y = (rx0 if ed.get('facade') == 'LEFT' else rx1), ed.get('pos', 0.0)
+                ed_d = {'x': ed_x, 'y': ed_y, 'axis': sax, 'w': ed.get('w', 1.8), 'is_portal': ed.get('is_portal', True)}
+                if (rx0 - 0.55 <= ed_x <= rx1 + 0.55) and (ry0 - 0.55 <= ed_y <= ry1 + 0.55):
+                    if ed_d not in all_doorways:
+                        all_doorways.append(ed_d)
 
     # 2. Gather all windows bordering this room
     room_windows = []

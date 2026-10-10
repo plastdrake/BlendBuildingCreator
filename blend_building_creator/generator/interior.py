@@ -2547,6 +2547,22 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             )
             rooms.append(w_rm)
 
+    if doorways:
+        for rm in rooms:
+            rx0, rx1, ry0, ry1 = rm.bounds
+            for d in doorways:
+                dx, dy = d.get('x', 0.0), d.get('y', 0.0)
+                dw = d.get('w', 0.95)
+                axis = d.get('axis', 'X')
+                if axis == 'X':
+                    if (dx + dw * 0.5 >= rx0 - 0.20 and dx - dw * 0.5 <= rx1 + 0.20) and (ry0 - 0.55 <= dy <= ry1 + 0.55):
+                        if d not in rm.doorways:
+                            rm.doorways.append(d)
+                else:
+                    if (dy + dw * 0.5 >= ry0 - 0.20 and dy - dw * 0.5 <= ry1 + 0.20) and (rx0 - 0.55 <= dx <= rx1 + 0.55):
+                        if d not in rm.doorways:
+                            rm.doorways.append(d)
+
     return rooms, interior_walls
 
 

@@ -126,9 +126,6 @@ def _build_halls(bm, props, tier):
         elif hid == "keep":
             ov['has_basement_stair'] = True
             ov['window_left'] = False
-            # Floor 0 west connecting wing doorway on South facade (-Y in world = FRONT in local space)
-            if tier == 3:
-                extra_doors.append({'floor_idx': 0, 'facade': 'FRONT', 'pos': -14.5, 'w': 2.0, 'h': 2.6, 'is_portal': True})
             # Floor 0 chapel-link doorway on West facade (-X in world = LEFT in local space)
             if tier >= 2:
                 extra_doors.append({'floor_idx': 0, 'facade': 'LEFT', 'pos': 0.0, 'w': 2.0, 'h': 2.6, 'is_portal': True})

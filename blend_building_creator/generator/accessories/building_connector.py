@@ -984,29 +984,86 @@ def build_connecting_wing(
         if has_bridge_door and s_side > 0:
             _up_ex.append((bridge_door_y - 1.30, bridge_door_y + 1.30))
         _line_section(s_side, stair_y_end + 0.3, deck_n - 0.3, z_high, _up_ex)
+    # 3.5 INTERIOR FINISHED TIMBER CEILING & EXPOSED CROSS-BEAMS
+    # Fully seals the walkable corridor so no roof trusses, shingles, or exterior
+    # geometry are visible from inside the connector wing.
+    ceil_h = 3.35
+    ceil_thick = 0.08
+    beam_w = 0.18
+    beam_h = 0.22
+    int_w = width - wall_t * 2.0 - 0.04
+
+    # A. Lower section ceiling
+    create_beveled_box(
+        bm, size=(int_w, len_low, ceil_thick),
+        location=(cx, mid_y_low, z_low + ceil_h),
+        mat_index=deck_mat, bevel_amount=0.01
+    )
+    n_beams_low = max(2, int(len_low / 1.8))
+    for bi in range(n_beams_low + 1):
+        by = y_start + bi * (len_low / n_beams_low)
+        create_beveled_box(
+            bm, size=(int_w + 0.06, beam_w, beam_h),
+            location=(cx, by, z_low + ceil_h - beam_h * 0.5),
+            mat_index=timber_mat, bevel_amount=0.01
+        )
+
+    # B. Stair section sloped ceiling
+    stair_pitch = math.atan2(stair_h, stair_len)
+    stair_hyp = math.hypot(stair_len, stair_h)
+    create_beveled_box(
+        bm, size=(int_w, stair_hyp, ceil_thick),
+        location=(cx, mid_stair_y, mid_stair_z - 0.90 + ceil_h),
+        rotation=(stair_pitch, 0.0, 0.0),
+        mat_index=deck_mat, bevel_amount=0.01
+    )
+    n_beams_stair = max(2, int(stair_len / 1.8))
+    for bi in range(n_beams_stair + 1):
+        by = stair_y_start + bi * (stair_len / n_beams_stair)
+        bz = z_low + (by - stair_y_start) / stair_len * stair_h + ceil_h - beam_h * 0.5
+        create_beveled_box(
+            bm, size=(int_w + 0.06, beam_w, beam_h),
+            location=(cx, by, bz),
+            rotation=(stair_pitch, 0.0, 0.0),
+            mat_index=timber_mat, bevel_amount=0.01
+        )
+
+    # C. Upper section ceiling
+    create_beveled_box(
+        bm, size=(int_w, len_high, ceil_thick),
+        location=(cx, mid_y_high, z_high + ceil_h),
+        mat_index=deck_mat, bevel_amount=0.01
+    )
+    n_beams_high = max(2, int(len_high / 1.8))
+    for bi in range(n_beams_high + 1):
+        by = stair_y_end + bi * (len_high / n_beams_high)
+        create_beveled_box(
+            bm, size=(int_w + 0.06, beam_w, beam_h),
+            location=(cx, by, z_high + ceil_h - beam_h * 0.5),
+            mat_index=timber_mat, bevel_amount=0.01
+        )
+
     # 4. STEPPED GABLE SHINGLE ROOFS (proper roof builder, flush abutments).
-    # The upper roof runs all the way down over the stair zone so the middle
-    # of the wing is roofed; its front gable closes the step while the
-    # walkway stays open below (no blocking parapet wall across the path).
+    # Both roofs terminate strictly at stair_y_start with flush abutments,
+    # preventing either roof from protruding into the interior or the other roof.
     from ..roof.gable_roof import build_gable_roof
-    # Lower section gable roof (abuts South building facade flush with zero overhang)
+    # Lower section gable roof (abuts South building facade and step wall flush)
     build_gable_roof(
         bm,
         x_min=cx - half_w,
         x_max=cx + half_w,
         y_min=y_start,
-        y_max=stair_y_start + 0.5,
+        y_max=stair_y_start,
         z_base=z_low + floor_h * 2.0,
         roof_height=2.6,
         overhang=0.45,
         abut_front=True,  # Flushed to south building wall at y_start
-        abut_back=False,
+        abut_back=True,   # Flushed to step-closing wall at stair_y_start
         gable_ends=('BACK',),
         gable_walls=True,
     )
 
-    # Upper section gable roof (runs over the stair zone and abuts the North
-    # building facade flush with zero overhang)
+    # Upper section gable roof (runs over the stair zone and abuts the North facade flush)
     build_gable_roof(
         bm,
         x_min=cx - half_w,
@@ -1016,16 +1073,14 @@ def build_connecting_wing(
         z_base=z_high + floor_h * 2.0,
         roof_height=2.6,
         overhang=0.45,
-        abut_front=False,
-        abut_back=True,  # Flushed to north building wall, never inside it
+        abut_front=True,  # Flushed to step-closing wall at stair_y_start
+        abut_back=True,   # Flushed to north building wall, never inside it
         gable_ends=('FRONT',),
         gable_walls=True,
     )
 
-    # (No parapet block across the step: the front gable closes the roof while
-    # the walkway passes freely beneath it.)
     # Step-closing wall panel on the south face between the lower ridge and
-    # the upper eave (high above head height: seals the envelope, never the path)
+    # the upper eave (high above head height: seals the envelope)
     _step_lo = z_low + floor_h * 2.0 + 2.6
     _step_hi = z_high + floor_h * 2.0
     create_beveled_box(
@@ -1035,56 +1090,52 @@ def build_connecting_wing(
     )
 
     # 5. CONNECTION PORTALS AT BOTH BUILDING ENDS (straddling the wall planes,
-    # with solid threshold plates so the route is walkable end to end)
+    # with solid raised threshold slabs and stone surrounds so the route is 100% walkable)
     portal_w = 2.00
     portal_h = 2.70
 
     def _wing_portal(y_wall, z_deck, into_building):
         # Carve the wall + any interior walls/furniture in the doorway corridor
-        # (starting just above deck level so decks and flat rugs survive).
         if into_building > 0:
-            y_span = (y_wall - 1.2, y_wall + 2.6)
+            y_span = (y_wall - 1.4, y_wall + 2.8)
         else:
-            y_span = (y_wall - 2.6, y_wall + 1.2)
+            y_span = (y_wall - 2.8, y_wall + 1.4)
         carve_pass_through_portal(
             bm,
             x_span=(cx - portal_w * 0.65, cx + portal_w * 0.65),
             y_span=y_span,
             z_span=(z_deck + 0.06, z_deck + portal_h + 0.30)
         )
-        # Framed stone portal surround on the wing side of the wall
+        # Raised cut-stone threshold slab: covers the wall foundation joint and floorboard ends cleanly
         create_beveled_box(
-            bm, size=(portal_w + 0.60, 0.40, 0.45),
-            location=(cx, y_wall, z_deck + portal_h + 0.22),
-            mat_index=trim_mat, bevel_amount=0.025
+            bm, size=(portal_w + 0.60, 1.40, 0.14),
+            location=(cx, y_wall, z_deck + 0.04),
+            mat_index=trim_mat, bevel_amount=0.015
         )
+        # Heavy stone door jamb piers sitting on the threshold slab
         for js in (-1.0, 1.0):
             create_beveled_box(
-                bm, size=(0.35, 0.38, portal_h + 0.35),
-                location=(cx + js * (portal_w * 0.5 + 0.18), y_wall, z_deck + (portal_h + 0.35) * 0.5),
+                bm, size=(0.32, 0.44, portal_h),
+                location=(cx + js * (portal_w * 0.5 + 0.16), y_wall, z_deck + 0.11 + portal_h * 0.5),
                 mat_index=trim_mat, bevel_amount=0.02
             )
-        # Timber-frame portal: jamb posts + head beam lining the opening
+        # Dressed stone lintel block bridging across the top
+        create_beveled_box(
+            bm, size=(portal_w + 0.64, 0.48, 0.38),
+            location=(cx, y_wall, z_deck + 0.11 + portal_h + 0.19),
+            mat_index=trim_mat, bevel_amount=0.02
+        )
+        # Timber-frame casing lining the inner opening
         for js in (-1.0, 1.0):
             create_beveled_box(
-                bm, size=(0.16, 0.20, portal_h),
-                location=(cx + js * (portal_w * 0.5 - 0.02), y_wall, z_deck + portal_h * 0.5),
-                mat_index=timber_mat, bevel_amount=0.015
+                bm, size=(0.14, 0.30, portal_h),
+                location=(cx + js * (portal_w * 0.5 - 0.02), y_wall, z_deck + 0.11 + portal_h * 0.5),
+                mat_index=timber_mat, bevel_amount=0.012
             )
         create_beveled_box(
-            bm, size=(portal_w + 0.16, 0.20, 0.18),
-            location=(cx, y_wall, z_deck + portal_h + 0.02),
-            mat_index=timber_mat, bevel_amount=0.015
-        )
-        # Solid threshold plate bridging the wall passage (laid after carving)
-        if into_building > 0:
-            th_y = y_wall + 0.05
-        else:
-            th_y = y_wall - 0.05
-        create_beveled_box(
-            bm, size=(portal_w - 0.10, 1.30, 0.10),
-            location=(cx, th_y, z_deck + 0.01),
-            mat_index=trim_mat, bevel_amount=0.01
+            bm, size=(portal_w + 0.14, 0.30, 0.14),
+            location=(cx, y_wall, z_deck + 0.11 + portal_h + 0.07),
+            mat_index=timber_mat, bevel_amount=0.012
         )
 
     # South portal into Great Hall / East Hall (wall plane at y_start)

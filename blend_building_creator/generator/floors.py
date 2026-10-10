@@ -1548,10 +1548,13 @@ def build_floors(bm, props, ctx):
                 sax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
                 if sax == 'Y':
                     xf = ix_min if ed.get('facade') == 'LEFT' else ix_max
-                    _plan_doorways.append({'x': xf, 'y': ed.get('pos', 0.0), 'axis': 'Y', 'w': ed.get('w', 1.8)})
+                    _plan_doorways.append({'x': xf, 'y': ed.get('pos', 0.0), 'axis': 'Y', 'w': ed.get('w', 1.8), 'is_portal': ed.get('is_portal', True)})
                 else:
                     yf = iy_max if ed.get('facade') == 'BACK' else iy_min
-                    _plan_doorways.append({'x': ed.get('pos', 0.0), 'y': yf, 'axis': 'X', 'w': ed.get('w', 1.8)})
+                    _plan_doorways.append({'x': ed.get('pos', 0.0), 'y': yf, 'axis': 'X', 'w': ed.get('w', 1.8), 'is_portal': ed.get('is_portal', True)})
+        for _pdw in _plan_doorways:
+            if _pdw not in ctx.floor_doorways.setdefault(fl_idx, []):
+                ctx.floor_doorways[fl_idx].append(_pdw)
         fl_rooms, fl_interior_walls = plan_floor_rooms(
             fl_idx, (ix_min, ix_max, iy_min, iy_max),
             stair_hole=cur_stair_hole or next_stair_hole,
@@ -2858,27 +2861,29 @@ def _place_exterior_stair_doors(bm, props, ctx, fl_idx, z_floor,
             ops.append({'u_start': (pos - dw_w * 0.5 - e_margin) - y_min,
                         'u_end': (pos + dw_w * 0.5 + e_margin) - y_min,
                         'z_start': z_floor, 'z_end': top_z})
-            ctx.floor_doorways.setdefault(fl_idx, []).append({'x': xf, 'y': pos, 'axis': 'Y', 'w': dw_w})
-            build_door_assembly(
-                bm, center_x=xf, y_front=pos, z_base=z_floor,
-                wall_thickness=wall_t, door_w=dw_w, door_h=dw_h,
-                door_angle_deg=props.door_angle,
-                door_shape='ARCHED',
-                ground_floor_stone=False,
-                normal_axis=('-X' if facade == 'LEFT' else '+X'),
-                include_leaf=not is_portal)
+            ctx.floor_doorways.setdefault(fl_idx, []).append({'x': xf, 'y': pos, 'axis': 'Y', 'w': dw_w, 'is_portal': is_portal})
+            if not is_portal:
+                build_door_assembly(
+                    bm, center_x=xf, y_front=pos, z_base=z_floor,
+                    wall_thickness=wall_t, door_w=dw_w, door_h=dw_h,
+                    door_angle_deg=props.door_angle,
+                    door_shape='ARCHED',
+                    ground_floor_stone=False,
+                    normal_axis=('-X' if facade == 'LEFT' else '+X'),
+                    include_leaf=True)
         else:
             yf = y_max if facade == 'BACK' else y_min
             ops = back_openings if facade == 'BACK' else front_openings
             ops.append({'u_start': (pos - dw_w * 0.5 - e_margin) - x_min,
                         'u_end': (pos + dw_w * 0.5 + e_margin) - x_min,
                         'z_start': z_floor, 'z_end': top_z})
-            ctx.floor_doorways.setdefault(fl_idx, []).append({'x': pos, 'y': yf, 'axis': 'X', 'w': dw_w})
-            build_door_assembly(
-                bm, center_x=pos, y_front=yf, z_base=z_floor,
-                wall_thickness=wall_t, door_w=dw_w, door_h=dw_h,
-                door_angle_deg=props.door_angle,
-                door_shape='ARCHED',
-                ground_floor_stone=False,
-                normal_axis=('+Y' if facade == 'BACK' else '-Y'),
-                include_leaf=not is_portal)
+            ctx.floor_doorways.setdefault(fl_idx, []).append({'x': pos, 'y': yf, 'axis': 'X', 'w': dw_w, 'is_portal': is_portal})
+            if not is_portal:
+                build_door_assembly(
+                    bm, center_x=pos, y_front=yf, z_base=z_floor,
+                    wall_thickness=wall_t, door_w=dw_w, door_h=dw_h,
+                    door_angle_deg=props.door_angle,
+                    door_shape='ARCHED',
+                    ground_floor_stone=False,
+                    normal_axis=('+Y' if facade == 'BACK' else '-Y'),
+                    include_leaf=True)
