@@ -103,6 +103,23 @@ def _bread_fbx_mat():
     return MAT_INDEX_BREAD_FBX
 
 
+def _stamp_bread(bm, faces, lx, ly, lz, yaw=0.0, length=0.30):
+    """One loaf in a LOCAL frame: the baked artist bread when available,
+    else the stylized domed loaf. Faces are appended to ``faces`` (local)."""
+    _n0 = len(bm.faces)
+    try:
+        if _build_fbx_prop(bm, 'bread.fbx', None, lx, ly, lz, yaw, length,
+                           _bread_fbx_mat(), long_axis='AUTO'):
+            faces += [f for f in list(bm.faces)[_n0:] if f.is_valid]
+            return faces
+    except Exception:
+        pass
+    local = []
+    _loaf(bm, local, lx, ly, lz, yaw=yaw, length=length)
+    faces += local
+    return faces
+
+
 def build_bread_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.50):
     """Baker's cooling rack: post frame with three loaf-laden shelves."""
     faces = []
@@ -131,7 +148,8 @@ def build_bread_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.50):
         n = max(2, int(width / 0.42))
         for i in range(n):
             lx = -width * 0.5 + 0.28 + i * ((width - 0.56) / max(1, n - 1))
-            _loaf(bm, faces, lx, 0.0, sz + 0.0225, yaw=(0.12 if si % 2 else -0.10) + i * 0.05)
+            _stamp_bread(bm, faces, lx, 0.0, sz + 0.0225,
+                         yaw=(0.12 if si % 2 else -0.10) + i * 0.05)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
