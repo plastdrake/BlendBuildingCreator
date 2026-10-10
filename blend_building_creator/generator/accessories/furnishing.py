@@ -2170,6 +2170,365 @@ def _furnish_workshop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
+# ---------------------------------------------------------------------------
+# Dedicated artisan craft workshops. Each trade gets its own production room
+# (bakehouse, brewhouse, ...) composed from the prop catalogue, so an
+# artisan's ground floor reads as their craft instead of a generic office.
+# ---------------------------------------------------------------------------
+
+def _place_craft_table(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
+                       length: float = 1.40, width: float = 0.85):
+    """Best-effort work table standing free in the open floor (not wall-backed)."""
+    rcx = (tracker.rx0 + tracker.rx1) * 0.5
+    rcy = (tracker.ry0 + tracker.ry1) * 0.5
+    cands = [(rcx, rcy), (rcx - 0.9, rcy), (rcx + 0.9, rcy),
+             (rcx, rcy - 0.9), (rcx, rcy + 0.9),
+             (rcx - 0.9, rcy - 0.9), (rcx + 0.9, rcy + 0.9)]
+    rng.shuffle(cands)
+    for tx, ty in cands:
+        tx += _jit(rng, 0.15)
+        ty += _jit(rng, 0.15)
+        for yaw, tw, td in ((0.0, length, width), (math.pi * 0.5, width, length)):
+            if tracker.is_free(tx - tw * 0.5 - 0.30, tx + tw * 0.5 + 0.30,
+                               ty - td * 0.5 - 0.30, ty + td * 0.5 + 0.30):
+                tracker.occupy(tx - tw * 0.5, tx + tw * 0.5, ty - td * 0.5, ty + td * 0.5)
+                build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, yaw,
+                           length=length, width=width)
+                return (tx, ty, yaw)
+    return None
+
+
+def _dress_craft_table(bm, tx: float, ty: float, yaw: float, z_table: float,
+                       rng, goods):
+    """Lay trade goods in a row along a work table top."""
+    n = len(goods)
+    for i, g in enumerate(goods):
+        off = (i - (n - 1) * 0.5) * 0.45
+        gx, gy = _table_offset(tx, ty, off, 0.0, yaw)
+        build_prop(bm, g, gx, gy, z_table, rng.uniform(0.0, 6.28))
+
+
+def _stool_near(bm, tracker: RoomOccupancyTracker, tx: float, ty: float,
+                yaw: float, z_floor: float, rng) -> bool:
+    """A work stool tucked against a work table, when the floor is clear."""
+    for sx, sy in (_table_offset(tx, ty, 0.0, 0.80, yaw),
+                   _table_offset(tx, ty, 0.0, -0.80, yaw)):
+        if tracker.is_free(sx - 0.25, sx + 0.25, sy - 0.25, sy + 0.25):
+            tracker.occupy(sx - 0.25, sx + 0.25, sy - 0.25, sy + 0.25)
+            build_prop(bm, 'STOOL', sx, sy, z_floor, rng.uniform(0.0, 6.28))
+            return True
+    return False
+
+
+def _place_goods_row(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
+                     key: str, count: int = 3, box: float = 0.32) -> int:
+    """Row of small floor goods (sacks, pots, crates) along the freest wall base."""
+    rx0, rx1, ry0, ry1 = tracker.rx0, tracker.rx1, tracker.ry0, tracker.ry1
+    spots = []
+    for i in range(count):
+        f = (i + 1) / (count + 1)
+        spots += [(rx0 + (rx1 - rx0) * f, ry1 - box - 0.05),
+                  (rx0 + (rx1 - rx0) * f, ry0 + box + 0.05),
+                  (rx0 + box + 0.05, ry0 + (ry1 - ry0) * f),
+                  (rx1 - box - 0.05, ry0 + (ry1 - ry0) * f)]
+    rng.shuffle(spots)
+    placed = 0
+    for cx, cy in spots:
+        if placed >= count:
+            break
+        if tracker.is_free(cx - box, cx + box, cy - box, cy + box):
+            tracker.occupy(cx - box, cx + box, cy - box, cy + box)
+            build_prop(bm, key, cx + _jit(rng, 0.08), cy + _jit(rng, 0.08),
+                       z_floor, rng.uniform(0.0, 6.28))
+            placed += 1
+    return placed
+
+
+def _furnish_bakehouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                       rng, density: float):
+    """Master baker's bakehouse: kneading tables with dough prep, flour sacks,
+    loaf shelves and oven fuel. (The brick hearth oven itself is kit geometry.)"""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    z_table = z_floor + 0.775
+
+    for _ in range(2 if min(rw, rd) >= 3.4 else 1):
+        t = _place_craft_table(bm, tracker, z_floor, rng)
+        if t is None:
+            break
+        _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
+                           ['FOODPREP_CLUTTER', 'FOODPREP_CLUTTER'])
+        _stool_near(bm, tracker, t[0], t[1], t[2], z_floor, rng)
+
+    _place_goods_row(bm, tracker, z_floor, rng, 'SACK', count=4)  # flour
+    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('EAST', 'NORTH', 'WEST'))  # loaf shelves
+    if rng.random() < density:
+        _try_place_wall_prop(bm, 'LOG_PILE', 1.60, 0.55, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'),
+                             length=1.60, radius=0.15, rows=2)  # oven fuel
+
+    rug_w = min(2.60, max(1.60, rw * 0.55))
+    rug_l = min(3.40, max(2.00, rd * 0.55))
+    _lay_rug(bm, tracker, rm, rng, 'RUG_FOREST', rcx, rcy, z_floor, rug_w, rug_l)
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _furnish_brewhouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                       rng, density: float):
+    """Brewhouse: mash vats along the wall, keg rows, malt sacks and a tasting
+    corner. Stays bare underfoot (wet trade)."""
+    tracker.no_rugs = True
+    tracker.rug_count = 1
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rx0, rx1, ry1 = tracker.rx0, tracker.rx1, tracker.ry1
+
+    for i in range(2):  # great mash vats against the back wall
+        cx = rx0 + (rx1 - rx0) * (i + 1) / 3.0 + _jit(rng, 0.20)
+        cy = ry1 - 0.62
+        if tracker.is_free(cx - 0.60, cx + 0.60, cy - 0.60, cy + 0.60):
+            tracker.occupy(cx - 0.60, cx + 0.60, cy - 0.60, cy + 0.60)
+            build_prop(bm, 'BARREL', cx, cy, z_floor, 0.0, radius=0.55, height=1.10)
+
+    _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=3, box=0.40)  # kegs
+    _place_goods_row(bm, tracker, z_floor, rng, 'SACK', count=3)  # malt
+    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('EAST', 'WEST', 'SOUTH'))
+    if rng.random() < density:  # tasting corner: round table, mugs, bottles
+        for tx, ty in ((rcx, rcy), (rcx - 1.0, rcy), (rcx + 1.0, rcy)):
+            if tracker.is_free(tx - 0.75, tx + 0.75, ty - 0.75, ty + 0.75):
+                tracker.occupy(tx - 0.75, tx + 0.75, ty - 0.75, ty + 0.75)
+                z_table = z_floor + 0.775
+                build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=0.55)
+                build_prop(bm, 'PEWTER_TANKARD', tx - 0.18, ty, z_table, 0.0)
+                build_prop(bm, 'PEWTER_TANKARD', tx + 0.18, ty + 0.10, z_table, 0.0)
+                build_prop(bm, 'BOTTLE_CLUSTER', tx, ty - 0.22, z_table, 0.0)
+                break
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _furnish_butchery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                      rng, density: float):
+    """Butchery and smokehouse: cleaver blocks, brine barrels, salt sacks and
+    smoke fuel. Stays bare underfoot."""
+    tracker.no_rugs = True
+    tracker.rug_count = 1
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    z_table = z_floor + 0.775
+
+    for _ in range(2 if min(rw, rd) >= 3.4 else 1):
+        t = _place_craft_table(bm, tracker, z_floor, rng)
+        if t is None:
+            break
+        _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
+                           ['FOODPREP_CLUTTER'])  # cleaver block
+
+    _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=3, box=0.40)  # brine
+    _place_goods_row(bm, tracker, z_floor, rng, 'SACK', count=2)  # salt
+    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('EAST', 'NORTH', 'WEST'))
+    if rng.random() < density:
+        _try_place_wall_prop(bm, 'LOG_PILE', 1.60, 0.55, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'),
+                             length=1.60, radius=0.15, rows=2)  # smoke fuel
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _furnish_tailor_atelier(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                            rng, density: float):
+    """Tailor's atelier: cutting table with cloth stacks, bolt shelves, garment
+    wardrobe and a fitting corner."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    z_table = z_floor + 0.775
+
+    t = _place_craft_table(bm, tracker, z_floor, rng, length=1.60, width=0.90)
+    if t is not None:  # cutting table dressed with folded cloth
+        _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
+                           ['FOLDED_CLOTH', 'FOLDED_CLOTH'])
+        _stool_near(bm, tracker, t[0], t[1], t[2], z_floor, rng)
+
+    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('EAST', 'NORTH', 'WEST'))  # cloth bolts
+    _try_place_wall_prop(bm, 'WARDROBE', 1.20, 0.55, tracker, z_floor,
+                         candidate_walls=('WEST', 'EAST', 'NORTH'), width=1.2, height=1.9)
+    _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'WEST', 'EAST'), width=0.9)
+
+    rug_w = min(2.60, max(1.60, rw * 0.55))
+    rug_l = min(3.40, max(2.00, rd * 0.55))
+    _lay_rug(bm, tracker, rm, rng, 'RUG_SAPPHIRE', rcx, rcy, z_floor, rug_w, rug_l)
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _furnish_goldsmith(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                       rng, density: float):
+    """Goldsmith's workshop: fine bench with ledger, display shelves and an
+    iron-strapped strongbox."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+
+    d = _try_place_wall_prop(bm, 'DESK', 1.40, 0.68, tracker, z_floor,
+                             candidate_walls=('NORTH', 'WEST', 'EAST'))
+    if d:
+        _dress_desk(bm, tracker, d[0], d[1], d[2], z_floor, rng, (rcx, rcy))
+
+    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('EAST', 'NORTH', 'WEST'))  # display
+    _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'WEST', 'EAST'), width=0.9)  # strongbox
+    if rng.random() < density:  # gem-oil side table
+        for tx, ty in ((rcx, rcy), (rcx - 1.0, rcy), (rcx + 1.0, rcy)):
+            if tracker.is_free(tx - 0.60, tx + 0.60, ty - 0.60, ty + 0.60):
+                tracker.occupy(tx - 0.60, tx + 0.60, ty - 0.60, ty + 0.60)
+                build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=0.45)
+                build_prop(bm, 'BOTTLE_CLUSTER', tx, ty, z_floor + 0.775, 0.0)
+                break
+
+    rug_w = min(2.40, max(1.50, rw * 0.50))
+    rug_l = min(3.00, max(1.80, rd * 0.50))
+    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor, rug_w, rug_l)
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _furnish_smithy(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                    rng, density: float):
+    """Tool smithy: quench barrels, coal pile, stock crates and a tool/product
+    rack. (The forge itself is kit geometry.) Stays bare underfoot."""
+    tracker.no_rugs = True
+    tracker.rug_count = 1
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+
+    _try_place_wall_prop(bm, 'WEAPON_RACK', 1.20, 0.45, tracker, z_floor,
+                         candidate_walls=('NORTH', 'EAST', 'WEST'))  # tool display
+    _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)  # quench
+    _try_place_wall_prop(bm, 'LOG_PILE', 1.60, 0.55, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'WEST', 'EAST'),
+                         length=1.60, radius=0.15, rows=2)  # coal
+    _place_goods_row(bm, tracker, z_floor, rng, 'CRATE', count=2, box=0.36)  # stock
+    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('EAST', 'WEST', 'NORTH'))
+    if rng.random() < density:
+        _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'), width=0.9)
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _furnish_joinery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                     rng, density: float):
+    """Joiner's workshop: workbenches, lumber and plank piles, finished pieces.
+    Stays bare underfoot (shavings)."""
+    tracker.no_rugs = True
+    tracker.rug_count = 1
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+
+    for _ in range(2 if min(rw, rd) >= 3.4 else 1):
+        t = _place_craft_table(bm, tracker, z_floor, rng, length=1.60, width=0.90)
+        if t is None:
+            break
+        _stool_near(bm, tracker, t[0], t[1], t[2], z_floor, rng)
+
+    _try_place_wall_prop(bm, 'PLANK_PILE', 1.80, 0.55, tracker, z_floor,
+                         candidate_walls=('NORTH', 'EAST', 'WEST'),
+                         length=1.80, width=0.28, layers=5)  # seasoned boards
+    _try_place_wall_prop(bm, 'LOG_PILE', 1.60, 0.55, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'WEST', 'EAST'),
+                         length=1.60, radius=0.17, rows=3)  # timber
+    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('EAST', 'WEST', 'NORTH'))
+    if rng.random() < density:  # finished pieces: chair + chest
+        _try_place_wall_prop(bm, 'CHAIR', 0.55, 0.55, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'EAST', 'WEST'))
+        _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'), width=0.9)
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                     rng, density: float):
+    """Fishery: gutting tables with the day's catch, fish-box crates, salt
+    barrels and tackle shelves. Stays bare underfoot."""
+    tracker.no_rugs = True
+    tracker.rug_count = 1
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    z_table = z_floor + 0.775
+
+    for _ in range(2 if min(rw, rd) >= 3.4 else 1):
+        t = _place_craft_table(bm, tracker, z_floor, rng)
+        if t is None:
+            break
+        _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
+                           ['FOODPREP_CLUTTER'])  # catch prep board
+
+    _place_goods_row(bm, tracker, z_floor, rng, 'CRATE', count=3, box=0.36)  # fish boxes
+    _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)  # salt barrels
+    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('EAST', 'NORTH', 'WEST'))  # tackle
+    if rng.random() < density:
+        _place_goods_row(bm, tracker, z_floor, rng, 'CLAY_POT', count=2, box=0.30)
+    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+
+
+def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
+                          rng, arch: str) -> None:
+    """Best-effort trade counter dressing in an artisan STORE: the shop shows
+    what the workshop below makes."""
+    rcx = (tracker.rx0 + tracker.rx1) * 0.5
+    rcy = (tracker.ry0 + tracker.ry1) * 0.5
+    z_table = z_floor + 0.775
+    if arch in ('BLACKSMITH', 'TOOLSMITH'):  # arms/tools display rack
+        _try_place_wall_prop(bm, 'WEAPON_RACK', 1.20, 0.45, tracker, z_floor,
+                             candidate_walls=('NORTH', 'EAST', 'WEST'))
+        return
+    if arch == 'FURNITURE_MAKER':  # showroom pieces
+        _try_place_wall_prop(bm, 'CHAIR', 0.55, 0.55, tracker, z_floor,
+                             candidate_walls=('NORTH', 'EAST', 'WEST'))
+        _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'), width=0.9)
+        return
+    table_goods = {
+        'TAILOR': ['FOLDED_CLOTH', 'FOLDED_CLOTH'],
+        'BAKERY': ['FOODPREP_CLUTTER', 'FOODPREP_CLUTTER'],
+        'BUTCHER': ['FOODPREP_CLUTTER'],
+        'FISHERMAN': ['FOODPREP_CLUTTER'],
+        'JEWELER': ['FOLDED_CLOTH', 'BOTTLE_CLUSTER'],
+        'BREWERY': ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'BOTTLE_CLUSTER'],
+    }.get(arch)
+    if not table_goods:
+        return
+    is_round = (arch == 'BREWERY')
+    for tx, ty in ((rcx, rcy), (rcx - 1.0, rcy), (rcx + 1.0, rcy),
+                   (rcx, rcy - 1.0), (rcx, rcy + 1.0)):
+        if is_round:
+            if tracker.is_free(tx - 0.70, tx + 0.70, ty - 0.70, ty + 0.70):
+                tracker.occupy(tx - 0.70, tx + 0.70, ty - 0.70, ty + 0.70)
+                build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=0.55)
+                _dress_craft_table(bm, tx, ty, 0.0, z_table, rng, table_goods)
+                return
+        else:
+            t = _place_craft_table(bm, tracker, z_floor, rng)
+            if t is not None:
+                _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng, table_goods)
+                return
+
+
 def _furnish_chapel(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                     rng, density: float):
     """Furnishes a chapel hall laid out right-to-left: altar counter on the
@@ -2859,12 +3218,29 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_armory(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('STORE',):
             _furnish_shop(bm, rm, tracker, z_floor, z_ceil, rng, density)
+            _dress_shop_for_trade(bm, tracker, z_floor, rng, tracker.archetype)
         elif role in ('INFIRMARY', 'APOTHECARY', 'HEALER_QUARTERS'):
             _furnish_infirmary(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('STUDY', 'LIBRARY', 'VESTRY'):
             _furnish_study_library(bm, rm, tracker, z_floor, z_ceil, rng, density)
-        elif role in ('WORKSHOP', 'SMITHY'):
+        elif role in ('BAKEHOUSE',):
+            _furnish_bakehouse(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('BREWHOUSE',):
+            _furnish_brewhouse(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('BUTCHERY',):
+            _furnish_butchery(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('TAILOR_ATELIER',):
+            _furnish_tailor_atelier(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('GOLDSMITH',):
+            _furnish_goldsmith(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('JOINERY',):
+            _furnish_joinery(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('FISHERY',):
+            _furnish_fishery(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('WORKSHOP',):
             _furnish_workshop(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('SMITHY',):
+            _furnish_smithy(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('CHAPEL_HALL',):
             _furnish_chapel(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('STORAGE', 'CELLAR', 'PANTRY'):

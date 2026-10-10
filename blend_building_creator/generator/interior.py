@@ -1110,16 +1110,18 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         if archetype in ('TAVERN', 'INN'):
             pool = ['STAIR_LANDING', 'GUEST_ROOM', 'GUEST_ROOM', 'GUEST_ROOM', 'MASTER_BED', 'STUDY']
             return pool[:num_rooms]
-        elif archetype in ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH', 'QUARRY'):
+        elif archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY'):
             # Industrial upper floors are work/storage, never bedrooms or kitchens.
             pool = ['STAIR_LANDING', 'STONE_STORE' if archetype == 'QUARRY' else 'STORAGE', 'WORKSHOP', 'OFFICE']
             return pool[:num_rooms]
-        elif archetype in ('BAKERY', 'FISHERMAN', 'BREWERY',
+        elif archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
                           'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER') or archetype.startswith('ARTISAN'):
+            # Artisan live/work house: trade below, family home above. Upper
+            # storeys are strictly residential (no offices, no studies).
             if fl_idx == 1:
                 pool = ['STAIR_LANDING', 'HOUSE_HALL', 'BEDROOM', 'KITCHEN']
             else:
-                pool = ['STAIR_LANDING', 'MASTER_BED', 'STUDY', 'BEDROOM']
+                pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM']
             return pool[:num_rooms]
         elif archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):
             pool = ['STAIR_LANDING', 'BARRACKS_DORM', 'BARRACKS_DORM', 'OFFICER_QUARTERS']
@@ -1155,12 +1157,28 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         pool = ['TAVERN_TAPROOM', 'KITCHEN', 'PANTRY', 'CELLAR']
         return pool[:num_rooms]
 
-    if archetype in ('BLACKSMITH', 'WAREHOUSE', 'LUMBERMILL', 'QUARRY', 'BAKERY', 'FISHERMAN', 'BREWERY',
-                     'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER') or archetype.startswith('ARTISAN'):
+    # Dedicated craft workshops per artisan trade: the street-facing shop plus
+    # the trade's own production rooms (never generic offices or studies).
+    _ARTISAN_GROUND = {
+        'BAKERY': ['STORE', 'BAKEHOUSE', 'BAKEHOUSE', 'STORAGE'],
+        'BREWERY': ['STORE', 'BREWHOUSE', 'BREWHOUSE', 'STORAGE'],
+        'BUTCHER': ['STORE', 'BUTCHERY', 'BUTCHERY', 'STORAGE'],
+        'TAILOR': ['STORE', 'TAILOR_ATELIER', 'TAILOR_ATELIER', 'STORAGE'],
+        'JEWELER': ['STORE', 'GOLDSMITH', 'GOLDSMITH', 'STORAGE'],
+        'BLACKSMITH': ['STORE', 'SMITHY', 'SMITHY', 'STORAGE'],
+        'TOOLSMITH': ['STORE', 'SMITHY', 'SMITHY', 'STORAGE'],
+        'FURNITURE_MAKER': ['STORE', 'JOINERY', 'JOINERY', 'STORAGE'],
+        'FISHERMAN': ['STORE', 'FISHERY', 'FISHERY', 'STORAGE'],
+    }
+    if archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY'):
         if archetype == 'QUARRY':
             pool = ['STONE_STORE', 'STORAGE', 'WORKSHOP', 'OFFICE']
         else:
             pool = ['STORE', 'WORKSHOP', 'STORAGE', 'PANTRY']
+        return pool[:num_rooms]
+
+    if archetype in _ARTISAN_GROUND or archetype.startswith('ARTISAN'):
+        pool = _ARTISAN_GROUND.get(archetype, ['STORE', 'WORKSHOP', 'STORAGE', 'PANTRY'])
         return pool[:num_rooms]
 
     if archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):
@@ -1475,8 +1493,18 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     w_role = 'BARRACKS_DORM'
                     w_doorways = []
                 else:
-                    w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
-                                       ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH')) else 'GUEST_ROOM'
+                    # Artisan courtyard wings are working trade space on the
+                    # ground floor (forge wing, brew wing, ...), bedrooms above.
+                    _craft_wing = {'BLACKSMITH': 'SMITHY', 'TOOLSMITH': 'SMITHY',
+                                   'BREWERY': 'BREWHOUSE', 'BAKERY': 'BAKEHOUSE',
+                                   'BUTCHER': 'BUTCHERY', 'FISHERMAN': 'FISHERY',
+                                   'TAILOR': 'TAILOR_ATELIER', 'JEWELER': 'GOLDSMITH',
+                                   'FURNITURE_MAKER': 'JOINERY'}.get(effective_archetype)
+                    if fl_idx == 0 and _craft_wing:
+                        w_role = _craft_wing
+                    else:
+                        w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
+                                           ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH')) else 'GUEST_ROOM'
                     w_doorways = []
                 w_rm = Room(
                     id=f"fl{fl_idx}_wing{wi}",
