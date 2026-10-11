@@ -3731,7 +3731,11 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                 if (dy + dw * 0.5 >= ry0 - 0.20 and dy - dw * 0.5 <= ry1 + 0.20) and (rx0 - 0.55 <= dx <= rx1 + 0.55):
                     if d not in all_doorways:
                         all_doorways.append(d)
-        _extras = getattr(ctx, 'extra_doorways', None) or getattr(getattr(ctx, 'props', None), 'extra_doorways', None) or []
+        _extras = (getattr(ctx, 'extra_doorways', None)
+                   or getattr(getattr(ctx, 'props', None), 'extra_doorways', None)
+                   or (getattr(ctx, 'props', None).get('extra_doorways', None) if hasattr(getattr(ctx, 'props', None), 'get') else None)
+                   or (props.get('extra_doorways', None) if hasattr(props, 'get') else None)
+                   or [])
         for ed in _extras:
             if ed.get('floor_idx', 0) == rm.floor_idx:
                 sax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')

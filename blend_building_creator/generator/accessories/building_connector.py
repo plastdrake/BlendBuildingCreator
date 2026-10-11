@@ -1685,3 +1685,226 @@ def chain_buildings(bm, building_nodes, links_spec):
             underpass_spring_z=link.get('underpass_spring_z', fz - 6.0)
         )
 
+
+def build_chapel_connector(
+    bm,
+    p_chapel=(-14.4, 40.0),
+    p_keep=(-12.0, 40.0),
+    width=2.90,
+    floor_z=14.86,
+    chapel_floor_z=14.45,
+    ceiling_h=2.90,
+    tier=2
+):
+    """
+    Clean, simple enclosed ground-level corridor between the Chapel and Keep.
+    Walkable space consists of a clean wooden floor, solid side walls, flat wooden
+    ceiling with timber beams, simple shingle roof, and both wall penetrations cleanly
+    encased in solid timber portal frames (jambs + lintels) covering cut wall edges.
+    """
+    x_chapel = float(p_chapel[0])
+    x_keep = float(p_keep[0])
+    cy = float((p_chapel[1] + p_keep[1]) * 0.5)
+    cx = (x_chapel + x_keep) * 0.5
+    dx = abs(x_keep - x_chapel)
+
+    portal_w = 2.00
+    portal_h = 2.60
+
+    # 1. Carve clearance through both buildings' walls and interior threshold zones
+    # to guarantee 100% open walkability with zero blocking faces or furniture remnants.
+    carve_pass_through_portal(
+        bm,
+        x_span=(x_chapel - 0.90, x_keep + 0.90),
+        y_span=(cy - portal_w * 0.54, cy + portal_w * 0.54),
+        z_span=(chapel_floor_z + 0.04, floor_z + portal_h + 0.15)
+    )
+
+    # 2. Solid stone foundation plinth from ground up to floor deck level
+    found_z0 = 13.40
+    found_z1 = chapel_floor_z - 0.04
+    found_h = found_z1 - found_z0
+    create_beveled_box(
+        bm,
+        size=(dx + 0.30, width, found_h),
+        location=(cx, cy, found_z0 + found_h * 0.5),
+        mat_index=MAT_INDEX_STONE,
+        bevel_amount=0.02
+    )
+
+    # 3. Clean wooden floor deck inside corridor with integrated transition steps
+    # Keep floor is at 14.86, Chapel floor is at 14.45 (delta 0.41m).
+    # Transition happens entirely within the corridor:
+    #   Keep-level deck: x from -12.0 to -13.3 (Z = 14.86)
+    #   Intermediate step: x from -13.3 to -13.85 (Z = 14.65)
+    #   Lower step / chapel threshold: x from -13.85 to -14.4 (Z = 14.45)
+    deck_w = portal_w + 0.06
+    # Keep deck
+    lx1 = 1.30
+    create_beveled_box(
+        bm,
+        size=(lx1, deck_w, 0.10),
+        location=(x_keep - lx1 * 0.5, cy, floor_z - 0.05),
+        mat_index=MAT_INDEX_FLOOR,
+        bevel_amount=0.01
+    )
+    # Intermediate step
+    lx2 = 0.55
+    create_beveled_box(
+        bm,
+        size=(lx2, deck_w, 0.10),
+        location=(x_keep - lx1 - lx2 * 0.5, cy, 14.65 - 0.05),
+        mat_index=MAT_INDEX_FLOOR,
+        bevel_amount=0.01
+    )
+    # Vertical timber riser at step 1
+    create_beveled_box(
+        bm,
+        size=(0.04, deck_w, 0.21),
+        location=(x_keep - lx1, cy, 14.65 + 0.21 * 0.5),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.005
+    )
+    # Lower step (flush with Chapel floor)
+    lx3 = dx - lx1 - lx2
+    create_beveled_box(
+        bm,
+        size=(lx3, deck_w, 0.10),
+        location=(x_chapel + lx3 * 0.5, cy, chapel_floor_z - 0.05),
+        mat_index=MAT_INDEX_FLOOR,
+        bevel_amount=0.01
+    )
+    # Vertical timber riser at step 2
+    create_beveled_box(
+        bm,
+        size=(0.04, deck_w, 0.20),
+        location=(x_chapel + lx3, cy, chapel_floor_z + 0.20 * 0.5),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.005
+    )
+
+    # 4. Clean solid side walls (North and South)
+    wall_t = (width - deck_w) * 0.5
+    top_z = floor_z + ceiling_h
+    wall_h = top_z - found_z1
+    for side in (-1.0, 1.0):
+        wy = cy + side * (deck_w * 0.5 + wall_t * 0.5)
+        create_beveled_box(
+            bm,
+            size=(dx, wall_t, wall_h),
+            location=(cx, wy, found_z1 + wall_h * 0.5),
+            mat_index=MAT_INDEX_STONE,
+            bevel_amount=0.02
+        )
+
+    # 5. Clean flat wooden ceiling with timber tie joists
+    ceil_z = top_z - 0.04
+    create_beveled_box(
+        bm,
+        size=(dx + 0.10, deck_w, 0.08),
+        location=(cx, cy, ceil_z - 0.04),
+        mat_index=MAT_INDEX_WOOD,
+        bevel_amount=0.01
+    )
+    for bx in (cx - 0.60, cx, cx + 0.60):
+        create_beveled_box(
+            bm,
+            size=(0.20, deck_w + 0.10, 0.18),
+            location=(bx, cy, ceil_z - 0.12),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.01
+        )
+
+    # 6. Simple pitched gable shingle roof
+    roof_ridge_z = top_z + 1.15
+    roof_len = dx + 0.40
+    roof_span = width + 0.70  # overhang on eaves
+    # Timber ridge beam
+    create_beveled_box(
+        bm,
+        size=(roof_len, 0.18, 0.22),
+        location=(cx, cy, roof_ridge_z - 0.08),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.01
+    )
+    # Sloped roof planes (North and South pitches)
+    half_span = roof_span * 0.5
+    slope_len = math.sqrt(half_span * half_span + 1.15 * 1.15)
+    pitch_ang = math.atan2(1.15, half_span)
+    for sign in (-1.0, 1.0):
+        ry = cy + sign * half_span * 0.5
+        rz = top_z + 1.15 * 0.5
+        rot_mat = Matrix.Translation(Vector((cx, ry, rz))) @ Matrix.Rotation(-sign * pitch_ang, 4, 'X')
+        import bmesh
+        sub_bm = bmesh.new()
+        create_beveled_box(
+            sub_bm,
+            size=(roof_len, slope_len, 0.10),
+            location=(0.0, 0.0, 0.0),
+            mat_index=MAT_INDEX_SHINGLES,
+            bevel_amount=0.01
+        )
+        _merge_sub_bmesh(bm, sub_bm, rot_mat)
+        sub_bm.free()
+
+    # Timber eave fascia boards
+    for sign in (-1.0, 1.0):
+        ey = cy + sign * half_span
+        create_beveled_box(
+            bm,
+            size=(roof_len, 0.08, 0.18),
+            location=(cx, ey, top_z + 0.02),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.01
+        )
+
+    # 7. Timber portal frames completely encasing the cut wall edges at both ends
+    # This covers all cut stone/plaster/wood edges in solid timber with zero gaps!
+    jamb_w = 0.26
+    jamb_t = 0.46  # thoroughly encases the ~0.36m wall thickness
+    lintel_h = 0.28
+
+    for x_end, base_fz in ((x_keep, floor_z), (x_chapel, chapel_floor_z)):
+        # Jambs on North and South sides of the portal
+        jh = portal_h + 0.04
+        for side in (-1.0, 1.0):
+            jy = cy + side * (portal_w * 0.5 + jamb_w * 0.5 - 0.02)
+            create_beveled_box(
+                bm,
+                size=(jamb_t, jamb_w, jh),
+                location=(x_end, jy, base_fz + jh * 0.5),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.015
+            )
+        # Header / Lintel spanning across the jambs
+        lintel_w = portal_w + jamb_w * 2.0 - 0.04
+        create_beveled_box(
+            bm,
+            size=(jamb_t, lintel_w, lintel_h),
+            location=(x_end, cy, base_fz + portal_h + lintel_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.015
+        )
+        # Clean casing trim on interior room face and corridor face
+        for face_dx in (-jamb_t * 0.5, jamb_t * 0.5):
+            trim_x = x_end + face_dx
+            # Left & Right architrave trims
+            for side in (-1.0, 1.0):
+                ty = cy + side * (portal_w * 0.5 + 0.08)
+                create_beveled_box(
+                    bm,
+                    size=(0.06, 0.16, jh),
+                    location=(trim_x, ty, base_fz + jh * 0.5),
+                    mat_index=MAT_INDEX_TIMBER,
+                    bevel_amount=0.005
+                )
+            # Top architrave trim
+            create_beveled_box(
+                bm,
+                size=(0.06, lintel_w + 0.04, 0.16),
+                location=(trim_x, cy, base_fz + portal_h + 0.12),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.005
+            )
+
+

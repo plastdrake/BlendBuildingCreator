@@ -975,6 +975,7 @@ def build_estate_chapel(bm, props, pos=(28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_3
     """Detached estate chantry chapel & treasury (consecrated private sanctuary)."""
     overrides = {
         'building_shape': 'RECTANGLE',
+        'building_archetype': 'CHAPEL',
         'num_floors': max(1, floors),
         'floor_height': floor_h,
         'width': width,

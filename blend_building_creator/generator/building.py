@@ -96,6 +96,7 @@ def generate_building(obj, props):
         return
 
     ctx = _create_building_context(props)
+    ctx.props = props
     ctx.host_obj = obj
     _build_foundation(bm, props, ctx)
     build_floors(bm, props, ctx)
@@ -363,6 +364,8 @@ def _create_building_context(props):
             elif chosen_side is not None:
                 floor_balconies[_bf] = [{'side': chosen_side, 'offset': 0.0}]
 
+    extra_dw = getattr(props, 'extra_doorways', None) or (props.get('extra_doorways', None) if hasattr(props, 'get') else None) or []
+
     return BuildingContext(
         num_floors=num_floors, floor_h=floor_h, found_h=found_h,
         floor_wall_bounds={}, hx=0.0, hy=0.0,
@@ -378,6 +381,7 @@ def _create_building_context(props):
         total_height=total_height, floor_stair_holes={},
         wx_base_min=wx_base_min, wx_base_max=wx_base_max,
         wy_base_min=wy_base_min, wy_base_max=wy_base_max,
+        extra_doorways=list(extra_dw),
         is_rotated_roof=is_rotated_roof,
     )
 

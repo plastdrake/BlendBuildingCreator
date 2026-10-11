@@ -152,34 +152,16 @@ def _build_halls(bm, props, tier):
         build_estate_chapel(
             bm, props, pos=(-18.2, 40.0, 13.7), rot_z=0.0,
             tier=f"TIER_{tier}", width=7.6, depth=12.0, floors=1,
-            extra_overrides={'window_left': False, 'window_right': False, 'roof_overhang': 0.50}
+            extra_overrides={
+                'building_archetype': 'CHAPEL',
+                'window_left': False, 'window_right': False, 'roof_overhang': 0.50,
+                'extra_doorways': [{'floor_idx': 0, 'facade': 'RIGHT', 'pos': 0.0, 'w': 2.0, 'h': 2.6, 'is_portal': True}],
+            }
         )
-        # Architectural connecting link joining Chapel east wall to Keep west wall
-        # (deck flush with the Keep ground floor; a two-tread stoop steps down
-        # to the lower chapel floor at the east end)
-        from .building_connector import build_skybridge_link
-        build_skybridge_link(
-            bm,
-            p1=(-14.4, 40.0),
-            p2=(-12.0, 40.0),
-            width=3.8,
-            floor_z=14.86,
-            ceiling_h=3.2,
-            has_underpass_arch=False,
-            roof_style='GABLE',
-            has_windows=False,
-            has_portals=True
-        )
-        from ..mesh_utils import create_beveled_box as _cbb
-        from ..materials import MAT_INDEX_CUT_STONE as _MCS
-        # Entrance steps down from the link deck (14.90) to the chapel floor
-        # (14.40): the deck-slab tongue forms the first tread, two solid stone
-        # boxes grounded on the chapel floor slab complete the stair.
-        for _sx0, _sx1, _stop in ((-15.00, -14.70, 14.72), (-15.32, -15.00, 14.56)):
-            _sh = _stop - 14.38
-            _cbb(bm, size=(_sx1 - _sx0, 1.90, _sh),
-                 location=((_sx0 + _sx1) * 0.5, 40.0, 14.38 + _sh * 0.5),
-                 mat_index=_MCS, bevel_amount=0.01)
+        # Dedicated ground corridor link joining Chapel east wall to Keep west wall
+        # with clean walls, floor, ceiling, and timber portal casings encasing cut wall edges.
+        from .building_connector import build_chapel_connector
+        build_chapel_connector(bm, tier=tier)
 
 
 def _gate_link(bm, tier):

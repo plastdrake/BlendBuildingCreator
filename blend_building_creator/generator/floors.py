@@ -1543,7 +1543,10 @@ def build_floors(bm, props, ctx):
                 _stair_door_spots = {}
         _plan_doorways = list(ctx.floor_doorways.get(fl_idx, []))
         _plan_doorways.extend(_stair_door_spots.get(fl_idx, []))
-        for ed in getattr(props, 'extra_doorways', []):
+        _extra_dw = (getattr(props, 'extra_doorways', None)
+                     or (props.get('extra_doorways', None) if hasattr(props, 'get') else None)
+                     or getattr(ctx, 'extra_doorways', None) or [])
+        for ed in _extra_dw:
             if ed.get('floor_idx', 0) == fl_idx:
                 sax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
                 if sax == 'Y':
@@ -2858,7 +2861,10 @@ def _place_extra_doorways(
     left_openings, right_openings, front_openings, back_openings
 ):
     e_margin = 0.12
-    for ed in getattr(props, 'extra_doorways', []):
+    _extra_dw = (getattr(props, 'extra_doorways', None)
+                 or (props.get('extra_doorways', None) if hasattr(props, 'get') else None)
+                 or getattr(ctx, 'extra_doorways', None) or [])
+    for ed in _extra_dw:
         if ed.get('floor_idx', 0) != fl_idx:
             continue
         facade = ed.get('facade', 'RIGHT')
