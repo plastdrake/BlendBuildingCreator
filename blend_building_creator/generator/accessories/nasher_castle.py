@@ -23,7 +23,7 @@ _FLOOR_H = 3.7
 _HALLS = (
     ("keep", 1, 0.0, 40.0, 14.0, 24.0, 16.0, 4, 0.0, 'T_SHAPE', 'BACK', 9.0, 5.0, 10.5),
     ("great_hall", 1, -15.0, 0.0, 8.0, 22.0, 10.0, 5, 0.0, 'T_SHAPE', 'FRONT', 8.0, 5.0, 7.5),
-    ("east_hall", 2, 15.0, 0.0, 8.0, 22.0, 10.0, 5, 0.0, 'L_SHAPE', 'BACK', 7.0, 5.0, 7.0),
+    ("east_hall", 2, 15.0, 0.0, 8.0, 22.0, 10.0, 5, 0.0, 'T_SHAPE', 'FRONT', 8.0, 5.0, 7.0),
     ("barracks", 2, -20.0, -28.5, 3.0, 14.0, 9.0, 2, 5.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 5.5),
     ("armory", 2, 20.0, -28.5, 3.0, 14.0, 9.0, 2, -5.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 5.5),
     ("archive_hall", 3, 20.5, 40.0, 14.0, 17.0, 10.0, 3, 0.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 7.0),
@@ -112,27 +112,37 @@ def _build_halls(bm, props, tier):
             # Floor 3 skybridge doorway on East facade (-X in world = RIGHT (+X) in local space)
             if tier >= 2:
                 extra_doors.append({'floor_idx': 3, 'facade': 'RIGHT', 'pos': -3.6, 'w': 2.0, 'h': 2.6, 'is_portal': True})
-            # Floor 0 connecting wing doorway on North facade (+Y in world = BACK in local space)
+            # Connecting wing doorway on North facade (+Y in world = BACK in local space)
+            # West Connecting Wing is at cx = -8.5. Great hall center is -15.0, so local pos = -8.5 - (-15.0) = 6.5
             if tier == 3:
-                extra_doors.append({'floor_idx': 0, 'facade': 'BACK', 'pos': 0.5, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+                for fli in (0, 1, 2):
+                    extra_doors.append({'floor_idx': fli, 'facade': 'BACK', 'pos': 6.5, 'w': 6.6 if fli > 0 else 2.0, 'h': 2.6, 'is_portal': True})
         elif hid == "east_hall":
             ov['stair_placement'] = 'RIGHT'
             # Floor 3 skybridge doorway on West facade (+X in world = LEFT (-X) in local space)
             if tier >= 2:
                 extra_doors.append({'floor_idx': 3, 'facade': 'LEFT', 'pos': -3.6, 'w': 2.0, 'h': 2.6, 'is_portal': True})
-            # Floor 0 connecting wing doorway on North facade (+Y in world = BACK in local space)
+            # Connecting wing doorway on North facade (+Y in world = BACK in local space)
+            # East Connecting Wing is at cx = 16.5. East hall center is 15.0, so local pos = 16.5 - 15.0 = 1.5
             if tier == 3:
-                extra_doors.append({'floor_idx': 0, 'facade': 'BACK', 'pos': 1.5, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+                for fli in (0, 1, 2):
+                    extra_doors.append({'floor_idx': fli, 'facade': 'BACK', 'pos': 1.5, 'w': 6.6 if fli > 0 else 2.0, 'h': 2.6, 'is_portal': True})
         elif hid == "keep":
             ov['has_basement_stair'] = True
             ov['window_left'] = False
             # Floor 0 chapel-link doorway on West facade (-X in world = LEFT in local space)
             if tier >= 2:
                 extra_doors.append({'floor_idx': 0, 'facade': 'LEFT', 'pos': 0.0, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+            # Floor 0 west connecting wing doorway on South facade (-Y in world = FRONT in local space)
+            # West Connecting Wing is at cx = -8.5. Keep center is 0.0, so local pos = -8.5
+            if tier == 3:
+                for fli in (0, 1):
+                    extra_doors.append({'floor_idx': fli, 'facade': 'FRONT', 'pos': -8.5, 'w': 6.6 if fli > 0 else 2.0, 'h': 2.6, 'is_portal': True})
         elif hid == "archive_hall":
             # Floor 0 east connecting wing doorway on South facade (-Y in world = FRONT in local space)
             if tier == 3:
-                extra_doors.append({'floor_idx': 0, 'facade': 'FRONT', 'pos': -4.0, 'w': 2.0, 'h': 2.6, 'is_portal': True})
+                for fli in (0, 1):
+                    extra_doors.append({'floor_idx': fli, 'facade': 'FRONT', 'pos': -4.0, 'w': 6.6 if fli > 0 else 2.0, 'h': 2.6, 'is_portal': True})
         if extra_doors:
             ov['extra_doorways'] = extra_doors
         _merge_generated_building(bm, props, ov, pos=(x, y, pz - 0.3), rot_z=math.radians(rot))
@@ -354,13 +364,13 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
         # West Connecting Wing linking Great Hall (y=5.0) to Keep (south wall y=32.0).
         # Decks sit flush with the connected ground floors (8.86 / 14.86).
         build_connecting_wing(
-            bm, cx=-14.5, y_start=5.0, y_end=34.0, width=6.6,
+            bm, cx=-8.5, y_start=5.0, y_end=32.0, width=6.6,
             z_low=8.86, z_high=14.86, stair_y_start=15.0, stair_y_end=24.0,
             wall_y_north=32.0, roof_y_end_north=32.0
         )
         # East Connecting Wing linking East Hall (y=5.0) to Archive Hall (south wall y=35.0)
         build_connecting_wing(
-            bm, cx=16.5, y_start=5.0, y_end=36.5, width=6.6,
+            bm, cx=16.5, y_start=5.0, y_end=35.0, width=6.6,
             z_low=8.86, z_high=14.86, stair_y_start=15.0, stair_y_end=24.0,
             has_bridge_door=True, bridge_door_y=26.0,
             wall_y_north=35.0, roof_y_end_north=35.0

@@ -808,7 +808,7 @@ def build_connecting_wing(
     carve_pass_through_portal(
         bm,
         x_span=(cx - walk_w * 0.5, cx + walk_w * 0.5),
-        y_span=(y_start - 0.2, stair_y_start + 0.2),
+        y_span=(y_start + 0.35, stair_y_start + 0.2),
         z_span=(z_low + 0.05, z_low + 3.80)
     )
     carve_pass_through_portal(
@@ -820,7 +820,7 @@ def build_connecting_wing(
     carve_pass_through_portal(
         bm,
         x_span=(cx - walk_w * 0.5, cx + walk_w * 0.5),
-        y_span=(stair_y_end - 0.2, deck_n + 0.2),
+        y_span=(stair_y_end - 0.2, wall_n - 0.35),
         z_span=(z_high + 0.05, z_high + 3.80)
     )
 
@@ -1204,7 +1204,7 @@ def build_connecting_wing(
         overhang=0.45,
         abut_front=True,  # Flushed to south building wall at y_start
         abut_back=True,   # Flushed to step-closing wall at stair_y_start
-        gable_ends=('BACK',),
+        gable_ends=('FRONT', 'BACK'),
         gable_walls=True,
     )
 
@@ -1220,7 +1220,7 @@ def build_connecting_wing(
         overhang=0.45,
         abut_front=True,  # Flushed to step-closing wall at stair_y_start
         abut_back=True,   # Flushed to north building wall, never inside it
-        gable_ends=('FRONT',),
+        gable_ends=('FRONT', 'BACK'),
         gable_walls=True,
     )
 
@@ -1264,16 +1264,16 @@ def build_connecting_wing(
     portal_h = 2.70
 
     def _wing_portal(y_wall, z_deck, into_building):
-        # Carve the wall + any interior walls/furniture in the doorway corridor
+        # Carve strictly the doorway opening through the wall (not wide trenches)
         if into_building > 0:
-            y_span = (y_wall - 1.4, y_wall + 2.8)
+            y_span = (y_wall - 0.45, y_wall + 1.20)
         else:
-            y_span = (y_wall - 2.8, y_wall + 1.4)
+            y_span = (y_wall - 1.20, y_wall + 0.45)
         carve_pass_through_portal(
             bm,
-            x_span=(cx - portal_w * 0.65, cx + portal_w * 0.65),
+            x_span=(cx - portal_w * 0.50, cx + portal_w * 0.50),
             y_span=y_span,
-            z_span=(z_deck + 0.06, z_deck + portal_h + 0.30)
+            z_span=(z_deck + 0.06, z_deck + portal_h + 0.15)
         )
         # Raised cut-stone threshold slab: covers the wall foundation joint and floorboard ends cleanly
         create_beveled_box(
@@ -1306,6 +1306,60 @@ def build_connecting_wing(
             location=(cx, y_wall, z_deck + 0.11 + portal_h + 0.07),
             mat_index=timber_mat, bevel_amount=0.012
         )
+
+        # Solid flanking walls on both sides of the doorframe so there are NO open gaps beside the portal
+        flank_w = max(0.40, half_w - (portal_w * 0.5 + 0.16))
+        for js in (-1.0, 1.0):
+            fx = cx + js * (half_w - flank_w * 0.5)
+            # Full-height wall panel up to ceiling
+            create_beveled_box(
+                bm, size=(flank_w + 0.08, wall_t, ceil_h),
+                location=(fx, y_wall, z_deck + ceil_h * 0.5),
+                mat_index=wall_mat, bevel_amount=0.015
+            )
+            # Interior finished lining
+            create_beveled_box(
+                bm, size=(flank_w, 0.08, ceil_h - 0.16),
+                location=(fx, y_wall - into_building * (wall_t * 0.5 + 0.04), z_deck + ceil_h * 0.5),
+                mat_index=MAT_INDEX_PLASTER_EXT, bevel_amount=0.008
+            )
+            # Timber baseboard and corner post
+            create_beveled_box(
+                bm, size=(flank_w + 0.04, 0.10, 0.16),
+                location=(fx, y_wall - into_building * (wall_t * 0.5 + 0.04), z_deck + 0.08),
+                mat_index=timber_mat, bevel_amount=0.01
+            )
+            create_beveled_box(
+                bm, size=(0.14, 0.12, ceil_h),
+                location=(cx + js * (half_w - wall_t - 0.04), y_wall - into_building * (wall_t * 0.5 + 0.04), z_deck + ceil_h * 0.5),
+                mat_index=timber_mat, bevel_amount=0.012
+            )
+        # Header wall above lintel bridging up to ceiling
+        header_h = max(0.20, ceil_h - (portal_h + 0.38))
+        create_beveled_box(
+            bm, size=(portal_w + 0.64, wall_t, header_h),
+            location=(cx, y_wall, z_deck + (portal_h + 0.38) + header_h * 0.5),
+            mat_index=wall_mat, bevel_amount=0.015
+        )
+        create_beveled_box(
+            bm, size=(portal_w + 0.64, 0.08, header_h - 0.06),
+            location=(cx, y_wall - into_building * (wall_t * 0.5 + 0.04), z_deck + (portal_h + 0.38) + header_h * 0.5),
+            mat_index=MAT_INDEX_PLASTER_EXT, bevel_amount=0.008
+        )
+        # Upper transverse wall above ceiling up to the roof eave
+        z_eave = z_deck + floor_h * 2.0
+        if z_eave > z_deck + ceil_h:
+            eave_wall_h = z_eave - (z_deck + ceil_h)
+            create_beveled_box(
+                bm, size=(width, wall_t, eave_wall_h),
+                location=(cx, y_wall, z_deck + ceil_h + eave_wall_h * 0.5),
+                mat_index=upper_wall_mat, bevel_amount=0.015
+            )
+            create_beveled_box(
+                bm, size=(width + 0.08, wall_t + 0.06, 0.18),
+                location=(cx, y_wall, z_deck + ceil_h),
+                mat_index=timber_mat, bevel_amount=0.012
+            )
 
     # South portal into Great Hall / East Hall (wall plane at y_start)
     _wing_portal(y_start, z_low, -1)
