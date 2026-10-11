@@ -172,7 +172,7 @@ def _gate_link(bm, tier):
     open flush with no step.
     """
     from .building_connector import build_skybridge_link
-    fz = 19.9
+    fz = 20.00
     build_skybridge_link(
         bm,
         p1=(-4.0, -3.6),

@@ -140,10 +140,10 @@ def build_skybridge_link(
         rotation=(0.0, 0.0, yaw),
         mat_index=trim_mat, bevel_amount=0.025
     )
-    # Interior wooden floorboards / flags
+    # Interior wooden floorboards / flags (top surface flush with floor_z)
     create_beveled_box(
-        bm, size=(span_len + 0.50, width - wall_thickness * 2.0, 0.04),
-        location=(center.x, center.y, floor_z + 0.02),
+        bm, size=(span_len + 0.50, width - wall_thickness * 2.0, 0.08),
+        location=(center.x, center.y, floor_z - 0.04),
         rotation=(0.0, 0.0, yaw),
         mat_index=deck_mat, bevel_amount=0.005
     )
@@ -316,126 +316,70 @@ def build_skybridge_link(
     # 5. CONNECTION PORTALS AT BOTH BUILDING INTERFACES
     if has_portals:
         portal_w = 2.00
-        portal_h = 2.70
-        # Carve pass-through doorways through any existing wall or furniture geometry,
-        # reaching 2.8m into adjacent buildings to guarantee a completely walkable passage.
-        # The carve starts just above deck level so the bridge deck, boards and flat
-        # rugs survive while walls, interior partitions and furniture are cleared.
+        portal_h = 2.65
+        # 1. Carve clearance strictly through the wall thickness (~0.48m depth),
+        # NEVER penetrating deep into the room so props, furniture, rugs, and interior floorboards
+        # are 100% protected and untouched!
         for end_sign, pt in ((-1.0, v1), (1.0, v2)):
             into_bld_vec = end_sign * span_dir
-            carve_c = pt + into_bld_vec * 1.40
-            dx = abs(into_bld_vec.x * 2.8) + abs(trans_dir.x * (portal_w * 0.65))
-            dy = abs(into_bld_vec.y * 2.8) + abs(trans_dir.y * (portal_w * 0.65))
+            carve_c = pt + into_bld_vec * 0.22
+            dx = abs(into_bld_vec.x * 0.26) + abs(trans_dir.x * (portal_w * 0.52))
+            dy = abs(into_bld_vec.y * 0.26) + abs(trans_dir.y * (portal_w * 0.52))
             carve_pass_through_portal(
                 bm,
-                x_span=(carve_c.x - max(1.4, dx * 0.5), carve_c.x + max(1.4, dx * 0.5)),
-                y_span=(carve_c.y - max(1.4, dy * 0.5), carve_c.y + max(1.4, dy * 0.5)),
-                z_span=(floor_z + 0.04, floor_z + portal_h + 0.35)
+                x_span=(carve_c.x - max(0.26, dx), carve_c.x + max(0.26, dx)),
+                y_span=(carve_c.y - max(0.26, dy), carve_c.y + max(0.26, dy)),
+                z_span=(floor_z + 0.04, floor_z + portal_h + 0.15)
             )
+
+        # 2. Solid timber portal encasements covering all cut wall edges at both interfaces
+        # Clean rectangular jambs covering the wall thickness, solid lintel, and matching architrave trims.
+        # Zero chaotic stone arches, zero plaster partitions, zero cut-stone threshold slabs!
+        jamb_w = 0.26
+        jamb_t = 0.48  # thoroughly covers the 0.38m wall thickness
+        lintel_h = 0.28
+        jh = portal_h + 0.04
 
         for end_sign, pt in ((-1.0, v1), (1.0, v2)):
             into_bld_vec = end_sign * span_dir
+            frame_c = pt + into_bld_vec * 0.22
 
-            # 1. Raised dressed cut-stone threshold slab spanning across the wall opening:
-            # Eliminates coplanar z-fighting with floorboards and conceals all floor cut edges
-            thresh_c = pt + into_bld_vec * 0.30
-            create_beveled_box(
-                bm, size=(1.40, portal_w + 0.40, 0.06),
-                location=(thresh_c.x, thresh_c.y, floor_z + 0.03),
-                rotation=(0.0, 0.0, yaw),
-                mat_index=trim_mat, bevel_amount=0.012
-            )
-
-            # 2. Bridge-side stone portal surround facing into the bridge
-            p_face_pos = pt - into_bld_vec * 0.08
-            # Stone arched lintel block
-            create_beveled_box(
-                bm, size=(0.34, portal_w + 0.60, 0.45),
-                location=(p_face_pos.x, p_face_pos.y, floor_z + portal_h + 0.22),
-                rotation=(0.0, 0.0, yaw),
-                mat_index=trim_mat, bevel_amount=0.03
-            )
-            # Stone side jamb piers
-            for js in (-1.0, 1.0):
-                j_pos = p_face_pos + trans_dir * (js * (portal_w * 0.5 + 0.18))
+            # Left & Right timber jambs
+            for side in (-1.0, 1.0):
+                j_pos = frame_c + trans_dir * (side * (portal_w * 0.5 + jamb_w * 0.5 - 0.02))
                 create_beveled_box(
-                    bm, size=(0.32, 0.38, portal_h + 0.40),
-                    location=(j_pos.x, j_pos.y, floor_z + (portal_h + 0.40) * 0.5),
+                    bm, size=(jamb_t, jamb_w, jh),
+                    location=(j_pos.x, j_pos.y, floor_z + jh * 0.5),
                     rotation=(0.0, 0.0, yaw),
-                    mat_index=trim_mat, bevel_amount=0.025
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
                 )
 
-            # 3. Full-depth reveal lining sleeve through the wall thickness
-            # Completely covers rough cut masonry and interior voids
-            rev_c = pt + into_bld_vec * 0.35
-            rev_d = 0.85
-            for js in (-1.0, 1.0):
-                jrev_pos = rev_c + trans_dir * (js * (portal_w * 0.5 - 0.03))
-                create_beveled_box(
-                    bm, size=(rev_d, 0.08, portal_h),
-                    location=(jrev_pos.x, jrev_pos.y, floor_z + portal_h * 0.5),
-                    rotation=(0.0, 0.0, yaw),
-                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
-                )
+            # Top timber lintel spanning across the jambs
+            lintel_w = portal_w + jamb_w * 2.0 - 0.04
             create_beveled_box(
-                bm, size=(rev_d, portal_w - 0.04, 0.08),
-                location=(rev_c.x, rev_c.y, floor_z + portal_h - 0.04),
-                rotation=(0.0, 0.0, yaw),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
-            )
-
-            # 4. Room-side architectural timber casing & portal framing:
-            # Sits inside the wood-paneled room, cleanly capping wall edges, wood siding cuts,
-            # and masonry so the room interior looks master-crafted!
-            room_face_pos = pt + into_bld_vec * 0.72
-            for js in (-1.0, 1.0):
-                rj_pos = room_face_pos + trans_dir * (js * (portal_w * 0.5 + 0.12))
-                create_beveled_box(
-                    bm, size=(0.20, 0.28, portal_h + 0.20),
-                    location=(rj_pos.x, rj_pos.y, floor_z + (portal_h + 0.20) * 0.5),
-                    rotation=(0.0, 0.0, yaw),
-                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.018
-                )
-            create_beveled_box(
-                bm, size=(0.22, portal_w + 0.65, 0.28),
-                location=(room_face_pos.x, room_face_pos.y, floor_z + portal_h + 0.14),
-                rotation=(0.0, 0.0, yaw),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.018
-            )
-            create_beveled_box(
-                bm, size=(0.16, portal_w + 0.45, 0.32),
-                location=(room_face_pos.x, room_face_pos.y, floor_z + portal_h + 0.42),
-                rotation=(0.0, 0.0, yaw),
-                mat_index=MAT_INDEX_WOOD, bevel_amount=0.015
-            )
-
-            # 5. Bridge-side interior lining partition & studs
-            lining_pos = pt - into_bld_vec * 0.08
-            lining_w = width - wall_thickness * 2.0
-            for js in (-1.0, 1.0):
-                flank_w = max(0.1, (lining_w - portal_w) * 0.5)
-                flank_c = lining_pos + trans_dir * (js * (portal_w * 0.5 + flank_w * 0.5))
-                create_beveled_box(
-                    bm, size=(0.10, flank_w, portal_h + 0.30),
-                    location=(flank_c.x, flank_c.y, floor_z + (portal_h + 0.30) * 0.5),
-                    rotation=(0.0, 0.0, yaw),
-                    mat_index=MAT_INDEX_PLASTER_EXT, bevel_amount=0.01
-                )
-                for stud_k in range(3):
-                    stud_off = portal_w * 0.5 + 0.08 + (flank_w - 0.16) * (stud_k / 2.0)
-                    tpost_c = lining_pos + trans_dir * (js * stud_off)
-                    create_beveled_box(
-                        bm, size=(0.14, 0.16, portal_h + 0.30),
-                        location=(tpost_c.x, tpost_c.y, floor_z + (portal_h + 0.30) * 0.5),
-                        rotation=(0.0, 0.0, yaw),
-                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
-                    )
-            create_beveled_box(
-                bm, size=(0.14, portal_w + 0.20, 0.18),
-                location=(lining_pos.x, lining_pos.y, floor_z + portal_h + 0.09),
+                bm, size=(jamb_t, lintel_w, lintel_h),
+                location=(frame_c.x, frame_c.y, floor_z + portal_h + lintel_h * 0.5),
                 rotation=(0.0, 0.0, yaw),
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
             )
+
+            # Architrave casing trims on both room-facing and bridge-facing sides
+            for face_sgn in (-1.0, 1.0):
+                trim_pos = frame_c + into_bld_vec * (face_sgn * jamb_t * 0.5)
+                for side in (-1.0, 1.0):
+                    t_pos = trim_pos + trans_dir * (side * (portal_w * 0.5 + 0.08))
+                    create_beveled_box(
+                        bm, size=(0.06, 0.16, jh),
+                        location=(t_pos.x, t_pos.y, floor_z + jh * 0.5),
+                        rotation=(0.0, 0.0, yaw),
+                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+                    )
+                create_beveled_box(
+                    bm, size=(0.06, lintel_w + 0.04, 0.16),
+                    location=(trim_pos.x, trim_pos.y, floor_z + portal_h + 0.12),
+                    rotation=(0.0, 0.0, yaw),
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+                )
 
 
     # 6. ROOF STRUCTURE
