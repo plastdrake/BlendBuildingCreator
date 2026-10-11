@@ -2351,15 +2351,54 @@ def _place_corner_prop(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
                              half_w, half_d, **params)
 
 
+# Per-good scale jitter: fish and meat vary the most so a stocked surface
+# reads hand-laid, bread only a little.
+_GOODS_LENGTH_JITTER = {
+    'FISH': (0.80, 1.22),
+    'MEAT': (0.84, 1.18),
+    'MEAT_SMALL': (0.80, 1.24),
+    'BREAD_LOAF': (0.90, 1.10),
+}
+
+
+def _good_length_param(key: str, rng) -> dict:
+    """Params dict adding a randomised ``length`` to goods that support it
+    (fish/meat/bread) so merchandise looks varied rather than cloned."""
+    jit = _GOODS_LENGTH_JITTER.get(key)
+    if not jit:
+        return {}
+    try:
+        from .prop_registry import get_spec
+        base = get_spec(key).defaults.get('length')
+    except Exception:
+        base = None
+    if not base:
+        return {}
+    return {'length': base * rng.uniform(*jit)}
+
+
 def _dress_craft_table(bm, tx: float, ty: float, yaw: float, z_table: float,
-                       rng, goods):
-    """Lay trade goods in a row along a work table top (lifted a hair so
-    flat goods like fish/meat never z-fight the table surface)."""
-    n = len(goods)
-    for i, g in enumerate(goods):
-        off = (i - (n - 1) * 0.5) * 0.45
-        gx, gy = _table_offset(tx, ty, off, 0.0, yaw)
-        build_prop(bm, g, gx, gy, z_table + 0.012, rng.uniform(0.0, 6.28))
+                       rng, goods, span: float = None):
+    """Lay trade goods along a work-table top with per-item scale and yaw
+    variation (lifted a hair so flat goods never z-fight the surface).
+
+    When ``span`` (the table's usable length) is given, the goods list is
+    cycled and packed at ~0.30m so the surface looks fully stocked instead of
+    holding a single lonely piece; otherwise a single legacy row at 0.45m."""
+    if not goods:
+        return
+    if span is None:
+        n = len(goods)
+        spacing = 0.45
+    else:
+        spacing = 0.30
+        n = min(12, max(len(goods), int(max(0.0, span - 0.15) / spacing) + 1))
+    seq = [goods[i % len(goods)] for i in range(n)]
+    for i, g in enumerate(seq):
+        off = (i - (n - 1) * 0.5) * spacing
+        gx, gy = _table_offset(tx, ty, off, _jit(rng, 0.06), yaw)
+        build_prop(bm, g, gx, gy, z_table + 0.012,
+                   rng.uniform(0.0, 6.28), **_good_length_param(g, rng))
 
 
 def _stool_near(bm, tracker: RoomOccupancyTracker, tx: float, ty: float,
@@ -2414,10 +2453,10 @@ def _furnish_bakehouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
             break
         if _ti == 0:  # kneading table: proving bowl and fresh loaves
             _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                               ['DOUGH_BOWL', 'BREAD_LOAF', 'BREAD_LOAF'])
+                               ['DOUGH_BOWL', 'BREAD_LOAF', 'BREAD_LOAF'], span=1.15)
         else:
             _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                               ['FOODPREP_CLUTTER', 'BREAD_LOAF'])
+                               ['FOODPREP_CLUTTER', 'BREAD_LOAF', 'BREAD_LOAF'], span=1.15)
         _stool_near(bm, tracker, t[0], t[1], t[2], z_floor, rng)
 
     # Cooling rack laden with loaves along a free wall.
@@ -2489,12 +2528,12 @@ def _furnish_butchery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
         t = _place_craft_table(bm, tracker, z_floor, rng)
         if t is not None:
             _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                               ['MEAT', 'MEAT_SMALL'])
+                               ['MEAT', 'MEAT_SMALL'], span=1.15)
     # A prep table laid with cuts either way.
     t = _place_craft_table(bm, tracker, z_floor, rng)
     if t is not None:
         _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                           ['MEAT', 'MEAT_SMALL', 'MEAT'])
+                           ['MEAT', 'MEAT_SMALL', 'MEAT'], span=1.15)
     # Two hanging meat rails along free walls.
     _try_place_wall_prop(bm, 'SAUSAGE_STRING', 1.30, 0.35, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'))
@@ -2504,7 +2543,7 @@ def _furnish_butchery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
     t2 = _place_craft_table(bm, tracker, z_floor, rng, length=1.20, width=0.75)
     if t2 is not None:
         _dress_craft_table(bm, t2[0], t2[1], t2[2], z_table, rng,
-                           ['MEAT_SMALL', 'MEAT_SMALL', 'FOODPREP_CLUTTER'])
+                           ['MEAT_SMALL', 'MEAT_SMALL', 'FOODPREP_CLUTTER'], span=0.95)
 
     _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=3, box=0.40)  # brine
     _place_goods_row(bm, tracker, z_floor, rng, 'SACK', count=2)  # salt
@@ -2530,7 +2569,7 @@ def _furnish_tailor_atelier(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
     t = _place_craft_table(bm, tracker, z_floor, rng, length=1.60, width=0.90)
     if t is not None:  # cutting table dressed with folded cloth
         _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                           ['FOLDED_CLOTH', 'FOLDED_CLOTH'])
+                           ['FOLDED_CLOTH', 'FOLDED_CLOTH'], span=1.30)
         _stool_near(bm, tracker, t[0], t[1], t[2], z_floor, rng)
 
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
@@ -2669,19 +2708,21 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     # Gutting tables laden with the day's catch (lots of fish).
     for _ in range(2 if min(rw, rd) >= 3.4 else 1):
         t = _place_craft_table(bm, tracker, z_floor, rng)
+        _span = 1.15
         if t is None:
             # Compact gutting table for the small fishery chambers.
             t = _place_craft_table(bm, tracker, z_floor, rng,
                                    length=0.95, width=0.62)
+            _span = 0.72
         if t is None:
             break
         _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                           ['FISH', 'FISH', 'FOODPREP_CLUTTER'])
+                           ['FISH', 'FISH', 'FOODPREP_CLUTTER'], span=_span)
     # A third table of sorted catch when there is room.
     t3 = _place_craft_table(bm, tracker, z_floor, rng, length=1.20, width=0.75)
     if t3 is not None:
         _dress_craft_table(bm, t3[0], t3[1], t3[2], z_table, rng,
-                           ['FISH', 'FISH', 'FOODPREP_CLUTTER'])
+                           ['FISH', 'FISH', 'FOODPREP_CLUTTER'], span=0.95)
     # Fish boxes: fish kept in slatted crates, never loose on the bare floor.
     for _ci in range(2):
         _place_floor_prop(bm, tracker, z_floor, rng, 'CRATE', 0.30, 0.30)
@@ -2753,7 +2794,8 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
                              candidate_walls=('WEST', 'EAST', 'NORTH'))
     elif arch == 'JEWELER':
         _lay_out_jeweler_counter(bm, tracker, z_floor, rng)
-    # Stepped market display near the entrance, dressed with sale goods.
+    # Stepped market display: normally placed earlier by _furnish_shop (so it
+    # wins a good wall nook); this call is a guarded no-op then.
     _place_market_display(bm, tracker, z_floor, rng, arch)
     # The fishmonger's goods live on the display case, not a generic table.
     if not table_goods or arch == 'FISHERMAN':
@@ -2765,12 +2807,14 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
             if tracker.is_free(tx - 0.70, tx + 0.70, ty - 0.70, ty + 0.70):
                 tracker.occupy(tx - 0.70, tx + 0.70, ty - 0.70, ty + 0.70)
                 build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=0.55)
-                _dress_craft_table(bm, tx, ty, 0.0, z_table, rng, table_goods)
+                _dress_craft_table(bm, tx, ty, 0.0, z_table, rng, table_goods,
+                                   span=0.85)
                 return
         else:
             t = _place_craft_table(bm, tracker, z_floor, rng)
             if t is not None:
-                _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng, table_goods)
+                _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
+                                   table_goods, span=1.15)
                 return
 
 
@@ -2813,26 +2857,32 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
     """Stepped three-tier goods display near the shop entrance, dressed with
     the trade's own sale goods. Faces the street door."""
     _tier_goods = {
-        'BAKERY': [['BREAD_LOAF', 'BREAD_LOAF'], ['BREAD_LOAF', 'BREAD_LOAF'],
-                   ['BREAD_LOAF', 'BREAD_LOAF']],
-        'BREWERY': [['BOTTLE', 'BOTTLE'], ['PEWTER_TANKARD', 'PEWTER_TANKARD'],
-                    ['BOTTLE_CLUSTER']],
-        'BUTCHER': [['MEAT', 'MEAT_SMALL'], ['MEAT_SMALL', 'MEAT'],
-                    ['MEAT', 'MEAT']],
-        'TAILOR': [['FOLDED_CLOTH', 'FOLDED_CLOTH'],
-                   ['FOLDED_CLOTH', 'FOLDED_CLOTH'],
-                   ['BOOK_PILE_SMALL', 'FOLDED_CLOTH']],
-        'JEWELER': [['FOLDED_CLOTH', 'FOLDED_CLOTH'], ['GEM_TRAY'],
-                    ['BOTTLE_CLUSTER']],
-        'BLACKSMITH': [['HORSESHOE', 'HORSESHOE'], ['HORSESHOE', 'HORSESHOE'],
-                       ['CLAY_POT', 'HORSESHOE']],
-        'TOOLSMITH': [['HORSESHOE', 'HORSESHOE'], ['HORSESHOE', 'HORSESHOE'],
-                      ['CLAY_POT', 'HORSESHOE']],
-        'FURNITURE_MAKER': [['WOODEN_BOWL', 'WOODEN_BOWL'],
-                            ['WOODEN_BOWL', 'WOODEN_BOWL'],
-                            ['WOODEN_BOWL', 'CLAY_POT']],
-        'FISHERMAN': [['FISH', 'FISH'], ['FISH', 'FISH'],
-                      ['FISH', 'FISH', 'FISH']],
+        'BAKERY': [['BREAD_LOAF', 'BREAD_LOAF', 'BREAD_LOAF'],
+                   ['BREAD_LOAF', 'BREAD_LOAF', 'BREAD_LOAF'],
+                   ['BREAD_LOAF', 'BREAD_LOAF', 'BREAD_LOAF']],
+        'BREWERY': [['BOTTLE', 'BOTTLE', 'BOTTLE'],
+                    ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'PEWTER_TANKARD'],
+                    ['BOTTLE_CLUSTER', 'BOTTLE', 'BOTTLE']],
+        'BUTCHER': [['MEAT', 'MEAT_SMALL', 'MEAT'],
+                    ['MEAT_SMALL', 'MEAT', 'MEAT_SMALL'],
+                    ['MEAT', 'MEAT', 'MEAT_SMALL']],
+        'TAILOR': [['FOLDED_CLOTH', 'FOLDED_CLOTH', 'FOLDED_CLOTH'],
+                   ['FOLDED_CLOTH', 'FOLDED_CLOTH', 'FOLDED_CLOTH'],
+                   ['BOOK_PILE_SMALL', 'FOLDED_CLOTH', 'FOLDED_CLOTH']],
+        'JEWELER': [['FOLDED_CLOTH', 'FOLDED_CLOTH'], ['GEM_TRAY', 'BOTTLE'],
+                    ['BOTTLE_CLUSTER', 'BOTTLE']],
+        'BLACKSMITH': [['HORSESHOE', 'HORSESHOE', 'HORSESHOE'],
+                       ['HORSESHOE', 'HORSESHOE', 'HORSESHOE'],
+                       ['CLAY_POT', 'HORSESHOE', 'HORSESHOE']],
+        'TOOLSMITH': [['HORSESHOE', 'HORSESHOE', 'HORSESHOE'],
+                      ['HORSESHOE', 'HORSESHOE', 'HORSESHOE'],
+                      ['CLAY_POT', 'HORSESHOE', 'HORSESHOE']],
+        'FURNITURE_MAKER': [['WOODEN_BOWL', 'WOODEN_BOWL', 'WOODEN_BOWL'],
+                            ['WOODEN_BOWL', 'WOODEN_BOWL', 'WOODEN_BOWL'],
+                            ['WOODEN_BOWL', 'CLAY_POT', 'WOODEN_BOWL']],
+        'FISHERMAN': [['FISH', 'FISH', 'FISH'],
+                      ['FISH', 'FISH', 'FISH'],
+                      ['FISH', 'FISH', 'FISH', 'FISH']],
     }.get(arch)
     if not _tier_goods:
         return
@@ -2896,19 +2946,27 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         return
     _cx, _cy, _yaw = _placed
     build_prop(bm, 'MARKET_DISPLAY', _cx, _cy, z_floor, _yaw, width=_disp_w)
-    # Dress the tiers (mirror the builder: tier tops at local y +0.18/-0.18/
-    # -0.54, z 0.50/0.85/1.20; slots at x scale with the display width).
-    _cx_off = (_disp_w - 0.08) * 0.23
+    # Dress the tiers (mirror the builder: tier tops at local y +0.17/-0.16/
+    # -0.50, z 0.50/0.85/1.20). Items spread across the tier width, scaled to
+    # fill it, with per-item scale and yaw jitter so a tier reads fully
+    # stocked and hand-laid rather than cloned.
+    _usable = max(0.24, _disp_w - 0.30)
+    _max_i = max(2, int(_usable / 0.30) + 1)
     _cyaw = _yaw
     _cos, _sin = math.cos(_cyaw), math.sin(_cyaw)
-    for (_ly, _lz), _goods in zip(((0.17, 0.50), (-0.16, 0.85), (-0.50, 1.20)),
+    for (_ly, _lz), _base in zip(((0.17, 0.50), (-0.16, 0.85), (-0.50, 1.20)),
                                  _tier_goods):
+        _goods = _base[:min(len(_base), _max_i)]
+        _m = len(_goods)
         for _i, _g in enumerate(_goods):
-            _lx = (-_cx_off if _i % 2 == 0 else _cx_off) if len(_goods) > 1 else 0.0
-            _gx = _cx + _lx * _cos - _ly * _sin
-            _gy = _cy + _lx * _sin + _ly * _cos
+            _frac = 0.0 if _m <= 1 else (_i / (_m - 1) - 0.5)
+            _lx = _frac * _usable + _jit(rng, 0.025)
+            _lyj = _ly + _jit(rng, 0.02)
+            _gx = _cx + _lx * _cos - _lyj * _sin
+            _gy = _cy + _lx * _sin + _lyj * _cos
             build_prop(bm, _g, _gx, _gy, z_floor + _lz + 0.012,
-                       _cyaw + rng.uniform(-0.15, 0.15))
+                       _cyaw + rng.uniform(-0.45, 0.45),
+                       **_good_length_param(_g, rng))
     return
 
 
@@ -3479,7 +3537,11 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
             build_prop(bm, 'POTTED_PLANT_SMALL', _cc['cx'], _cc['cy'],
                        _cc['top_z'], rng.uniform(0.0, 6.28))
 
-    # 2. Display shelves on perimeter walls (the fishmonger swaps these for
+    # 2. Stepped market display FIRST (before shelves/crates) so it always
+    #    wins a good wall nook and never gets blocked out.
+    _place_market_display(bm, tracker, z_floor, rng, getattr(tracker, 'archetype', ''))
+
+    # 3. Display shelves on perimeter walls (the fishmonger swaps these for
     #    the trade display case instead).
     _arch0 = getattr(tracker, 'archetype', 'NONE')
     if _arch0 not in ('FISHERMAN',):
@@ -3488,8 +3550,8 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
         _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                              candidate_walls=('WEST', 'NORTH', 'SOUTH'))
 
-    # 3. Goods crates and merchandise barrels — kept OFF the corners so the
-    #    wall corners stay free for the trade display (placed next).
+    # 4. Goods crates and merchandise barrels — kept OFF the corners so the
+    #    wall corners stay free for the trade display (placed above).
     _mid_y = (rm.bounds[2] + rm.bounds[3]) * 0.5
     _mid_x = (rm.bounds[0] + rm.bounds[1]) * 0.5
     for cx, cy in ((rm.bounds[0] + 0.40, _mid_y), (rm.bounds[1] - 0.40, _mid_y),
@@ -3499,7 +3561,7 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
             prop = 'CRATE' if rng.random() < 0.6 else 'BARREL'
             build_prop(bm, prop, cx, cy, z_floor, 0.0)
 
-    # 4. Area rug in the customer browse zone (in front of a freestanding
+    # 5. Area rug in the customer browse zone (in front of a freestanding
     # counter, else room centre; skipped in a bare industrial store).
     if not getattr(tracker, 'no_rugs', False):
         rug_choice = rng.choice(['RUG_SAPPHIRE', 'RUG_FOREST'])
