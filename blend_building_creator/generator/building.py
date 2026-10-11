@@ -382,7 +382,7 @@ def _create_building_context(props):
     )
 
 
-def _build_foundation_block(bm, fw, fd, fcx, fcy, found_h, found_type):
+def _build_foundation_block(bm, fw, fd, fcx, fcy, found_h, found_type, stair_hole=None):
     if found_type == 'WOOD':
         # Clean perimeter timber sill frame: no duplicate inner box (floor slab provides
         # the single clean floor deck), no metal corners, and cleanly butted side beams.
@@ -410,6 +410,37 @@ def _build_foundation_block(bm, fw, fd, fcx, fcy, found_h, found_type):
                 bevel_amount=0.012
             )
     else:
+        fx0, fx1 = fcx - fw * 0.5, fcx + fw * 0.5
+        fy0, fy1 = fcy - fd * 0.5, fcy + fd * 0.5
+        if stair_hole is not None:
+            sh_x0, sh_x1, sh_y0, sh_y1 = stair_hole
+            if not (sh_x1 <= fx0 or sh_x0 >= fx1 or sh_y1 <= fy0 or sh_y0 >= fy1):
+                sx0 = max(fx0, min(fx1, sh_x0))
+                sx1 = max(fx0, min(fx1, sh_x1))
+                sy0 = max(fy0, min(fy1, sh_y0))
+                sy1 = max(fy0, min(fy1, sh_y1))
+
+                def _found_sub(x_a, x_b, y_a, y_b):
+                    if x_b - x_a < 0.04 or y_b - y_a < 0.04:
+                        return
+                    create_beveled_box(
+                        bm,
+                        size=(x_b - x_a, y_b - y_a, found_h),
+                        location=((x_a + x_b) * 0.5, (y_a + y_b) * 0.5, found_h * 0.5),
+                        mat_index=MAT_INDEX_STONE,
+                        bevel_amount=0.04
+                    )
+
+                if sx0 > fx0 + 0.02:
+                    _found_sub(fx0, sx0, fy0, fy1)
+                if sx1 < fx1 - 0.02:
+                    _found_sub(sx1, fx1, fy0, fy1)
+                if sy0 > fy0 + 0.02:
+                    _found_sub(sx0, sx1, fy0, sy0)
+                if sy1 < fy1 - 0.02:
+                    _found_sub(sx0, sx1, sy1, fy1)
+                return
+
         create_beveled_box(
             bm,
             size=(fw, fd, found_h),
@@ -436,14 +467,25 @@ def _build_foundation(bm, props, ctx):
         # Stop foundation plinth at rear wall line (y_max = base_hy) so it does not poke into apse room
         fd = ctx.base_d + 0.175
         fcy = -0.0875
-    _build_foundation_block(bm, fw, fd, fcx, fcy, found_h, found_type)
+
+    bs_hole = None
+    if getattr(props, 'has_basement_stair', False):
+        if ctx.shape == 'L_SHAPE' and ctx.wings:
+            wb = ctx.wings[0]['base']
+            _shx = float(wb[0]) + 1.50
+            _shy = (float(wb[2]) + float(wb[3])) * 0.5
+            bs_hole = (_shx - 0.80, _shx + 0.80, _shy - 1.80, _shy + 1.80)
+        else:
+            bs_hole = (1.10, 5.70, 4.00, 5.40)
+
+    _build_foundation_block(bm, fw, fd, fcx, fcy, found_h, found_type, stair_hole=bs_hole)
     for w_elem in ctx.wings:
         wb = w_elem['base']
         w_fw = (wb[1] - wb[0]) + 0.35
         w_fd = (wb[3] - wb[2]) + 0.35
         w_fcx = (wb[0] + wb[1]) * 0.5
         w_fcy = (wb[2] + wb[3]) * 0.5
-        _build_foundation_block(bm, w_fw, w_fd, w_fcx, w_fcy, found_h, found_type)
+        _build_foundation_block(bm, w_fw, w_fd, w_fcx, w_fcy, found_h, found_type, stair_hole=bs_hole)
         
     if getattr(props, 'has_dungeon', False):
         from .accessories.castle import build_subterranean_dungeon_level

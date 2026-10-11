@@ -276,8 +276,8 @@ def build_nasher_dungeon(bm, tier):
 
     z_keep_floor = 14.95
 
-    # 3. Clear shaft volume through rock / foundation below the Keep floor slab
-    carve_pass_through_portal(bm, x_span=(1.10, 5.70), y_span=(44.00, 45.40), z_span=(12.8, 14.82))
+    # 3. Clear shaft volume through rock / foundation / floor so the hole is completely open
+    carve_pass_through_portal(bm, x_span=(1.10, 5.70), y_span=(44.00, 45.40), z_span=(12.8, 15.05))
 
     # Masonry shaft casing walls line the rock shaft cleanly under the floor slab
     # (top terminates at z_keep_floor - 0.12 so it never sits coplanar with floor planks).
