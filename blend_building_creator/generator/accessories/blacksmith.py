@@ -5,11 +5,11 @@ from ..mesh_utils import create_beveled_box
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_SHINGLES,
     MAT_INDEX_PLASTER_BRICK, MAT_INDEX_CUT_STONE, MAT_INDEX_IRON,
-    MAT_INDEX_LANTERN,
+    MAT_INDEX_LANTERN, MAT_INDEX_CLAY, MAT_INDEX_WATER,
 )
 
 
-def _brick_faces(bm, cx, cy, cz, w, d, h, mat_brick=MAT_INDEX_PLASTER_BRICK,
+def _brick_faces(bm, cx, cy, cz, w, d, h, mat_brick=MAT_INDEX_CLAY,
                  mat_core=MAT_INDEX_CUT_STONE, brick=0.30, course=0.11,
                  gap=0.014, thick=0.06):
     """Face a rectangular masonry block in staggered brick on all four
@@ -224,37 +224,68 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
     forge_x = wall_x + 0.90
     forge_y = canopy_cy
     forge_w, forge_d, forge_h = 1.30, 1.05, 0.95
-    # Brick-faced masonry body (mortar core inset so nothing is coplanar).
-    _brick_faces(bm, forge_x, forge_y, z_ground + forge_h * 0.5,
+    z_deck = z_ground + 0.12   # top of the stone deck; props rest here
+    # Clay-brick masonry body (mortar core inset so nothing is coplanar).
+    _brick_faces(bm, forge_x, forge_y, z_deck + forge_h * 0.5,
                  forge_w, forge_d, forge_h, brick=0.30, course=0.12,
                  gap=0.014, thick=0.06)
-    # Fire chamber recess in the front face (facing the yard, -Y).
+    # --- Fire opening in the front face (facing the yard, -Y) ---------------
+    front_y = forge_y - forge_d * 0.5
+    open_cx, open_cz = forge_x, z_deck + 0.40
+    open_w, open_h = 0.62, 0.44
+    # Dark firebox interior recessed into the body.
     create_beveled_box(
-        bm, size=(0.70, 0.34, 0.34),
-        location=(forge_x, forge_y - forge_d * 0.5 + 0.17,
-                  z_ground + forge_h * 0.62),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.015
-    )
-    # Glowing embers in the chamber mouth.
+        bm, size=(open_w, 0.34, open_h),
+        location=(open_cx, front_y + 0.14, open_cz),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.010)
+    # Glowing coals / burning fuel sitting in the firebox.
     create_beveled_box(
-        bm, size=(0.56, 0.10, 0.24),
-        location=(forge_x, forge_y - forge_d * 0.5 + 0.06,
-                  z_ground + forge_h * 0.60),
-        mat_index=MAT_INDEX_LANTERN, bevel_amount=0.012
-    )
+        bm, size=(open_w - 0.10, 0.24, 0.14),
+        location=(open_cx, front_y + 0.12, z_deck + 0.24),
+        mat_index=MAT_INDEX_LANTERN, bevel_amount=0.010)
+    # Clay jambs each side of the mouth.
+    for sx in (-(open_w * 0.5 + 0.06), (open_w * 0.5 + 0.06)):
+        create_beveled_box(
+            bm, size=(0.11, 0.14, open_h + 0.20),
+            location=(open_cx + sx, front_y + 0.05, open_cz),
+            mat_index=MAT_INDEX_CLAY, bevel_amount=0.010)
+    # Clay voussoir arch over the mouth (bricks fanned around the opening).
+    _arch_r = open_w * 0.5 + 0.07
+    _arch_top = open_cz + open_h * 0.5
+    for k in range(5):
+        a = math.pi * (0.13 + 0.74 * k / 4.0)
+        create_beveled_box(
+            bm, size=(0.12, 0.14, 0.11),
+            location=(open_cx + _arch_r * math.cos(a),
+                      front_y + 0.05,
+                      _arch_top + _arch_r * math.sin(a) * 0.70),
+            rotation=(0.0, a - math.pi * 0.5, 0.0),
+            mat_index=MAT_INDEX_CLAY, bevel_amount=0.008)
+    # Hearth sill jutting out in front of the mouth.
+    create_beveled_box(
+        bm, size=(open_w + 0.34, 0.30, 0.09),
+        location=(open_cx, front_y - 0.06, z_deck + 0.10),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
     # Iron hood tapering up from the forge crown.
     create_beveled_box(
         bm, size=(forge_w - 0.10, forge_d - 0.10, 0.16),
-        location=(forge_x, forge_y, z_ground + forge_h + 0.08),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.012
-    )
-    # Brick flue rising through the canopy roof.
+        location=(forge_x, forge_y, z_deck + forge_h + 0.08),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.012)
+    # Clay-brick flue rising through the canopy roof.
     flue_h = canopy_h + 0.40
     _brick_faces(bm, forge_x, forge_y,
-                 z_ground + forge_h + 0.16 + flue_h * 0.5,
+                 z_deck + forge_h + 0.16 + flue_h * 0.5,
                  0.52, 0.52, flue_h, brick=0.24, course=0.17,
                  gap=0.014, thick=0.05)
-    # Fuel: a small stacked log pile tucked BEHIND the forge.
+    # Quench barrel beside the forge (water-filled).
+    from .furniture import build_barrel
+    quench_x = min(wall_x + canopy_w - 0.30, forge_x + 1.15)
+    build_barrel(bm, quench_x, canopy_cy - 0.75, z_deck, radius=0.28, height=0.60)
+    create_beveled_box(
+        bm, size=(0.44, 0.44, 0.02),
+        location=(quench_x, canopy_cy - 0.75, z_deck + 0.55),
+        mat_index=MAT_INDEX_WATER, bevel_amount=0.006)
+    # Fuel: a small stacked log pile resting ON the deck, behind the forge.
     from .interior_furniture import build_log_pile
-    build_log_pile(bm, forge_x, forge_y + forge_d * 0.5 + 0.62, z_ground,
+    build_log_pile(bm, forge_x, forge_y + forge_d * 0.5 + 0.62, z_deck,
                    ang=0.0, length=0.95, radius=0.10, rows=2)

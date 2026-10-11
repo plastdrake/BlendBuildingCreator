@@ -1400,93 +1400,121 @@ def _scale_faces(faces, center, scale):
     return faces
 
 
-def _smith_haft(bm, faces, length, r=0.019, mat=MAT_INDEX_WOOD):
+def _smith_haft(bm, faces, length, r=0.020, mat=MAT_INDEX_WOOD):
     """A gently tapered wooden haft lying along local +X, resting at z=r."""
     haft_len = length * 0.80
     cx = -length * 0.5 + haft_len * 0.5
-    faces += create_cylinder(
-        bm, radius=r, height=haft_len, segments=10,
+    # Tapered shaft: slimmer at the butt, full at the head.
+    faces += create_cone(
+        bm, radius1=r * 0.80, radius2=r * 1.15, height=haft_len, segments=12,
         location=(cx, 0.0, r), rotation=(0.0, math.pi * 0.5, 0.0),
         mat_index=mat)
-    # Flared butt swell.
+    # Rounded butt knob.
     faces += create_cylinder(
-        bm, radius=r * 1.25, height=0.05, segments=10,
-        location=(-length * 0.5 + 0.03, 0.0, r),
+        bm, radius=r * 1.28, height=0.055, segments=12,
+        location=(-length * 0.5 + 0.028, 0.0, r),
         rotation=(0.0, math.pi * 0.5, 0.0), mat_index=mat)
     return -length * 0.5 + haft_len   # x of the head seat
 
 
 def build_axe(bm, x, y, z_ground=0.0, ang=0.0, length=0.74, variant=0):
-    """Felling axe: a tapered wooden haft and a forged, flared steel bit.
-    Lies flat along +X with the bit toward +Y (the shopper side)."""
+    """Felling axe: a tapered wooden haft and a forged, flared steel bit with
+    a beard horn. Lies flat along +X with the bit toward +Y."""
     faces = []
     head_x = _smith_haft(bm, faces, length)
-    # Iron eye collar.
+    hz = 0.048
+    # Eye / cheek block.
     faces += create_beveled_box(
-        bm, size=(0.06, 0.05, 0.085), location=(head_x, 0.0, 0.045),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
+        bm, size=(0.075, 0.055, 0.095), location=(head_x, 0.0, hz),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.010)
     # Poll block behind the eye.
     faces += create_beveled_box(
-        bm, size=(0.05, 0.045, 0.06), location=(head_x - 0.005, -0.04, 0.045),
+        bm, size=(0.05, 0.05, 0.072), location=(head_x - 0.022, -0.038, hz),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
-    # Flared bit: a cone flattened in Z so it reads as a wedge-ground edge.
+    # Flared bit: a cone flattened in Z (a wedge-ground edge), widening to +Y.
+    bit_c = (head_x + 0.015, 0.125, hz)
     bit = create_cone(
-        bm, radius1=0.045, radius2=0.085, height=0.15, segments=10,
-        location=(head_x + 0.01, 0.115, 0.045),
-        rotation=(math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_IRON)
-    _scale_faces(bit, (head_x + 0.01, 0.115, 0.045), (1.0, 1.0, 0.55))
+        bm, radius1=0.050, radius2=0.100, height=0.175, segments=16,
+        location=bit_c, rotation=(-math.pi * 0.5, 0.0, 0.0),
+        mat_index=MAT_INDEX_IRON)
+    _scale_faces(bit, bit_c, (1.0, 1.0, 0.55))
     faces += bit
+    # Beard horn (lower jaw) sweeping back under the bit.
+    beard_c = (head_x + 0.02, 0.055, hz - 0.058)
+    beard = create_cone(
+        bm, radius1=0.040, radius2=0.012, height=0.10, segments=12,
+        location=beard_c, rotation=(-math.pi * 0.5, 0.0, 0.0),
+        mat_index=MAT_INDEX_IRON)
+    _scale_faces(beard, beard_c, (1.0, 1.0, 0.7))
+    faces += beard
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
 
 def build_pickaxe(bm, x, y, z_ground=0.0, ang=0.0, length=0.80, variant=0):
-    """Pickaxe: a wooden haft with a forged T-head — a spike one side and a
-    chisel adze the other. Lies flat along +X."""
+    """Pickaxe: a wooden haft with a forged T-head — a curved pick spike
+    toward +Y and a chisel adze toward -Y. Lies flat along +X."""
     faces = []
     head_x = _smith_haft(bm, faces, length)
-    # Forged eye collar.
+    hz = 0.045
+    # Forged eye collar around the haft.
     faces += create_beveled_box(
-        bm, size=(0.055, 0.055, 0.075), location=(head_x, 0.0, 0.040),
+        bm, size=(0.055, 0.055, 0.082), location=(head_x, 0.0, hz),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
-    # Curved spike (pick) toward +Y.
-    spike = create_cone(
-        bm, radius1=0.034, radius2=0.006, height=0.22, segments=8,
-        location=(head_x, 0.125, 0.040),
-        rotation=(math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_IRON)
-    _scale_faces(spike, (head_x, 0.125, 0.040), (1.0, 1.0, 0.62))
-    faces += spike
-    # Flat chisel (adze) toward -Y.
+    # Curved pick spike toward +Y (three tapering, drooping segments).
+    seg_pts = ((head_x, 0.06, hz),
+               (head_x, 0.155, hz - 0.010),
+               (head_x, 0.235, hz - 0.035))
+    seg_rad = ((0.036, 0.030), (0.030, 0.018), (0.018, 0.005))
+    for (px, py, pz), (r1, r2) in zip(seg_pts, seg_rad):
+        seg = create_cone(
+            bm, radius1=r1, radius2=r2, height=0.10, segments=12,
+            location=(px, py, pz),
+            rotation=(-math.pi * 0.5 - 0.22, 0.0, 0.0),
+            mat_index=MAT_INDEX_IRON)
+        _scale_faces(seg, (px, py, pz), (1.0, 1.0, 0.72))
+        faces += seg
+    # Flat chisel adze toward -Y.
+    adze_c = (head_x, -0.095, hz)
     adze = create_cone(
-        bm, radius1=0.032, radius2=0.016, height=0.13, segments=8,
-        location=(head_x, -0.085, 0.040),
-        rotation=(-math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_IRON)
-    _scale_faces(adze, (head_x, -0.085, 0.040), (1.0, 1.0, 0.55))
+        bm, radius1=0.034, radius2=0.018, height=0.15, segments=12,
+        location=adze_c, rotation=(math.pi * 0.5, 0.0, 0.0),
+        mat_index=MAT_INDEX_IRON)
+    _scale_faces(adze, adze_c, (1.0, 1.0, 0.5))
     faces += adze
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
 
 def build_hoe(bm, x, y, z_ground=0.0, ang=0.0, length=0.78, variant=0):
-    """Hoe: a wooden haft with a forged offset blade set at a right angle.
+    """Hoe: a wooden haft with a forged offset blade set at a slight angle.
     Lies flat along +X with the blade toward +Y."""
     faces = []
     head_x = _smith_haft(bm, faces, length)
-    # Socket eye and neck.
+    hz = 0.038
+    # Socket eye clamped on the haft.
     faces += create_beveled_box(
-        bm, size=(0.05, 0.05, 0.065), location=(head_x, 0.0, 0.035),
+        bm, size=(0.055, 0.06, 0.075), location=(head_x, 0.0, hz),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
+    # Neck stepping forward and down to the blade.
     faces += create_beveled_box(
-        bm, size=(0.055, 0.11, 0.045),
-        location=(head_x + 0.01, 0.075, 0.035),
+        bm, size=(0.055, 0.115, 0.045),
+        location=(head_x + 0.01, 0.085, hz - 0.01),
+        rotation=(-0.35, 0.0, 0.0),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
-    # Broad flat blade, angled slightly forward, with a ground edge.
+    # Broad flat blade, angled slightly downward toward the cutting edge.
+    blade_c = (head_x + 0.01, 0.175, hz - 0.03)
     blade = create_beveled_box(
-        bm, size=(0.19, 0.115, 0.022),
-        location=(head_x + 0.01, 0.15, 0.030),
-        rotation=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_IRON,
-        bevel_amount=0.010)
+        bm, size=(0.21, 0.135, 0.024),
+        location=blade_c, rotation=(-0.28, 0.0, 0.0),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.010)
     faces += blade
+    # Ground cutting lip along the leading edge.
+    faces += create_beveled_box(
+        bm, size=(0.215, 0.03, 0.014),
+        location=(head_x + 0.01, 0.238, hz - 0.055),
+        rotation=(-0.28, 0.0, 0.0),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 

@@ -44,9 +44,12 @@ class RoomOccupancyTracker:
         # never block the stairs, not just the bare opening). Kept snug on
         # purpose: the upper guardrail already protects the opening edge, and
         # oversized pads used to starve whole rooms of furniture.
+        self.stair_box = None
+        self.stair_is_ceiling = False
         if stair_hole is not None:
             sx0, sx1, sy0, sy1 = stair_hole
-            self.occupied_boxes.append((sx0 - 0.60, sx1 + 0.60, sy0 - 0.90, sy1 + 0.90))
+            self.stair_box = (sx0 - 0.60, sx1 + 0.60, sy0 - 0.90, sy1 + 0.90)
+            self.occupied_boxes.append(self.stair_box)
 
         # 2. Reserve walking corridors around all doorways (interior, front, wing, annex)
         if doorways:
@@ -104,8 +107,13 @@ class RoomOccupancyTracker:
         return False
 
     def is_free(self, bx0: float, bx1: float, by0: float, by1: float, margin: float = 0.03,
-                ignore_chimney: bool = False, check_windows: bool = False) -> bool:
-        """Returns True if the box [bx0, bx1] x [by0, by1] is inside the room and unblocked."""
+                ignore_chimney: bool = False, check_windows: bool = False,
+                ignore_stair: bool = False) -> bool:
+        """Returns True if the box [bx0, bx1] x [by0, by1] is inside the room and unblocked.
+
+        ``ignore_stair`` skips the reserved stairwell box: used only where the
+        stair is a ceiling opening (solid floor beneath), so the genuinely
+        walkable space under the flight can still take furniture."""
         eps = 0.02
         if bx0 < self.rx0 - eps or bx1 > self.rx1 + eps:
             return False
@@ -120,6 +128,8 @@ class RoomOccupancyTracker:
                 if not (bx1 + margin < wx0 or bx0 - margin > wx1 or by1 + margin < wy0 or by0 - margin > wy1):
                     return False
         for ox0, ox1, oy0, oy1 in self.occupied_boxes:
+            if ignore_stair and self.stair_box == (ox0, ox1, oy0, oy1):
+                continue
             if not (bx1 + margin < ox0 or bx0 - margin > ox1 or by1 + margin < oy0 or by0 - margin > oy1):
                 return False
         return True
@@ -619,8 +629,8 @@ def _lay_rug(bm, tracker, rm, rng, key, cx, cy, z_floor, w, l, yaw_max=0.12,
     def _hits_hole(px, py, pw, pl):
         if hole is None:
             return False
-        hx0, hx1 = hole[0] - 0.15, hole[1] + 0.15
-        hy0, hy1 = hole[2] - 0.15, hole[3] + 0.15
+        hx0, hx1 = hole[0] - 0.20, hole[1] + 0.20
+        hy0, hy1 = hole[2] - 0.20, hole[3] + 0.20
         return not (px + pw * 0.5 < hx0 or px - pw * 0.5 > hx1 or
                     py + pl * 0.5 < hy0 or py - pl * 0.5 > hy1)
 
@@ -636,7 +646,7 @@ def _lay_rug(bm, tracker, rm, rng, key, cx, cy, z_floor, w, l, yaw_max=0.12,
     if _hits_hole(cx, cy, ew, el):
         along_y = el >= ew
         lo, hi = (ry0, ry1) if along_y else (rx0, rx1)
-        h0, h1 = (hole[2] - 0.15, hole[3] + 0.15) if along_y else (hole[0] - 0.15, hole[1] + 0.15)
+        h0, h1 = (hole[2] - 0.20, hole[3] + 0.20) if along_y else (hole[0] - 0.20, hole[1] + 0.20)
         segs = [(a, b) for a, b in ((lo, h0), (h1, hi)) if b - a >= 1.0]
         if segs:
             a, b = max(segs, key=lambda sg: sg[1] - sg[0])
@@ -648,6 +658,8 @@ def _lay_rug(bm, tracker, rm, rng, key, cx, cy, z_floor, w, l, yaw_max=0.12,
                 w = min(w, b - a)
                 ew = min(ew, b - a)
                 cx = a + (b - a) * 0.5
+        else:
+            return None
 
     if ew < avail_w:
         cx = min(max(cx, rx0 + ew * 0.5), rx1 - ew * 0.5)
@@ -657,6 +669,10 @@ def _lay_rug(bm, tracker, rm, rng, key, cx, cy, z_floor, w, l, yaw_max=0.12,
         cy = min(max(cy, ry0 + el * 0.5), ry1 - el * 0.5)
     else:
         cy = (ry0 + ry1) * 0.5
+
+    # Hard guarantee: rugs must NEVER cross or overlap a stair opening
+    if _hits_hole(cx, cy, ew, el):
+        return None
 
     if not allow_overlap and _overlap_frac(cx, cy, ew, el) > 0.03:
         placed = False
@@ -2392,11 +2408,12 @@ def _dress_craft_table(bm, tx: float, ty: float, yaw: float, z_table: float,
     holding a single lonely piece; otherwise a single legacy row at 0.45m."""
     if not goods:
         return
+    _maxlen = max((_good_base_length(g) or 0.24) for g in goods)
     if span is None:
         n = len(goods)
-        spacing = 0.45
+        spacing = max(0.45, _maxlen + 0.10)
     else:
-        spacing = 0.30
+        spacing = max(0.30, _maxlen + 0.08)
         n = min(12, max(len(goods), int(max(0.0, span - 0.15) / spacing) + 1))
     seq = [goods[i % len(goods)] for i in range(n)]
     for i, g in enumerate(seq):
@@ -2785,8 +2802,8 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'FISHERMAN': ['FISH', 'FISH', 'FISH', 'FOODPREP_CLUTTER'],
         'JEWELER': ['RING_GOLD', 'BRACELET', 'NECKLACE', 'BROOCH'],
         'BREWERY': ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'BOTTLE_CLUSTER'],
-        'TOOLSMITH': ['AXE', 'HORSESHOE', 'HOE', 'HORSESHOE'],
-        'BLACKSMITH': ['AXE', 'HORSESHOE', 'PICKAXE', 'HORSESHOE'],
+        'TOOLSMITH': ['AXE', 'PICKAXE', 'HOE'],
+        'BLACKSMITH': ['AXE', 'PICKAXE', 'HOE'],
     }.get(arch)
     # Trade showpieces that do not fit on the table.
     if arch == 'BAKERY':
@@ -2881,12 +2898,8 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'JEWELER': [['RING_GOLD', 'RING_SILVER', 'BRACELET'],
                     ['NECKLACE', 'BROOCH', 'RING_GOLD'],
                     ['COIN_STACK', 'RING_SILVER', 'BRACELET']],
-        'BLACKSMITH': [['HORSESHOE', 'AXE', 'HORSESHOE'],
-                       ['HORSESHOE', 'PICKAXE', 'HORSESHOE'],
-                       ['HOE', 'HORSESHOE', 'AXE']],
-        'TOOLSMITH': [['HORSESHOE', 'AXE', 'HORSESHOE'],
-                      ['HORSESHOE', 'PICKAXE', 'HORSESHOE'],
-                      ['HOE', 'HORSESHOE', 'AXE']],
+        'BLACKSMITH': [['AXE', 'PICKAXE'], ['HOE', 'AXE'], ['PICKAXE', 'HOE']],
+        'TOOLSMITH': [['AXE', 'PICKAXE'], ['HOE', 'AXE'], ['PICKAXE', 'HOE']],
         'FURNITURE_MAKER': [['WOODEN_BOWL', 'WOODEN_BOWL', 'WOODEN_BOWL'],
                             ['WOODEN_BOWL', 'WOODEN_BOWL', 'WOODEN_BOWL'],
                             ['WOODEN_BOWL', 'CLAY_POT', 'WOODEN_BOWL']],
@@ -2912,6 +2925,10 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         return {'-Y': 0.0, '+Y': math.pi, '-X': -math.pi * 0.5,
                 '+X': math.pi * 0.5}[w]
 
+    # The space under a ceiling stair-hole is walkable (solid floor below), so
+    # the display may be tucked there when every clear wall spot is taken.
+    _ig = bool(getattr(tracker, 'stair_is_ceiling', False))
+
     def _try_place(hw, hd):
         """Search WALL-hugging spots for a free patch of the given half-size.
         Corners first (ordered by closeness to the staircase so it lands under
@@ -2931,19 +2948,39 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         if _sw is not None:
             _sxc = (_sw[0] + _sw[1]) * 0.5
             _syc = (_sw[2] + _sw[3]) * 0.5
-            _spots.sort(key=lambda p: (_check(p, hw, hd), 
+            _spots.sort(key=lambda p: (_check(p, hw, hd),
                                        math.hypot(p[0] - _sxc, p[1] - _syc)))
         for _sx, _sy in _spots:
             _sx += _jit(rng, 0.06)
             _sy += _jit(rng, 0.06)
-            if not tracker.is_free(_sx - hw, _sx + hw, _sy - hd, _sy + hd):
+            if not tracker.is_free(_sx - hw, _sx + hw, _sy - hd, _sy + hd,
+                                   ignore_stair=_ig):
                 continue
             tracker.occupy(_sx - hw, _sx + hw, _sy - hd, _sy + hd)
             return (_sx, _sy, _yaw_away(_sx, _sy))
+        # Fine scan hugging each wall as a last resort (a staircase or counter
+        # can block the coarse corner/midpoint spots in a small shop).
+        for _wy in (_nf, _nb):
+            _x = _nl
+            while _x <= _nr + 1e-6:
+                if tracker.is_free(_x - hw, _x + hw, _wy - hd, _wy + hd,
+                                   ignore_stair=_ig):
+                    tracker.occupy(_x - hw, _x + hw, _wy - hd, _wy + hd)
+                    return (_x, _wy, _yaw_away(_x, _wy))
+                _x += 0.15
+        for _wx in (_nl, _nr):
+            _y = _nf
+            while _y <= _nb + 1e-6:
+                if tracker.is_free(_wx - hw, _wx + hw, _y - hd, _y + hd,
+                                   ignore_stair=_ig):
+                    tracker.occupy(_wx - hw, _wx + hw, _y - hd, _y + hd)
+                    return (_wx, _y, _yaw_away(_wx, _y))
+                _y += 0.15
         return None
 
     def _check(p, hw, hd):
-        return 0 if tracker.is_free(p[0] - hw, p[0] + hw, p[1] - hd, p[1] + hd) else 1
+        return 0 if tracker.is_free(p[0] - hw, p[0] + hw, p[1] - hd, p[1] + hd,
+                                    ignore_stair=_ig) else 1
 
     # Full-size display first, then a compact one for cramped shops.
     _placed = _try_place(0.85, 0.575)
@@ -2958,7 +2995,8 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         if _sp is not None:
             _sxc, _syc = _sp[0], _sp[1]
             for _hw, _hd, _w in ((0.62, 0.50, 1.05), (0.50, 0.44, 0.92)):
-                if tracker.is_free(_sxc - _hw, _sxc + _hw, _syc - _hd, _syc + _hd):
+                if tracker.is_free(_sxc - _hw, _sxc + _hw, _syc - _hd,
+                                   _syc + _hd, ignore_stair=_ig):
                     tracker.occupy(_sxc - _hw, _sxc + _hw, _syc - _hd, _syc + _hd)
                     _placed = (_sxc, _syc, _yaw_away(_sxc, _syc))
                     _disp_w = _w
@@ -3229,6 +3267,12 @@ def _furnish_corridor(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
+
+    if 'cellar_stair' in getattr(rm, 'id', ''):
+        # Dedicated cellar stairwell room: keep the stair landing and hole completely
+        # free of rugs, furniture or clutter. Only place ceiling lantern.
+        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+        return
 
     # 1. Hallway runner rugs (kept off the stair opening, staggered, slight yaw)
     rug_choice = rng.choice(['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST'])
@@ -3716,6 +3760,12 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         chimney=chimney_positions
     )
     tracker.stair_hole = _stair_well
+    # A ceiling stair-hole (no opening in THIS floor's own slab) sits over a
+    # solid floor, so the walkable space beneath the flight is usable.
+    _own_hole = None
+    if ctx is not None:
+        _own_hole = (getattr(ctx, 'floor_stair_holes', None) or {}).get(rm.floor_idx)
+    tracker.stair_is_ceiling = bool(_stair_well is not None and _own_hole is None)
     tracker.rng = rng
     tracker.archetype = getattr(ctx, 'effective_archetype', 'NONE') if ctx is not None else 'NONE'
     if getattr(ctx, 'effective_archetype', 'NONE') == 'BAKERY' and ctx is not None:
