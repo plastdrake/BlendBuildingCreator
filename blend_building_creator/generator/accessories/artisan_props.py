@@ -385,12 +385,6 @@ def _hanging_rail_frame(bm, width):
             location=(sx, 0.0, 0.09 + h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010
         )
-        faces += create_beveled_box(
-            bm, size=(0.06, 0.06, 0.40),
-            location=(sx, 0.11, 0.30),
-            rotation=(0.70, 0.0, 0.0),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
-        )
     rail_z = 0.09 + h - 0.07
     faces += create_cylinder(
         bm, radius=0.034, height=width - 0.02, segments=8,
@@ -630,34 +624,55 @@ def build_gem_tray(bm, x, y, z_ground=0.0, ang=0.0):
         location=(0.0, 0.0, 0.036),
         mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.003
     )
-    gems = (
-        (-0.10, 0.045, MAT_INDEX_BOTTLE_GLASS, 0.026, 0.3, 0.06),
-        (-0.03, -0.035, MAT_INDEX_GLASS, 0.022, 1.1, -0.05),
-        (0.045, 0.050, MAT_INDEX_BOTTLE_GLASS, 0.024, 2.2, 0.08),
-        (0.115, -0.030, MAT_INDEX_GLASS, 0.027, 2.9, -0.07),
-    )
-    for gx, gy, mat, gs, gyaw, gtilt in gems:
-        _gem(bm, faces, gx, gy, 0.042, mat, size=gs, yaw=gyaw, tilt=gtilt)
-    # Gold and silver rings: two flat, one standing against the rim.
-    for rx, ry, rmat in ((-0.062, -0.068, MAT_INDEX_GOLD),
-                         (0.015, 0.062, MAT_INDEX_SILVER)):
+    # Neat, aligned layout: a row of rings along the back, a row of cut gems
+    # in the middle, a row of coins at the front. Nothing overlaps.
+    for _i, _rgx in enumerate((-0.11, -0.037, 0.037, 0.11)):
+        _rmat = MAT_INDEX_GOLD if _i % 2 == 0 else MAT_INDEX_SILVER
         faces += create_torus_ring(
-            bm, location=(rx, ry, 0.048 + 0.008),
-            rotation=(0.0, 0.0, rx * 10.0),
-            major_radius=0.023, minor_radius=0.008,
-            major_segments=14, minor_segments=6, mat_index=rmat
-        )
-    faces += create_torus_ring(
-        bm, location=(0.125, 0.045, 0.048 + 0.024),
-        rotation=(math.pi * 0.5, 0.0, 0.2),
-        major_radius=0.023, minor_radius=0.008,
-        major_segments=14, minor_segments=6, mat_index=MAT_INDEX_GOLD
-    )
-    for cx, cy in ((0.10, 0.055), (0.135, 0.030), (-0.065, -0.055)):
+            bm, location=(_rgx, 0.075, 0.048), rotation=(0.0, 0.0, 0.0),
+            major_radius=0.019, minor_radius=0.007,
+            major_segments=16, minor_segments=7, mat_index=_rmat)
+    for _gx, _kind, _gs in ((-0.105, 'emerald', 0.018), (-0.035, 'diamond', 0.016),
+                            (0.035, 'ruby', 0.017), (0.105, 'sapphire', 0.016)):
+        _jewel_gem(bm, faces, _gx, -0.030, 0.040, _kind, _gs, 0.0)
+    for _ci, _cx2 in enumerate((-0.084, -0.042, 0.0, 0.042, 0.084)):
         faces += create_cylinder(
-            bm, radius=0.020, height=0.008, segments=10,
-            location=(cx, cy, 0.046), mat_index=MAT_INDEX_GOLD
-        )
+            bm, radius=0.014, height=0.006, segments=12,
+            location=(_cx2, -0.092, 0.040), mat_index=MAT_INDEX_GOLD)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_ring_tray(bm, x, y, z_ground=0.0, ang=0.0, width=0.36):
+    """A padded display tray holding a neat, aligned grid of rings (a
+    jeweller's presentation tray). Nothing overlaps."""
+    faces = []
+    tw, td = width, width * 0.72
+    faces += create_beveled_box(
+        bm, size=(tw, td, 0.028), location=(0.0, 0.0, 0.014),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.005)
+    rim_h, rim_t = 0.042, 0.018
+    for sy in (-td * 0.5 + rim_t * 0.5, td * 0.5 - rim_t * 0.5):
+        faces += create_beveled_box(
+            bm, size=(tw, rim_t, rim_h),
+            location=(0.0, sy, rim_h * 0.5 + 0.028),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
+    for sx in (-tw * 0.5 + rim_t * 0.5, tw * 0.5 - rim_t * 0.5):
+        faces += create_beveled_box(
+            bm, size=(rim_t, td, rim_h),
+            location=(sx, 0.0, rim_h * 0.5 + 0.028),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
+    # Velvet insert with six neat ring slots (3 across, 2 deep).
+    faces += create_beveled_box(
+        bm, size=(tw - 0.05, td - 0.05, 0.012), location=(0.0, 0.0, 0.034),
+        mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.003)
+    for _row, _ry in ((0, 0.028), (1, -0.026)):
+        for _c, _rx in enumerate((-0.082, 0.0, 0.082)):
+            _metal = MAT_INDEX_GOLD if (_row + _c) % 2 == 0 else MAT_INDEX_SILVER
+            faces += create_torus_ring(
+                bm, location=(_rx, _ry, 0.044), rotation=(0.0, 0.0, 0.0),
+                major_radius=0.018, minor_radius=0.007,
+                major_segments=16, minor_segments=7, mat_index=_metal)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 

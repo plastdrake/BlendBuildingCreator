@@ -121,6 +121,7 @@ MAT_INDEX_MEAT          = 48
 MAT_INDEX_BREAD_FBX     = 49
 MAT_INDEX_GOLD          = 50
 MAT_INDEX_SILVER        = 51
+MAT_INDEX_TERRACOTTA    = 52
 
 
 # ---------------------------------------------------------------------------
@@ -2525,6 +2526,23 @@ def create_stylized_fish(name="M_Building_Fish"):
     return mat
 
 
+def create_stylized_terracotta_brick(name="M_Building_Terracotta_Brick"):
+    """Terracotta brick masonry (terracotta_brick_diffuse.jpg), tiled to suit
+    the smith's forge body and flue."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    c = _coord(tree, loc_x=-1000)
+    tex_node = _load_image_texture(tree, "terracotta_brick_diffuse.jpg", c,
+                                   loc_x=-700, loc_y=120, scale=(2.2, 2.2, 2.2))
+    if tex_node is not None:
+        _apply_ao(tree, bsdf, tex_node.outputs["Color"], strength=0.34, distance=0.12)
+        _setup_pbr(tree, bsdf, out, roughness=0.88, metallic=0.0)
+        return mat
+    _set_bsdf_input(bsdf, "Base Color", (0.72, 0.34, 0.20, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.88)
+    return mat
+
+
 def create_stylized_meat(name="M_Building_Meat"):
     """Handpainted butcher cuts (meat.jpg): exact 0-1 atlas UVs, no tiling."""
     mat, tree = _new_mat(name)
@@ -2844,6 +2862,8 @@ def setup_building_material_slots(obj, props):
                 or create_stylized_gold("M_Building_Gold"))
     mat_silver = (getattr(props, 'custom_silver', None)
                   or create_stylized_silver("M_Building_Silver"))
+    mat_terracotta = (getattr(props, 'custom_terracotta', None)
+                      or create_stylized_terracotta_brick("M_Building_Terracotta_Brick"))
 
     # Assemble canonical slots in strict order
     required_mats = [
@@ -2899,6 +2919,7 @@ def setup_building_material_slots(obj, props):
         mat_bread_fbx,      # 49 MAT_INDEX_BREAD_FBX
         mat_gold,           # 50 MAT_INDEX_GOLD
         mat_silver,         # 51 MAT_INDEX_SILVER
+        mat_terracotta,     # 52 MAT_INDEX_TERRACOTTA
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -2963,6 +2984,7 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Bread_FBX",     # 49
     "M_Building_Gold",          # 50
     "M_Building_Silver",        # 51
+    "M_Building_Terracotta_Brick",  # 52
 )
 
 

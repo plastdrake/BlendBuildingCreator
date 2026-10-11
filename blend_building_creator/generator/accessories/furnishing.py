@@ -2376,6 +2376,10 @@ _GOODS_LENGTH_JITTER = {
     'BREAD_LOAF': (0.90, 1.10),
 }
 
+# Goods that must stay neatly aligned (they stack/lay flush), so they get only
+# a whisper of yaw jitter.
+_ALIGNED_GOODS = {'RING_TRAY', 'GEM_TRAY'}
+
 
 def _good_base_length(key: str):
     """Registry default ``length`` for goods that carry one, else None."""
@@ -2419,8 +2423,9 @@ def _dress_craft_table(bm, tx: float, ty: float, yaw: float, z_table: float,
     for i, g in enumerate(seq):
         off = (i - (n - 1) * 0.5) * spacing
         gx, gy = _table_offset(tx, ty, off, _jit(rng, 0.06), yaw)
+        _gyaw = rng.uniform(-0.08, 0.08) if g in _ALIGNED_GOODS else rng.uniform(0.0, 6.28)
         build_prop(bm, g, gx, gy, z_table + 0.012,
-                   rng.uniform(0.0, 6.28), **_good_length_param(g, rng))
+                   _gyaw, **_good_length_param(g, rng))
 
 
 def _stool_near(bm, tracker: RoomOccupancyTracker, tx: float, ty: float,
@@ -2747,20 +2752,18 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     if t3 is not None:
         _dress_craft_table(bm, t3[0], t3[1], t3[2], z_table, rng,
                            ['FISH', 'FISH', 'FOODPREP_CLUTTER'], span=0.95)
-    # Fish boxes: fish kept in slatted crates, never loose on the bare floor.
-    for _ci in range(2):
-        _place_floor_prop(bm, tracker, z_floor, rng, 'CRATE', 0.30, 0.30)
-        _place_goods_row(bm, tracker, z_floor, rng, 'CRATE', count=1, box=0.30)
-
-    # Fish drying rack + hanging fish rail along free walls (fish hang, they
-    # do not lie on the floor).
+    # Hanging fish: rails along the walls and curing stringers from the beams
+    # (the catch hangs; it is never left loose on the floor). Replaces the old
+    # clutter of crates.
     _try_place_wall_prop(bm, 'FISH_DRYING_RACK', 1.60, 0.80, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'))
     _try_place_wall_prop(bm, 'FISH_RAIL', 1.30, 0.35, tracker, z_floor,
                          candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'))
+    _try_place_wall_prop(bm, 'FISH_RAIL', 1.10, 0.35, tracker, z_floor,
+                         candidate_walls=('WEST', 'SOUTH', 'EAST', 'NORTH'))
     _place_floor_prop(bm, tracker, z_floor, rng, 'ROPE_COIL', 0.28, 0.28)
-    # Curing stringers hung from the beams (two when there is room).
-    for _si in range(2):
+    # Curing stringers hung from the beams (three when there is room).
+    for _si in range(3):
         _spot = _freest_spot(tracker, rng)
         if _spot is not None and _spot[2] >= 0.20 - 1e-6:
             tracker.occupy(_spot[0] - 0.20, _spot[0] + 0.20,
@@ -2769,8 +2772,7 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         else:
             break
 
-    _place_goods_row(bm, tracker, z_floor, rng, 'CRATE', count=3, box=0.36)  # fish boxes
-    _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)  # salt barrels
+    _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)  # salt
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('EAST', 'NORTH', 'WEST'))  # tackle
     if rng.random() < density:
@@ -2800,7 +2802,7 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'BAKERY': ['BREAD_LOAF', 'BREAD_LOAF', 'BREAD_LOAF'],
         'BUTCHER': ['MEAT', 'MEAT_SMALL', 'MEAT'],
         'FISHERMAN': ['FISH', 'FISH', 'FISH', 'FOODPREP_CLUTTER'],
-        'JEWELER': ['RING_GOLD', 'BRACELET', 'NECKLACE', 'BROOCH'],
+        'JEWELER': ['RING_TRAY', 'GEM_TRAY'],
         'BREWERY': ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'BOTTLE_CLUSTER'],
         'TOOLSMITH': ['AXE', 'PICKAXE', 'HOE'],
         'BLACKSMITH': ['AXE', 'PICKAXE', 'HOE'],
@@ -2854,10 +2856,13 @@ def _lay_out_jeweler_counter(bm, tracker: RoomOccupancyTracker, z_floor: float,
         _try_place_wall_prop(bm, 'STRONGBOX', 0.66, 0.44, tracker, z_floor,
                              candidate_walls=('SOUTH', 'WEST', 'EAST'))
         return
-    # Gem tray centre counter, plant at one end.
-    build_prop(bm, 'GEM_TRAY', cc['cx'], cc['cy'], cc['top_z'], cc['yaw'])
-    _ex = cc['cx'] + math.cos(cc['yaw']) * (cc['length'] * 0.5 - 0.22)
-    _ey = cc['cy'] + math.sin(cc['yaw']) * (cc['length'] * 0.5 - 0.22)
+    # A neat row of padded trays along the counter, plant at one end.
+    _ca, _sa = math.cos(cc['yaw']), math.sin(cc['yaw'])
+    for _off, _key in ((-0.34, 'RING_TRAY'), (0.06, 'GEM_TRAY')):
+        build_prop(bm, _key, cc['cx'] + _ca * _off, cc['cy'] + _sa * _off,
+                   cc['top_z'], cc['yaw'])
+    _ex = cc['cx'] + _ca * (cc['length'] * 0.5 - 0.20)
+    _ey = cc['cy'] + _sa * (cc['length'] * 0.5 - 0.20)
     build_prop(bm, 'POTTED_PLANT_SMALL', _ex, _ey, cc['top_z'],
                rng.uniform(0.0, 6.28))
     # Scale behind the counter when there is a merchant zone, else a corner.
@@ -2895,9 +2900,7 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'TAILOR': [['FOLDED_CLOTH', 'FOLDED_CLOTH', 'FOLDED_CLOTH'],
                    ['FOLDED_CLOTH', 'FOLDED_CLOTH', 'FOLDED_CLOTH'],
                    ['BOOK_PILE_SMALL', 'FOLDED_CLOTH', 'FOLDED_CLOTH']],
-        'JEWELER': [['RING_GOLD', 'RING_SILVER', 'BRACELET'],
-                    ['NECKLACE', 'BROOCH', 'RING_GOLD'],
-                    ['COIN_STACK', 'RING_SILVER', 'BRACELET']],
+        'JEWELER': [['RING_TRAY'], ['GEM_TRAY'], ['RING_TRAY']],
         'BLACKSMITH': [['AXE', 'PICKAXE'], ['HOE', 'AXE'], ['PICKAXE', 'HOE']],
         'TOOLSMITH': [['AXE', 'PICKAXE'], ['HOE', 'AXE'], ['PICKAXE', 'HOE']],
         'FURNITURE_MAKER': [['WOODEN_BOWL', 'WOODEN_BOWL', 'WOODEN_BOWL'],
@@ -2943,13 +2946,17 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
             _py = _ry0 + (_ry1 - _ry0) * _f
             _px = _rx0 + (_rx1 - _rx0) * _f
             _spots += [(_nl, _py), (_nr, _py), (_px, _nf), (_px, _nb)]
-        # Order by closeness to the stairwell so the nearest wall nook wins.
+        # Order the wall nooks. Normally the stairwell-nearest nook wins (the
+        # display tucks under the stairs); in a cramped shop where the stair
+        # reserve is ignored, prefer the corner with the MOST clearance from
+        # the staircase so it never clips a step.
         _sw = getattr(tracker, 'stair_hole', None)
         if _sw is not None:
             _sxc = (_sw[0] + _sw[1]) * 0.5
             _syc = (_sw[2] + _sw[3]) * 0.5
+            _dist = -1.0 if _ig else 1.0
             _spots.sort(key=lambda p: (_check(p, hw, hd),
-                                       math.hypot(p[0] - _sxc, p[1] - _syc)))
+                                       _dist * math.hypot(p[0] - _sxc, p[1] - _syc)))
         for _sx, _sy in _spots:
             _sx += _jit(rng, 0.06)
             _sy += _jit(rng, 0.06)
@@ -3030,7 +3037,7 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
             # Long merchandise (tools) stays near-aligned so it lies neatly;
             # small goods get the full playful yaw.
             _base_len = _good_base_length(_g) or 0.24
-            _yj = 0.12 if _base_len > 0.45 else 0.45
+            _yj = 0.10 if (_base_len > 0.45 or _g in _ALIGNED_GOODS) else 0.45
             build_prop(bm, _g, _gx, _gy, z_floor + _lz + 0.012,
                        _cyaw + rng.uniform(-_yj, _yj),
                        **_good_length_param(_g, rng))

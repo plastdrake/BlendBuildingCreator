@@ -11,7 +11,7 @@ from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
     MAT_INDEX_PLASTER_EXT, MAT_INDEX_SHINGLES, MAT_INDEX_GLASS,
     MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_DOOR,
-    MAT_INDEX_CUT_STONE, MAT_INDEX_LOG
+    MAT_INDEX_CUT_STONE, MAT_INDEX_LOG, MAT_INDEX_ROPE
 )
 
 def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
@@ -76,3 +76,24 @@ def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
             rotation=(0.0, -0.28, 0.0),
             mat_index=MAT_INDEX_TIMBER
         )
+
+    # Hang the day's catch from the rail (the catch cures in the open air, so
+    # the frame is never empty).
+    try:
+        from .artisan_props import _stamp_baked_local, _fish_mat, _hang_mat
+        _n = max(4, int(rack_l / 0.30))
+        for _i in range(_n):
+            _fy = rack_cy - rack_l * 0.5 + 0.26 + _i * ((rack_l - 0.52) / max(1, _n - 1))
+            _rope = 0.20 + (0.08 if _i % 2 else 0.0)
+            create_cylinder(
+                bm, radius=0.006, height=_rope, segments=6,
+                location=(rack_x, _fy, z_ground + rack_h - _rope * 0.5),
+                mat_index=MAT_INDEX_ROPE
+            )
+            _stamp_baked_local(
+                bm, [], 'fish.fbx', rack_x, _fy - 0.005,
+                z_ground + rack_h - _rope - 0.02, 0.0, 0.30,
+                _fish_mat(), long_axis='X', pre_mat=_hang_mat()
+            )
+    except Exception:
+        pass

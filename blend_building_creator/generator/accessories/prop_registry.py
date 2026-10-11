@@ -226,6 +226,8 @@ for _s in (
           'artisan_props', 'build_strongbox', 0.50),
     _spec('GEM_TRAY', "Gem Tray", 'WORK', "Velvet tray with cut stones and gold coins",
           'artisan_props', 'build_gem_tray', 0.30),
+    _spec('RING_TRAY', "Ring Tray", 'WORK', "Padded tray of neatly aligned rings",
+          'artisan_props', 'build_ring_tray', 0.20, width=0.36),
     _spec('BALANCE_SCALE', "Balance Scale", 'WORK', "Standing scale with twin pans and weights",
           'artisan_props', 'build_balance_scale', 0.45),
     _spec('ANVIL', "Anvil", 'WORK', "Smith's anvil on a stump with horn and heel",
