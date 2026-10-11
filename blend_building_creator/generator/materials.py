@@ -119,6 +119,8 @@ MAT_INDEX_CANVAS        = 46
 MAT_INDEX_FISH          = 47
 MAT_INDEX_MEAT          = 48
 MAT_INDEX_BREAD_FBX     = 49
+MAT_INDEX_GOLD          = 50
+MAT_INDEX_SILVER        = 51
 
 
 # ---------------------------------------------------------------------------
@@ -1857,6 +1859,24 @@ def create_stylized_iron(name="M_Building_Iron"):
     return mat
 
 
+def create_stylized_gold(name="M_Building_Gold", color=(0.93, 0.73, 0.26, 1.0)):
+    """Polished gold: warm metallic PBR for rings, bracelets and coin."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=0.26, metallic=1.0)
+    return mat
+
+
+def create_stylized_silver(name="M_Building_Silver", color=(0.88, 0.89, 0.92, 1.0)):
+    """Polished silver: cool metallic PBR for fine jewellery."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=0.22, metallic=1.0)
+    return mat
+
+
 def create_stylized_clock_face(name="M_Building_Clock_Face", color=(0.95, 0.95, 0.92, 1.0),
                                glow=0.0):
     """Clean painted-white enamel clock dial.
@@ -2820,6 +2840,10 @@ def setup_building_material_slots(obj, props):
                 or create_stylized_meat("M_Building_Meat"))
     mat_bread_fbx = (getattr(props, 'custom_bread_fbx', None)
                      or create_stylized_bread_fbx("M_Building_Bread_FBX"))
+    mat_gold = (getattr(props, 'custom_gold', None)
+                or create_stylized_gold("M_Building_Gold"))
+    mat_silver = (getattr(props, 'custom_silver', None)
+                  or create_stylized_silver("M_Building_Silver"))
 
     # Assemble canonical slots in strict order
     required_mats = [
@@ -2873,6 +2897,8 @@ def setup_building_material_slots(obj, props):
         mat_fish,           # 47 MAT_INDEX_FISH
         mat_meat,           # 48 MAT_INDEX_MEAT
         mat_bread_fbx,      # 49 MAT_INDEX_BREAD_FBX
+        mat_gold,           # 50 MAT_INDEX_GOLD
+        mat_silver,         # 51 MAT_INDEX_SILVER
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -2935,6 +2961,8 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Fish",          # 47
     "M_Building_Meat",          # 48
     "M_Building_Bread_FBX",     # 49
+    "M_Building_Gold",          # 50
+    "M_Building_Silver",        # 51
 )
 
 

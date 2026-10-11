@@ -2361,17 +2361,22 @@ _GOODS_LENGTH_JITTER = {
 }
 
 
+def _good_base_length(key: str):
+    """Registry default ``length`` for goods that carry one, else None."""
+    try:
+        from .prop_registry import get_spec
+        return get_spec(key).defaults.get('length')
+    except Exception:
+        return None
+
+
 def _good_length_param(key: str, rng) -> dict:
     """Params dict adding a randomised ``length`` to goods that support it
     (fish/meat/bread) so merchandise looks varied rather than cloned."""
     jit = _GOODS_LENGTH_JITTER.get(key)
     if not jit:
         return {}
-    try:
-        from .prop_registry import get_spec
-        base = get_spec(key).defaults.get('length')
-    except Exception:
-        base = None
+    base = _good_base_length(key)
     if not base:
         return {}
     return {'length': base * rng.uniform(*jit)}
@@ -2451,9 +2456,9 @@ def _furnish_bakehouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
         t = _place_craft_table(bm, tracker, z_floor, rng)
         if t is None:
             break
-        if _ti == 0:  # kneading table: proving bowl and fresh loaves
+        if _ti == 0:  # kneading table: fresh loaves
             _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
-                               ['DOUGH_BOWL', 'BREAD_LOAF', 'BREAD_LOAF'], span=1.15)
+                               ['BREAD_LOAF', 'BREAD_LOAF', 'BREAD_LOAF'], span=1.15)
         else:
             _dress_craft_table(bm, t[0], t[1], t[2], z_table, rng,
                                ['FOODPREP_CLUTTER', 'BREAD_LOAF', 'BREAD_LOAF'], span=1.15)
@@ -2467,9 +2472,9 @@ def _furnish_bakehouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('EAST', 'NORTH', 'WEST'))  # loaf shelves
     if rng.random() < density:
-        _try_place_wall_prop(bm, 'LOG_PILE', 1.60, 0.55, tracker, z_floor,
+        _try_place_wall_prop(bm, 'LOG_PILE', 1.15, 0.95, tracker, z_floor,
                              candidate_walls=('SOUTH', 'WEST', 'EAST'),
-                             length=1.60, radius=0.15, rows=2)  # oven fuel
+                             length=1.00, radius=0.11, rows=2)  # oven fuel
 
     rug_w = min(2.60, max(1.60, rw * 0.55))
     rug_l = min(3.40, max(2.00, rd * 0.55))
@@ -2547,12 +2552,14 @@ def _furnish_butchery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
 
     _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=3, box=0.40)  # brine
     _place_goods_row(bm, tracker, z_floor, rng, 'SACK', count=2)  # salt
-    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+    _try_place_wall_prop(bm, 'MEAT_RACK', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('EAST', 'NORTH', 'WEST'))
+    _try_place_wall_prop(bm, 'MEAT_RACK', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=('NORTH', 'WEST', 'SOUTH'))
     if rng.random() < density:
-        _try_place_wall_prop(bm, 'LOG_PILE', 1.60, 0.55, tracker, z_floor,
+        _try_place_wall_prop(bm, 'LOG_PILE', 1.15, 0.95, tracker, z_floor,
                              candidate_walls=('SOUTH', 'WEST', 'EAST'),
-                             length=1.60, radius=0.15, rows=2)  # smoke fuel
+                             length=1.00, radius=0.11, rows=2)  # smoke fuel
     build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
 
 
@@ -2643,9 +2650,9 @@ def _furnish_smithy(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
     _try_place_wall_prop(bm, 'TOOL_RACK', 1.20, 0.30, tracker, z_floor,
                          candidate_walls=('EAST', 'WEST', 'NORTH'))
     _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)  # quench
-    _try_place_wall_prop(bm, 'LOG_PILE', 1.60, 0.55, tracker, z_floor,
+    _try_place_wall_prop(bm, 'LOG_PILE', 1.15, 0.95, tracker, z_floor,
                          candidate_walls=('SOUTH', 'WEST', 'EAST'),
-                         length=1.60, radius=0.15, rows=2)  # coal
+                         length=1.00, radius=0.11, rows=2)  # coal
     _place_goods_row(bm, tracker, z_floor, rng, 'CRATE', count=2, box=0.36)  # stock
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('EAST', 'WEST', 'NORTH'))
@@ -2680,9 +2687,9 @@ def _furnish_joinery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     _try_place_wall_prop(bm, 'PLANK_PILE', 1.80, 0.55, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'),
                          length=1.80, layers=5)  # seasoned boards
-    _try_place_wall_prop(bm, 'LOG_PILE', 1.60, 0.55, tracker, z_floor,
+    _try_place_wall_prop(bm, 'LOG_PILE', 1.25, 0.95, tracker, z_floor,
                          candidate_walls=('SOUTH', 'WEST', 'EAST'),
-                         length=1.60, radius=0.17, rows=3)  # timber
+                         length=1.10, radius=0.12, rows=2)  # timber
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('EAST', 'WEST', 'NORTH'))
     if rng.random() < density:  # finished pieces: chair + chest
@@ -2773,11 +2780,13 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
                              candidate_walls=('SOUTH', 'WEST', 'EAST'))
     table_goods = {
         'TAILOR': ['FOLDED_CLOTH', 'FOLDED_CLOTH'],
-        'BAKERY': ['BREAD_LOAF', 'BREAD_LOAF', 'DOUGH_BOWL'],
+        'BAKERY': ['BREAD_LOAF', 'BREAD_LOAF', 'BREAD_LOAF'],
         'BUTCHER': ['MEAT', 'MEAT_SMALL', 'MEAT'],
         'FISHERMAN': ['FISH', 'FISH', 'FISH', 'FOODPREP_CLUTTER'],
-        'JEWELER': ['BOTTLE_CLUSTER', 'BOTTLE', 'BOTTLE'],
+        'JEWELER': ['RING_GOLD', 'BRACELET', 'NECKLACE', 'BROOCH'],
         'BREWERY': ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'BOTTLE_CLUSTER'],
+        'TOOLSMITH': ['AXE', 'HORSESHOE', 'HOE', 'HORSESHOE'],
+        'BLACKSMITH': ['AXE', 'HORSESHOE', 'PICKAXE', 'HORSESHOE'],
     }.get(arch)
     # Trade showpieces that do not fit on the table.
     if arch == 'BAKERY':
@@ -2869,14 +2878,15 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'TAILOR': [['FOLDED_CLOTH', 'FOLDED_CLOTH', 'FOLDED_CLOTH'],
                    ['FOLDED_CLOTH', 'FOLDED_CLOTH', 'FOLDED_CLOTH'],
                    ['BOOK_PILE_SMALL', 'FOLDED_CLOTH', 'FOLDED_CLOTH']],
-        'JEWELER': [['FOLDED_CLOTH', 'FOLDED_CLOTH'], ['GEM_TRAY', 'BOTTLE'],
-                    ['BOTTLE_CLUSTER', 'BOTTLE']],
-        'BLACKSMITH': [['HORSESHOE', 'HORSESHOE', 'HORSESHOE'],
-                       ['HORSESHOE', 'HORSESHOE', 'HORSESHOE'],
-                       ['CLAY_POT', 'HORSESHOE', 'HORSESHOE']],
-        'TOOLSMITH': [['HORSESHOE', 'HORSESHOE', 'HORSESHOE'],
-                      ['HORSESHOE', 'HORSESHOE', 'HORSESHOE'],
-                      ['CLAY_POT', 'HORSESHOE', 'HORSESHOE']],
+        'JEWELER': [['RING_GOLD', 'RING_SILVER', 'BRACELET'],
+                    ['NECKLACE', 'BROOCH', 'RING_GOLD'],
+                    ['COIN_STACK', 'RING_SILVER', 'BRACELET']],
+        'BLACKSMITH': [['HORSESHOE', 'AXE', 'HORSESHOE'],
+                       ['HORSESHOE', 'PICKAXE', 'HORSESHOE'],
+                       ['HOE', 'HORSESHOE', 'AXE']],
+        'TOOLSMITH': [['HORSESHOE', 'AXE', 'HORSESHOE'],
+                      ['HORSESHOE', 'PICKAXE', 'HORSESHOE'],
+                      ['HOE', 'HORSESHOE', 'AXE']],
         'FURNITURE_MAKER': [['WOODEN_BOWL', 'WOODEN_BOWL', 'WOODEN_BOWL'],
                             ['WOODEN_BOWL', 'WOODEN_BOWL', 'WOODEN_BOWL'],
                             ['WOODEN_BOWL', 'CLAY_POT', 'WOODEN_BOWL']],
@@ -2942,7 +2952,18 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         _placed = _try_place(0.62, 0.50)
         _disp_w = 1.05
     if _placed is None:
-        # No wall-hugging spot big enough: never drop it mid-room. Skip.
+        # Cramped shop (e.g. a staircase eating every wall): fall back to the
+        # freest open patch so the trade display always shows up.
+        _sp = _freest_spot(tracker, rng)
+        if _sp is not None:
+            _sxc, _syc = _sp[0], _sp[1]
+            for _hw, _hd, _w in ((0.62, 0.50, 1.05), (0.50, 0.44, 0.92)):
+                if tracker.is_free(_sxc - _hw, _sxc + _hw, _syc - _hd, _syc + _hd):
+                    tracker.occupy(_sxc - _hw, _sxc + _hw, _syc - _hd, _syc + _hd)
+                    _placed = (_sxc, _syc, _yaw_away(_sxc, _syc))
+                    _disp_w = _w
+                    break
+    if _placed is None:
         return
     _cx, _cy, _yaw = _placed
     build_prop(bm, 'MARKET_DISPLAY', _cx, _cy, z_floor, _yaw, width=_disp_w)
@@ -2950,22 +2971,30 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
     # -0.50, z 0.50/0.85/1.20). Items spread across the tier width, scaled to
     # fill it, with per-item scale and yaw jitter so a tier reads fully
     # stocked and hand-laid rather than cloned.
-    _usable = max(0.24, _disp_w - 0.30)
-    _max_i = max(2, int(_usable / 0.30) + 1)
     _cyaw = _yaw
     _cos, _sin = math.cos(_cyaw), math.sin(_cyaw)
     for (_ly, _lz), _base in zip(((0.17, 0.50), (-0.16, 0.85), (-0.50, 1.20)),
                                  _tier_goods):
+        # Size the run to the longest piece on the tier so long goods (tools)
+        # never overhang the display's sides, then pack it.
+        _lens = [(_good_base_length(g) or 0.24) for g in _base]
+        _longest = max(_lens) if _lens else 0.24
+        _span = max(0.24, _disp_w - _longest - 0.10)
+        _max_i = max(2, int(_span / (_longest + 0.06)) + 1)
         _goods = _base[:min(len(_base), _max_i)]
         _m = len(_goods)
         for _i, _g in enumerate(_goods):
             _frac = 0.0 if _m <= 1 else (_i / (_m - 1) - 0.5)
-            _lx = _frac * _usable + _jit(rng, 0.025)
+            _lx = _frac * _span + _jit(rng, 0.02)
             _lyj = _ly + _jit(rng, 0.02)
             _gx = _cx + _lx * _cos - _lyj * _sin
             _gy = _cy + _lx * _sin + _lyj * _cos
+            # Long merchandise (tools) stays near-aligned so it lies neatly;
+            # small goods get the full playful yaw.
+            _base_len = _good_base_length(_g) or 0.24
+            _yj = 0.12 if _base_len > 0.45 else 0.45
             build_prop(bm, _g, _gx, _gy, z_floor + _lz + 0.012,
-                       _cyaw + rng.uniform(-0.45, 0.45),
+                       _cyaw + rng.uniform(-_yj, _yj),
                        **_good_length_param(_g, rng))
     return
 
@@ -3542,9 +3571,14 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     _place_market_display(bm, tracker, z_floor, rng, getattr(tracker, 'archetype', ''))
 
     # 3. Display shelves on perimeter walls (the fishmonger swaps these for
-    #    the trade display case instead).
+    #    the trade display case; the butcher swaps them for meat racks).
     _arch0 = getattr(tracker, 'archetype', 'NONE')
-    if _arch0 not in ('FISHERMAN',):
+    if _arch0 == 'BUTCHER':
+        _try_place_wall_prop(bm, 'MEAT_RACK', 1.40, 0.40, tracker, z_floor,
+                             candidate_walls=('EAST', 'WEST', 'NORTH'))
+        _try_place_wall_prop(bm, 'MEAT_RACK', 1.40, 0.40, tracker, z_floor,
+                             candidate_walls=('WEST', 'NORTH', 'SOUTH'))
+    elif _arch0 not in ('FISHERMAN',):
         _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
                              candidate_walls=('EAST', 'WEST', 'NORTH'))
         _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
@@ -3812,7 +3846,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     # Minimum-dressing guarantee: a living room the recipe left almost empty
     # (awkward stairwell, door-heavy plan) still gets a sitting nook. Bare
     # industrial fit-outs, walkways and stables are exempt by design.
-    if (not _bare and role not in ('STAIR_LANDING', 'CORRIDOR', 'STABLE_HALL')
+    if (not _bare and role not in ('STAIR_LANDING', 'CORRIDOR', 'STABLE_HALL', 'STORE')
             and len(tracker.occupied_boxes) - _occ_before < 3):
         try:
             _ensure_minimum_dressing(bm, tracker, rm, z_floor, rng)

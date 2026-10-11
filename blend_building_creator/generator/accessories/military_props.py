@@ -288,11 +288,13 @@ def build_weapon_rack(bm, x, y, z_ground=0.0, ang=0.0):
         for f in post_f:
             f.tag = True
 
-        # Diagonal timber knee braces
-        for s_brace, b_ang in ((-1, math.radians(35.0)), (1, math.radians(-35.0))):
-            brace_pos = to_world(s_x, s_brace * 0.14, 0.36)
-            br_f = create_beveled_box(bm, size=(0.08, 0.08, 0.48),
-                                     location=brace_pos, rotation=(b_ang, 0.0, ang),
+        # Diagonal timber knee braces: each runs from the post down to a foot
+        # runner end, splayed symmetrically fore/aft in the depth (YZ) plane.
+        for s_brace in (-1, 1):
+            brace_pos = to_world(s_x, s_brace * 0.14, 0.33)
+            br_f = create_beveled_box(bm, size=(0.075, 0.075, 0.60),
+                                     location=brace_pos,
+                                     rotation=(s_brace * 0.47, 0.0, ang),
                                      mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
             for f in br_f:
                 f.tag = True

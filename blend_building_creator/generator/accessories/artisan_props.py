@@ -27,7 +27,7 @@ from ..materials import (
     MAT_INDEX_CLOTH_LINEN, MAT_INDEX_BOTTLE_GLASS, MAT_INDEX_GLASS,
     MAT_INDEX_LEATHER, MAT_INDEX_BREAD, MAT_INDEX_WATER,
     MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_LOG,
-    MAT_INDEX_ROPE,
+    MAT_INDEX_ROPE, MAT_INDEX_GOLD, MAT_INDEX_SILVER,
 )
 from .furniture import build_barrel
 
@@ -162,6 +162,37 @@ def build_bread_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.50):
             lx = -width * 0.5 + 0.28 + i * ((width - 0.56) / max(1, n - 1))
             _stamp_bread(bm, faces, lx, 0.0, sz + 0.0225,
                          yaw=(0.12 if si % 2 else -0.10) + i * 0.05)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_meat_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.40):
+    """Butcher's wall rack: a timber frame with three shelves crowded with
+    the artist's cuts (meat.fbx / meat1.fbx)."""
+    faces = []
+    post_s = 0.07
+    depth = 0.34
+    hgt = 1.52
+    shelf_t = 0.05
+    for sx in (-width * 0.5 + post_s * 0.5, width * 0.5 - post_s * 0.5):
+        faces += create_beveled_box(
+            bm, size=(post_s, depth, hgt),
+            location=(sx, 0.0, hgt * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+    for si, sz in enumerate((0.34, 0.72, 1.10)):
+        faces += create_beveled_box(
+            bm, size=(width - 0.02, depth, shelf_t),
+            location=(0.0, 0.0, sz),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.008)
+        n = max(3, int(width / 0.26))
+        for i in range(n):
+            lx = -width * 0.5 + 0.17 + i * ((width - 0.34) / max(1, n - 1))
+            vb = (i + si) % 2
+            _stamp_baked_local(
+                bm, faces, 'meat.fbx' if vb == 0 else 'meat1.fbx',
+                lx, 0.0, sz + shelf_t * 0.5 + 0.012,
+                0.30 if i % 2 else -0.26,
+                0.26, _meat_mat(), long_axis='Y')
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
@@ -607,25 +638,158 @@ def build_gem_tray(bm, x, y, z_ground=0.0, ang=0.0):
     )
     for gx, gy, mat, gs, gyaw, gtilt in gems:
         _gem(bm, faces, gx, gy, 0.042, mat, size=gs, yaw=gyaw, tilt=gtilt)
-    # Gold rings: two flat, one standing against the rim.
-    for rx, ry in ((-0.062, -0.068), (0.015, 0.062)):
+    # Gold and silver rings: two flat, one standing against the rim.
+    for rx, ry, rmat in ((-0.062, -0.068, MAT_INDEX_GOLD),
+                         (0.015, 0.062, MAT_INDEX_SILVER)):
         faces += create_torus_ring(
             bm, location=(rx, ry, 0.048 + 0.008),
             rotation=(0.0, 0.0, rx * 10.0),
             major_radius=0.023, minor_radius=0.008,
-            major_segments=14, minor_segments=6, mat_index=MAT_INDEX_WAX
+            major_segments=14, minor_segments=6, mat_index=rmat
         )
     faces += create_torus_ring(
         bm, location=(0.125, 0.045, 0.048 + 0.024),
         rotation=(math.pi * 0.5, 0.0, 0.2),
         major_radius=0.023, minor_radius=0.008,
-        major_segments=14, minor_segments=6, mat_index=MAT_INDEX_WAX
+        major_segments=14, minor_segments=6, mat_index=MAT_INDEX_GOLD
     )
     for cx, cy in ((0.10, 0.055), (0.135, 0.030), (-0.065, -0.055)):
         faces += create_cylinder(
             bm, radius=0.020, height=0.008, segments=10,
-            location=(cx, cy, 0.046), mat_index=MAT_INDEX_WAX
+            location=(cx, cy, 0.046), mat_index=MAT_INDEX_GOLD
         )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def _jewel_gem(bm, faces, gx, gy, gz, kind='diamond', size=0.010, yaw=0.4):
+    mat = {'diamond': MAT_INDEX_GLASS, 'emerald': MAT_INDEX_BOTTLE_GLASS,
+           'ruby': MAT_INDEX_FABRIC_RED, 'sapphire': MAT_INDEX_WATER}.get(
+               kind, MAT_INDEX_GLASS)
+    return _gem(bm, faces, gx, gy, gz, mat, size=size, yaw=yaw, tilt=0.12)
+
+
+def build_ring(bm, x, y, z_ground=0.0, ang=0.0, metal='gold', variant=0):
+    """A fine ring lying flat: a polished band with a claw-set gem.
+
+    variant 0 = solitaire, 1 = flat signet with an engraved gem, 2 = plain
+    wedding band (no stone)."""
+    mat = MAT_INDEX_SILVER if str(metal).lower() == 'silver' else MAT_INDEX_GOLD
+    faces = []
+    mr = 0.019
+    faces += create_torus_ring(
+        bm, location=(0.0, 0.0, 0.0075), rotation=(0.0, 0.0, 0.0),
+        major_radius=mr, minor_radius=0.007, major_segments=18,
+        minor_segments=8, mat_index=mat)
+    if variant == 1:  # signet: flat oval bezel on the shoulder
+        faces += create_beveled_box(
+            bm, size=(0.025, 0.018, 0.008),
+            location=(mr, 0.0, 0.015), mat_index=mat, bevel_amount=0.003)
+        faces += _jewel_gem(bm, faces, mr, 0.0, 0.018, 'ruby', 0.007, 0.2)
+    elif variant == 2:  # plain band, slight engraving ridge
+        faces += create_torus_ring(
+            bm, location=(0.0, 0.0, 0.0075), rotation=(0.0, 0.0, 0.0),
+            major_radius=mr, minor_radius=0.0085, major_segments=18,
+            minor_segments=6, mat_index=mat)
+    else:  # solitaire: four claws + a brilliant
+        for k in (0, 1, 2, 3):
+            a = math.pi * 0.5 + (k - 1.5) * 0.30
+            faces += create_beveled_box(
+                bm, size=(0.006, 0.006, 0.011),
+                location=(mr * math.cos(a), mr * math.sin(a), 0.013),
+                mat_index=mat, bevel_amount=0.002)
+        faces += _jewel_gem(bm, faces, mr, 0.0, 0.019, 'diamond', 0.010, 0.35)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_bracelet(bm, x, y, z_ground=0.0, ang=0.0, metal='gold'):
+    """A bangle lying flat: a broad polished band set with three gems."""
+    mat = MAT_INDEX_SILVER if str(metal).lower() == 'silver' else MAT_INDEX_GOLD
+    faces = []
+    mr = 0.048
+    faces += create_torus_ring(
+        bm, location=(0.0, 0.0, 0.009), rotation=(0.0, 0.0, 0.0),
+        major_radius=mr, minor_radius=0.009, major_segments=24,
+        minor_segments=8, mat_index=mat)
+    kinds = ('emerald', 'diamond', 'ruby')
+    for k in range(3):
+        a = math.pi * 0.5 + (k - 1) * 0.55
+        faces += _jewel_gem(bm, faces, mr * math.cos(a), mr * math.sin(a),
+                            0.015, kinds[k], 0.010, 0.35 + k)
+    # Flat clasp plaque.
+    faces += create_beveled_box(
+        bm, size=(0.030, 0.016, 0.010),
+        location=(-mr, 0.0, 0.010), mat_index=mat, bevel_amount=0.003)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_necklace(bm, x, y, z_ground=0.0, ang=0.0, metal='gold'):
+    """A fine chain necklace coiled flat with a pendant drop."""
+    mat = MAT_INDEX_SILVER if str(metal).lower() == 'silver' else MAT_INDEX_GOLD
+    faces = []
+    mr = 0.058
+    faces += create_torus_ring(
+        bm, location=(0.0, 0.0, 0.004), rotation=(0.0, 0.0, 0.0),
+        major_radius=mr, minor_radius=0.0042, major_segments=28,
+        minor_segments=6, mat_index=mat)
+    faces += create_torus_ring(
+        bm, location=(0.006, 0.004, 0.004), rotation=(0.0, 0.0, 0.5),
+        major_radius=mr * 0.9, minor_radius=0.0042, major_segments=28,
+        minor_segments=6, mat_index=mat)
+    # Pendant: a small bale + teardrop gem hanging at the front.
+    faces += create_cylinder(
+        bm, radius=0.006, height=0.014, segments=8,
+        location=(mr, 0.0, 0.010), rotation=(0.0, math.pi * 0.5, 0.0),
+        mat_index=mat)
+    faces += _jewel_gem(bm, faces, mr + 0.02, 0.0, 0.014, 'sapphire', 0.013, 0.5)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_brooch(bm, x, y, z_ground=0.0, ang=0.0, metal='gold'):
+    """An oval brooch lying flat: a polished plate ringed with small stones
+    around one large centre stone."""
+    mat = MAT_INDEX_SILVER if str(metal).lower() == 'silver' else MAT_INDEX_GOLD
+    faces = []
+    plate = create_cylinder(
+        bm, radius=0.038, height=0.010, segments=20,
+        location=(0.0, 0.0, 0.005), mat_index=mat)
+    _scale_faces(plate, (0.0, 0.0, 0.005), (1.0, 0.72, 1.0))
+    faces += plate
+    # Rim.
+    rim = create_torus_ring(
+        bm, location=(0.0, 0.0, 0.008), rotation=(0.0, 0.0, 0.0),
+        major_radius=0.036, minor_radius=0.005, major_segments=22,
+        minor_segments=6, mat_index=mat)
+    _scale_faces(rim, (0.0, 0.0, 0.008), (1.0, 0.72, 1.0))
+    faces += rim
+    faces += _jewel_gem(bm, faces, 0.0, 0.0, 0.012, 'ruby', 0.016, 0.3)
+    for k in range(6):
+        a = k * math.pi / 3.0
+        faces += _jewel_gem(bm, faces,
+                           0.024 * math.cos(a), 0.017 * math.sin(a), 0.010,
+                            'diamond' if k % 2 else 'emerald', 0.006, a)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_coin_stack(bm, x, y, z_ground=0.0, ang=0.0, metal='gold', count=7):
+    """A neat stack of coins with two spilled beside it."""
+    mat = MAT_INDEX_SILVER if str(metal).lower() == 'silver' else MAT_INDEX_GOLD
+    faces = []
+    r = 0.016
+    for i in range(max(1, count)):
+        faces += create_cylinder(
+            bm, radius=r, height=0.0055, segments=16,
+            location=(0.0, 0.0, 0.0028 + i * 0.0058),
+            rotation=(0.0, 0.0, i * 0.3), mat_index=mat)
+    for dx, dy, yaw in ((0.045, 0.02, 0.6), (0.03, -0.035, 1.3)):
+        faces += create_cylinder(
+            bm, radius=r, height=0.0055, segments=16,
+            location=(dx, dy, 0.0028), rotation=(0.0, 0.0, yaw),
+            mat_index=mat)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
@@ -1177,28 +1341,155 @@ def build_market_display(bm, x, y, z_ground=0.0, ang=0.0, width=1.50):
     return faces
 
 
-def build_horseshoe(bm, x, y, z_ground=0.0, ang=0.0):
-    """Lucky iron horseshoe lying flat (U opening toward +Y local)."""
+def _arc_shoe(bm, r_mid, seg_w, seg_t, a_start_deg, a_end_deg, n,
+              mat_index, z_top=0.0):
+    """A rounded U-shaped iron stroke: many short segments laid around an arc
+    so the shoe reads curved (no square corners). Returns local faces with the
+    shoe lying flat (thickness up Z), built around the local origin."""
     faces = []
-    for sx in (-0.045, 0.045):
+    a0 = math.radians(a_start_deg)
+    a1 = math.radians(a_end_deg)
+    step = (a1 - a0) / n
+    seg_len = abs(r_mid * step) * 1.5 + 0.006   # overlap -> no gaps
+    for i in range(n + 1):
+        a = a0 + step * i
+        cx = r_mid * math.cos(a)
+        cy = r_mid * math.sin(a)
         faces += create_beveled_box(
-            bm, size=(0.035, 0.11, 0.030),
-            location=(sx, 0.02, 0.015),
-            mat_index=MAT_INDEX_IRON, bevel_amount=0.005
+            bm, size=(seg_len, seg_w, seg_t),
+            location=(cx, cy, z_top + seg_t * 0.5),
+            rotation=(0.0, 0.0, a + math.pi * 0.5),
+            mat_index=mat_index, bevel_amount=0.004
         )
-    faces += create_beveled_box(
-        bm, size=(0.125, 0.035, 0.030),
-        location=(0.0, -0.035, 0.015),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.005
-    )
-    for sx in (-0.045, 0.045):
-        for sy in (-0.01, 0.055):
-            faces += create_cylinder(
-                bm, radius=0.007, height=0.014, segments=6,
-                location=(sx, sy, 0.030 + 0.007), mat_index=MAT_INDEX_IRON
-            )
+    # Tapered heel tips closing the open ends.
+    for a in (a0, a1):
+        cx = r_mid * math.cos(a)
+        cy = r_mid * math.sin(a)
+        faces += create_beveled_box(
+            bm, size=(seg_w * 0.85, seg_w * 1.25, seg_t),
+            location=(cx, cy, z_top + seg_t * 0.5),
+            rotation=(0.0, 0.0, a),
+            mat_index=mat_index, bevel_amount=0.004
+        )
+    return faces
+
+
+def build_horseshoe(bm, x, y, z_ground=0.0, ang=0.0):
+    """Lucky iron horseshoe lying flat: a smoothly arced U (many short
+    segments) with tapered heels, so it never looks like a square bracket."""
+    faces = _arc_shoe(bm, 0.098, 0.040, 0.020, -55.0, 235.0, 20,
+                      MAT_INDEX_IRON)
+    # Four nail-hole dimples punched around the toe.
+    for a_deg in (35.0, 90.0, 145.0, 200.0):
+        a = math.radians(a_deg)
+        hx = 0.098 * math.cos(a)
+        hy = 0.098 * math.sin(a)
+        faces += create_cylinder(
+            bm, radius=0.006, height=0.024, segments=6,
+            location=(hx, hy, 0.010), mat_index=MAT_INDEX_IRON
+        )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
+
+def _scale_faces(faces, center, scale):
+    """Scale a group of faces about ``center`` (used to flatten forged heads)."""
+    c = Matrix.Translation(center)
+    s = Matrix.Diagonal((scale[0], scale[1], scale[2], 1.0))
+    transform_faces(faces, c @ s @ c.inverted())
+    return faces
+
+
+def _smith_haft(bm, faces, length, r=0.019, mat=MAT_INDEX_WOOD):
+    """A gently tapered wooden haft lying along local +X, resting at z=r."""
+    haft_len = length * 0.80
+    cx = -length * 0.5 + haft_len * 0.5
+    faces += create_cylinder(
+        bm, radius=r, height=haft_len, segments=10,
+        location=(cx, 0.0, r), rotation=(0.0, math.pi * 0.5, 0.0),
+        mat_index=mat)
+    # Flared butt swell.
+    faces += create_cylinder(
+        bm, radius=r * 1.25, height=0.05, segments=10,
+        location=(-length * 0.5 + 0.03, 0.0, r),
+        rotation=(0.0, math.pi * 0.5, 0.0), mat_index=mat)
+    return -length * 0.5 + haft_len   # x of the head seat
+
+
+def build_axe(bm, x, y, z_ground=0.0, ang=0.0, length=0.74, variant=0):
+    """Felling axe: a tapered wooden haft and a forged, flared steel bit.
+    Lies flat along +X with the bit toward +Y (the shopper side)."""
+    faces = []
+    head_x = _smith_haft(bm, faces, length)
+    # Iron eye collar.
+    faces += create_beveled_box(
+        bm, size=(0.06, 0.05, 0.085), location=(head_x, 0.0, 0.045),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
+    # Poll block behind the eye.
+    faces += create_beveled_box(
+        bm, size=(0.05, 0.045, 0.06), location=(head_x - 0.005, -0.04, 0.045),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
+    # Flared bit: a cone flattened in Z so it reads as a wedge-ground edge.
+    bit = create_cone(
+        bm, radius1=0.045, radius2=0.085, height=0.15, segments=10,
+        location=(head_x + 0.01, 0.115, 0.045),
+        rotation=(math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_IRON)
+    _scale_faces(bit, (head_x + 0.01, 0.115, 0.045), (1.0, 1.0, 0.55))
+    faces += bit
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_pickaxe(bm, x, y, z_ground=0.0, ang=0.0, length=0.80, variant=0):
+    """Pickaxe: a wooden haft with a forged T-head — a spike one side and a
+    chisel adze the other. Lies flat along +X."""
+    faces = []
+    head_x = _smith_haft(bm, faces, length)
+    # Forged eye collar.
+    faces += create_beveled_box(
+        bm, size=(0.055, 0.055, 0.075), location=(head_x, 0.0, 0.040),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
+    # Curved spike (pick) toward +Y.
+    spike = create_cone(
+        bm, radius1=0.034, radius2=0.006, height=0.22, segments=8,
+        location=(head_x, 0.125, 0.040),
+        rotation=(math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_IRON)
+    _scale_faces(spike, (head_x, 0.125, 0.040), (1.0, 1.0, 0.62))
+    faces += spike
+    # Flat chisel (adze) toward -Y.
+    adze = create_cone(
+        bm, radius1=0.032, radius2=0.016, height=0.13, segments=8,
+        location=(head_x, -0.085, 0.040),
+        rotation=(-math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_IRON)
+    _scale_faces(adze, (head_x, -0.085, 0.040), (1.0, 1.0, 0.55))
+    faces += adze
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_hoe(bm, x, y, z_ground=0.0, ang=0.0, length=0.78, variant=0):
+    """Hoe: a wooden haft with a forged offset blade set at a right angle.
+    Lies flat along +X with the blade toward +Y."""
+    faces = []
+    head_x = _smith_haft(bm, faces, length)
+    # Socket eye and neck.
+    faces += create_beveled_box(
+        bm, size=(0.05, 0.05, 0.065), location=(head_x, 0.0, 0.035),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
+    faces += create_beveled_box(
+        bm, size=(0.055, 0.11, 0.045),
+        location=(head_x + 0.01, 0.075, 0.035),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.008)
+    # Broad flat blade, angled slightly forward, with a ground edge.
+    blade = create_beveled_box(
+        bm, size=(0.19, 0.115, 0.022),
+        location=(head_x + 0.01, 0.15, 0.030),
+        rotation=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_IRON,
+        bevel_amount=0.010)
+    faces += blade
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
 
 
 def build_wine_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.10):

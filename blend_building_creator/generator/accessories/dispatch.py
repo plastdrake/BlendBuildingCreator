@@ -807,30 +807,26 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
             build_brewery_cellar(bm, props, ctx, tier)
         except Exception:
             pass
-    # Fishmonger yard: fish drying racks / rails with the catch hanging out
-    # front, flanking the entrance path (outside the footprint).
+    # Fishmonger yard: fish rails (the one rack variant) hung with the catch,
+    # flanking the entrance but clear of the supply barrels/crates.
     if getattr(ctx, 'effective_archetype', '') == 'FISHERMAN':
         try:
-            import math as _m
-            from .artisan_props import build_fish_drying_rack, build_fish_rail
+            from .artisan_props import build_fish_rail
             from .hospitality import is_point_outside_building
-            _fy = -hy - 1.35
-            _fx = max(0.9, hx - 1.0)
+            _fy = -hy - 1.60
+            _fx = max(1.0, hx - 1.05)
             _cands = [
-                (-_fx, _fy, 0.0, 'RACK'),
-                (_fx, _fy, 0.0, 'RAIL'),
-                (-_fx, _fy - 2.0, 0.0, 'RAIL'),
-                (_fx, _fy - 2.0, 0.0, 'RACK'),
+                (-_fx, _fy, 0.0),
+                (_fx, _fy, 0.0),
+                (-_fx, _fy - 1.8, 0.0),
+                (_fx, _fy - 1.8, 0.0),
             ]
             _n = 0
-            for _px, _py, _pyaw, _kind in _cands:
+            for _px, _py, _pyaw in _cands:
                 if _n >= 2:
                     break
-                if is_point_outside_building(_px, _py, 0.70, ctx, margin=0.20):
-                    if _kind == 'RACK':
-                        build_fish_drying_rack(bm, _px, _py, 0.0, _pyaw, width=1.20)
-                    else:
-                        build_fish_rail(bm, _px, _py, 0.0, _pyaw, width=1.30)
+                if is_point_outside_building(_px, _py, 0.85, ctx, margin=0.35):
+                    build_fish_rail(bm, _px, _py, 0.0, _pyaw, width=1.15)
                     _n += 1
         except Exception:
             pass

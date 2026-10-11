@@ -3,8 +3,68 @@ from mathutils import Vector
 from ..uv_utils import apply_roof_shingle_uvs
 from ..mesh_utils import create_beveled_box
 from ..materials import (
-    MAT_INDEX_STONE, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_SHINGLES
+    MAT_INDEX_STONE, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_SHINGLES,
+    MAT_INDEX_PLASTER_BRICK, MAT_INDEX_CUT_STONE, MAT_INDEX_IRON,
+    MAT_INDEX_LANTERN,
 )
+
+
+def _brick_faces(bm, cx, cy, cz, w, d, h, mat_brick=MAT_INDEX_PLASTER_BRICK,
+                 mat_core=MAT_INDEX_CUT_STONE, brick=0.30, course=0.11,
+                 gap=0.014, thick=0.06):
+    """Face a rectangular masonry block in staggered brick on all four
+    vertical sides.
+
+    The mortar core is inset 3cm on every horizontal axis and 2cm top/bottom,
+    while each brick sits proud with its outer face flush to the nominal box
+    wall (``thick`` deep). The core surface is therefore never coplanar with a
+    brick face -> no z-fighting.
+    """
+    faces = []
+    faces += create_beveled_box(
+        bm, size=(max(0.05, w - 0.06), max(0.05, d - 0.06), max(0.05, h - 0.04)),
+        location=(cx, cy, cz), mat_index=mat_core, bevel_amount=0.012)
+
+    def _course(run, face_coord, sign, span, height):
+        nonlocal faces
+        z0 = cz - height * 0.5 + course * 0.5
+        rows = max(1, int(round(height / (course + gap))))
+        for r in range(rows):
+            z = z0 + r * (course + gap)
+            if z - course * 0.5 > cz + height * 0.5 + 1e-6:
+                break
+            off = (brick + gap) * 0.5 if (r % 2) else 0.0
+            n = int(span / (brick + gap)) + 2
+            for i in range(n):
+                s0 = -span * 0.5 + off + i * (brick + gap)
+                s1 = s0 + brick
+                if s1 <= -span * 0.5 + 1e-6:
+                    continue
+                if s0 >= span * 0.5 - 1e-6:
+                    break
+                # Clamp both ends flush with the block face (no ragged ends).
+                l0 = max(s0, -span * 0.5)
+                l1 = min(s1, span * 0.5)
+                seg_len = l1 - l0
+                if seg_len < 0.05:
+                    continue
+                sc = (l0 + l1) * 0.5
+                if run == 'X':
+                    loc = (cx + sc, face_coord + sign * thick * 0.5, z)
+                    size = (seg_len, thick, course)
+                else:
+                    loc = (face_coord + sign * thick * 0.5, cy + sc, z)
+                    size = (thick, seg_len, course)
+                faces += create_beveled_box(bm, size=size, location=loc,
+                                            mat_index=mat_brick,
+                                            bevel_amount=0.005)
+
+    # ±X faces: bricks run along Y.  ±Y faces: bricks run along X.
+    _course('Y', cx - w * 0.5, -1.0, d, h)
+    _course('Y', cx + w * 0.5, 1.0, d, h)
+    _course('X', cy - d * 0.5, -1.0, w, h)
+    _course('X', cy + d * 0.5, 1.0, w, h)
+    return faces
 
 def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickness, seed=42):
     wall_x = x_max
@@ -158,19 +218,16 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
     )
 
     # -------------------------------------------------------------------------
-    # Forge hearth under the canopy: cut-stone forge with a glowing fire
-    # chamber, iron hood and a masonry flue rising through the canopy.
+    # Forge hearth under the canopy: a BRICK-BUILT forge with a glowing fire
+    # chamber, iron hood and a brick flue rising through the canopy.
     # -------------------------------------------------------------------------
-    from ..materials import MAT_INDEX_CUT_STONE, MAT_INDEX_IRON, MAT_INDEX_LANTERN
     forge_x = wall_x + 0.90
     forge_y = canopy_cy
     forge_w, forge_d, forge_h = 1.30, 1.05, 0.95
-    # Stone body.
-    create_beveled_box(
-        bm, size=(forge_w, forge_d, forge_h),
-        location=(forge_x, forge_y, z_ground + forge_h * 0.5),
-        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
-    )
+    # Brick-faced masonry body (mortar core inset so nothing is coplanar).
+    _brick_faces(bm, forge_x, forge_y, z_ground + forge_h * 0.5,
+                 forge_w, forge_d, forge_h, brick=0.30, course=0.12,
+                 gap=0.014, thick=0.06)
     # Fire chamber recess in the front face (facing the yard, -Y).
     create_beveled_box(
         bm, size=(0.70, 0.34, 0.34),
@@ -191,21 +248,13 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
         location=(forge_x, forge_y, z_ground + forge_h + 0.08),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.012
     )
-    # Masonry flue rising through the canopy roof.
+    # Brick flue rising through the canopy roof.
     flue_h = canopy_h + 0.40
-    create_beveled_box(
-        bm, size=(0.52, 0.52, flue_h),
-        location=(forge_x, forge_y, z_ground + forge_h + 0.16 + flue_h * 0.5),
-        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
-    )
-    # Quench trough beside the forge.
-    create_beveled_box(
-        bm, size=(0.70, 0.44, 0.34),
-        location=(forge_x, forge_y + forge_d * 0.5 + 0.42, z_ground + 0.17),
-        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
-    )
-    create_beveled_box(
-        bm, size=(0.60, 0.34, 0.05),
-        location=(forge_x, forge_y + forge_d * 0.5 + 0.42, z_ground + 0.315),
-        mat_index=MAT_INDEX_STONE, bevel_amount=0.008
-    )
+    _brick_faces(bm, forge_x, forge_y,
+                 z_ground + forge_h + 0.16 + flue_h * 0.5,
+                 0.52, 0.52, flue_h, brick=0.24, course=0.17,
+                 gap=0.014, thick=0.05)
+    # Fuel: a small stacked log pile tucked BEHIND the forge.
+    from .interior_furniture import build_log_pile
+    build_log_pile(bm, forge_x, forge_y + forge_d * 0.5 + 0.62, z_ground,
+                   ang=0.0, length=0.95, radius=0.10, rows=2)
