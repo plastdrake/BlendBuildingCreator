@@ -214,14 +214,20 @@ def _build_towers(bm, registry, tier):
         # Direct door orientations connecting into adjacent buildings or bridge.
         # Flank towers aim their doors at the vestibule corridor (y=-4.2),
         # which lands inside both tower and hall footprints.
-        if abs(x - (-33.5)) < 1.0:
+        stair_base = None
+        if abs(x - 48.0) < 1.0:
+            door_angs = ((1, math.pi),)  # West-facing doorway on Floor 1 to receive the wooden bridge
+            # Calibrate base so Floor 1 sits precisely at z=14.86, matching the wooden bridge deck
+            z = 14.86 - 4.2 - 1.0
+            # Shift stair flight so Flight 0 lands at 170 deg and Flight 1 starts at 235 deg,
+            # leaving the 180 deg doorway completely clear of stairs on an open floor landing.
+            stair_base = 35.0
+        elif abs(x - (-33.5)) < 1.0:
             door_angs = ((0, 0.0),)  # East-facing doorway on Floor 0 opening toward Great Hall courtyard
         elif abs(x - 33.5) < 1.0:
             door_angs = ((0, math.pi),)  # West-facing doorway on Floor 0 opening toward East Hall courtyard
         elif abs(x - (-27.6)) < 1.0:
             door_angs = ((0, 0.0), (1, 0.0))  # East-facing doorways connecting into Chapel
-        elif abs(x - 48.0) < 1.0:
-            door_angs = ((1, math.pi),)  # West-facing doorway on Floor 1 to receive the wooden bridge
         else:
             door_angs = ((0, math.atan2(-y, -x)),)
 
@@ -230,7 +236,8 @@ def _build_towers(bm, registry, tier):
             num_floors=floors + 1 if tier == 3 else floors,
             floor_h=4.2 if tier == 3 else 4.0,
             tower_type='SPIRE' if roofed else 'BATTLEMENTS', spire_h=spire_h,
-            door_angs=door_angs)
+            door_angs=door_angs,
+            stair_base_deg=stair_base)
 
         # Architectural connector vestibule for the Wizard's Spire tying into the Chapel
         if abs(x - (-27.6)) < 1.0:
@@ -358,10 +365,10 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
             has_bridge_door=True, bridge_door_y=26.0,
             wall_y_north=35.0, roof_y_end_north=35.0
         )
-        # Cozy covered wooden bridge spanning across the chasm to East Bluff Tower
+        # Open-timbered trestle bridge spanning across the chasm to East Bluff Tower
         build_wooden_bridge(
             bm, p_start=(19.8, 26.0), p_end=(43.6, 26.0),
-            floor_z=14.0, width=2.6
+            floor_z=14.86, width=2.6
         )
 
     _build_towers(bm, registry, tier)

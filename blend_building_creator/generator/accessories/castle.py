@@ -166,7 +166,8 @@ def _tower_floor(bm, cx, cy, z, r_free, r_wall_in, a_land0, a_land1, mat, disk=T
 def build_walkable_round_tower(
     bm, cx, cy, z_base, radius, num_floors, floor_h,
     tower_type='SPIRE', spire_h=12.0, has_oriel=False, oriel_ang=0.0,
-    corbel_count=18, door_angs=((0, 0.0),), deck_door=True
+    corbel_count=18, door_angs=((0, 0.0),), deck_door=True,
+    stair_base_deg=None
 ):
     """Enterable round tower: 32-sided fieldstone shaft framed with cut-stone pilasters and
     belts, a stone stair hugging the inside wall (like the mage tower), arrow slits and a
@@ -174,6 +175,12 @@ def build_walkable_round_tower(
     crenellated deck.
     """
     from ..mage_tower import _witch_hat_roof, _build_curved_wall_stairs, _build_watertight_floor, _stair_arc_deg
+
+    def _get_stair_deg(f_idx):
+        if stair_base_deg is not None:
+            s_ang = (stair_base_deg + f_idx * 200.0) % 360.0
+            return (s_ang, (s_ang + 135.0) % 360.0)
+        return _stair_arc_deg(f_idx)
 
     segments = 32
     wall_t = 0.75 if radius >= 3.4 else 0.6
@@ -208,7 +215,7 @@ def build_walkable_round_tower(
     for fl in range(num_floors):
         z_fl = z0 + fl * floor_h
         z_ceil = z_fl + floor_h
-        s_arc = _stair_arc_deg(fl - 1) if fl > 0 else None
+        s_arc = _get_stair_deg(fl - 1) if fl > 0 else None
         if fl > 0:
             _build_watertight_floor(
                 bm, r_floor=r_wall_in + 0.04, z_floor=z_fl + 0.06,
@@ -216,7 +223,7 @@ def build_walkable_round_tower(
                 cx=cx, cy=cy
             )
         if fl < flights:
-            s_deg, e_deg = _stair_arc_deg(fl)
+            s_deg, e_deg = _get_stair_deg(fl)
             _build_curved_wall_stairs(
                 bm, cur_r=radius, wall_t=wall_t,
                 z0=z_fl + 0.06, z1=z_ceil + 0.06,
@@ -316,7 +323,7 @@ def build_walkable_round_tower(
 
     # Roof battlement deck with open stairwell cutout (walk straight onto the roof deck)
     deck_z = z_top + 0.35
-    deck_s_arc = _stair_arc_deg(flights - 1) if flights > 0 else None
+    deck_s_arc = _get_stair_deg(flights - 1) if flights > 0 else None
     _build_watertight_floor(
         bm, r_floor=r_wall_in + 0.04, z_floor=deck_z + 0.30,
         stair_arc=deck_s_arc, shaft_r_in=r_wall_in,
