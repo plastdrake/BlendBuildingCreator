@@ -45,9 +45,11 @@ class RoomOccupancyTracker:
         # purpose: the upper guardrail already protects the opening edge, and
         # oversized pads used to starve whole rooms of furniture.
         self.stair_box = None
+        self.stair_hole_rect = None
         self.stair_is_ceiling = False
         if stair_hole is not None:
             sx0, sx1, sy0, sy1 = stair_hole
+            self.stair_hole_rect = (sx0, sx1, sy0, sy1)
             self.stair_box = (sx0 - 0.60, sx1 + 0.60, sy0 - 0.90, sy1 + 0.90)
             self.occupied_boxes.append(self.stair_box)
 
@@ -2931,6 +2933,18 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
     # The space under a ceiling stair-hole is walkable (solid floor below), so
     # the display may be tucked there when every clear wall spot is taken.
     _ig = bool(getattr(tracker, 'stair_is_ceiling', False))
+    _hole = getattr(tracker, 'stair_hole_rect', None)
+
+    def _clear(x0, x1, y0, y1):
+        """Free for the display, and (when we are allowed under the stair) not
+        overlapping the stair flight footprint itself."""
+        if not tracker.is_free(x0, x1, y0, y1, ignore_stair=_ig):
+            return False
+        if _ig and _hole is not None:
+            hx0, hx1, hy0, hy1 = _hole
+            if not (x1 < hx0 or x0 > hx1 or y1 < hy0 or y0 > hy1):
+                return False
+        return True
 
     def _try_place(hw, hd):
         """Search WALL-hugging spots for a free patch of the given half-size.
@@ -2960,8 +2974,7 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         for _sx, _sy in _spots:
             _sx += _jit(rng, 0.06)
             _sy += _jit(rng, 0.06)
-            if not tracker.is_free(_sx - hw, _sx + hw, _sy - hd, _sy + hd,
-                                   ignore_stair=_ig):
+            if not _clear(_sx - hw, _sx + hw, _sy - hd, _sy + hd):
                 continue
             tracker.occupy(_sx - hw, _sx + hw, _sy - hd, _sy + hd)
             return (_sx, _sy, _yaw_away(_sx, _sy))
@@ -2970,24 +2983,21 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         for _wy in (_nf, _nb):
             _x = _nl
             while _x <= _nr + 1e-6:
-                if tracker.is_free(_x - hw, _x + hw, _wy - hd, _wy + hd,
-                                   ignore_stair=_ig):
+                if _clear(_x - hw, _x + hw, _wy - hd, _wy + hd):
                     tracker.occupy(_x - hw, _x + hw, _wy - hd, _wy + hd)
                     return (_x, _wy, _yaw_away(_x, _wy))
                 _x += 0.15
         for _wx in (_nl, _nr):
             _y = _nf
             while _y <= _nb + 1e-6:
-                if tracker.is_free(_wx - hw, _wx + hw, _y - hd, _y + hd,
-                                   ignore_stair=_ig):
+                if _clear(_wx - hw, _wx + hw, _y - hd, _y + hd):
                     tracker.occupy(_wx - hw, _wx + hw, _y - hd, _y + hd)
                     return (_wx, _y, _yaw_away(_wx, _y))
                 _y += 0.15
         return None
 
     def _check(p, hw, hd):
-        return 0 if tracker.is_free(p[0] - hw, p[0] + hw, p[1] - hd, p[1] + hd,
-                                    ignore_stair=_ig) else 1
+        return 0 if _clear(p[0] - hw, p[0] + hw, p[1] - hd, p[1] + hd) else 1
 
     # Full-size display first, then a compact one for cramped shops.
     _placed = _try_place(0.85, 0.575)
@@ -3002,8 +3012,7 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         if _sp is not None:
             _sxc, _syc = _sp[0], _sp[1]
             for _hw, _hd, _w in ((0.62, 0.50, 1.05), (0.50, 0.44, 0.92)):
-                if tracker.is_free(_sxc - _hw, _sxc + _hw, _syc - _hd,
-                                   _syc + _hd, ignore_stair=_ig):
+                if _clear(_sxc - _hw, _sxc + _hw, _syc - _hd, _syc + _hd):
                     tracker.occupy(_sxc - _hw, _sxc + _hw, _syc - _hd, _syc + _hd)
                     _placed = (_sxc, _syc, _yaw_away(_sxc, _syc))
                     _disp_w = _w
