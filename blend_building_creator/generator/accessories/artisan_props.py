@@ -417,23 +417,38 @@ def build_sausage_string(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
     return faces
 
 
+def _fish_scale(i):
+    """Deterministic 1.25..1.50 length multiplier for hanging fish, so a rack
+    of them reads random rather than cloned."""
+    return 1.25 + 0.25 * (((i * 2654435761) % 997) / 997.0)
+
+
+# Single resting fish (stalls, counters, displays) are scaled up as a whole so
+# they read chunkier without touching the layouts that place them.
+_FISH_SCALE = 1.35
+
+
 def build_fish_rail(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
-    """Fishmonger's hanging rail: the artist's fish hang nose-down on ropes,
-    like the butcher's cuts (local -Y faces the room)."""
+    """Fishmonger's hanging rail: the artist's fish hang by a rope tied through
+    the MIDDLE of each fish (not the head), like the butcher's cuts (local -Y
+    faces the room)."""
     faces, rail_z = _hanging_rail_frame(bm, width)
     n = max(3, int(width / 0.26))
     for i in range(n):
         hx = -width * 0.5 + 0.22 + i * ((width - 0.44) / max(1, n - 1))
-        rope_len = 0.20 + (0.08 if i % 2 else 0.0)
+        fl = 0.30 * _fish_scale(i)
+        rope_len = 0.02 + fl * 0.5
         faces += create_cylinder(
             bm, radius=0.006, height=rope_len, segments=6,
             location=(hx, 0.0, rail_z - rope_len * 0.5),
             mat_index=MAT_INDEX_ROPE
         )
+        # Fish top sits just under the rail; the rope's lower end meets the
+        # fish at its mid-body.
         _stamp_baked_local(
             bm, faces, 'fish.fbx',
-            hx, -0.005, rail_z - rope_len - 0.02, 0.0,
-            0.30, _fish_mat(), long_axis='X', pre_mat=_hang_mat()
+            hx, -0.005, rail_z - 0.02, 0.0,
+            fl, _fish_mat(), long_axis='X', pre_mat=_hang_mat()
         )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -1141,6 +1156,7 @@ def build_fish(bm, x, y, z_ground=0.0, ang=0.0, length=0.34, smoked=False):
     rests on so the flat fish never z-fights the table/floor beneath it.
     ``smoked`` only nudges the size now — the stylized box body is a
     last-resort fallback."""
+    length = length * _FISH_SCALE
     _lift = 0.015
     try:
         if _build_fbx_prop(bm, 'fish.fbx', None, x, y, z_ground + _lift, ang,
@@ -1411,15 +1427,18 @@ def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):
     for row, (bar_y, bar_z) in enumerate(((0.23, 1.55), (0.03, 0.95))):
         for i in range(n):
             hx = -width * 0.5 + 0.24 + i * ((width - 0.48) / max(1, n - 1))
-            # Rope hanger.
+            fl = 0.30 * _fish_scale(row * 7 + i)
+            rope_len = 0.02 + fl * 0.5
+            # Rope hanger (its lower end meets the fish at mid-body).
             faces += create_cylinder(
-                bm, radius=0.006, height=0.10, segments=6,
-                location=(hx, bar_y, bar_z - 0.05), mat_index=MAT_INDEX_ROPE
+                bm, radius=0.006, height=rope_len, segments=6,
+                location=(hx, bar_y, bar_z - rope_len * 0.5),
+                mat_index=MAT_INDEX_ROPE
             )
-            # The artist's fish hanging nose-down, face to the room.
+            # The artist's fish hanging by its middle, face to the room.
             _stamp_baked_local(
-                bm, faces, 'fish.fbx', hx, bar_y - 0.005, bar_z - 0.11,
-                0.0, 0.30, _fish_mat(), long_axis='X',
+                bm, faces, 'fish.fbx', hx, bar_y - 0.005, bar_z - 0.02,
+                0.0, fl, _fish_mat(), long_axis='X',
                 pre_mat=_hang_mat()
             )
     transform_faces(faces, _place(x, y, z_ground, ang))
@@ -1792,13 +1811,15 @@ def build_fish_stringer(bm, x, y, z_ceiling=3.0, ang=0.0, drops=3):
     )
     for i in range(drops):
         lx = (i - (drops - 1) * 0.5) * 0.28
+        fl = 0.30 * _fish_scale(i)
+        rope_len = 0.06 + fl * 0.5
         faces += create_cylinder(
-            bm, radius=0.006, height=0.14, segments=6,
-            location=(lx, 0.0, -0.06 - 0.07), mat_index=MAT_INDEX_ROPE
+            bm, radius=0.006, height=rope_len, segments=6,
+            location=(lx, 0.0, -0.06 - rope_len * 0.5), mat_index=MAT_INDEX_ROPE
         )
-        # The artist's fish hanging nose-down off the bar.
+        # The artist's fish hanging by its middle off the bar.
         _stamp_baked_local(
-            bm, faces, 'fish.fbx', lx, -0.005, -0.13, 0.0, 0.30,
+            bm, faces, 'fish.fbx', lx, -0.005, -0.06, 0.0, fl,
             _fish_mat(), long_axis='X', pre_mat=_hang_mat()
         )
     transform_faces(faces, _place(x, y, z_ceiling, ang))

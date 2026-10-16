@@ -409,7 +409,9 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
             build_chain_lantern(bm, p_lx, p_ly, z_ceiling=soffit_z - 0.02,
                                 chain_len=0.48, scale=scale_val)
 
-    # 2. Tavern Supply Nook: Barrels, Crates & Grain Sacks tucked against the exterior foundation
+    # 2. Supply nook: barrels, crates & a jar tucked against the exterior
+    #    foundation. Scanned across several spots so a wing, porch or annex can
+    #    never silently delete the whole cluster (it used to vanish on T2/T3).
     side_sign = 1.0
     bx_base = door_x + porch_w * 0.5 + 0.55
     if not is_point_outside_building(bx_base + 0.40, face_y - 0.70, 0.40, ctx, margin=0.10):
@@ -417,18 +419,28 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
         side_sign = -1.0
         bx_base = door_x - porch_w * 0.5 - 1.25
 
-    if is_point_outside_building(bx_base, face_y - 0.65, 0.35, ctx, margin=0.05):
-        build_barrel(bm, bx_base + side_sign * 0.10, face_y - 0.65, radius=0.34, height=0.74)
-        build_barrel(bm, bx_base + side_sign * 0.70, face_y - 0.60, radius=0.27, height=0.60)
-        build_barrel(bm, bx_base + side_sign * 0.40, face_y - 1.25, radius=0.30, height=0.68, lying=True, ang=0.15 * side_sign)
-
-        cx_base = bx_base + side_sign * 1.45
-        if is_point_outside_building(cx_base, face_y - 0.75, 0.35, ctx, margin=0.05):
-            build_crate(bm, cx_base, face_y - 0.75, ang=0.14 * side_sign, size=0.60)
-            if rich and is_point_outside_building(cx_base + side_sign * 0.60, face_y - 1.05, 0.30, ctx, margin=0.05):
-                build_crate(bm, cx_base + side_sign * 0.60, face_y - 1.05, ang=-0.18 * side_sign, size=0.48)
-                build_clay_pot(bm, cx_base + side_sign * 0.15, face_y - 1.40, radius=0.21,
+    _nook_spots = []
+    for _sgn in (side_sign, -side_sign):
+        for _dx in (0.0, 0.8, 1.6, 2.4, 3.2, 4.0):
+            for _dy in (0.70, 1.05, 1.45, 1.90):
+                _nook_spots.append((bx_base + _sgn * _dx, face_y - _dy))
+    for _sx, _sy in _nook_spots:
+        if not is_point_outside_building(_sx, _sy, 0.42, ctx, margin=0.05):
+            continue
+        _sg = 1.0 if _sx >= bx_base else -1.0
+        build_barrel(bm, _sx, _sy, radius=0.34, height=0.74)
+        build_barrel(bm, _sx + _sg * 0.62, _sy + 0.05, radius=0.27, height=0.60)
+        build_barrel(bm, _sx + _sg * 0.30, _sy - 0.58, radius=0.30, height=0.68,
+                     lying=True, ang=0.15 * _sg)
+        _cx = _sx + _sg * 1.45
+        if is_point_outside_building(_cx, _sy - 0.10, 0.35, ctx, margin=0.05):
+            build_crate(bm, _cx, _sy - 0.10, ang=0.14 * _sg, size=0.60)
+            if rich and is_point_outside_building(_cx + _sg * 0.60, _sy - 0.42,
+                                                  0.30, ctx, margin=0.05):
+                build_crate(bm, _cx + _sg * 0.60, _sy - 0.42, ang=-0.18 * _sg, size=0.48)
+                build_clay_pot(bm, _cx + _sg * 0.15, _sy - 0.78, radius=0.21,
                                height=0.52, ang=0.3, pot_type='JAR')
+        break
 
     # 3. Tavern Beer Garden: a single picnic table, clear of the door path (Tavern/Inn only).
     if is_inn or ctx.effective_archetype in ('TAVERN', 'INN'):
