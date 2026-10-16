@@ -88,7 +88,7 @@ def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
             _rope = 0.16 + 0.20 * _fl
             create_cylinder(
                 bm, radius=0.006, height=_rope, segments=6,
-                location=(rack_x, _fy + 0.035, z_ground + rack_h - _rope * 0.5),
+                location=(rack_x, _fy - 0.005, z_ground + rack_h - _rope * 0.5),
                 mat_index=MAT_INDEX_ROPE
             )
             # Rope behind the fish so it vanishes into the tail.

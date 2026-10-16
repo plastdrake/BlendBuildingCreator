@@ -443,7 +443,7 @@ def build_fish_rail(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
         rope_len = 0.16 + 0.20 * fl
         faces += create_cylinder(
             bm, radius=0.006, height=rope_len, segments=6,
-            location=(hx, 0.035, rail_z - rope_len * 0.5),
+            location=(hx, -0.005, rail_z - rope_len * 0.5),
             mat_index=MAT_INDEX_ROPE
         )
         _stamp_baked_local(
@@ -1433,7 +1433,7 @@ def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):
             # Rope passed behind the fish so it vanishes into the tail.
             faces += create_cylinder(
                 bm, radius=0.006, height=rope_len, segments=6,
-                location=(hx, bar_y + 0.035, bar_z - rope_len * 0.5),
+                location=(hx, bar_y - 0.005, bar_z - rope_len * 0.5),
                 mat_index=MAT_INDEX_ROPE
             )
             _stamp_baked_local(
@@ -1815,7 +1815,7 @@ def build_fish_stringer(bm, x, y, z_ceiling=3.0, ang=0.0, drops=3):
         rope_len = 0.16 + 0.20 * fl
         faces += create_cylinder(
             bm, radius=0.006, height=rope_len, segments=6,
-            location=(lx, 0.035, -0.06 - rope_len * 0.5), mat_index=MAT_INDEX_ROPE
+            location=(lx, -0.005, -0.06 - rope_len * 0.5), mat_index=MAT_INDEX_ROPE
         )
         _stamp_baked_local(
             bm, faces, 'fish.fbx', lx, -0.005, -0.06 - rope_len, 0.0, fl,
