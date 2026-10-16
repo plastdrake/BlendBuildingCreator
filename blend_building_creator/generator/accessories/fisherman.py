@@ -91,9 +91,10 @@ def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
                 location=(rack_x, _fy, z_ground + rack_h - _rope * 0.5),
                 mat_index=MAT_INDEX_ROPE
             )
+            # Rope runs 0.25*_fl into the fish's body near the tail.
             _stamp_baked_local(
                 bm, [], 'fish.fbx', rack_x, _fy,
-                z_ground + rack_h - _rope, _fish_yaw(_i), _fl,
+                z_ground + rack_h - _rope + _fl * 0.25, _fish_yaw(_i), _fl,
                 _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
             )
     except Exception:

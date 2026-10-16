@@ -456,9 +456,12 @@ def build_fish_rail(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
             location=(hx, 0.0, rail_z - rope_len * 0.5),
             mat_index=MAT_INDEX_ROPE
         )
+        # Fish hangs with its tail at the rope's end; drop the anchor 0.25*fl
+        # below the bar so the rope runs 0.25*fl into the fish's body near the
+        # tail and disappears, instead of stopping at the fish's back edge.
         _stamp_baked_local(
             bm, faces, 'fish.fbx',
-            hx, 0.0, rail_z - rope_len, _fish_yaw(i),
+            hx, 0.0, rail_z - rope_len + fl * 0.25, _fish_yaw(i),
             fl, _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
         )
     transform_faces(faces, _place(x, y, z_ground, ang))
@@ -1440,7 +1443,9 @@ def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):
             hx = -width * 0.5 + 0.24 + i * ((width - 0.48) / max(1, n - 1))
             fl = 0.30 * _fish_scale(row * 7 + i)
             rope_len = 0.18 + 0.85 * fl
-            # Rope passed behind the fish so it vanishes into the tail.
+            # Rope hangs from the bar; its lower end runs 0.25*fl into the
+            # fish's body near the tail so it vanishes instead of stopping at
+            # the fish's back edge.
             faces += create_cylinder(
                 bm, radius=0.006, height=rope_len, segments=6,
                 location=(hx, bar_y, bar_z - rope_len * 0.5),
@@ -1448,7 +1453,7 @@ def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):
             )
             _stamp_baked_local(
                 bm, faces, 'fish.fbx', hx, bar_y,
-                bar_z - rope_len, _fish_yaw(row * 7 + i), fl,
+                bar_z - rope_len + fl * 0.25, _fish_yaw(row * 7 + i), fl,
                 _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
             )
     transform_faces(faces, _place(x, y, z_ground, ang))
@@ -1827,8 +1832,10 @@ def build_fish_stringer(bm, x, y, z_ceiling=3.0, ang=0.0, drops=3):
             bm, radius=0.006, height=rope_len, segments=6,
             location=(lx, 0.0, -0.06 - rope_len * 0.5), mat_index=MAT_INDEX_ROPE
         )
+        # Rope runs 0.25*fl into the fish's body near the tail.
         _stamp_baked_local(
-            bm, faces, 'fish.fbx', lx, 0.0, -0.06 - rope_len, _fish_yaw(i), fl,
+            bm, faces, 'fish.fbx', lx, 0.0,
+            -0.06 - rope_len + fl * 0.25, _fish_yaw(i), fl,
             _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
         )
     transform_faces(faces, _place(x, y, z_ceiling, ang))
