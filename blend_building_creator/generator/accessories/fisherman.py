@@ -96,7 +96,7 @@ def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
             _stamp_baked_local(
                 bm, [], 'fish.fbx', rack_x, _fy,
                 z_ground + rack_h - _rope + _fl * 0.25, _fish_yaw(_i), _fl,
-                _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2,
+                _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=1.5,
                 anchor='CENTER'
             )
     except Exception:
