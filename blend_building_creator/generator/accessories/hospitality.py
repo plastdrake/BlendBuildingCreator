@@ -164,9 +164,19 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
             run_ang=-math.pi * 0.5, bracket_len=bracket_len,
             board_w=board_w, board_h=board_h, light_board=True)
         return True
-    # Last resort: mount it BESIDE the entrance (never over the doorway) so it
-    # stays at shopper height without blocking the door.
-    _mx = cands[0] if cands else (door_x + door_half + board_w * 0.5 + 0.35)
+    # Last resort: mount it BESIDE the entrance (never over the doorway) at the
+    # slot that overlaps the fewest windows/shutters, so it stays at shopper
+    # height without blocking the door or burying a window.
+    def _win_overlap(mx):
+        bx0, bx1 = mx - board_w * 0.5 - 0.08, mx + board_w * 0.5 + 0.08
+        tot = 0.0
+        for wx0, wx1, wz0, wz1 in _wins:
+            if not (bx1 < wx0 or bx0 > wx1 or board_top < wz0 or board_bot > wz1):
+                tot += min(bx1, wx1) - max(bx0, wx0)
+        return tot
+
+    _mx = min(cands, key=_win_overlap) if cands \
+        else (door_x + door_half + board_w * 0.5 + 0.35)
     build_hanging_sign(
         bm, _mx, face_y - 0.03, z_top,
         run_ang=-math.pi * 0.5, bracket_len=bracket_len,
@@ -427,9 +437,17 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
         bx_base = door_x - porch_w * 0.5 - 1.25
 
     _nook_spots = []
+    # Keep the nook OFF the porch deck and front steps: start its depth past
+    # whatever sticks out in front of the door.
+    _porch_clear = 0.0
+    if porch_info is not None:
+        _porch_clear = float(porch_info.get('porch_d', 1.5) or 1.5) + 0.40
+    elif _prop(props, 'has_front_steps', False):
+        _porch_clear = 1.30
     for _sgn in (side_sign, -side_sign):
         for _dx in (0.0, 0.8, 1.6, 2.4, 3.2, 4.0):
-            for _dy in (0.70, 1.05, 1.45, 1.90):
+            for _dy in (_porch_clear + 0.35, _porch_clear + 0.80,
+                        _porch_clear + 1.30, _porch_clear + 1.85):
                 _nook_spots.append((bx_base + _sgn * _dx, face_y - _dy))
     for _sx, _sy in _nook_spots:
         if not is_point_outside_building(_sx, _sy, 0.42, ctx, margin=0.05):
