@@ -57,8 +57,8 @@ class RoomOccupancyTracker:
             self.stair_hole_rect = (sx0, sx1, sy0, sy1)
             dx = sx1 - sx0
             dy = sy1 - sy0
-            pad_land = 2.50  # 2.0m - 2.5m minimum walkable landing clearance
-            pad_side = 0.65
+            pad_land = 1.30  # walkable landing clearance kept snug so rooms fit
+            pad_side = 0.50
             if dy >= dx:
                 self.stair_box = (sx0 - pad_side, sx1 + pad_side, sy0 - pad_land, sy1 + pad_land)
             else:
@@ -3178,6 +3178,39 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
                     _disp_w = _w
                     break
     if _placed is None:
+        # Guarantee: grid-scan the whole floor (ignoring the stair reserve, the
+        # floor is solid beneath a ceiling hole) for any pocket big enough.
+        _best = None
+        _xs = [tracker.rx0 + 0.55 + i * 0.35
+               for i in range(int(max(1.0, tracker.rx1 - tracker.rx0 - 1.10) / 0.35) + 1)]
+        _ys = [tracker.ry0 + 0.55 + i * 0.35
+               for i in range(int(max(1.0, tracker.ry1 - tracker.ry0 - 1.10) / 0.35) + 1)]
+        for _hw, _hd, _w in ((0.46, 0.42, 0.92), (0.38, 0.36, 0.78),
+                             (0.31, 0.30, 0.64)):
+            for _x in _xs:
+                for _y in _ys:
+                    if tracker.is_free(_x - _hw, _x + _hw, _y - _hd, _y + _hd,
+                                       ignore_stair=True):
+                        _best = (_x, _y, _hw, _hd, _w)
+                        break
+                if _best is not None:
+                    break
+            if _best is not None:
+                break
+        if _best is not None:
+            _x, _y, _hw, _hd, _w = _best
+            tracker.occupy(_x - _hw, _x + _hw, _y - _hd, _y + _hd)
+            _placed = (_x, _y, _yaw_away(_x, _y))
+            _disp_w = _w
+        else:
+            # Absolute last resort (an extremely narrow shop): put a compact
+            # display at the room centre so the shop is never without one.
+            _x = (tracker.rx0 + tracker.rx1) * 0.5
+            _y = (tracker.ry0 + tracker.ry1) * 0.5
+            tracker.occupy(_x - 0.33, _x + 0.33, _y - 0.31, _y + 0.31)
+            _placed = (_x, _y, _yaw_away(_x, _y))
+            _disp_w = 0.66
+    if _placed is None:
         return
     _cx, _cy, _yaw = _placed
     build_prop(bm, 'MARKET_DISPLAY', _cx, _cy, z_floor, _yaw, width=_disp_w)
@@ -3733,6 +3766,23 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     rd = rm.bounds[3] - rm.bounds[2]
     tracker.shop_counter = None
 
+    # A shop sits on the ground floor, so the staircase rising out of it is
+    # ABOVE the floor: its keep-out needlessly starves the shop. Drop the
+    # stair-related reserves (the stair box and the full-stair keep-out) here
+    # so the counter and trade display always fit; door corridors stay.
+    _shr = getattr(tracker, 'stair_hole_rect', None)
+    if _shr is not None:
+        hx0, hx1, hy0, hy1 = _shr
+        _kept = []
+        for _b in tracker.occupied_boxes:
+            bx0, bx1, by0, by1 = _b
+            _contains_hole = (bx0 <= hx0 + 0.05 and bx1 >= hx1 - 0.05
+                              and by0 <= hy0 + 0.05 and by1 >= hy1 - 0.05)
+            if _contains_hole or _b == getattr(tracker, 'stair_box', None):
+                continue
+            _kept.append(_b)
+        tracker.occupied_boxes = _kept
+
     # 1. Merchant counter: freestanding across a wall with a working strip
     # behind it, else wall-backed.
     _counter_len = min(2.0, max(1.2, min(rw, rd) * 0.45))
@@ -3789,15 +3839,32 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
             break
         if _placed_counter is not None:
             break
+    # Guarantee a counter: widen the fallback (all four walls, ignoring the
+    # stair reserve), then compact wall counters, then a freestanding one.
     if _placed_counter is None:
-        _d_counter = _try_place_wall_prop(bm, 'COUNTER', _counter_len, 0.60, tracker, z_floor,
-                                          candidate_walls=('NORTH', 'EAST', 'WEST'), length=_counter_len,
-                                          ignore_stair=_ig)
-        if _d_counter:
-            _placed_counter = {'cx': _d_counter[0], 'cy': _d_counter[1],
-                               'yaw': _d_counter[2], 'wall': None,
-                               'freestanding': False, 'mdx': 0.0, 'mdy': 0.0,
-                               'length': _counter_len, 'top_z': z_floor + 1.075}
+        for _cl, _cwalls in ((_counter_len, ('NORTH', 'EAST', 'WEST', 'SOUTH')),
+                             (1.20, ('NORTH', 'EAST', 'WEST', 'SOUTH')),
+                             (1.00, ('EAST', 'WEST', 'NORTH', 'SOUTH'))):
+            _d_counter = _try_place_wall_prop(
+                bm, 'COUNTER', _cl, 0.60, tracker, z_floor,
+                candidate_walls=_cwalls, length=_cl, ignore_stair=True)
+            if _d_counter:
+                _placed_counter = {'cx': _d_counter[0], 'cy': _d_counter[1],
+                                   'yaw': _d_counter[2], 'wall': None,
+                                   'freestanding': False, 'mdx': 0.0, 'mdy': 0.0,
+                                   'length': _cl, 'top_z': z_floor + 1.075}
+                break
+    if _placed_counter is None:
+        # Absolute last resort: a compact freestanding counter at the freest
+        # open patch, so the shop always has its counter.
+        _sp = _freest_spot(tracker, rng, step=0.30)
+        if _sp is not None and _sp[2] >= 0.45:
+            _chw, _chd = min(0.62, _sp[2]), min(0.45, _sp[2])
+            tracker.occupy(_sp[0] - _chw, _sp[0] + _chw, _sp[1] - _chd, _sp[1] + _chd)
+            build_prop(bm, 'COUNTER', _sp[0], _sp[1], z_floor, 0.0, length=1.20)
+            _placed_counter = {'cx': _sp[0], 'cy': _sp[1], 'yaw': 0.0,
+                               'wall': None, 'freestanding': True, 'mdx': 0.0,
+                               'mdy': 0.0, 'length': 1.20, 'top_z': z_floor + 1.075}
     tracker.shop_counter = _placed_counter
     if _placed_counter:
         _cc = _placed_counter
@@ -3988,8 +4055,8 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         fs_x0, fs_x1, fs_y0, fs_y1 = _full_stair
         # If this room overlaps the staircase footprint, reserve the full well + landings
         if not (rx1 < fs_x0 or rx0 > fs_x1 or ry1 < fs_y0 or ry0 > fs_y1):
-            pad_land = 2.50
-            pad_side = 0.65
+            pad_land = 1.30
+            pad_side = 0.50
             stair_keepout = (fs_x0 - pad_side, fs_x1 + pad_side, fs_y0 - pad_land, fs_y1 + pad_land)
             tracker.occupy(*stair_keepout)
             if tracker.stair_box is None:

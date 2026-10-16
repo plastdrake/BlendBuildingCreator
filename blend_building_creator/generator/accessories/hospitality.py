@@ -68,9 +68,11 @@ def build_hospitality_scene(bm, props, ctx, tier):
         )
 
     if _prop(props, 'has_trade_sign', False) or is_hospitality:
-        # Hang trade sign on the roof gable end facing the street, or on the facade
-        if _build_gable_signs(bm, props, ctx, tier) == 0:
-            _build_trade_sign(bm, props, ctx, porch_info)
+        # Mount the sign on the ground-storey facade near the entrance (a bit
+        # above the door), clear of windows and the porch roof. Only fall back
+        # to the high roof-gable sign when no facade spot is free.
+        if not _build_trade_sign(bm, props, ctx, porch_info):
+            _build_gable_signs(bm, props, ctx, tier)
 
     if _prop(props, 'has_flower_boxes', False):
         _build_window_flower_boxes(bm, props, ctx, tier)
@@ -83,34 +85,76 @@ def build_hospitality_scene(bm, props, ctx, tier):
 
 
 def _build_trade_sign(bm, props, ctx, porch_info=None):
-    """A large sign hung on the facade beside the door, clear of overhangs.
+    """A hanging sign on the ground-storey facade near the entrance.
 
-    Mounted on the outer face of the storey at the sign's height (so jetties and
-    log bulges never bury it), on whichever side of the door is free of a wing.
+    Mounted on the outer face of the ground storey, a bit above the door, on a
+    spot that does NOT cover any ground-floor window and does not hang through
+    the porch roof. Returns True when a sign was placed, else False.
     """
     door_x = ctx.main_door_cx
     outer = _wall_out(props, ctx, _prop(props, 'material_tier', 'TIER_2'))
     door_half = _prop(props, 'door_width', 1.2) * 0.5
+    b = ctx.bounds_for(0)
+    face_y = b[2] - outer
 
-    # Keep the sign on the ground storey's wall (a fixed +3.x mount floated above
-    # the wall top on single-storey buildings).
-    mount_z = ctx.found_h + ctx.floor_h * 0.60
-    face_y = ctx.bounds_for(0)[2] - outer
+    # Compact board so it fits between windows.
+    board_w, board_h = 1.32, 1.58
+    bracket_len = 1.34
+    # The board hangs 0.34 below the bracket top and is board_h tall.
+    board_top = ctx.found_h + ctx.floor_h - 0.24
+    z_top = board_top + 0.34
+    # Do not poke through a veranda/porch roof.
+    if porch_info is not None:
+        _amz = porch_info.get('awning_mid_z')
+        if _amz is not None and z_top + 0.14 > _amz:
+            z_top = _amz - 0.14
+            board_top = z_top - 0.34
+    board_bot = board_top - board_h
 
-    # Pick the side of the door that is clear of the front-wing footprint.
-    side = -1.0
-    for cand in (-1.0, 1.0):
-        cx = door_x + cand * (door_half + 1.30)
-        if is_point_outside_building(cx, face_y - 0.35, 0.30, ctx, margin=0.05):
-            side = cand
-            break
+    # Ground-floor front windows: (x0, x1, z0, z1), padded a touch.
+    _wins = []
+    for (_wx, _wy, _wz) in (ctx.window_centers.get(0, {}) or {}).get('FRONT', []):
+        _wins.append((_wx - 0.62, _wx + 0.62, _wz - 0.10, _wz + 1.35))
 
-    mount_x = door_x + side * (door_half + 1.25)
-    build_hanging_sign(
-        bm, mount_x, face_y - 0.03, mount_z,
-        run_ang=-math.pi * 0.5,
-        bracket_len=2.70, board_w=2.30, board_h=1.92, light_board=True,
-    )
+    def _free(mx):
+        bx0, bx1 = mx - board_w * 0.5 - 0.08, mx + board_w * 0.5 + 0.08
+        for wx0, wx1, wz0, wz1 in _wins:
+            if not (bx1 < wx0 or bx0 > wx1 or board_top < wz0 or board_bot > wz1):
+                return False
+        return True
+
+    # Candidates ordered from just beside the door outwards, then above the door.
+    # Candidates: scan from just beside the door outwards to the corners, so we
+    # pick the window-free spot nearest the entrance. (Above the door is
+    # avoided — the porch roof lives there.)
+    cands = []
+    _half = (b[1] - b[0]) * 0.5
+    _n = int(_half / 0.25) + 1
+    for _i in range(1, _n + 1):
+        for _s in (1.0, -1.0):
+            mx = door_x + _s * (door_half + 0.55 + _i * 0.25)
+            if b[0] + 0.60 <= mx <= b[1] - 0.60:
+                cands.append(mx)
+    _wings = get_building_footprint_boxes(ctx)[1:]
+
+    def _wing_blocked(mx):
+        for wx0, wx1, wy0, _wy1 in _wings:
+            if (wx0 - 0.35) <= mx <= (wx1 + 0.35) and wy0 <= face_y + 0.20:
+                return True
+        return False
+
+    for mx in cands:
+        # Never bury it behind a front-wing footprint.
+        if _wing_blocked(mx):
+            continue
+        if not _free(mx):
+            continue
+        build_hanging_sign(
+            bm, mx, face_y - 0.03, z_top,
+            run_ang=-math.pi * 0.5, bracket_len=bracket_len,
+            board_w=board_w, board_h=board_h, light_board=True)
+        return True
+    return False
 
 
 
