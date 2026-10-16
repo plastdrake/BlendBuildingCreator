@@ -112,40 +112,18 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
         add_floor_region(rx0, rx1, ry0, ry1, floor_idx + i * 17)
 
 def _wood_beam(bm, size, location, bevel_amount=0.015):
-    """A ``create_beveled_box`` oak beam (MAT_INDEX_WOOD) re-unwrapped so the
-    plank grain runs ALONG the beam's length on every face.
-
-    The WOOD shader stretches fibers along U (unlike TIMBER's V), so this maps
-    U down the longest axis and V across it — the mirror of ``map_beam_uvs``.
-    Faces are tagged so the final world UV pass preserves the mapping.
-    Only ever used for horizontal beams here; pillars/post UVs elsewhere are
-    deliberately left untouched.
+    """Creates a horizontal timber beam with UV unwrap aligned along the beam's length.
+    Uses MAT_INDEX_TIMBER so ceiling beams match the rich dark timber framing,
+    and map_beam_uvs so wood grain flows longitudinally along the beam length.
     """
-    from .mesh_utils import create_beveled_box
-    faces = create_beveled_box(bm, size=size, location=location,
-                               mat_index=MAT_INDEX_WOOD, bevel_amount=bevel_amount)
-    dx, dy, dz = (float(size[0]), float(size[1]), float(size[2]))
-    long_ax = 0 if (dx >= dy and dx >= dz) else (1 if dy >= dz else 2)
-    shorts = [a for a in range(3) if a != long_ax]
-    ox, oy, oz = (float(location[0]), float(location[1]), float(location[2]))
-    uv = bm.loops.layers.uv.verify()
-    bm.normal_update()
-    for f in faces:
-        if not f.is_valid:
-            continue
-        f.tag = True
-        n = f.normal
-        la = (abs(n.x), abs(n.y), abs(n.z))
-        dom = 0 if (la[0] >= la[1] and la[0] >= la[2]) else (1 if la[1] >= la[2] else 2)
-        for loop in f.loops:
-            co = loop.vert.co
-            c = (co.x - ox, co.y - oy, co.z - oz)
-            if dom == long_ax:
-                loop[uv].uv = (c[shorts[0]] * 1.2, c[shorts[1]] * 1.2)
-            else:
-                v_ax = shorts[0] if dom == shorts[1] else shorts[1]
-                loop[uv].uv = (c[long_ax] * 0.40, c[v_ax] * 1.2)
-    return [f for f in faces if f.is_valid]
+    from .uv_utils import timber_box
+    return timber_box(
+        bm,
+        size=size,
+        location=location,
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=bevel_amount,
+    )
 
 def _subtract_interval(segments, cut_start, cut_end):
     """Subtracts [cut_start, cut_end] from a list of (start, end) intervals."""
@@ -3121,6 +3099,32 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             if v_rect:
                 hall_rm.floor_void = v_rect
                 hall_rm.role = 'MEZZANINE_GALLERY'
+
+    # Fishmonger ground floor: ONE big open shop room (no side chambers) so the
+    # trade has room to work; the catch is stored in barrels.
+    if fl_idx == 0 and effective_archetype == 'FISHERMAN':
+        _wings = [r for r in rooms if getattr(r, 'is_wing', False)]
+        _all_dw = []
+        for _r in rooms:
+            for _d in getattr(_r, 'doorways', []) or []:
+                if _d not in _all_dw:
+                    _all_dw.append(_d)
+        for _d in (doorways or []):
+            if _d not in _all_dw:
+                _all_dw.append(_d)
+        if front_door_info:
+            _fdw = {'x': front_door_info[0], 'y': iy_min, 'axis': 'X',
+                    'w': front_door_info[1]}
+            if _fdw not in _all_dw:
+                _all_dw.append(_fdw)
+        _main_room = Room(
+            id=f"fl{fl_idx}_hall", floor_idx=fl_idx, role='STORE',
+            bounds=(ix_min, ix_max, iy_min, iy_max),
+            doorways=_all_dw, stair_hole=stair_hole,
+            exterior_facades={'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
+                              'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)})
+        rooms = [_main_room] + _wings
+        interior_walls = []
 
     return rooms, interior_walls
 

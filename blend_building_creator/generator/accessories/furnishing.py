@@ -3944,7 +3944,39 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     #    toolsmith shop keeps its floor clear for the tool racks instead.
     _mid_y = (rm.bounds[2] + rm.bounds[3]) * 0.5
     _mid_x = (rm.bounds[0] + rm.bounds[1]) * 0.5
-    if _arch0 not in ('TOOLSMITH', 'BLACKSMITH'):
+    if _arch0 == 'FISHERMAN':
+        # Fish storage barrels lining the big open shop (the catch is salted
+        # down in these).
+        _n_placed = 0
+        _wl, _wr = rm.bounds[0], rm.bounds[1]
+        _wf, _wb = rm.bounds[2], rm.bounds[3]
+        _spots = []
+        # Corners first (the display takes one; the rest are free for barrels).
+        _spots += [(_wl + 0.55, _wf + 0.55), (_wr - 0.55, _wf + 0.55),
+                   (_wl + 0.55, _wb - 0.55), (_wr - 0.55, _wb - 0.55)]
+        for _f in (0.5, 0.3, 0.7):
+            _spots += [(_wl + 0.55, _wf + (_wb - _wf) * _f),
+                       (_wr - 0.55, _wf + (_wb - _wf) * _f),
+                       (_wl + (_wr - _wl) * _f, _wf + 0.55),
+                       (_wl + (_wr - _wl) * _f, _wb - 0.55)]
+        for _bx, _by in _spots:
+            if _n_placed >= 5:
+                break
+            if tracker.is_free(_bx - 0.34, _bx + 0.34, _by - 0.34, _by + 0.34):
+                tracker.occupy(_bx - 0.34, _bx + 0.34, _by - 0.34, _by + 0.34)
+                build_prop(bm, 'BARREL', _bx, _by, z_floor, rng.uniform(0.0, 6.28))
+                _n_placed += 1
+        if _n_placed < 2:
+            for _ in range(3 - _n_placed):
+                _sp = _freest_spot(tracker, rng, step=0.35)
+                if _sp is None or _sp[2] < 0.30:
+                    break
+                tracker.occupy(_sp[0] - 0.30, _sp[0] + 0.30,
+                               _sp[1] - 0.30, _sp[1] + 0.30)
+                build_prop(bm, 'BARREL', _sp[0], _sp[1], z_floor,
+                           rng.uniform(0.0, 6.28))
+                _n_placed += 1
+    elif _arch0 not in ('TOOLSMITH', 'BLACKSMITH'):
         for cx, cy in ((rm.bounds[0] + 0.40, _mid_y), (rm.bounds[1] - 0.40, _mid_y),
                        (_mid_x, rm.bounds[2] + 0.40), (_mid_x, rm.bounds[3] - 0.40)):
             if tracker.is_free(cx - 0.25, cx + 0.25, cy - 0.25, cy + 0.25):
