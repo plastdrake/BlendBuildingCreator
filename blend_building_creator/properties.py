@@ -634,6 +634,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         description="Type of staircase connecting floors",
         items=[
             ('STRAIGHT', 'Straight Run', 'Wooden staircase with steps, stringers and handrail'),
+            ('L', 'L-Shaped', 'L-shaped staircase: lower flight, quarter landing, then a 90-degree turn'),
             ('SPIRAL', 'Fantasy Spiral', 'Curved spiral staircase around central wooden post')
         ],
         default='STRAIGHT',
@@ -2412,6 +2413,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     has_throne_room: BoolProperty(
         name="Castle Throne Room",
         description="Designate the grand hall as a royal throne room with raised dais, throne chair, red ceremonial carpet, banners, and braziers",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_double_height: BoolProperty(
+        name="Double-Height Mezzanine",
+        description="Two-storey grand hall with open mezzanine gallery and protective railing overlooking the floor below",
         default=False,
         update=on_property_updated
     )

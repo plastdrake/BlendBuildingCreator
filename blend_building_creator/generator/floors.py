@@ -725,7 +725,7 @@ def build_floors(bm, props, ctx):
                 # L-shaped stair: a lower flight (along Y) to a quarter landing,
                 # then a 90-degree turn (along X) up to the next floor. Gives a
                 # real landing instead of one cramped straight run.
-                _lane = lane_cx_0
+                _lane = lane_cx_0 + (0.45 if stair_side_opt != 'RIGHT' else -0.45)
                 _run = min(1.50, max(1.05, D_interior * 0.15))
                 _turn = -1 if stair_side_opt == 'RIGHT' else 1
                 _fy = fl0_iy_min + max(0.95, _run * 0.7)

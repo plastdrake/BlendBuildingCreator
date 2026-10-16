@@ -57,13 +57,31 @@ class RoomOccupancyTracker:
             self.stair_hole_rect = (sx0, sx1, sy0, sy1)
             dx = sx1 - sx0
             dy = sy1 - sy0
-            pad_land = 1.30  # walkable landing clearance kept snug so rooms fit
-            pad_side = 0.50
+            pad_land = 2.10  # Minimum 2.0+ meters walkable landing clearance
+            pad_side = 0.80  # Clear side clearance
             if dy >= dx:
                 self.stair_box = (sx0 - pad_side, sx1 + pad_side, sy0 - pad_land, sy1 + pad_land)
             else:
                 self.stair_box = (sx0 - pad_land, sx1 + pad_land, sy0 - pad_side, sy1 + pad_side)
             self.occupied_boxes.append(self.stair_box)
+
+            # Keep a clear 2x2 m approach at BOTH ends of the stair (the foot
+            # downstairs and the landing upstairs) so nothing blocks stepping
+            # on/off the stairs. Carpets ignore this (rugs don't use
+            # occupied_boxes), so a rug may still cover the approach.
+            self.stair_approach = []
+            _axc = (sx0 + sx1) * 0.5
+            _ayc = (sy0 + sy1) * 0.5
+            if dy >= dx:
+                for _aye in (sy0 - 0.95, sy1 + 0.95):
+                    _ab = (_axc - 1.0, _axc + 1.0, _aye - 1.0, _aye + 1.0)
+                    self.stair_approach.append(_ab)
+                    self.occupied_boxes.append(_ab)
+            else:
+                for _axe in (sx0 - 0.95, sx1 + 0.95):
+                    _ab = (_axe - 1.0, _axe + 1.0, _ayc - 1.0, _ayc + 1.0)
+                    self.stair_approach.append(_ab)
+                    self.occupied_boxes.append(_ab)
 
         # 2. Reserve walking corridors around all doorways (interior, front, wing, annex)
         if doorways:
@@ -1933,7 +1951,9 @@ def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
                     break
 
     # 4. Note: Red carpet runner down the center aisle is already integrated into the new Throne.fbx!
-    # (Redundant procedural red carpet removed as requested)
+    # (Redundant procedural red carpet and underlying rugs removed as requested)
+    tracker.rug_count = 1
+    tracker.no_rugs = True
 
     # 7. Courtier / noble benches along side walls
     _try_place_wall_prop(bm, 'BENCH', 1.80, 0.50, tracker, z_floor,
@@ -3817,6 +3837,29 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     # behind it, else wall-backed.
     _counter_len = min(2.0, max(1.2, min(rw, rd) * 0.45))
     _placed_counter = None
+    # Fishmonger: the west side is the staircase, so place the counter
+    # freestanding in the clear (east) half — never up against the stairs.
+    if getattr(tracker, 'archetype', '') == 'FISHERMAN':
+        _cxc = (tracker.rx0 + tracker.rx1) * 0.5
+        _cyc = (tracker.ry0 + tracker.ry1) * 0.5
+        for _ox, _oy in ((1.15, 0.0), (1.15, -1.15), (1.15, 1.15),
+                         (0.6, -1.5), (0.6, 1.5)):
+            _ccx, _ccy = _cxc + _ox, _cyc + _oy
+            if not tracker.is_free(_ccx - 1.15, _ccx + 1.15,
+                                   _ccy - 0.45, _ccy + 0.45, ignore_stair=True):
+                continue
+            tracker.occupy(_ccx - 1.15, _ccx + 1.15, _ccy - 0.45, _ccy + 0.45)
+            build_prop(bm, 'COUNTER', _ccx, _ccy, z_floor, 0.0, length=2.0)
+            _stx, _sty = _ccx + 0.72, _ccy
+            if tracker.is_free(_stx - 0.26, _stx + 0.26, _sty - 0.26,
+                               _sty + 0.26, ignore_stair=True):
+                tracker.occupy(_stx - 0.26, _stx + 0.26, _sty - 0.26, _sty + 0.26)
+                build_prop(bm, 'STOOL', _stx, _sty, z_floor, math.pi * 0.5)
+            _placed_counter = {'cx': _ccx, 'cy': _ccy, 'yaw': 0.0,
+                               'wall': 'FREESTAND', 'freestanding': True,
+                               'mdx': 1.0, 'mdy': 0.0, 'length': 2.0,
+                               'top_z': z_floor + 1.075}
+            break
     # Pass 1 keeps clear of the staircase (so the counter is not buried under
     # the flight); pass 2 may use the space beneath it in cramped shops.
     # (wall, yaw so the plank front faces the room, merchant dir into wall)
@@ -3945,36 +3988,18 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     _mid_y = (rm.bounds[2] + rm.bounds[3]) * 0.5
     _mid_x = (rm.bounds[0] + rm.bounds[1]) * 0.5
     if _arch0 == 'FISHERMAN':
-        # Fish storage barrels lining the big open shop (the catch is salted
-        # down in these).
+        # Fish storage barrels lined up ALONG THE WALLS (never mid-floor).
         _n_placed = 0
-        _wl, _wr = rm.bounds[0], rm.bounds[1]
-        _wf, _wb = rm.bounds[2], rm.bounds[3]
-        _spots = []
-        # Corners first (the display takes one; the rest are free for barrels).
-        _spots += [(_wl + 0.55, _wf + 0.55), (_wr - 0.55, _wf + 0.55),
-                   (_wl + 0.55, _wb - 0.55), (_wr - 0.55, _wb - 0.55)]
-        for _f in (0.5, 0.3, 0.7):
-            _spots += [(_wl + 0.55, _wf + (_wb - _wf) * _f),
-                       (_wr - 0.55, _wf + (_wb - _wf) * _f),
-                       (_wl + (_wr - _wl) * _f, _wf + 0.55),
-                       (_wl + (_wr - _wl) * _f, _wb - 0.55)]
-        for _bx, _by in _spots:
-            if _n_placed >= 5:
+        for _walls in (('EAST', 'WEST', 'NORTH', 'SOUTH'),
+                       ('WEST', 'EAST', 'SOUTH', 'NORTH'),
+                       ('NORTH', 'SOUTH', 'EAST', 'WEST'),
+                       ('SOUTH', 'NORTH', 'WEST', 'EAST'),
+                       ('EAST', 'NORTH', 'WEST', 'SOUTH'),
+                       ('WEST', 'SOUTH', 'EAST', 'NORTH')):
+            if _n_placed >= 4:
                 break
-            if tracker.is_free(_bx - 0.34, _bx + 0.34, _by - 0.34, _by + 0.34):
-                tracker.occupy(_bx - 0.34, _bx + 0.34, _by - 0.34, _by + 0.34)
-                build_prop(bm, 'BARREL', _bx, _by, z_floor, rng.uniform(0.0, 6.28))
-                _n_placed += 1
-        if _n_placed < 2:
-            for _ in range(3 - _n_placed):
-                _sp = _freest_spot(tracker, rng, step=0.35)
-                if _sp is None or _sp[2] < 0.30:
-                    break
-                tracker.occupy(_sp[0] - 0.30, _sp[0] + 0.30,
-                               _sp[1] - 0.30, _sp[1] + 0.30)
-                build_prop(bm, 'BARREL', _sp[0], _sp[1], z_floor,
-                           rng.uniform(0.0, 6.28))
+            if _try_place_wall_prop(bm, 'BARREL', 0.72, 0.72, tracker, z_floor,
+                                    candidate_walls=_walls) is not None:
                 _n_placed += 1
     elif _arch0 not in ('TOOLSMITH', 'BLACKSMITH'):
         for cx, cy in ((rm.bounds[0] + 0.40, _mid_y), (rm.bounds[1] - 0.40, _mid_y),
@@ -4128,8 +4153,8 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         fs_x0, fs_x1, fs_y0, fs_y1 = _full_stair
         # If this room overlaps the staircase footprint, reserve the full well + landings
         if not (rx1 < fs_x0 or rx0 > fs_x1 or ry1 < fs_y0 or ry0 > fs_y1):
-            pad_land = 1.30
-            pad_side = 0.50
+            pad_land = 2.10
+            pad_side = 0.80
             stair_keepout = (fs_x0 - pad_side, fs_x1 + pad_side, fs_y0 - pad_land, fs_y1 + pad_land)
             tracker.occupy(*stair_keepout)
             if tracker.stair_box is None:
@@ -4276,7 +4301,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
 
     # Every room gets at least one rug, except back-of-house rooms in an
     # industrial fit-out (warehouses/lumbermills stay bare).
-    if not _bare and getattr(tracker, 'rug_count', 0) == 0:
+    if not _bare and role != 'THRONE_ROOM' and getattr(tracker, 'rug_count', 0) == 0 and not getattr(tracker, 'no_rugs', False):
         rw = (rx1 - rx0) - inset * 2.0
         rd = (ry1 - ry0) - inset * 2.0
         if rw >= 1.0 and rd >= 1.0:

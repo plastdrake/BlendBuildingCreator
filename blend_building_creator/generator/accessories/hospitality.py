@@ -150,19 +150,18 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
                 return True
         return False
 
-    _board_cx = bracket_len * 0.5 + 0.02
     for mx in cands:
         # Never bury it behind a front-wing footprint.
         if _wing_blocked(mx):
             continue
         if not _free(mx):
             continue
-        # Mounted flat to the street (board faces +/-Y) so it reads clearly
-        # from the road; the arm runs along the wall and the board hangs at
-        # `mx` (offset back by the board centre).
+        # Projecting hanging sign (perpendicular to the wall, board faces along
+        # the street) so it reads as a proper shop sign and is never pressed
+        # flat against the wall.
         build_hanging_sign(
-            bm, mx - _board_cx, face_y - 0.03, z_top,
-            run_ang=0.0, bracket_len=bracket_len,
+            bm, mx, face_y - 0.03, z_top,
+            run_ang=-math.pi * 0.5, bracket_len=bracket_len,
             board_w=board_w, board_h=board_h, light_board=True)
         return True
     return False

@@ -174,11 +174,12 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
             by = y_min + i * actual_step
 
             # Calculate remaining spans after subtracting all holes
+            # Beam ends are recessed 1 cm (0.01m) away from hole rims to eliminate coplanar conflicts with ceiling/floor slab
             segments = [(x_min - 0.02, x_max + 0.02)]
             for h in all_holes:
                 hx_min, hx_max, hy_min, hy_max = h
                 if (hy_min - 0.25) <= by <= (hy_max + 0.25):
-                    segments = _subtract_interval(segments, hx_min, hx_max)
+                    segments = _subtract_interval(segments, hx_min - 0.01, hx_max + 0.01)
 
             for seg_a, seg_b in segments:
                 w = seg_b - seg_a
@@ -214,11 +215,12 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
         bx = x_min + i * actual_step
 
         # Calculate remaining spans after subtracting all holes
+        # Beam ends are recessed 1 cm (0.01m) away from hole rims to eliminate coplanar conflicts with ceiling/floor slab
         segments = [(y_min - 0.02, y_max + 0.02)]
         for h in all_holes:
             hx_min, hx_max, hy_min, hy_max = h
             if (hx_min - 0.25) <= bx <= (hx_max + 0.25):
-                segments = _subtract_interval(segments, hy_min, hy_max)
+                segments = _subtract_interval(segments, hy_min - 0.01, hy_max + 0.01)
 
         for seg_a, seg_b in segments:
             h = seg_b - seg_a
@@ -1452,16 +1454,23 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         _sw = float(stair_pos_info.get('w', 1.5))
         _scx = float(stair_pos_info.get('cx', ix_min + 2.0))
         if stair_on_right:
-            req_side_w = max(4.0, (ix_max - _scx) + _sw * 0.5 + 1.2)
+            req_side_w = max(4.0, (ix_max - _scx) + _sw * 0.5 + 2.2)
         else:
-            req_side_w = max(4.0, (_scx - ix_min) + _sw * 0.5 + 1.2)
+            req_side_w = max(4.0, (_scx - ix_min) + _sw * 0.5 + 2.2)
     elif stair_hole:
         if stair_on_right:
-            req_side_w = max(4.0, ix_max - stair_hole[0] + 1.2)
+            req_side_w = max(4.0, ix_max - stair_hole[0] + 2.2)
         else:
-            req_side_w = max(4.0, stair_hole[1] - ix_min + 1.2)
+            req_side_w = max(4.0, stair_hole[1] - ix_min + 2.2)
     else:
         req_side_w = 4.5
+
+    # If there is a basement stair hole or floor stair opening, ensure side bay has at least 2.2m clearance to partition wall
+    if stair_hole:
+        if stair_hole[0] > (ix_min + ix_max) * 0.5:
+            req_side_w = max(req_side_w, (ix_max - stair_hole[0]) + 2.2)
+        else:
+            req_side_w = max(req_side_w, (stair_hole[1] - ix_min) + 2.2)
 
     for ed in (extra_doorways or []):
         if ed.get('floor_idx', fl_idx) == fl_idx:
@@ -1934,7 +1943,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             _p_rooms, _p_walls = _palace
             if fl_wings_bounds:
                 for wi, wb in enumerate(fl_wings_bounds):
-                    w_role = 'ROYAL_CHAMBER' if fl_idx == 0 else ('MASTER_BED' if fl_idx == 1 else 'GUEST_ROOM')
+                    w_role = 'LIBRARY' if fl_idx == 0 else ('MASTER_BED' if fl_idx == 1 else 'GUEST_ROOM')
                     wing_dw = []
                     dw_wx = (wb[0] + wb[1]) * 0.5
                     dw_w_eff = dw_w
@@ -3147,14 +3156,22 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     # trade has room to work; the catch is stored in barrels.
     if fl_idx == 0 and effective_archetype == 'FISHERMAN':
         _wings = [r for r in rooms if getattr(r, 'is_wing', False)]
-        _all_dw = []
+        _cand = []
         for _r in rooms:
             for _d in getattr(_r, 'doorways', []) or []:
-                if _d not in _all_dw:
-                    _all_dw.append(_d)
+                if _d not in _cand:
+                    _cand.append(_d)
         for _d in (doorways or []):
-            if _d not in _all_dw:
-                _all_dw.append(_d)
+            if _d not in _cand:
+                _cand.append(_d)
+        # Only keep doorways on the main block's EXTERIOR edges — the doorways
+        # to the now-removed side chambers would otherwise carve phantom
+        # corridors through the open shop.
+        def _on_edge(_d):
+            _dx, _dy = _d.get('x', 1e9), _d.get('y', 1e9)
+            return (abs(_dx - ix_min) < 0.9 or abs(_dx - ix_max) < 0.9
+                    or abs(_dy - iy_min) < 0.9 or abs(_dy - iy_max) < 0.9)
+        _all_dw = [_d for _d in _cand if _on_edge(_d)]
         if front_door_info:
             _fdw = {'x': front_door_info[0], 'y': iy_min, 'axis': 'X',
                     'w': front_door_info[1]}
