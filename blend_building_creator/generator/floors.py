@@ -617,10 +617,9 @@ def build_floors(bm, props, ctx):
                 _info = _turn_hole_info.get(fl_idx)
                 if _info is not None:
                     _h, _open = _info
-                    # Skip guarding any side that runs along a wall, and the
-                    # side where the flight's FOOT meets the hole (you must be
-                    # able to step on/off at both ends - only the long open
-                    # sides of the well need a railing).
+                    # Skip guarding any side that runs along a wall (and the
+                    # arrival side is skipped as the open_side). The FOOT end
+                    # still gets a railing: on this floor it is a void edge.
                     _skip = set()
                     if _h[0] - slab_xmin < 0.55:
                         _skip.add('W')
@@ -630,10 +629,6 @@ def build_floors(bm, props, ctx):
                         _skip.add('S')
                     if slab_ymax - _h[3] < 0.55:
                         _skip.add('N')
-                    if _open in ('N', 'S'):
-                        _skip.add('S' if _open == 'N' else 'N')
-                    else:
-                        _skip.add('W' if _open == 'E' else 'E')
                     build_stair_guardrail_one_open(
                         bm, _h, z_floor + 0.05, _open, offset=0.14, rail_h=0.95,
                         bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
@@ -1822,7 +1817,8 @@ def build_floors(bm, props, ctx):
                 'y_top': (_turn_col_y0 + _turn_col_d) if _turn_style else stair_y_top,
                 'y_ascend': stair_ascend_sign,
                 'has_stairs': props.has_stairs, 'style': props.stair_style,
-                'switchback': (False if _turn_style else stair_switchback), 'walk_w': 1.05
+                'switchback': (False if _turn_style else stair_switchback), 'walk_w': 1.05,
+                'ascend_hole': next_stair_hole if _turn_style else None
             },
             front_door_info=(door_cx, getattr(props, 'door_width', 1.0)) if (
                 fl_idx == 0 and props.has_front_door and not open_timber

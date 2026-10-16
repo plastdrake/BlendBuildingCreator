@@ -1729,7 +1729,7 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
 
 def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
                       has_stairs_landing, stair_pos_info=None,
-                      extra_doorways=None, props=None):
+                      extra_doorways=None, props=None, fl_wings_bounds=None):
     """Grand Manor / Palace multi-column floor plan for wide buildings (W >= 15m).
 
     Supports both left-hand and right-hand stairs.
@@ -1741,6 +1741,47 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
     D = iy_max - iy_min
     if W < 15.0 or D < 6.0:
         return None
+
+    # Collect all doorway spans along X (front & back doors, wing portals, connector portals)
+    # that vertical partition walls must NEVER cross or bisect.
+    x_dw_spans = []
+    margin = 0.55
+    for ed in (extra_doorways or []):
+        if ed.get('axis', 'X') == 'X':
+            dcx = ed.get('x', ed.get('pos', 0.0))
+            d_w = ed.get('w', 1.4)
+            x_dw_spans.append((dcx - d_w * 0.5 - margin, dcx + d_w * 0.5 + margin))
+
+    if fl_wings_bounds:
+        for wb in fl_wings_bounds:
+            w_cx = (wb[0] + wb[1]) * 0.5
+            w_span = wb[1] - wb[0]
+            p_w = min(max(1.2, w_span - 1.2), 2.2)
+            x_dw_spans.append((w_cx - p_w * 0.5 - margin, w_cx + p_w * 0.5 + margin))
+
+    def _clear_cw(pos, lo, hi):
+        if hi < lo:
+            hi = lo
+        pos = min(hi, max(lo, pos))
+        for _ in range(5):
+            hit = False
+            for s0, s1 in x_dw_spans:
+                if s0 <= pos <= s1:
+                    cands = [p for p in (s0, s1) if lo <= p <= hi]
+                    if not cands:
+                        for tm in (0.35, 0.22, 0.15):
+                            s_mid = (s0 + s1) * 0.5
+                            half = (s1 - s0 - margin * 2.0) * 0.5 + tm
+                            cands = [p for p in (s_mid - half, s_mid + half) if lo <= p <= hi]
+                            if cands:
+                                break
+                    if not cands:
+                        cands = [lo if abs(lo - pos) < abs(hi - pos) else hi]
+                    pos = min(cands, key=lambda p: abs(p - pos))
+                    hit = True
+            if not hit:
+                break
+        return min(hi, max(lo, pos))
 
     stair_on_right = bool(
         (stair_pos_info and float(stair_pos_info.get('cx', ix_min)) > (ix_min + ix_max) * 0.5)
@@ -1756,13 +1797,14 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
 
     rem_w = W - c_stair_w
     num_bays = 3 if rem_w >= 13.0 else 2
-    bay_w = rem_w / float(num_bays)
 
     if stair_on_right:
-        b3 = ix_max - c_stair_w
+        b3 = _clear_cw(ix_max - c_stair_w, ix_min + 3.0, ix_max - 2.5)
         if num_bays == 3:
-            b1 = ix_min + bay_w
-            b2 = b1 + bay_w
+            avail_w = b3 - ix_min
+            bay_w = avail_w / 3.0
+            b1 = _clear_cw(ix_min + bay_w, ix_min + 2.0, b3 - 3.0)
+            b2 = _clear_cw(b1 + (b3 - b1) * 0.5, b1 + 2.0, b3 - 2.0)
             cols = [
                 (ix_min, b1, 'west'),
                 (b1, b2, 'center_west'),
@@ -1771,7 +1813,7 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             ]
             col_b_walls = [b1, b2, b3]
         else:
-            b1 = ix_min + bay_w
+            b1 = _clear_cw(ix_min + (b3 - ix_min) * 0.5, ix_min + 2.0, b3 - 2.0)
             cols = [
                 (ix_min, b1, 'west'),
                 (b1, b3, 'center'),
@@ -1779,10 +1821,12 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             ]
             col_b_walls = [b1, b3]
     else:
-        b1 = ix_min + c_stair_w
+        b1 = _clear_cw(ix_min + c_stair_w, ix_min + 2.5, ix_max - 3.0)
         if num_bays == 3:
-            b2 = b1 + bay_w
-            b3 = b2 + bay_w
+            avail_w = ix_max - b1
+            bay_w = avail_w / 3.0
+            b2 = _clear_cw(b1 + bay_w, b1 + 2.0, ix_max - 4.0)
+            b3 = _clear_cw(b2 + (ix_max - b2) * 0.5, b2 + 2.0, ix_max - 2.0)
             cols = [
                 (ix_min, b1, 'west_stair'),
                 (b1, b2, 'center_west'),
@@ -1791,7 +1835,7 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             ]
             col_b_walls = [b1, b2, b3]
         else:
-            b2 = b1 + bay_w
+            b2 = _clear_cw(b1 + (ix_max - b1) * 0.5, b1 + 2.0, ix_max - 2.0)
             cols = [
                 (ix_min, b1, 'west_stair'),
                 (b1, b2, 'center'),
@@ -1917,7 +1961,14 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             ))
         else:
             # Split front/back into 2 comfortable domestic rooms!
-            _hwall(cx0, cx1, y_mid, (cx0 + cx1) * 0.5)
+            y_h = y_mid
+            for ed in (extra_doorways or []):
+                if ed.get('axis') == 'Y':
+                    ey = ed.get('y', ed.get('pos', 0.0))
+                    ew = ed.get('w', 1.2)
+                    if abs(y_h - ey) <= ew * 0.5 + 0.40:
+                        y_h = ey - ew * 0.5 - 0.45 if y_h < ey else ey + ew * 0.5 + 0.45
+            _hwall(cx0, cx1, y_h, (cx0 + cx1) * 0.5)
             if fl_idx == 0:
                 r_south = 'KITCHEN' if ci == 0 else 'PANTRY'
                 r_north = 'PANTRY' if ci == 0 else 'STORAGE'
@@ -2035,7 +2086,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                                    dw_w, dw_h, has_stairs_landing,
                                    stair_pos_info=stair_pos_info,
                                    extra_doorways=doorways,
-                                   props=props)
+                                   props=props,
+                                   fl_wings_bounds=fl_wings_bounds)
         if _manor is not None:
             _manor_rooms, _manor_walls = _manor
             if fl_wings_bounds:
@@ -3028,17 +3080,46 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             # The corner-loop stair hugs the walls, so the CENTRE of the floor
             # stays free: put square-ish rooms there (one combined living room
             # on a small floor; a short row of them on a deep one).
-            _ring = 1.90
-            _rx0, _rx1 = ix_min + _ring, ix_max - _ring
-            _ry0, _ry1 = iy_min + _ring, iy_max - _ring
+            # Inset the room only off the walls that actually carry a flight on
+            # THIS floor (the one coming up and the one going up); the free
+            # walls stay as the room boundary so furniture hugs the real walls
+            # instead of lining a virtual box in the middle of the floor.
+            _sides = set()
+            for _hrect in (stair_hole, (stair_pos_info or {}).get('ascend_hole')):
+                if not _hrect:
+                    continue
+                _hx0, _hx1, _hy0, _hy1 = _hrect
+                if _hx0 - ix_min < 0.95:
+                    _sides.add('W')
+                if ix_max - _hx1 < 0.95:
+                    _sides.add('E')
+                if _hy0 - iy_min < 0.95:
+                    _sides.add('S')
+                if iy_max - _hy1 < 0.95:
+                    _sides.add('N')
+            _ins = 1.75
+            _rx0 = ix_min + (_ins if 'W' in _sides else 0.0)
+            _rx1 = ix_max - (_ins if 'E' in _sides else 0.0)
+            _ry0 = iy_min + (_ins if 'S' in _sides else 0.0)
+            _ry1 = iy_max - (_ins if 'N' in _sides else 0.0)
             _rw, _rd = _rx1 - _rx0, _ry1 - _ry0
             _fac = {'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
                     'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)}
+            # Roles per floor: a small home (2 storeys) gets one combined
+            # kitchen/bed/living room upstairs; taller homes keep them on
+            # SEPARATE floors so a stove is never in a bedroom.
+            _tf = max(1, int(total_floors or 1))
+            if _tf <= 2:
+                _first_role = 'COTTAGE'
+            elif fl_idx <= 1:
+                _first_role = 'KITCHEN'
+            else:
+                _first_role = 'MASTER_BED' if fl_idx >= _tf - 1 else 'BEDROOM'
             if _rw > 1.8 and _rd > 1.8:
                 _n = 1
                 while _n < 4 and _rd / _n > _rw * 1.85:
                     _n += 1
-                _roles = ['COTTAGE'] + ['BEDROOM'] * (_n - 1)
+                _roles = [_first_role] + ['BEDROOM'] * (_n - 1)
                 rooms = []
                 for _i in range(_n):
                     _b0 = _ry0 + _rd * _i / _n
@@ -3051,7 +3132,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                         exterior_facades=dict(_fac)))
             else:
                 rooms = [Room(
-                    id=f"fl{fl_idx}_cottage", floor_idx=fl_idx, role='COTTAGE',
+                    id=f"fl{fl_idx}_cottage", floor_idx=fl_idx, role=_first_role,
                     bounds=(ix_min, ix_max, iy_min, iy_max),
                     doorways=list(doorways or []),
                     stair_hole=stair_hole, exterior_facades=dict(_fac))]
