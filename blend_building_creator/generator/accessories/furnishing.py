@@ -3819,14 +3819,21 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     _placed_counter = None
     # Pass 1 keeps clear of the staircase (so the counter is not buried under
     # the flight); pass 2 may use the space beneath it in cramped shops.
+    # (wall, yaw so the plank front faces the room, merchant dir into wall)
+    _wall_order = (('NORTH', 0.0, 0.0, 1.0),
+                   ('EAST', -math.pi * 0.5, 1.0, 0.0),
+                   ('WEST', math.pi * 0.5, -1.0, 0.0),
+                   ('SOUTH', math.pi, 0.0, -1.0))
+    if getattr(tracker, 'archetype', '') == 'FISHERMAN':
+        # Keep the fishmonger counter off the west staircase.
+        _wall_order = (('EAST', -math.pi * 0.5, 1.0, 0.0),
+                       ('SOUTH', math.pi, 0.0, -1.0),
+                       ('NORTH', 0.0, 0.0, 1.0),
+                       ('WEST', math.pi * 0.5, -1.0, 0.0))
     for _ig in (False, True):
         if _placed_counter is not None:
             break
-        # (wall, yaw so the plank front faces the room, merchant dir into wall)
-        for _wall, _yaw, _mdx, _mdy in (('NORTH', 0.0, 0.0, 1.0),
-                                        ('EAST', -math.pi * 0.5, 1.0, 0.0),
-                                        ('WEST', math.pi * 0.5, -1.0, 0.0),
-                                        ('SOUTH', math.pi, 0.0, -1.0)):
+        for _wall, _yaw, _mdx, _mdy in _wall_order:
             _run = rw if _wall in ('NORTH', 'SOUTH') else rd
             _clen = min(2.0, max(1.2, _run * 0.45))
             _hw = (_clen * 0.5 + 0.15) if _wall in ('NORTH', 'SOUTH') else 0.45

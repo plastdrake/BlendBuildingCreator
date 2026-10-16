@@ -384,6 +384,15 @@ def _create_building_context(props, extra_doorways=None, extra_window_exclusions
         extra_we.append({'facade': 'RIGHT', 'min': -0.82 * _hy, 'max': 0.82 * _hy,
                          'floor_min': 0, 'floor_max': 0})
 
+    # The fishmonger's shop display case moves into the front-left corner: drop
+    # the shopfront window there (the adjacent west window stays).
+    if effective_archetype == 'FISHERMAN':
+        extra_we = list(extra_we)
+        extra_we.append({'facade': 'FRONT',
+                         'min': -base_w * 0.5 + 0.18,
+                         'max': -base_w * 0.5 + 2.00,
+                         'floor_min': 0, 'floor_max': 0})
+
     return BuildingContext(
         num_floors=num_floors, floor_h=floor_h, found_h=found_h,
         floor_wall_bounds={}, hx=0.0, hy=0.0,
@@ -499,7 +508,10 @@ def _build_foundation(bm, props, ctx):
             _shy = (float(wb[2]) + float(wb[3])) * 0.5
             bs_hole = (_shx - 0.80, _shx + 0.80, _shy - 1.80, _shy + 1.80)
         else:
-            bs_hole = (1.10, 5.70, 4.00, 5.40)
+            if getattr(props, 'has_throne_room', False):
+                bs_hole = (6.80, 11.40, 4.00, 5.40)
+            else:
+                bs_hole = (1.10, 5.70, 4.00, 5.40)
 
     _build_foundation_block(bm, fw, fd, fcx, fcy, found_h, found_type, stair_hole=bs_hole)
     for w_elem in ctx.wings:
