@@ -164,10 +164,11 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
             run_ang=-math.pi * 0.5, bracket_len=bracket_len,
             board_w=board_w, board_h=board_h, light_board=True)
         return True
-    # Last resort: mount the sign just above the entrance so it stays at
-    # shopper height rather than falling back to the distant roof gable.
+    # Last resort: mount it BESIDE the entrance (never over the doorway) so it
+    # stays at shopper height without blocking the door.
+    _mx = cands[0] if cands else (door_x + door_half + board_w * 0.5 + 0.35)
     build_hanging_sign(
-        bm, door_x, face_y - 0.03, z_top,
+        bm, _mx, face_y - 0.03, z_top,
         run_ang=-math.pi * 0.5, bracket_len=bracket_len,
         board_w=board_w, board_h=board_h, light_board=True)
     return True
