@@ -80,7 +80,10 @@ def build_hospitality_scene(bm, props, ctx, tier):
     if _prop(props, 'has_outdoor_decor', False) or is_hospitality:
         _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info)
 
-    if _prop(props, 'has_well', False):
+    # No wells in artisan yards (they read as cluttered next to the workshops).
+    _ARTISAN_ARCH = {'BAKERY', 'TAILOR', 'BLACKSMITH', 'JEWELER', 'BREWERY',
+                     'FISHERMAN', 'BUTCHER', 'FURNITURE_MAKER'}
+    if _prop(props, 'has_well', False) and ctx.effective_archetype not in _ARTISAN_ARCH:
         _build_well(bm, props, ctx)
 
 
@@ -97,18 +100,20 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
     b = ctx.bounds_for(0)
     face_y = b[2] - outer
 
-    # Compact board so it fits between windows.
+    # Compact board so it fits between windows; the arm must be longer than the
+    # board so the hanging board clears the wall mounting plate.
     board_w, board_h = 1.32, 1.58
-    bracket_len = 1.34
-    # The board hangs 0.34 below the bracket top and is board_h tall.
-    board_top = ctx.found_h + ctx.floor_h - 0.24
-    z_top = board_top + 0.34
+    bracket_len = board_w + 0.46
+    # The board hangs 0.34 below the bracket top and is board_h tall. Keep the
+    # whole sign (bracket included) below the storey top so it never pokes up
+    # through an upper-floor jetty/overhang.
+    z_top = ctx.found_h + ctx.floor_h - 0.46
     # Do not poke through a veranda/porch roof.
     if porch_info is not None:
         _amz = porch_info.get('awning_mid_z')
         if _amz is not None and z_top + 0.14 > _amz:
             z_top = _amz - 0.14
-            board_top = z_top - 0.34
+    board_top = z_top - 0.34
     board_bot = board_top - board_h
 
     # Ground-floor front windows: (x0, x1, z0, z1), padded a touch.
@@ -123,16 +128,18 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
                 return False
         return True
 
-    # Candidates ordered from just beside the door outwards, then above the door.
     # Candidates: scan from just beside the door outwards to the corners, so we
-    # pick the window-free spot nearest the entrance. (Above the door is
-    # avoided — the porch roof lives there.)
+    # pick the window-free spot nearest the entrance. When a porch/veranda
+    # exists, start beyond it so the sign is not hidden behind the porch posts.
     cands = []
     _half = (b[1] - b[0]) * 0.5
     _n = int(_half / 0.25) + 1
+    _base = door_half + 0.55
+    if porch_info is not None:
+        _base = max(_base, 1.95)
     for _i in range(1, _n + 1):
         for _s in (1.0, -1.0):
-            mx = door_x + _s * (door_half + 0.55 + _i * 0.25)
+            mx = door_x + _s * (_base + _i * 0.25)
             if b[0] + 0.60 <= mx <= b[1] - 0.60:
                 cands.append(mx)
     _wings = get_building_footprint_boxes(ctx)[1:]

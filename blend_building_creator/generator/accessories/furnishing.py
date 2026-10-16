@@ -1885,23 +1885,16 @@ def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
     _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
 
     # 2. Place Royal Throne on elevated Dais at the head wall
-    throne_y = rm.bounds[3] - 1.25
+    # The artist Throne.fbx has back/banners at Y = +0.8 to +1.0 and red carpet extending forward to Y = -7.4.
+    throne_y = rm.bounds[3] - 1.00
     throne_x = rcx
-    throne_ang = 0.0  # In local coords, Throne.fbx & dais face -Y (South) toward entrance doors
-    # The throne is the primary centerpiece of the Throne Room and is ALWAYS placed.
-    dais_hw = 1.25
-    tracker.occupy(throne_x - dais_hw, throne_x + dais_hw, throne_y - 1.15, throne_y + 0.95)
+    throne_ang = 0.0  # In local coords, Throne.fbx faces -Y (South) toward entrance doors
+    # The throne asset includes the stone dais and red carpet runner extending forward ~7.4m
+    tracker.occupy(throne_x - 1.80, throne_x + 1.80, throne_y - 7.50, rm.bounds[3])
     build_prop(bm, 'ROYAL_THRONE', throne_x, throne_y, z_floor, throne_ang, dais=True)
 
-    # 3. Flanking heraldic wall banners behind the dais on the head wall
-    head_wall_y = rm.bounds[3] - 0.05
-    for sgn in (-1.0, 1.0):
-        ban_x = throne_x + sgn * 1.95
-        if rm.bounds[0] + 0.40 <= ban_x <= rm.bounds[1] - 0.40:
-            build_wall_banner(bm, ban_x, head_wall_y, z_floor,
-                              ang=-math.pi * 0.5, width=0.90, length=2.20, hang_h=2.80)
-
-    # 5. Heraldic wall banners along the gallery side walls
+    # 3. Heraldic wall banners along the gallery side walls
+    # (Head wall banners removed because the new Throne.fbx includes its own banners!)
     if rd >= 6.0:
         side_ban_y = rcy - 0.50
         build_wall_banner(bm, rm.bounds[0] + 0.05, side_ban_y, z_floor,
@@ -1909,11 +1902,8 @@ def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
         build_wall_banner(bm, rm.bounds[1] - 0.05, side_ban_y, z_floor,
                           ang=math.pi, width=0.90, length=2.20, hang_h=3.20)
 
-    # 6. Long ceremonial royal red carpet runner leading down the aisle to the throne dais
-    runner_w = min(2.80, max(1.80, rw * 0.38))
-    runner_l = min(14.00, max(4.00, rd * 0.78))
-    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy - 0.3, z_floor, runner_w, runner_l,
-             yaw_max=0.0)
+    # 4. Note: Red carpet runner down the center aisle is already integrated into the new Throne.fbx!
+    # (Redundant procedural red carpet removed as requested)
 
     # 7. Courtier / noble benches along side walls
     _try_place_wall_prop(bm, 'BENCH', 1.80, 0.50, tracker, z_floor,
@@ -3766,79 +3756,64 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     rd = rm.bounds[3] - rm.bounds[2]
     tracker.shop_counter = None
 
-    # A shop sits on the ground floor, so the staircase rising out of it is
-    # ABOVE the floor: its keep-out needlessly starves the shop. Drop the
-    # stair-related reserves (the stair box and the full-stair keep-out) here
-    # so the counter and trade display always fit; door corridors stay.
-    _shr = getattr(tracker, 'stair_hole_rect', None)
-    if _shr is not None:
-        hx0, hx1, hy0, hy1 = _shr
-        _kept = []
-        for _b in tracker.occupied_boxes:
-            bx0, bx1, by0, by1 = _b
-            _contains_hole = (bx0 <= hx0 + 0.05 and bx1 >= hx1 - 0.05
-                              and by0 <= hy0 + 0.05 and by1 >= hy1 - 0.05)
-            if _contains_hole or _b == getattr(tracker, 'stair_box', None):
-                continue
-            _kept.append(_b)
-        tracker.occupied_boxes = _kept
-
     # 1. Merchant counter: freestanding across a wall with a working strip
     # behind it, else wall-backed.
     _counter_len = min(2.0, max(1.2, min(rw, rd) * 0.45))
     _placed_counter = None
-    # Under a ceiling stair-hole the floor is solid, so wall props may use the
-    # space beneath the flight in cramped shops.
-    _ig = bool(getattr(tracker, 'stair_is_ceiling', False))
-    # (wall, yaw so the plank front faces the room, merchant dir into wall)
-    for _wall, _yaw, _mdx, _mdy in (('NORTH', 0.0, 0.0, 1.0),
-                                    ('EAST', -math.pi * 0.5, 1.0, 0.0),
-                                    ('WEST', math.pi * 0.5, -1.0, 0.0),
-                                    ('SOUTH', math.pi, 0.0, -1.0)):
-        _run = rw if _wall in ('NORTH', 'SOUTH') else rd
-        _clen = min(2.0, max(1.2, _run * 0.45))
-        _hw = (_clen * 0.5 + 0.15) if _wall in ('NORTH', 'SOUTH') else 0.45
-        _hd = 0.45 if _wall in ('NORTH', 'SOUTH') else (_clen * 0.5 + 0.15)
-        if _wall == 'NORTH':
-            _axis, _fixed = 'X', tracker.ry1 - 1.05 - 0.30
-            _lo, _hi = tracker.rx0 + _hw + 0.12, tracker.rx1 - _hw - 0.12
-        elif _wall == 'SOUTH':
-            _axis, _fixed = 'X', tracker.ry0 + 1.05 + 0.30
-            _lo, _hi = tracker.rx0 + _hw + 0.12, tracker.rx1 - _hw - 0.12
-        elif _wall == 'EAST':
-            _axis, _fixed = 'Y', tracker.rx1 - 1.05 - 0.30
-            _lo, _hi = tracker.ry0 + _hd + 0.12, tracker.ry1 - _hd - 0.12
-        else:
-            _axis, _fixed = 'Y', tracker.rx0 + 1.05 + 0.30
-            _lo, _hi = tracker.ry0 + _hd + 0.12, tracker.ry1 - _hd - 0.12
-        if _hi < _lo - 1e-6:
-            continue
-        # Sample along the wall so a cramped room still finds a free bay.
-        _span = _hi - _lo
-        _n = max(1, int(_span / 0.25) + 1)
-        for _k in range(_n + 1):
-            _t = _lo + _span * (_k / float(_n))
-            _ccx, _ccy = (_t, _fixed) if _axis == 'X' else (_fixed, _t)
-            if not tracker.is_free(_ccx - _hw, _ccx + _hw, _ccy - _hd, _ccy + _hd,
-                                   ignore_stair=_ig):
-                continue
-            # Merchant stool spot behind the counter.
-            _stx, _sty = _ccx + _mdx * 0.72, _ccy + _mdy * 0.72
-            if not tracker.is_free(_stx - 0.26, _stx + 0.26, _sty - 0.26, _sty + 0.26,
-                                   ignore_stair=_ig):
-                continue
-            tracker.occupy(_ccx - _hw, _ccx + _hw, _ccy - _hd, _ccy + _hd)
-            build_prop(bm, 'COUNTER', _ccx, _ccy, z_floor, _yaw, length=_clen)
-            tracker.occupy(_stx - 0.26, _stx + 0.26, _sty - 0.26, _sty + 0.26)
-            build_prop(bm, 'STOOL', _stx, _sty, z_floor,
-                       math.atan2(-_mdx, -_mdy))
-            _placed_counter = {'cx': _ccx, 'cy': _ccy, 'yaw': _yaw,
-                               'wall': _wall, 'freestanding': True,
-                               'mdx': _mdx, 'mdy': _mdy, 'length': _clen,
-                               'top_z': z_floor + 1.075}
-            break
+    # Pass 1 keeps clear of the staircase (so the counter is not buried under
+    # the flight); pass 2 may use the space beneath it in cramped shops.
+    for _ig in (False, True):
         if _placed_counter is not None:
             break
+        # (wall, yaw so the plank front faces the room, merchant dir into wall)
+        for _wall, _yaw, _mdx, _mdy in (('NORTH', 0.0, 0.0, 1.0),
+                                        ('EAST', -math.pi * 0.5, 1.0, 0.0),
+                                        ('WEST', math.pi * 0.5, -1.0, 0.0),
+                                        ('SOUTH', math.pi, 0.0, -1.0)):
+            _run = rw if _wall in ('NORTH', 'SOUTH') else rd
+            _clen = min(2.0, max(1.2, _run * 0.45))
+            _hw = (_clen * 0.5 + 0.15) if _wall in ('NORTH', 'SOUTH') else 0.45
+            _hd = 0.45 if _wall in ('NORTH', 'SOUTH') else (_clen * 0.5 + 0.15)
+            if _wall == 'NORTH':
+                _axis, _fixed = 'X', tracker.ry1 - 1.05 - 0.30
+                _lo, _hi = tracker.rx0 + _hw + 0.12, tracker.rx1 - _hw - 0.12
+            elif _wall == 'SOUTH':
+                _axis, _fixed = 'X', tracker.ry0 + 1.05 + 0.30
+                _lo, _hi = tracker.rx0 + _hw + 0.12, tracker.rx1 - _hw - 0.12
+            elif _wall == 'EAST':
+                _axis, _fixed = 'Y', tracker.rx1 - 1.05 - 0.30
+                _lo, _hi = tracker.ry0 + _hd + 0.12, tracker.ry1 - _hd - 0.12
+            else:
+                _axis, _fixed = 'Y', tracker.rx0 + 1.05 + 0.30
+                _lo, _hi = tracker.ry0 + _hd + 0.12, tracker.ry1 - _hd - 0.12
+            if _hi < _lo - 1e-6:
+                continue
+            # Sample along the wall so a cramped room still finds a free bay.
+            _span = _hi - _lo
+            _n = max(1, int(_span / 0.25) + 1)
+            for _k in range(_n + 1):
+                _t = _lo + _span * (_k / float(_n))
+                _ccx, _ccy = (_t, _fixed) if _axis == 'X' else (_fixed, _t)
+                if not tracker.is_free(_ccx - _hw, _ccx + _hw, _ccy - _hd, _ccy + _hd,
+                                       ignore_stair=_ig):
+                    continue
+                # Merchant stool spot behind the counter.
+                _stx, _sty = _ccx + _mdx * 0.72, _ccy + _mdy * 0.72
+                if not tracker.is_free(_stx - 0.26, _stx + 0.26, _sty - 0.26, _sty + 0.26,
+                                       ignore_stair=_ig):
+                    continue
+                tracker.occupy(_ccx - _hw, _ccx + _hw, _ccy - _hd, _ccy + _hd)
+                build_prop(bm, 'COUNTER', _ccx, _ccy, z_floor, _yaw, length=_clen)
+                tracker.occupy(_stx - 0.26, _stx + 0.26, _sty - 0.26, _sty + 0.26)
+                build_prop(bm, 'STOOL', _stx, _sty, z_floor,
+                           math.atan2(-_mdx, -_mdy))
+                _placed_counter = {'cx': _ccx, 'cy': _ccy, 'yaw': _yaw,
+                                   'wall': _wall, 'freestanding': True,
+                                   'mdx': _mdx, 'mdy': _mdy, 'length': _clen,
+                                   'top_z': z_floor + 1.075}
+                break
+            if _placed_counter is not None:
+                break
     # Guarantee a counter: widen the fallback (all four walls, ignoring the
     # stair reserve), then compact wall counters, then a freestanding one.
     if _placed_counter is None:
@@ -4047,11 +4022,12 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     if ctx is not None:
         _own_hole = (getattr(ctx, 'floor_stair_holes', None) or {}).get(rm.floor_idx)
     tracker.stair_is_ceiling = bool(_stair_well is not None and _own_hole is None)
-    # Reserve the full staircase footprint only where this floor actually has
-    # an opening in its own slab; over a solid floor the space beneath the
-    # flight stays walkable and usable (the base stair_box is enough).
+    # Reserve the full staircase footprint only above the ground floor: on the
+    # ground floor the ascending staircase is ABOVE the slab, so reserving its
+    # whole footprint would needlessly starve the room (the snug base stair_box
+    # still keeps props off the actual staircase).
     _full_stair = getattr(ctx, 'full_stair_box', None)
-    if _full_stair is not None and not tracker.stair_is_ceiling:
+    if _full_stair is not None and rm.floor_idx > 0:
         fs_x0, fs_x1, fs_y0, fs_y1 = _full_stair
         # If this room overlaps the staircase footprint, reserve the full well + landings
         if not (rx1 < fs_x0 or rx0 > fs_x1 or ry1 < fs_y0 or ry0 > fs_y1):
@@ -4312,8 +4288,9 @@ def furnish_building_interior(bm, props, ctx):
 
         # Designate largest ground-floor room as THRONE_ROOM if requested
         if fl == 0 and (bool(getattr(props, 'has_throne_room', False)) or _program == 'PALACE') and rooms:
-            largest_rm = max(rooms, key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]))
-            largest_rm.role = 'THRONE_ROOM'
+            if not any(getattr(r, 'role', '') == 'THRONE_ROOM' for r in rooms):
+                largest_rm = max(rooms, key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]))
+                largest_rm.role = 'THRONE_ROOM'
             floor_has_dining = True
 
         for rm in rooms:
