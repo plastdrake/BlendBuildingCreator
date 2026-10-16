@@ -188,24 +188,25 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
         bm, size=(0.24, open_w - 0.10, 0.14),
         location=(face_x - 0.12, open_cy, z_deck + 0.24),
         mat_index=MAT_INDEX_LANTERN, bevel_amount=0.010)
-    # Brick jambs each side of the mouth (now along Y).
-    for sy in (-(open_w * 0.5 + 0.06), (open_w * 0.5 + 0.06)):
+    # Uniform cut-stone jambs and a continuous segmental arch (overlapping
+    # voussoirs, so there are no gaps between blocks).
+    for sy in (-(open_w * 0.5 + 0.085), (open_w * 0.5 + 0.085)):
         create_beveled_box(
-            bm, size=(0.14, 0.11, open_h + 0.20),
-            location=(face_x + 0.05, open_cy + sy, open_cz),
-            mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.010)
-    # Brick voussoir arch over the mouth (fanned in the YZ plane).
-    _arch_r = open_w * 0.5 + 0.07
-    _arch_top = open_cz + open_h * 0.5
-    for k in range(5):
-        a = math.pi * (0.13 + 0.74 * k / 4.0)
+            bm, size=(0.16, 0.17, open_h + 0.26),
+            location=(face_x + 0.03, open_cy + sy, open_cz),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
+    _arch_r = open_w * 0.5 + 0.085
+    _arch_cz = open_cz + open_h * 0.5
+    _n_arch = 7
+    for k in range(_n_arch):
+        a = math.pi * (0.10 + 0.80 * k / (_n_arch - 1))
         create_beveled_box(
-            bm, size=(0.14, 0.12, 0.11),
-            location=(face_x + 0.05,
+            bm, size=(0.16, 0.22, 0.16),
+            location=(face_x + 0.03,
                       open_cy + _arch_r * math.cos(a),
-                      _arch_top + _arch_r * math.sin(a) * 0.70),
+                      _arch_cz + _arch_r * math.sin(a) * 0.72),
             rotation=(a - math.pi * 0.5, 0.0, 0.0),
-            mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.008)
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
     # Stone hearth sill jutting out in front of the mouth (+X).
     create_beveled_box(
         bm, size=(0.30, open_w + 0.34, 0.09),
