@@ -617,9 +617,20 @@ def build_floors(bm, props, ctx):
                 _info = _turn_hole_info.get(fl_idx)
                 if _info is not None:
                     _h, _open = _info
+                    # Skip guarding any side that runs along a wall.
+                    _skip = set()
+                    if _h[0] - slab_xmin < 0.55:
+                        _skip.add('W')
+                    if slab_xmax - _h[1] < 0.55:
+                        _skip.add('E')
+                    if _h[2] - slab_ymin < 0.55:
+                        _skip.add('S')
+                    if slab_ymax - _h[3] < 0.55:
+                        _skip.add('N')
                     build_stair_guardrail_one_open(
                         bm, _h, z_floor + 0.05, _open, offset=0.14, rail_h=0.95,
-                        bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax))
+                        bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
+                        skip_sides=_skip)
             elif props.stair_style == 'SPIRAL':
                 build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
                                       return_y=sh_y1, x_start=sh_x1 + 0.20)
@@ -760,86 +771,38 @@ def build_floors(bm, props, ctx):
                 next_stair_hole = (spiral_hole_xmin, spiral_hole_xmax,
                                    spiral_cy - spiral_r - 0.06, min(iy_max, spiral_cy + spiral_r + 0.06))
             elif getattr(props, 'stair_style', 'STRAIGHT') == 'TURN':
-                # Normal straight flights, but each storey's flight is turned
-                # 90 degrees from the one below it, joined by a 2x2 m landing.
-                # Every flight stays inside the reserved stair column.
-                _cx0 = _turn_col_x0
-                _cy0 = _turn_col_y0
-                _cwid = _turn_col_w
-                _cdep = _turn_col_d
-                _span = min(_cwid, _cdep)
-                # Leave room for the 2x2 landing BEYOND the flight's top, so no
-                # landing ever overshoots a wall.
-                _run = min(stair_len, max(2.2, _span - 4.2))
-                _lane_x = _cx0 + stair_w * 0.5 + 0.34
-                if _turn_land is None:
-                    _fx, _fy = _lane_x, _cy0 + 1.05
-                    _axis, _sign = 'Y', 1
-                else:
-                    _fx, _fy, _prev_axis, _psign = _turn_land
-                    _axis = 'X' if _prev_axis == 'Y' else 'Y'
-                    _sign = _psign
-                if _axis == 'Y':
-                    _ax_f, _ax_lo, _ax_hi = _fy, _cy0 + 2.05, _cy0 + _cdep - 2.05
-                else:
-                    _ax_f, _ax_lo, _ax_hi = _fx, _cx0 + 2.05, _cx0 + _cwid - 2.05
-
-                def _frect(_t, _ax, _ffx, _ffy, _w):
-                    _h = _w * 0.5 + 0.06
-                    if _ax == 'Y':
-                        return (_ffx - _h, _ffx + _h, min(_ffy, _t) - 0.06, max(_ffy, _t) + 0.06)
-                    return (min(_ffx, _t) - 0.06, max(_ffx, _t) + 0.06, _ffy - _h, _ffy + _h)
-
-                def _rover(_a, _b):
-                    return not (_a[1] <= _b[0] or _a[0] >= _b[1] or _a[3] <= _b[2] or _a[2] >= _b[3])
-
-                # Both directions keep the 2x2 landing inside the column; prefer
-                # the one whose footprint does NOT stack on the flight below, so
-                # an upper flight always clears the one beneath it.
-                _opts = []
-                for _s in (1, -1):
-                    _t = _ax_f + _s * _run
-                    if _ax_lo - 0.01 <= _t <= _ax_hi + 0.01:
-                        _opts.append((_s, _t))
-                if not _opts:
-                    _opts = [(_sign, _ax_f + _sign * _run)]
-                if _turn_prev is not None and len(_opts) > 1:
-                    def _ov(_a, _b):
-                        _ix = max(0.0, min(_a[1], _b[1]) - max(_a[0], _b[0]))
-                        _iy = max(0.0, min(_a[3], _b[3]) - max(_a[2], _b[2]))
-                        return _ix * _iy
-                    # Least footprint overlap with the flight below first: the
-                    # upper flight must never run back over the opening you
-                    # climb up through.
-                    _opts.sort(key=lambda _o: _ov(
-                        _frect(_o[1], _axis, _fx, _fy, stair_w), _turn_prev))
-                _sign, _ax_t = _opts[0]
-                _turn_prev = _frect(_ax_t, _axis, _fx, _fy, stair_w)
-                if _axis == 'Y':
-                    _tx, _ty = _fx, _ax_t
-                else:
-                    _tx, _ty = _ax_t, _fy
-                build_turned_flight(bm, (_fx, _fy), (_tx, _ty), z_floor + 0.05,
+                # Corner-loop turned stair: every storey's flight hugs a
+                # DIFFERENT wall and runs the full length of that wall, so an
+                # upper flight is never beside or above the one below it, and
+                # the middle of the floor is left free for the rooms.
+                _lane = stair_w * 0.5 + 0.30
+                _ax0 = fl0_ix_min + 0.06 + _lane
+                _ax1 = fl0_ix_max - 0.06 - _lane
+                _ay0 = fl0_iy_min + 0.06 + _lane
+                _ay1 = fl0_iy_max - 0.06 - _lane
+                _corners = [(_ax0, _ay0), (_ax0, _ay1), (_ax1, _ay1), (_ax1, _ay0)]
+                _a = _corners[fl_idx % 4]
+                _b = _corners[(fl_idx + 1) % 4]
+                _axis = 'Y' if abs(_b[1] - _a[1]) > abs(_b[0] - _a[0]) else 'X'
+                _ux = 0.0 if abs(_b[0] - _a[0]) < 1e-6 else (1.0 if _b[0] > _a[0] else -1.0)
+                _uy = 0.0 if abs(_b[1] - _a[1]) < 1e-6 else (1.0 if _b[1] > _a[1] else -1.0)
+                _foot = (_a[0] + _ux * 1.0, _a[1] + _uy * 1.0)
+                _tip = (_b[0] - _ux * 1.0, _b[1] - _uy * 1.0)
+                build_turned_flight(bm, _foot, _tip, z_floor + 0.05,
                                     z_ceil + 0.05, stair_w, along_axis=_axis)
-                # The floor itself IS the 2x2 landing (no extra timber board);
-                # the next flight leaves from 1 m beyond the top step.
-                _lcx = _tx + (_sign * 1.0 if _axis == 'X' else 0.0)
-                _lcy = _ty + (_sign * 1.0 if _axis == 'Y' else 0.0)
-                _turn_land = (_lcx, _lcy, _axis, _sign)
-                # Opening in the slab above: the flight footprint, stopping at
-                # the top step so the landing sits on solid floor.
+                # Opening in the slab above: the flight footprint (2x2 landings
+                # sit on solid floor at each corner).
+                _hw = stair_w * 0.5 + 0.10
                 if _axis == 'Y':
-                    _hx0 = _fx - stair_w * 0.5 - 0.10
-                    _hx1 = _fx + stair_w * 0.5 + 0.10
-                    _hy0 = min(_fy, _ty) - 0.05
-                    _hy1 = max(_fy, _ty) + 0.05
-                    _open = 'N' if _sign > 0 else 'S'
+                    _hx0, _hx1 = _foot[0] - _hw, _foot[0] + _hw
+                    _hy0 = min(_foot[1], _tip[1]) - 0.05
+                    _hy1 = max(_foot[1], _tip[1]) + 0.05
+                    _open = 'N' if _uy > 0 else 'S'
                 else:
-                    _hy0 = _fy - stair_w * 0.5 - 0.10
-                    _hy1 = _fy + stair_w * 0.5 + 0.10
-                    _hx0 = min(_fx, _tx) - 0.05
-                    _hx1 = max(_fx, _tx) + 0.05
-                    _open = 'E' if _sign > 0 else 'W'
+                    _hy0, _hy1 = _foot[1] - _hw, _foot[1] + _hw
+                    _hx0 = min(_foot[0], _tip[0]) - 0.05
+                    _hx1 = max(_foot[0], _tip[0]) + 0.05
+                    _open = 'E' if _ux > 0 else 'W'
                 next_stair_hole = (_hx0, _hx1, _hy0, _hy1)
                 _turn_hole_info[fl_idx + 1] = (next_stair_hole, _open)
             else:

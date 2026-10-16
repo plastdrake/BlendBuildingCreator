@@ -798,9 +798,11 @@ def build_stair_landing(bm, cx, cy, z_top, size=2.0):
 
 
 def build_stair_guardrail_one_open(bm, hole, floor_z, open_side,
-                                   offset=0.14, rail_h=0.95, bounds=None):
+                                   offset=0.14, rail_h=0.95, bounds=None,
+                                   skip_sides=None):
     """Guard a rectangular stair opening on all sides EXCEPT ``open_side``
-    ('N', 'S', 'E' or 'W') where you step onto/off the flight."""
+    ('N', 'S', 'E' or 'W') where you step onto/off the flight, and any side in
+    ``skip_sides`` (e.g. a side that sits against a wall)."""
     x0, x1, y0, y1 = hole
     if bounds:
         sx0, sx1, sy0, sy1 = bounds
@@ -814,6 +816,8 @@ def build_stair_guardrail_one_open(bm, hole, floor_z, open_side,
               'S': (xl, yl, xr, yl), 'N': (xl, yr, xr, yr)}
     for _s, (_ax, _ay, _bx, _by) in _sides.items():
         if _s == open_side:
+            continue
+        if skip_sides and _s in skip_sides:
             continue
         if abs(_bx - _ax) < 0.3 and abs(_by - _ay) < 0.3:
             continue
@@ -1514,24 +1518,33 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
     else:
         req_side_w = 4.5
 
-    # If there is a basement stair hole or floor stair opening, ensure side bay has at least 2.2m clearance to partition wall
+    # If there is a basement stair hole or floor stair opening, ensure side bay has clearance to partition wall
     if stair_hole:
         if stair_hole[0] > (ix_min + ix_max) * 0.5:
-            req_side_w = max(req_side_w, (ix_max - stair_hole[0]) + 2.2)
+            # Stair on east side (e.g. basement stair in East Bay)
+            req_side_w = max(req_side_w, (ix_max - stair_hole[0]) + 0.3)
         else:
+            # Stair on west side (main stairs in West Bay)
             req_side_w = max(req_side_w, (stair_hole[1] - ix_min) + 2.2)
 
+    # For wide palace/keep (W >= 18.0), the center bay is [-6.0, 6.0].
+    # Doorways inside the central bay (|ex| <= 6.5) enter the Throne Room / Mezzanine Gallery,
+    # and MUST NOT push req_side_w! Only doorways outside [-6.5, 6.5] belong to side bays.
     for ed in (extra_doorways or []):
         if ed.get('floor_idx', fl_idx) == fl_idx:
-            ex = ed.get('x', ed.get('pos', 0.0))
-            ew = ed.get('w', 1.2)
-            if ex < -1.0:
-                req_side_w = max(req_side_w, (-ex) - ix_min + ew * 0.5 + 1.0)
-            elif ex > 1.0:
-                req_side_w = max(req_side_w, ix_max - ex + ew * 0.5 + 1.0)
+            d_axis = ed.get('axis', 'X' if ed.get('facade') in ('FRONT', 'BACK') else 'Y')
+            if d_axis == 'X':
+                ex = ed.get('x', ed.get('pos', 0.0))
+                ew = ed.get('w', 1.2)
+                if ex < -6.5:
+                    req_side_w = max(req_side_w, (ex + ew * 0.5 + 1.0) - ix_min)
+                elif ex > 6.5:
+                    req_side_w = max(req_side_w, ix_max - (ex - ew * 0.5 - 1.0))
 
     max_half = (W * 0.5) - req_side_w
     half_hall_w = min(6.0, max(3.5, max_half))
+    if W >= 18.0:
+        half_hall_w = 6.0
     b_west = -half_hall_w
     b_east = half_hall_w
 
@@ -1608,7 +1621,7 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         )
         rooms = [rm_west, rm_center, rm_east_s, rm_east_n]
 
-    elif fl_idx == 1 and bool(getattr(props, 'has_double_height', False)):
+    elif fl_idx == 1 and bool(getattr(props, 'has_throne_room', False) or getattr(props, 'has_double_height', False)):
         _vwall(b_west, iy_min, iy_max, y_mid)
         _vwall(b_east, iy_min, iy_max, y_mid)
 
@@ -3011,21 +3024,37 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             _bd = [iy_min] + list(_deep_splits) + [iy_max]
             if min(_bd[_i + 1] - _bd[_i] for _i in range(len(_bd) - 1)) < 2.8:
                 _deep_splits = None
-        if _deep_splits is None and _turn_layout and has_stairs_landing:
-            # A turned staircase on a small floor rises through ONE combined
-            # living room (bed + kitchen + hearth together) rather than a big
-            # bare landing plus a sliver of a second room.
-            dw_x = (ix_min + ix_max) * 0.5
-            if abs(dw_x - (door_cx or 0.0)) < 0.4:
-                dw_x += 0.85
-            rooms = [Room(
-                id=f"fl{fl_idx}_cottage", floor_idx=fl_idx, role='COTTAGE',
-                bounds=(ix_min, ix_max, iy_min, iy_max),
-                doorways=list(doorways or []),
-                stair_hole=stair_hole,
-                exterior_facades={'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
-                                  'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)},
-            )]
+        if _turn_layout and has_stairs_landing:
+            # The corner-loop stair hugs the walls, so the CENTRE of the floor
+            # stays free: put square-ish rooms there (one combined living room
+            # on a small floor; a short row of them on a deep one).
+            _ring = 1.90
+            _rx0, _rx1 = ix_min + _ring, ix_max - _ring
+            _ry0, _ry1 = iy_min + _ring, iy_max - _ring
+            _rw, _rd = _rx1 - _rx0, _ry1 - _ry0
+            _fac = {'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
+                    'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)}
+            if _rw > 1.8 and _rd > 1.8:
+                _n = 1
+                while _n < 4 and _rd / _n > _rw * 1.85:
+                    _n += 1
+                _roles = ['COTTAGE'] + ['BEDROOM'] * (_n - 1)
+                rooms = []
+                for _i in range(_n):
+                    _b0 = _ry0 + _rd * _i / _n
+                    _b1 = _ry0 + _rd * (_i + 1) / _n
+                    rooms.append(Room(
+                        id=f"fl{fl_idx}_room{_i}", floor_idx=fl_idx,
+                        role=_roles[_i], bounds=(_rx0, _rx1, _b0, _b1),
+                        doorways=list(doorways or []),
+                        stair_hole=(stair_hole if _i == 0 else None),
+                        exterior_facades=dict(_fac)))
+            else:
+                rooms = [Room(
+                    id=f"fl{fl_idx}_cottage", floor_idx=fl_idx, role='COTTAGE',
+                    bounds=(ix_min, ix_max, iy_min, iy_max),
+                    doorways=list(doorways or []),
+                    stair_hole=stair_hole, exterior_facades=dict(_fac))]
         elif _deep_splits is None:
             _deep_target = 2
             roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors, program=program)
