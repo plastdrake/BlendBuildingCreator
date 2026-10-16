@@ -83,11 +83,18 @@ class RoomOccupancyTracker:
                     self.stair_approach.append(_ab)
                     self.occupied_boxes.append(_ab)
 
-        # 2. Reserve walking corridors around all doorways (interior, front, wing, annex)
+        # 2. Reserve walking corridors around all doorways (interior, front, wing, annex).
+        # A stair-landing foot is NOT a doorway corridor: it reserves exactly
+        # its 2x2 m approach square so it can never starve a room like a portal
+        # corridor (3.2 m deep) would.
         if doorways:
             for d in doorways:
                 dcx = d.get('x', (rx0 + rx1) * 0.5)
                 dcy = d.get('y', (ry0 + ry1) * 0.5)
+                if bool(d.get('is_stair_landing', False)):
+                    self.occupied_boxes.append((dcx - 1.0, dcx + 1.0,
+                                                dcy - 1.0, dcy + 1.0))
+                    continue
                 axis = d.get('axis', 'X')
                 dw = d.get('w', 0.95)
                 is_p = bool(d.get('is_portal', False) or dw >= 2.0)
@@ -131,6 +138,13 @@ class RoomOccupancyTracker:
         for d in self.doorways:
             dcx = d.get('x', (self.rx0 + self.rx1) * 0.5)
             dcy = d.get('y', (self.ry0 + self.ry1) * 0.5)
+            if bool(d.get('is_stair_landing', False)):
+                # Stair foot: only the 2x2 approach itself counts, so wall
+                # props can still use the nearby walls instead of being pushed
+                # into the middle of the room.
+                if math.hypot(x - dcx, y - dcy) < max(radius, 1.15):
+                    return True
+                continue
             dw = d.get('w', 0.95)
             is_p = bool(d.get('is_portal', False) or dw >= 2.0)
             axis = d.get('axis', 'X')
@@ -1890,17 +1904,17 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
 def _wall_clears_doorways(wall_axis, wall_pos, banner_pos, banner_w, doorways, min_margin=0.80):
     """Returns True if a banner at banner_pos along the given wall does not overlap or block any doorway."""
     for dw in (doorways or []):
-        dw_axis = dw.get('axis', 'X')
-        if dw_axis == wall_axis:
+        dw_axis = str(dw.get('axis', 'X')).upper()
+        if dw_axis == str(wall_axis).upper():
             dw_x = dw.get('x', 0.0)
             dw_y = dw.get('y', 0.0)
             dw_w = dw.get('w', 1.2)
-            if wall_axis == 'Y':
-                if abs(dw_x - wall_pos) < 0.40:
+            if dw_axis == 'Y':
+                if abs(dw_x - wall_pos) < 0.60:
                     if abs(banner_pos - dw_y) < (banner_w * 0.5 + dw_w * 0.5 + min_margin):
                         return False
             else:
-                if abs(dw_y - wall_pos) < 0.40:
+                if abs(dw_y - wall_pos) < 0.60:
                     if abs(banner_pos - dw_x) < (banner_w * 0.5 + dw_w * 0.5 + min_margin):
                         return False
     return True
@@ -1984,10 +1998,11 @@ def _furnish_mezzanine_gallery(bm, rm, tracker: RoomOccupancyTracker, z_floor: f
 
     # 1. Heraldic wall banners on perimeter gallery walls (hang high on walls, 100% clear of walkways and doors)
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    all_doorways = list(rm.doorways or []) + list(getattr(tracker, 'doorways', []) or [])
     for sgn in (-1.0, 1.0):
         bx = rcx + sgn * 2.5
         if rm.bounds[0] + 0.6 <= bx <= rm.bounds[1] - 0.6:
-            if _wall_clears_doorways('X', rm.bounds[3], bx, 0.85, rm.doorways, min_margin=0.80):
+            if _wall_clears_doorways('X', rm.bounds[3], bx, 0.85, all_doorways, min_margin=0.80):
                 build_wall_banner(bm, bx, rm.bounds[3] - 0.05, z_floor,
                                   ang=-math.pi * 0.5, width=0.85, length=2.00, hang_h=2.40)
 
@@ -4298,9 +4313,12 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                              is_master=False)
             tracker.no_rugs = True
             if getattr(rm, 'floor_idx', 1) <= 1:
+                # The hall below owns the single dining set, so the kitchen
+                # stays a kitchen (stove + shelf + produce) instead of adding
+                # a second table that clumps against it.
                 _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, _d,
                                  chimney_pos=chimney_positions,
-                                 floor_has_dining=False)
+                                 floor_has_dining=True)
             _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, _d,
                                 chimney_pos=chimney_positions)
             tracker.no_rugs = _prev_nr
