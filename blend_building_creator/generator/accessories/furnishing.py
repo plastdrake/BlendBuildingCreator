@@ -1869,6 +1869,25 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.52)
 
 
+def _wall_clears_doorways(wall_axis, wall_pos, banner_pos, banner_w, doorways, min_margin=0.80):
+    """Returns True if a banner at banner_pos along the given wall does not overlap or block any doorway."""
+    for dw in (doorways or []):
+        dw_axis = dw.get('axis', 'X')
+        if dw_axis == wall_axis:
+            dw_x = dw.get('x', 0.0)
+            dw_y = dw.get('y', 0.0)
+            dw_w = dw.get('w', 1.2)
+            if wall_axis == 'Y':
+                if abs(dw_x - wall_pos) < 0.40:
+                    if abs(banner_pos - dw_y) < (banner_w * 0.5 + dw_w * 0.5 + min_margin):
+                        return False
+            else:
+                if abs(dw_y - wall_pos) < 0.40:
+                    if abs(banner_pos - dw_x) < (banner_w * 0.5 + dw_w * 0.5 + min_margin):
+                        return False
+    return True
+
+
 def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                          rng, density: float, chimney_pos: Optional[Tuple[float, float]] = None):
     """Grand Castle Throne Room: elevated stepped dais with frontal stairs, royal throne,
@@ -1894,13 +1913,24 @@ def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
     build_prop(bm, 'ROYAL_THRONE', throne_x, throne_y, z_floor, throne_ang, dais=True)
 
     # 3. Heraldic wall banners along the gallery side walls
-    # (Head wall banners removed because the new Throne.fbx includes its own banners!)
+    # (Banners MUST NEVER block doorways or passages)
     if rd >= 6.0:
-        side_ban_y = rcy - 0.50
-        build_wall_banner(bm, rm.bounds[0] + 0.05, side_ban_y, z_floor,
-                          ang=0.0, width=0.90, length=2.20, hang_h=3.20)
-        build_wall_banner(bm, rm.bounds[1] - 0.05, side_ban_y, z_floor,
-                          ang=math.pi, width=0.90, length=2.20, hang_h=3.20)
+        ban_w = 0.90
+        cand_y_list = [rcy - 2.80, rcy + 2.80, rcy - 3.50, rcy + 3.50]
+        # West side wall
+        for cy in cand_y_list:
+            if rm.bounds[2] + 1.0 <= cy <= rm.bounds[3] - 1.0:
+                if _wall_clears_doorways('Y', rm.bounds[0], cy, ban_w, rm.doorways, min_margin=0.80):
+                    build_wall_banner(bm, rm.bounds[0] + 0.05, cy, z_floor,
+                                      ang=0.0, width=ban_w, length=2.20, hang_h=3.20)
+                    break
+        # East side wall
+        for cy in cand_y_list:
+            if rm.bounds[2] + 1.0 <= cy <= rm.bounds[3] - 1.0:
+                if _wall_clears_doorways('Y', rm.bounds[1], cy, ban_w, rm.doorways, min_margin=0.80):
+                    build_wall_banner(bm, rm.bounds[1] - 0.05, cy, z_floor,
+                                      ang=math.pi, width=ban_w, length=2.20, hang_h=3.20)
+                    break
 
     # 4. Note: Red carpet runner down the center aisle is already integrated into the new Throne.fbx!
     # (Redundant procedural red carpet removed as requested)
@@ -1932,13 +1962,14 @@ def _furnish_mezzanine_gallery(bm, rm, tracker: RoomOccupancyTracker, z_floor: f
     placed over the floor void."""
     from .banner import build_wall_banner
 
-    # 1. Heraldic wall banners on perimeter gallery walls (hang high on walls, 100% clear of walkways)
+    # 1. Heraldic wall banners on perimeter gallery walls (hang high on walls, 100% clear of walkways and doors)
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     for sgn in (-1.0, 1.0):
         bx = rcx + sgn * 2.5
         if rm.bounds[0] + 0.6 <= bx <= rm.bounds[1] - 0.6:
-            build_wall_banner(bm, bx, rm.bounds[3] - 0.05, z_floor,
-                              ang=-math.pi * 0.5, width=0.85, length=2.00, hang_h=2.40)
+            if _wall_clears_doorways('X', rm.bounds[3], bx, 0.85, rm.doorways, min_margin=0.80):
+                build_wall_banner(bm, bx, rm.bounds[3] - 0.05, z_floor,
+                                  ang=-math.pi * 0.5, width=0.85, length=2.00, hang_h=2.40)
 
     _fvoid = getattr(rm, 'floor_void', None) or getattr(tracker, 'floor_void', None)
     if _fvoid is None:
@@ -2956,7 +2987,7 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
     # Trade showpieces that do not fit on the table.
     if arch == 'BAKERY':
         _try_place_wall_prop(bm, 'BREAD_RACK', 1.00, 0.50, tracker, z_floor,
-                             candidate_walls=('NORTH', 'EAST', 'WEST'))
+                             candidate_walls=('WEST', 'NORTH', 'EAST'))
     elif arch == 'BREWERY':
         _place_floor_prop(bm, tracker, z_floor, rng, 'BOTTLE_CRATE', 0.33, 0.33)
     elif arch == 'BUTCHER':
@@ -3870,9 +3901,9 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
                              candidate_walls=('WEST', 'NORTH', 'SOUTH'))
     elif _arch0 not in ('FISHERMAN', 'TOOLSMITH', 'BLACKSMITH'):
         _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
-                             candidate_walls=('EAST', 'WEST', 'NORTH'))
+                             candidate_walls=('EAST', 'SOUTH', 'NORTH'))
         _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
-                             candidate_walls=('WEST', 'NORTH', 'SOUTH'))
+                             candidate_walls=('EAST', 'SOUTH', 'WEST', 'NORTH'))
 
     # 4. Goods crates and merchandise barrels — kept OFF the corners so the
     #    wall corners stay free for the trade display (placed above). The
@@ -4117,7 +4148,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         elif role in ('KITCHEN', 'TENEMENT_KITCHEN'):
             _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, density,
                              chimney_pos=chimney_positions, floor_has_dining=floor_has_dining)
-        elif role in ('MASTER_BED', 'OFFICER_QUARTERS'):
+        elif role in ('MASTER_BED', 'OFFICER_QUARTERS', 'ROYAL_CHAMBER'):
             _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, density, is_master=True)
         elif role in ('MESS_HALL',):
             _furnish_mess_hall(bm, rm, tracker, z_floor, z_ceil, rng, density)

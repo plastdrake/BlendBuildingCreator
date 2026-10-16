@@ -21,7 +21,7 @@ from ..mesh_utils import (
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_IRON, MAT_INDEX_WOOD,
     MAT_INDEX_TARP, MAT_INDEX_SIGN,
-    MAT_INDEX_CLOCK_FACE,
+    MAT_INDEX_BOOK_PAPER,
 )
 
 
@@ -91,9 +91,10 @@ def build_hanging_sign(bm, x, y, z_top, run_ang=0.0, bracket_len=2.20,
     rng = _rng(x, y, 31)
     faces = []
 
-    # Wall mounting plate (2x thicker/wider).
-    faces += create_beveled_box(bm, size=(0.12, 0.32, 0.68),
-                                location=(0.04, 0.0, -0.28), mat_index=MAT_INDEX_IRON,
+    # Wall mounting plate — deliberately deep so it always reaches back into
+    # the wall the sign hangs on (the bracket arm can never float off it).
+    faces += create_beveled_box(bm, size=(0.34, 0.32, 0.68),
+                                location=(-0.10, 0.0, -0.28), mat_index=MAT_INDEX_IRON,
                                 bevel_amount=0.016)
     # Main horizontal forged iron beam (2x thicker).
     faces += create_beveled_box(bm, size=(bracket_len, 0.084, 0.084),
@@ -191,7 +192,7 @@ def build_notice_board(bm, x, y, z_ground=0.0, ang=0.0, width=1.10,
         faces += create_beveled_box(bm, size=(0.26, 0.010, 0.32),
                                     location=(nx, -0.07, board_cz + ny_off),
                                     rotation=(0.0, 0.0, (rng.random() - 0.5) * 0.08),
-                                    mat_index=MAT_INDEX_CLOCK_FACE, bevel_amount=0.0)
+                                    mat_index=MAT_INDEX_BOOK_PAPER, bevel_amount=0.0)
         faces += create_cylinder(bm, radius=0.012, height=0.025, segments=6,
                                  location=(nx, -0.08, board_cz + ny_off + 0.13),
                                  rotation=(math.pi * 0.5, 0.0, 0.0),
