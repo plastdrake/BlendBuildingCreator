@@ -565,8 +565,9 @@ def build_floors(bm, props, ctx):
                 if getattr(props, 'has_throne_room', False):
                     # Palace throne hall is centered symmetrically at [-half_w, +half_w]
                     _stair_r = (cur_stair_hole[1] + 0.30) if cur_stair_hole else (slab_xmin + 4.5)
-                    _req_w = max(4.5, _stair_r - slab_xmin)
                     _half = min(6.0, max(3.5, (slab_xmax - slab_xmin) * 0.5 - _req_w))
+                    if (slab_xmax - slab_xmin) >= 18.0 and _req_w <= (slab_xmax - slab_xmin) * 0.5 - 6.0:
+                        _half = 6.0
                     _hall_xmin = -_half
                     _hall_xmax = _half
                 else:
@@ -790,13 +791,11 @@ def build_floors(bm, props, ctx):
                 else:
                     _tx, _ty = _ax_t, _fy
                 build_turned_flight(bm, (_fx, _fy), (_tx, _ty), z_floor + 0.05,
-                                    z_ceil + 0.05, stair_w, along_axis=_axis,
-                                    base_anchor=(fl_idx == 0), top_anchor=False)
-                # 2x2 m landing just past the top step; the next flight leaves
-                # from it, turned 90 degrees.
+                                    z_ceil + 0.05, stair_w, along_axis=_axis)
+                # The floor itself IS the 2x2 landing (no extra timber board);
+                # the next flight leaves from 1 m beyond the top step.
                 _lcx = _tx + (_sign * 1.0 if _axis == 'X' else 0.0)
                 _lcy = _ty + (_sign * 1.0 if _axis == 'Y' else 0.0)
-                build_stair_landing(bm, _lcx, _lcy, z_ceil + 0.05, size=2.0)
                 _turn_land = (_lcx, _lcy, _axis, _sign)
                 # Opening in the slab above: the flight footprint, stopping at
                 # the top step so the landing sits on solid floor.
@@ -880,6 +879,8 @@ def build_floors(bm, props, ctx):
                     _stair_r = (next_stair_hole[1] + 0.30) if next_stair_hole else (slab_xmin + 4.5)
                     _req_w = max(4.5, _stair_r - slab_xmin)
                     _half = min(6.0, max(3.5, (slab_xmax - slab_xmin) * 0.5 - _req_w))
+                    if (slab_xmax - slab_xmin) >= 18.0 and _req_w <= (slab_xmax - slab_xmin) * 0.5 - 6.0:
+                        _half = 6.0
                     _hall_xmin = -_half
                     _hall_xmax = _half
                 else:
