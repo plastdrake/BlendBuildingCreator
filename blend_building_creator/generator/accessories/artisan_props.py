@@ -1348,47 +1348,34 @@ def _stamp_baked_tool(bm, _faces, key, x, y, z_ground=0.0, ang=0.0,
     return True
 
 
-def build_smith_tool_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.20):
-    """Smith's finished-tool rack: a flat timber wall frame with a top rail
-    from which the artist's axe, pickaxe and hoe hang head-down, each turned
-    so its full silhouette faces the room. Spaced to the tool spans so nothing
+def build_smith_tool_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.22):
+    """Smith's tool rack: a simple open timber frame (two posts and a top rail,
+    no back board) from which the artist's axe, pickaxe and hoe hang HEAD-UP
+    with their working face to the room. Spaced to the tool spans so nothing
     overlaps."""
     faces = []
-    post_s = 0.07
-    depth = 0.18
-    h = 0.98
-    rail_z = 0.88
-    tool_len = 0.50
+    post_s = 0.08
+    depth = 0.14
+    rail_z = 0.86
+    h = rail_z + 0.12
     for sx in (-width * 0.5 + post_s * 0.5, width * 0.5 - post_s * 0.5):
         faces += create_beveled_box(
             bm, size=(post_s, depth, h), location=(sx, 0.0, h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
-    # Back board closing the frame.
+    # Top rail only.
     faces += create_beveled_box(
-        bm, size=(width, 0.035, h - 0.05),
-        location=(0.0, depth * 0.5 - 0.018, h * 0.5),
-        mat_index=MAT_INDEX_WOOD, bevel_amount=0.006)
-    # Top rail the tools hang from.
-    faces += create_beveled_box(
-        bm, size=(width, 0.09, 0.09),
-        location=(0.0, -depth * 0.5 + 0.055, rail_z),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-    # Head-down, silhouette to the room: rotate the upright art so its length
-    # runs down and its working face points -Y.
+        bm, size=(width, depth + 0.06, 0.10),
+        location=(0.0, -0.02, rail_z),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+    # Tools hang head-up, working face to -Y, head resting at the rail.
     from mathutils import Matrix as _M
-    orient = (_M.Rotation(-math.pi * 0.5, 4, 'Z')
-              @ _M.Rotation(math.pi, 4, 'X'))
-    for lx, key in ((-0.40, 'axe_tool'), (0.0, 'pickaxe_tool'),
-                    (0.40, 'hoe_tool')):
-        _stamp_baked_tool(bm, faces, key, lx, -depth * 0.5 + 0.075,
-                          rail_z - tool_len, ang=0.0, length=tool_len,
+    orient = _M.Rotation(-math.pi * 0.5, 4, 'Z')
+    tool_len = 0.52
+    for lx, key in ((-0.42, 'axe_tool'), (0.0, 'pickaxe_tool'),
+                    (0.42, 'hoe_tool')):
+        _stamp_baked_tool(bm, faces, key, lx, -0.04,
+                          rail_z + 0.10 - tool_len, ang=0.0, length=tool_len,
                           orient=orient)
-        # Wooden pegs pinning each tool to the rail.
-        for px in (lx - 0.045, lx + 0.045):
-            faces += create_cylinder(
-                bm, radius=0.012, height=0.07, segments=8,
-                location=(px, -depth * 0.5 + 0.05, rail_z - 0.03),
-                mat_index=MAT_INDEX_WOOD)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 

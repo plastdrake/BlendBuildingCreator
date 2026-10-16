@@ -136,6 +136,9 @@ def _set_bsdf_input(bsdf, name, value):
 
 def _apply_ao(tree, bsdf, color_socket, strength=0.52, distance=0.18):
     """Warm-amber AO crevice shadow embedded in Base Color -> bakes correctly."""
+    if not hasattr(color_socket, "node"):
+        _set_bsdf_input(bsdf, "Base Color", color_socket)
+        return
     bx = color_socket.node.location.x + 80
     by = color_socket.node.location.y - 340
 
@@ -1548,7 +1551,7 @@ def create_stylized_shingles(name="M_Building_Shingles",
         _setup_pbr(tree, bsdf, out, roughness=0.96)
         return mat
 
-    elif tier == 'TIER_2':
+    elif roof_mat == 'TERRACOTTA' or tier == 'TIER_2':
         default_clr = (0.78, 0.30, 0.14, 1.0)
         c_use = color or default_clr
         tex_node = _load_image_texture(tree, "terracotta_tiles_diffuse.png", c, loc_x=-660, loc_y=80, scale=(1.0, 1.0, 1.0))
@@ -2323,7 +2326,8 @@ def create_stylized_tarp(name="M_Building_Tarp", color=(0.84, 0.76, 0.65, 1.0)):
         _setup_pbr(tree, bsdf, out, roughness=0.92)
         return mat
 
-    _apply_ao(tree, bsdf, color, strength=0.48, distance=0.15)
+    # Missing texture: plain tinted BSDF (never pass a tuple into _apply_ao).
+    _set_bsdf_input(bsdf, "Base Color", color)
     _setup_pbr(tree, bsdf, out, roughness=0.92)
     return mat
 
@@ -2351,7 +2355,8 @@ def create_stylized_clay(name="M_Building_Clay", color=(0.82, 0.52, 0.36, 1.0)):
         _setup_pbr(tree, bsdf, out, roughness=0.68)
         return mat
 
-    _apply_ao(tree, bsdf, color, strength=0.50, distance=0.15)
+    # Missing texture: plain tinted BSDF (never pass a tuple into _apply_ao).
+    _set_bsdf_input(bsdf, "Base Color", color)
     _setup_pbr(tree, bsdf, out, roughness=0.68)
     return mat
 
@@ -2533,7 +2538,7 @@ def create_stylized_terracotta_brick(name="M_Building_Terracotta_Brick"):
     out, bsdf = _out_bsdf(tree, loc_x=1000)
     c = _coord(tree, loc_x=-1000)
     tex_node = _load_image_texture(tree, "terracotta_brick_diffuse.jpg", c,
-                                   loc_x=-700, loc_y=120, scale=(2.2, 2.2, 2.2))
+                                   loc_x=-700, loc_y=120, scale=(1.1, 1.1, 1.1))
     if tex_node is not None:
         _apply_ao(tree, bsdf, tex_node.outputs["Color"], strength=0.34, distance=0.12)
         _setup_pbr(tree, bsdf, out, roughness=0.88, metallic=0.0)
@@ -2669,7 +2674,15 @@ def setup_building_material_slots(obj, props):
     mat_prefix = "M_Outbuilding_" if is_outbuilding else "M_Building_"
 
     # 0. Stone (stone_wall_diffuse.jpg / mud_fieldstone / squared_fieldstone / ashlar_stone)
-    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone(f"{mat_prefix}Stone", color=props.color_stone, tier=tier)
+    stone_tier = tier
+    if tier == 'TIER_2' and (getattr(props, 'has_castle_citadel', False) or 
+                             getattr(props, 'has_curtain_wall', False) or 
+                             getattr(props, 'castle_tier', '') in ('TIER_2', 'TIER_3') or
+                             getattr(props, 'archetype', '') == 'CASTLE' or
+                             getattr(props, 'building_archetype', '') == 'CASTLE' or
+                             getattr(props, 'preset_name', '') in ('LORD_NASHERS_MANOR', 'CASTLE')):
+        stone_tier = 'TIER_3'
+    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone(f"{mat_prefix}Stone", color=props.color_stone, tier=stone_tier)
 
     # 1. Plaster (wattle_daub / stucco_plaster / smooth_ivory_stucco)
     freq = getattr(props, 'exposed_brick_frequency', 0.25)

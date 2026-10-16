@@ -1,7 +1,7 @@
 import math
 from mathutils import Vector
 from ..uv_utils import apply_roof_shingle_uvs
-from ..mesh_utils import create_beveled_box
+from ..mesh_utils import create_beveled_box, create_cone
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_SHINGLES,
     MAT_INDEX_CUT_STONE, MAT_INDEX_IRON, MAT_INDEX_LANTERN, MAT_INDEX_WATER,
@@ -173,42 +173,43 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
         bm, size=(forge_w, forge_d, forge_h),
         location=(forge_x, forge_y, z_deck + forge_h * 0.5),
         mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.020)
-    # --- Fire opening in the front face (facing the yard, -Y) ---------------
-    front_y = forge_y - forge_d * 0.5
-    open_cx, open_cz = forge_x, z_deck + 0.40
-    open_w, open_h = 0.62, 0.44
-    # Dark firebox interior recessed into the body (booleaned-in cavity box).
+    # --- Fire opening, now on the +X face (facing the open yard / smith) -----
+    face_x = forge_x + forge_w * 0.5          # +X face of the body
+    open_cy = forge_y
+    open_cz = z_deck + 0.40
+    open_w, open_h = 0.62, 0.44               # open_w now runs along Y
+    # Dark firebox interior recessed into the body.
     create_beveled_box(
-        bm, size=(open_w, 0.34, open_h),
-        location=(open_cx, front_y + 0.14, open_cz),
+        bm, size=(0.34, open_w, open_h),
+        location=(face_x - 0.14, open_cy, open_cz),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.010)
     # Glowing coals / burning fuel sitting in the firebox.
     create_beveled_box(
-        bm, size=(open_w - 0.10, 0.24, 0.14),
-        location=(open_cx, front_y + 0.12, z_deck + 0.24),
+        bm, size=(0.24, open_w - 0.10, 0.14),
+        location=(face_x - 0.12, open_cy, z_deck + 0.24),
         mat_index=MAT_INDEX_LANTERN, bevel_amount=0.010)
-    # Brick jambs each side of the mouth.
-    for sx in (-(open_w * 0.5 + 0.06), (open_w * 0.5 + 0.06)):
+    # Brick jambs each side of the mouth (now along Y).
+    for sy in (-(open_w * 0.5 + 0.06), (open_w * 0.5 + 0.06)):
         create_beveled_box(
-            bm, size=(0.11, 0.14, open_h + 0.20),
-            location=(open_cx + sx, front_y + 0.05, open_cz),
+            bm, size=(0.14, 0.11, open_h + 0.20),
+            location=(face_x + 0.05, open_cy + sy, open_cz),
             mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.010)
-    # Brick voussoir arch over the mouth (blocks fanned around the opening).
+    # Brick voussoir arch over the mouth (fanned in the YZ plane).
     _arch_r = open_w * 0.5 + 0.07
     _arch_top = open_cz + open_h * 0.5
     for k in range(5):
         a = math.pi * (0.13 + 0.74 * k / 4.0)
         create_beveled_box(
-            bm, size=(0.12, 0.14, 0.11),
-            location=(open_cx + _arch_r * math.cos(a),
-                      front_y + 0.05,
+            bm, size=(0.14, 0.12, 0.11),
+            location=(face_x + 0.05,
+                      open_cy + _arch_r * math.cos(a),
                       _arch_top + _arch_r * math.sin(a) * 0.70),
-            rotation=(0.0, a - math.pi * 0.5, 0.0),
+            rotation=(a - math.pi * 0.5, 0.0, 0.0),
             mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.008)
-    # Hearth sill jutting out in front of the mouth.
+    # Stone hearth sill jutting out in front of the mouth (+X).
     create_beveled_box(
-        bm, size=(open_w + 0.34, 0.30, 0.09),
-        location=(open_cx, front_y - 0.06, z_deck + 0.10),
+        bm, size=(0.30, open_w + 0.34, 0.09),
+        location=(face_x + 0.06, open_cy, z_deck + 0.10),
         mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
     # Iron hood tapering up from the forge crown.
     create_beveled_box(
@@ -221,10 +222,25 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
         bm, size=(0.52, 0.52, flue_h),
         location=(forge_x, forge_y, z_deck + forge_h + 0.16 + flue_h * 0.5),
         mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.016)
+    # Finish the flue top like the main chimney: collar, overhanging cap, pot.
+    flue_top = z_deck + forge_h + 0.16 + flue_h
+    create_beveled_box(
+        bm, size=(0.62, 0.62, 0.10),
+        location=(forge_x, forge_y, flue_top - 0.11),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.020)
+    create_beveled_box(
+        bm, size=(0.70, 0.70, 0.12),
+        location=(forge_x, forge_y, flue_top + 0.01),
+        rotation=(0.0, 0.02, 0.0),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
+    create_cone(
+        bm, radius1=0.19, radius2=0.24, height=0.40, segments=8,
+        location=(forge_x, forge_y, flue_top + 0.07 + 0.20),
+        mat_index=MAT_INDEX_IRON)
     # Open quench barrel beside the forge: hollow, no lid, water surface.
     from ..mesh_utils import create_hollow_cylinder, create_torus_ring
-    quench_x = min(wall_x + canopy_w - 0.34, forge_x + 1.15)
-    quench_y = canopy_cy - 0.75
+    quench_x = forge_x + 1.35
+    quench_y = forge_y - 1.20
     q_r, q_h = 0.30, 0.62
     create_hollow_cylinder(
         bm, radius=q_r, inner_radius=q_r - 0.035, height=q_h,
@@ -243,10 +259,9 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
     from .interior_furniture import build_log_pile
     build_log_pile(bm, forge_x, forge_y + forge_d * 0.5 + 0.62, z_deck,
                    ang=0.0, length=0.95, radius=0.10, rows=2)
-    # Anvil on the deck, a step in front of the fire opening where the smith
-    # strikes the hot metal.
+    # Anvil on the deck beside the fire opening (out of the mouth's +X path).
     try:
         from .artisan_props import build_anvil
-        build_anvil(bm, forge_x + 0.12, forge_y - 1.10, z_deck, ang=0.0)
+        build_anvil(bm, forge_x + 1.05, forge_y + 1.05, z_deck, ang=0.0)
     except Exception:
         pass

@@ -421,6 +421,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
     _rng = getattr(tracker, 'rng', None)
     jit = _rng.uniform(-0.30, 0.30) if _rng is not None else 0.0
 
+    _fvoid = getattr(tracker, 'floor_void', None)
+
     for wall in candidate_walls:
         if wall == 'NORTH':
             # Back at +Y, front at -Y -> yaw = 0.0
@@ -430,6 +432,10 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             max_x = rx1 - width * 0.5 - 0.15
             for cx in _sample_wall_positions(rcx + offset_bias + jit, min_x, max_x, step=0.30):
                 b = (cx - width * 0.5, cx + width * 0.5, cy - depth * 0.5, cy + depth * 0.5)
+                if _fvoid is not None:
+                    # Enforce solid floor under prop and >= 2.0m clear walking aisle to void
+                    if b[2] < _fvoid[3] + 2.00 or not (b[1] <= _fvoid[0] or b[0] >= _fvoid[1] or b[2] >= _fvoid[3]):
+                        continue
                 if tracker.is_near_door(cx, cy, radius=1.60) or any(tracker.is_near_door(px, py, radius=1.20) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
                 if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
@@ -445,6 +451,10 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             max_x = rx1 - width * 0.5 - 0.15
             for cx in _sample_wall_positions(rcx + offset_bias + jit, min_x, max_x, step=0.30):
                 b = (cx - width * 0.5, cx + width * 0.5, cy - depth * 0.5, cy + depth * 0.5)
+                if _fvoid is not None:
+                    # Enforce solid floor under prop and >= 2.0m clear walking aisle to void
+                    if _fvoid[2] - b[3] < 2.00 or not (b[1] <= _fvoid[0] or b[0] >= _fvoid[1] or b[3] <= _fvoid[2]):
+                        continue
                 if tracker.is_near_door(cx, cy, radius=1.60) or any(tracker.is_near_door(px, py, radius=1.20) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
                 if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
@@ -460,6 +470,10 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             max_y = ry1 - width * 0.5 - 0.15
             for cy in _sample_wall_positions(rcy + offset_bias + jit, min_y, max_y, step=0.30):
                 b = (cx - depth * 0.5, cx + depth * 0.5, cy - width * 0.5, cy + width * 0.5)
+                if _fvoid is not None:
+                    # Enforce solid floor under prop and >= 2.0m clear walking aisle to void
+                    if b[0] - _fvoid[1] < 2.00 or not (b[3] <= _fvoid[2] or b[2] >= _fvoid[3] or b[0] >= _fvoid[1]):
+                        continue
                 if tracker.is_near_door(cx, cy, radius=1.60) or any(tracker.is_near_door(px, py, radius=1.20) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
                 if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
@@ -475,6 +489,10 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             max_y = ry1 - width * 0.5 - 0.15
             for cy in _sample_wall_positions(rcy + offset_bias + jit, min_y, max_y, step=0.30):
                 b = (cx - depth * 0.5, cx + depth * 0.5, cy - width * 0.5, cy + width * 0.5)
+                if _fvoid is not None:
+                    # Enforce solid floor under prop and >= 2.0m clear walking aisle to void
+                    if _fvoid[0] - b[1] < 2.00 or not (b[3] <= _fvoid[2] or b[2] >= _fvoid[3] or b[1] <= _fvoid[0]):
+                        continue
                 if tracker.is_near_door(cx, cy, radius=1.60) or any(tracker.is_near_door(px, py, radius=1.20) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
                 if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows):
@@ -647,6 +665,22 @@ def _lay_rug(bm, tracker, rm, rng, key, cx, cy, z_floor, w, l, yaw_max=0.12,
             s2 = min(1.0, avail_w / max(ew, 1e-3), avail_l / max(el, 1e-3))
             w, l = w * s2, l * s2
             ew, el = ew * s2, el * s2
+
+    # Conform bounding box to authentic rug texture aspect ratio (848 x 1264)
+    RUG_ASPECT = 1264.0 / 848.0
+    _is_y = (l >= w)
+    _d_long = l if _is_y else w
+    _d_short = w if _is_y else l
+    _ratio = _d_long / max(0.01, _d_short)
+    if _ratio < 1.7 * RUG_ASPECT:
+        if _ratio > RUG_ASPECT:
+            _d_long = _d_short * RUG_ASPECT
+        else:
+            _d_short = _d_long / RUG_ASPECT
+        w = _d_short if _is_y else _d_long
+        l = _d_long if _is_y else _d_short
+        ew = w * ca + l * sa
+        el = w * sa + l * ca
 
     hole = getattr(rm, 'stair_hole', None)
     void_h = getattr(rm, 'floor_void', None) or getattr(tracker, 'floor_void', None)
@@ -1900,16 +1934,14 @@ def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
 def _furnish_mezzanine_gallery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                                rng, density: float):
     """Walkable upper gallery rim overlooking a double-height hall below.
-    All furnishings sit against outer walls; the center void is kept open."""
+    All furnishings sit against outer walls; the center void is kept open.
+    STRICT WALKABILITY: Every placed prop MUST leave at least 2.0m of clear,
+    unobstructed walking aisle between the prop and the gallery void railing.
+    Props are NEVER placed if the walkway rim is under 2.55m wide, and NEVER
+    placed over the floor void."""
     from .banner import build_wall_banner
 
-    # 1. Noble benches against outer perimeter walls
-    _try_place_wall_prop(bm, 'BENCH', 1.60, 0.45, tracker, z_floor,
-                         candidate_walls=('WEST', 'NORTH', 'SOUTH', 'EAST'), length=1.50)
-    _try_place_wall_prop(bm, 'BENCH', 1.60, 0.45, tracker, z_floor,
-                         candidate_walls=('NORTH', 'SOUTH', 'WEST', 'EAST'), length=1.50)
-
-    # 2. Wall banners on the perimeter gallery walls
+    # 1. Heraldic wall banners on perimeter gallery walls (hang high on walls, 100% clear of walkways)
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     for sgn in (-1.0, 1.0):
         bx = rcx + sgn * 2.5
@@ -1917,12 +1949,44 @@ def _furnish_mezzanine_gallery(bm, rm, tracker: RoomOccupancyTracker, z_floor: f
             build_wall_banner(bm, bx, rm.bounds[3] - 0.05, z_floor,
                               ang=-math.pi * 0.5, width=0.85, length=2.00, hang_h=2.40)
 
-    # 3. Potted plants at corners of the walkable rim
-    _try_place_plant(bm, tracker, z_floor, rng, large=True)
+    _fvoid = getattr(rm, 'floor_void', None) or getattr(tracker, 'floor_void', None)
+    if _fvoid is None:
+        return
 
-    # 4. Bookcases or display cabinets against outer walls
-    _try_place_wall_prop(bm, 'BOOKCASE_LARGE', 1.20, 0.45, tracker, z_floor,
-                         candidate_walls=('WEST', 'EAST', 'NORTH'))
+    vx0, vx1, vy0, vy1 = _fvoid
+    rx0, rx1, ry0, ry1 = rm.bounds
+    min_walk = 2.00
+
+    # Determine which walls have sufficient rim width to hold furniture while preserving >= 2.0m aisle:
+    # Bench depth ~0.45m + 0.10m margin = 0.55m. Rim must be >= 2.55m
+    bench_walls = []
+    if (ry1 - vy1) >= min_walk + 0.55:
+        bench_walls.append('NORTH')
+    if (vy0 - ry0) >= min_walk + 0.55:
+        bench_walls.append('SOUTH')
+    if (rx1 - vx1) >= min_walk + 0.55:
+        bench_walls.append('EAST')
+    if (vx0 - rx0) >= min_walk + 0.55:
+        bench_walls.append('WEST')
+
+    if bench_walls:
+        _try_place_wall_prop(bm, 'BENCH', 1.60, 0.45, tracker, z_floor,
+                             candidate_walls=tuple(bench_walls), length=1.50)
+
+    # Bookcase / display cabinet requires deeper rim >= 2.65m
+    cab_walls = []
+    if (ry1 - vy1) >= min_walk + 0.65:
+        cab_walls.append('NORTH')
+    if (vy0 - ry0) >= min_walk + 0.65:
+        cab_walls.append('SOUTH')
+    if (rx1 - vx1) >= min_walk + 0.65:
+        cab_walls.append('EAST')
+    if (vx0 - rx0) >= min_walk + 0.65:
+        cab_walls.append('WEST')
+
+    if cab_walls:
+        _try_place_wall_prop(bm, 'BOOKCASE_LARGE', 1.20, 0.45, tracker, z_floor,
+                             candidate_walls=tuple(cab_walls))
 
 
 def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -2915,11 +2979,14 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         _lay_out_jeweler_counter(bm, tracker, z_floor, rng)
     elif arch in ('TOOLSMITH', 'BLACKSMITH'):
         # The artist's smith tools are too large for the stepped display, so
-        # they hang on a dedicated wall tool rack instead.
-        _try_place_wall_prop(bm, 'SMITH_TOOL_RACK', 1.15, 0.30, tracker, z_floor,
-                             candidate_walls=('EAST', 'WEST', 'NORTH'))
-        _try_place_wall_prop(bm, 'SMITH_TOOL_RACK', 1.15, 0.30, tracker, z_floor,
-                             candidate_walls=('WEST', 'NORTH', 'EAST', 'SOUTH'))
+        # they hang on dedicated wall tool racks instead — several around the
+        # shop so it reads well stocked.
+        for _walls in (('EAST', 'WEST', 'NORTH'),
+                       ('WEST', 'NORTH', 'EAST', 'SOUTH'),
+                       ('NORTH', 'EAST', 'SOUTH', 'WEST'),
+                       ('SOUTH', 'WEST', 'EAST', 'NORTH')):
+            _try_place_wall_prop(bm, 'SMITH_TOOL_RACK', 1.25, 0.30, tracker,
+                                 z_floor, candidate_walls=_walls)
     # Stepped market display: normally placed earlier by _furnish_shop (so it
     # wins a good wall nook); this call is a guarded no-op then.
     _place_market_display(bm, tracker, z_floor, rng, arch)
