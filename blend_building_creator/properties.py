@@ -634,7 +634,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         description="Type of staircase connecting floors",
         items=[
             ('STRAIGHT', 'Straight Run', 'Wooden staircase with steps, stringers and handrail'),
-            ('L', 'L-Shaped', 'L-shaped staircase: lower flight, quarter landing, then a 90-degree turn'),
+            ('TURN', 'Turned Flights', 'Straight flights turned 90 degrees each storey, joined by a 2x2m landing'),
             ('SPIRAL', 'Fantasy Spiral', 'Curved spiral staircase around central wooden post')
         ],
         default='STRAIGHT',

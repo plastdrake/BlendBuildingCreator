@@ -21,7 +21,7 @@ from .shapes import get_facade_window_positions, compute_fl_wing_bounds
 from .style import is_tier1_wattle_daub, get_effective_wall_material
 from .interior import (
     build_floor_slab, build_ceiling_beams, build_interior_trims, build_straight_staircase,
-    build_l_staircase,
+    build_straight_flight, build_stair_landing, build_stair_guardrail_one_open,
     build_spiral_staircase, build_stair_guardrail, build_stair_guardrail_3sided, plan_floor_rooms, build_floor_interior_walls
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly
@@ -371,6 +371,31 @@ def build_floors(bm, props, ctx):
         seed, open_timber)
     ctx.mini_wing_spread = _mw_spread
 
+    # Turned-flight staircase state: the centre of the landing at the top of the
+    # last flight (and the axis it ran along), plus, per arrival floor, the
+    # opening rect and which side stays open to step off the flight.
+    _turn_land = None
+    _turn_hole_info = {}
+    # Turned flights live in a dedicated stair column so they never cut into
+    # the upstairs rooms.  Reserve it from the ground footprint and hand it to
+    # the room planner so each storey's hall swallows the column.
+    _turn_style = (getattr(props, 'stair_style', 'STRAIGHT') == 'TURN'
+                   and props.has_stairs)
+    _turn_col_w = 0.0
+    _turn_col_d = 0.0
+    _turn_col_x0 = 0.0
+    _turn_col_y0 = 0.0
+    if _turn_style:
+        _tw_int = fl0_ix_max - fl0_ix_min
+        _td_int = fl0_iy_max - fl0_iy_min
+        _turn_col_w = min(5.0, max(3.6, min(_tw_int, _td_int) - 2.2))
+        _turn_col_d = min(6.2, max(3.6, _td_int - 1.4))
+        if getattr(props, 'stair_placement', 'LEFT') == 'RIGHT':
+            _turn_col_x0 = fl0_ix_max - 0.08 - _turn_col_w
+        else:
+            _turn_col_x0 = fl0_ix_min + 0.08
+        _turn_col_y0 = fl0_iy_min + 0.08
+
     for fl_idx in range(num_floors):
         z_floor = found_h + fl_idx * floor_h
         z_ceil = z_floor + floor_h
@@ -582,7 +607,14 @@ def build_floors(bm, props, ctx):
         if fl_idx > 0 and props.has_stairs and cur_stair_hole is not None:
             sh_x1, sh_x2, sh_y1, sh_y2 = cur_stair_hole
             rail_x = min(slab_xmax - 0.10, sh_x2 + 0.05)
-            if props.stair_style == 'SPIRAL':
+            if getattr(props, 'stair_style', 'STRAIGHT') == 'TURN':
+                _info = _turn_hole_info.get(fl_idx)
+                if _info is not None:
+                    _h, _open = _info
+                    build_stair_guardrail_one_open(
+                        bm, _h, z_floor + 0.05, _open, offset=0.14, rail_h=0.95,
+                        bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax))
+            elif props.stair_style == 'SPIRAL':
                 build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
                                       return_y=sh_y1, x_start=sh_x1 + 0.20)
             elif is_tenement_stairs and D_interior >= 7.4:
@@ -721,22 +753,64 @@ def build_floors(bm, props, ctx):
                 spiral_hole_xmax = spiral_cx + spiral_r + 0.08
                 next_stair_hole = (spiral_hole_xmin, spiral_hole_xmax,
                                    spiral_cy - spiral_r - 0.06, min(iy_max, spiral_cy + spiral_r + 0.06))
-            elif getattr(props, 'stair_style', 'STRAIGHT') == 'L':
-                # L-shaped stair: a lower flight (along Y) to a quarter landing,
-                # then a 90-degree turn (along X) up to the next floor. Gives a
-                # real landing instead of one cramped straight run.
-                _lane = lane_cx_0 + (0.45 if stair_side_opt != 'RIGHT' else -0.45)
-                _run = min(1.50, max(1.05, D_interior * 0.15))
-                _turn = -1 if stair_side_opt == 'RIGHT' else 1
-                _fy = fl0_iy_min + max(0.95, _run * 0.7)
-                build_l_staircase(bm, (_lane, _fy, z_floor + 0.05), z_ceil + 0.05,
-                                  stair_width=stair_w, run=_run,
-                                  direction_y=1, turn=_turn)
-                _h0x = min(_lane, _lane + _run * _turn) - stair_w * 0.5 - 0.10
-                _h1x = max(_lane, _lane + _run * _turn) + stair_w * 0.5 + 0.10
-                _h0y = _fy - stair_w * 0.5 - 0.10
-                _h1y = _fy + _run + stair_w * 0.5 + 0.10
-                next_stair_hole = (_h0x, _h1x, _h0y, _h1y)
+            elif getattr(props, 'stair_style', 'STRAIGHT') == 'TURN':
+                # Normal straight flights, but each storey's flight is turned
+                # 90 degrees from the one below it, joined by a 2x2 m landing.
+                # Every flight stays inside the reserved stair column.
+                _cx0 = _turn_col_x0
+                _cy0 = _turn_col_y0
+                _cwid = _turn_col_w
+                _cdep = _turn_col_d
+                _run_y = min(3.6, max(1.9, _cdep - 2.1))
+                _run_x = min(3.2, max(1.5, _cwid - 3.0))
+                _lane_x = _cx0 + stair_w * 0.5 + 0.06
+                if _turn_land is None:
+                    _fx, _fy = _lane_x, _cy0 + 1.05
+                    _axis = 'Y'
+                    _sign = 1
+                else:
+                    _fx, _fy, _prev_axis, _psign = _turn_land
+                    _axis = 'X' if _prev_axis == 'Y' else 'Y'
+                    _sign = _psign
+                _run = _run_y if _axis == 'Y' else _run_x
+                if _axis == 'Y':
+                    _lo, _hi = _cy0 + 1.05, _cy0 + _cdep - 1.05
+                    if _sign > 0 and _fy + _run > _hi:
+                        _sign = -1
+                    elif _sign < 0 and _fy - _run < _lo:
+                        _sign = 1
+                    _tx, _ty = _fx, _fy + _sign * _run
+                else:
+                    _lo, _hi = _cx0 + 1.55, _cx0 + _cwid - 1.05
+                    if _sign > 0 and _fx + _run > _hi:
+                        _sign = -1
+                    elif _sign < 0 and _fx - _run < _lo:
+                        _sign = 1
+                    _tx, _ty = _fx + _sign * _run, _fy
+                build_straight_flight(bm, (_fx, _fy), (_tx, _ty), z_floor + 0.05,
+                                      z_ceil + 0.05, stair_w, along_axis=_axis)
+                # 2x2 m landing just past the top step; the next flight leaves
+                # from it, turned 90 degrees.
+                _lcx = _tx + (_sign * 1.0 if _axis == 'X' else 0.0)
+                _lcy = _ty + (_sign * 1.0 if _axis == 'Y' else 0.0)
+                build_stair_landing(bm, _lcx, _lcy, z_ceil + 0.05, size=2.0)
+                _turn_land = (_lcx, _lcy, _axis, _sign)
+                # Opening in the slab above: the flight footprint, stopping at
+                # the top step so the landing sits on solid floor.
+                if _axis == 'Y':
+                    _hx0 = _fx - stair_w * 0.5 - 0.10
+                    _hx1 = _fx + stair_w * 0.5 + 0.10
+                    _hy0 = min(_fy, _ty) - 0.05
+                    _hy1 = max(_fy, _ty) + 0.05
+                    _open = 'N' if _sign > 0 else 'S'
+                else:
+                    _hy0 = _fy - stair_w * 0.5 - 0.10
+                    _hy1 = _fy + stair_w * 0.5 + 0.10
+                    _hx0 = min(_fx, _tx) - 0.05
+                    _hx1 = max(_fx, _tx) + 0.05
+                    _open = 'E' if _sign > 0 else 'W'
+                next_stair_hole = (_hx0, _hx1, _hy0, _hy1)
+                _turn_hole_info[fl_idx + 1] = (next_stair_hole, _open)
             else:
                 if is_tenement_stairs and D_interior >= 7.4:
                     # Single-wall tandem stair for tenements: all flights hug the same wall
@@ -1773,12 +1847,15 @@ def build_floors(bm, props, ctx):
                 # For a tenement switchback `cx`/`w` describe the WHOLE well (both
                 # lanes), so the hall clears both flights and still keeps a
                 # walkway beside them; otherwise they describe the single lane.
-                'cx': stair_cx,
-                'w': (stair_w * 2.0 + lane_gap) if stair_switchback else stair_w,
-                'y_bot': stair_y_bot, 'y_top': stair_y_top,
+                # Turned flights report their reserved stair column instead.
+                'cx': (_turn_col_x0 + _turn_col_w * 0.5) if _turn_style else stair_cx,
+                'w': _turn_col_w if _turn_style else (
+                    (stair_w * 2.0 + lane_gap) if stair_switchback else stair_w),
+                'y_bot': _turn_col_y0 if _turn_style else stair_y_bot,
+                'y_top': (_turn_col_y0 + _turn_col_d) if _turn_style else stair_y_top,
                 'y_ascend': stair_ascend_sign,
                 'has_stairs': props.has_stairs, 'style': props.stair_style,
-                'switchback': stair_switchback, 'walk_w': 1.05
+                'switchback': (False if _turn_style else stair_switchback), 'walk_w': 1.05
             },
             front_door_info=(door_cx, getattr(props, 'door_width', 1.0)) if (
                 fl_idx == 0 and props.has_front_door and not open_timber

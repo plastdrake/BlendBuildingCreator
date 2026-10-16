@@ -723,53 +723,64 @@ def _l_stair_rail(bm, p0xy, p1xy, z0, z1, out_xy, h=0.92):
                    location=(bx, by, bz + h * 0.5), mat_index=MAT_INDEX_STAIRS)
 
 
-def build_l_staircase(bm, start_pos, target_z, stair_width=1.40, run=1.30,
-                      num_steps=14, direction_y=1, turn=1):
-    """L-shaped staircase: a lower flight along Y to a quarter landing, then an
-    upper flight turned 90 degrees along X up to the next floor. Gives a real
-    quarter landing instead of one cramped straight run."""
-    x0, y0, z0 = start_pos
-    dz = target_z - z0
-    step_h = dz / float(max(6, num_steps))
-    n1 = max(3, int(round((dz * 0.5) / 0.20)))
-    z_mid = z0 + dz * 0.5
-    ly = y0 + run * direction_y
-    half = stair_width * 0.5
+def build_straight_flight(bm, foot_xy, top_xy, z0, z1, width, along_axis='Y'):
+    """One full-storey straight flight (treads + risers + guard rails on both
+    sides) running along ``along_axis`` ('Y' or 'X'). Wood grain is unwrapped
+    ALONG each tread's length. Flights are joined by ``build_stair_landing`` to
+    make the turned-flight staircase."""
+    _l_stair_run(bm, foot_xy, top_xy, z0, z1, width, along_axis)
+    _half = width * 0.5 + 0.05
+    if along_axis == 'Y':
+        _l_stair_rail(bm, foot_xy, top_xy, z0, z1, (-_half, 0.0))
+        _l_stair_rail(bm, foot_xy, top_xy, z0, z1, (_half, 0.0))
+    else:
+        _l_stair_rail(bm, foot_xy, top_xy, z0, z1, (0.0, -_half))
+        _l_stair_rail(bm, foot_xy, top_xy, z0, z1, (0.0, _half))
 
-    # Lower flight (+Y) up to the quarter landing.
-    _l_stair_run(bm, (x0, y0), (x0, ly), z0, z_mid, stair_width, 'Y')
-    # Quarter landing (grain unwrapped along X).
-    _landing = create_beveled_box(bm, size=(stair_width + 0.30, stair_width + 0.30, 0.10),
-                                  location=(x0, ly, z_mid - 0.05),
-                                  mat_index=MAT_INDEX_STAIRS, bevel_amount=0.012)
+
+def build_stair_landing(bm, cx, cy, z_top, size=2.0):
+    """A solid square landing platform at the top of a flight; wood grain runs
+    along X. Returns the (x0, x1, y0, y1) rect it occupies."""
+    _land = create_beveled_box(bm, size=(size, size, 0.12),
+                               location=(cx, cy, z_top - 0.06),
+                               mat_index=MAT_INDEX_STAIRS, bevel_amount=0.012)
     _uvl = bm.loops.layers.uv.verify()
-    for _f in _landing:
+    for _f in _land:
         if not _f.is_valid:
             continue
         _nz = abs(_f.normal.z)
         for _loop in _f.loops:
             _co = _loop.vert.co
             if _nz > 0.5:
-                _u, _v = (_co.y - ly) * 1.2, (_co.x - x0) * 1.5
+                _u, _v = (_co.y - cy) * 1.2, (_co.x - cx) * 1.5
             else:
-                _u, _v = (_co.x - x0) * 1.5, (_co.z - (z_mid - 0.05)) * 1.2
+                _u, _v = (_co.x - cx) * 1.5, (_co.z - z_top) * 1.2
             _loop[_uvl].uv = Vector((_u, _v))
-    # Upper flight (+X) from the landing up to the floor.
-    x1 = x0 + run * turn
-    _l_stair_run(bm, (x0 + half * turn, ly), (x1 + half * turn, ly),
-                 z_mid, target_z, stair_width, 'X')
+    return (cx - size * 0.5, cx + size * 0.5, cy - size * 0.5, cy + size * 0.5)
 
-    # Handrails along the outer edges.
-    _l_stair_rail(bm, (x0, y0), (x0, ly), z0, z_mid, (-half - 0.05, 0.0))
-    _l_stair_rail(bm, (x0 + half * turn, ly), (x1 + half * turn, ly),
-                  z_mid, target_z, (0.0, half + 0.05))
-    # Newel posts at the foot, the landing and the top.
-    build_railing_post(bm, x0 - half - 0.05, y0 + 0.05 * direction_y, z0,
-                       height=1.05, iron_pin=False)
-    build_railing_post(bm, x0 - half - 0.05, ly, z_mid, height=1.05,
-                       iron_pin=False)
-    build_railing_post(bm, x1 + half * turn, ly + half + 0.05, target_z,
-                       height=1.05, iron_pin=False)
+
+def build_stair_guardrail_one_open(bm, hole, floor_z, open_side,
+                                   offset=0.14, rail_h=0.95, bounds=None):
+    """Guard a rectangular stair opening on all sides EXCEPT ``open_side``
+    ('N', 'S', 'E' or 'W') where you step onto/off the flight."""
+    x0, x1, y0, y1 = hole
+    if bounds:
+        sx0, sx1, sy0, sy1 = bounds
+    else:
+        sx0, sx1, sy0, sy1 = x0 - 99.0, x1 + 99.0, y0 - 99.0, y1 + 99.0
+    xl = max(sx0 + 0.06, x0 - offset)
+    xr = min(sx1 - 0.06, x1 + offset)
+    yl = max(sy0 + 0.06, y0 - offset)
+    yr = min(sy1 - 0.06, y1 + offset)
+    _sides = {'W': (xl, yl, xl, yr), 'E': (xr, yl, xr, yr),
+              'S': (xl, yl, xr, yl), 'N': (xl, yr, xr, yr)}
+    for _s, (_ax, _ay, _bx, _by) in _sides.items():
+        if _s == open_side:
+            continue
+        if abs(_bx - _ax) < 0.3 and abs(_by - _ay) < 0.3:
+            continue
+        build_railing(bm, (_ax, _ay), (_bx, _by), floor_z, height=rail_h,
+                      post_spacing=1.25, baluster_spacing=0.20, braces=False)
 
 
 def build_spiral_staircase(bm, center_pos, target_z, radius=1.35, num_steps=18, start_ang_deg=-90.0, total_angle_deg=360.0):
