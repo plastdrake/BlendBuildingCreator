@@ -631,9 +631,11 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
         )
 
 def _l_stair_run(bm, foot_xy, top_xy, z0, z1, width, along_axis):
-    """One flight of an L-stair: risers + treads climbing from z0 to z1.
-    ``along_axis`` is 'Y' or 'X' (the run direction is +axis)."""
+    """One flight of an L-stair: risers + treads climbing from z0 to z1, with
+    the wood grain unwrapped ALONG the length of each step (V along the tread
+    length, U across) so it never runs crossways. ``along_axis`` is 'Y' or 'X'."""
     import math as _m
+    uv_layer = bm.loops.layers.uv.verify()
     fx, fy = foot_xy
     tx, ty = top_xy
     horiz = _m.hypot(tx - fx, ty - fy)
@@ -646,19 +648,48 @@ def _l_stair_run(bm, foot_xy, top_xy, z0, z1, width, along_axis):
         cy = fy + (ty - fy) * frac
         sz = z0 + (i + 0.5) * step_h
         if along_axis == 'Y':
-            create_beveled_box(bm, size=(width, step_d + 0.05, 0.05),
-                               location=(cx, cy, sz), mat_index=MAT_INDEX_WOOD,
-                               bevel_amount=0.010)
-            create_box(bm, size=(width - 0.02, 0.035, step_h),
-                       location=(cx, cy - (ty - fy) / n * 0.5, sz - step_h * 0.5),
-                       mat_index=MAT_INDEX_STAIRS)
+            tread = create_beveled_box(bm, size=(width, step_d + 0.05, 0.05),
+                                       location=(cx, cy, sz), mat_index=MAT_INDEX_WOOD,
+                                       bevel_amount=0.010)
+            riser = create_box(bm, size=(width - 0.02, 0.035, step_h),
+                               location=(cx, cy - (ty - fy) / n * 0.5, sz - step_h * 0.5),
+                               mat_index=MAT_INDEX_STAIRS)
         else:
-            create_beveled_box(bm, size=(step_d + 0.05, width, 0.05),
-                               location=(cx, cy, sz), mat_index=MAT_INDEX_WOOD,
-                               bevel_amount=0.010)
-            create_box(bm, size=(0.035, width - 0.02, step_h),
-                       location=(cx - (tx - fx) / n * 0.5, cy, sz - step_h * 0.5),
-                       mat_index=MAT_INDEX_STAIRS)
+            tread = create_beveled_box(bm, size=(step_d + 0.05, width, 0.05),
+                                       location=(cx, cy, sz), mat_index=MAT_INDEX_WOOD,
+                                       bevel_amount=0.010)
+            riser = create_box(bm, size=(0.035, width - 0.02, step_h),
+                               location=(cx - (tx - fx) / n * 0.5, cy, sz - step_h * 0.5),
+                               mat_index=MAT_INDEX_STAIRS)
+        # Treads: grain (V) along the step's length, U across the tread.
+        for f in tread:
+            if not f.is_valid:
+                continue
+            nx, ny, nz = abs(f.normal.x), abs(f.normal.y), abs(f.normal.z)
+            for loop in f.loops:
+                co = loop.vert.co
+                if nz >= nx and nz >= ny:
+                    if along_axis == 'Y':
+                        u, v = (co.y - cy) * 1.1, (co.x - cx) * 1.5
+                    else:
+                        u, v = (co.x - cx) * 1.1, (co.y - cy) * 1.5
+                elif ny >= nx:
+                    u, v = (co.x - cx) * 1.5, (co.z - sz) * 1.1
+                else:
+                    u, v = (co.y - cy) * 1.5, (co.z - sz) * 1.1
+                loop[uv_layer].uv = Vector((u, v))
+        # Risers: grain along the step width, so the riser reads as a board.
+        for f in riser:
+            if not f.is_valid:
+                continue
+            nz2 = abs(f.normal.z)
+            for loop in f.loops:
+                co = loop.vert.co
+                if nz2 > 0.5:
+                    u, v = (co.x - cx) * 1.2, (co.y - cy) * 1.2
+                else:
+                    u, v = (co.x - cx) * 1.5, (co.z - (sz - step_h * 0.5)) * 1.0
+                loop[uv_layer].uv = Vector((u, v))
 
 
 def _l_stair_rail(bm, p0xy, p1xy, z0, z1, out_xy, h=0.92):
@@ -705,10 +736,22 @@ def build_l_staircase(bm, start_pos, target_z, stair_width=1.40, run=1.30,
 
     # Lower flight (+Y) up to the quarter landing.
     _l_stair_run(bm, (x0, y0), (x0, ly), z0, z_mid, stair_width, 'Y')
-    # Quarter landing.
-    create_beveled_box(bm, size=(stair_width + 0.30, stair_width + 0.30, 0.10),
-                       location=(x0, ly, z_mid - 0.05),
-                       mat_index=MAT_INDEX_STAIRS, bevel_amount=0.012)
+    # Quarter landing (grain unwrapped along X).
+    _landing = create_beveled_box(bm, size=(stair_width + 0.30, stair_width + 0.30, 0.10),
+                                  location=(x0, ly, z_mid - 0.05),
+                                  mat_index=MAT_INDEX_STAIRS, bevel_amount=0.012)
+    _uvl = bm.loops.layers.uv.verify()
+    for _f in _landing:
+        if not _f.is_valid:
+            continue
+        _nz = abs(_f.normal.z)
+        for _loop in _f.loops:
+            _co = _loop.vert.co
+            if _nz > 0.5:
+                _u, _v = (_co.y - ly) * 1.2, (_co.x - x0) * 1.5
+            else:
+                _u, _v = (_co.x - x0) * 1.5, (_co.z - (z_mid - 0.05)) * 1.2
+            _loop[_uvl].uv = Vector((_u, _v))
     # Upper flight (+X) from the landing up to the floor.
     x1 = x0 + run * turn
     _l_stair_run(bm, (x0 + half * turn, ly), (x1 + half * turn, ly),
