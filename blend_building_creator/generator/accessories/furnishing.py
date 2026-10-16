@@ -4280,6 +4280,16 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_chapel(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('STORAGE', 'CELLAR', 'PANTRY'):
             _furnish_storage(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('COTTAGE', 'LIVING_QUARTERS'):
+            # Small upstairs floor with the stair taking most of it: one
+            # combined living area with a hearth/seating, a bed and a kitchen
+            # corner rather than three cramped separate rooms.
+            _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, density,
+                                chimney_pos=chimney_positions)
+            _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, density,
+                             is_master=False)
+            _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, density,
+                             chimney_pos=chimney_positions, floor_has_dining=False)
         elif role in ('STABLE_HALL',):
             _furnish_stable_hall(bm, rm, tracker, z_floor, z_ceil, rng, density)
         else:  # HOUSE_HALL, DINING, PARLOR, default

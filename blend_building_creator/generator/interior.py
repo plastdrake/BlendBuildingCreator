@@ -723,19 +723,53 @@ def _l_stair_rail(bm, p0xy, p1xy, z0, z1, out_xy, h=0.92):
                    location=(bx, by, bz + h * 0.5), mat_index=MAT_INDEX_STAIRS)
 
 
-def build_straight_flight(bm, foot_xy, top_xy, z0, z1, width, along_axis='Y'):
-    """One full-storey straight flight (treads + risers + guard rails on both
-    sides) running along ``along_axis`` ('Y' or 'X'). Wood grain is unwrapped
-    ALONG each tread's length. Flights are joined by ``build_stair_landing`` to
-    make the turned-flight staircase."""
-    _l_stair_run(bm, foot_xy, top_xy, z0, z1, width, along_axis)
-    _half = width * 0.5 + 0.05
+def _merge_bmesh(dst, src):
+    """Copy every face of ``src`` into ``dst`` (positions, material and UVs)."""
+    uv_s = src.loops.layers.uv.verify()
+    uv_d = dst.loops.layers.uv.verify()
+    vmap = {}
+    for v in src.verts:
+        vmap[v] = dst.verts.new(v.co)
+    for f in src.faces:
+        try:
+            nf = dst.faces.new([vmap[v] for v in f.verts])
+        except ValueError:
+            continue
+        nf.material_index = f.material_index
+        nf.smooth = f.smooth
+        for l_s, l_d in zip(f.loops, nf.loops):
+            l_d[uv_d].uv = l_s[uv_s].uv
+    dst.verts.index_update()
+    dst.faces.index_update()
+
+
+def build_turned_flight(bm, foot_xy, top_xy, z0, z1, width, along_axis='Y',
+                        num_steps=14):
+    """One full-storey flight built with the NORMAL straight-staircase geometry
+    (chunky treads, closed stringers, end pillars and rails on both sides),
+    oriented along 'Y' or 'X'. Used to make the turned-flight staircase: an X
+    run is built as an ordinary +Y flight and then yawed 90 degrees about its
+    foot, rotating ONLY the newly added verts so nothing else is disturbed."""
+    fx, fy = foot_xy
+    tx, ty = top_xy
     if along_axis == 'Y':
-        _l_stair_rail(bm, foot_xy, top_xy, z0, z1, (-_half, 0.0))
-        _l_stair_rail(bm, foot_xy, top_xy, z0, z1, (_half, 0.0))
-    else:
-        _l_stair_rail(bm, foot_xy, top_xy, z0, z1, (0.0, -_half))
-        _l_stair_rail(bm, foot_xy, top_xy, z0, z1, (0.0, _half))
+        run = abs(ty - fy)
+        direction = 1 if ty >= fy else -1
+        build_straight_staircase(bm, (fx, fy, z0), z1, stair_width=width,
+                                 stair_depth=run, num_steps=num_steps,
+                                 direction_y=direction)
+        return
+    run = abs(tx - fx)
+    before = set(bm.verts)
+    build_straight_staircase(bm, (fx, fy, z0), z1, stair_width=width,
+                             stair_depth=run, num_steps=num_steps,
+                             direction_y=1)
+    ang = -math.pi * 0.5 if tx >= fx else math.pi * 0.5
+    moving = [v for v in bm.verts if v not in before]
+    if moving:
+        bmesh.ops.rotate(bm, cent=Vector((fx, fy, 0.0)),
+                         matrix=Matrix.Rotation(ang, 3, 'Z'), verts=moving)
+    bm.verts.index_update()
 
 
 def build_stair_landing(bm, cx, cy, z_top, size=2.0):
@@ -2155,8 +2189,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 return
 
     # Decide layout mode
-    is_deep = (D > W * 1.25 and D >= 6.5
-               and effective_archetype != 'TENEMENT')
+    _turn_layout = (getattr(props, 'stair_style', 'STRAIGHT') == 'TURN')
+    # A turned staircase takes a big corner column, so those floors use the
+    # band (front-to-back) layout: the stair gets a full-width band and the
+    # rooms wrap around it instead of being squeezed into a side strip.
+    is_deep = ((D > W * 1.25 and D >= 6.5) or _turn_layout) \
+        and effective_archetype != 'TENEMENT'
     can_3_rooms = (partition_style in ('AUTO', 'HALL_CHAMBERS')) and (W >= 7.2 and D >= 5.4)
     can_4_rooms = can_3_rooms and (D >= 8.0 or effective_archetype in ('INN', 'TENEMENT'))
 
@@ -2969,6 +3007,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                           else (roles[1] if has_stairs_landing else roles[0]))
             back_role = ('STAIR_LANDING' if (has_stairs_landing and stair_guards_north)
                          else (roles[0] if has_stairs_landing else roles[1]))
+            # Never leave the second band ALSO a bare landing — when the stair
+            # takes the front band, the band behind it must become a real room.
+            if back_role == 'STAIR_LANDING':
+                _pool2 = _resolve_room_roles(effective_archetype, fl_idx, 2, False,
+                                             total_floors, program=program)
+                _pick = next((r for r in reversed(_pool2) if r != 'STAIR_LANDING'), None)
+                back_role = _pick or 'BEDROOM'
+            # A turned staircase leaves only one room behind it here: make it a
+            # single combined living area (hearth, bed and kitchen corner).
+            if _turn_layout and _deep_target <= 2:
+                back_role = 'COTTAGE'
 
             rm0 = Room(
                 id=f"fl{fl_idx}_front", floor_idx=fl_idx, role=front_role,

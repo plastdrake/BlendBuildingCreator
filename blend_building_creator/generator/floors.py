@@ -21,7 +21,7 @@ from .shapes import get_facade_window_positions, compute_fl_wing_bounds
 from .style import is_tier1_wattle_daub, get_effective_wall_material
 from .interior import (
     build_floor_slab, build_ceiling_beams, build_interior_trims, build_straight_staircase,
-    build_straight_flight, build_stair_landing, build_stair_guardrail_one_open,
+    build_turned_flight, build_stair_landing, build_stair_guardrail_one_open,
     build_spiral_staircase, build_stair_guardrail, build_stair_guardrail_3sided, plan_floor_rooms, build_floor_interior_walls
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly
@@ -388,8 +388,11 @@ def build_floors(bm, props, ctx):
     if _turn_style:
         _tw_int = fl0_ix_max - fl0_ix_min
         _td_int = fl0_iy_max - fl0_iy_min
-        _turn_col_w = min(5.0, max(3.6, min(_tw_int, _td_int) - 2.2))
-        _turn_col_d = min(6.2, max(3.6, _td_int - 1.4))
+        # Rectangular stair column. A turned staircase's flights need real runs,
+        # so the column spans nearly the full width; the floor's rooms then wrap
+        # around it in a band layout (stair band + rooms behind).
+        _turn_col_w = min(6.4, max(4.6, min(_tw_int, _td_int) - 1.2))
+        _turn_col_d = min(6.5, max(4.2, _td_int - 1.4))
         if getattr(props, 'stair_placement', 'LEFT') == 'RIGHT':
             _turn_col_x0 = fl0_ix_max - 0.08 - _turn_col_w
         else:
@@ -759,36 +762,32 @@ def build_floors(bm, props, ctx):
                 # Every flight stays inside the reserved stair column.
                 _cx0 = _turn_col_x0
                 _cy0 = _turn_col_y0
-                _cwid = _turn_col_w
-                _cdep = _turn_col_d
-                _run_y = min(3.6, max(1.9, _cdep - 2.1))
-                _run_x = min(3.2, max(1.5, _cwid - 3.0))
-                _lane_x = _cx0 + stair_w * 0.5 + 0.06
+                _sq = _turn_col_w
+                _run = min(stair_len, _sq - 3.0)
+                _lane_x = _cx0 + stair_w * 0.5 + 0.12
                 if _turn_land is None:
                     _fx, _fy = _lane_x, _cy0 + 1.05
-                    _axis = 'Y'
-                    _sign = 1
+                    _axis, _sign = 'Y', 1
                 else:
                     _fx, _fy, _prev_axis, _psign = _turn_land
                     _axis = 'X' if _prev_axis == 'Y' else 'Y'
                     _sign = _psign
-                _run = _run_y if _axis == 'Y' else _run_x
                 if _axis == 'Y':
-                    _lo, _hi = _cy0 + 1.05, _cy0 + _cdep - 1.05
+                    _lo, _hi = _cy0 + 1.05, _cy0 + _sq - 1.05
                     if _sign > 0 and _fy + _run > _hi:
                         _sign = -1
                     elif _sign < 0 and _fy - _run < _lo:
                         _sign = 1
                     _tx, _ty = _fx, _fy + _sign * _run
                 else:
-                    _lo, _hi = _cx0 + 1.55, _cx0 + _cwid - 1.05
+                    _lo, _hi = _cx0 + 0.90, _cx0 + _sq - 1.05
                     if _sign > 0 and _fx + _run > _hi:
                         _sign = -1
                     elif _sign < 0 and _fx - _run < _lo:
                         _sign = 1
                     _tx, _ty = _fx + _sign * _run, _fy
-                build_straight_flight(bm, (_fx, _fy), (_tx, _ty), z_floor + 0.05,
-                                      z_ceil + 0.05, stair_w, along_axis=_axis)
+                build_turned_flight(bm, (_fx, _fy), (_tx, _ty), z_floor + 0.05,
+                                    z_ceil + 0.05, stair_w, along_axis=_axis)
                 # 2x2 m landing just past the top step; the next flight leaves
                 # from it, turned 90 degrees.
                 _lcx = _tx + (_sign * 1.0 if _axis == 'X' else 0.0)
