@@ -2949,7 +2949,23 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         else:
             _deep_target = 4 if D >= 16.8 else (3 if D >= 10.5 else 2)
         _deep_splits = None
-        if _deep_target >= 3:
+        if _turn_layout and has_stairs_landing:
+            # Turned-stair floors: the front band is the stair column; whatever
+            # depth is left behind it is divided into evenly-sized (square-ish)
+            # rooms. No corridor slivers, and if only one decent room fits it is
+            # simply one room.
+            _col_top = stair_safe_y_top + 0.35
+            _avail = iy_max - _col_top
+            _nrooms = int(_avail / 3.6)
+            while _nrooms >= 1 and _avail / _nrooms < 2.8:
+                _nrooms -= 1
+            if _nrooms >= 1 and (_col_top - iy_min) >= 1.6:
+                _splits = [_col_top]
+                for _ri in range(1, _nrooms):
+                    _splits.append(_col_top + _avail * _ri / _nrooms)
+                _deep_splits = _splits
+                _deep_target = _nrooms + 1
+        elif _deep_target >= 3:
             for _try_n in range(_deep_target, 2, -1):
                 _raw = [iy_min + D * i / _try_n for i in range(1, _try_n)]
                 _ok = True
@@ -2978,10 +2994,23 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                             break
                     _fixed.append(_sp)
                     _lo = _sp + 2.2
-                if _ok and _fixed and iy_max - _fixed[-1] >= 2.2 - 1e-6:
-                    _deep_splits = _fixed
-                    _deep_target = _try_n
-                    break
+                if not (_ok and _fixed and iy_max - _fixed[-1] >= 2.2 - 1e-6):
+                    continue
+                if _turn_layout:
+                    # Prefer squarer rooms: reject a band set that contains a
+                    # corridor-thin slice and retry with one band fewer.
+                    _ed = [iy_min] + list(_fixed) + [iy_max]
+                    if min(_ed[_i + 1] - _ed[_i] for _i in range(len(_ed) - 1)) < 2.8:
+                        continue
+                _deep_splits = _fixed
+                _deep_target = _try_n
+                break
+        # Reject corridor-thin bands on turned-stair floors: a floor sliced into
+        # shallow strips reads as hallways. Prefer a single room instead.
+        if _deep_splits is not None and _turn_layout:
+            _bd = [iy_min] + list(_deep_splits) + [iy_max]
+            if min(_bd[_i + 1] - _bd[_i] for _i in range(len(_bd) - 1)) < 2.8:
+                _deep_splits = None
         if _deep_splits is None and _turn_layout and has_stairs_landing:
             # A turned staircase on a small floor rises through ONE combined
             # living room (bed + kitchen + hearth together) rather than a big
