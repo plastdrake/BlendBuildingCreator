@@ -793,8 +793,11 @@ def build_floors(bm, props, ctx):
                 _axis = 'Y' if abs(_b[1] - _a[1]) > abs(_b[0] - _a[0]) else 'X'
                 _ux = 0.0 if abs(_b[0] - _a[0]) < 1e-6 else (1.0 if _b[0] > _a[0] else -1.0)
                 _uy = 0.0 if abs(_b[1] - _a[1]) < 1e-6 else (1.0 if _b[1] > _a[1] else -1.0)
-                _foot = (_a[0] + _ux * 1.0, _a[1] + _uy * 1.0)
-                _tip = (_b[0] - _ux * 1.0, _b[1] - _uy * 1.0)
+                # Leave a generous clear landing at EACH corner (1.6 m in from
+                # the corner on both walls) so you can step off one flight and
+                # onto the next without the other flight's body in the way.
+                _foot = (_a[0] + _ux * 1.6, _a[1] + _uy * 1.6)
+                _tip = (_b[0] - _ux * 1.6, _b[1] - _uy * 1.6)
                 build_turned_flight(bm, _foot, _tip, z_floor + 0.05,
                                     z_ceil + 0.05, stair_w, along_axis=_axis)
                 # Reserve a clear 2x2 approach at the foot of this flight so
