@@ -63,7 +63,7 @@ def _ensure_door_floor_clearance(props):
                 pass
 
 
-def generate_building(obj, props):
+def generate_building(obj, props, extra_doorways=None, extra_window_exclusions=None):
     """
     Main generator function called when properties change or generate button is clicked.
     Constructs the building inside obj.data.
@@ -95,7 +95,7 @@ def generate_building(obj, props):
         _build_castle_citadel_building(obj, bm, props)
         return
 
-    ctx = _create_building_context(props)
+    ctx = _create_building_context(props, extra_doorways=extra_doorways, extra_window_exclusions=extra_window_exclusions)
     ctx.props = props
     ctx.host_obj = obj
     _build_foundation(bm, props, ctx)
@@ -188,7 +188,7 @@ def _build_round_tower_building(obj, bm, props):
     _store_building_settings(obj, props)
 
 
-def _create_building_context(props):
+def _create_building_context(props, extra_doorways=None, extra_window_exclusions=None):
     """Resolve every top-level dimension, wing and balcony decision into a context."""
     seed = props.seed
     num_floors = max(1, props.num_floors)
@@ -364,7 +364,25 @@ def _create_building_context(props):
             elif chosen_side is not None:
                 floor_balconies[_bf] = [{'side': chosen_side, 'offset': 0.0}]
 
-    extra_dw = getattr(props, 'extra_doorways', None) or (props.get('extra_doorways', None) if hasattr(props, 'get') else None) or []
+    if extra_doorways is None:
+        extra_dw = getattr(props, 'extra_doorways', None) or (props.get('extra_doorways', None) if hasattr(props, 'get') else None) or []
+    else:
+        extra_dw = extra_doorways
+
+    if extra_window_exclusions is None:
+        extra_we = getattr(props, 'extra_window_exclusions', None) or (props.get('extra_window_exclusions', None) if hasattr(props, 'get') else None) or []
+    else:
+        extra_we = extra_window_exclusions
+
+    # The blacksmith's open forge canopy stands against the +X (RIGHT) wall on
+    # the ground floor. Suppress the ground-floor windows beneath it so they
+    # are not buried behind the work canopy (upper-storey windows stay).
+    _bs_kit = bool(getattr(props, 'kit_blacksmith', False)) or effective_archetype == 'BLACKSMITH'
+    if _bs_kit:
+        _hy = base_d * 0.5
+        extra_we = list(extra_we)
+        extra_we.append({'facade': 'RIGHT', 'min': -0.82 * _hy, 'max': 0.82 * _hy,
+                         'floor_min': 0, 'floor_max': 0})
 
     return BuildingContext(
         num_floors=num_floors, floor_h=floor_h, found_h=found_h,
@@ -382,6 +400,7 @@ def _create_building_context(props):
         wx_base_min=wx_base_min, wx_base_max=wx_base_max,
         wy_base_min=wy_base_min, wy_base_max=wy_base_max,
         extra_doorways=list(extra_dw),
+        extra_window_exclusions=list(extra_we),
         is_rotated_roof=is_rotated_roof,
     )
 

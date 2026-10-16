@@ -1269,15 +1269,17 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
 
 
 def _stamp_baked_tool(bm, _faces, key, x, y, z_ground=0.0, ang=0.0,
-                      length=0.62, lay_flat=True, long='Z'):
+                      length=0.62, lay_flat=True, long='Z', orient=None):
     """Stamp one of the artist's baked smith tools, keeping its per-face
     material slots (iron head, wooden haft, ...).
 
-    The source FBX are modelled standing upright (length along +Z). By default
-    the tool is laid flat (haft along local +X, working edge toward -Y) so it
-    reads as merchandise on a table or display; pass ``lay_flat=False`` for
-    pieces that stand on the ground (the anvil). ``length`` sets the extent of
-    the chosen source axis. Returns True, or False when not baked.
+    ``length`` sets the extent of the chosen source axis. The source FBX are
+    modelled standing upright (length along +Z). By default the tool is laid
+    flat (haft along local +X, working edge toward -Y); pass ``lay_flat=False``
+    to keep it upright (the anvil), or an explicit 4x4 ``orient`` matrix for a
+    custom mount. Whichever way it is turned, the piece is dropped so its
+    lowest point rests exactly on ``z_ground``. Returns True, or False when the
+    art is not baked.
     """
     from mathutils import Matrix as _M, Vector as _V
     from .artisan_meshdata import PROP_MESHES
@@ -1295,15 +1297,24 @@ def _stamp_baked_tool(bm, _faces, key, x, y, z_ground=0.0, ang=0.0,
     else:
         span = max(xs) - min(xs)
     s = length / (span or 1.0)
-    base = _M.Translation((-(min(xs) + max(xs)) * 0.5,
-                           -(min(ys) + max(ys)) * 0.5,
-                           -min(zs)))
-    # Lay an upright tool down: source +Z (haft) -> local +X, thin axis -> Z.
-    orient = (_M.Rotation(math.pi * 0.5, 4, 'Y') if lay_flat
-              else _M.Diagonal((1.0, 1.0, 1.0, 1.0)))
-    place = (_M.Translation((x, y, z_ground)) @ _M.Rotation(ang, 4, 'Z')
+    cx = (min(xs) + max(xs)) * 0.5
+    cy = (min(ys) + max(ys)) * 0.5
+    cz0 = min(zs)
+    if orient is None:
+        orient = (_M.Rotation(math.pi * 0.5, 4, 'Y') if lay_flat
+                  else _M.Diagonal((1.0, 1.0, 1.0, 1.0)))
+    # Measure the lowest transformed Z so the piece rests on z_ground whatever
+    # the orientation.
+    _minz = 1e9
+    for vx, vy, vz in verts:
+        _p = orient @ _V((s * (vx - cx), s * (vy - cy), s * (vz - cz0)))
+        if _p[2] < _minz:
+            _minz = _p[2]
+    place = (_M.Translation((x, y, z_ground - _minz)) @ _M.Rotation(ang, 4, 'Z')
              @ orient @ _M.Diagonal((s, s, s, 1.0)))
+    base = _M.Translation((-cx, -cy, -cz0))
     uv_layer = bm.loops.layers.uv.verify()
+    _n0 = len(bm.faces)
     remap = {}
     used = set(vi for poly in it['polys'] for vi, _ in poly)
     for i in used:
@@ -1329,7 +1340,57 @@ def _stamp_baked_tool(bm, _faces, key, x, y, z_ground=0.0, ang=0.0,
             sv = src.get(loop.vert)
             if sv is not None and sv in uvm:
                 loop[uv_layer].uv = uvm[sv]
+    if _faces is not None:
+        try:
+            _faces += [f for f in list(bm.faces)[_n0:] if f.is_valid]
+        except Exception:
+            pass
     return True
+
+
+def build_smith_tool_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.20):
+    """Smith's finished-tool rack: a flat timber wall frame with a top rail
+    from which the artist's axe, pickaxe and hoe hang head-down, each turned
+    so its full silhouette faces the room. Spaced to the tool spans so nothing
+    overlaps."""
+    faces = []
+    post_s = 0.07
+    depth = 0.18
+    h = 0.98
+    rail_z = 0.88
+    tool_len = 0.50
+    for sx in (-width * 0.5 + post_s * 0.5, width * 0.5 - post_s * 0.5):
+        faces += create_beveled_box(
+            bm, size=(post_s, depth, h), location=(sx, 0.0, h * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+    # Back board closing the frame.
+    faces += create_beveled_box(
+        bm, size=(width, 0.035, h - 0.05),
+        location=(0.0, depth * 0.5 - 0.018, h * 0.5),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.006)
+    # Top rail the tools hang from.
+    faces += create_beveled_box(
+        bm, size=(width, 0.09, 0.09),
+        location=(0.0, -depth * 0.5 + 0.055, rail_z),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    # Head-down, silhouette to the room: rotate the upright art so its length
+    # runs down and its working face points -Y.
+    from mathutils import Matrix as _M
+    orient = (_M.Rotation(-math.pi * 0.5, 4, 'Z')
+              @ _M.Rotation(math.pi, 4, 'X'))
+    for lx, key in ((-0.40, 'axe_tool'), (0.0, 'pickaxe_tool'),
+                    (0.40, 'hoe_tool')):
+        _stamp_baked_tool(bm, faces, key, lx, -depth * 0.5 + 0.075,
+                          rail_z - tool_len, ang=0.0, length=tool_len,
+                          orient=orient)
+        # Wooden pegs pinning each tool to the rail.
+        for px in (lx - 0.045, lx + 0.045):
+            faces += create_cylinder(
+                bm, radius=0.012, height=0.07, segments=8,
+                location=(px, -depth * 0.5 + 0.05, rail_z - 0.03),
+                mat_index=MAT_INDEX_WOOD)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
 
 
 def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):

@@ -243,3 +243,10 @@ def build_blacksmith_forge(bm, x_min, x_max, y_min, y_max, z_ground, wall_thickn
     from .interior_furniture import build_log_pile
     build_log_pile(bm, forge_x, forge_y + forge_d * 0.5 + 0.62, z_deck,
                    ang=0.0, length=0.95, radius=0.10, rows=2)
+    # Anvil on the deck, a step in front of the fire opening where the smith
+    # strikes the hot metal.
+    try:
+        from .artisan_props import build_anvil
+        build_anvil(bm, forge_x + 0.12, forge_y - 1.10, z_deck, ang=0.0)
+    except Exception:
+        pass
