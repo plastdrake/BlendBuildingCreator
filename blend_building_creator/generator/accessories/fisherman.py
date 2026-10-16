@@ -85,7 +85,7 @@ def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
         for _i in range(_n):
             _fy = rack_cy - rack_l * 0.5 + 0.26 + _i * ((rack_l - 0.52) / max(1, _n - 1))
             _fl = 0.30 * _fish_scale(_i)
-            _rope = 0.16 + 0.20 * _fl
+            _rope = 0.18 + 0.85 * _fl
             create_cylinder(
                 bm, radius=0.006, height=_rope, segments=6,
                 location=(rack_x, _fy - 0.005, z_ground + rack_h - _rope * 0.5),
@@ -95,7 +95,7 @@ def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
             _stamp_baked_local(
                 bm, [], 'fish.fbx', rack_x, _fy - 0.005,
                 z_ground + rack_h - _rope, 0.0, _fl,
-                _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=1.6
+                _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
             )
     except Exception:
         pass
