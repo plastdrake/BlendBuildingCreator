@@ -461,7 +461,7 @@ def build_mezzanine_void_railing(bm, vx0, vx1, vy0, vy1, floor_z, height=0.98):
                   post_at_start=False, post_at_end=False, post_spacing=1.4, baluster_spacing=0.22)
 
 
-def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_depth=2.6, num_steps=14, direction_y=1):
+def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_depth=2.6, num_steps=14, direction_y=1, base_anchor=True, top_anchor=True):
     """
     Generates a wooden straight/run staircase with chunky treads, grounded stringers,
     solid base and top anchor plates, and stylized handrails on BOTH SIDES.
@@ -477,18 +477,19 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
     uv_layer = bm.loops.layers.uv.verify()
     
     # 1. Grounded Starter Base Timber (anchored to floor)
-    base_faces = create_beveled_box(
-        bm,
-        size=(stair_width + 0.18, 0.22, 0.08),
-        location=(x0, y0 + 0.05 * direction_y, z0 + 0.04),
-        mat_index=MAT_INDEX_STAIRS,
-        bevel_amount=0.012
-    )
-    for f in base_faces:
-        if f.is_valid:
-            for loop in f.loops:
-                co = loop.vert.co
-                loop[uv_layer].uv = Vector(((co.y - y0) * 1.5 + (co.z - z0) * 1.5, (co.x - x0) * 0.65))
+    if base_anchor:
+        base_faces = create_beveled_box(
+            bm,
+            size=(stair_width + 0.18, 0.22, 0.08),
+            location=(x0, y0 + 0.05 * direction_y, z0 + 0.04),
+            mat_index=MAT_INDEX_STAIRS,
+            bevel_amount=0.012
+        )
+        for f in base_faces:
+            if f.is_valid:
+                for loop in f.loops:
+                    co = loop.vert.co
+                    loop[uv_layer].uv = Vector(((co.y - y0) * 1.5 + (co.z - z0) * 1.5, (co.x - x0) * 0.65))
     
     # 2. Wooden Treads and Risers
     for i in range(num_steps):
@@ -571,18 +572,19 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
         
     # 4. Top Landing Anchor Timber (anchors stringers solidly to the upper floor).
     # Dropped a touch below the floor so its top face never z-fights the slab.
-    top_faces = create_beveled_box(
-        bm,
-        size=(stair_width + 0.18, 0.22, 0.10),
-        location=(x0, y0 + stair_depth * direction_y, target_z - 0.09),
-        mat_index=MAT_INDEX_STAIRS,
-        bevel_amount=0.012
-    )
-    for f in top_faces:
-        if f.is_valid:
-            for loop in f.loops:
-                co = loop.vert.co
-                loop[uv_layer].uv = Vector(((co.x - x0) * 1.5, (co.y - (y0 + stair_depth * direction_y)) * 0.65 + (co.z - target_z) * 1.2))
+    if top_anchor:
+        top_faces = create_beveled_box(
+            bm,
+            size=(stair_width + 0.18, 0.22, 0.10),
+            location=(x0, y0 + stair_depth * direction_y, target_z - 0.09),
+            mat_index=MAT_INDEX_STAIRS,
+            bevel_amount=0.012
+        )
+        for f in top_faces:
+            if f.is_valid:
+                for loop in f.loops:
+                    co = loop.vert.co
+                    loop[uv_layer].uv = Vector(((co.x - x0) * 1.5, (co.y - (y0 + stair_depth * direction_y)) * 0.65 + (co.z - target_z) * 1.2))
 
     # 5. Guard railings on BOTH sides with prominent, taller end pillars (newel posts).
     # End pillars are placed forward at the landing/step edges and grounded on floor/landing slabs.
@@ -744,7 +746,7 @@ def _merge_bmesh(dst, src):
 
 
 def build_turned_flight(bm, foot_xy, top_xy, z0, z1, width, along_axis='Y',
-                        num_steps=14):
+                        num_steps=14, base_anchor=True, top_anchor=True):
     """One full-storey flight built with the NORMAL straight-staircase geometry
     (chunky treads, closed stringers, end pillars and rails on both sides),
     oriented along 'Y' or 'X'. Used to make the turned-flight staircase: an X
@@ -757,13 +759,15 @@ def build_turned_flight(bm, foot_xy, top_xy, z0, z1, width, along_axis='Y',
         direction = 1 if ty >= fy else -1
         build_straight_staircase(bm, (fx, fy, z0), z1, stair_width=width,
                                  stair_depth=run, num_steps=num_steps,
-                                 direction_y=direction)
+                                 direction_y=direction,
+                                 base_anchor=base_anchor, top_anchor=top_anchor)
         return
     run = abs(tx - fx)
     before = set(bm.verts)
     build_straight_staircase(bm, (fx, fy, z0), z1, stair_width=width,
                              stair_depth=run, num_steps=num_steps,
-                             direction_y=1)
+                             direction_y=1,
+                             base_anchor=base_anchor, top_anchor=top_anchor)
     ang = -math.pi * 0.5 if tx >= fx else math.pi * 0.5
     moving = [v for v in bm.verts if v not in before]
     if moving:
@@ -2955,10 +2959,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     _sp = _clear_doorway_span(_sp, axis='Y', lo=_lo, hi=iy_max - 1.8)
                     _sp = _dodge_oven_band(_sp, _lo, iy_max - 1.8)
                     _sp = min(max(_sp, _lo), iy_max - 1.8)
-                    if stair_hole is not None:
+                    _hs0 = _hs1 = None
+                    if _turn_layout:
+                        # Keep the partition clear of the WHOLE turned-stair
+                        # column (flights, landings and all), not just the slab
+                        # opening, so no wall ever runs through the stairs.
+                        _hs0, _hs1 = stair_safe_y_bot - 0.35, stair_safe_y_top + 0.35
+                    elif stair_hole is not None:
+                        _hs0, _hs1 = stair_hole[2] - 0.80, stair_hole[3] + 0.80
+                    if _hs0 is not None:
                         # A split exactly on the clearance edge is already
                         # safe; only the open interval is forbidden.
-                        _hs0, _hs1 = stair_hole[2] - 0.80, stair_hole[3] + 0.80
                         if _hs0 < _sp < _hs1:
                             _sp = _hs0 if (_sp - _hs0) <= (_hs1 - _sp) else _hs1
                             _sp = min(max(_sp, _lo), iy_max - 1.8)
@@ -2971,7 +2982,22 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     _deep_splits = _fixed
                     _deep_target = _try_n
                     break
-        if _deep_splits is None:
+        if _deep_splits is None and _turn_layout and has_stairs_landing:
+            # A turned staircase on a small floor rises through ONE combined
+            # living room (bed + kitchen + hearth together) rather than a big
+            # bare landing plus a sliver of a second room.
+            dw_x = (ix_min + ix_max) * 0.5
+            if abs(dw_x - (door_cx or 0.0)) < 0.4:
+                dw_x += 0.85
+            rooms = [Room(
+                id=f"fl{fl_idx}_cottage", floor_idx=fl_idx, role='COTTAGE',
+                bounds=(ix_min, ix_max, iy_min, iy_max),
+                doorways=list(doorways or []),
+                stair_hole=stair_hole,
+                exterior_facades={'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
+                                  'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)},
+            )]
+        elif _deep_splits is None:
             _deep_target = 2
             roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors, program=program)
             # Keep the cross partition clear of the stair band on whichever side
@@ -3016,7 +3042,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 back_role = _pick or 'BEDROOM'
             # A turned staircase leaves only one room behind it here: make it a
             # single combined living area (hearth, bed and kitchen corner).
-            if _turn_layout and _deep_target <= 2:
+            # Upper floors only — the ground floor keeps its trade workshop.
+            if _turn_layout and fl_idx > 0 and _deep_target <= 2:
                 back_role = 'COTTAGE'
 
             rm0 = Room(

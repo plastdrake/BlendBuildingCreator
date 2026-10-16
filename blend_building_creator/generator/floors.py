@@ -764,7 +764,7 @@ def build_floors(bm, props, ctx):
                 _cy0 = _turn_col_y0
                 _sq = _turn_col_w
                 _run = min(stair_len, _sq - 3.0)
-                _lane_x = _cx0 + stair_w * 0.5 + 0.12
+                _lane_x = _cx0 + stair_w * 0.5 + 0.34
                 if _turn_land is None:
                     _fx, _fy = _lane_x, _cy0 + 1.05
                     _axis, _sign = 'Y', 1
@@ -787,7 +787,8 @@ def build_floors(bm, props, ctx):
                         _sign = 1
                     _tx, _ty = _fx + _sign * _run, _fy
                 build_turned_flight(bm, (_fx, _fy), (_tx, _ty), z_floor + 0.05,
-                                    z_ceil + 0.05, stair_w, along_axis=_axis)
+                                    z_ceil + 0.05, stair_w, along_axis=_axis,
+                                    base_anchor=(fl_idx == 0), top_anchor=False)
                 # 2x2 m landing just past the top step; the next flight leaves
                 # from it, turned 90 degrees.
                 _lcx = _tx + (_sign * 1.0 if _axis == 'X' else 0.0)
