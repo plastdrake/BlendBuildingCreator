@@ -375,6 +375,7 @@ def build_floors(bm, props, ctx):
     # last flight (and the axis it ran along), plus, per arrival floor, the
     # opening rect and which side stays open to step off the flight.
     _turn_land = None
+    _turn_prev = None
     _turn_hole_info = {}
     # Turned flights live in a dedicated stair column so they never cut into
     # the upstairs rooms.  Reserve it from the ground footprint and hand it to
@@ -781,11 +782,35 @@ def build_floors(bm, props, ctx):
                     _ax_f, _ax_lo, _ax_hi = _fy, _cy0 + 2.05, _cy0 + _cdep - 2.05
                 else:
                     _ax_f, _ax_lo, _ax_hi = _fx, _cx0 + 2.05, _cx0 + _cwid - 2.05
-                if _sign > 0 and _ax_f + _run > _ax_hi:
-                    _sign = -1
-                if _sign < 0 and _ax_f - _run < _ax_lo:
-                    _sign = 1 if _ax_f + _run <= _ax_hi else -1
-                _ax_t = _ax_f + _sign * _run
+
+                def _frect(_t, _ax, _ffx, _ffy, _w):
+                    _h = _w * 0.5 + 0.06
+                    if _ax == 'Y':
+                        return (_ffx - _h, _ffx + _h, min(_ffy, _t) - 0.06, max(_ffy, _t) + 0.06)
+                    return (min(_ffx, _t) - 0.06, max(_ffx, _t) + 0.06, _ffy - _h, _ffy + _h)
+
+                def _rover(_a, _b):
+                    return not (_a[1] <= _b[0] or _a[0] >= _b[1] or _a[3] <= _b[2] or _a[2] >= _b[3])
+
+                # Both directions keep the 2x2 landing inside the column; prefer
+                # the one whose footprint does NOT stack on the flight below, so
+                # an upper flight always clears the one beneath it.
+                _opts = []
+                for _s in (1, -1):
+                    _t = _ax_f + _s * _run
+                    if _ax_lo - 0.01 <= _t <= _ax_hi + 0.01:
+                        _opts.append((_s, _t))
+                if not _opts:
+                    _opts = [(_sign, _ax_f + _sign * _run)]
+                if _turn_prev is not None and len(_opts) > 1:
+                    _pick = _opts[0]
+                    for _o in _opts:
+                        if not _rover(_frect(_o[1], _axis, _fx, _fy, stair_w), _turn_prev):
+                            _pick = _o
+                            break
+                    _opts = [_pick]
+                _sign, _ax_t = _opts[0]
+                _turn_prev = _frect(_ax_t, _axis, _fx, _fy, stair_w)
                 if _axis == 'Y':
                     _tx, _ty = _fx, _ax_t
                 else:
