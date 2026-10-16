@@ -566,29 +566,37 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
     rcx = (rx0 + rx1) * 0.5
     rcy = (ry0 + ry1) * 0.5
 
-    # 1. Try West wall (headboard at -X, bed extends +X into room)
-    cx = rx0 + length * 0.5 + 0.03
-    min_y = ry0 + width * 0.5 + 0.15
-    max_y = ry1 - width * 0.5 - 0.15
-    for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
-        if tracker.is_near_door(cx, cy, radius=1.60):
-            continue
-        b = (cx - length * 0.5, cx + length * 0.5, cy - width * 0.5, cy + width * 0.5)
-        if tracker.is_free(b[0], b[1], b[2], b[3]):
-            tracker.occupy(b[0], b[1], b[2], b[3])
-            build_prop(bm, 'BED', cx, cy, z_floor, 0.0, length=length, width=width)
-            return (cx, cy, 0.0)
+    # 1. Try West wall (headboard at -X, bed extends +X into room). Slide
+    # outward along the wall-normal when the first slot is clipped (e.g. by a
+    # stair keep-out) instead of abandoning the whole wall.
+    for dx in (0.0, 0.30, 0.60):
+        cx = rx0 + length * 0.5 + 0.03 + dx
+        if cx + length * 0.5 > rx1 - 0.15:
+            break
+        min_y = ry0 + width * 0.5 + 0.15
+        max_y = ry1 - width * 0.5 - 0.15
+        for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
+            if tracker.is_near_door(cx, cy, radius=1.60):
+                continue
+            b = (cx - length * 0.5, cx + length * 0.5, cy - width * 0.5, cy + width * 0.5)
+            if tracker.is_free(b[0], b[1], b[2], b[3]):
+                tracker.occupy(b[0], b[1], b[2], b[3])
+                build_prop(bm, 'BED', cx, cy, z_floor, 0.0, length=length, width=width)
+                return (cx, cy, 0.0)
 
     # 2. Try East wall (headboard at +X, bed extends -X into room)
-    cx = rx1 - length * 0.5 - 0.03
-    for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
-        if tracker.is_near_door(cx, cy, radius=1.60):
-            continue
-        b = (cx - length * 0.5, cx + length * 0.5, cy - width * 0.5, cy + width * 0.5)
-        if tracker.is_free(b[0], b[1], b[2], b[3]):
-            tracker.occupy(b[0], b[1], b[2], b[3])
-            build_prop(bm, 'BED', cx, cy, z_floor, math.pi, length=length, width=width)
-            return (cx, cy, math.pi)
+    for dx in (0.0, 0.30, 0.60):
+        cx = rx1 - length * 0.5 - 0.03 - dx
+        if cx - length * 0.5 < rx0 + 0.15:
+            break
+        for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
+            if tracker.is_near_door(cx, cy, radius=1.60):
+                continue
+            b = (cx - length * 0.5, cx + length * 0.5, cy - width * 0.5, cy + width * 0.5)
+            if tracker.is_free(b[0], b[1], b[2], b[3]):
+                tracker.occupy(b[0], b[1], b[2], b[3])
+                build_prop(bm, 'BED', cx, cy, z_floor, math.pi, length=length, width=width)
+                return (cx, cy, math.pi)
 
     # 3. Try North wall (headboard at +Y, bed extends -Y into room)
     cy = ry1 - length * 0.5 - 0.03
@@ -4153,6 +4161,20 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         floor_void=_floor_void
     )
     tracker.stair_hole = _stair_well
+    # Turned-stair rooms are pre-inset off the walls that carry a flight, so
+    # the generic side pad would double-dip and deny the whole inset wall.
+    # Shrink it to a clip margin (the hole ends keep their approach boxes and
+    # the room inset already clears the flight body).
+    if (ctx is not None and getattr(ctx, 'turn_stair', False)
+            and tracker.stair_box is not None and _stair_well is not None):
+        try:
+            tracker.occupied_boxes.remove(tracker.stair_box)
+        except ValueError:
+            pass
+        _sx0, _sx1, _sy0, _sy1 = _stair_well
+        tracker.stair_box = (_sx0 - 0.15, _sx1 + 0.15,
+                             _sy0 - 2.10, _sy1 + 2.10)
+        tracker.occupied_boxes.append(tracker.stair_box)
     # A ceiling stair-hole (no opening in THIS floor's own slab) sits over a
     # solid floor, so the walkable space beneath the flight is usable.
     _own_hole = None
@@ -4305,9 +4327,10 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_storage(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('COTTAGE', 'LIVING_QUARTERS'):
             # One combined living area per floor. Bed FIRST so it always lands,
-            # living after (thinned so nothing piles up), and a kitchen only on
-            # the lowest upper floor - one kitchen per home, not per storey.
-            _d = density * 0.55
+            # living after, and a kitchen only on the lowest upper floor -
+            # one kitchen per home, not per storey. Density is near-full: the
+            # room is big and the recipes anchor to different walls/zones.
+            _d = min(1.0, density * 0.8)
             _prev_nr = getattr(tracker, 'no_rugs', False)
             _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, _d,
                              is_master=False)

@@ -80,7 +80,8 @@ def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
     # Hang the day's catch from the rail (the catch cures in the open air, so
     # the frame is never empty).
     try:
-        from .artisan_props import _stamp_baked_local, _fish_mat, _hang_mat, _fish_scale
+        from .artisan_props import (_stamp_baked_local, _fish_mat, _hang_mat,
+                                    _fish_scale, _fish_yaw)
         _n = max(4, int(rack_l / 0.30))
         for _i in range(_n):
             _fy = rack_cy - rack_l * 0.5 + 0.26 + _i * ((rack_l - 0.52) / max(1, _n - 1))
@@ -95,7 +96,8 @@ def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
             _stamp_baked_local(
                 bm, [], 'fish.fbx', rack_x, _fy,
                 z_ground + rack_h - _rope + _fl * 0.25, _fish_yaw(_i), _fl,
-                _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
+                _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2,
+                anchor='CENTER'
             )
     except Exception:
         pass

@@ -105,14 +105,14 @@ def _bread_fbx_mat():
 
 def _stamp_baked_local(bm, faces, fbx_file, lx, ly, lz, yaw, length,
                        mat_index, long_axis='AUTO', pre_rot=(0.0, 0.0, 0.0),
-                       pre_mat=None, thick=1.0):
+                       pre_mat=None, thick=1.0, anchor='BASE'):
     """Stamp a baked mesh in a caller's LOCAL frame, appending the new faces
     to ``faces`` so they ride along with the caller's own final transform."""
     _n0 = len(bm.faces)
     try:
         if _build_fbx_prop(bm, fbx_file, None, lx, ly, lz, yaw, length,
                            mat_index, long_axis=long_axis, pre_rot=pre_rot,
-                           pre_mat=pre_mat, thick=thick):
+                           pre_mat=pre_mat, thick=thick, anchor=anchor):
             faces += [f for f in list(bm.faces)[_n0:] if f.is_valid]
             return True
     except Exception:
@@ -462,7 +462,8 @@ def build_fish_rail(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
         _stamp_baked_local(
             bm, faces, 'fish.fbx',
             hx, 0.0, rail_z - rope_len + fl * 0.25, _fish_yaw(i),
-            fl, _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
+            fl, _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2,
+            anchor='CENTER'
         )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -1224,7 +1225,8 @@ def _meat_mat():
 
 def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
                     mat_index, final=None, long_axis='Y',
-                    pre_rot=(0.0, 0.0, 0.0), pre_mat=None, thick=1.0):
+                    pre_rot=(0.0, 0.0, 0.0), pre_mat=None, thick=1.0,
+                    anchor='BASE'):
     """Stamp a baked artist prop mesh normalized to ``length`` with ``mat_index``.
 
     ``fbx_file`` names the source art (e.g. ``bread.fbx``); the geometry comes
@@ -1233,6 +1235,10 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
     and depsgraph contexts). ``long_axis`` is the local axis that must end up
     pointing along the prop's +X length. ``pre_rot`` (Euler) or ``pre_mat``
     (Matrix) is applied AFTER that axis fix — used to hang cuts/fish.
+    ``anchor`` is 'BASE' (bbox min-Z sits on ``z_ground``, for things resting
+    on surfaces) or 'CENTER' (bbox center sits on the anchor point — for
+    hanging fish, whose local thickness axis becomes world-Y, so the rope
+    plane runs through the middle of the body instead of grazing one face).
     Returns True, raises on any problem.
     """
     from mathutils import Matrix as _M, Vector as _V, Euler as _E
@@ -1256,15 +1262,16 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
         else max(dx, dy)
     span = span or 1.0
     s = length / span
-    cx, cy, z0 = ((min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5,
-                  min(zs))
+    cx, cy = ((min(xs) + max(xs)) * 0.5, (min(ys) + max(ys)) * 0.5)
+    # Hanging mounts centre the mesh on the anchor; resting props sit on it.
+    zc = ((min(zs) + max(zs)) * 0.5) if anchor == 'CENTER' else min(zs)
     fix = _M.Rotation(yaw_fix, 4, 'Z')
     pre = (pre_mat.to_4x4() if hasattr(pre_mat, 'to_4x4') else pre_mat) \
         if pre_mat is not None else _E(pre_rot).to_matrix().to_4x4()
     local = (_M.Translation((x, y, z_ground)) @ _M.Rotation(ang, 4, 'Z'))
     place = (local if final is None else (final @ local))
     place = place @ pre @ fix @ _M.Diagonal((s, s, s * thick, 1.0))
-    base = _M.Translation((-cx, -cy, -z0))
+    base = _M.Translation((-cx, -cy, -zc))
     uv_layer = bm.loops.layers.uv.verify()
     seen = set()
     remap = {}
@@ -1454,7 +1461,8 @@ def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):
             _stamp_baked_local(
                 bm, faces, 'fish.fbx', hx, bar_y,
                 bar_z - rope_len + fl * 0.25, _fish_yaw(row * 7 + i), fl,
-                _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
+                _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2,
+                anchor='CENTER'
             )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -1836,7 +1844,8 @@ def build_fish_stringer(bm, x, y, z_ceiling=3.0, ang=0.0, drops=3):
         _stamp_baked_local(
             bm, faces, 'fish.fbx', lx, 0.0,
             -0.06 - rope_len + fl * 0.25, _fish_yaw(i), fl,
-            _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
+            _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2,
+            anchor='CENTER'
         )
     transform_faces(faces, _place(x, y, z_ceiling, ang))
     return faces

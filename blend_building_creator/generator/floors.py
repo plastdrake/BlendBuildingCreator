@@ -2968,7 +2968,13 @@ def build_floors(bm, props, ctx):
 
     ctx.floor_wall_bounds = floor_wall_bounds
     ctx.floor_stair_holes = floor_stair_holes
-    ctx.full_stair_box = full_stair_box
+    # The corner-loop turned stair reserves each flight individually (hole +
+    # stair box + approaches + foot landing), so the legacy single-column
+    # full-stair keepout must NOT apply — it would reserve a phantom strip
+    # where no stair exists and starve whole rooms of furniture.
+    _is_turn = (getattr(props, 'stair_style', 'STRAIGHT') == 'TURN')
+    ctx.full_stair_box = None if _is_turn else full_stair_box
+    ctx.turn_stair = _is_turn
     ctx.floor_rooms = floor_rooms
     ctx.floor_interior_walls = floor_interior_walls
     ctx.window_centers = window_centers
