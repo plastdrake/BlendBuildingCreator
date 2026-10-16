@@ -47,10 +47,11 @@ def _add_floorboard_finish(bm, x_min, x_max, y_min, y_max, z_top, seed=0, thickn
         x += board_w
         col += 1
 
-def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickness=0.15, stair_hole=None, mat_idx=MAT_INDEX_FLOOR):
+def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickness=0.15,
+                     stair_hole=None, mat_idx=MAT_INDEX_FLOOR, floor_void=None):
     """
-    Builds a solid floor slab. If stair_hole (xmin, xmax, ymin, ymax) is provided,
-    splits the floor slab into cleanly joined pieces leaving the stairwell opening open.
+    Builds a solid floor slab. If stair_hole and/or floor_void are provided,
+    decomposes the floor into clean non-overlapping rectangular slabs around the openings.
     """
     z_bottom = z_level - thickness
     z_top = z_level
@@ -63,9 +64,6 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
             location=((rx_min + rx_max) * 0.5, (ry_min + ry_max) * 0.5,
                       (z_bottom + z_top) * 0.5), mat_index=mat_idx
         )
-        # Planks run along the LONGEST span (beams cross the shortest).
-        # Swap top/bottom UVs when Y is longest and tag faces so the final
-        # cubic UV pass preserves this orientation.
         if (rx_max - rx_min) < (ry_max - ry_min):
             uv_layer = bm.loops.layers.uv.verify()
             for f in faces:
@@ -76,35 +74,42 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
                     co = loop.vert.co
                     loop[uv_layer].uv = Vector((co.y, co.x))
                 f.tag = True
-    
-    if stair_hole is None:
-        # Timber floors are the planks themselves—no duplicate hidden slab below.
+
+    holes = []
+    if stair_hole is not None:
+        holes.append(stair_hole)
+    if floor_void is not None:
+        holes.append(floor_void)
+
+    if not holes:
         add_floor_region(x_min, x_max, y_min, y_max, floor_idx)
         return
 
-    # Decompose floor into 4 rectangular slabs around the stairwell cutout:
-    sx_min, sx_max, sy_min, sy_max = stair_hole
-    # Clamp to bounds
-    sx_min = max(x_min, min(x_max, sx_min))
-    sx_max = max(x_min, min(x_max, sx_max))
-    sy_min = max(y_min, min(y_max, sy_min))
-    sy_max = max(y_min, min(y_max, sy_max))
+    # Subtract each hole sequentially from the remaining rectangular regions:
+    rects = [(x_min, x_max, y_min, y_max)]
+    for hole in holes:
+        hx0, hx1, hy0, hy1 = hole
+        new_rects = []
+        for (rx0, rx1, ry0, ry1) in rects:
+            ox0 = max(rx0, hx0)
+            ox1 = min(rx1, hx1)
+            oy0 = max(ry0, hy0)
+            oy1 = min(ry1, hy1)
+            if ox1 <= ox0 or oy1 <= oy0:
+                new_rects.append((rx0, rx1, ry0, ry1))
+                continue
+            if rx0 < ox0:
+                new_rects.append((rx0, ox0, ry0, ry1))
+            if rx1 > ox1:
+                new_rects.append((ox1, rx1, ry0, ry1))
+            if ry0 < oy0:
+                new_rects.append((ox0, ox1, ry0, oy0))
+            if ry1 > oy1:
+                new_rects.append((ox0, ox1, oy1, ry1))
+        rects = new_rects
 
-    # 1. Left slab alongside stairwell from x_min up to sx_min (covers overhang & unused flight tracks)
-    if sx_min > x_min + 0.02:
-        add_floor_region(x_min, sx_min, y_min, y_max, floor_idx + 37)
-
-    # 2. Right slab alongside stairwell from sx_max up to x_max
-    if sx_max < x_max - 0.02:
-        add_floor_region(sx_max, x_max, y_min, y_max, floor_idx)
-
-    # 3. Front portion in front of stairwell (from y_min up to sy_min across stair width)
-    if sy_min > y_min + 0.02:
-        add_floor_region(sx_min, sx_max, y_min, sy_min, floor_idx + 11)
-
-    # 4. Back portion behind stairwell (from sy_max up to y_max across stair width)
-    if sy_max < y_max - 0.02:
-        add_floor_region(sx_min, sx_max, sy_max, y_max, floor_idx + 23)
+    for i, (rx0, rx1, ry0, ry1) in enumerate(rects):
+        add_floor_region(rx0, rx1, ry0, ry1, floor_idx + i * 17)
 
 def _wood_beam(bm, size, location, bevel_amount=0.015):
     """A ``create_beveled_box`` oak beam (MAT_INDEX_WOOD) re-unwrapped so the
@@ -142,14 +147,32 @@ def _wood_beam(bm, size, location, bevel_amount=0.015):
                 loop[uv].uv = (c[long_ax] * 0.40, c[v_ax] * 1.2)
     return [f for f in faces if f.is_valid]
 
+def _subtract_interval(segments, cut_start, cut_end):
+    """Subtracts [cut_start, cut_end] from a list of (start, end) intervals."""
+    new_segs = []
+    for a, b in segments:
+        if cut_end <= a or cut_start >= b:
+            new_segs.append((a, b))
+        else:
+            if a < cut_start:
+                new_segs.append((a, cut_start))
+            if b > cut_end:
+                new_segs.append((cut_end, b))
+    return new_segs
 
-def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, beam_w=0.14, beam_d=0.18, stair_hole=None):
+
+def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, beam_w=0.14, beam_d=0.18, stair_hole=None, holes=None):
     """
     Builds rustic timber cross-beams under the ceiling for that classic fantasy tavern interior.
     Beams always span the SHORTEST room distance (floorboards run along the longest).
-    Automatically clips and trims beams around stairwells so beams never block stairs or head clearance.
+    Automatically clips and trims beams around stairwells and floor voids so beams never block stairs,
+    head clearance, or double-height grand hall voids.
     """
     beam_cz = z_ceil - (beam_d * 0.5)
+
+    all_holes = list(holes) if holes else []
+    if stair_hole is not None and stair_hole not in all_holes:
+        all_holes.append(stair_hole)
 
     if (x_max - x_min) <= (y_max - y_min):
         total_y = y_max - y_min
@@ -172,41 +195,23 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
         for i in range(1, num_beams + 1):
             by = y_min + i * actual_step
 
-            # Check if this beam crosses the stairwell cutout
-            if stair_hole is not None:
-                sh_xmin, sh_xmax, sh_ymin, sh_ymax = stair_hole
-                if (sh_ymin - 0.25) <= by <= (sh_ymax + 0.25):
-                    # Trim the beam so it only spans from sh_xmax to x_max
-                    if sh_xmax < x_max - 0.3:
-                        w = (x_max + 0.02) - sh_xmax
-                        cx = sh_xmax + w * 0.5
-                        _wood_beam(
-                            bm,
-                            size=(w, beam_w, beam_d),
-                            location=(cx, by, beam_cz),
-                            bevel_amount=0.015
-                        )
-                    # Also span beam on the left if there is floor on the left
-                    if sh_xmin > x_min + 0.4:
-                        w_left = sh_xmin - (x_min - 0.02)
-                        cx_left = (x_min - 0.02) + w_left * 0.5
-                        _wood_beam(
-                            bm,
-                            size=(w_left, beam_w, beam_d),
-                            location=(cx_left, by, beam_cz),
-                            bevel_amount=0.015
-                        )
-                    continue
+            # Calculate remaining spans after subtracting all holes
+            segments = [(x_min - 0.02, x_max + 0.02)]
+            for h in all_holes:
+                hx_min, hx_max, hy_min, hy_max = h
+                if (hy_min - 0.25) <= by <= (hy_max + 0.25):
+                    segments = _subtract_interval(segments, hx_min, hx_max)
 
-            # Full width beam � embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
-            beam_length = (x_max - x_min) + 0.04
-            beam_cx = (x_min + x_max) * 0.5
-            _wood_beam(
-                bm,
-                size=(beam_length, beam_w, beam_d),
-                location=(beam_cx, by, beam_cz),
-                bevel_amount=0.015
-            )
+            for seg_a, seg_b in segments:
+                w = seg_b - seg_a
+                if w >= 0.40:
+                    cx = (seg_a + seg_b) * 0.5
+                    _wood_beam(
+                        bm,
+                        size=(w, beam_w, beam_d),
+                        location=(cx, by, beam_cz),
+                        bevel_amount=0.015
+                    )
         return
 
     total_x = x_max - x_min
@@ -230,41 +235,23 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
     for i in range(1, num_beams + 1):
         bx = x_min + i * actual_step
 
-        # Check if this beam crosses the stairwell cutout
-        if stair_hole is not None:
-            sh_xmin, sh_xmax, sh_ymin, sh_ymax = stair_hole
-            if (sh_xmin - 0.25) <= bx <= (sh_xmax + 0.25):
-                # Trim the beam so it only spans from sh_ymax to y_max
-                if sh_ymax < y_max - 0.3:
-                    h = (y_max + 0.02) - sh_ymax
-                    cy = sh_ymax + h * 0.5
-                    _wood_beam(
-                        bm,
-                        size=(beam_w, h, beam_d),
-                        location=(bx, cy, beam_cz),
-                        bevel_amount=0.015
-                    )
-                # Also span beam on the near side if there is floor there
-                if sh_ymin > y_min + 0.4:
-                    h_far = sh_ymin - (y_min - 0.02)
-                    cy_far = (y_min - 0.02) + h_far * 0.5
-                    _wood_beam(
-                        bm,
-                        size=(beam_w, h_far, beam_d),
-                        location=(bx, cy_far, beam_cz),
-                        bevel_amount=0.015
-                    )
-                continue
+        # Calculate remaining spans after subtracting all holes
+        segments = [(y_min - 0.02, y_max + 0.02)]
+        for h in all_holes:
+            hx_min, hx_max, hy_min, hy_max = h
+            if (hx_min - 0.25) <= bx <= (hx_max + 0.25):
+                segments = _subtract_interval(segments, hy_min, hy_max)
 
-        # Full depth beam � embedded 0.02 into interior plaster wall to prevent gaps without poking through roof
-        beam_length = (y_max - y_min) + 0.04
-        beam_cy = (y_min + y_max) * 0.5
-        _wood_beam(
-            bm,
-            size=(beam_w, beam_length, beam_d),
-            location=(bx, beam_cy, beam_cz),
-            bevel_amount=0.015
-        )
+        for seg_a, seg_b in segments:
+            h = seg_b - seg_a
+            if h >= 0.40:
+                cy = (seg_a + seg_b) * 0.5
+                _wood_beam(
+                    bm,
+                    size=(beam_w, h, beam_d),
+                    location=(bx, cy, beam_cz),
+                    bevel_amount=0.015
+                )
 
 
 def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
@@ -410,6 +397,89 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, retu
         build_railing(bm, (x_start, return_y), (rail_x, return_y), floor_z,
                       height=rail_h, braces=False, post_spacing=1.0,
                       post_at_start=False, post_at_end=False)
+
+
+def compute_mezzanine_void(hall_bounds, stair_hole=None, min_rim=2.00, doorways=None):
+    """Calculates the central double-height opening dimensions inside a grand hall,
+    leaving a continuous, fully connected, walkable perimeter rim around upstairs.
+    Returns (vx0, vx1, vy0, vy1) or None if space is too narrow.
+    Guarantees at least 2.0m of clear walkable floor on every rim and in front of doorways."""
+    hx0, hx1, hy0, hy1 = hall_bounds
+    hw = hx1 - hx0
+    hd = hy1 - hy0
+    min_walk = max(2.00, min_rim)
+    # Must have room for 2.0m rims on both sides plus at least 1.6m void
+    if hw < (min_walk * 2.0 + 1.6) or hd < (min_walk * 2.0 + 1.6):
+        return None
+
+    rim_w_left = min_walk
+    if stair_hole is not None:
+        sx0, sx1, sy0, sy1 = stair_hole
+        # If stairs are on the west side of this hall, ensure the west rim clears the stair landing by >= 2.0m
+        if sx1 > hx0 and sx0 < hx1:
+            rim_w_left = max(min_walk, (sx1 - hx0) + 2.00)
+
+    rim_w_right = min_walk
+    rim_w_south = min_walk
+    rim_w_north = min_walk
+
+    # Check doorways around the hall perimeter to maintain at least 2.0m solid landing
+    if doorways:
+        for dw in doorways:
+            dx = dw.get('x', (hx0 + hx1) * 0.5)
+            dy = dw.get('y', (hy0 + hy1) * 0.5)
+            d_axis = dw.get('axis', 'X')
+            if d_axis == 'Y':
+                if abs(dx - hx0) <= 0.65 and (hy0 - 0.5 <= dy <= hy1 + 0.5):
+                    rim_w_left = max(rim_w_left, (dx - hx0) + 2.00)
+                elif abs(dx - hx1) <= 0.65 and (hy0 - 0.5 <= dy <= hy1 + 0.5):
+                    rim_w_right = max(rim_w_right, (hx1 - dx) + 2.00)
+            else:
+                if abs(dy - hy0) <= 0.65 and (hx0 - 0.5 <= dx <= hx1 + 0.5):
+                    rim_w_south = max(rim_w_south, (dy - hy0) + 2.00)
+                elif abs(dy - hy1) <= 0.65 and (hx0 - 0.5 <= dx <= hx1 + 0.5):
+                    rim_w_north = max(rim_w_north, (hy1 - dy) + 2.00)
+
+    # Don't let rims swallow the void completely if hall is wide enough
+    if (rim_w_left + rim_w_right) > hw - 1.6:
+        excess = (rim_w_left + rim_w_right) - (hw - 1.6)
+        rim_w_left = max(min_walk, rim_w_left - excess * 0.5)
+        rim_w_right = max(min_walk, rim_w_right - excess * 0.5)
+
+    if (rim_w_south + rim_w_north) > hd - 1.6:
+        excess = (rim_w_south + rim_w_north) - (hd - 1.6)
+        rim_w_south = max(min_walk, rim_w_south - excess * 0.5)
+        rim_w_north = max(min_walk, rim_w_north - excess * 0.5)
+
+    vx0 = hx0 + rim_w_left
+    vx1 = hx1 - rim_w_right
+    vy0 = hy0 + rim_w_south
+    vy1 = hy1 - rim_w_north
+
+    if (vx1 - vx0) < 1.6 or (vy1 - vy0) < 1.6:
+        return None
+    return (vx0, vx1, vy0, vy1)
+
+
+def build_mezzanine_void_railing(bm, vx0, vx1, vy0, vy1, floor_z, height=0.98):
+    """Builds a complete protective perimeter balustrade around a double-height floor void.
+    Corner posts are shared cleanly at the 4 corners of the void."""
+    from .railing import build_railing
+    if (vx1 - vx0) < 0.5 or (vy1 - vy0) < 0.5:
+        return
+    # West run: from (vx0, vy0) to (vx0, vy1)
+    build_railing(bm, (vx0, vy0), (vx0, vy1), floor_z, height=height,
+                  post_at_start=True, post_at_end=True, post_spacing=1.4, baluster_spacing=0.22)
+    # East run: from (vx1, vy0) to (vx1, vy1)
+    build_railing(bm, (vx1, vy0), (vx1, vy1), floor_z, height=height,
+                  post_at_start=True, post_at_end=True, post_spacing=1.4, baluster_spacing=0.22)
+    # South run: from (vx0, vy0) to (vx1, vy0) (omit corner posts since side runs placed them)
+    build_railing(bm, (vx0, vy0), (vx1, vy0), floor_z, height=height,
+                  post_at_start=False, post_at_end=False, post_spacing=1.4, baluster_spacing=0.22)
+    # North run: from (vx0, vy1) to (vx1, vy1) (omit corner posts)
+    build_railing(bm, (vx0, vy1), (vx1, vy1), floor_z, height=height,
+                  post_at_start=False, post_at_end=False, post_spacing=1.4, baluster_spacing=0.22)
+
 
 def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_depth=2.6, num_steps=14, direction_y=1):
     """
@@ -581,6 +651,103 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
             end_overhang=0.0,
             braces=False,
         )
+
+def _l_stair_run(bm, foot_xy, top_xy, z0, z1, width, along_axis):
+    """One flight of an L-stair: risers + treads climbing from z0 to z1.
+    ``along_axis`` is 'Y' or 'X' (the run direction is +axis)."""
+    import math as _m
+    fx, fy = foot_xy
+    tx, ty = top_xy
+    horiz = _m.hypot(tx - fx, ty - fy)
+    n = max(3, int(round(abs(z1 - z0) / 0.20)))
+    step_h = (z1 - z0) / n
+    step_d = (horiz / n)
+    for i in range(n):
+        frac = (i + 0.5) / n
+        cx = fx + (tx - fx) * frac
+        cy = fy + (ty - fy) * frac
+        sz = z0 + (i + 0.5) * step_h
+        if along_axis == 'Y':
+            create_beveled_box(bm, size=(width, step_d + 0.05, 0.05),
+                               location=(cx, cy, sz), mat_index=MAT_INDEX_WOOD,
+                               bevel_amount=0.010)
+            create_box(bm, size=(width - 0.02, 0.035, step_h),
+                       location=(cx, cy - (ty - fy) / n * 0.5, sz - step_h * 0.5),
+                       mat_index=MAT_INDEX_STAIRS)
+        else:
+            create_beveled_box(bm, size=(step_d + 0.05, width, 0.05),
+                               location=(cx, cy, sz), mat_index=MAT_INDEX_WOOD,
+                               bevel_amount=0.010)
+            create_box(bm, size=(0.035, width - 0.02, step_h),
+                       location=(cx - (tx - fx) / n * 0.5, cy, sz - step_h * 0.5),
+                       mat_index=MAT_INDEX_STAIRS)
+
+
+def _l_stair_rail(bm, p0xy, p1xy, z0, z1, out_xy, h=0.92):
+    """A sloped handrail with balusters along one edge of an L-stair flight."""
+    import math as _m
+    x0, y0 = p0xy
+    x1, y1 = p1xy
+    ox, oy = out_xy
+    dx, dy = (x1 - x0), (y1 - y0)
+    run = _m.hypot(dx, dy) or 1e-4
+    ux, uy = dx / run, dy / run
+    # Sloped rail beam.
+    L = _m.hypot(run, z1 - z0)
+    pitch = _m.atan2(z1 - z0, run)
+    # create_box(): length along Y, so yaw the beam to the run then pitch it.
+    yaw = _m.atan2(dx, dy)
+    create_box(bm, size=(0.06, L, 0.07),
+               location=((x0 + x1) * 0.5 + ox, (y0 + y1) * 0.5 + oy,
+                         (z0 + z1) * 0.5 + h),
+               rotation=(pitch, 0.0, yaw), mat_index=MAT_INDEX_STAIRS)
+    # Balusters.
+    nb = max(2, int(run / 0.22))
+    for i in range(nb + 1):
+        f = i / float(nb)
+        bx = x0 + dx * f + ox
+        by = y0 + dy * f + oy
+        bz = z0 + (z1 - z0) * f
+        create_box(bm, size=(0.035, 0.035, h),
+                   location=(bx, by, bz + h * 0.5), mat_index=MAT_INDEX_STAIRS)
+
+
+def build_l_staircase(bm, start_pos, target_z, stair_width=1.40, run=1.30,
+                      num_steps=14, direction_y=1, turn=1):
+    """L-shaped staircase: a lower flight along Y to a quarter landing, then an
+    upper flight turned 90 degrees along X up to the next floor. Gives a real
+    quarter landing instead of one cramped straight run."""
+    x0, y0, z0 = start_pos
+    dz = target_z - z0
+    step_h = dz / float(max(6, num_steps))
+    n1 = max(3, int(round((dz * 0.5) / 0.20)))
+    z_mid = z0 + dz * 0.5
+    ly = y0 + run * direction_y
+    half = stair_width * 0.5
+
+    # Lower flight (+Y) up to the quarter landing.
+    _l_stair_run(bm, (x0, y0), (x0, ly), z0, z_mid, stair_width, 'Y')
+    # Quarter landing.
+    create_beveled_box(bm, size=(stair_width + 0.30, stair_width + 0.30, 0.10),
+                       location=(x0, ly, z_mid - 0.05),
+                       mat_index=MAT_INDEX_STAIRS, bevel_amount=0.012)
+    # Upper flight (+X) from the landing up to the floor.
+    x1 = x0 + run * turn
+    _l_stair_run(bm, (x0 + half * turn, ly), (x1 + half * turn, ly),
+                 z_mid, target_z, stair_width, 'X')
+
+    # Handrails along the outer edges.
+    _l_stair_rail(bm, (x0, y0), (x0, ly), z0, z_mid, (-half - 0.05, 0.0))
+    _l_stair_rail(bm, (x0 + half * turn, ly), (x1 + half * turn, ly),
+                  z_mid, target_z, (0.0, half + 0.05))
+    # Newel posts at the foot, the landing and the top.
+    build_railing_post(bm, x0 - half - 0.05, y0 + 0.05 * direction_y, z0,
+                       height=1.05, iron_pin=False)
+    build_railing_post(bm, x0 - half - 0.05, ly, z_mid, height=1.05,
+                       iron_pin=False)
+    build_railing_post(bm, x1 + half * turn, ly + half + 0.05, target_z,
+                       height=1.05, iron_pin=False)
+
 
 def build_spiral_staircase(bm, center_pos, target_z, radius=1.35, num_steps=18, start_ang_deg=-90.0, total_angle_deg=360.0):
     """
@@ -778,6 +945,7 @@ class Room:
     doorways: List[Dict[str, Any]] = field(default_factory=list)
     stair_hole: Optional[Tuple[float, float, float, float]] = None
     exterior_facades: Dict[str, Tuple[float, float]] = field(default_factory=dict)
+    floor_void: Optional[Tuple[float, float, float, float]] = None
 
 
 def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
@@ -1236,74 +1404,74 @@ def _wing_portals(wb, doorways):
             if wy1 - 0.4 <= dw.get('y', 0.0) <= wy2 + 0.4 and \
                (abs(dw.get('x', 0.0) - wx1) < 0.7 or abs(dw.get('x', 0.0) - wx2) < 0.7):
                 out.append(dw)
-    return out
+def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
+                              has_stairs_landing, stair_pos_info=None,
+                              extra_doorways=None, props=None):
+    """Grand Castle / Palace floor plan with central Throne Room & Mezzanine Gallery.
 
-
-def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
-                      has_stairs_landing, stair_pos_info=None):
-    """Manor-specific floor plan: dedicated stair hall + grand banquet hall.
-
-    Large manor footprints (W >= 16m) get a 4-column grid instead of the generic
-    2-column split, so rooms stay at sensible domestic sizes:
-      - west strip: full-depth stair hall (the flight stands here, clear of
-        every partition, with a 1.2m walk-off at its foot);
-      - inner columns: kitchen/pantry split, full-depth banquet hall,
-        library/study split.
-    The stairs never sit inside the kitchen or a bedroom anymore.
-    Returns (rooms, interior_walls) or None when the footprint is too small.
+    Structure:
+    - West Bay: Dedicated Stair & Circulation Hall (holds stairs, connector wing portal, chapel portal).
+    - Center Bay: Grand Throne Room (Floor 0) / Mezzanine Gallery (Floor 1).
+      Centered exactly on X = 0.0, directly aligned with the front entrance and terrace stairs.
+      Zero interior partition walls inside this bay - never cuts the void or walkways!
+    - East Bay: Royal Chambers / Council Chamber / Banquet Hall (and Archive portal).
     """
     ix_min, ix_max, iy_min, iy_max = bounds
     W = ix_max - ix_min
     D = iy_max - iy_min
-    if W < 16.0 or D < 7.0:
+    if W < 13.0 or D < 5.5:
         return None
 
-    # West strip holds the whole stair well plus a walkway beside it.
-    if stair_pos_info:
-        try:
-            _cx = float(stair_pos_info.get('cx', 0.0))
-            _w = float(stair_pos_info.get('w', 1.5))
-            c0w = (_cx + _w * 0.5 + 1.0) - ix_min
-        except Exception:
-            c0w = W * 0.22
-    else:
-        c0w = W * 0.22
-    c0w = min(max(c0w, 3.5), W * 0.30)
-    rest = W - c0w
-    b1 = ix_min + c0w
-    b2 = b1 + rest / 3.0
-    b3 = b1 + rest * 2.0 / 3.0
-    yA = (iy_min + iy_max) * 0.5
-    yB = (iy_min + iy_max) * 0.5
+    stair_on_right = bool(
+        (stair_pos_info and float(stair_pos_info.get('cx', ix_min)) > (ix_min + ix_max) * 0.5)
+        or getattr(props, 'stair_placement', 'LEFT') == 'RIGHT'
+    )
 
+    if stair_pos_info:
+        _sw = float(stair_pos_info.get('w', 1.5))
+        _scx = float(stair_pos_info.get('cx', ix_min + 2.0))
+        if stair_on_right:
+            req_side_w = max(4.0, (ix_max - _scx) + _sw * 0.5 + 1.2)
+        else:
+            req_side_w = max(4.0, (_scx - ix_min) + _sw * 0.5 + 1.2)
+    elif stair_hole:
+        if stair_on_right:
+            req_side_w = max(4.0, ix_max - stair_hole[0] + 1.2)
+        else:
+            req_side_w = max(4.0, stair_hole[1] - ix_min + 1.2)
+    else:
+        req_side_w = 4.5
+
+    for ed in (extra_doorways or []):
+        if ed.get('floor_idx', fl_idx) == fl_idx:
+            ex = ed.get('x', ed.get('pos', 0.0))
+            ew = ed.get('w', 1.2)
+            if ex < -1.0:
+                req_side_w = max(req_side_w, (-ex) - ix_min + ew * 0.5 + 1.0)
+            elif ex > 1.0:
+                req_side_w = max(req_side_w, ix_max - ex + ew * 0.5 + 1.0)
+
+    max_half = (W * 0.5) - req_side_w
+    half_hall_w = min(6.0, max(3.5, max_half))
+    b_west = -half_hall_w
+    b_east = half_hall_w
+
+    rooms = []
     walls = []
 
-    def _vwall(px, y0, y1):
-        dw_y = (y0 + y1) * 0.5
+    def _vwall(px, y0, y1, dw_y):
         walls.append({
             'p1': (px, y0), 'p2': (px, y1),
             'axis': 'Y', 'pos': px, 'thickness': wall_t,
             'doorway': {'x': px, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'},
         })
 
-    # West strip has no cross-divider: the flight runs full-depth clear.
-    _vwall(b1, iy_min, yA)
-    _vwall(b1, yA, iy_max)
-    _vwall(b2, iy_min, yA)
-    _vwall(b2, yA, iy_max)
-    walls.append({
-        'p1': (b1, yA), 'p2': (b2, yA),
-        'axis': 'X', 'pos': yA, 'thickness': wall_t, 'doorway': None,
-    })
-    _vwall(b3, iy_min, yB)
-    _vwall(b3, yB, iy_max)
-    walls.append({
-        'p1': (b3, yB), 'p2': (ix_max, yB),
-        'axis': 'X', 'pos': yB, 'thickness': wall_t, 'doorway': None,
-    })
-
-    def _dw(x, y, axis):
-        return {'x': x, 'y': y, 'axis': axis, 'w': dw_w}
+    def _hwall(x0, x1, y, dw_x):
+        walls.append({
+            'p1': (x0, y), 'p2': (x1, y),
+            'axis': 'X', 'pos': y, 'thickness': wall_t,
+            'doorway': {'x': dw_x, 'y': y, 'w': dw_w, 'h': dw_h, 'axis': 'X'},
+        })
 
     def _holds_stair(rb):
         if stair_hole is None:
@@ -1314,68 +1482,389 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             return None
         return stair_hole
 
-    rooms = []
-    # Dedicated full-depth stair hall (west strip).
-    _bs = (ix_min, b1, iy_min, iy_max)
-    _stair_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'STAIR_LANDING'
-    rooms.append(Room(
-        id=f"fl{fl_idx}_stair_hall", floor_idx=fl_idx, role=_stair_role,
-        bounds=_bs,
-        doorways=[_dw(b1, (iy_min + yA) * 0.5, 'Y'),
-                  _dw(b1, (yA + iy_max) * 0.5, 'Y')],
-        stair_hole=_holds_stair(_bs),
-        exterior_facades={'FRONT': (ix_min, b1), 'BACK': (ix_min, b1),
-                          'LEFT': (iy_min, iy_max)}))
+    y_mid = (iy_min + iy_max) * 0.5
 
-    # Inner-west column split front/back (kitchen + pantry / bedrooms).
     if fl_idx == 0:
-        _r0, _r1 = 'KITCHEN', 'PANTRY'
-    elif has_stairs_landing:
-        _r0, _r1 = 'BEDROOM', 'BEDROOM'
+        _vwall(b_west, iy_min, iy_max, y_mid)
+        _vwall(b_east, iy_min, iy_max, y_mid)
+
+        rm_west = Room(
+            id=f"fl{fl_idx}_stair_hall", floor_idx=fl_idx, role='CORRIDOR',
+            bounds=(ix_min, b_west, iy_min, iy_max),
+            doorways=[{'x': b_west, 'y': y_mid, 'axis': 'Y', 'w': dw_w}],
+            stair_hole=_holds_stair((ix_min, b_west, iy_min, iy_max)),
+            exterior_facades={'FRONT': (ix_min, b_west), 'BACK': (ix_min, b_west), 'LEFT': (iy_min, iy_max)}
+        )
+        rm_center = Room(
+            id=f"fl{fl_idx}_throne_room", floor_idx=fl_idx, role='THRONE_ROOM',
+            bounds=(b_west, b_east, iy_min, iy_max),
+            doorways=[
+                {'x': b_west, 'y': y_mid, 'axis': 'Y', 'w': dw_w},
+                {'x': b_east, 'y': y_mid, 'axis': 'Y', 'w': dw_w},
+            ],
+            stair_hole=None,
+            exterior_facades={'FRONT': (b_west, b_east), 'BACK': (b_west, b_east)}
+        )
+        # Partition the East Bay into Council Chamber (south) and Banquet/Archive Hall (north).
+        # Shift the cross-wall to y_mid - 2.8 so it never intersects the Archive portal at y_mid!
+        split_y_east = y_mid - 2.8
+        _hwall(b_east, ix_max, split_y_east, (b_east + ix_max) * 0.5)
+        rm_east_s = Room(
+            id=f"fl{fl_idx}_council_chamber", floor_idx=fl_idx, role='COUNCIL_CHAMBER',
+            bounds=(b_east, ix_max, iy_min, split_y_east),
+            doorways=[{'x': (b_east + ix_max) * 0.5, 'y': split_y_east, 'axis': 'X', 'w': dw_w}],
+            stair_hole=None,
+            exterior_facades={'FRONT': (b_east, ix_max), 'RIGHT': (iy_min, split_y_east)}
+        )
+        rm_east_n = Room(
+            id=f"fl{fl_idx}_banquet_hall", floor_idx=fl_idx, role='BANQUET_HALL',
+            bounds=(b_east, ix_max, split_y_east, iy_max),
+            doorways=[
+                {'x': b_east, 'y': y_mid, 'axis': 'Y', 'w': dw_w},
+                {'x': (b_east + ix_max) * 0.5, 'y': split_y_east, 'axis': 'X', 'w': dw_w},
+                {'x': ix_max, 'y': y_mid, 'axis': 'Y', 'w': 2.40}
+            ],
+            stair_hole=_holds_stair((b_east, ix_max, split_y_east, iy_max)),
+            exterior_facades={'BACK': (b_east, ix_max), 'RIGHT': (split_y_east, iy_max)}
+        )
+        rooms = [rm_west, rm_center, rm_east_s, rm_east_n]
+
+    elif fl_idx == 1 and bool(getattr(props, 'has_double_height', False)):
+        _vwall(b_west, iy_min, iy_max, y_mid)
+        _vwall(b_east, iy_min, iy_max, y_mid)
+
+        v_rim = 2.00
+        vx0 = b_west + v_rim
+        vx1 = b_east - v_rim
+        vy0 = iy_min + v_rim
+        vy1 = iy_max - v_rim
+        void_rect = (vx0, vx1, vy0, vy1)
+
+        rm_west = Room(
+            id=f"fl{fl_idx}_stair_landing", floor_idx=fl_idx, role='STAIR_LANDING',
+            bounds=(ix_min, b_west, iy_min, iy_max),
+            doorways=[{'x': b_west, 'y': y_mid, 'axis': 'Y', 'w': dw_w}],
+            stair_hole=_holds_stair((ix_min, b_west, iy_min, iy_max)),
+            exterior_facades={'FRONT': (ix_min, b_west), 'BACK': (ix_min, b_west), 'LEFT': (iy_min, iy_max)}
+        )
+        rm_center = Room(
+            id=f"fl{fl_idx}_mezzanine_gallery", floor_idx=fl_idx, role='MEZZANINE_GALLERY',
+            bounds=(b_west, b_east, iy_min, iy_max),
+            doorways=[
+                {'x': b_west, 'y': y_mid, 'axis': 'Y', 'w': dw_w},
+                {'x': b_east, 'y': y_mid, 'axis': 'Y', 'w': dw_w},
+            ],
+            stair_hole=None,
+            exterior_facades={'FRONT': (b_west, b_east), 'BACK': (b_west, b_east)}
+        )
+        rm_center.floor_void = void_rect
+
+        split_y_east = y_mid - 2.8
+        _hwall(b_east, ix_max, split_y_east, (b_east + ix_max) * 0.5)
+        rm_east_s = Room(
+            id=f"fl{fl_idx}_study", floor_idx=fl_idx, role='STUDY',
+            bounds=(b_east, ix_max, iy_min, split_y_east),
+            doorways=[{'x': (b_east + ix_max) * 0.5, 'y': split_y_east, 'axis': 'X', 'w': dw_w}],
+            stair_hole=None,
+            exterior_facades={'FRONT': (b_east, ix_max), 'RIGHT': (iy_min, split_y_east)}
+        )
+        rm_east_n = Room(
+            id=f"fl{fl_idx}_master_bed", floor_idx=fl_idx, role='MASTER_BED',
+            bounds=(b_east, ix_max, split_y_east, iy_max),
+            doorways=[
+                {'x': b_east, 'y': y_mid, 'axis': 'Y', 'w': dw_w},
+                {'x': (b_east + ix_max) * 0.5, 'y': split_y_east, 'axis': 'X', 'w': dw_w}
+            ],
+            stair_hole=None,
+            exterior_facades={'BACK': (b_east, ix_max), 'RIGHT': (split_y_east, iy_max)}
+        )
+        rooms = [rm_west, rm_center, rm_east_s, rm_east_n]
+
     else:
-        _r0, _r1 = 'MASTER_BED', 'BEDROOM'
-    _b0 = (b1, b2, iy_min, yA)
-    _b1 = (b1, b2, yA, iy_max)
-    rooms.append(Room(
-        id=f"fl{fl_idx}_kitchen", floor_idx=fl_idx, role=_r0,
-        bounds=_b0, doorways=[_dw(b1, (iy_min + yA) * 0.5, 'Y'),
-                              _dw(b2, (iy_min + yA) * 0.5, 'Y')],
-        stair_hole=_holds_stair(_b0),
-        exterior_facades={'FRONT': (b1, b2)}))
-    rooms.append(Room(
-        id=f"fl{fl_idx}_pantry", floor_idx=fl_idx, role=_r1,
-        bounds=_b1, doorways=[_dw(b1, (yA + iy_max) * 0.5, 'Y'),
-                              _dw(b2, (yA + iy_max) * 0.5, 'Y')],
-        stair_hole=_holds_stair(_b1),
-        exterior_facades={'BACK': (b1, b2)}))
+        _vwall(b_west, iy_min, iy_max, y_mid)
+        _vwall(b_east, iy_min, iy_max, y_mid)
+        _hwall(b_west, b_east, y_mid, 0.0)
 
-    # Full-depth banquet hall / grand suite (center-east column).
-    _bc = (b2, b3, iy_min, iy_max)
-    _crole = 'BANQUET_HALL' if fl_idx == 0 else (
-        'MASTER_BED' if has_stairs_landing else 'GUEST_ROOM')
-    rooms.append(Room(
-        id=f"fl{fl_idx}_banquet", floor_idx=fl_idx, role=_crole,
-        bounds=_bc,
-        doorways=[_dw(b2, (iy_min + yA) * 0.5, 'Y'),
-                  _dw(b2, (yA + iy_max) * 0.5, 'Y'),
-                  _dw(b3, (iy_min + yB) * 0.5, 'Y'),
-                  _dw(b3, (yB + iy_max) * 0.5, 'Y')],
-        stair_hole=_holds_stair(_bc),
-        exterior_facades={'FRONT': (b2, b3), 'BACK': (b2, b3)}))
+        rm_west = Room(
+            id=f"fl{fl_idx}_stair_landing", floor_idx=fl_idx, role='STAIR_LANDING',
+            bounds=(ix_min, b_west, iy_min, iy_max),
+            doorways=[{'x': b_west, 'y': y_mid, 'axis': 'Y', 'w': dw_w}],
+            stair_hole=_holds_stair((ix_min, b_west, iy_min, iy_max)),
+            exterior_facades={'FRONT': (ix_min, b_west), 'BACK': (ix_min, b_west), 'LEFT': (iy_min, iy_max)}
+        )
+        rm_center_s = Room(
+            id=f"fl{fl_idx}_royal_salon", floor_idx=fl_idx, role='GREAT_HALL',
+            bounds=(b_west, b_east, iy_min, y_mid),
+            doorways=[
+                {'x': b_west, 'y': y_mid - 1.5, 'axis': 'Y', 'w': dw_w},
+                {'x': 0.0, 'y': y_mid, 'axis': 'X', 'w': dw_w}
+            ],
+            stair_hole=None,
+            exterior_facades={'FRONT': (b_west, b_east)}
+        )
+        rm_center_n = Room(
+            id=f"fl{fl_idx}_royal_bed", floor_idx=fl_idx, role='MASTER_BED',
+            bounds=(b_west, b_east, y_mid, iy_max),
+            doorways=[
+                {'x': 0.0, 'y': y_mid, 'axis': 'X', 'w': dw_w},
+                {'x': b_east, 'y': y_mid + 1.5, 'axis': 'Y', 'w': dw_w}
+            ],
+            stair_hole=None,
+            exterior_facades={'BACK': (b_west, b_east)}
+        )
+        _hwall(b_east, ix_max, y_mid, (b_east + ix_max) * 0.5)
+        rm_east_s = Room(
+            id=f"fl{fl_idx}_library", floor_idx=fl_idx, role='LIBRARY',
+            bounds=(b_east, ix_max, iy_min, y_mid),
+            doorways=[{'x': (b_east + ix_max) * 0.5, 'y': y_mid, 'axis': 'X', 'w': dw_w}],
+            stair_hole=None,
+            exterior_facades={'FRONT': (b_east, ix_max), 'RIGHT': (iy_min, y_mid)}
+        )
+        rm_east_n = Room(
+            id=f"fl{fl_idx}_treasury", floor_idx=fl_idx, role='OFFICE',
+            bounds=(b_east, ix_max, y_mid, iy_max),
+            doorways=[
+                {'x': b_east, 'y': y_mid, 'axis': 'Y', 'w': dw_w},
+                {'x': (b_east + ix_max) * 0.5, 'y': y_mid, 'axis': 'X', 'w': dw_w}
+            ],
+            stair_hole=None,
+            exterior_facades={'BACK': (b_east, ix_max), 'RIGHT': (y_mid, iy_max)}
+        )
+        rooms = [rm_west, rm_center_s, rm_center_n, rm_east_s, rm_east_n]
 
-    # East column split front/back (library + study).
-    _b2 = (b3, ix_max, iy_min, yB)
-    _b3 = (b3, ix_max, yB, iy_max)
-    rooms.append(Room(
-        id=f"fl{fl_idx}_library", floor_idx=fl_idx, role='LIBRARY',
-        bounds=_b2, doorways=[_dw(b3, (iy_min + yB) * 0.5, 'Y')],
-        stair_hole=_holds_stair(_b2),
-        exterior_facades={'FRONT': (b3, ix_max), 'RIGHT': (iy_min, yB)}))
-    rooms.append(Room(
-        id=f"fl{fl_idx}_study", floor_idx=fl_idx, role='STUDY',
-        bounds=_b3, doorways=[_dw(b3, (yB + iy_max) * 0.5, 'Y')],
-        stair_hole=_holds_stair(_b3),
-        exterior_facades={'BACK': (b3, ix_max), 'RIGHT': (yB, iy_max)}))
+    return rooms, walls
+
+
+def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
+                      has_stairs_landing, stair_pos_info=None,
+                      extra_doorways=None, props=None):
+    """Grand Manor / Palace multi-column floor plan for wide buildings (W >= 15m).
+
+    Supports both left-hand and right-hand stairs.
+    Divides the floor into a dedicated stair hall strip plus 2 to 3 well-proportioned
+    living bays with central grand salons, libraries, suites, and skybridge reception galleries.
+    """
+    ix_min, ix_max, iy_min, iy_max = bounds
+    W = ix_max - ix_min
+    D = iy_max - iy_min
+    if W < 15.0 or D < 6.0:
+        return None
+
+    stair_on_right = bool(
+        (stair_pos_info and float(stair_pos_info.get('cx', ix_min)) > (ix_min + ix_max) * 0.5)
+        or getattr(props, 'stair_placement', 'LEFT') == 'RIGHT'
+    )
+
+    if stair_pos_info:
+        _sw = float(stair_pos_info.get('w', 1.5))
+        c_stair_w = max(3.6, _sw + 1.8)
+    else:
+        c_stair_w = 4.0
+    c_stair_w = min(max(c_stair_w, 3.5), W * 0.28)
+
+    rem_w = W - c_stair_w
+    num_bays = 3 if rem_w >= 13.0 else 2
+    bay_w = rem_w / float(num_bays)
+
+    if stair_on_right:
+        b3 = ix_max - c_stair_w
+        if num_bays == 3:
+            b1 = ix_min + bay_w
+            b2 = b1 + bay_w
+            cols = [
+                (ix_min, b1, 'west'),
+                (b1, b2, 'center_west'),
+                (b2, b3, 'center_east'),
+                (b3, ix_max, 'east_stair')
+            ]
+            col_b_walls = [b1, b2, b3]
+        else:
+            b1 = ix_min + bay_w
+            cols = [
+                (ix_min, b1, 'west'),
+                (b1, b3, 'center'),
+                (b3, ix_max, 'east_stair')
+            ]
+            col_b_walls = [b1, b3]
+    else:
+        b1 = ix_min + c_stair_w
+        if num_bays == 3:
+            b2 = b1 + bay_w
+            b3 = b2 + bay_w
+            cols = [
+                (ix_min, b1, 'west_stair'),
+                (b1, b2, 'center_west'),
+                (b2, b3, 'center_east'),
+                (b3, ix_max, 'east')
+            ]
+            col_b_walls = [b1, b2, b3]
+        else:
+            b2 = b1 + bay_w
+            cols = [
+                (ix_min, b1, 'west_stair'),
+                (b1, b2, 'center'),
+                (b2, ix_max, 'east')
+            ]
+            col_b_walls = [b1, b2]
+
+    # Check portals on this floor (e.g. skybridge portal on Floor 3)
+    has_left_portal = False
+    has_right_portal = False
+    for ed in (extra_doorways or []):
+        if ed.get('floor_idx', fl_idx) == fl_idx and ed.get('is_portal'):
+            fac = ed.get('facade')
+            ex = ed.get('x', 0.0)
+            if fac == 'LEFT' or abs(ex - ix_min) < 0.35:
+                has_left_portal = True
+            elif fac == 'RIGHT' or abs(ex - ix_max) < 0.35:
+                has_right_portal = True
+
+    y_mid = (iy_min + iy_max) * 0.5
+    walls = []
+
+    def _vwall(px, y0, y1, dw_y):
+        walls.append({
+            'p1': (px, y0), 'p2': (px, y1),
+            'axis': 'Y', 'pos': px, 'thickness': wall_t,
+            'doorway': {'x': px, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'},
+        })
+
+    def _hwall(x0, x1, y, dw_x):
+        walls.append({
+            'p1': (x0, y), 'p2': (x1, y),
+            'axis': 'X', 'pos': y, 'thickness': wall_t,
+            'doorway': {'x': dw_x, 'y': y, 'w': dw_w, 'h': dw_h, 'axis': 'X'},
+        })
+
+    def _holds_stair(rb):
+        if stair_hole is None:
+            return None
+        pad = 0.30
+        if rb[1] < stair_hole[0] - pad or rb[0] > stair_hole[1] + pad \
+                or rb[3] < stair_hole[2] - pad or rb[2] > stair_hole[3] + pad:
+            return None
+        return stair_hole
+
+    def _dw(x, y, axis):
+        return {'x': x, 'y': y, 'axis': axis, 'w': dw_w}
+
+    # Vertical dividing walls with doorways between adjacent bays
+    for cw in col_b_walls:
+        _vwall(cw, iy_min, y_mid, (iy_min + y_mid) * 0.5)
+        # Second doorway in north half for flowing circulation
+        _vwall(cw, y_mid, iy_max, (y_mid + iy_max) * 0.5)
+
+    rooms = []
+    for ci, (cx0, cx1, ctag) in enumerate(cols):
+        is_stair = 'stair' in ctag
+        is_portal_col = (has_left_portal and ci == 0) or (has_right_portal and ci == len(cols) - 1)
+
+        facades = {}
+        if ci == 0:
+            facades['LEFT'] = (iy_min, iy_max)
+        if ci == len(cols) - 1:
+            facades['RIGHT'] = (iy_min, iy_max)
+        facades['FRONT'] = (cx0, cx1)
+        facades['BACK'] = (cx0, cx1)
+
+        if is_stair:
+            _s_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'STAIR_LANDING'
+            _rb = (cx0, cx1, iy_min, iy_max)
+            _doors = []
+            if ci > 0:
+                _doors.append(_dw(cx0, (iy_min + y_mid) * 0.5, 'Y'))
+                _doors.append(_dw(cx0, (y_mid + iy_max) * 0.5, 'Y'))
+            if ci < len(cols) - 1:
+                _doors.append(_dw(cx1, (iy_min + y_mid) * 0.5, 'Y'))
+                _doors.append(_dw(cx1, (y_mid + iy_max) * 0.5, 'Y'))
+            rooms.append(Room(
+                id=f"fl{fl_idx}_{ctag}", floor_idx=fl_idx, role=_s_role,
+                bounds=_rb, doorways=_doors, stair_hole=_holds_stair(_rb),
+                exterior_facades=facades
+            ))
+        elif is_portal_col:
+            # Full-depth skybridge reception gallery / galleria
+            _p_role = 'ENTRANCE_HALL' if fl_idx == 3 else 'GREAT_HALL'
+            _rb = (cx0, cx1, iy_min, iy_max)
+            _doors = []
+            if ci > 0:
+                _doors.append(_dw(cx0, (iy_min + y_mid) * 0.5, 'Y'))
+                _doors.append(_dw(cx0, (y_mid + iy_max) * 0.5, 'Y'))
+            if ci < len(cols) - 1:
+                _doors.append(_dw(cx1, (iy_min + y_mid) * 0.5, 'Y'))
+                _doors.append(_dw(cx1, (y_mid + iy_max) * 0.5, 'Y'))
+            rooms.append(Room(
+                id=f"fl{fl_idx}_skybridge_gallery", floor_idx=fl_idx, role=_p_role,
+                bounds=_rb, doorways=_doors, stair_hole=_holds_stair(_rb),
+                exterior_facades=facades
+            ))
+        elif ctag == 'center_west' or (num_bays == 2 and ctag == 'center'):
+            # Grand Salon / Dining / Reception Hall (full depth)
+            if fl_idx == 0:
+                _c_role = 'BANQUET_HALL'
+            elif fl_idx == 1:
+                _c_role = 'HOUSE_HALL'
+            elif fl_idx == 2:
+                _c_role = 'HOUSE_HALL'
+            elif fl_idx == 3:
+                _c_role = 'HOUSE_HALL'
+            else:
+                _c_role = 'MASTER_BED'
+            _rb = (cx0, cx1, iy_min, iy_max)
+            _doors = []
+            if ci > 0:
+                _doors.append(_dw(cx0, (iy_min + y_mid) * 0.5, 'Y'))
+                _doors.append(_dw(cx0, (y_mid + iy_max) * 0.5, 'Y'))
+            if ci < len(cols) - 1:
+                _doors.append(_dw(cx1, (iy_min + y_mid) * 0.5, 'Y'))
+                _doors.append(_dw(cx1, (y_mid + iy_max) * 0.5, 'Y'))
+            rooms.append(Room(
+                id=f"fl{fl_idx}_salon", floor_idx=fl_idx, role=_c_role,
+                bounds=_rb, doorways=_doors, stair_hole=_holds_stair(_rb),
+                exterior_facades=facades
+            ))
+        else:
+            # Split front/back into 2 comfortable domestic rooms!
+            _hwall(cx0, cx1, y_mid, (cx0 + cx1) * 0.5)
+            if fl_idx == 0:
+                r_south = 'KITCHEN' if ci == 0 else 'PANTRY'
+                r_north = 'PANTRY' if ci == 0 else 'STORAGE'
+            elif fl_idx == 1:
+                r_south = 'LIBRARY'
+                r_north = 'STUDY'
+            elif fl_idx == 2:
+                r_south = 'MASTER_BED'
+                r_north = 'BEDROOM'
+            elif fl_idx == 3:
+                r_south = 'PARLOR'
+                r_north = 'STUDY'
+            else:
+                r_south = 'BEDROOM'
+                r_north = 'STORAGE'
+
+            _rb_s = (cx0, cx1, iy_min, y_mid)
+            _rb_n = (cx0, cx1, y_mid, iy_max)
+
+            _doors_s = [_dw((cx0 + cx1) * 0.5, y_mid, 'X')]
+            _doors_n = [_dw((cx0 + cx1) * 0.5, y_mid, 'X')]
+            if ci > 0:
+                _doors_s.append(_dw(cx0, (iy_min + y_mid) * 0.5, 'Y'))
+                _doors_n.append(_dw(cx0, (y_mid + iy_max) * 0.5, 'Y'))
+            if ci < len(cols) - 1:
+                _doors_s.append(_dw(cx1, (iy_min + y_mid) * 0.5, 'Y'))
+                _doors_n.append(_dw(cx1, (y_mid + iy_max) * 0.5, 'Y'))
+
+            rooms.append(Room(
+                id=f"fl{fl_idx}_{ctag}_s", floor_idx=fl_idx, role=r_south,
+                bounds=_rb_s, doorways=_doors_s, stair_hole=_holds_stair(_rb_s),
+                exterior_facades={'FRONT': (cx0, cx1), **({'LEFT': (iy_min, y_mid)} if ci == 0 else {}), **({'RIGHT': (iy_min, y_mid)} if ci == len(cols) - 1 else {})}
+            ))
+            rooms.append(Room(
+                id=f"fl{fl_idx}_{ctag}_n", floor_idx=fl_idx, role=r_north,
+                bounds=_rb_n, doorways=_doors_n, stair_hole=_holds_stair(_rb_n),
+                exterior_facades={'BACK': (cx0, cx1), **({'LEFT': (y_mid, iy_max)} if ci == 0 else {}), **({'RIGHT': (y_mid, iy_max)} if ci == len(cols) - 1 else {})}
+            ))
+
     return rooms, walls
 
 
@@ -1414,27 +1903,67 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             return None
         return stair_hole
 
-    # Grand manor plan: wide noble footprints use a dedicated 4-column grid
-    # (full-depth stair hall + kitchen/pantry + banquet hall + library/study)
-    # so rooms stay at sensible domestic sizes and the stairs never sit
-    # inside the kitchen or a bedroom.
-    if effective_archetype == 'MANOR' and has_interior_walls \
+    if bool(getattr(props, 'has_throne_room', False)) and has_interior_walls and W >= 13.0 and D >= 5.5:
+        _palace = _plan_throne_palace_rooms(
+            fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
+            has_stairs_landing, stair_pos_info=stair_pos_info,
+            extra_doorways=doorways, props=props
+        )
+        if _palace is not None:
+            _p_rooms, _p_walls = _palace
+            if fl_wings_bounds:
+                for wi, wb in enumerate(fl_wings_bounds):
+                    w_role = 'ROYAL_CHAMBER' if fl_idx == 0 else ('MASTER_BED' if fl_idx == 1 else 'GUEST_ROOM')
+                    wing_dw = []
+                    dw_wx = (wb[0] + wb[1]) * 0.5
+                    dw_w_eff = dw_w
+                    if bool(getattr(props, 'has_throne_room', False)) and wb[2] >= iy_max - 0.30:
+                        dw_w_eff = min(dw_w, 1.30)
+                        dw_wx = max(wb[0] + dw_w_eff * 0.5 + 0.35, min(-2.20 - dw_w_eff * 0.5, (wb[0] + wb[1]) * 0.5 - 3.00))
+                    if wb[3] <= iy_min + 0.30:
+                        wing_dw.append({'x': dw_wx, 'y': iy_min, 'axis': 'X', 'w': dw_w_eff})
+                    elif wb[2] >= iy_max - 0.30:
+                        wing_dw.append({'x': dw_wx, 'y': iy_max, 'axis': 'X', 'w': dw_w_eff})
+                        for r in _p_rooms:
+                            if getattr(r, 'role', '') == 'THRONE_ROOM':
+                                if not any(abs(d.get('x', 0) - dw_wx) < 0.2 and abs(d.get('y', 0) - iy_max) < 0.2 for d in r.doorways):
+                                    r.doorways.append({'x': dw_wx, 'y': iy_max, 'axis': 'X', 'w': dw_w_eff})
+                    _p_rooms.append(Room(
+                        id=f"fl{fl_idx}_wing{wi}", floor_idx=fl_idx,
+                        role=w_role, bounds=wb, is_wing=True, wing_id=wi,
+                        doorways=wing_dw, stair_hole=None, exterior_facades={}))
+            return _p_rooms, _p_walls
+
+    is_wide_mansion = (W >= 15.0 and D >= 6.0
+                       and not getattr(props, 'has_throne_room', False)
+                       and not getattr(props, 'has_double_height', False))
+    if (effective_archetype == 'MANOR' or is_wide_mansion) and has_interior_walls \
             and partition_style in ('AUTO', 'HALL_CHAMBERS'):
         _manor = _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t,
                                    dw_w, dw_h, has_stairs_landing,
-                                   stair_pos_info=stair_pos_info)
+                                   stair_pos_info=stair_pos_info,
+                                   extra_doorways=doorways,
+                                   props=props)
         if _manor is not None:
             _manor_rooms, _manor_walls = _manor
             if fl_wings_bounds:
                 for wi, wb in enumerate(fl_wings_bounds):
                     if fl_idx == 0:
+                        w_role = 'STORAGE' if wi == 0 else 'GUEST_ROOM'
+                    elif fl_idx == 3:
                         w_role = 'STUDY' if wi == 0 else 'GUEST_ROOM'
                     else:
                         w_role = 'BEDROOM' if wi == 0 else 'GUEST_ROOM'
+                    wing_dw = []
+                    dw_wx = (wb[0] + wb[1]) * 0.5
+                    if wb[3] <= iy_min + 0.30:
+                        wing_dw.append({'x': dw_wx, 'y': iy_min, 'axis': 'X', 'w': dw_w})
+                    elif wb[2] >= iy_max - 0.30:
+                        wing_dw.append({'x': dw_wx, 'y': iy_max, 'axis': 'X', 'w': dw_w})
                     _manor_rooms.append(Room(
                         id=f"fl{fl_idx}_wing{wi}", floor_idx=fl_idx,
                         role=w_role, bounds=wb, is_wing=True, wing_id=wi,
-                        doorways=[], stair_hole=None, exterior_facades={}))
+                        doorways=wing_dw, stair_hole=None, exterior_facades={}))
             return _manor_rooms, _manor_walls
 
     # Single open room fallback (only when explicitly requested, plot is tiny
@@ -1637,14 +2166,30 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
     if not is_deep:
         # Partition along Y (vertical wall at X = split_x, running from iy_min to iy_max)
-        min_split_x = stair_safe_x + 0.60
-        if door_cx is not None:
-            min_split_x = max(min_split_x, door_cx + 0.95)
+        stair_on_right = bool(
+            (stair_pos_info and float(stair_pos_info.get('cx', ix_min)) > (ix_min + ix_max) * 0.5)
+            or getattr(props, 'stair_placement', 'LEFT') == 'RIGHT'
+        )
+        if stair_on_right:
+            stair_w = float((stair_pos_info or {}).get('w', 1.2) or 1.2)
+            stair_cx = float((stair_pos_info or {}).get('cx', ix_max - 1.4) or (ix_max - 1.4))
+            stair_safe_x_left = stair_cx - stair_w * 0.5 - 0.20
+            max_split_x = stair_safe_x_left - 0.60
+            split_x = max(ix_min + 2.2, min(max_split_x, ix_max - W * 0.38))
+            split_x = _clear_doorway_span(split_x, axis='X',
+                                          lo=ix_min + 1.8,
+                                          hi=min(ix_max - 1.8, max_split_x))
+        else:
+            min_split_x = stair_safe_x + 0.60
+            if door_cx is not None:
+                min_split_x = max(min_split_x, door_cx + 0.95)
+            if bool(getattr(props, 'has_throne_room', False)):
+                min_split_x = max(min_split_x, 0.95)
 
-        split_x = min(ix_max - 2.2, max(min_split_x, ix_min + W * 0.50))
-        split_x = _clear_doorway_span(split_x, axis='X',
-                                      lo=max(ix_min + 1.8, min_split_x),
-                                      hi=ix_max - 1.8)
+            split_x = min(ix_max - 2.2, max(min_split_x, ix_min + W * 0.50))
+            split_x = _clear_doorway_span(split_x, axis='X',
+                                          lo=max(ix_min + 1.8, min_split_x),
+                                          hi=ix_max - 1.8)
 
         # Smarter room division: refuse long narrow corridor-rooms. Peek the
         # chamber roles so the single kitchen gets a bigger share, then
@@ -2562,6 +3107,20 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     if (dy + dw * 0.5 >= ry0 - 0.20 and dy - dw * 0.5 <= ry1 + 0.20) and (rx0 - 0.55 <= dx <= rx1 + 0.55):
                         if d not in rm.doorways:
                             rm.doorways.append(d)
+
+    # Check if this floor has a mezzanine gallery void (double-height grand hall)
+    if fl_idx == 1 and bool(getattr(props, 'has_throne_room', False) or getattr(props, 'has_double_height', False)):
+        # Target the room directly above the ground floor hall / throne room
+        hall_rm = next((r for r in rooms if not getattr(r, 'is_wing', False) and (r.id.endswith('_hall') or r.id.endswith('_great_hall'))), None)
+        if hall_rm is None:
+            hall_rm = max([r for r in rooms if not getattr(r, 'is_wing', False) and not r.id.endswith('_stair_bay')],
+                          key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]),
+                          default=None)
+        if hall_rm is not None:
+            v_rect = compute_mezzanine_void(hall_rm.bounds, stair_hole=stair_hole, min_rim=2.00, doorways=doorways)
+            if v_rect:
+                hall_rm.floor_void = v_rect
+                hall_rm.role = 'MEZZANINE_GALLERY'
 
     return rooms, interior_walls
 
