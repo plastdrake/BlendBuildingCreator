@@ -4289,20 +4289,20 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         elif role in ('STORAGE', 'CELLAR', 'PANTRY'):
             _furnish_storage(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('COTTAGE', 'LIVING_QUARTERS'):
-            # One combined living area. Run the recipes THINNED so nothing piles
-            # up, kitchen FIRST and bed LAST so the bed lands in the leftover
-            # space away from the stove, and only ONE rug on the whole floor.
+            # One combined living area per floor. Bed FIRST so it always lands,
+            # living after (thinned so nothing piles up), and a kitchen only on
+            # the lowest upper floor - one kitchen per home, not per storey.
             _d = density * 0.55
             _prev_nr = getattr(tracker, 'no_rugs', False)
-            tracker.no_rugs = True
-            _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, _d,
-                             chimney_pos=chimney_positions, floor_has_dining=False)
-            _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, _d,
-                                chimney_pos=chimney_positions)
-            # Bed last, with rugs allowed (it lays the single floor rug).
-            tracker.no_rugs = _prev_nr
             _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, _d,
                              is_master=False)
+            tracker.no_rugs = True
+            if getattr(rm, 'floor_idx', 1) <= 1:
+                _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, _d,
+                                 chimney_pos=chimney_positions,
+                                 floor_has_dining=False)
+            _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, _d,
+                                chimney_pos=chimney_positions)
             tracker.no_rugs = _prev_nr
         elif role in ('STABLE_HALL',):
             _furnish_stable_hall(bm, rm, tracker, z_floor, z_ceil, rng, density)

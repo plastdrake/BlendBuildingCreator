@@ -292,11 +292,11 @@ def build_floors(bm, props, ctx):
                                     _shy - 1.80, _shy + 1.80)
         else:
             if getattr(props, 'has_throne_room', False):
-                # Basement stairs in the room to the right (East Bay, X in [6.80, 11.40])
+                # Basement stairs in the room to the right (East Bay, X in [8.20, 11.60], leaving 2.2m clear landing to West wall at x=6.0)
                 bs_y0 = 4.00
                 bs_y1 = 5.40
-                bs_x0 = 6.80
-                bs_x1 = 11.40
+                bs_x0 = 8.20
+                bs_x1 = 11.60
             else:
                 # Legacy rear stair hall (north strip), flight runs east-west.
                 # Top step starts at x=1.10 to leave a solid flat entrance landing
@@ -617,7 +617,10 @@ def build_floors(bm, props, ctx):
                 _info = _turn_hole_info.get(fl_idx)
                 if _info is not None:
                     _h, _open = _info
-                    # Skip guarding any side that runs along a wall.
+                    # Skip guarding any side that runs along a wall, and the
+                    # side where the flight's FOOT meets the hole (you must be
+                    # able to step on/off at both ends - only the long open
+                    # sides of the well need a railing).
                     _skip = set()
                     if _h[0] - slab_xmin < 0.55:
                         _skip.add('W')
@@ -627,6 +630,10 @@ def build_floors(bm, props, ctx):
                         _skip.add('S')
                     if slab_ymax - _h[3] < 0.55:
                         _skip.add('N')
+                    if _open in ('N', 'S'):
+                        _skip.add('S' if _open == 'N' else 'N')
+                    else:
+                        _skip.add('W' if _open == 'E' else 'E')
                     build_stair_guardrail_one_open(
                         bm, _h, z_floor + 0.05, _open, offset=0.14, rail_h=0.95,
                         bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
