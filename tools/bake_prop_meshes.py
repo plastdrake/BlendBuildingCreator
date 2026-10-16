@@ -22,14 +22,56 @@ FBX_PROPS = {
     'bread': 'bread.fbx',
     'meat': 'meat.fbx',
     'meat1': 'meat1.fbx',
+    'anvil_tool': 'Anvil_Tool.fbx',
+    'axe_tool': 'Axe_Tool.fbx',
+    'hoe_tool': 'Hoe_Tool.fbx',
+    'pickaxe_tool': 'Pickaxe_Tool.fbx',
 }
+
+# Canonical material slot indices (mirrors generator/materials.py). The artist
+# FBX reference our own material names, so each baked face keeps its slot.
+MAT_BY_NAME = {
+    'M_Building_Stone': 0, 'M_Building_Plaster': 1, 'M_Building_Timber': 2,
+    'M_Building_Floor': 3, 'M_Building_Shingles': 4, 'M_Building_Glass': 5,
+    'M_Building_Iron': 6, 'M_Building_Wood': 7, 'M_Building_Cut_Stone': 8,
+    'M_Building_Log': 9, 'M_Building_Log_End': 10,
+    'M_Building_Plaster_Brick': 11, 'M_Building_Clock_Face': 12,
+    'M_Building_Banner': 13, 'M_Building_Target': 14, 'M_Building_Hay': 15,
+    'M_Building_Dirt': 16, 'M_Building_Sign': 17, 'M_Building_Rope': 18,
+    'LanternEmissive': 19, 'M_Building_Tarp': 20, 'M_Building_Clay': 21,
+    'M_Building_Fabric_White': 22, 'M_Building_Fabric_Red': 23,
+    'M_Building_Fabric_Stitched': 24, 'M_Building_Leather': 25,
+    'M_Building_Book_Paper': 26, 'M_Building_Wax': 27,
+    'M_Building_Leather_2': 28, 'M_Building_Leather_3': 29,
+    'M_Building_Rug_1': 30, 'M_Building_Rug_2': 31, 'M_Building_Rug_3': 32,
+    'M_Building_Plant': 33, 'M_Building_Pumpkin': 34, 'M_Building_Bread': 35,
+    'M_Building_Upholstery': 36, 'M_Building_Cloth_Linen': 37,
+    'M_Building_Bottle_Glass': 38, 'M_Building_Pumpkin_Stem': 39,
+    'M_Building_Open_Book': 40, 'M_Water': 41, 'M_Building_Cliffs': 42,
+    'M_Building_Dungeon_Wall': 43, 'M_Building_Dungeon_Floor': 44,
+    'M_Building_Dungeon_Beam': 45, 'M_Building_Canvas': 46,
+    'M_Building_Fish': 47, 'M_Building_Meat': 48, 'M_Building_Bread_FBX': 49,
+    'M_Building_Gold': 50, 'M_Building_Silver': 51,
+    'M_Building_Terracotta_Brick': 52,
+}
+
+
+def _canon_index(name):
+    """Canonical slot index for an FBX material name (ignores .001 / _T1)."""
+    if not name:
+        return None
+    base = name.split('.')[0]
+    if len(base) > 3 and base[-3] == '_' and base[-2] == 'T' and base[-1] in '123':
+        base = base[:-3]
+    return MAT_BY_NAME.get(base)
 
 
 def bake_one(path):
     before = set(bpy.data.objects[:])
     bpy.ops.import_scene.fbx(filepath=path)
     new = [o for o in bpy.data.objects if o not in before]
-    items = []
+
+    verts, polys, poly_mats = [], [], []
     for o in new:
         if o.type != 'MESH':
             continue
@@ -37,22 +79,30 @@ def bake_one(path):
         if not me.vertices or not me.polygons:
             continue
         M = o.matrix_world
-        verts = [tuple(round(c, 5) for c in (M @ v.co)) for v in me.vertices]
+        off = len(verts)
+        for v in me.vertices:
+            verts.append(tuple(round(c, 5) for c in (M @ v.co)))
         uv_data = me.uv_layers[0].data if len(me.uv_layers) else None
-        polys = []
+        slot_idx = [_canon_index(m.name if m else None) for m in me.materials]
         for poly in me.polygons:
             loops = []
             for li in poly.loop_indices:
-                vi = me.loops[li].vertex_index
+                vi = me.loops[li].vertex_index + off
                 uv = (tuple(round(c, 5) for c in uv_data[li].uv)
                       if uv_data is not None else (0.0, 0.0))
                 loops.append((vi, uv))
             polys.append(loops)
-        items.append({'verts': verts, 'polys': polys})
+            si = (slot_idx[poly.material_index]
+                  if poly.material_index < len(slot_idx) else None)
+            poly_mats.append(-1 if si is None else si)
+
     for o in new:
-        me = o.data if o.type == 'MESH' else None
         bpy.data.objects.remove(o, do_unlink=True)
-    return items
+    if not verts or not polys:
+        return None
+    has_mats = any(m >= 0 for m in poly_mats)
+    return {'verts': verts, 'polys': polys,
+            'poly_mats': poly_mats if has_mats else None}
 
 
 all_data = {}
@@ -61,11 +111,12 @@ for key, fname in FBX_PROPS.items():
     if not os.path.exists(p):
         print('MISSING', p)
         continue
-    items = bake_one(p)
-    if items:
-        all_data[key] = items[0]
-        print(f'BAKED {key}: {len(items[0]["verts"])} verts '
-              f'{len(items[0]["polys"])} polys')
+    item = bake_one(p)
+    if item:
+        all_data[key] = item
+        print(f'BAKED {key}: {len(item["verts"])} verts '
+              f'{len(item["polys"])} polys '
+              f'mats={"yes" if item["poly_mats"] else "no"}')
     else:
         print('EMPTY', key)
 
@@ -75,7 +126,9 @@ lines = [
     'Regenerate with:  blender --background --python tools/bake_prop_meshes.py',
     '',
     'Each entry stores world-space vertices and per-loop (vertex_index, uv)',
-    'so the builder needs no FBX import at generation time.',
+    'so the builder needs no FBX import at generation time. Optional',
+    '"poly_mats" holds a canonical material slot index per polygon (-1 = use',
+    'the builder-supplied default).',
     '"""',
     '',
     'PROP_MESHES = {',
@@ -92,6 +145,12 @@ for key, item in all_data.items():
                           for vi, uv in poly)
         lines.append(f'            [{loops}],')
     lines.append('        ],')
+    if item['poly_mats']:
+        lines.append('        "poly_mats": [')
+        pm = item['poly_mats']
+        for i in range(0, len(pm), 24):
+            lines.append('            ' + ', '.join(repr(x) for x in pm[i:i + 24]) + ',')
+        lines.append('        ],')
     lines.append('    },')
 lines.append('}')
 lines.append('')

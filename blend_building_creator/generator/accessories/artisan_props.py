@@ -853,6 +853,18 @@ def build_balance_scale(bm, x, y, z_ground=0.0, ang=0.0):
 
 
 def build_anvil(bm, x, y, z_ground=0.0, ang=0.0):
+    """Smith's anvil on a log stump — the artist's Anvil_Tool.fbx (per-face
+    iron/log materials), falling back to the stylized build if unbaked."""
+    try:
+        if _stamp_baked_tool(bm, None, 'anvil_tool', x, y, z_ground, ang,
+                             length=0.64, lay_flat=False, long='X'):
+            return True
+    except Exception:
+        pass
+    return _procedural_anvil(bm, x, y, z_ground, ang)
+
+
+def _procedural_anvil(bm, x, y, z_ground=0.0, ang=0.0):
     """Smith's anvil on a stump: tapered waist, full face, conical horn."""
     faces = []
     faces += create_cylinder(
@@ -1229,7 +1241,8 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
     for i in used:
         v = verts[i]
         remap[i] = bm.verts.new(place @ (fix @ (base @ _V(v))))
-    for poly in it['polys']:
+    _poly_mats = it.get('poly_mats')
+    for _pi, poly in enumerate(it['polys']):
         idx = [vi for vi, _ in poly]
         if len(set(idx)) < 3:
             continue  # degenerate loop
@@ -1238,7 +1251,10 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
             continue  # duplicate face
         seen.add(key_f)
         f = bm.faces.new([remap[i] for i in idx])
-        f.material_index = mat_index
+        _slot = mat_index
+        if _poly_mats is not None and _pi < len(_poly_mats) and _poly_mats[_pi] >= 0:
+            _slot = _poly_mats[_pi]
+        f.material_index = _slot
         f.smooth = True
         f.tag = True  # protect the atlas UVs from the final cubic UV pass
         # Assign UVs keyed to the ACTUAL source vertex behind each loop, so
@@ -1249,6 +1265,70 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
             src = src_of.get(loop.vert)
             if src is not None and src in uv_by_vi:
                 loop[uv_layer].uv = uv_by_vi[src]
+    return True
+
+
+def _stamp_baked_tool(bm, _faces, key, x, y, z_ground=0.0, ang=0.0,
+                      length=0.62, lay_flat=True, long='Z'):
+    """Stamp one of the artist's baked smith tools, keeping its per-face
+    material slots (iron head, wooden haft, ...).
+
+    The source FBX are modelled standing upright (length along +Z). By default
+    the tool is laid flat (haft along local +X, working edge toward -Y) so it
+    reads as merchandise on a table or display; pass ``lay_flat=False`` for
+    pieces that stand on the ground (the anvil). ``length`` sets the extent of
+    the chosen source axis. Returns True, or False when not baked.
+    """
+    from mathutils import Matrix as _M, Vector as _V
+    from .artisan_meshdata import PROP_MESHES
+    it = PROP_MESHES.get(key)
+    if not it:
+        return False
+    verts = it['verts']
+    xs = [v[0] for v in verts]
+    ys = [v[1] for v in verts]
+    zs = [v[2] for v in verts]
+    if long == 'Z':
+        span = max(zs) - min(zs)
+    elif long == 'Y':
+        span = max(ys) - min(ys)
+    else:
+        span = max(xs) - min(xs)
+    s = length / (span or 1.0)
+    base = _M.Translation((-(min(xs) + max(xs)) * 0.5,
+                           -(min(ys) + max(ys)) * 0.5,
+                           -min(zs)))
+    # Lay an upright tool down: source +Z (haft) -> local +X, thin axis -> Z.
+    orient = (_M.Rotation(math.pi * 0.5, 4, 'Y') if lay_flat
+              else _M.Diagonal((1.0, 1.0, 1.0, 1.0)))
+    place = (_M.Translation((x, y, z_ground)) @ _M.Rotation(ang, 4, 'Z')
+             @ orient @ _M.Diagonal((s, s, s, 1.0)))
+    uv_layer = bm.loops.layers.uv.verify()
+    remap = {}
+    used = set(vi for poly in it['polys'] for vi, _ in poly)
+    for i in used:
+        remap[i] = bm.verts.new(place @ (base @ _V(verts[i])))
+    _pm = it.get('poly_mats')
+    seen = set()
+    for pi, poly in enumerate(it['polys']):
+        idx = [vi for vi, _ in poly]
+        if len(set(idx)) < 3:
+            continue
+        kf = tuple(sorted(idx))
+        if kf in seen:
+            continue
+        seen.add(kf)
+        f = bm.faces.new([remap[i] for i in idx])
+        f.material_index = (_pm[pi] if (_pm is not None and pi < len(_pm)
+                                        and _pm[pi] >= 0) else MAT_INDEX_IRON)
+        f.smooth = True
+        f.tag = True
+        uvm = {vi: uv for vi, uv in poly}
+        src = {remap[i]: i for i in idx}
+        for loop in f.loops:
+            sv = src.get(loop.vert)
+            if sv is not None and sv in uvm:
+                loop[uv_layer].uv = uvm[sv]
     return True
 
 
@@ -1432,7 +1512,19 @@ def _smith_haft(bm, faces, length, r=0.020, mat=MAT_INDEX_WOOD):
     return -length * 0.5 + haft_len   # x of the head seat
 
 
-def build_axe(bm, x, y, z_ground=0.0, ang=0.0, length=0.74, variant=0):
+def build_axe(bm, x, y, z_ground=0.0, ang=0.0, length=0.62, variant=0):
+    """Felling axe — the artist's Axe_Tool.fbx (per-face iron/wood), laid flat.
+    Falls back to the stylized build when the art is unbaked."""
+    try:
+        if _stamp_baked_tool(bm, None, 'axe_tool', x, y, z_ground, ang,
+                             length=length, lay_flat=True, long='Z'):
+            return True
+    except Exception:
+        pass
+    return _procedural_axe(bm, x, y, z_ground, ang, length, variant)
+
+
+def _procedural_axe(bm, x, y, z_ground=0.0, ang=0.0, length=0.74, variant=0):
     """Felling axe: a tapered wooden haft and a forged, flared steel bit with
     a beard horn. Lies flat along +X with the bit toward +Y."""
     faces = []
@@ -1466,7 +1558,18 @@ def build_axe(bm, x, y, z_ground=0.0, ang=0.0, length=0.74, variant=0):
     return faces
 
 
-def build_pickaxe(bm, x, y, z_ground=0.0, ang=0.0, length=0.80, variant=0):
+def build_pickaxe(bm, x, y, z_ground=0.0, ang=0.0, length=0.66, variant=0):
+    """Pickaxe — the artist's Pickaxe_Tool.fbx (per-face iron/wood), laid flat."""
+    try:
+        if _stamp_baked_tool(bm, None, 'pickaxe_tool', x, y, z_ground, ang,
+                             length=length, lay_flat=True, long='Z'):
+            return True
+    except Exception:
+        pass
+    return _procedural_pickaxe(bm, x, y, z_ground, ang, length, variant)
+
+
+def _procedural_pickaxe(bm, x, y, z_ground=0.0, ang=0.0, length=0.80, variant=0):
     """Pickaxe: a wooden haft with a forged T-head — a curved pick spike
     toward +Y and a chisel adze toward -Y. Lies flat along +X."""
     faces = []
@@ -1501,7 +1604,18 @@ def build_pickaxe(bm, x, y, z_ground=0.0, ang=0.0, length=0.80, variant=0):
     return faces
 
 
-def build_hoe(bm, x, y, z_ground=0.0, ang=0.0, length=0.78, variant=0):
+def build_hoe(bm, x, y, z_ground=0.0, ang=0.0, length=0.64, variant=0):
+    """Hoe — the artist's Hoe_Tool.fbx (per-face iron/wood), laid flat."""
+    try:
+        if _stamp_baked_tool(bm, None, 'hoe_tool', x, y, z_ground, ang,
+                             length=length, lay_flat=True, long='Z'):
+            return True
+    except Exception:
+        pass
+    return _procedural_hoe(bm, x, y, z_ground, ang, length, variant)
+
+
+def _procedural_hoe(bm, x, y, z_ground=0.0, ang=0.0, length=0.78, variant=0):
     """Hoe: a wooden haft with a forged offset blade set at a slight angle.
     Lies flat along +X with the blade toward +Y."""
     faces = []
