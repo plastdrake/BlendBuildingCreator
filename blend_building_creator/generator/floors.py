@@ -790,6 +790,12 @@ def build_floors(bm, props, ctx):
                 _tip = (_b[0] - _ux * 1.0, _b[1] - _uy * 1.0)
                 build_turned_flight(bm, _foot, _tip, z_floor + 0.05,
                                     z_ceil + 0.05, stair_w, along_axis=_axis)
+                # Reserve a clear 2x2 approach at the foot of this flight so
+                # nothing (props, partitions) blocks getting onto the stairs.
+                ctx.floor_doorways.setdefault(fl_idx, []).append({
+                    'x': _foot[0], 'y': _foot[1],
+                    'axis': ('X' if _axis == 'Y' else 'Y'),
+                    'w': 2.10, 'is_stair_landing': True})
                 # Opening in the slab above: the flight footprint (2x2 landings
                 # sit on solid floor at each corner).
                 _hw = stair_w * 0.5 + 0.10
