@@ -1374,7 +1374,7 @@ def build_smith_tool_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.22):
     for lx, key in ((-0.42, 'axe_tool'), (0.0, 'pickaxe_tool'),
                     (0.42, 'hoe_tool')):
         _stamp_baked_tool(bm, faces, key, lx, -0.04,
-                          rail_z + 0.10 - tool_len, ang=0.0, length=tool_len,
+                          rail_z + 0.24 - tool_len, ang=0.0, length=tool_len,
                           orient=orient)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces

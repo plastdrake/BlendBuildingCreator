@@ -3876,12 +3876,13 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
         _cc = _placed_counter
         _arch_cc = getattr(tracker, 'archetype', 'NONE')
         if _arch_cc in ('TOOLSMITH', 'BLACKSMITH'):
-            # A tool or two laid out on the counter (no plant).
+            # A tool or two laid out on the counter (no plant), spaced so the
+            # axe head never lands in the pickaxe handle.
             _ca, _sa = math.cos(_cc['yaw']), math.sin(_cc['yaw'])
-            for _off, _key in ((-0.26, 'AXE'), (0.22, 'PICKAXE')):
+            for _off, _key in ((-0.44, 'AXE'), (0.44, 'PICKAXE')):
                 build_prop(bm, _key, _cc['cx'] + _ca * _off,
                            _cc['cy'] + _sa * _off, _cc['top_z'],
-                           _cc['yaw'] + 0.30)
+                           _cc['yaw'])
         elif _arch_cc != 'JEWELER':
             # Countertop plant (jeweler gets the gem tray instead).
             build_prop(bm, 'POTTED_PLANT_SMALL', _cc['cx'], _cc['cy'],
