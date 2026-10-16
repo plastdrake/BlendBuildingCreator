@@ -105,14 +105,14 @@ def _bread_fbx_mat():
 
 def _stamp_baked_local(bm, faces, fbx_file, lx, ly, lz, yaw, length,
                        mat_index, long_axis='AUTO', pre_rot=(0.0, 0.0, 0.0),
-                       pre_mat=None):
+                       pre_mat=None, thick=1.0):
     """Stamp a baked mesh in a caller's LOCAL frame, appending the new faces
     to ``faces`` so they ride along with the caller's own final transform."""
     _n0 = len(bm.faces)
     try:
         if _build_fbx_prop(bm, fbx_file, None, lx, ly, lz, yaw, length,
                            mat_index, long_axis=long_axis, pre_rot=pre_rot,
-                           pre_mat=pre_mat):
+                           pre_mat=pre_mat, thick=thick):
             faces += [f for f in list(bm.faces)[_n0:] if f.is_valid]
             return True
     except Exception:
@@ -438,18 +438,18 @@ def build_fish_rail(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
     for i in range(n):
         hx = -width * 0.5 + 0.22 + i * ((width - 0.44) / max(1, n - 1))
         fl = 0.30 * _fish_scale(i)
-        # Rope hangs from the rail, passes the fish's tail fin and is hidden
-        # behind the fish body (fish hangs with its fin at the rope's end).
-        rope_len = 0.10 + 0.24 * fl
+        # Rope hangs from the rail; its lower end sits inside the fish's body
+        # and it is routed just behind the fish, so it vanishes into the tail.
+        rope_len = 0.16 + 0.20 * fl
         faces += create_cylinder(
             bm, radius=0.006, height=rope_len, segments=6,
-            location=(hx, 0.030, rail_z - rope_len * 0.5),
+            location=(hx, 0.035, rail_z - rope_len * 0.5),
             mat_index=MAT_INDEX_ROPE
         )
         _stamp_baked_local(
             bm, faces, 'fish.fbx',
-            hx, -0.005, rail_z - 0.10 - fl * 0.5, 0.0,
-            fl, _fish_mat(), long_axis='X', pre_mat=_hang_mat()
+            hx, -0.005, rail_z - rope_len, 0.0,
+            fl, _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=1.6
         )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -1161,7 +1161,7 @@ def build_fish(bm, x, y, z_ground=0.0, ang=0.0, length=0.34, smoked=False):
     _lift = 0.015
     try:
         if _build_fbx_prop(bm, 'fish.fbx', None, x, y, z_ground + _lift, ang,
-                           length, _fish_mat(), long_axis='AUTO'):
+                           length, _fish_mat(), long_axis='AUTO', thick=1.45):
             return True
     except Exception:
         pass
@@ -1211,7 +1211,7 @@ def _meat_mat():
 
 def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
                     mat_index, final=None, long_axis='Y',
-                    pre_rot=(0.0, 0.0, 0.0), pre_mat=None):
+                    pre_rot=(0.0, 0.0, 0.0), pre_mat=None, thick=1.0):
     """Stamp a baked artist prop mesh normalized to ``length`` with ``mat_index``.
 
     ``fbx_file`` names the source art (e.g. ``bread.fbx``); the geometry comes
@@ -1250,7 +1250,7 @@ def _build_fbx_prop(bm, fbx_file, _unused, x, y, z_ground, ang, length,
         if pre_mat is not None else _E(pre_rot).to_matrix().to_4x4()
     local = (_M.Translation((x, y, z_ground)) @ _M.Rotation(ang, 4, 'Z'))
     place = (local if final is None else (final @ local))
-    place = place @ pre @ fix @ _M.Diagonal((s, s, s, 1.0))
+    place = place @ pre @ fix @ _M.Diagonal((s, s, s * thick, 1.0))
     base = _M.Translation((-cx, -cy, -z0))
     uv_layer = bm.loops.layers.uv.verify()
     seen = set()
@@ -1429,17 +1429,17 @@ def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):
         for i in range(n):
             hx = -width * 0.5 + 0.24 + i * ((width - 0.48) / max(1, n - 1))
             fl = 0.30 * _fish_scale(row * 7 + i)
-            rope_len = 0.10 + 0.24 * fl
-            # Rope passed behind the fish so it vanishes into the tail fin.
+            rope_len = 0.16 + 0.20 * fl
+            # Rope passed behind the fish so it vanishes into the tail.
             faces += create_cylinder(
                 bm, radius=0.006, height=rope_len, segments=6,
-                location=(hx, bar_y + 0.030, bar_z - rope_len * 0.5),
+                location=(hx, bar_y + 0.035, bar_z - rope_len * 0.5),
                 mat_index=MAT_INDEX_ROPE
             )
             _stamp_baked_local(
                 bm, faces, 'fish.fbx', hx, bar_y - 0.005,
-                bar_z - 0.10 - fl * 0.5, 0.0, fl, _fish_mat(), long_axis='X',
-                pre_mat=_hang_mat()
+                bar_z - rope_len, 0.0, fl, _fish_mat(), long_axis='X',
+                pre_mat=_hang_mat(), thick=1.6
             )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -1812,14 +1812,14 @@ def build_fish_stringer(bm, x, y, z_ceiling=3.0, ang=0.0, drops=3):
     for i in range(drops):
         lx = (i - (drops - 1) * 0.5) * 0.28
         fl = 0.30 * _fish_scale(i)
-        rope_len = 0.10 + 0.24 * fl
+        rope_len = 0.16 + 0.20 * fl
         faces += create_cylinder(
             bm, radius=0.006, height=rope_len, segments=6,
-            location=(lx, 0.030, -0.06 - rope_len * 0.5), mat_index=MAT_INDEX_ROPE
+            location=(lx, 0.035, -0.06 - rope_len * 0.5), mat_index=MAT_INDEX_ROPE
         )
         _stamp_baked_local(
-            bm, faces, 'fish.fbx', lx, -0.005, -0.16 - fl * 0.5, 0.0, fl,
-            _fish_mat(), long_axis='X', pre_mat=_hang_mat()
+            bm, faces, 'fish.fbx', lx, -0.005, -0.06 - rope_len, 0.0, fl,
+            _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=1.6
         )
     transform_faces(faces, _place(x, y, z_ceiling, ang))
     return faces
