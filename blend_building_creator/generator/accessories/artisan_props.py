@@ -559,11 +559,12 @@ def build_strongbox(bm, x, y, z_ground=0.0, ang=0.0):
         location=(0.0, 0.0, bh + 0.05),
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.012
     )
-    # Iron bands wrapping body and lid.
+    # Iron bands wrapping body and lid — kept a hair proud of the lid top and
+    # sides so the band faces are never coplanar with (or z-fighting) the lid.
     for bx in (-bw * 0.28, bw * 0.28):
         faces += create_beveled_box(
-            bm, size=(0.055, bd + 0.025, bh + 0.10),
-            location=(bx, 0.0, (bh + 0.10) * 0.5),
+            bm, size=(0.055, bd + 0.04, bh + 0.12),
+            location=(bx, 0.0, (bh + 0.12) * 0.5),
             mat_index=MAT_INDEX_IRON, bevel_amount=0.004
         )
     # Lock plate + studs on the front face.

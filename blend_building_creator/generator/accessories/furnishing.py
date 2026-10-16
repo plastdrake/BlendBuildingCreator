@@ -2989,7 +2989,33 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         _try_place_wall_prop(bm, 'BREAD_RACK', 1.00, 0.50, tracker, z_floor,
                              candidate_walls=('WEST', 'NORTH', 'EAST'))
     elif arch == 'BREWERY':
-        _place_floor_prop(bm, tracker, z_floor, rng, 'BOTTLE_CRATE', 0.33, 0.33)
+        # A case of drinks: prefer the counter, then a wall, then a corner —
+        # never randomly on the open floor.
+        _cc = getattr(tracker, 'shop_counter', None)
+        _done = False
+        if _cc is not None:
+            _ca, _sa = math.cos(_cc['yaw']), math.sin(_cc['yaw'])
+            for _off in (0.42, -0.42, 0.0):
+                _bx = _cc['cx'] + _ca * _off
+                _by = _cc['cy'] + _sa * _off
+                if tracker.is_free(_bx - 0.26, _bx + 0.26, _by - 0.24, _by + 0.24):
+                    tracker.occupy(_bx - 0.26, _bx + 0.26, _by - 0.24, _by + 0.24)
+                    build_prop(bm, 'BOTTLE_CRATE', _bx, _by, _cc['top_z'], _cc['yaw'])
+                    _done = True
+                    break
+        if not _done:
+            _done = _try_place_wall_prop(bm, 'BOTTLE_CRATE', 0.52, 0.52, tracker,
+                                         z_floor, candidate_walls=('EAST', 'WEST', 'SOUTH', 'NORTH')) is not None
+        if not _done:
+            for _cx2, _cy2 in ((rm.bounds[0] + 0.35, rm.bounds[2] + 0.35),
+                               (rm.bounds[1] - 0.35, rm.bounds[2] + 0.35),
+                               (rm.bounds[0] + 0.35, rm.bounds[3] - 0.35),
+                               (rm.bounds[1] - 0.35, rm.bounds[3] - 0.35)):
+                if tracker.is_free(_cx2 - 0.28, _cx2 + 0.28, _cy2 - 0.28, _cy2 + 0.28):
+                    tracker.occupy(_cx2 - 0.28, _cx2 + 0.28, _cy2 - 0.28, _cy2 + 0.28)
+                    build_prop(bm, 'BOTTLE_CRATE', _cx2, _cy2, z_floor,
+                               rng.uniform(0.0, 6.28))
+                    break
     elif arch == 'BUTCHER':
         _try_place_wall_prop(bm, 'SAUSAGE_STRING', 1.00, 0.35, tracker, z_floor,
                              candidate_walls=('NORTH', 'EAST', 'WEST'))
