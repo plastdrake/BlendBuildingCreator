@@ -427,6 +427,13 @@ def _fish_scale(i):
     return 1.40 + 0.50 * ((_h % 1000) / 999.0)
 
 
+def _fish_yaw(i):
+    """Small random yaw (±0.18 rad) so hanging fish don't all face exactly the
+    same way - mixed deterministically like the size."""
+    _h = (i * 709607 + 982451653) & 0xFFFFFFFF
+    return (math.pi * 0.36 * (_h % 1000) / 999.0) - math.pi * 0.18
+
+
 # Single resting fish (stalls, counters, displays) are scaled up as a whole so
 # they read chunkier without touching the layouts that place them.
 _FISH_SCALE = 1.35
@@ -446,12 +453,12 @@ def build_fish_rail(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
         rope_len = 0.18 + 0.85 * fl
         faces += create_cylinder(
             bm, radius=0.006, height=rope_len, segments=6,
-            location=(hx, -0.005, rail_z - rope_len * 0.5),
+            location=(hx, 0.0, rail_z - rope_len * 0.5),
             mat_index=MAT_INDEX_ROPE
         )
         _stamp_baked_local(
             bm, faces, 'fish.fbx',
-            hx, -0.005, rail_z - rope_len, 0.0,
+            hx, 0.0, rail_z - rope_len, _fish_yaw(i),
             fl, _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
         )
     transform_faces(faces, _place(x, y, z_ground, ang))
@@ -1436,13 +1443,13 @@ def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):
             # Rope passed behind the fish so it vanishes into the tail.
             faces += create_cylinder(
                 bm, radius=0.006, height=rope_len, segments=6,
-                location=(hx, bar_y - 0.005, bar_z - rope_len * 0.5),
+                location=(hx, bar_y, bar_z - rope_len * 0.5),
                 mat_index=MAT_INDEX_ROPE
             )
             _stamp_baked_local(
-                bm, faces, 'fish.fbx', hx, bar_y - 0.005,
-                bar_z - rope_len, 0.0, fl, _fish_mat(), long_axis='X',
-                pre_mat=_hang_mat(), thick=2.2
+                bm, faces, 'fish.fbx', hx, bar_y,
+                bar_z - rope_len, _fish_yaw(row * 7 + i), fl,
+                _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
             )
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -1818,10 +1825,10 @@ def build_fish_stringer(bm, x, y, z_ceiling=3.0, ang=0.0, drops=3):
         rope_len = 0.18 + 0.85 * fl
         faces += create_cylinder(
             bm, radius=0.006, height=rope_len, segments=6,
-            location=(lx, -0.005, -0.06 - rope_len * 0.5), mat_index=MAT_INDEX_ROPE
+            location=(lx, 0.0, -0.06 - rope_len * 0.5), mat_index=MAT_INDEX_ROPE
         )
         _stamp_baked_local(
-            bm, faces, 'fish.fbx', lx, -0.005, -0.06 - rope_len, 0.0, fl,
+            bm, faces, 'fish.fbx', lx, 0.0, -0.06 - rope_len, _fish_yaw(i), fl,
             _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
         )
     transform_faces(faces, _place(x, y, z_ceiling, ang))

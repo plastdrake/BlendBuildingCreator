@@ -88,13 +88,12 @@ def build_fisherman_stilts(bm, x_min, x_max, y_min, y_max, z_ground, z_floor):
             _rope = 0.18 + 0.85 * _fl
             create_cylinder(
                 bm, radius=0.006, height=_rope, segments=6,
-                location=(rack_x, _fy - 0.005, z_ground + rack_h - _rope * 0.5),
+                location=(rack_x, _fy, z_ground + rack_h - _rope * 0.5),
                 mat_index=MAT_INDEX_ROPE
             )
-            # Rope behind the fish so it vanishes into the tail.
             _stamp_baked_local(
-                bm, [], 'fish.fbx', rack_x, _fy - 0.005,
-                z_ground + rack_h - _rope, 0.0, _fl,
+                bm, [], 'fish.fbx', rack_x, _fy,
+                z_ground + rack_h - _rope, _fish_yaw(_i), _fl,
                 _fish_mat(), long_axis='X', pre_mat=_hang_mat(), thick=2.2
             )
     except Exception:
