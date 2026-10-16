@@ -566,8 +566,9 @@ def build_floors(bm, props, ctx):
                 if getattr(props, 'has_throne_room', False):
                     # Palace throne hall is centered symmetrically at [-half_w, +half_w]
                     _stair_r = (cur_stair_hole[1] + 0.30) if cur_stair_hole else (slab_xmin + 4.5)
+                    _req_w = max(4.5, _stair_r - slab_xmin)
                     _half = min(6.0, max(3.5, (slab_xmax - slab_xmin) * 0.5 - _req_w))
-                    if (slab_xmax - slab_xmin) >= 18.0 and _req_w <= (slab_xmax - slab_xmin) * 0.5 - 6.0:
+                    if (slab_xmax - slab_xmin) >= 18.0:
                         _half = 6.0
                     _hall_xmin = -_half
                     _hall_xmax = _half
@@ -803,12 +804,15 @@ def build_floors(bm, props, ctx):
                 if not _opts:
                     _opts = [(_sign, _ax_f + _sign * _run)]
                 if _turn_prev is not None and len(_opts) > 1:
-                    _pick = _opts[0]
-                    for _o in _opts:
-                        if not _rover(_frect(_o[1], _axis, _fx, _fy, stair_w), _turn_prev):
-                            _pick = _o
-                            break
-                    _opts = [_pick]
+                    def _ov(_a, _b):
+                        _ix = max(0.0, min(_a[1], _b[1]) - max(_a[0], _b[0]))
+                        _iy = max(0.0, min(_a[3], _b[3]) - max(_a[2], _b[2]))
+                        return _ix * _iy
+                    # Least footprint overlap with the flight below first: the
+                    # upper flight must never run back over the opening you
+                    # climb up through.
+                    _opts.sort(key=lambda _o: _ov(
+                        _frect(_o[1], _axis, _fx, _fy, stair_w), _turn_prev))
                 _sign, _ax_t = _opts[0]
                 _turn_prev = _frect(_ax_t, _axis, _fx, _fy, stair_w)
                 if _axis == 'Y':
@@ -904,7 +908,7 @@ def build_floors(bm, props, ctx):
                     _stair_r = (next_stair_hole[1] + 0.30) if next_stair_hole else (slab_xmin + 4.5)
                     _req_w = max(4.5, _stair_r - slab_xmin)
                     _half = min(6.0, max(3.5, (slab_xmax - slab_xmin) * 0.5 - _req_w))
-                    if (slab_xmax - slab_xmin) >= 18.0 and _req_w <= (slab_xmax - slab_xmin) * 0.5 - 6.0:
+                    if (slab_xmax - slab_xmin) >= 18.0:
                         _half = 6.0
                     _hall_xmin = -_half
                     _hall_xmax = _half
@@ -1426,34 +1430,9 @@ def build_floors(bm, props, ctx):
                     create_beveled_box(bm, size=(p_w + jamb_w * 2.0 + 0.06, wall_t + 0.16, 0.038),
                                        location=(p_cx, f_yf, z_floor + 0.05 + 0.019),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
-                    # Interior liner: the main wall's outer (exterior) face would
-                    # otherwise show inside the wing room. Cover the wing span
-                    # with wood planks (portal cut out), tucking every liner
-                    # edge under the portal jambs/lintel and the wing side walls
-                    # so no raw edge ever shows.
-                    _lt = 0.06
-                    _ly = p_yf + (-1.0 if w_wall == 'FRONT' else 1.0) * (wall_t * 0.5)
-                    _lx0 = w_xmin - 0.05
-                    _lx1 = w_xmax + 0.05
-                    _jx0 = p_cx - p_w * 0.5 - jamb_w + 0.03
-                    _jx1 = p_cx + p_w * 0.5 + jamb_w - 0.03
-                    _HH = z_ceil - z_floor
-                    if _jx0 - _lx0 > 0.05:
-                        create_beveled_box(
-                            bm, size=((_jx0 - _lx0), _lt, _HH),
-                            location=((_lx0 + _jx0) * 0.5, _ly, z_floor + _HH * 0.5),
-                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
-                    if _lx1 - _jx1 > 0.05:
-                        create_beveled_box(
-                            bm, size=((_lx1 - _jx1), _lt, _HH),
-                            location=((_jx1 + _lx1) * 0.5, _ly, z_floor + _HH * 0.5),
-                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
-                    _ztop = z_floor + portal_h + lintel_h - 0.05
-                    if z_ceil - _ztop > 0.05 and _jx1 - _jx0 > 0.05:
-                        create_beveled_box(
-                            bm, size=((_jx1 - _jx0), _lt, z_ceil - _ztop),
-                            location=(p_cx, _ly, _ztop + (z_ceil - _ztop) * 0.5),
-                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
+                    # Interior liner: the shared party wall within flat_ranges is directly
+                    # constructed as finished MAT_INDEX_WOOD on both faces by build_wall_with_opening,
+                    # eliminating coplanar liner z-fighting.
                 else: # LEFT or RIGHT
                     wing_span = w_ymax - w_ymin
                     clear_margin = wall_t + jamb_w + 0.22
@@ -1488,32 +1467,9 @@ def build_floors(bm, props, ctx):
                     create_beveled_box(bm, size=(wall_t + 0.16, p_w + jamb_w * 2.0 + 0.06, 0.038),
                                        location=(f_xf, p_cy, z_floor + 0.05 + 0.019),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
-                    # Interior liner (mirrors the FRONT/BACK case): cover the wing
-                    # span of the main wall with wood planks on the wing side,
-                    # portal cut out, all edges tucked under jambs/lintel/walls.
-                    _lt = 0.06
-                    _lx = p_xf + (-1.0 if w_wall == 'LEFT' else 1.0) * (wall_t * 0.5)
-                    _ly0 = w_ymin - 0.05
-                    _ly1 = w_ymax + 0.05
-                    _jy0 = p_cy - p_w * 0.5 - jamb_w + 0.03
-                    _jy1 = p_cy + p_w * 0.5 + jamb_w - 0.03
-                    _HH = z_ceil - z_floor
-                    if _jy0 - _ly0 > 0.05:
-                        create_beveled_box(
-                            bm, size=(_lt, (_jy0 - _ly0), _HH),
-                            location=(_lx, (_ly0 + _jy0) * 0.5, z_floor + _HH * 0.5),
-                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
-                    if _ly1 - _jy1 > 0.05:
-                        create_beveled_box(
-                            bm, size=(_lt, (_ly1 - _jy1), _HH),
-                            location=(_lx, (_jy1 + _ly1) * 0.5, z_floor + _HH * 0.5),
-                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
-                    _ztop = z_floor + portal_h + lintel_h - 0.05
-                    if z_ceil - _ztop > 0.05 and _jy1 - _jy0 > 0.05:
-                        create_beveled_box(
-                            bm, size=(_lt, (_jy1 - _jy0), z_ceil - _ztop),
-                            location=(_lx, p_cy, _ztop + (z_ceil - _ztop) * 0.5),
-                            mat_index=MAT_INDEX_WOOD, bevel_amount=0.004)
+                    # Interior liner: the shared party wall within flat_ranges is directly
+                    # constructed as finished MAT_INDEX_WOOD on both faces by build_wall_with_opening,
+                    # eliminating coplanar liner z-fighting.
 
         # Walk-in portal into mini-wing outcrop (layout decided up front)
         has_mw = getattr(props, 'has_mini_wing', False)
