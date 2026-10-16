@@ -907,24 +907,15 @@ def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, st
             nx, ny, nz = abs(f.normal.x), abs(f.normal.y), abs(f.normal.z)
             for loop in f.loops:
                 co = loop.vert.co
-                if is_wood:
-                    # Wood grain runs along V in material shaders.
-                    # Align V with the step length (X) so grain runs down the length of the step.
-                    if nz >= nx and nz >= ny:
-                        u, v = co.y * 0.85, co.x * 0.40
-                    elif ny >= nx:
-                        u, v = co.z * 0.85, co.x * 0.40
-                    else:
-                        u, v = co.y * 0.85, co.z * 0.85
+                # Consistent world-scale box UVs on every face (same scale as
+                # the walls/foundation) so no face — especially the step SIDES —
+                # ends up stretched or streaky.
+                if nz >= nx and nz >= ny:
+                    u, v = co.x * 1.0, co.y * 1.0
+                elif nx >= ny:
+                    u, v = co.y * 1.0, co.z * 1.0
                 else:
-                    # Masonry faces use the 1.0/m world scale so the bricks
-                    # match walls, towers and foundations exactly.
-                    if nz >= nx and nz >= ny:
-                        u, v = co.x * 1.0, co.y * 1.0
-                    elif nx >= ny:
-                        u, v = co.y * 1.0, co.z * 1.0
-                    else:
-                        u, v = co.x * 1.0, co.z * 1.0
+                    u, v = co.x * 1.0, co.z * 1.0
                 loop[uv_layer].uv = Vector((u, v))
 
 def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thickness=0.25,
