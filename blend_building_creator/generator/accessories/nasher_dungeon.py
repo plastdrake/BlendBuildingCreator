@@ -5,9 +5,10 @@ four metres below the last. Tier 1 digs one level, tier 2 two, tier 3 all four.
 """
 
 import math
+import bmesh
 
 from ..materials import (
-    MAT_INDEX_CUT_STONE, MAT_INDEX_IRON, MAT_INDEX_STONE,
+    MAT_INDEX_CUT_STONE, MAT_INDEX_IRON, MAT_INDEX_STONE, MAT_INDEX_CLIFFS,
     MAT_INDEX_DUNGEON_WALL as WALL, MAT_INDEX_DUNGEON_FLOOR as FLOOR,
     MAT_INDEX_DUNGEON_BEAM as BEAM,
 )
@@ -45,13 +46,18 @@ def _box(bm, x0, x1, y0, y1, z0, z1, mat=WALL, long_axis=None):
                            mat_index=mat, bevel_amount=0.01)
 
 
-def _slab(bm, ztop, hole=None):
-    """Level slab: flagstone top over a dark soffit, with an optional rectangular hole."""
+def _slab(bm, ztop, hole=None, ceiling_only=False):
+    """Level slab: flagstone top over a dark soffit, with an optional rectangular hole.
+    When ceiling_only=True, generates a single solid stone ceiling slab (no duplicate floor layer).
+    """
     x0, x1, y0, y1 = X0 - T * 0.5, X1 + T * 0.5, Y0 - T * 0.5, Y1 + T * 0.5
 
     def part(a0, a1, b0, b1):
-        _box(bm, a0, a1, b0, b1, ztop - 0.3, ztop - 0.12, WALL)
-        _box(bm, a0, a1, b0, b1, ztop - 0.12, ztop, FLOOR)
+        if ceiling_only:
+            _box(bm, a0, a1, b0, b1, ztop - 0.3, ztop, WALL)
+        else:
+            _box(bm, a0, a1, b0, b1, ztop - 0.3, ztop - 0.12, WALL)
+            _box(bm, a0, a1, b0, b1, ztop - 0.12, ztop, FLOOR)
 
     if hole is None:
         part(x0, x1, y0, y1)
@@ -239,8 +245,8 @@ def _level(bm, i, zf, depart_hole):
     _wall(bm, False, 0.0, CORR_N, Y1, zf, posts=False)
 
     for jx in (-15.0, -9.0, -3.0, 3.0, 9.0, 15.0):
-        if i == 0 and abs(jx - 3.0) < 0.1:
-            # Stop ceiling beam before the stairwell opening (y >= 43.7) to keep headroom open
+        if i == 0 and (abs(jx - 3.0) < 0.1 or abs(jx - 9.0) < 0.1):
+            # Stop ceiling beam before the stairwell opening (y >= 43.6) to keep headroom open and avoid casing conflict
             _box(bm, jx - 0.15, jx + 0.15, Y0 + 0.3, 43.6, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=1)
         else:
             _box(bm, jx - 0.15, jx + 0.15, Y0 + 0.3, Y1 - 0.3, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=1)
@@ -269,35 +275,58 @@ def build_nasher_dungeon(bm, tier):
         if i < levels - 1:
             _stair(bm, STAIRS[i][0], STAIRS[i][1], LEVEL_Z[i], LEVEL_Z[i + 1])
 
-    # 2. Ceiling slab over Level 0 with an open stairwell cutout under the Keep's
-    # rear stair hall (sits flush at Z=13.2/13.5, 0.5 m below the citadel pad).
-    stair_hole_keep = (1.10, 5.70, 44.00, 45.40)
-    _slab(bm, 13.5, hole=stair_hole_keep)
+    # 2. Ceiling slab over Level 0 with an open stairwell cutout around the shaft casing
+    # (sits flush at Z=13.2/13.5, single stone ceiling slab without coplanar casing conflict).
+    bs_x0, bs_x1 = 6.80, 11.40
+    bs_y0, bs_y1 = 44.00, 45.40
+    stair_hole_keep = (bs_x0 - 0.22, bs_x1 + 0.22, bs_y0 - 0.32, bs_y1 + 0.32)
+    _slab(bm, 13.5, hole=stair_hole_keep, ceiling_only=True)
 
     z_keep_floor = 14.95
+    t_w = 0.22
 
-    # 3. Clear shaft volume through rock / foundation / floor so the hole is completely open
-    carve_pass_through_portal(bm, x_span=(1.10, 5.70), y_span=(44.00, 45.40), z_span=(12.8, 15.05))
+    # 3. Clear shaft volume through rock / foundation / floor
+    carve_pass_through_portal(bm, x_span=(bs_x0, bs_x1), y_span=(bs_y0, bs_y1), z_span=(12.8, 15.05))
 
-    # Masonry shaft casing walls line the rock shaft cleanly under the floor slab
-    # (top terminates at z_keep_floor - 0.12 so it never sits coplanar with floor planks).
-    _box(bm, 0.90, 5.90, 45.40, 45.70, 13.2, z_keep_floor - 0.12, WALL)
-    _box(bm, 0.90, 5.90, 43.70, 44.00, 13.2, z_keep_floor - 0.12, WALL)
-    _box(bm, 0.90, 1.10, 43.70, 45.70, 13.2, z_keep_floor - 0.12, WALL)
-    _box(bm, 5.70, 5.90, 43.70, 45.70, 13.2, z_keep_floor - 0.12, WALL)
+    # Purge all residual cliff rock, foundation stone, and cut boundary faces inside/around the shaft casing
+    # so NO duplicate or bisected sliver faces can ever coexist with the clean casing walls:
+    stair_casing_purge = [
+        f for f in bm.faces if f.is_valid
+        and (bs_x0 - 0.45 <= f.calc_center_median().x <= bs_x1 + 0.50)
+        and (bs_y0 - 0.45 <= f.calc_center_median().y <= bs_y1 + 0.45)
+        and (12.80 <= f.calc_center_median().z <= z_keep_floor - 0.05)
+        and f.material_index in (MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_CLIFFS)
+    ]
+    if stair_casing_purge:
+        bmesh.ops.delete(bm, geom=stair_casing_purge, context='FACES')
 
-    # 4. Straight stair flight along X in the rear hall: top step starts at x=1.10,
-    # leaving a flat 1.1m landing in front of the central doorway, descending eastward
-    # into Level 0 and arriving directly before the east-hall doorway.
-    _stair(bm, 1.10, 5.50, z_keep_floor, LEVEL_Z[0], y0=44.05, y1=45.35)
+    loose_e = [e for e in bm.edges if not e.link_faces]
+    if loose_e:
+        bmesh.ops.delete(bm, geom=loose_e, context='EDGES')
 
-    # 5. Proper normal timber guard railing around the stair opening on the Keep floor:
-    # both long sides (North and South) plus the closed East end (entry from landing at west).
-    build_railing(bm, (1.10, 45.40), (5.70, 45.40), z_keep_floor,
+    # 4. Clean masonry shaft casing walls lining the rock shaft under the floor slab
+    # Non-overlapping corner joints: North & South span full width; West & East butt cleanly between them.
+    # Top stops at z_keep_floor - 0.12 so floor planks rest cleanly on the stone wall.
+    z_bot_casing = 13.20
+    z_top_casing = z_keep_floor - 0.12
+    _box(bm, bs_x0 - t_w, bs_x1 + t_w, bs_y1, bs_y1 + t_w, z_bot_casing, z_top_casing, WALL)
+    _box(bm, bs_x0 - t_w, bs_x1 + t_w, bs_y0 - t_w, bs_y0, z_bot_casing, z_top_casing, WALL)
+    _box(bm, bs_x0 - t_w, bs_x0, bs_y0, bs_y1, z_bot_casing, z_top_casing, WALL)
+    _box(bm, bs_x1, bs_x1 + t_w, bs_y0, bs_y1, z_bot_casing, z_top_casing, WALL)
+
+    # 5. Straight stair flight along X in the east hall: top step starts at bs_x0,
+    # descending eastward into Level 0.
+    _stair(bm, bs_x0, bs_x1 - 0.20, z_keep_floor, LEVEL_Z[0], y0=bs_y0 + 0.05, y1=bs_y1 - 0.05)
+
+    # 6. Timber guard railing around the stair opening on the Keep floor:
+    # Offset 0.08m outward so the railing sits firmly on the wooden floor planks,
+    # with zero post/baluster clipping through the shaft opening edge.
+    r_off = 0.08
+    build_railing(bm, (bs_x0, bs_y1 + r_off), (bs_x1 + r_off, bs_y1 + r_off), z_keep_floor,
                   height=0.95, post_spacing=1.60, baluster_spacing=0.25, braces=False)
-    build_railing(bm, (1.10, 44.00), (5.70, 44.00), z_keep_floor,
+    build_railing(bm, (bs_x0, bs_y0 - r_off), (bs_x1 + r_off, bs_y0 - r_off), z_keep_floor,
                   height=0.95, post_spacing=1.60, baluster_spacing=0.25, braces=False)
-    build_railing(bm, (5.70, 44.00), (5.70, 45.40), z_keep_floor,
+    build_railing(bm, (bs_x1 + r_off, bs_y0 - r_off), (bs_x1 + r_off, bs_y1 + r_off), z_keep_floor,
                   height=0.95, post_spacing=1.60, baluster_spacing=0.25, braces=False,
                   post_at_start=False, post_at_end=False)
 
