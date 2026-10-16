@@ -86,6 +86,25 @@ def _build_balconies(bm, props, ctx, tier):
     width = _prop(props, 'balcony_width', 2.4)
     depth = _prop(props, 'balcony_depth', 1.3)
     balc_dict = getattr(ctx, 'floor_balconies', {})
+    _walls_by_fl = getattr(ctx, 'floor_interior_walls', {}) or {}
+
+    def _seg_hits_rect(p1, p2, rect):
+        """True when the wall segment passes through the balcony footprint."""
+        x0, x1, y0, y1 = rect
+        ax, ay = p1
+        bx, by = p2
+        if max(ax, bx) < x0 - 0.02 or min(ax, bx) > x1 + 0.02:
+            return False
+        if max(ay, by) < y0 - 0.02 or min(ay, by) > y1 + 0.02:
+            return False
+        for _i in range(17):
+            _t = _i / 16.0
+            _px = ax + (bx - ax) * _t
+            _py = ay + (by - ay) * _t
+            if x0 - 0.02 <= _px <= x1 + 0.02 and y0 - 0.02 <= _py <= y1 + 0.02:
+                return True
+        return False
+
     for fl_idx in ctx.active_balc_floors:
         b_list = balc_dict.get(fl_idx, [])
         if not b_list and ctx.floor_balc_side and ctx.floor_balc_side.get(fl_idx):
@@ -97,6 +116,29 @@ def _build_balconies(bm, props, ctx, tier):
             bounds = ctx.bounds_for(fl_idx)
             lower = ctx.bounds_for(max(0, fl_idx - 1))
             offset = b.get('offset', 0.0)
+            # Never build a balcony an interior wall runs straight through:
+            # pick the balcony where the wall would run through its middle.
+            if side in ('FRONT', 'BACK'):
+                _bcx = (bounds[0] + bounds[1]) * 0.5 + offset
+                _fy = bounds[2] if side == 'FRONT' else bounds[3]
+                if side == 'FRONT':
+                    _rect = (_bcx - width * 0.5, _bcx + width * 0.5,
+                             _fy - depth - 0.10, _fy + 0.05)
+                else:
+                    _rect = (_bcx - width * 0.5, _bcx + width * 0.5,
+                             _fy - 0.05, _fy + depth + 0.10)
+            else:
+                _fx = bounds[0] if side == 'LEFT' else bounds[1]
+                _bcy = (bounds[2] + bounds[3]) * 0.5 + offset
+                if side == 'LEFT':
+                    _rect = (_fx - depth - 0.10, _fx + 0.05,
+                             _bcy - width * 0.5, _bcy + width * 0.5)
+                else:
+                    _rect = (_fx - 0.05, _fx + depth + 0.10,
+                             _bcy - width * 0.5, _bcy + width * 0.5)
+            if any(_seg_hits_rect(w.get('p1', (0.0, 0.0)), w.get('p2', (0.0, 0.0)), _rect)
+                   for w in _walls_by_fl.get(fl_idx, [])):
+                continue
             build_balcony(
                 bm, side=side,
                 wall_x_min=bounds[0], wall_x_max=bounds[1],
@@ -791,9 +833,11 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
         build_fisherman_stilts(bm, -hx, hx, -hy, hy, z_ground=0.0, z_floor=found_h)
     if _kit_on(props, ctx, 'kit_bakery', 'BAKERY'):
         build_bakery_oven(bm, props, ctx, tier)
-    if _kit_on(props, ctx, 'kit_chapel', 'CHAPEL'):
+    _is_out = bool(getattr(props, 'is_estate_outbuilding', False)
+                   or (props.get('is_estate_outbuilding', False) if hasattr(props, 'get') else False))
+    if _kit_on(props, ctx, 'kit_chapel', 'CHAPEL') and getattr(props, 'has_chapel_kit', True) and not _is_out:
         build_chapel_kit(bm, props, ctx, tier)
-    if _kit_on(props, ctx, 'kit_stable', 'STABLE'):
+    if _kit_on(props, ctx, 'kit_stable', 'STABLE') and getattr(props, 'has_stable_yard', True):
         from .estate import build_stable_yard_for_building
         build_stable_yard_for_building(bm, props, ctx)
     if _kit_on(props, ctx, 'kit_warehouse', 'WAREHOUSE'):
