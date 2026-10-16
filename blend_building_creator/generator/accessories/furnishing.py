@@ -164,13 +164,16 @@ class RoomOccupancyTracker:
 
     def is_free(self, bx0: float, bx1: float, by0: float, by1: float, margin: float = 0.03,
                 ignore_chimney: bool = False, check_windows: bool = False,
-                ignore_stair: bool = False) -> bool:
+                ignore_stair: bool = False, bounds_slack: float = 0.0) -> bool:
         """Returns True if the box [bx0, bx1] x [by0, by1] is inside the room and unblocked.
 
         ``ignore_stair`` skips the reserved stairwell box: used only where the
         stair is a ceiling opening (solid floor beneath), so the genuinely
-        walkable space under the flight can still take furniture."""
-        eps = 0.02
+        walkable space under the flight can still take furniture.
+        ``bounds_slack`` relaxes only the outer room containment (for pieces
+        anchored flush to the real wall, past the plaster safety inset) —
+        collision against stairs, doors and other props stays strict."""
+        eps = 0.02 + bounds_slack
         if bx0 < self.rx0 - eps or bx1 > self.rx1 + eps:
             return False
         if by0 < self.ry0 - eps or by1 > self.ry1 + eps:
@@ -445,6 +448,12 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
     """
     rx0, rx1 = tracker.rx0, tracker.rx1
     ry0, ry1 = tracker.ry0, tracker.ry1
+    # Anchor wall pieces flush to the REAL wall (back face 1 cm off the
+    # plaster), not to the inset tracker bounds — a wardrobe floating 18 cm
+    # off the wall reads as a bug. Containment is relaxed to match; all
+    # collision checks stay strict.
+    _rb = getattr(tracker, 'room_bounds', None) or (rx0, rx1, ry0, ry1)
+    _wx0, _wx1, _wy0, _wy1 = _rb
     rcx = (rx0 + rx1) * 0.5
     rcy = (ry0 + ry1) * 0.5
 
@@ -459,10 +468,10 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
     for wall in candidate_walls:
         if wall == 'NORTH':
             # Back at +Y, front at -Y -> yaw = 0.0
-            cy = ry1 - depth * 0.5 - 0.03
+            cy = _wy1 - depth * 0.5 - 0.01
             yaw = 0.0
-            min_x = rx0 + width * 0.5 + 0.15
-            max_x = rx1 - width * 0.5 - 0.15
+            min_x = _wx0 + width * 0.5 + 0.15
+            max_x = _wx1 - width * 0.5 - 0.15
             for cx in _sample_wall_positions(rcx + offset_bias + jit, min_x, max_x, step=0.30):
                 b = (cx - width * 0.5, cx + width * 0.5, cy - depth * 0.5, cy + depth * 0.5)
                 if _fvoid is not None:
@@ -471,17 +480,18 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                         continue
                 if tracker.is_near_door(cx, cy, radius=1.60) or any(tracker.is_near_door(px, py, radius=1.20) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
-                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows, ignore_stair=ignore_stair):
+                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows, ignore_stair=ignore_stair,
+                                   bounds_slack=0.16):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
                     return (cx, cy, yaw)
 
         elif wall == 'SOUTH':
             # Back at -Y, front at +Y -> yaw = math.pi
-            cy = ry0 + depth * 0.5 + 0.03
+            cy = _wy0 + depth * 0.5 + 0.01
             yaw = math.pi
-            min_x = rx0 + width * 0.5 + 0.15
-            max_x = rx1 - width * 0.5 - 0.15
+            min_x = _wx0 + width * 0.5 + 0.15
+            max_x = _wx1 - width * 0.5 - 0.15
             for cx in _sample_wall_positions(rcx + offset_bias + jit, min_x, max_x, step=0.30):
                 b = (cx - width * 0.5, cx + width * 0.5, cy - depth * 0.5, cy + depth * 0.5)
                 if _fvoid is not None:
@@ -490,17 +500,18 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                         continue
                 if tracker.is_near_door(cx, cy, radius=1.60) or any(tracker.is_near_door(px, py, radius=1.20) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
-                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows, ignore_stair=ignore_stair):
+                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows, ignore_stair=ignore_stair,
+                                   bounds_slack=0.16):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
                     return (cx, cy, yaw)
 
         elif wall == 'EAST':
             # Back at +X, front at -X -> yaw = -math.pi / 2
-            cx = rx1 - depth * 0.5 - 0.03
+            cx = _wx1 - depth * 0.5 - 0.01
             yaw = -math.pi / 2
-            min_y = ry0 + width * 0.5 + 0.15
-            max_y = ry1 - width * 0.5 - 0.15
+            min_y = _wy0 + width * 0.5 + 0.15
+            max_y = _wy1 - width * 0.5 - 0.15
             for cy in _sample_wall_positions(rcy + offset_bias + jit, min_y, max_y, step=0.30):
                 b = (cx - depth * 0.5, cx + depth * 0.5, cy - width * 0.5, cy + width * 0.5)
                 if _fvoid is not None:
@@ -509,17 +520,18 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                         continue
                 if tracker.is_near_door(cx, cy, radius=1.60) or any(tracker.is_near_door(px, py, radius=1.20) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
-                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows, ignore_stair=ignore_stair):
+                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows, ignore_stair=ignore_stair,
+                                   bounds_slack=0.16):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
                     return (cx, cy, yaw)
 
         elif wall == 'WEST':
             # Back at -X, front at +X -> yaw = math.pi / 2
-            cx = rx0 + depth * 0.5 + 0.03
+            cx = _wx0 + depth * 0.5 + 0.01
             yaw = math.pi / 2
-            min_y = ry0 + width * 0.5 + 0.15
-            max_y = ry1 - width * 0.5 - 0.15
+            min_y = _wy0 + width * 0.5 + 0.15
+            max_y = _wy1 - width * 0.5 - 0.15
             for cy in _sample_wall_positions(rcy + offset_bias + jit, min_y, max_y, step=0.30):
                 b = (cx - depth * 0.5, cx + depth * 0.5, cy - width * 0.5, cy + width * 0.5)
                 if _fvoid is not None:
@@ -528,7 +540,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                         continue
                 if tracker.is_near_door(cx, cy, radius=1.60) or any(tracker.is_near_door(px, py, radius=1.20) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
-                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows, ignore_stair=ignore_stair):
+                if tracker.is_free(b[0], b[1], b[2], b[3], check_windows=check_windows, ignore_stair=ignore_stair,
+                                   bounds_slack=0.16):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
                     return (cx, cy, yaw)
@@ -565,59 +578,62 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
     ry0, ry1 = tracker.ry0, tracker.ry1
     rcx = (rx0 + rx1) * 0.5
     rcy = (ry0 + ry1) * 0.5
+    # Headboard sits flush to the REAL wall (1 cm off the plaster).
+    _rb = getattr(tracker, 'room_bounds', None) or (rx0, rx1, ry0, ry1)
+    _wx0, _wx1, _wy0, _wy1 = _rb
 
     # 1. Try West wall (headboard at -X, bed extends +X into room). Slide
     # outward along the wall-normal when the first slot is clipped (e.g. by a
     # stair keep-out) instead of abandoning the whole wall.
     for dx in (0.0, 0.30, 0.60):
-        cx = rx0 + length * 0.5 + 0.03 + dx
-        if cx + length * 0.5 > rx1 - 0.15:
+        cx = _wx0 + length * 0.5 + 0.01 + dx
+        if cx + length * 0.5 > _wx1 - 0.15:
             break
-        min_y = ry0 + width * 0.5 + 0.15
-        max_y = ry1 - width * 0.5 - 0.15
+        min_y = _wy0 + width * 0.5 + 0.15
+        max_y = _wy1 - width * 0.5 - 0.15
         for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
             if tracker.is_near_door(cx, cy, radius=1.60):
                 continue
             b = (cx - length * 0.5, cx + length * 0.5, cy - width * 0.5, cy + width * 0.5)
-            if tracker.is_free(b[0], b[1], b[2], b[3]):
+            if tracker.is_free(b[0], b[1], b[2], b[3], bounds_slack=0.16):
                 tracker.occupy(b[0], b[1], b[2], b[3])
                 build_prop(bm, 'BED', cx, cy, z_floor, 0.0, length=length, width=width)
                 return (cx, cy, 0.0)
 
     # 2. Try East wall (headboard at +X, bed extends -X into room)
     for dx in (0.0, 0.30, 0.60):
-        cx = rx1 - length * 0.5 - 0.03 - dx
-        if cx - length * 0.5 < rx0 + 0.15:
+        cx = _wx1 - length * 0.5 - 0.01 - dx
+        if cx - length * 0.5 < _wx0 + 0.15:
             break
         for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
             if tracker.is_near_door(cx, cy, radius=1.60):
                 continue
             b = (cx - length * 0.5, cx + length * 0.5, cy - width * 0.5, cy + width * 0.5)
-            if tracker.is_free(b[0], b[1], b[2], b[3]):
+            if tracker.is_free(b[0], b[1], b[2], b[3], bounds_slack=0.16):
                 tracker.occupy(b[0], b[1], b[2], b[3])
                 build_prop(bm, 'BED', cx, cy, z_floor, math.pi, length=length, width=width)
                 return (cx, cy, math.pi)
 
     # 3. Try North wall (headboard at +Y, bed extends -Y into room)
-    cy = ry1 - length * 0.5 - 0.03
-    min_x = rx0 + width * 0.5 + 0.15
-    max_x = rx1 - width * 0.5 - 0.15
+    cy = _wy1 - length * 0.5 - 0.01
+    min_x = _wx0 + width * 0.5 + 0.15
+    max_x = _wx1 - width * 0.5 - 0.15
     for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
         if tracker.is_near_door(cx, cy, radius=1.60):
             continue
         b = (cx - width * 0.5, cx + width * 0.5, cy - length * 0.5, cy + length * 0.5)
-        if tracker.is_free(b[0], b[1], b[2], b[3]):
+        if tracker.is_free(b[0], b[1], b[2], b[3], bounds_slack=0.16):
             tracker.occupy(b[0], b[1], b[2], b[3])
             build_prop(bm, 'BED', cx, cy, z_floor, -math.pi / 2, length=length, width=width)
             return (cx, cy, -math.pi / 2)
 
     # 4. Try South wall (headboard at -Y, bed extends +Y into room)
-    cy = ry0 + length * 0.5 + 0.03
+    cy = _wy0 + length * 0.5 + 0.01
     for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
         if tracker.is_near_door(cx, cy, radius=1.60):
             continue
         b = (cx - width * 0.5, cx + width * 0.5, cy - length * 0.5, cy + length * 0.5)
-        if tracker.is_free(b[0], b[1], b[2], b[3]):
+        if tracker.is_free(b[0], b[1], b[2], b[3], bounds_slack=0.16):
             tracker.occupy(b[0], b[1], b[2], b[3])
             build_prop(bm, 'BED', cx, cy, z_floor, math.pi / 2, length=length, width=width)
             return (cx, cy, math.pi / 2)
@@ -4160,6 +4176,8 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         chimney=chimney_positions,
         floor_void=_floor_void
     )
+    # Real (uninset) room bounds: wall-anchored pieces sit flush to these.
+    tracker.room_bounds = (rx0, rx1, ry0, ry1)
     tracker.stair_hole = _stair_well
     # Turned-stair rooms are pre-inset off the walls that carry a flight, so
     # the generic side pad would double-dip and deny the whole inset wall.
