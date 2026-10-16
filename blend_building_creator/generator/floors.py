@@ -388,11 +388,11 @@ def build_floors(bm, props, ctx):
     if _turn_style:
         _tw_int = fl0_ix_max - fl0_ix_min
         _td_int = fl0_iy_max - fl0_iy_min
-        # Rectangular stair column. A turned staircase's flights need real runs,
-        # so the column spans nearly the full width; the floor's rooms then wrap
-        # around it in a band layout (stair band + rooms behind).
-        _turn_col_w = min(6.4, max(4.6, min(_tw_int, _td_int) - 1.2))
-        _turn_col_d = min(6.5, max(4.2, _td_int - 1.4))
+        # Rectangular stair column. Turned flights need a full run PLUS a 2x2
+        # landing beyond the top, so the column is sized to hold both; it only
+        # reserves the stair's footprint (the floors themselves stay one room).
+        _turn_col_w = min(7.4, max(4.6, _tw_int - 0.8))
+        _turn_col_d = min(7.8, max(4.6, _td_int - 0.8))
         if getattr(props, 'stair_placement', 'LEFT') == 'RIGHT':
             _turn_col_x0 = fl0_ix_max - 0.08 - _turn_col_w
         else:
@@ -762,8 +762,12 @@ def build_floors(bm, props, ctx):
                 # Every flight stays inside the reserved stair column.
                 _cx0 = _turn_col_x0
                 _cy0 = _turn_col_y0
-                _sq = _turn_col_w
-                _run = min(stair_len, _sq - 3.0)
+                _cwid = _turn_col_w
+                _cdep = _turn_col_d
+                _span = min(_cwid, _cdep)
+                # Leave room for the 2x2 landing BEYOND the flight's top, so no
+                # landing ever overshoots a wall.
+                _run = min(stair_len, max(2.2, _span - 4.2))
                 _lane_x = _cx0 + stair_w * 0.5 + 0.34
                 if _turn_land is None:
                     _fx, _fy = _lane_x, _cy0 + 1.05
@@ -773,19 +777,18 @@ def build_floors(bm, props, ctx):
                     _axis = 'X' if _prev_axis == 'Y' else 'Y'
                     _sign = _psign
                 if _axis == 'Y':
-                    _lo, _hi = _cy0 + 1.05, _cy0 + _sq - 1.05
-                    if _sign > 0 and _fy + _run > _hi:
-                        _sign = -1
-                    elif _sign < 0 and _fy - _run < _lo:
-                        _sign = 1
-                    _tx, _ty = _fx, _fy + _sign * _run
+                    _ax_f, _ax_lo, _ax_hi = _fy, _cy0 + 2.05, _cy0 + _cdep - 2.05
                 else:
-                    _lo, _hi = _cx0 + 0.90, _cx0 + _sq - 1.05
-                    if _sign > 0 and _fx + _run > _hi:
-                        _sign = -1
-                    elif _sign < 0 and _fx - _run < _lo:
-                        _sign = 1
-                    _tx, _ty = _fx + _sign * _run, _fy
+                    _ax_f, _ax_lo, _ax_hi = _fx, _cx0 + 2.05, _cx0 + _cwid - 2.05
+                if _sign > 0 and _ax_f + _run > _ax_hi:
+                    _sign = -1
+                if _sign < 0 and _ax_f - _run < _ax_lo:
+                    _sign = 1 if _ax_f + _run <= _ax_hi else -1
+                _ax_t = _ax_f + _sign * _run
+                if _axis == 'Y':
+                    _tx, _ty = _fx, _ax_t
+                else:
+                    _tx, _ty = _ax_t, _fy
                 build_turned_flight(bm, (_fx, _fy), (_tx, _ty), z_floor + 0.05,
                                     z_ceil + 0.05, stair_w, along_axis=_axis,
                                     base_anchor=(fl_idx == 0), top_anchor=False)
