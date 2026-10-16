@@ -4205,9 +4205,17 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     # Open-air stockpiles stay entirely bare: every room is product only.
     _bare = ((getattr(ctx, 'no_utility_rugs', False)
              and rm.role in _UTILITY_ROLES) or tracker.is_quarry)
-    if getattr(tracker, 'bare_stockpile', False):
-        _bare = True
-    tracker.no_rugs = _bare
+    # Mezzanine Gallery & Floor Void Keep-out: reserve the opening so NO props or rugs clip it
+    _fvoid = getattr(rm, 'floor_void', None)
+    if not _fvoid and ctx is not None:
+        _fvoid = (getattr(ctx, 'floor_voids', {}) or {}).get(rm.floor_idx)
+    if _fvoid is not None:
+        tracker.occupy(_fvoid[0] - 0.20, _fvoid[1] + 0.20, _fvoid[2] - 0.20, _fvoid[3] + 0.20)
+        tracker.floor_void = _fvoid
+
+    if rm.role in ('MEZZANINE_GALLERY', 'UPPER_GALLERY'):
+        tracker.no_rugs = True
+        tracker.rug_count = 99
 
     role = rm.role
     _occ_before = len(tracker.occupied_boxes)
@@ -4281,14 +4289,15 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         elif role in ('STORAGE', 'CELLAR', 'PANTRY'):
             _furnish_storage(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('COTTAGE', 'LIVING_QUARTERS'):
-            # Small upstairs floor with the stair taking most of it: one
-            # combined living area with a hearth/seating, a bed and a kitchen
-            # corner rather than three cramped separate rooms.
-            _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, density,
+            # One combined living area: run the three recipes THINNED so the
+            # furniture spreads around the room instead of piling up beside the
+            # bed, and so a small cottage doesn't get three shelving units.
+            _d = density * 0.55
+            _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, _d,
                                 chimney_pos=chimney_positions)
-            _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, density,
+            _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, _d,
                              is_master=False)
-            _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, density,
+            _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, _d,
                              chimney_pos=chimney_positions, floor_has_dining=False)
         elif role in ('STABLE_HALL',):
             _furnish_stable_hall(bm, rm, tracker, z_floor, z_ceil, rng, density)
@@ -4301,7 +4310,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     # Minimum-dressing guarantee: a living room the recipe left almost empty
     # (awkward stairwell, door-heavy plan) still gets a sitting nook. Bare
     # industrial fit-outs, walkways and stables are exempt by design.
-    if (not _bare and role not in ('STAIR_LANDING', 'CORRIDOR', 'STABLE_HALL', 'STORE')
+    if (not _bare and role not in ('STAIR_LANDING', 'CORRIDOR', 'STABLE_HALL', 'STORE', 'MEZZANINE_GALLERY', 'UPPER_GALLERY')
             and len(tracker.occupied_boxes) - _occ_before < 3):
         try:
             _ensure_minimum_dressing(bm, tracker, rm, z_floor, rng)
@@ -4311,7 +4320,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
 
     # Every room gets at least one rug, except back-of-house rooms in an
     # industrial fit-out (warehouses/lumbermills stay bare).
-    if not _bare and role != 'THRONE_ROOM' and getattr(tracker, 'rug_count', 0) == 0 and not getattr(tracker, 'no_rugs', False):
+    if not _bare and role not in ('THRONE_ROOM', 'MEZZANINE_GALLERY', 'UPPER_GALLERY') and getattr(tracker, 'rug_count', 0) == 0 and not getattr(tracker, 'no_rugs', False):
         rw = (rx1 - rx0) - inset * 2.0
         rd = (ry1 - ry0) - inset * 2.0
         if rw >= 1.0 and rd >= 1.0:
@@ -4323,7 +4332,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     # (skipped in bare industrial utility rooms, and never in a working stable).
     rw = rx1 - rx0
     rd = ry1 - ry0
-    if role != 'STABLE_HALL' and not _bare and min(rw, rd) >= 2.6 and rng.random() < 0.7:
+    if role not in ('STABLE_HALL', 'MEZZANINE_GALLERY', 'UPPER_GALLERY') and not _bare and min(rw, rd) >= 2.6 and rng.random() < 0.7:
         _try_place_plant(bm, tracker, z_floor, rng, large=True)
 
 
