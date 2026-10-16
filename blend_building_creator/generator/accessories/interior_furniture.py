@@ -1270,7 +1270,7 @@ def _normalize_candle_uv(bm, faces, cx, cy, z0, z1, r):
         f.tag = True
 
 
-def build_chandelier(bm, x, y, z_top=2.4, ang=0.0, radius=0.45):
+def build_chandelier(bm, x, y, z_top=2.4, ang=0.0, radius=0.45, chain_drop: float = 0.0):
     """Wagon-wheel chandelier: open timber ring, wax candles, link chain.
 
     An open ring (torus + spokes) lets the candlelight fall through instead
@@ -1279,11 +1279,19 @@ def build_chandelier(bm, x, y, z_top=2.4, ang=0.0, radius=0.45):
     """
     from ..materials import MAT_INDEX_LANTERN, MAT_INDEX_WAX
     faces = []
-    # Ceiling mount + three interlocking vertical links down to the stem.
+    # Ceiling mount
     faces += create_cylinder(bm, radius=0.06, height=0.03, segments=10,
                              location=(0.0, 0.0, -0.015), mat_index=MAT_INDEX_IRON)
+    
+    # If suspended from a soaring double-height ceiling, add suspension chain/rod
+    cd = max(0.0, float(chain_drop))
+    if cd > 0.05:
+        faces += create_cylinder(bm, radius=0.020, height=cd, segments=8,
+                                 location=(0.0, 0.0, -cd * 0.5), mat_index=MAT_INDEX_IRON)
+    
+    # Three interlocking vertical links down to the stem.
     for i in range(3):
-        lz = -0.05 - i * 0.055
+        lz = -cd - 0.05 - i * 0.055
         rot = (math.pi * 0.5, 0.0, 0.0) if i % 2 == 0 else (0.0, math.pi * 0.5, 0.0)
         faces += create_torus_ring(bm, location=(0.0, 0.0, lz), rotation=rot,
                                    major_radius=0.032, minor_radius=0.008,
@@ -1291,8 +1299,8 @@ def build_chandelier(bm, x, y, z_top=2.4, ang=0.0, radius=0.45):
                                    mat_index=MAT_INDEX_IRON)
     # Iron stem from the last link down to the hub.
     faces += create_cylinder(bm, radius=0.022, height=0.42, segments=8,
-                             location=(0.0, 0.0, -0.41), mat_index=MAT_INDEX_IRON)
-    wheel_cz = -0.63
+                             location=(0.0, 0.0, -cd - 0.41), mat_index=MAT_INDEX_IRON)
+    wheel_cz = -cd - 0.63
     # Open timber wheel ring + hub + spokes (light falls through the middle).
     faces += create_torus_ring(bm, location=(0.0, 0.0, wheel_cz),
                                major_radius=radius, minor_radius=0.055,
@@ -1308,7 +1316,7 @@ def build_chandelier(bm, x, y, z_top=2.4, ang=0.0, radius=0.45):
                                     rotation=(0.0, 0.0, a),
                                     mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
     # Hanger rods from the stem to the ring (embedded both ends).
-    rod_top_z = -0.30
+    rod_top_z = wheel_cz + 0.33
     for i in range(3):
         a = 2.0 * math.pi * i / 3 + 0.5
         px, py = math.cos(a) * radius * 0.94, math.sin(a) * radius * 0.94
@@ -1458,9 +1466,11 @@ def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=2.4, length=3.6, rug_style=
     """Woven carpet with transparent alpha tassels cutout.
     rug_style: 1 = Crimson Ornate, 2 = Sapphire Royal, 3 = Forest Woven.
 
-    The rug art is painted landscape (1024 x 640) with the pattern's long axis
-    along texture-U, so the UVs are chosen per-rug: texture-U always follows
-    the rug's longer local axis and texture-V the shorter one.
+    STRICT PERSPECTIVE GUARANTEE:
+    All rug textures have native resolution 848 x 1264 (aspect ratio 1.490566).
+    Carpets NEVER violate their image perspective or stretch textures:
+    - Normal rugs preserve the authentic 1.490566 aspect ratio with 1:1 isometric mapping.
+    - Long hallway / throne runners are generated as modular non-stretched segments laid end-to-end.
     """
     if z_floor is not None:
         z_ground = z_floor
@@ -1468,35 +1478,84 @@ def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=2.4, length=3.6, rug_style=
     mat_map = {1: MAT_INDEX_RUG_1, 2: MAT_INDEX_RUG_2, 3: MAT_INDEX_RUG_3}
     mat_idx = mat_map.get(rug_style, MAT_INDEX_RUG_1)
 
-    hw = width * 0.5
-    hl = length * 0.5
+    RUG_ASPECT = 1264.0 / 848.0  # 1.490566037735849
     z = z_ground + 0.008
-
     uv_layer = bm.loops.layers.uv.verify()
-    v1 = bm.verts.new((-hw, -hl, z))
-    v2 = bm.verts.new((hw, -hl, z))
-    v3 = bm.verts.new((hw, hl, z))
-    v4 = bm.verts.new((-hw, hl, z))
-    f = bm.faces.new((v1, v2, v3, v4))
-    f.material_index = mat_idx
 
-    for loop in f.loops:
-        # The rug art is painted portrait (aspect 2:3) with the pattern's long
-        # axis and fringe tassels along texture-V (top & bottom short ends) and
-        # width along texture-U.
-        # Align texture-U to the narrower dimension and texture-V to the longer dimension
-        # so tassels always sit on the shorter ends and patterns stay upright.
-        if length >= width:
-            u = 0.0 if loop.vert.co.x < 0 else 1.0
-            v = 0.0 if loop.vert.co.y < 0 else 1.0
+    is_along_y = (length >= width)
+    dim_long = max(0.2, length if is_along_y else width)
+    dim_short = max(0.2, width if is_along_y else length)
+
+    ratio = dim_long / max(0.01, dim_short)
+    faces = []
+
+    if ratio >= 1.7 * RUG_ASPECT:
+        # Multi-segment runner: divide into N distinct rugs laid end-to-end
+        # so each segment preserves the exact un-stretched aspect ratio!
+        num_segs = max(2, int(round(dim_long / (dim_short * RUG_ASPECT))))
+        seg_long = dim_long / num_segs
+        seg_short = seg_long / RUG_ASPECT
+        for i in range(num_segs):
+            offset_long = -dim_long * 0.5 + seg_long * 0.5 + i * seg_long
+            if is_along_y:
+                cx_i, cy_i = 0.0, offset_long
+                hw_i, hl_i = seg_short * 0.5, seg_long * 0.5
+            else:
+                cx_i, cy_i = offset_long, 0.0
+                hw_i, hl_i = seg_long * 0.5, seg_short * 0.5
+
+            v1 = bm.verts.new((cx_i - hw_i, cy_i - hl_i, z))
+            v2 = bm.verts.new((cx_i + hw_i, cy_i - hl_i, z))
+            v3 = bm.verts.new((cx_i + hw_i, cy_i + hl_i, z))
+            v4 = bm.verts.new((cx_i - hw_i, cy_i + hl_i, z))
+            f_i = bm.faces.new((v1, v2, v3, v4))
+            f_i.material_index = mat_idx
+            for loop in f_i.loops:
+                if is_along_y:
+                    u = 0.0 if loop.vert.co.x < cx_i else 1.0
+                    v = 0.0 if loop.vert.co.y < cy_i else 1.0
+                else:
+                    u = 0.0 if loop.vert.co.y < cy_i else 1.0
+                    v = 0.0 if loop.vert.co.x < cx_i else 1.0
+                loop[uv_layer].uv = Vector((u, v))
+            f_i.tag = True
+            faces.append(f_i)
+    else:
+        # Single rug: conform dimensions to EXACT RUG_ASPECT so the image is never stretched
+        if ratio > RUG_ASPECT:
+            actual_short = dim_short
+            actual_long = actual_short * RUG_ASPECT
         else:
-            u = 0.0 if loop.vert.co.y < 0 else 1.0
-            v = 0.0 if loop.vert.co.x < 0 else 1.0
-        loop[uv_layer].uv = Vector((u, v))
-    f.tag = True
+            actual_long = dim_long
+            actual_short = actual_long / RUG_ASPECT
 
-    transform_faces([f], Matrix.Translation((x, y, 0.0)) @ Matrix.Rotation(ang, 4, 'Z'))
-    return [f]
+        if is_along_y:
+            hw = actual_short * 0.5
+            hl = actual_long * 0.5
+        else:
+            hw = actual_long * 0.5
+            hl = actual_short * 0.5
+
+        v1 = bm.verts.new((-hw, -hl, z))
+        v2 = bm.verts.new((hw, -hl, z))
+        v3 = bm.verts.new((hw, hl, z))
+        v4 = bm.verts.new((-hw, hl, z))
+        f = bm.faces.new((v1, v2, v3, v4))
+        f.material_index = mat_idx
+
+        for loop in f.loops:
+            if is_along_y:
+                u = 0.0 if loop.vert.co.x < 0 else 1.0
+                v = 0.0 if loop.vert.co.y < 0 else 1.0
+            else:
+                u = 0.0 if loop.vert.co.y < 0 else 1.0
+                v = 0.0 if loop.vert.co.x < 0 else 1.0
+            loop[uv_layer].uv = Vector((u, v))
+        f.tag = True
+        faces.append(f)
+
+    transform_faces(faces, Matrix.Translation((x, y, 0.0)) @ Matrix.Rotation(ang, 4, 'Z'))
+    return faces
 
 
 def build_pewter_tankard(bm, x, y, z_ground=0.0, ang=0.0):
@@ -2360,144 +2419,200 @@ def build_chair(bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
 
 def build_royal_throne(bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
                        ang: float = 0.0, dais: bool = True):
-    """Grand ceremonial Royal Throne: 3-tier stepped cut-stone dais, velvet runner,
-    carved gold & ashlar pedestal, plush crimson cushion, towering arched backrest
-    with gothic finials, carved lion armrests and heraldic crest."""
-    faces = []
-    z_throne = 0.48 if dais else 0.0
+    """Grand ceremonial Royal Throne: uses artist-crafted Throne.fbx from PROP_MESHES['royal_throne']
+    which features an integrated stone dais platform, heraldic banners, plush velvet throne,
+    and a royal red carpet runner.
+    Native materials (fabric red, timber, wood, heraldic crest, cut stone) are mapped directly,
+    with fallback to procedural architecture if unbaked.
+    """
+    # 1. Check for baked Throne.fbx mesh
+    try:
+        from .artisan_meshdata import PROP_MESHES
+        it = PROP_MESHES.get('royal_throne') or PROP_MESHES.get('Throne')
+    except Exception:
+        it = None
 
-    # 1. Stepped cut-stone dais platform
+    if it:
+        place = _place(x, y, z_ground, ang)
+        verts = it['verts']
+        uv_layer = bm.loops.layers.uv.verify()
+        seen = set()
+        remap = {}
+        used = set(vi for poly in it['polys'] for vi, _ in poly)
+        for i in used:
+            v = verts[i]
+            remap[i] = bm.verts.new(place @ Vector(v))
+        _poly_mats = it.get('poly_mats')
+        throne_faces = []
+        for _pi, poly in enumerate(it['polys']):
+            idx = [vi for vi, _ in poly]
+            if len(set(idx)) < 3:
+                continue
+            kf = tuple(sorted(idx))
+            if kf in seen:
+                continue
+            seen.add(kf)
+            f = bm.faces.new([remap[i] for i in idx])
+            _slot = MAT_INDEX_WOOD
+            if _poly_mats is not None and _pi < len(_poly_mats) and _poly_mats[_pi] >= 0:
+                _slot = _poly_mats[_pi]
+            f.material_index = _slot
+            f.smooth = True
+            f.tag = True  # Protect FBX atlas UVs from cubic pass
+            uv_by_vi = {vi: uv for vi, uv in poly}
+            src_of = {remap[i]: i for i in idx}
+            for loop in f.loops:
+                src = src_of.get(loop.vert)
+                if src is not None and src in uv_by_vi:
+                    loop[uv_layer].uv = uv_by_vi[src]
+            throne_faces.append(f)
+        return throne_faces
+
+    # 2. Fallback procedural stepped cut-stone dais + chair if artist FBX is missing
+    faces = []
+    z_throne = 0.28 if dais else 0.0
+
     if dais:
-        # Tier 1 (base step)
+        # Main elevated royal platform (height 0.28m, width 2.40m, depth 1.80m)
         faces += create_beveled_box(
-            bm, size=(2.80, 2.40, 0.16),
-            location=(0.0, 0.15, 0.08),
-            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+            bm, size=(2.40, 1.80, 0.28),
+            location=(0.0, 0.35, 0.14),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.020
         )
-        # Tier 2 (middle step)
+        # 2 frontal stone steps leading up to the platform
         faces += create_beveled_box(
-            bm, size=(2.30, 2.00, 0.16),
-            location=(0.0, 0.20, 0.24),
-            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+            bm, size=(1.60, 0.36, 0.10),
+            location=(0.0, -0.73, 0.05),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015
         )
-        # Tier 3 (top dais platform)
         faces += create_beveled_box(
-            bm, size=(1.80, 1.65, 0.16),
-            location=(0.0, 0.25, 0.40),
-            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+            bm, size=(1.60, 0.36, 0.19),
+            location=(0.0, -0.37, 0.095),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015
         )
-        # Crimson velvet dais runner
+        # Flanking stone plinth newel posts with ceremonial fire braziers at front corners
+        for sgn in (-1.0, 1.0):
+            px = sgn * 1.05
+            py = -0.40
+            faces += create_beveled_box(
+                bm, size=(0.26, 0.26, 0.52),
+                location=(px, py, 0.26),
+                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015
+            )
+            faces += create_beveled_box(
+                bm, size=(0.32, 0.32, 0.08),
+                location=(px, py, 0.52 + 0.04),
+                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012
+            )
+            # Ceremonial iron brazier on top
+            faces += create_cylinder(
+                bm, radius=0.13, height=0.10, segments=12,
+                location=(px, py, 0.60 + 0.05), mat_index=MAT_INDEX_IRON
+            )
+        # Crimson velvet carpet running continuously down the steps and across the dais
         faces += create_beveled_box(
-            bm, size=(1.40, 1.60, 0.015),
-            location=(0.0, 0.25, 0.488),
+            bm, size=(1.05, 1.30, 0.012),
+            location=(0.0, 0.35, 0.286),
+            mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.003
+        )
+        faces += create_beveled_box(
+            bm, size=(1.05, 0.85, 0.012),
+            location=(0.0, -0.48, 0.145),
+            rotation=(0.33, 0.0, 0.0),
             mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.003
         )
 
-    # 2. Throne Pedestal & Plinth
-    faces += create_beveled_box(
+    # Transform dais platform into world space before stamping throne
+    if faces:
+        transform_faces(faces, _place(x, y, z_ground, ang))
+
+    # Fallback procedural throne chair if not baked
+    proc_faces = []
+    proc_faces += create_beveled_box(
         bm, size=(1.10, 0.95, 0.12),
         location=(0.0, 0.20, z_throne + 0.06),
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.012
     )
-    # 4 carved corner lion-paw pillars
     for lx in (-0.46, 0.46):
         for ly in (-0.18, 0.52):
-            faces += create_beveled_box(
+            proc_faces += create_beveled_box(
                 bm, size=(0.12, 0.12, 0.46),
                 location=(lx, ly, z_throne + 0.12 + 0.23),
                 mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010
             )
-
-    # 3. Throne Seat Box & Cushion
-    faces += create_beveled_box(
+    proc_faces += create_beveled_box(
         bm, size=(1.02, 0.88, 0.10),
         location=(0.0, 0.18, z_throne + 0.58),
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
     )
-    # Deep tufted crimson cushion
-    faces += create_beveled_box(
+    proc_faces += create_beveled_box(
         bm, size=(0.90, 0.78, 0.14),
         location=(0.0, 0.16, z_throne + 0.63 + 0.07),
         mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.015
     )
-
-    # 4. Carved Armrests with terminal scroll bosses
     for sgn in (-1.0, 1.0):
         ax = sgn * 0.47
-        faces += create_beveled_box(
+        proc_faces += create_beveled_box(
             bm, size=(0.10, 0.72, 0.26),
             location=(ax, 0.16, z_throne + 0.63 + 0.13),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
-        # Padded velvet arm pad
-        faces += create_beveled_box(
+        proc_faces += create_beveled_box(
             bm, size=(0.12, 0.62, 0.035),
             location=(ax, 0.14, z_throne + 0.89 + 0.018),
             mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.006
         )
-        # Front terminal boss (lion head / scroll finial)
-        faces += create_beveled_box(
+        proc_faces += create_beveled_box(
             bm, size=(0.13, 0.13, 0.13),
             location=(ax, -0.22, z_throne + 0.86),
             mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012
         )
-
-    # 5. Towering Gothic Arched Backrest
     stile_h = 1.85
     for sgn in (-1.0, 1.0):
         bx = sgn * 0.46
-        # Upright stiles flanking backrest
-        faces += create_beveled_box(
+        proc_faces += create_beveled_box(
             bm, size=(0.10, 0.10, stile_h),
             location=(bx, 0.52, z_throne + 0.58 + stile_h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
-        # Pointed spire pinnacle atop stiles
-        faces += create_cone(
+        proc_faces += create_cone(
             bm, radius1=0.07, radius2=0.0, height=0.28, segments=6,
             location=(bx, 0.52, z_throne + 0.58 + stile_h + 0.14),
             rotation=(0.0, 0.0, 0.0), mat_index=MAT_INDEX_CUT_STONE
         )
-
-    # Main backrest woodwork panel
-    faces += create_beveled_box(
+    proc_faces += create_beveled_box(
         bm, size=(0.84, 0.08, 1.50),
         location=(0.0, 0.51, z_throne + 0.70 + 0.75),
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
     )
-    # Tufted velvet backrest inner cushion
-    faces += create_beveled_box(
+    proc_faces += create_beveled_box(
         bm, size=(0.74, 0.05, 1.35),
         location=(0.0, 0.47, z_throne + 0.72 + 0.675),
         mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.012
     )
-    # Arched Gothic Crown atop backrest
-    faces += create_beveled_box(
+    proc_faces += create_beveled_box(
         bm, size=(0.92, 0.09, 0.26),
         location=(0.0, 0.51, z_throne + 2.26),
         mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012
     )
-    # Carved heraldic shield crest atop crown
-    faces += create_beveled_box(
+    proc_faces += create_beveled_box(
         bm, size=(0.36, 0.07, 0.38),
         location=(0.0, 0.50, z_throne + 2.45),
         mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.014
     )
-
-    # 6. Overhead Royal Baldachin / Canopy Cornice & Rear Drapery
-    faces += create_beveled_box(
+    proc_faces += create_beveled_box(
         bm, size=(1.60, 1.10, 0.12),
         location=(0.0, 0.35, z_throne + 2.72),
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.012
     )
-    # Hanging velvet backdrop drapery falling behind throne
-    faces += create_beveled_box(
+    proc_faces += create_beveled_box(
         bm, size=(1.50, 0.03, 2.25),
         location=(0.0, 0.58, z_throne + 1.55),
         mat_index=MAT_INDEX_CLOTH_LINEN, bevel_amount=0.008
     )
 
-    transform_faces(faces, _place(x, y, z_ground, ang))
+    transform_faces(proc_faces, _place(x, y, z_ground, ang))
+    faces.extend(proc_faces)
     return faces
 
 

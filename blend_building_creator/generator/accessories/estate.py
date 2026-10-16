@@ -170,6 +170,9 @@ _OUTHOUSE_DISABLED = (
     'has_outdoor_decor', 'has_well', 'has_arched_porch',
     'has_side_rampart', 'has_pillared_overhang',
     'has_castle_citadel',
+    'has_chapel_kit', 'has_stable_yard', 'kit_chapel', 'kit_stable',
+    'kit_blacksmith', 'kit_windmill', 'kit_watchtower', 'kit_fisherman',
+    'kit_bakery', 'kit_warehouse', 'kit_lumbermill',
 )
 
 _INHERITED = (
@@ -225,6 +228,8 @@ def _create_detached_outbuilding(base_props, overrides, pos=(0.0, 0.0, 0.0), rot
     mesh = bpy.data.meshes.new(mesh_name)
     out_obj = bpy.data.objects.new(obj_name, mesh)
     col.objects.link(out_obj)
+    if hasattr(bpy.context, 'view_layer'):
+        bpy.context.view_layer.update()
 
     out_obj.location = Vector(pos)
     out_obj.rotation_euler = Euler((0.0, 0.0, rot_z), 'XYZ')
@@ -264,6 +269,9 @@ def _create_detached_outbuilding(base_props, overrides, pos=(0.0, 0.0, 0.0), rot
                     setattr(op, _fk, False)
                 except Exception:
                     pass
+        op['is_estate_outbuilding'] = True
+        op['has_chapel_kit'] = False
+        op['has_stable_yard'] = _is_stable
         for k, v in overrides.items():
             try:
                 setattr(op, k, v)
@@ -302,9 +310,13 @@ def _create_detached_outbuilding(base_props, overrides, pos=(0.0, 0.0, 0.0), rot
             elif rm == 'SLATE':
                 op.color_shingles = (0.20, 0.24, 0.28, 1.0)
 
-        generate_building(out_obj, op)
+        generate_building(out_obj, op, extra_doorways=overrides.get('extra_doorways', None),
+                          extra_window_exclusions=overrides.get('extra_window_exclusions', None))
     finally:
         bpy.data.scenes.remove(scene)
+
+    from ..mesh_utils import apply_organic_shading
+    apply_organic_shading(out_obj)
 
     return out_obj
 
@@ -366,6 +378,9 @@ def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, pre
                     setattr(op, _fk, False)
                 except Exception:
                     pass
+        op['is_estate_outbuilding'] = True
+        op['has_chapel_kit'] = False
+        op['has_stable_yard'] = _is_stable
         for k, v in overrides.items():
             try:
                 setattr(op, k, v)
@@ -405,7 +420,8 @@ def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, pre
             elif rm == 'SLATE':
                 op.color_shingles = (0.20, 0.24, 0.28, 1.0)
 
-        generate_building(obj, op)
+        generate_building(obj, op, extra_doorways=overrides.get('extra_doorways', None),
+                          extra_window_exclusions=overrides.get('extra_window_exclusions', None))
 
         # Translate the temp mesh's pruned slot indices back to canonical.
         try:
@@ -465,26 +481,13 @@ def build_stable(bm, props, pos=(-24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_1',
         bd = depth
 
     if host_obj is not None:
-        out_obj = _create_detached_outbuilding(
+        return _create_detached_outbuilding(
             props, overrides, pos=pos, rot_z=rot_z,
             preset_key=_stable_key(tier), name="Stables", host_obj=host_obj
         )
-        try:
-            import bmesh
-            out_bm = bmesh.new()
-            out_bm.from_mesh(out_obj.data)
-            _build_stable_yard(out_bm, Matrix.Identity(4), bw, bd, tier)
-            out_bm.to_mesh(out_obj.data)
-            out_bm.free()
-            out_obj.data.update()
-        except Exception:
-            pass
-        return out_obj
     else:
-        _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z,
-                                  preset_key=_stable_key(tier))
-        t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
-        _build_stable_yard(bm, t, bw, bd, tier)
+        return _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z,
+                                         preset_key=_stable_key(tier))
 
 
 def build_stable_yard_for_building(bm, props, ctx):
@@ -504,16 +507,76 @@ def _local_box(bm, t, size, loc, mat=MAT_INDEX_TIMBER, bevel=0.01, rot=(0.0, 0.0
         bm, size=size, location=loc, rotation=rot,
         transform_matrix=t, mat_index=mat, bevel_amount=bevel,
     )
+def _timber_box(bm, t, size, loc, mat=MAT_INDEX_TIMBER, bevel=0.008, rot=(0.0, 0.0, 0.0)):
+    """Place a timber beam/post with explicit longitudinal UV unwrapping along its longest axis.
+    Grain runs along V in M_Building_Timber. Tagging faces protects them from subsequent box unwraps."""
+    fs = _local_box(bm, t, size, loc, mat=mat, bevel=bevel, rot=rot)
+    dx, dy, dz = size
+    uv_layer = bm.loops.layers.uv.verify()
+    rot_mat = Euler(rot, 'XYZ').to_matrix().to_4x4()
+    loc_mat = Matrix.Translation(Vector(loc))
+    base_tr = loc_mat @ rot_mat
+    if t is not None:
+        base_tr = t @ base_tr
+    inv_tr = base_tr.inverted()
+    
+    sv = 0.40  # 0.40 tiles/m along wood grain (longitudinal)
+    su = 1.20  # 1.20 tiles/m around perimeter
+    sx, sy, sz = dx * 0.5, dy * 0.5, dz * 0.5
+
+    for f in fs:
+        if not f.is_valid:
+            continue
+        f.material_index = mat
+        f.tag = True
+        ln = (inv_tr.to_3x3() @ f.normal).normalized()
+        nx, ny, nz = abs(ln.x), abs(ln.y), abs(ln.z)
+        for loop in f.loops:
+            lv = inv_tr @ loop.vert.co
+            if dz >= dx and dz >= dy:
+                # Vertical post: V along Z (height)
+                if nz >= nx and nz >= ny:
+                    u = (lv.x + sx) * su
+                    v = (lv.y + sy) * su
+                elif nx >= ny:
+                    u = (lv.y + sy) * su
+                    v = (lv.z + sz) * sv
+                else:
+                    u = (lv.x + sx) * su
+                    v = (lv.z + sz) * sv
+            elif dx >= dy and dx >= dz:
+                # Horizontal rail along X: V along X (length)
+                if nx >= ny and nx >= nz:
+                    u = (lv.y + sy) * su
+                    v = (lv.z + sz) * su
+                elif nz >= ny:
+                    u = (lv.y + sy) * su
+                    v = (lv.x + sx) * sv
+                else:
+                    u = (lv.z + sz) * su
+                    v = (lv.x + sx) * sv
+            else:
+                # Horizontal rail along Y: V along Y (length)
+                if ny >= nx and ny >= nz:
+                    u = (lv.x + sx) * su
+                    v = (lv.z + sz) * su
+                elif nz >= nx:
+                    u = (lv.x + sx) * su
+                    v = (lv.y + sy) * sv
+                else:
+                    u = (lv.z + sz) * su
+                    v = (lv.y + sy) * sv
+            loop[uv_layer].uv = Vector((u, v))
+    return fs
 
 
 def _build_stall_shelter(bm, t, x0, x1, y_back, depth, tier='TIER_1', stalls=3,
                          back_h=2.15, front_h=2.15):
     """Open-front timber stall row with a framed lean-to roof, opening toward -Y.
 
-    Tier 1 gets a simple cloth/plank skin over a visible rafter frame (lumbermill
-    feel); higher tiers get shingles. The shelter is a flat-roofed run-in shed, so
-    the back wall, stall dividers and both end walls all share one height (nothing
-    steps or pokes through); only the open front is framed by posts.
+    Matches the main stable building roof material (shingles/thatch). The shelter
+    is a flat-roofed run-in shed, so the back wall, stall dividers and both end walls
+    all share one height; only the open front is framed by posts.
     """
     w = x1 - x0
     cx = (x0 + x1) * 0.5
@@ -523,8 +586,6 @@ def _build_stall_shelter(bm, t, x0, x1, y_back, depth, tier='TIER_1', stalls=3,
     rl = math.hypot(depth, slope)
     mid_y = y_back - depth * 0.5
     roof_mid_z = (back_h + front_h) * 0.5
-    # One shared wall height for the back wall, dividers and ends: it clears the
-    # roof underside everywhere the roof is lowest.
     wall_h = min(back_h, front_h) - 0.05
 
     # Plank back wall.
@@ -535,8 +596,8 @@ def _build_stall_shelter(bm, t, x0, x1, y_back, depth, tier='TIER_1', stalls=3,
     # Front posts.
     for i in range(stalls + 1):
         px = x0 + w * i / stalls
-        _local_box(bm, t, (0.16, 0.16, front_h), (px, y_front, front_h * 0.5),
-                   mat=MAT_INDEX_TIMBER, bevel=0.012)
+        _timber_box(bm, t, (0.16, 0.16, front_h), (px, y_front, front_h * 0.5),
+                    mat=MAT_INDEX_TIMBER, bevel=0.012)
     # Solid divider walls between stalls, at the same height as the back wall.
     for i in range(1, stalls):
         px = x0 + w * i / stalls
@@ -548,17 +609,18 @@ def _build_stall_shelter(bm, t, x0, x1, y_back, depth, tier='TIER_1', stalls=3,
                    mat=MAT_INDEX_WOOD, bevel=0.008)
 
     # Rafter frame: front header on the posts and a back plate sitting on the wall.
-    _local_box(bm, t, (w + 0.20, 0.14, 0.16), (cx, y_front, front_h + 0.02),
-               mat=MAT_INDEX_TIMBER, bevel=0.008)
-    _local_box(bm, t, (w + 0.20, 0.14, 0.16), (cx, y_back, wall_h + 0.08),
-               mat=MAT_INDEX_TIMBER, bevel=0.008)
+    _timber_box(bm, t, (w + 0.20, 0.14, 0.16), (cx, y_front, front_h + 0.02),
+                mat=MAT_INDEX_TIMBER, bevel=0.008)
+    _timber_box(bm, t, (w + 0.20, 0.14, 0.16), (cx, y_back, wall_h + 0.08),
+                mat=MAT_INDEX_TIMBER, bevel=0.008)
     for i in range(stalls + 1):
         rx = x0 + w * i / stalls
-        _local_box(bm, t, (0.09, rl + 0.10, 0.09), (rx, mid_y, roof_mid_z + 0.10),
-                   rot=(ang, 0.0, 0.0), mat=MAT_INDEX_TIMBER, bevel=0.006)
+        _timber_box(bm, t, (0.09, rl + 0.10, 0.09), (rx, mid_y, roof_mid_z + 0.10),
+                    rot=(ang, 0.0, 0.0), mat=MAT_INDEX_TIMBER, bevel=0.006)
 
     # Roof slab, framed by bargeboards (sides) and a fascia board (front eave).
-    roof_mat = MAT_INDEX_TARP if tier == 'TIER_1' else MAT_INDEX_SHINGLES
+    # Always match the stable building's roof material (thatch in T1, shingles in T2/T3).
+    roof_mat = MAT_INDEX_SHINGLES
     roof_faces = _local_box(
         bm, t, (w + 0.34, rl + 0.30, 0.055),
         (cx, mid_y, roof_mid_z + 0.17), rot=(ang, 0.0, 0.0),
@@ -566,25 +628,25 @@ def _build_stall_shelter(bm, t, x0, x1, y_back, depth, tier='TIER_1', stalls=3,
     half_rl = rl * 0.5 + 0.15
     front_y = mid_y - half_rl * math.cos(ang)
     front_z = roof_mid_z + 0.17 - half_rl * math.sin(ang)
-    _local_box(bm, t, (w + 0.40, 0.11, 0.16), (cx, front_y, front_z),
-               rot=(ang, 0.0, 0.0), mat=MAT_INDEX_TIMBER, bevel=0.008)
+    _timber_box(bm, t, (w + 0.40, 0.11, 0.16), (cx, front_y, front_z),
+                rot=(ang, 0.0, 0.0), mat=MAT_INDEX_TIMBER, bevel=0.008)
     for s in (-1.0, 1.0):
-        _local_box(bm, t, (0.12, rl + 0.30, 0.16),
-                   (cx + s * (w * 0.5 + 0.17), mid_y, roof_mid_z + 0.16),
-                   rot=(ang, 0.0, 0.0), mat=MAT_INDEX_TIMBER, bevel=0.008)
+        _timber_box(bm, t, (0.12, rl + 0.30, 0.16),
+                    (cx + s * (w * 0.5 + 0.17), mid_y, roof_mid_z + 0.16),
+                    rot=(ang, 0.0, 0.0), mat=MAT_INDEX_TIMBER, bevel=0.008)
 
     # Match the main-roof shingle UVs (correct axis + 0.32 tiles/m) instead of the
     # default box mapping that leaves the tiles rotated and mis-scaled.
-    if roof_mat == MAT_INDEX_SHINGLES:
-        from ..roof.shingles import map_lean_to_shingle_uvs
-        loc_world = t @ Vector((cx, mid_y, roof_mid_z + 0.17))
-        rot_world = (t.to_3x3() @ Euler((ang, 0.0, 0.0), 'XYZ').to_matrix()).to_euler()
-        map_lean_to_shingle_uvs(bm, roof_faces, loc_world, rot_world,
-                                u_scale=0.32, v_scale=0.32)
+    from ..roof.shingles import map_lean_to_shingle_uvs
+    loc_world = t @ Vector((cx, mid_y, roof_mid_z + 0.17))
+    rot_world = (t.to_3x3() @ Euler((ang, 0.0, 0.0), 'XYZ').to_matrix()).to_euler()
+    map_lean_to_shingle_uvs(bm, roof_faces, loc_world, rot_world,
+                            u_scale=0.32, v_scale=0.32)
 
 
 def _build_pen_fence(bm, t, x0, x1, y0, y1, gate_w=1.7, post_h=1.25):
-    """A rail-and-post paddock fence around the pen, with a gate gap on the -Y side."""
+    """A rail-and-post paddock fence around the pen, with a gate gap on the -Y side.
+    Built with timber material and longitudinal unwrapped grain along posts and rails."""
     def run(ax, ay, bx, by):
         length = math.hypot(bx - ax, by - ay)
         n = max(1, int(round(length / 1.6)))
@@ -592,12 +654,12 @@ def _build_pen_fence(bm, t, x0, x1, y0, y1, gate_w=1.7, post_h=1.25):
         for i in range(n + 1):
             fx = ax + (bx - ax) * i / n
             fy = ay + (by - ay) * i / n
-            _local_box(bm, t, (0.14, 0.14, post_h), (fx, fy, post_h * 0.5),
-                       mat=MAT_INDEX_TIMBER, bevel=0.010)
+            _timber_box(bm, t, (0.14, 0.14, post_h), (fx, fy, post_h * 0.5),
+                        mat=MAT_INDEX_TIMBER, bevel=0.010)
         for rz in (0.50, 1.00):
-            _local_box(bm, t, (length + 0.08, 0.08, 0.10),
-                       ((ax + bx) * 0.5, (ay + by) * 0.5, rz),
-                       rot=(0.0, 0.0, ang), mat=MAT_INDEX_TIMBER, bevel=0.006)
+            _timber_box(bm, t, (length + 0.08, 0.08, 0.10),
+                        ((ax + bx) * 0.5, (ay + by) * 0.5, rz),
+                        rot=(0.0, 0.0, ang), mat=MAT_INDEX_TIMBER, bevel=0.006)
 
     run(x0, y0, x0, y1)                 # left flank
     run(x1, y0, x1, y1)                 # right flank
@@ -608,8 +670,8 @@ def _build_pen_fence(bm, t, x0, x1, y0, y1, gate_w=1.7, post_h=1.25):
     run(x0, y1, gate_lo, y1)
     run(gate_hi, y1, x1, y1)
     for gx in (gate_lo, gate_hi):
-        _local_box(bm, t, (0.18, 0.18, post_h + 0.35), (gx, y1, (post_h + 0.35) * 0.5),
-                   mat=MAT_INDEX_TIMBER, bevel=0.014)
+        _timber_box(bm, t, (0.18, 0.18, post_h + 0.35), (gx, y1, (post_h + 0.35) * 0.5),
+                    mat=MAT_INDEX_TIMBER, bevel=0.014)
 
 
 def _build_stable_yard(bm, t, barn_w, barn_d, tier):
@@ -1006,6 +1068,8 @@ def build_estate_chapel(bm, props, pos=(28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_3
         'has_roof_shingles': True,
         'has_dormers': False,
         'has_chimney': False,
+        'has_chapel_kit': False,
+        'has_bell_cote': False,
     }
     if extra_overrides:
         overrides.update(extra_overrides)
@@ -1014,58 +1078,60 @@ def build_estate_chapel(bm, props, pos=(28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_3
             props, overrides, pos=pos, rot_z=rot_z,
             name="Chapel", host_obj=host_obj
         )
-        try:
-            import bmesh
-            from ..materials import MAT_INDEX_CUT_STONE, MAT_INDEX_STONE, MAT_INDEX_IRON
-            from ..mesh_utils import create_beveled_box, create_cylinder
-            out_bm = bmesh.new()
-            out_bm.from_mesh(out_obj.data)
-            z_ridge = 0.75 + floor_h + 3.4
-            create_beveled_box(out_bm, size=(1.20, 0.45, 1.40),
-                               location=(0.0, 0.0, z_ridge + 0.70),
-                               rotation=(0.0, 0.0, 0.0),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03)
-            create_cylinder(out_bm, radius=0.22, height=0.35, segments=16,
-                            location=(0.0, 0.0, z_ridge + 0.65),
-                            rotation=(1.5708, 0.0, 0.0),
-                            mat_index=MAT_INDEX_IRON)
-            create_beveled_box(out_bm, size=(2.40, 0.85, 0.22),
-                               location=(0.0, -depth * 0.5 - 0.42, 0.11),
-                               rotation=(0.0, 0.0, 0.0),
-                               mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
-            create_beveled_box(out_bm, size=(2.10, 0.65, 0.22),
-                               location=(0.0, -depth * 0.5 - 0.25, 0.33),
-                               rotation=(0.0, 0.0, 0.0),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-            out_bm.to_mesh(out_obj.data)
-            out_bm.free()
-            out_obj.data.update()
-        except Exception:
-            pass
+        if overrides.get('has_bell_cote', False):
+            try:
+                import bmesh
+                from ..materials import MAT_INDEX_CUT_STONE, MAT_INDEX_STONE, MAT_INDEX_IRON
+                from ..mesh_utils import create_beveled_box, create_cylinder
+                out_bm = bmesh.new()
+                out_bm.from_mesh(out_obj.data)
+                z_ridge = 0.75 + floor_h + 3.4
+                create_beveled_box(out_bm, size=(1.20, 0.45, 1.40),
+                                   location=(0.0, 0.0, z_ridge + 0.70),
+                                   rotation=(0.0, 0.0, 0.0),
+                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03)
+                create_cylinder(out_bm, radius=0.22, height=0.35, segments=16,
+                                location=(0.0, 0.0, z_ridge + 0.65),
+                                rotation=(1.5708, 0.0, 0.0),
+                                mat_index=MAT_INDEX_IRON)
+                create_beveled_box(out_bm, size=(2.40, 0.85, 0.22),
+                                   location=(0.0, -depth * 0.5 - 0.42, 0.11),
+                                   rotation=(0.0, 0.0, 0.0),
+                                   mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+                create_beveled_box(out_bm, size=(2.10, 0.65, 0.22),
+                                   location=(0.0, -depth * 0.5 - 0.25, 0.33),
+                                   rotation=(0.0, 0.0, 0.0),
+                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+                out_bm.to_mesh(out_obj.data)
+                out_bm.free()
+                out_obj.data.update()
+            except Exception:
+                pass
         return out_obj
     else:
         _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
-        try:
-            t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
-            z_ridge = 0.75 + floor_h + 3.4
-            create_beveled_box(bm, size=(1.20, 0.45, 1.40),
-                               location=(t @ Vector((0.0, 0.0, z_ridge + 0.70))),
-                               rotation=(0.0, 0.0, rot_z),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03)
-            create_cylinder(bm, radius=0.22, height=0.35, segments=16,
-                            location=(t @ Vector((0.0, 0.0, z_ridge + 0.65))),
-                            rotation=(1.5708, 0.0, rot_z),
-                            mat_index=MAT_INDEX_IRON)
-            create_beveled_box(bm, size=(2.40, 0.85, 0.22),
-                               location=(t @ Vector((0.0, -depth * 0.5 - 0.42, 0.11))),
-                               rotation=(0.0, 0.0, rot_z),
-                               mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
-            create_beveled_box(bm, size=(2.10, 0.65, 0.22),
-                               location=(t @ Vector((0.0, -depth * 0.5 - 0.25, 0.33))),
-                               rotation=(0.0, 0.0, rot_z),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-        except Exception:
-            pass
+        if overrides.get('has_bell_cote', False):
+            try:
+                t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
+                z_ridge = 0.75 + floor_h + 3.4
+                create_beveled_box(bm, size=(1.20, 0.45, 1.40),
+                                   location=(t @ Vector((0.0, 0.0, z_ridge + 0.70))),
+                                   rotation=(0.0, 0.0, rot_z),
+                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03)
+                create_cylinder(bm, radius=0.22, height=0.35, segments=16,
+                                location=(t @ Vector((0.0, 0.0, z_ridge + 0.65))),
+                                rotation=(1.5708, 0.0, rot_z),
+                                mat_index=MAT_INDEX_IRON)
+                create_beveled_box(bm, size=(2.40, 0.85, 0.22),
+                                   location=(t @ Vector((0.0, -depth * 0.5 - 0.42, 0.11))),
+                                   rotation=(0.0, 0.0, rot_z),
+                                   mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+                create_beveled_box(bm, size=(2.10, 0.65, 0.22),
+                                   location=(t @ Vector((0.0, -depth * 0.5 - 0.25, 0.33))),
+                                   rotation=(0.0, 0.0, rot_z),
+                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+            except Exception:
+                pass
 
 def build_tenement_building(bm, props, pos=(24.0, 10.0, 0.0), rot_z=0.0, tier='TIER_3',
                             width=24.0, depth=11.0, floors=3, floor_h=3.4, extra_overrides=None,
@@ -1392,7 +1458,7 @@ def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='
     rack_pos = t @ Vector((arena_cx - 4.4, arena_cy - 3.2, 0.0))
     build_weapon_rack(bm, rack_pos.x, rack_pos.y, 0.0, ang=rot_z + math.pi * 0.22)
     crate_wep = t @ Vector((arena_cx - 4.8, arena_cy - 2.3, 0.0))
-    build_crate(bm, x=crate_wep.x, y=crate_wep.y, z_ground=0.0, size=0.52, height=0.46, ang=0.18)
+    build_crate(bm, x=crate_wep.x, y=crate_wep.y, z_ground=0.0, size=0.52, height=0.46, ang=rot_z + 0.18)
 
     # Spectator / trainer benches overlooking the sparring arena
     # Bench 1: Along the right perimeter fence, turned facing left into the arena
@@ -1412,20 +1478,24 @@ def build_estate_training_grounds(bm, pos=(-30.0, -50.0, 0.0), rot_z=0.0, tier='
                 ang=rot_z + math.pi, length=2.0)
 
     # Armorer crates, tool chest, and water cooling trough on the front right
-    crate_pos = t @ Vector((gap_half + 2.2, -half_d + 1.4, 0.0))
-    build_crate(bm, x=crate_pos.x, y=crate_pos.y, z_ground=0.0, size=0.68, height=0.55)
-    build_crate(bm, x=crate_pos.x + 0.72, y=crate_pos.y, z_ground=0.0, size=0.50, height=0.45, ang=0.25)
-    build_barrel(bm, x=crate_pos.x + 1.45, y=crate_pos.y + 0.15, z_ground=0.0)
+    # (positioned in local space so they never overlap the perimeter fence when rotated)
+    crate_pos1 = t @ Vector((gap_half + 1.5, -half_d + 1.5, 0.0))
+    build_crate(bm, x=crate_pos1.x, y=crate_pos1.y, z_ground=0.0, size=0.68, height=0.55, ang=rot_z)
+    crate_pos2 = t @ Vector((gap_half + 2.3, -half_d + 1.5, 0.0))
+    build_crate(bm, x=crate_pos2.x, y=crate_pos2.y, z_ground=0.0, size=0.50, height=0.45, ang=rot_z + 0.25)
+    barrel_pos = t @ Vector((gap_half + 3.1, -half_d + 1.6, 0.0))
+    build_barrel(bm, x=barrel_pos.x, y=barrel_pos.y, z_ground=0.0)
     # Water cooling trough for swords & cleaning
-    trough_pos = t @ Vector((gap_half + 2.8, -half_d + 2.5, 0.20))
+    trough_pos = t @ Vector((gap_half + 2.4, -half_d + 2.5, 0.20))
     create_beveled_box(bm, size=(1.20, 0.55, 0.40),
                        location=(trough_pos.x, trough_pos.y, trough_pos.z),
                        rotation=(0.0, 0.0, rot_z),
                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
 
-    # 5. Heraldic Banner Pole
+    # 5. Heraldic Banner Pole inheriting gate facing normal
     pole_pos = t @ Vector((-gap_half - 0.30, -half_d - 0.20, 0.0))
-    build_banner_pole(bm, x=pole_pos.x, y=pole_pos.y, z_ground=0.0, height=5.4)
+    build_banner_pole(bm, x=pole_pos.x, y=pole_pos.y, z_ground=0.0, height=5.4,
+                      flag_dir=(fwd_out.x, fwd_out.y))
 
 
 # -----------------------------------------------------------------------------
@@ -1909,3 +1979,10 @@ def build_estate_outbuildings(bm, props, ctx, host_obj=None):
     if has_awnings:
         _place_estate_awnings(bm, props, tier, spread_x, fore_y,
                               stable=stable_slot, servant=servant_slot)
+
+    # 10. Ensure all detached outbuilding child objects have organic shading (Smooth by Angle)
+    if host_obj:
+        from ..mesh_utils import apply_organic_shading
+        for child in host_obj.children:
+            if child.get("is_castle_outbuilding", False) or child.get("is_estate_outbuilding", False):
+                apply_organic_shading(child)

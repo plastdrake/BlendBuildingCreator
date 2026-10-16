@@ -104,19 +104,24 @@ def _height(spec, x, y):
 
 
 def _ramp(x, y):
-    """(weight, z) of the grand-stair corridor along x=0, or (0, 0) outside it."""
-    w = 1.0 - _smooth((abs(x) - 2.8) / 0.7)
+    """(weight, z) of the grand-stair corridor along x=0, or (0, 0) outside it.
+    The stair width is 4.4m with cheek walls and railings out to abs(x)=2.80.
+    We keep the rock bed excavated 45cm below the step treads/landings up to
+    abs(x)=3.30 so cliff rock geometry never overlaps or clips into the steps.
+    """
+    w = 1.0 - _smooth((abs(x) - 3.3) / 1.1)
     if w <= 0.0:
         return 0.0, 0.0
     for y0, z0, y1, z1 in RAMPS:
         if y0 <= y <= y1:
-            return w, z0 + (z1 - z0) * (y - y0) / (y1 - y0)
+            zr = (z0 + (z1 - z0) * (y - y0) / (y1 - y0)) - 0.45
+            return w, zr
     return 0.0, 0.0
 
 
 def _connector_wing_corridor(x, y, z):
     """Caps bedrock height under the West and East connecting wings so the stairs and floors are 100% clear."""
-    for cx, y_max in ((-14.5, 33.5), (16.5, 36.5)):
+    for cx, y_max in ((-8.5, 33.5), (16.5, 36.5)):
         dx = abs(x - cx)
         if dx > 4.4:
             continue
@@ -936,7 +941,8 @@ def _build_ring_towers(bm, tier):
             if to_del:
                 import bmesh
                 bmesh.ops.delete(bm, geom=to_del, context='FACES')
-            z_base = min(0.0, ground_z(x, y) - 0.5)
+            walk_zg = max(0.0, ground_z(x, y))
+            z_base = walk_zg - 1.0
             build_walkable_round_tower(
                 bm, cx=x, cy=y, z_base=z_base, radius=r,
                 num_floors=floors if tier == 2 else floors + 1,

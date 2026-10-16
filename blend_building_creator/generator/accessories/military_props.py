@@ -125,8 +125,8 @@ def build_archery_target(bm, x, y, z_ground=0.0, ang=0.0):
 
     # Orthonormal orientation:
     # fn points outward from the target face toward the courtyard / archer
-    fn = Vector((-sa * cos_t, -ca * cos_t, sin_t)).normalized()
-    right = Vector((ca, -sa, 0.0)).normalized()
+    fn = Vector((sa * cos_t, -ca * cos_t, sin_t)).normalized()
+    right = Vector((ca, sa, 0.0)).normalized()
     up = fn.cross(right).normalized()
 
     target_z = z_ground + 1.25

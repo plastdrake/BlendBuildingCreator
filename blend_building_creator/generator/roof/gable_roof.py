@@ -286,12 +286,14 @@ def build_gable_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=3.0, ov
             t1 = (j + 1) / segments_y
             y0 = ry_min + t0 * total_d
             y1 = ry_min + t1 * total_d
-            extra_len = 0.01 if (abut_back and j == segments_y - 1) else 0.04
-            seg_len = (y1 - y0) + extra_len
+            # Overlap adjacent segments slightly for seamless joints, but never overhang abutting walls
+            b_start = ry_min if (abut_front and j == 0) else (y0 - 0.02)
+            b_end = ry_max if (abut_back and j == segments_y - 1) else (y1 + 0.02)
+            seg_len = max(0.04, b_end - b_start)
             create_beveled_box(
                 bm,
                 size=(0.20, seg_len, 0.22),
-                location=(cx, (y0 + y1) * 0.5, rz + 0.05),
+                location=(cx, (b_start + b_end) * 0.5, rz + 0.05),
                 mat_index=MAT_INDEX_TIMBER,
                 bevel_amount=0.015
             )

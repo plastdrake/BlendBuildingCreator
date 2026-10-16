@@ -216,14 +216,14 @@ def build_round_tower(bm, props, seed):
         if props.has_ceiling_beams:
             beam_d = 0.16
             beam_span = max(0.25, (cur_r - 0.05) - well_r)
-            beam_mid_r = well_r + beam_span * 0.5
+            from .uv_utils import timber_box
             for k in range(segments):
                 b_ang = k * d_ang + offset_ang
-                create_box(bm, size=(beam_span, 0.14, beam_d),
+                timber_box(bm, size=(beam_span, 0.14, beam_d),
                            location=(beam_mid_r * math.cos(b_ang),
                                      beam_mid_r * math.sin(b_ang),
                                      z_ceil - beam_d * 0.5),
-                           rotation=(0.0, 0.0, b_ang), mat_index=MAT_INDEX_WOOD)
+                           rotation=(0.0, 0.0, b_ang), mat_index=MAT_INDEX_TIMBER)
 
         # ---- Shell: wall material per tier (ground stone base) ----
         if tier_val == 'TIER_1':

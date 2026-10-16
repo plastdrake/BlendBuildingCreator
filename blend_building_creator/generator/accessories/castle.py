@@ -178,7 +178,12 @@ def build_walkable_round_tower(
 
     def _get_stair_deg(f_idx):
         if stair_base_deg is not None:
-            s_ang = (stair_base_deg + f_idx * 200.0) % 360.0
+            if isinstance(stair_base_deg, dict):
+                s_ang = stair_base_deg.get(f_idx, (stair_base_deg.get('default', 0.0) + f_idx * 200.0) % 360.0)
+            elif callable(stair_base_deg):
+                return stair_base_deg(f_idx)
+            else:
+                s_ang = (stair_base_deg + f_idx * 200.0) % 360.0
             return (s_ang, (s_ang + 135.0) % 360.0)
         return _stair_arc_deg(f_idx)
 
@@ -272,10 +277,11 @@ def build_walkable_round_tower(
                                    location=(fx, fy, z_fl + floor_h * 0.5),
                                    rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
 
-            # Cut-stone framing pilasters up the shaft.
+            # Cut-stone framing pilasters up the shaft: thicker so they stick into the tower room
+            # by ~6 cm to articulate the interior shape and completely eliminate coplanar z-fighting with the inner wall.
             if k % 4 == 0 and not is_door:
-                pr = radius - wall_t * 0.5 + 0.08
-                create_beveled_box(bm, size=(wall_t + 0.16, 0.34, floor_h),
+                pr = radius - wall_t * 0.5 + 0.05
+                create_beveled_box(bm, size=(wall_t + 0.22, 0.34, floor_h),
                                    location=(cx + pr * ca, cy + pr * sa, z_fl + floor_h * 0.5),
                                    rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_CUT_STONE,
                                    bevel_amount=0.02)
@@ -1382,8 +1388,8 @@ def build_great_ballroom_wing(
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
     create_beveled_box(bm, size=(2.2, 4.0, 0.20), location=(dx - 0.8, cy, fz + 0.60 + 0.10),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-    build_royal_throne(bm, x=dx - 1.0, y=cy - 0.9, z_ground=fz + 0.80)
-    build_royal_throne(bm, x=dx - 1.0, y=cy + 0.9, z_ground=fz + 0.80)
+    build_royal_throne(bm, x=dx - 0.7, y=cy - 0.9, z_ground=fz + 0.80, ang=math.pi * 0.5, dais=False)
+    build_royal_throne(bm, x=dx - 0.7, y=cy + 0.9, z_ground=fz + 0.80, ang=math.pi * 0.5, dais=False)
 
     # Hammerbeam Timber Trusses
     for i in range(4):

@@ -71,6 +71,7 @@ class BuildingContext:
     chimney_pos: Any = None
     floor_doorways: Dict[int, List[Dict[str, Any]]] = field(default_factory=dict)
     extra_doorways: List[Dict[str, Any]] = field(default_factory=list)
+    extra_window_exclusions: List[Dict[str, Any]] = field(default_factory=list)
     is_rotated_roof: bool = False
 
     def bounds_for(self, floor_idx: int) -> Bounds:

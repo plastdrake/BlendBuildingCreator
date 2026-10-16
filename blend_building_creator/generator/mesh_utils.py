@@ -13,26 +13,77 @@ def apply_organic_shading(obj, angle_deg=42.0):
     """
     Smooths the finished building mesh by angle so bevels/cylinders read as soft and
     rounded (organic hand-carved look) while sharp unbeveled corners stay crisp.
-    Uses the Blender 4.1+ 'Smooth by Angle' operator, with a flat shade_smooth fallback.
+    Uses the Blender 4.1+ 'Smooth by Angle' modifier/operator, with a robust fallback.
     """
-    try:
-        if hasattr(bpy.context, 'view_layer') and obj.name in bpy.context.view_layer.objects:
-            prev_active = bpy.context.view_layer.objects.active
-            bpy.context.view_layer.objects.active = obj
-            was_selected = obj.select_get()
-            obj.select_set(True)
-            bpy.ops.object.shade_auto_smooth(angle=math.radians(angle_deg))
-            obj.select_set(was_selected)
-            bpy.context.view_layer.objects.active = prev_active
-        else:
-            for poly in obj.data.polygons:
-                poly.use_smooth = True
-    except Exception:
+    if not obj or not hasattr(obj, 'data') or not obj.data or not hasattr(obj.data, 'polygons'):
+        return
+
+    rad_angle = math.radians(angle_deg)
+
+    # 1. Direct attachment if "Smooth by Angle" node group is already in bpy.data.node_groups
+    ng = bpy.data.node_groups.get("Smooth by Angle")
+    if ng is not None:
         try:
+            mod = None
+            for m in obj.modifiers:
+                if m.type == 'NODES' and getattr(m, 'node_group', None) == ng:
+                    mod = m
+                    break
+            if mod is None:
+                mod = obj.modifiers.new(name="Smooth by Angle", type='NODES')
+                mod.node_group = ng
+            if hasattr(mod, 'properties') and hasattr(mod.properties, 'inputs'):
+                if hasattr(mod.properties.inputs, 'Input_1'):
+                    mod.properties.inputs.Input_1.value = rad_angle
             for poly in obj.data.polygons:
                 poly.use_smooth = True
+            return
         except Exception:
             pass
+
+    # 2. Operator execution (loads "Smooth by Angle" node group from asset library into bpy.data)
+    try:
+        vl = getattr(bpy.context, 'view_layer', None)
+        if vl:
+            vl.update()
+            if obj.name in vl.objects:
+                prev_active = vl.objects.active
+                vl.objects.active = obj
+                was_selected = obj.select_get()
+                obj.select_set(True)
+                bpy.ops.object.shade_auto_smooth(angle=rad_angle)
+                obj.select_set(was_selected)
+                vl.objects.active = prev_active
+                return
+    except Exception:
+        pass
+
+    # 3. Legacy Blender (3.x, 4.0) auto-smooth property
+    if hasattr(obj.data, 'use_auto_smooth'):
+        try:
+            obj.data.use_auto_smooth = True
+            obj.data.auto_smooth_angle = rad_angle
+            for poly in obj.data.polygons:
+                poly.use_smooth = True
+            return
+        except Exception:
+            pass
+
+    # 4. Fallback verification:
+    # Only enable smooth polygons if an angle-splitting mechanism is active!
+    has_mod = any(
+        m.name == "Smooth by Angle" or
+        (m.type == 'NODES' and getattr(m, 'node_group', None) and m.node_group.name == "Smooth by Angle")
+        for m in getattr(obj, 'modifiers', [])
+    )
+    has_legacy = getattr(obj.data, 'use_auto_smooth', False)
+    if has_mod or has_legacy:
+        for poly in obj.data.polygons:
+            poly.use_smooth = True
+    else:
+        # Never smooth all polygons without angle splitting; flat shading prevents normal distortion
+        for poly in obj.data.polygons:
+            poly.use_smooth = False
 
 def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, is_wall=False, u_offset=0.0, v_offset=0.0, transform_matrix=None):
     """

@@ -479,6 +479,13 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
         if ou2 - ou1 > 0.01:
             u_edges.add(ou1)
             u_edges.add(ou2)
+    if flat_ranges:
+        for fu1, fu2 in flat_ranges:
+            fu1_c = max(0.0, min(seg_len, fu1))
+            fu2_c = max(0.0, min(seg_len, fu2))
+            if fu2_c - fu1_c > 0.01:
+                u_edges.add(fu1_c)
+                u_edges.add(fu2_c)
     edges = sorted(u_edges)
 
     # Opening rects in wall-local coords, used to keep exposed-brick patches
@@ -496,16 +503,20 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                 op_rects.append((ou1, ou2, oz1, oz2))
 
     def _emit(ua, ub, za, zb, seg_is_start, seg_is_end, brick_ok=True):
+        u_mid = (ua + ub) * 0.5
+        is_flat = any(fu1 - 0.01 <= u_mid <= fu2 + 0.01 for fu1, fu2 in (flat_ranges or []))
+        seg_mat_ext = MAT_INDEX_WOOD if is_flat else mat_ext
+        seg_inner_mat = MAT_INDEX_WOOD if is_flat else inner_mat
         build_wall_segment(
-            bm, pt_at(ua), pt_at(ub), za, zb, thickness, mat_ext=mat_ext,
+            bm, pt_at(ua), pt_at(ub), za, zb, thickness, mat_ext=seg_mat_ext,
             normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
             plank_direction=plank_direction, plank_jankiness=plank_jankiness,
             stone_block_scale=stone_block_scale, stone_disorder=stone_disorder,
             is_corner_start=seg_is_start, is_corner_end=seg_is_end, seed=seed,
             u_offset=u_offset + ua, v_offset=za - z_bottom,
-            has_exposed_brick=(has_exposed_brick and brick_ok),
+            has_exposed_brick=(has_exposed_brick and brick_ok and not is_flat),
             exposed_brick_freq=exposed_brick_freq,
-            inner_mat=inner_mat
+            inner_mat=seg_inner_mat
         )
 
     for i in range(len(edges) - 1):

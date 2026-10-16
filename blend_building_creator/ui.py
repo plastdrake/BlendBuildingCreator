@@ -808,6 +808,7 @@ class VIEW3D_PT_fantasy_building_furnishing(bpy.types.Panel):
         box.label(text="Whole-Building Interior", icon='HOME')
         box.prop(props, "has_interior_furnishing", text="Furnish Interior")
         box.prop(props, "has_throne_room", text="Castle Throne Room")
+        box.prop(props, "has_double_height", text="Double-Height Mezzanine")
         box.prop(props, "interior_program", text="Room Mix")
         box.prop(props, "furnishing_style", text="Style")
         box.prop(props, "furnishing_density", slider=True)

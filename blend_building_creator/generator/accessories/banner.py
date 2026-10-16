@@ -154,3 +154,135 @@ def build_banner_pole(bm, x, y, z_ground=0.0, height=4.6,
         for f in st_faces:
             f.tag = True
 
+
+def build_wall_banner(bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
+                      ang: float = 0.0, width: float = 0.90, length: float = 2.00,
+                      hang_h: float = 2.60):
+    """Ornate hanging wall banner / heraldic tapestry standard mounted on an iron wall bracket."""
+    fx = math.cos(ang)
+    fy = math.sin(ang)
+    flen = math.hypot(fx, fy)
+    if flen < 1e-4:
+        fx, fy = 0.0, -1.0
+    else:
+        fx, fy = fx / flen, fy / flen
+
+    # Perpendicular direction
+    sx, sy = fy, -fx
+    ang_side = math.atan2(sy, sx)
+
+    top_z = z_ground + hang_h
+    bracket_len = 0.20
+    bar_w = width + 0.24
+    bar_cx = x + fx * bracket_len
+    bar_cy = y + fy * bracket_len
+    bar_z = top_z
+
+    # 1. Iron wall plates and extension brackets
+    for end_sign in (-1.0, 1.0):
+        mount_x = x + sx * (width * 0.35 * end_sign)
+        mount_y = y + sy * (width * 0.35 * end_sign)
+        wp = create_cylinder(bm, radius=0.060, height=0.025, segments=8,
+                             location=(mount_x, mount_y, bar_z),
+                             rotation=(0.0, 1.5708, math.atan2(fy, fx)), mat_index=MAT_INDEX_IRON)
+        for f in wp:
+            f.tag = True
+        br = create_cylinder(bm, radius=0.020, height=bracket_len, segments=8,
+                             location=(mount_x + fx * bracket_len * 0.5, mount_y + fy * bracket_len * 0.5, bar_z),
+                             rotation=(0.0, 1.5708, math.atan2(fy, fx)), mat_index=MAT_INDEX_IRON)
+        for f in br:
+            f.tag = True
+
+    # 2. Horizontal rod with ornate finials
+    rod_faces = create_cylinder(bm, radius=0.025, height=bar_w, segments=8,
+                                location=(bar_cx, bar_cy, bar_z),
+                                rotation=(0.0, 1.5708, ang_side), mat_index=MAT_INDEX_IRON)
+    for f in rod_faces:
+        f.tag = True
+
+    for end_sign in (-1.0, 1.0):
+        cap_x = bar_cx + sx * (bar_w * 0.5 * end_sign)
+        cap_y = bar_cy + sy * (bar_w * 0.5 * end_sign)
+        cap = create_cylinder(bm, radius=0.038, height=0.035, segments=8,
+                              location=(cap_x, cap_y, bar_z),
+                              rotation=(0.0, 1.5708, ang_side), mat_index=MAT_INDEX_IRON)
+        for f in cap:
+            f.tag = True
+        tip = create_cone(bm, radius1=0.034, radius2=0.0, height=0.09, segments=8,
+                          location=(cap_x + sx * 0.055 * end_sign, cap_y + sy * 0.055 * end_sign, bar_z),
+                          rotation=(0.0, 1.5708 * end_sign, ang_side), mat_index=MAT_INDEX_IRON)
+        for f in tip:
+            f.tag = True
+
+    # 3. Cloth Banner
+    cloth_w = width
+    cloth_h = length
+    cloth_t = 0.015
+    cloth_cx = bar_cx + fx * 0.015
+    cloth_cy = bar_cy + fy * 0.015
+    cloth_top_z = bar_z - 0.03
+
+    hx = cloth_w * 0.5
+    hy = cloth_t * 0.5
+
+    local_front = [
+        Vector((-hx,  hy, 0.0)),
+        Vector((-hx,  hy, -cloth_h)),
+        Vector(( hx,  hy, -cloth_h)),
+        Vector(( hx,  hy, 0.0)),
+    ]
+    local_back = [
+        Vector(( hx, -hy, 0.0)),
+        Vector(( hx, -hy, -cloth_h)),
+        Vector((-hx, -hy, -cloth_h)),
+        Vector((-hx, -hy, 0.0)),
+    ]
+
+    rot_mat = Matrix([
+        [sx, fx, 0.0, 0.0],
+        [sy, fy, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0]
+    ])
+    loc_mat = Matrix.Translation(Vector((cloth_cx, cloth_cy, cloth_top_z)))
+    tr = loc_mat @ rot_mat
+
+    verts_front = [bm.verts.new(tr @ v) for v in local_front]
+    verts_back  = [bm.verts.new(tr @ v) for v in local_back]
+
+    uv_layer = bm.loops.layers.uv.verify()
+
+    f_front = bm.faces.new([verts_front[0], verts_front[1], verts_front[2], verts_front[3]])
+    f_front.material_index = MAT_INDEX_BANNER
+    f_front.tag = True
+    f_front.loops[0][uv_layer].uv = Vector((0.0, 1.0))
+    f_front.loops[1][uv_layer].uv = Vector((0.0, 0.0))
+    f_front.loops[2][uv_layer].uv = Vector((1.0, 0.0))
+    f_front.loops[3][uv_layer].uv = Vector((1.0, 1.0))
+
+    f_back = bm.faces.new([verts_back[0], verts_back[1], verts_back[2], verts_back[3]])
+    f_back.material_index = MAT_INDEX_BANNER
+    f_back.tag = True
+    f_back.loops[0][uv_layer].uv = Vector((0.0, 1.0))
+    f_back.loops[1][uv_layer].uv = Vector((0.0, 0.0))
+    f_back.loops[2][uv_layer].uv = Vector((1.0, 0.0))
+    f_back.loops[3][uv_layer].uv = Vector((1.0, 1.0))
+
+    f_top = bm.faces.new([verts_front[0], verts_back[3], verts_back[0], verts_front[3]])
+    f_top.material_index = MAT_INDEX_BANNER
+    f_top.tag = True
+    for lp in f_top.loops:
+        lp[uv_layer].uv = Vector((0.5, 0.98))
+
+    # Hanging straps looping over the rod
+    strap_w = 0.08
+    for sx_off in (-hx * 0.70, 0.0, hx * 0.70):
+        strap_cx = cloth_cx + sx * sx_off
+        strap_cy = cloth_cy + sy * sx_off
+        st_faces = create_cylinder(bm, radius=0.034, height=strap_w, segments=8,
+                                   location=(strap_cx, strap_cy, bar_z),
+                                   rotation=(0.0, 1.5708, ang_side), mat_index=MAT_INDEX_BANNER)
+        for f in st_faces:
+            f.tag = True
+
+

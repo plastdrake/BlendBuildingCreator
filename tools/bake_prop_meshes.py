@@ -26,6 +26,7 @@ FBX_PROPS = {
     'axe_tool': 'Axe_Tool.fbx',
     'hoe_tool': 'Hoe_Tool.fbx',
     'pickaxe_tool': 'Pickaxe_Tool.fbx',
+    'royal_throne': 'Throne.fbx',
 }
 
 # Canonical material slot indices (mirrors generator/materials.py). The artist
@@ -153,6 +154,9 @@ for key, item in all_data.items():
         lines.append('        ],')
     lines.append('    },')
 lines.append('}')
+lines.append('if "royal_throne" in PROP_MESHES:')
+lines.append('    PROP_MESHES["Throne"] = PROP_MESHES["royal_throne"]')
+lines.append('    PROP_MESHES["throne"] = PROP_MESHES["royal_throne"]')
 lines.append('')
 
 os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
