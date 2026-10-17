@@ -444,21 +444,42 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
         _porch_clear = float(porch_info.get('porch_d', 1.5) or 1.5) + 0.40
     elif _prop(props, 'has_front_steps', False):
         _porch_clear = 1.30
+    # (x, y, outward-side): the side the crates continue toward, so they walk
+    # AWAY from the door instead of across its path.
     for _sgn in (side_sign, -side_sign):
         for _dx in (0.0, 0.8, 1.6, 2.4, 3.2, 4.0):
             for _dy in (_porch_clear + 0.35, _porch_clear + 0.80,
                         _porch_clear + 1.30, _porch_clear + 1.85):
-                _nook_spots.append((bx_base + _sgn * _dx, face_y - _dy))
-    for _sx, _sy in _nook_spots:
+                _nook_spots.append((bx_base + _sgn * _dx, face_y - _dy, _sgn))
+    for _sx, _sy, _sg in _nook_spots:
         if not is_point_outside_building(_sx, _sy, 0.42, ctx, margin=0.05):
             continue
-        _sg = 1.0 if _sx >= bx_base else -1.0
+        # Never block the door path: every piece of the cluster must sit
+        # clear of the entrance corridor.
+        _door_clear = 1.35
+        if min(abs(_sx - door_x), abs(_sx + _sg * 0.62 - door_x),
+               abs(_sx + _sg * 0.30 - door_x)) < _door_clear:
+            continue
+        # Never land on a fish rail placed earlier in the pipeline.
+        _cluster = [(_sx, _sy), (_sx + _sg * 0.62, _sy + 0.05),
+                    (_sx + _sg * 0.30, _sy - 0.58),
+                    (_sx + _sg * 1.45, _sy - 0.10)]
+        _hit_rail = False
+        for _rx0, _rx1, _ry0, _ry1 in (getattr(ctx, 'fisher_rails', None) or []):
+            for _qx, _qy in _cluster:
+                if _rx0 - 0.45 <= _qx <= _rx1 + 0.45 and _ry0 - 0.45 <= _qy <= _ry1 + 0.45:
+                    _hit_rail = True
+                    break
+            if _hit_rail:
+                break
+        if _hit_rail:
+            continue
         build_barrel(bm, _sx, _sy, radius=0.34, height=0.74)
         build_barrel(bm, _sx + _sg * 0.62, _sy + 0.05, radius=0.27, height=0.60)
         build_barrel(bm, _sx + _sg * 0.30, _sy - 0.58, radius=0.30, height=0.68,
                      lying=True, ang=0.15 * _sg)
         _cx = _sx + _sg * 1.45
-        if is_point_outside_building(_cx, _sy - 0.10, 0.35, ctx, margin=0.05):
+        if abs(_cx - door_x) >= 1.35 and is_point_outside_building(_cx, _sy - 0.10, 0.35, ctx, margin=0.05):
             build_crate(bm, _cx, _sy - 0.10, ang=0.14 * _sg, size=0.60)
             if rich and is_point_outside_building(_cx + _sg * 0.60, _sy - 0.42,
                                                   0.30, ctx, margin=0.05):

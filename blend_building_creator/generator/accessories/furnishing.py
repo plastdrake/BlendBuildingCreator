@@ -470,8 +470,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             # Back at +Y, front at -Y -> yaw = 0.0
             cy = _wy1 - depth * 0.5 - 0.01
             yaw = 0.0
-            min_x = _wx0 + width * 0.5 + 0.15
-            max_x = _wx1 - width * 0.5 - 0.15
+            min_x = rx0 + width * 0.5 + 0.15
+            max_x = rx1 - width * 0.5 - 0.15
             for cx in _sample_wall_positions(rcx + offset_bias + jit, min_x, max_x, step=0.30):
                 b = (cx - width * 0.5, cx + width * 0.5, cy - depth * 0.5, cy + depth * 0.5)
                 if _fvoid is not None:
@@ -490,8 +490,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             # Back at -Y, front at +Y -> yaw = math.pi
             cy = _wy0 + depth * 0.5 + 0.01
             yaw = math.pi
-            min_x = _wx0 + width * 0.5 + 0.15
-            max_x = _wx1 - width * 0.5 - 0.15
+            min_x = rx0 + width * 0.5 + 0.15
+            max_x = rx1 - width * 0.5 - 0.15
             for cx in _sample_wall_positions(rcx + offset_bias + jit, min_x, max_x, step=0.30):
                 b = (cx - width * 0.5, cx + width * 0.5, cy - depth * 0.5, cy + depth * 0.5)
                 if _fvoid is not None:
@@ -510,8 +510,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             # Back at +X, front at -X -> yaw = -math.pi / 2
             cx = _wx1 - depth * 0.5 - 0.01
             yaw = -math.pi / 2
-            min_y = _wy0 + width * 0.5 + 0.15
-            max_y = _wy1 - width * 0.5 - 0.15
+            min_y = ry0 + width * 0.5 + 0.15
+            max_y = ry1 - width * 0.5 - 0.15
             for cy in _sample_wall_positions(rcy + offset_bias + jit, min_y, max_y, step=0.30):
                 b = (cx - depth * 0.5, cx + depth * 0.5, cy - width * 0.5, cy + width * 0.5)
                 if _fvoid is not None:
@@ -530,8 +530,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
             # Back at -X, front at +X -> yaw = math.pi / 2
             cx = _wx0 + depth * 0.5 + 0.01
             yaw = math.pi / 2
-            min_y = _wy0 + width * 0.5 + 0.15
-            max_y = _wy1 - width * 0.5 - 0.15
+            min_y = ry0 + width * 0.5 + 0.15
+            max_y = ry1 - width * 0.5 - 0.15
             for cy in _sample_wall_positions(rcy + offset_bias + jit, min_y, max_y, step=0.30):
                 b = (cx - depth * 0.5, cx + depth * 0.5, cy - width * 0.5, cy + width * 0.5)
                 if _fvoid is not None:
@@ -589,8 +589,8 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
         cx = _wx0 + length * 0.5 + 0.01 + dx
         if cx + length * 0.5 > _wx1 - 0.15:
             break
-        min_y = _wy0 + width * 0.5 + 0.15
-        max_y = _wy1 - width * 0.5 - 0.15
+        min_y = ry0 + width * 0.5 + 0.15
+        max_y = ry1 - width * 0.5 - 0.15
         for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
             if tracker.is_near_door(cx, cy, radius=1.60):
                 continue
@@ -616,8 +616,8 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
 
     # 3. Try North wall (headboard at +Y, bed extends -Y into room)
     cy = _wy1 - length * 0.5 - 0.01
-    min_x = _wx0 + width * 0.5 + 0.15
-    max_x = _wx1 - width * 0.5 - 0.15
+    min_x = rx0 + width * 0.5 + 0.15
+    max_x = rx1 - width * 0.5 - 0.15
     for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
         if tracker.is_near_door(cx, cy, radius=1.60):
             continue
@@ -4177,7 +4177,17 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         floor_void=_floor_void
     )
     # Real (uninset) room bounds: wall-anchored pieces sit flush to these.
+    # Prefer the TRUE interior walls for the floor (the room itself may be
+    # inset a metre+ off a wall that carries a flight elsewhere); the precise
+    # stair/door/prop boxes still reject any slot the flight actually uses.
     tracker.room_bounds = (rx0, rx1, ry0, ry1)
+    if ctx is not None:
+        _fwb = (getattr(ctx, 'floor_wall_bounds', None) or {}).get(
+            rm.floor_idx)
+        _wt = float(getattr(ctx, 'wall_t', 0.30) or 0.30)
+        if _fwb is not None:
+            tracker.room_bounds = (_fwb[0] + _wt, _fwb[1] - _wt,
+                                   _fwb[2] + _wt, _fwb[3] - _wt)
     tracker.stair_hole = _stair_well
     # Turned-stair rooms are pre-inset off the walls that carry a flight, so
     # the generic side pad would double-dip and deny the whole inset wall.
@@ -4190,7 +4200,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         except ValueError:
             pass
         _sx0, _sx1, _sy0, _sy1 = _stair_well
-        tracker.stair_box = (_sx0 - 0.15, _sx1 + 0.15,
+        tracker.stair_box = (_sx0 - 0.25, _sx1 + 0.25,
                              _sy0 - 2.10, _sy1 + 2.10)
         tracker.occupied_boxes.append(tracker.stair_box)
     # A ceiling stair-hole (no opening in THIS floor's own slab) sits over a

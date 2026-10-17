@@ -851,26 +851,35 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
             build_brewery_cellar(bm, props, ctx, tier)
         except Exception:
             pass
-    # Fishmonger yard: fish rails (the one rack variant) hung with the catch,
-    # flanking the entrance but clear of the supply barrels/crates.
+    # Fishmonger yard: fish rails hug the front wall, flanking the entrance
+    # with the door path kept clear. Higher tiers work more rails (bigger
+    # catch). Footprints are published so the supply nook never lands on one.
     if getattr(ctx, 'effective_archetype', '') == 'FISHERMAN':
         try:
             from .artisan_props import build_fish_rail
             from .hospitality import is_point_outside_building
-            _fy = -hy - 1.60
-            _fx = max(1.0, hx - 1.05)
-            _cands = [
-                (-_fx, _fy, 0.0),
-                (_fx, _fy, 0.0),
-                (-_fx, _fy - 1.8, 0.0),
-                (_fx, _fy - 1.8, 0.0),
-            ]
+            _door_x = ctx.main_door_cx
+            _n_want = 2 if tier == 'TIER_1' else (4 if tier == 'TIER_2' else 5)
+            _ry = -hy - 0.75
+            _offs = []
+            _step, _start = 1.45, 2.05
+            for _k in range(6):
+                _offs.append(-(_start + _k * _step))
+                _offs.append(_start + _k * _step)
+            ctx.fisher_rails = []
             _n = 0
-            for _px, _py, _pyaw in _cands:
-                if _n >= 2:
+            for _ox in _offs:
+                if _n >= _n_want:
                     break
-                if is_point_outside_building(_px, _py, 0.85, ctx, margin=0.35):
-                    build_fish_rail(bm, _px, _py, 0.0, _pyaw, width=1.15)
+                if abs(_ox) < 1.55:
+                    continue  # door path stays clear (rack half-width + margin)
+                _px = _door_x + _ox
+                # Rack frame is ~0.5 deep: 0.45 radius + 0.10 margin tucks it
+                # against the wall instead of stranding it mid-yard.
+                if is_point_outside_building(_px, _ry, 0.45, ctx, margin=0.10):
+                    build_fish_rail(bm, _px, _ry, 0.0, 0.0, width=1.15)
+                    ctx.fisher_rails.append((_px - 0.65, _px + 0.65,
+                                             _ry - 0.45, _ry + 0.45))
                     _n += 1
         except Exception:
             pass
