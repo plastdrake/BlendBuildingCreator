@@ -292,11 +292,11 @@ def build_floors(bm, props, ctx):
                                     _shy - 1.80, _shy + 1.80)
         else:
             if getattr(props, 'has_throne_room', False):
-                # Basement stairs in the room to the right (East Bay, X in [8.20, 11.60], leaving 2.2m clear landing to West wall at x=6.0)
+                # Basement stairs in the room to the right (East Bay, X in [6.80, 11.40])
                 bs_y0 = 4.00
                 bs_y1 = 5.40
-                bs_x0 = 8.20
-                bs_x1 = 11.60
+                bs_x0 = 6.80
+                bs_x1 = 11.40
             else:
                 # Legacy rear stair hall (north strip), flight runs east-west.
                 # Top step starts at x=1.10 to leave a solid flat entrance landing
