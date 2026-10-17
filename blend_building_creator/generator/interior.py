@@ -754,15 +754,29 @@ def build_turned_flight(bm, foot_xy, top_xy, z0, z1, width, along_axis='Y',
     foot, rotating ONLY the newly added verts so nothing else is disturbed."""
     fx, fy = foot_xy
     tx, ty = top_xy
+    dz = abs(z1 - z0)
+    run = abs(ty - fy) if along_axis == 'Y' else abs(tx - fx)
+    # Treads first: keep every step ~0.30 m deep so long runs don't look
+    # stretched and short runs don't look mushed; cap riser height so short
+    # flights stay climable. Derive per-flight instead of a fixed 14 steps,
+    # which stretched long runs (e.g. 12 m) and mushed short ones (e.g. 1.5 m).
+    num_steps = max(4, int(round(run / 0.30)))
+    num_steps = max(num_steps, int(round(dz / 0.45)))
+    if run / num_steps > 0.35:
+        num_steps = max(num_steps, int(round(run / 0.35)))
     if along_axis == 'Y':
-        run = abs(ty - fy)
         direction = 1 if ty >= fy else -1
         build_straight_staircase(bm, (fx, fy, z0), z1, stair_width=width,
                                  stair_depth=run, num_steps=num_steps,
                                  direction_y=direction,
                                  base_anchor=base_anchor, top_anchor=top_anchor)
         return
+    dz = abs(z1 - z0)
     run = abs(tx - fx)
+    num_steps = max(4, int(round(run / 0.30)))
+    num_steps = max(num_steps, int(round(dz / 0.45)))
+    if run / num_steps > 0.35:
+        num_steps = max(num_steps, int(round(run / 0.35)))
     before = set(bm.verts)
     build_straight_staircase(bm, (fx, fy, z0), z1, stair_width=width,
                              stair_depth=run, num_steps=num_steps,
@@ -1289,6 +1303,10 @@ _INTERIOR_PROGRAMS = {
         'ground': ('STABLE_HALL',),
         'upper': ('STABLE_HALL',),
     },
+    'ARMORY': {
+        'ground': ('ARMORY', 'STORAGE', 'ENTRANCE_HALL'),
+        'upper': ('ARMORY', 'STORAGE', 'ENTRANCE_HALL'),
+    },
 }
 
 _ARCHETYPE_PROGRAM = {
@@ -1296,6 +1314,7 @@ _ARCHETYPE_PROGRAM = {
     'TAVERN': 'HOSPITALITY', 'INN': 'HOSPITALITY',
     'TOWN_HALL': 'CIVIC', 'CIVIC': 'CIVIC', 'GUILDHALL': 'CIVIC',
     'BARRACKS': 'MILITARY', 'INFANTRY_BARRACKS': 'MILITARY', 'KNIGHTS_MANOR': 'MILITARY',
+    'ARMORY': 'ARMORY',
     'PALACE': 'PALACE', 'CASTLE': 'PALACE', 'NASHERS_MANOR': 'PALACE',
     'STABLE': 'STABLE',
     'ARCHERY': 'RANGER', 'ARCHERY_RANGE': 'RANGER',
@@ -1371,8 +1390,11 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             else:
                 pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM']
             return pool[:num_rooms]
+        elif archetype == 'ARMORY':
+            pool = ['STAIR_LANDING', 'ARMORY', 'STORAGE', 'DRILL_HALL']
+            return pool[:num_rooms]
         elif archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):
-            pool = ['STAIR_LANDING', 'BARRACKS_DORM', 'BARRACKS_DORM', 'OFFICER_QUARTERS']
+            pool = ['STAIR_LANDING', 'ARMORY', 'STORAGE', 'OFFICER_QUARTERS']
             return pool[:num_rooms]
         elif archetype in ('KNIGHTS_MANOR',):
             pool = ['STAIR_LANDING', 'BARRACKS_DORM', 'OFFICER_QUARTERS', 'ARMORY', 'BARRACKS_DORM']
@@ -1429,8 +1451,12 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         pool = _ARTISAN_GROUND.get(archetype, ['STORE', 'WORKSHOP', 'STORAGE', 'PANTRY'])
         return pool[:num_rooms]
 
+    if archetype == 'ARMORY':
+        pool = ['ARMORY', 'STORAGE', 'DRILL_HALL', 'ENTRANCE_HALL']
+        return pool[:num_rooms]
+
     if archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):
-        pool = ['DRILL_HALL', 'MESS_HALL', 'ARMORY', 'STORAGE']
+        pool = ['ARMORY', 'STORAGE', 'DRILL_HALL', 'MESS_HALL']
         return pool[:num_rooms]
 
     if archetype in ('KNIGHTS_MANOR',):
@@ -1747,7 +1773,8 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
     x_dw_spans = []
     margin = 0.55
     for ed in (extra_doorways or []):
-        if ed.get('axis', 'X') == 'X':
+        sax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
+        if sax == 'X':
             dcx = ed.get('x', ed.get('pos', 0.0))
             d_w = ed.get('w', 1.4)
             x_dw_spans.append((dcx - d_w * 0.5 - margin, dcx + d_w * 0.5 + margin))
@@ -1963,12 +1990,23 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             # Split front/back into 2 comfortable domestic rooms!
             y_h = y_mid
             for ed in (extra_doorways or []):
-                if ed.get('axis') == 'Y':
+                sax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
+                if sax == 'Y':
                     ey = ed.get('y', ed.get('pos', 0.0))
                     ew = ed.get('w', 1.2)
-                    if abs(y_h - ey) <= ew * 0.5 + 0.40:
-                        y_h = ey - ew * 0.5 - 0.45 if y_h < ey else ey + ew * 0.5 + 0.45
-            _hwall(cx0, cx1, y_h, (cx0 + cx1) * 0.5)
+                    is_on_col_wall = (ci == 0 and (ed.get('facade') == 'LEFT' or abs(ed.get('x', 0) - ix_min) < 0.5)) or \
+                                     (ci == len(cols) - 1 and (ed.get('facade') == 'RIGHT' or abs(ed.get('x', 0) - ix_max) < 0.5))
+                    if is_on_col_wall:
+                        d_margin = ew * 0.5 + 0.55
+                        if abs(y_h - ey) < d_margin:
+                            cands_y = [p for p in (ey - d_margin, ey + d_margin) if iy_min + 1.8 <= p <= iy_max - 1.8]
+                            if cands_y:
+                                y_h = min(cands_y, key=lambda p: abs(p - y_mid))
+                            else:
+                                y_h = None
+                                break
+            if y_h is not None:
+                _hwall(cx0, cx1, y_h, (cx0 + cx1) * 0.5)
             if fl_idx == 0:
                 r_south = 'KITCHEN' if ci == 0 else 'PANTRY'
                 r_north = 'PANTRY' if ci == 0 else 'STORAGE'
