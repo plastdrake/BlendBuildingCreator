@@ -756,14 +756,12 @@ def build_turned_flight(bm, foot_xy, top_xy, z0, z1, width, along_axis='Y',
     tx, ty = top_xy
     dz = abs(z1 - z0)
     run = abs(ty - fy) if along_axis == 'Y' else abs(tx - fx)
-    # Treads first: keep every step ~0.30 m deep so long runs don't look
-    # stretched and short runs don't look mushed; cap riser height so short
-    # flights stay climable. Derive per-flight instead of a fixed 14 steps,
-    # which stretched long runs (e.g. 12 m) and mushed short ones (e.g. 1.5 m).
-    num_steps = max(4, int(round(run / 0.30)))
-    num_steps = max(num_steps, int(round(dz / 0.45)))
-    if run / num_steps > 0.35:
-        num_steps = max(num_steps, int(round(run / 0.35)))
+    # Balance riser (~0.185 m) and tread (~0.30 m) so no flight is stretched
+    # (deep treads) or mushed (short treads): pick the step count that keeps
+    # BOTH within comfortable bounds, clamped to a sane range.
+    steps_rise = max(2, int(round(dz / 0.185)))
+    steps_run = max(2, int(round(run / 0.30)))
+    num_steps = max(4, min(24, min(steps_rise, steps_run)))
     if along_axis == 'Y':
         direction = 1 if ty >= fy else -1
         build_straight_staircase(bm, (fx, fy, z0), z1, stair_width=width,
@@ -773,10 +771,9 @@ def build_turned_flight(bm, foot_xy, top_xy, z0, z1, width, along_axis='Y',
         return
     dz = abs(z1 - z0)
     run = abs(tx - fx)
-    num_steps = max(4, int(round(run / 0.30)))
-    num_steps = max(num_steps, int(round(dz / 0.45)))
-    if run / num_steps > 0.35:
-        num_steps = max(num_steps, int(round(run / 0.35)))
+    steps_rise = max(2, int(round(dz / 0.185)))
+    steps_run = max(2, int(round(run / 0.30)))
+    num_steps = max(4, min(24, min(steps_rise, steps_run)))
     before = set(bm.verts)
     build_straight_staircase(bm, (fx, fy, z0), z1, stair_width=width,
                              stair_depth=run, num_steps=num_steps,

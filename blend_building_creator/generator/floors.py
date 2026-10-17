@@ -777,7 +777,7 @@ def build_floors(bm, props, ctx):
                 # DIFFERENT wall and runs the full length of that wall, so an
                 # upper flight is never beside or above the one below it, and
                 # the middle of the floor is left free for the rooms.
-                _lane = stair_w * 0.5 + 0.30
+                _lane = stair_w * 0.5 + 0.10
                 _ax0 = fl0_ix_min + 0.06 + _lane
                 _ax1 = fl0_ix_max - 0.06 - _lane
                 _ay0 = fl0_iy_min + 0.06 + _lane
@@ -791,9 +791,10 @@ def build_floors(bm, props, ctx):
                 # Each corner holds TWO separate 2x2 landings side by side: the
                 # arriving flight owns the corner (its top landing), and the
                 # departing flight starts 2x2 further along its own wall so the
-                # two landings are adjacent but never overlap. (The very first
-                # flight starts at the ground corner with just its own landing.)
-                _fo = 1.0 if (fl_idx % 4) == 0 else 3.0
+                # two landings are adjacent but never overlap. Every flight
+                # starts 1m from its corner so every flight gets the same
+                # generous run (no short mushed flights on narrow axes).
+                _fo = 1.0
                 _foot = (_a[0] + _ux * _fo, _a[1] + _uy * _fo)
                 _tip = (_b[0] - _ux * 1.0, _b[1] - _uy * 1.0)
                 build_turned_flight(bm, _foot, _tip, z_floor + 0.05,
