@@ -399,10 +399,10 @@ def build_floors(bm, props, ctx):
             _turn_col_x0 = fl0_ix_min + 0.08
         _turn_col_y0 = fl0_iy_min + 0.08
         _lane = stair_w * 0.5 + 0.10
-        _ax0 = fl0_ix_min + 0.06 + _lane
-        _ax1 = fl0_ix_max - 0.06 - _lane
-        _ay0 = fl0_iy_min + 0.06 + _lane
-        _ay1 = fl0_iy_max - 0.06 - _lane
+        _ax0 = _turn_col_x0 + 0.06 + _lane
+        _ax1 = _turn_col_x0 + _turn_col_w - 0.06 - _lane
+        _ay0 = _turn_col_y0 + 0.06 + _lane
+        _ay1 = _turn_col_y0 + _turn_col_d - 0.06 - _lane
         _corners = [(_ax0, _ay0), (_ax0, _ay1), (_ax1, _ay1), (_ax1, _ay0)]
         _turn_cur = _corners[0]
 
@@ -782,27 +782,33 @@ def build_floors(bm, props, ctx):
                 # Corner-loop turned stair: every storey's flight is a NORMAL
                 # straight flight (~6 m run, comfortable tread/riser) that
                 # turns 90° each storey and spirals around the stair column.
-                # No flight ever spans the whole room depth, so nothing looks
-                # stretched and floor space stays free at every landing for
-                # walking off into the rooms.
+                # Each corner holds a 2×2 landing BETWEEN flights so landings
+                # never overlap and you can always walk off into the rooms.
                 _dz = z_ceil - z_floor
                 _max_run = _dz / math.tan(math.radians(30))   # ~30° angle
                 _max_run = max(3.0, min(_max_run, 6.0))        # clamp 3–6 m
-                _dirs = [(0.0, 1.0), (1.0, 0.0), (0.0, -1.0), (-1.0, 0.0)]
-                _ux, _uy = _dirs[fl_idx % 4]
+                _lane = stair_w * 0.5 + 0.10
+                _ax0 = _turn_col_x0 + 0.06 + _lane
+                _ax1 = _turn_col_x0 + _turn_col_w - 0.06 - _lane
+                _ay0 = _turn_col_y0 + 0.06 + _lane
+                _ay1 = _turn_col_y0 + _turn_col_d - 0.06 - _lane
+                _corners = [(_ax0, _ay0), (_ax0, _ay1), (_ax1, _ay1), (_ax1, _ay0)]
+                _corner = _corners[fl_idx % 4]
+                _nxt = _corners[(fl_idx + 1) % 4]
+                _ux = 0.0 if abs(_nxt[0] - _corner[0]) < 1e-6 else (1.0 if _nxt[0] > _corner[0] else -1.0)
+                _uy = 0.0 if abs(_nxt[1] - _corner[1]) < 1e-6 else (1.0 if _nxt[1] > _corner[1] else -1.0)
                 _axis = 'Y' if abs(_uy) > abs(_ux) else 'X'
-                # Available run in this direction before hitting the column wall.
-                if _ux > 0:
-                    _avail = _ax1 - _turn_cur[0]
-                elif _ux < 0:
-                    _avail = _turn_cur[0] - _ax0
-                elif _uy > 0:
-                    _avail = _ay1 - _turn_cur[1]
-                else:
-                    _avail = _turn_cur[1] - _ay0
-                _run = min(_max_run, _avail)
-                _foot = _turn_cur
-                _tip = (_turn_cur[0] + _ux * _run, _turn_cur[1] + _uy * _run)
+                # Foot 1 m inside current corner landing, tip 1 m inside next
+                # corner landing — landings sit BETWEEN flights, never overlap.
+                _foot = (_corner[0] + _ux * 1.0, _corner[1] + _uy * 1.0)
+                _tip = (_nxt[0] - _ux * 1.0, _nxt[1] - _uy * 1.0)
+                _run = abs(_tip[1] - _foot[1]) if _uy != 0 else abs(_tip[0] - _foot[0])
+                if _run > _max_run:
+                    _scale = _max_run / _run
+                    _mid = ((_foot[0] + _tip[0]) / 2, (_foot[1] + _tip[1]) / 2)
+                    _foot = (_mid[0] - _ux * _max_run / 2, _mid[1] - _uy * _max_run / 2)
+                    _tip = (_mid[0] + _ux * _max_run / 2, _mid[1] + _uy * _max_run / 2)
+                    _run = _max_run
                 build_turned_flight(bm, _foot, _tip, z_floor + 0.05,
                                     z_ceil + 0.05, stair_w, along_axis=_axis)
                 # Reserve a clear 2x2 approach at the foot of this flight so
@@ -826,8 +832,6 @@ def build_floors(bm, props, ctx):
                     _open = 'E' if _ux > 0 else 'W'
                 next_stair_hole = (_hx0, _hx1, _hy0, _hy1)
                 _turn_hole_info[fl_idx + 1] = (next_stair_hole, _open)
-                # The next flight starts where this one ends, turned 90°.
-                _turn_cur = _tip
             else:
                 if is_tenement_stairs and D_interior >= 7.4:
                     # Single-wall tandem stair for tenements: all flights hug the same wall
