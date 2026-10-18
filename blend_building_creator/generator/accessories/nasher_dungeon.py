@@ -343,12 +343,14 @@ def build_nasher_dungeon(bm, tier):
     _box(bm, bs_x0 - t_w, corr_x0, bs_y0 - t_w, bs_y0, 9.50, z_top_casing, WALL)
     # South headwall above the wide corridor opening, sealing the stair hall up to the Keep floor:
     _box(bm, corr_x0, corr_x1 + t_w, bs_y0 - t_w, bs_y0, 13.00, z_top_casing, WALL)
-    # West wall of the connecting corridor:
-    _box(bm, corr_x0 - t_w, corr_x0, 45.80, bs_y0, 9.50, 13.00, WALL)
+    # West wall of the connecting corridor (full height up to upper floor slab):
+    _box(bm, corr_x0 - t_w, corr_x0, 45.80, bs_y0, 9.50, z_top_casing, WALL)
     # East wall along the stair landing (full height up to Keep floor):
     _box(bm, corr_x1, corr_x1 + t_w, bs_y0, bs_y1 + t_w, 9.50, z_top_casing, WALL)
-    # East wall of the connecting corridor (up to corridor ceiling):
-    _box(bm, corr_x1, corr_x1 + t_w, 45.80, bs_y0, 9.50, 13.00, WALL)
+    # East wall of the connecting corridor (full height up to upper floor slab):
+    _box(bm, corr_x1, corr_x1 + t_w, 45.80, bs_y0, 9.50, z_top_casing, WALL)
+    # South end headwall over the dungeon doorway at the end of the corridor, closing the gap up to the upper floor slab:
+    _box(bm, corr_x0 - t_w, corr_x1 + t_w, 45.75, 46.10, 12.50, z_top_casing, WALL)
     # Ceiling over the connecting corridor:
     _box(bm, corr_x0 - t_w, corr_x1 + t_w, 45.80, bs_y0, 12.80, 13.10, WALL)
     # Transverse heavy oak lintel beam across the entrance to the corridor at bs_y0:
