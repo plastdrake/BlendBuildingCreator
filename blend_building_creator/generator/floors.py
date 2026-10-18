@@ -22,7 +22,8 @@ from .style import is_tier1_wattle_daub, get_effective_wall_material
 from .interior import (
     build_floor_slab, build_ceiling_beams, build_interior_trims, build_straight_staircase,
     build_turned_flight, build_stair_landing, build_stair_guardrail_one_open,
-    build_spiral_staircase, build_stair_guardrail, build_stair_guardrail_3sided, plan_floor_rooms, build_floor_interior_walls
+    build_spiral_staircase, build_stair_guardrail, build_stair_guardrail_3sided,
+    build_stair_hole_trim, plan_floor_rooms, build_floor_interior_walls
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly
 from .accessories.cargo_port import build_cargo_port_frame
@@ -560,6 +561,8 @@ def build_floors(bm, props, ctx):
                 if not (_h[1] < slab_xmin or _h[0] > slab_xmax
                         or _h[3] < slab_ymin or _h[2] > slab_ymax):
                     _main_hole = _h
+                    build_stair_hole_trim(bm, _main_hole, slab_z, thickness=0.12,
+                                          mat_index=MAT_INDEX_TIMBER, open_side='W')
             _cur_void = (getattr(props, 'floor_voids', None) or getattr(ctx, 'floor_voids', None) or {}).get(fl_idx, None)
             if _cur_void is None and fl_idx == 1:
                 _f1_rooms = (getattr(ctx, 'floor_rooms', {}) or {}).get(1, [])
@@ -615,9 +618,21 @@ def build_floors(bm, props, ctx):
                 _vx0, _vx1, _vy0, _vy1 = _cur_void
                 build_mezzanine_void_railing(bm, _vx0, _vx1, _vy0, _vy1, z_floor + 0.05, height=0.98)
         
-        # Upper floor safety guardrail around stair opening
+        # Upper floor safety guardrail and timber trim around stair opening
         if fl_idx > 0 and props.has_stairs and cur_stair_hole is not None:
             sh_x1, sh_x2, sh_y1, sh_y2 = cur_stair_hole
+            # Timber curb trim capping the cut edges of the floor slab neatly
+            _open_side = None
+            if getattr(props, 'stair_style', 'STRAIGHT') == 'TURN':
+                _info = _turn_hole_info.get(fl_idx)
+                if _info is not None:
+                    _open_side = _info[1]
+            else:
+                dir_y = int(stair_ascend_sign) if ((fl_idx - 1) % 2 == 0) else int(-stair_ascend_sign)
+                _open_side = 'N' if dir_y == 1 else 'S'
+            build_stair_hole_trim(bm, cur_stair_hole, slab_z, thickness=0.12,
+                                  mat_index=MAT_INDEX_TIMBER, open_side=_open_side)
+
             rail_x = min(slab_xmax - 0.10, sh_x2 + 0.05)
             if getattr(props, 'stair_style', 'STRAIGHT') == 'TURN':
                 _info = _turn_hole_info.get(fl_idx)
@@ -728,6 +743,9 @@ def build_floors(bm, props, ctx):
                     stair_hole=_w_hole,
                     mat_idx=floor_mat
                 )
+                if fl_idx > 0 and _w_hole is not None:
+                    build_stair_hole_trim(bm, _w_hole, z_floor + 0.05, thickness=0.12,
+                                          mat_index=MAT_INDEX_TIMBER, open_side='N')
                 if fl_idx > 0 and fl_overhang > prev_fl_overhang:
                     overhang_step = fl_overhang - prev_fl_overhang
                     prev_wb = w_elem.get('bounds_fl', {}).get(fl_idx - 1, None)
@@ -856,7 +874,8 @@ def build_floors(bm, props, ctx):
                     stair_start = (stair_cx, y_foot, z_floor + 0.05)
                     build_straight_staircase(bm, stair_start, z_ceil + 0.05,
                                              stair_width=stair_w, stair_depth=stair_len,
-                                             direction_y=dir_y)
+                                             direction_y=dir_y,
+                                             bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax))
                     sh_y0 = min(y_foot, y_head) - 0.10
                     sh_y1 = max(y_foot, y_head) + 0.10
                     next_stair_hole = (stair_cx - stair_w * 0.5 - 0.08,
@@ -873,7 +892,8 @@ def build_floors(bm, props, ctx):
                         direction_y = int(-stair_ascend_sign)
                     build_straight_staircase(bm, stair_start, z_ceil + 0.05,
                                              stair_width=stair_w, stair_depth=stair_len,
-                                             direction_y=direction_y)
+                                             direction_y=direction_y,
+                                             bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax))
                     next_stair_hole = (lane_cx - stair_w * 0.5 - 0.08, lane_cx + stair_w * 0.5 + 0.12,
                                        stair_y_bot - 0.10, stair_y_top + 0.10)
             

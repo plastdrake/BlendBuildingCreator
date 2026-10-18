@@ -12,7 +12,7 @@ from ..materials import (
     MAT_INDEX_DUNGEON_WALL as WALL, MAT_INDEX_DUNGEON_FLOOR as FLOOR,
     MAT_INDEX_DUNGEON_BEAM as BEAM,
 )
-from ..mesh_utils import create_beveled_box, create_cylinder
+from ..mesh_utils import create_box, create_beveled_box, create_cylinder
 from .furniture import build_barrel, build_crate
 
 PAD_Z = 14.0
@@ -137,21 +137,63 @@ def _stair(bm, x_top, x_bot, z_top, z_bot, y0=None, y1=None):
     run = abs(x_bot - x_top) / n
     rise = (z_top - z_bot) / n
     sy0, sy1 = (STAIR_Y if y0 is None else (y0, y1))
+    from mathutils import Vector
+    uv_layer = bm.loops.layers.uv.verify()
+    nosing = 0.025 * sgn
+
+    # 1. Structural carriage ramp supporting the flight (kept clear of side rails)
+    diag_len = math.hypot(abs(x_bot - x_top), abs(z_top - z_bot))
+    pitch = math.atan2(z_bot - z_top, abs(x_bot - x_top)) * sgn
+    cx_ramp = (x_top + x_bot) * 0.5
+    cz_ramp = (z_top + z_bot) * 0.5 - 0.25
+    create_box(
+        bm, size=(diag_len, (sy1 - sy0) - 0.12, 0.30),
+        location=(cx_ramp, (sy0 + sy1) * 0.5, cz_ramp),
+        rotation=(0.0, -pitch, 0.0),
+        mat_index=WALL
+    )
+
+    # 2. Individual step tread slabs and risers (zero coplanar face collisions)
+    tread_t = 0.06
     for i in range(n):
         top = z_top - (i + 1) * rise
         if top <= z_bot + 0.03:
             break
         xa = x_top + sgn * i * run
-        xb = xa + sgn * run
-        _box(bm, min(xa, xb), max(xa, xb), sy0, sy1, z_bot, top, FLOOR)
+        xc = xa + sgn * (run * 0.5 + 0.015)
+        step_faces = create_beveled_box(
+            bm, size=(run + 0.03, sy1 - sy0, tread_t),
+            location=(xc, (sy0 + sy1) * 0.5, top - tread_t * 0.5),
+            mat_index=FLOOR, bevel_amount=0.01
+        )
+        for f in step_faces:
+            if not f.is_valid:
+                continue
+            for loop in f.loops:
+                co = loop.vert.co
+                v = (co.y - (sy0 + sy1) * 0.5) * 0.85
+                u = (co.x - xc) * 1.5 + (co.z - top) * 1.5
+                loop[uv_layer].uv = Vector((u, v))
+            f.tag = True
 
-    # Proper normal timber handrails following the stair flight slope on both sides
+        # Riser beneath tread (top embedded 6mm into tread slab to eliminate coplanar contact)
+        if rise > tread_t + 0.01:
+            riser_h = rise - tread_t + 0.006
+            r_faces = create_box(
+                bm, size=(0.04, sy1 - sy0 - 0.02, riser_h),
+                location=(xa, (sy0 + sy1) * 0.5, top - rise + riser_h * 0.5),
+                mat_index=WALL
+            )
+
+    # Proper timber handrails following the stair flight slope
     from ..railing import build_railing
-    for sy in (sy0, sy1):
+    # If sy1 is against the north wall, only build on the open side sy0
+    rail_sides = (sy0,) if (y0 is not None and abs(sy1 - 52.40) < 0.20) else (sy0, sy1)
+    for sy in rail_sides:
         build_railing(bm, (x_top, sy), (x_bot, sy),
                       base_z=z_top, base_z_end=z_bot,
                       height=0.95, post_spacing=1.80, baluster_spacing=0.25,
-                      braces=False)
+                      braces=False, end_overhang=0.0)
 
 
 
@@ -228,6 +270,11 @@ _KINDS = (
 
 def _level(bm, i, zf, depart_hole):
     _slab(bm, zf, hole=depart_hole)
+    if depart_hole is not None:
+        from ..interior import build_stair_hole_trim
+        open_side = 'W' if STAIRS[i][0] < STAIRS[i][1] else 'E'
+        build_stair_hole_trim(bm, depart_hole, zf, thickness=0.30,
+                              mat_index=BEAM, open_side=open_side, curb_w=0.10)
     _wall(bm, True, Y0, X0, X1, zf)
     _y1_doors = ((4.40, 2.6),) if i == 0 else ()
     _wall(bm, True, Y1, X0, X1, zf, doors=_y1_doors)
@@ -376,26 +423,18 @@ def build_nasher_dungeon(bm, tier):
     _box(bm, bs_x1 - 0.05, corr_x1 + 0.05, 51.50, 51.70, z_top_casing - 0.22, z_top_casing, BEAM, long_axis=0)
 
     # Timber well-hole curb trimmers capping the floor slab edges neatly around the shaft opening in the wing
-    trim_w = 0.14
-    trim_h = 0.18
-    _box(bm, bs_x0 - trim_w, bs_x1 + trim_w, bs_y1, bs_y1 + trim_w, z_keep_floor - trim_h, z_keep_floor + 0.01, BEAM, long_axis=0)
-    _box(bm, bs_x0 - trim_w, bs_x1 + trim_w, bs_y0 - trim_w, bs_y0, z_keep_floor - trim_h, z_keep_floor + 0.01, BEAM, long_axis=0)
-    _box(bm, bs_x1, bs_x1 + trim_w, bs_y0, bs_y1, z_keep_floor - trim_h, z_keep_floor + 0.01, BEAM, long_axis=1)
+    from ..interior import build_stair_hole_trim
+    build_stair_hole_trim(bm, (bs_x0, bs_x1, bs_y0, bs_y1), z_keep_floor,
+                          thickness=0.18, mat_index=BEAM, open_side='W', curb_w=0.08)
 
     # 6. Straight stair flight along X in the Keep Back Wing: top step starts at bs_x0,
     # descending eastward down to Level 0 floor at z = 9.50.
     _stair(bm, bs_x0, bs_x1 - 0.20, z_keep_floor, LEVEL_Z[0], y0=bs_y0 + 0.05, y1=bs_y1 - 0.05)
 
-    # 7. Timber guard railing around the stair opening on the Keep floor:
-    # Offset 0.08m outward so the railing sits firmly on the wooden floor planks,
-    # with zero post/baluster clipping through the shaft opening edge.
-    # West edge (x = bs_x0) remains open for walking down the stairs!
-    r_off = 0.08
-    build_railing(bm, (bs_x0, bs_y0 - r_off), (bs_x1 + r_off, bs_y0 - r_off), z_keep_floor,
-                  height=0.95, post_spacing=1.60, baluster_spacing=0.25, braces=False)
-    build_railing(bm, (bs_x1 + r_off, bs_y0 - r_off), (bs_x1 + r_off, bs_y1 + r_off), z_keep_floor,
+    # 7. Timber guard railing across the foot end of the Keep floor stairwell:
+    # North side has solid masonry wall; south side is guarded by the stair flight's own sloped handrail.
+    # The foot end (East) guards the open void from the south stair rail post to the north wall:
+    build_railing(bm, (bs_x1 + 0.02, bs_y0 + 0.05), (bs_x1 + 0.02, bs_y1 - 0.05), z_keep_floor,
                   height=0.95, post_spacing=1.60, baluster_spacing=0.25, braces=False,
-                  post_at_start=False, post_at_end=False)
-    build_railing(bm, (bs_x0, bs_y1 + r_off), (bs_x1 + r_off, bs_y1 + r_off), z_keep_floor,
-                  height=0.95, post_spacing=1.60, baluster_spacing=0.25, braces=False)
+                  end_overhang=0.0)
 

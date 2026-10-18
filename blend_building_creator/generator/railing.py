@@ -87,7 +87,7 @@ def _rail_beam(bm, x0, y0, x1, y1, z0, z1, cross_w, cross_t, mat, bevel=0.010):
 
 def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
                   rail_mat=MAT_INDEX_TIMBER, baluster_mat=MAT_INDEX_TIMBER,
-                  end_overhang=0.08, post_spacing=1.60, baluster_spacing=0.25,
+                  end_overhang=0.0, post_spacing=1.60, baluster_spacing=0.25,
                   braces=False, iron_pins=False, posts=True, jankiness=0.15,
                   seed=0, has_sill=True, post_at_start=True, post_at_end=True):
     """Build a clean, optimized guard railing from p_start to p_end at floor level base_z.
@@ -110,10 +110,11 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
     def at(t):
         return (x0 + dx * t, y0 + dy * t, z0 + (z1 - z0) * t)
 
-    # 1. Grounded base sill rail, following slope (optional, omitted when stringer serves as sill)
+    # 1. Grounded base sill rail, following slope (optional, omitted when stringer serves as sill).
+    # Lifted 3mm above floor plane to completely eliminate any coplanar z-fighting with floorboards.
     if has_sill:
         _rail_beam(bm, x0, y0, x1, y1,
-                   z0 + SILL_T * 0.5, z1 + SILL_T * 0.5,
+                   z0 + 0.003 + SILL_T * 0.5, z1 + 0.003 + SILL_T * 0.5,
                    SILL_W, SILL_T, rail_mat, bevel=0.010)
 
     # 2. Handrail and cap board
@@ -125,8 +126,14 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
     _rail_beam(bm, rx0, ry0, rx1, ry1,
                z0 + height - RAIL_T * 0.5, z1 + height - RAIL_T * 0.5,
                RAIL_W, RAIL_T, rail_mat, bevel=0.010)
-    _rail_beam(bm, rx0, ry0, rx1, ry1,
-               z0 + height + CAP_T * 0.5, z1 + height + CAP_T * 0.5,
+    # Embedded 2mm into handrail so bottom face is buried inside solid beam (zero coplanar face conflict),
+    # and offset 3mm at ends so cap end cut faces never share planes with handrail beam end cuts.
+    cx0 = rx0 - ux * 0.003
+    cy0 = ry0 - uy * 0.003
+    cx1 = rx1 + ux * 0.003
+    cy1 = ry1 + uy * 0.003
+    _rail_beam(bm, cx0, cy0, cx1, cy1,
+               z0 + height + CAP_T * 0.5 - 0.002, z1 + height + CAP_T * 0.5 - 0.002,
                CAP_W, CAP_T, baluster_mat, bevel=0.008)
 
     # 3. Newel posts: both ends plus evenly spaced in between

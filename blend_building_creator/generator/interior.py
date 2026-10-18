@@ -317,66 +317,140 @@ def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
         add_trim_segment(x1, y1, x2, y2, inward,
                          z_ceil - trim_h_ceil * 0.5 - 0.008, 0.026, trim_h_ceil, 0.008)
 
+def build_stair_hole_trim(bm, hole, floor_z, thickness=0.12, mat_index=MAT_INDEX_TIMBER,
+                          open_side=None, curb_w=0.06):
+    """
+    Builds a neat timber curb trim framing the 4 cut edges of a floor slab around a stair opening.
+    Capping timbers sit directly over the cut edges, preventing any raw board ends from showing.
+    Closed sides are raised 8mm proud of the floor (floor_z + 0.008) and extend 8mm below the soffit
+    (floor_z - thickness - 0.008) to completely eliminate any coplanar z-fighting with floor planks or ceiling.
+    The open/walk-off side sits at floor_z + 0.002 (2mm beveled threshold) for a smooth walking surface.
+    """
+    if hole is None:
+        return
+    hx0, hx1, hy0, hy1 = hole
+    if hx1 - hx0 < 0.20 or hy1 - hy0 < 0.20:
+        return
+
+    hw = curb_w * 0.5
+    z_bot = floor_z - thickness - 0.008
+
+    # Edge definitions: (side, x0, x1, y0, y1, axis)
+    # North and South curbs span full X. West and East curbs fit cleanly between them
+    # with a 1mm hairline carpentry seam (0.001m), making all 4 board bounding boxes
+    # strictly disjoint in 3D space with ZERO coplanar face or volume overlap.
+    edges = [
+        ('S', hx0 - hw, hx1 + hw, hy0 - hw, hy0 + hw, 'X'),
+        ('N', hx0 - hw, hx1 + hw, hy1 - hw, hy1 + hw, 'X'),
+        ('W', hx0 - hw, hx0 + hw, hy0 + hw + 0.001, hy1 - hw - 0.001, 'Y'),
+        ('E', hx1 - hw, hx1 + hw, hy0 + hw + 0.001, hy1 - hw - 0.001, 'Y'),
+    ]
+
+    uv_layer = bm.loops.layers.uv.verify()
+
+    for side, x0, x1, y0, y1, axis in edges:
+        if x1 - x0 < 0.01 or y1 - y0 < 0.01:
+            continue
+        is_open = (side == open_side)
+        z_top = floor_z + (0.002 if is_open else 0.008)
+        cx = (x0 + x1) * 0.5
+        cy = (y0 + y1) * 0.5
+        cz = (z_bot + z_top) * 0.5
+        sx = x1 - x0
+        sy = y1 - y0
+        sz = z_top - z_bot
+
+        faces = create_beveled_box(
+            bm, size=(sx, sy, sz), location=(cx, cy, cz),
+            mat_index=mat_index, bevel_amount=0.006
+        )
+        for f in faces:
+            if not f.is_valid:
+                continue
+            for loop in f.loops:
+                co = loop.vert.co
+                if axis == 'X':
+                    v = (co.x - cx) * 0.85
+                    u = (co.y - cy) * 1.5 + (co.z - cz) * 1.5
+                else:
+                    v = (co.y - cy) * 0.85
+                    u = (co.x - cx) * 1.5 + (co.z - cz) * 1.5
+                loop[uv_layer].uv = Vector((u, v))
+            f.tag = True
+
+
 def build_stair_guardrail_3sided(bm, sh_x1, sh_x2, sh_y1, sh_y2, floor_z,
                                  climb_side='NORTH', offset=0.18, rail_h=0.95,
                                  bounds=None):
     """
-    Builds a 3-sided safety guardrail on the upper floor around the stairwell opening,
-    offset 18 cm (0.18m) outward from the hole so it never overlaps the stair structure or posts.
+    Builds a safety guardrail on the upper floor around the stairwell opening,
+    offset outward from the hole so it never overlaps the stair structure or posts.
     The side we climb up from the stairs is kept open.
+    Any side that is against an exterior or partition wall is skipped to prevent wall intersection.
     Corner posts are cleanly shared so there is zero overlap between adjacent railing segments.
     """
     slab_xmin, slab_xmax, slab_ymin, slab_ymax = bounds if bounds else (-999.0, 999.0, -999.0, 999.0)
+    has_west_wall = (sh_x1 - slab_xmin < 0.45)
+    has_east_wall = (slab_xmax - sh_x2 < 0.45)
+    has_south_wall = (sh_y1 - slab_ymin < 0.45)
+    has_north_wall = (slab_ymax - sh_y2 < 0.45)
+
     x_left = max(slab_xmin + 0.08, sh_x1 - offset)
     x_right = min(slab_xmax - 0.08, sh_x2 + offset)
     
     if climb_side == 'NORTH':
         y_foot = max(slab_ymin + 0.08, sh_y1 - offset)
         y_climb = min(slab_ymax - 0.08, sh_y2)
-        # Left long railing (corner post at y_foot, end post at y_climb)
-        build_railing(bm, (x_left, y_foot), (x_left, y_climb), floor_z, height=rail_h,
-                      post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                      post_at_start=True, post_at_end=True)
-        # Right long railing (corner post at y_foot, end post at y_climb)
-        build_railing(bm, (x_right, y_foot), (x_right, y_climb), floor_z, height=rail_h,
-                      post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                      post_at_start=True, post_at_end=True)
-        # Return short railing across closed foot end (skips corner posts as side rails placed them)
-        if x_right - x_left > 0.3:
-            build_railing(bm, (x_left, y_foot), (x_right, y_foot), floor_z, height=rail_h,
+        # Left long railing (only if not against wall)
+        if not has_west_wall:
+            build_railing(bm, (x_left, y_foot), (x_left, y_climb), floor_z, height=rail_h,
                           post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                          post_at_start=False, post_at_end=False)
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        # Right long railing (only if not against wall)
+        if not has_east_wall:
+            build_railing(bm, (x_right, y_foot), (x_right, y_climb), floor_z, height=rail_h,
+                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        # Return short railing across closed foot end (offset 1.5mm to eliminate coplanar intersection at corner posts)
+        if not has_south_wall and (x_right - x_left > 0.3):
+            build_railing(bm, (x_left, y_foot), (x_right, y_foot), floor_z + 0.0015, height=rail_h - 0.003,
+                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
+                          post_at_start=has_west_wall, post_at_end=has_east_wall,
+                          end_overhang=0.0)
     else:  # climb_side == 'SOUTH'
         y_foot = min(slab_ymax - 0.08, sh_y2 + offset)
         y_climb = max(slab_ymin + 0.08, sh_y1)
         # Left long railing
-        build_railing(bm, (x_left, y_climb), (x_left, y_foot), floor_z, height=rail_h,
-                      post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                      post_at_start=True, post_at_end=True)
-        # Right long railing
-        build_railing(bm, (x_right, y_climb), (x_right, y_foot), floor_z, height=rail_h,
-                      post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                      post_at_start=True, post_at_end=True)
-        # Return short railing across closed foot end
-        if x_right - x_left > 0.3:
-            build_railing(bm, (x_left, y_foot), (x_right, y_foot), floor_z, height=rail_h,
+        if not has_west_wall:
+            build_railing(bm, (x_left, y_climb), (x_left, y_foot), floor_z, height=rail_h,
                           post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                          post_at_start=False, post_at_end=False)
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        # Right long railing
+        if not has_east_wall:
+            build_railing(bm, (x_right, y_climb), (x_right, y_foot), floor_z, height=rail_h,
+                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        # Return short railing across closed foot end
+        if not has_north_wall and (x_right - x_left > 0.3):
+            build_railing(bm, (x_left, y_foot), (x_right, y_foot), floor_z + 0.0015, height=rail_h - 0.003,
+                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
+                          post_at_start=has_west_wall, post_at_end=has_east_wall,
+                          end_overhang=0.0)
 
 def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, return_y=None, x_start=None):
     """
     Builds a safety guardrail on the upper floor along the open edge of the stairwell
     (at X = rail_x, from y_start to y_end).
     If return_y and x_start are given, also adds the short return rail along the open end.
-    Uses the shared detailed railing builder.
+    Uses the shared detailed railing builder with end_overhang=0.0 to prevent wall penetrations.
     """
-    if y_end - y_start < 0.3:
+    if abs(y_end - y_start) < 0.3:
         return
-    build_railing(bm, (rail_x, y_start), (rail_x, y_end), floor_z, height=rail_h)
-    if return_y is not None and x_start is not None and abs(rail_x - x_start) > 0.3:
+    build_railing(bm, (rail_x, y_start), (rail_x, y_end), floor_z, height=rail_h, end_overhang=0.0)
+    if return_y is not None and x_start is not None and abs(rail_x - x_start) >= 0.3:
         build_railing(bm, (x_start, return_y), (rail_x, return_y), floor_z,
                       height=rail_h, braces=False, post_spacing=1.0,
-                      post_at_start=False, post_at_end=False)
+                      post_at_start=False, post_at_end=False, end_overhang=0.0)
 
 
 def compute_mezzanine_void(hall_bounds, stair_hole=None, min_rim=2.00, doorways=None):
@@ -461,7 +535,7 @@ def build_mezzanine_void_railing(bm, vx0, vx1, vy0, vy1, floor_z, height=0.98):
                   post_at_start=False, post_at_end=False, post_spacing=1.4, baluster_spacing=0.22)
 
 
-def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_depth=2.6, num_steps=14, direction_y=1, base_anchor=True, top_anchor=True):
+def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_depth=2.6, num_steps=14, direction_y=1, base_anchor=True, top_anchor=True, bounds=None):
     """
     Generates a wooden straight/run staircase with chunky treads, grounded stringers,
     solid base and top anchor plates, and stylized handrails on BOTH SIDES.
@@ -476,12 +550,12 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
     
     uv_layer = bm.loops.layers.uv.verify()
     
-    # 1. Grounded Starter Base Timber (anchored to floor)
+    # 1. Grounded Starter Base Timber (anchored to floor, slightly embedded to eliminate coplanar z-fighting)
     if base_anchor:
         base_faces = create_beveled_box(
             bm,
             size=(stair_width + 0.18, 0.22, 0.08),
-            location=(x0, y0 + 0.05 * direction_y, z0 + 0.04),
+            location=(x0, y0 + 0.05 * direction_y, z0 + 0.035),
             mat_index=MAT_INDEX_STAIRS,
             bevel_amount=0.012
         )
@@ -489,41 +563,33 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
             if f.is_valid:
                 for loop in f.loops:
                     co = loop.vert.co
-                    loop[uv_layer].uv = Vector(((co.y - y0) * 1.5 + (co.z - z0) * 1.5, (co.x - x0) * 0.65))
+                    v = (co.x - x0) * 0.85
+                    u = (co.y - y0) * 1.5 + (co.z - z0) * 1.5
+                    loop[uv_layer].uv = Vector((u, v))
+                f.tag = True
     
-    # 2. Wooden Treads and Risers
+    # 2. Wooden Treads and Risers with grain strictly ALONG LENGTH (V axis) of each board
+    # Tread ends penetrate 10mm into stringer mortises so there is zero coplanar face conflict with stringer walls
     for i in range(num_steps):
         sz = z0 + i * step_h + step_h * 0.5
         sy = y0 + i * step_d + step_d * 0.5
         sx = x0
         tread_faces = create_beveled_box(
             bm,
-            size=(stair_width, tread_d, tread_thick),
+            size=(stair_width + 0.02, tread_d, tread_thick),
             location=(sx, sy, sz),
             mat_index=MAT_INDEX_WOOD,
             bevel_amount=0.01
         )
-        # Wood grain oriented strictly ALONG LENGTH (V axis) of each stair step board
-        # The length direction is along the stair flight diagonal
         for f in tread_faces:
             if not f.is_valid:
                 continue
             for loop in f.loops:
                 co = loop.vert.co
-                # Calculate position along the stair length (diagonal from start to target)
-                # Length direction: (stair_depth * direction_y, 0, dz)
-                # Normalize and map to V axis (0 at bottom, 1 at top of tread)
-                len_dir_x = stair_depth * direction_y
-                len_dir_z = dz
-                length = math.sqrt(len_dir_x * len_dir_x + len_dir_z * len_dir_z)
-                if length > 0:
-                    along = (co.x * len_dir_x + co.z * len_dir_z) / length * 0.5 + 0.5  # 0-1 along length
-                else:
-                    along = 0.5
-                # V runs along length, U runs across width
-                u = (co.y - (sy - tread_d * 0.5)) * 1.6 + (co.z - sz) * 1.4 + (i * 0.19)
-                v = along * 2.0  # Scale to fill UV space
+                v = (co.x - sx) * 0.85 + (i * 0.31)
+                u = (co.y - sy) * 1.5 + (co.z - sz) * 1.4
                 loop[uv_layer].uv = Vector((u, v))
+            f.tag = True
 
         # Riser plank beneath tread (down to step below or floor)
         riser_faces = create_box(
@@ -537,9 +603,10 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
                 continue
             for loop in f.loops:
                 co = loop.vert.co
-                v = (co.x - (sx - stair_width * 0.5)) * 0.45 + (i * 0.37 + 0.15)
-                u = (co.z - (sz - step_h * 0.5)) * 1.6 + (co.y - sy) * 1.2 + (i * 0.19)
+                v = (co.x - (sx - stair_width * 0.5)) * 0.85 + (i * 0.37 + 0.15)
+                u = (co.z - (sz - step_h * 0.5)) * 1.6 + (co.y - sy) * 1.2
                 loop[uv_layer].uv = Vector((u, v))
+            f.tag = True
         
     # 3. Side Stringer Boards (anchored from starter base to upper landing)
     # Closed stringer beam (stringer_h=0.44, stringer_thick=0.10) to cover the sides of all
@@ -575,7 +642,7 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
     if top_anchor:
         top_faces = create_beveled_box(
             bm,
-            size=(stair_width + 0.18, 0.22, 0.10),
+            size=(stair_width + 0.14, 0.22, 0.10),
             location=(x0, y0 + stair_depth * direction_y, target_z - 0.09),
             mat_index=MAT_INDEX_STAIRS,
             bevel_amount=0.012
@@ -584,7 +651,10 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
             if f.is_valid:
                 for loop in f.loops:
                     co = loop.vert.co
-                    loop[uv_layer].uv = Vector(((co.x - x0) * 1.5, (co.y - (y0 + stair_depth * direction_y)) * 0.65 + (co.z - target_z) * 1.2))
+                    v = (co.x - x0) * 0.85
+                    u = (co.y - (y0 + stair_depth * direction_y)) * 1.5 + (co.z - target_z) * 1.2
+                    loop[uv_layer].uv = Vector((u, v))
+                f.tag = True
 
     # 5. Guard railings on BOTH sides with prominent, taller end pillars (newel posts).
     # End pillars are placed forward at the landing/step edges and grounded on floor/landing slabs.
@@ -598,6 +668,14 @@ def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_de
 
     for side in [-1, 1]:
         rail_x = x0 + side * (stair_width * 0.5 + stringer_thick * 0.5)
+
+        # Skip rail if it is against an exterior wall or room boundary
+        if bounds is not None:
+            slab_xmin, slab_xmax, slab_ymin, slab_ymax = bounds
+            if side == -1 and (rail_x - slab_xmin < 0.35):
+                continue
+            if side == 1 and (slab_xmax - rail_x < 0.35):
+                continue
 
         # Bottom end pillar: at the foot of the stairs, standing firmly on the lower floor (z0)
         bot_post_y = y0 + (POST_W * 0.5) * direction_y
@@ -805,6 +883,7 @@ def build_stair_landing(bm, cx, cy, z_top, size=2.0):
             else:
                 _u, _v = (_co.x - cx) * 1.5, (_co.z - z_top) * 1.2
             _loop[_uvl].uv = Vector((_u, _v))
+        _f.tag = True
     return (cx - size * 0.5, cx + size * 0.5, cy - size * 0.5, cy + size * 0.5)
 
 
@@ -833,7 +912,8 @@ def build_stair_guardrail_one_open(bm, hole, floor_z, open_side,
         if abs(_bx - _ax) < 0.3 and abs(_by - _ay) < 0.3:
             continue
         build_railing(bm, (_ax, _ay), (_bx, _by), floor_z, height=rail_h,
-                      post_spacing=1.25, baluster_spacing=0.20, braces=False)
+                      post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                      end_overhang=0.0)
 
 
 def build_spiral_staircase(bm, center_pos, target_z, radius=1.35, num_steps=18, start_ang_deg=-90.0, total_angle_deg=360.0):
@@ -900,6 +980,7 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.35, num_steps=18, 
                 v = lx * 0.45 + (i * 0.31)
                 u = ly * 1.6 + (co.z - cur_z) * 1.4 + (i * 0.17)
                 loop[uv_layer].uv = Vector((u, v))
+            f.tag = True
         
         # Outer banister point on every step (post added after the loop)
         px = cx + (radius - 0.04) * math.cos(mid_ang)
@@ -935,6 +1016,7 @@ def build_spiral_staircase(bm, center_pos, target_z, radius=1.35, num_steps=18, 
             v = lx * 0.45
             u = ly * 1.6 + (co.z - target_z) * 1.4
             loop[uv_layer].uv = Vector((u, v))
+        f.tag = True
     
     # Top landing banister point
     top_px = cx + (radius + 0.15) * math.cos(land_ang)
