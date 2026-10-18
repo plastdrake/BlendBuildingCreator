@@ -231,14 +231,10 @@ class BUILDING_OT_apply_preset(bpy.types.Operator):
 
 
 def _fbx_export_name(family, tier_label):
-    """Build the stable ``Category_Family_Tier`` filename used by batch exports."""
-    category = family.get('category', 'OTHER')
-    if isinstance(category, (list, tuple, set)):
-        category = next(iter(category), 'OTHER')
-    category = re.sub(r'[^A-Za-z0-9]+', '_', str(category)).strip('_').title()
+    """Build the stable ``Family_Tier`` filename used by batch exports."""
     family_name = re.sub(r"[^A-Za-z0-9]+", '_', family['name']).strip('_')
     tier = re.sub(r'[^A-Za-z0-9]+', '', tier_label)
-    return f"{category}_{family_name}_{tier}"
+    return f"{family_name}_{tier}"
 
 
 def _remove_objects(objects):
@@ -269,6 +265,12 @@ def _export_fbx_jobs(context, jobs, export_dir, keep_buildings=False):
     try:
         for index, (family, tier_label, preset_key) in enumerate(normalized_jobs):
             export_name = _fbx_export_name(family, tier_label)
+            status = f"FBX export {index + 1}/{len(normalized_jobs)}: {export_name}"
+            print(status)
+            try:
+                context.workspace.status_text_set(status)
+            except (AttributeError, RuntimeError):
+                pass
             mesh = bpy.data.meshes.new(f"{export_name}_Mesh")
             root = bpy.data.objects.new(export_name, mesh)
             context.collection.objects.link(root)
@@ -305,6 +307,21 @@ def _export_fbx_jobs(context, jobs, export_dir, keep_buildings=False):
                     add_leaf_bones=False,
                     apply_unit_scale=True,
                 )
+                filepath = os.path.join(export_dir, f"{export_name}.fbx")
+                mesh_objects = [obj for obj in created if obj.type == 'MESH']
+                vertex_count = sum(len(obj.data.vertices) for obj in mesh_objects)
+                file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
+                print(
+                    f"Exported {export_name}.fbx "
+                    f"({file_size_mb:.2f} MB, {len(created)} objects, {vertex_count:,} vertices)"
+                )
+                try:
+                    context.workspace.status_text_set(
+                        f"FBX export {index + 1}/{len(normalized_jobs)} complete: "
+                        f"{export_name} ({file_size_mb:.2f} MB)"
+                    )
+                except (AttributeError, RuntimeError):
+                    pass
             finally:
                 props.auto_update = old_auto
                 if not keep_buildings:
@@ -313,6 +330,10 @@ def _export_fbx_jobs(context, jobs, export_dir, keep_buildings=False):
     finally:
         props.auto_update = old_auto
         wm.progress_end()
+        try:
+            context.workspace.status_text_set(None)
+        except (AttributeError, RuntimeError):
+            pass
         bpy.ops.object.select_all(action='DESELECT')
 
     return len(normalized_jobs)

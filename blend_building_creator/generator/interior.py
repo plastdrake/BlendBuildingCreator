@@ -535,182 +535,305 @@ def build_mezzanine_void_railing(bm, vx0, vx1, vy0, vy1, floor_z, height=0.98):
                   post_at_start=False, post_at_end=False, post_spacing=1.4, baluster_spacing=0.22)
 
 
-def build_straight_staircase(bm, start_pos, target_z, stair_width=1.40, stair_depth=2.6, num_steps=14, direction_y=1, base_anchor=True, top_anchor=True, bounds=None):
+def _build_stringer_prism(bm, p_start, p_end, z0, z_head, stringer_thick,
+                          axis='Y', mat_index=MAT_INDEX_STAIRS,
+                          trim_head_clearance=0.08, stringer_h=0.34):
     """
-    Generates a wooden straight/run staircase with chunky treads, grounded stringers,
-    solid base and top anchor plates, and stylized handrails on BOTH SIDES.
-    direction_y: 1 for +Y (front to back), -1 for -Y (back to front).
+    Builds a structural wooden stringer prism that:
+    - Continues all the way down to the floor at the bottom (rests flat on floor at z0).
+    - Stops just below the frame/trim for the stair hole on the top (at z_head - trim_head_clearance).
+    - Has strictly vertical end faces against newel posts and hole rims.
+    - Zero protruding sharp corners, zero dangling ends in mid-air.
+    """
+    if axis == 'Y':
+        s0 = p_start[0]
+        r0 = p_start[1]
+        r1 = p_end[1]
+    else:
+        s0 = p_start[1]
+        r0 = p_start[0]
+        r1 = p_end[0]
+
+    L = abs(r1 - r0)
+    if L < 0.10:
+        return []
+    dir_r = 1.0 if r1 >= r0 else -1.0
+    dz = z_head - z0
+    m = dz / L
+
+    h_front = min(0.24, max(0.16, dz / 14 + 0.04))
+    z_head_cut = z_head - trim_head_clearance
+
+    # Top cutoff where slope hits underside of trim
+    u_top_cut = max(0.0, min(L, (z_head_cut - (z0 + h_front)) / m))
+    # Bottom cutoff where bottom slope hits floor
+    u_bot_cut = max(0.0, min(L, (stringer_h - h_front) / m))
+    z_bot_end = max(z0, z0 + h_front + m * L - stringer_h)
+
+    # 2D profile polygon in (u, z) relative to (r0, z0)
+    u_start = 0.162  # Disjoint hairline gap from newel post bottom (POST_W = 0.16 in railing.py)
+    poly = [
+        (u_start, z0),
+        (u_start, z0 + h_front),
+    ]
+    if u_top_cut < L - 0.02:
+        poly.append((u_top_cut, z_head_cut))
+    poly.append((L, z_head_cut))
+    poly.append((L, z_bot_end))
+    if u_bot_cut > u_start + 0.02:
+        poly.append((u_bot_cut, z0))
+
+    s1 = s0 - stringer_thick * 0.5
+    s2 = s0 + stringer_thick * 0.5
+
+    v_in = []
+    v_out = []
+    for u, z in poly:
+        r = r0 + u * dir_r
+        if axis == 'Y':
+            v_in.append(bm.verts.new((s1, r, z)))
+            v_out.append(bm.verts.new((s2, r, z)))
+        else:
+            v_in.append(bm.verts.new((r, s1, z)))
+            v_out.append(bm.verts.new((r, s2, z)))
+
+    faces = []
+    f_side1 = bm.faces.new(v_in)
+    f_side2 = bm.faces.new(reversed(v_out))
+    faces.extend([f_side1, f_side2])
+
+    N = len(poly)
+    for i in range(N):
+        i_next = (i + 1) % N
+        f_rim = bm.faces.new([v_in[i], v_in[i_next], v_out[i_next], v_out[i]])
+        faces.append(f_rim)
+
+    bmesh.ops.recalc_face_normals(bm, faces=faces)
+
+    uv_layer = bm.loops.layers.uv.verify()
+    for f in faces:
+        if not f.is_valid:
+            continue
+        f.material_index = mat_index
+        nx = abs(f.normal.x)
+        ny = abs(f.normal.y)
+        for loop in f.loops:
+            co = loop.vert.co
+            if axis == 'Y':
+                if nx > 0.5:
+                    u_coord = (co.y - r0) * 0.85
+                    v_coord = (co.z - z0) * 1.5
+                else:
+                    u_coord = (co.x - s0) * 1.5
+                    v_coord = (co.y - r0) * 0.85 + (co.z - z0) * 1.2
+            else:
+                if ny > 0.5:
+                    u_coord = (co.x - r0) * 0.85
+                    v_coord = (co.z - z0) * 1.5
+                else:
+                    u_coord = (co.y - s0) * 1.5
+                    v_coord = (co.x - r0) * 0.85 + (co.z - z0) * 1.2
+            loop[uv_layer].uv = Vector((u_coord, v_coord))
+        f.tag = True
+
+    return faces
+
+
+def build_straight_staircase(
+    bm, start_pos, target_z,
+    stair_width=1.40, stair_depth=2.6, num_steps=14,
+    direction_y=1, base_anchor=False, top_anchor=False,
+    bounds=None, axis='Y', direction_x=1,
+    has_rail_left=None, has_rail_right=None
+):
+    """
+    Generates a wooden straight/run staircase with:
+    - Chunky treads with grain aligned strictly along the length of each board.
+    - Grounded stringers that continue all the way to the floor at the bottom
+      and stop cleanly just below the frame/trim of the stair hole at the top.
+    - Clean newel posts and railings with zero intersecting sharp corners.
+    - NO extra fake box steps at the bottom or top.
+    Supports axis='Y' (default) and axis='X'.
     """
     x0, y0, z0 = start_pos
     dz = target_z - z0
     step_h = dz / num_steps
-    step_d = (stair_depth / num_steps) * direction_y
-    tread_d = (stair_depth / num_steps) + 0.04
-    tread_thick = 0.05
-    
-    uv_layer = bm.loops.layers.uv.verify()
-    
-    # 1. Grounded Starter Base Timber (anchored to floor, slightly embedded to eliminate coplanar z-fighting)
-    if base_anchor:
-        base_faces = create_beveled_box(
-            bm,
-            size=(stair_width + 0.18, 0.22, 0.08),
-            location=(x0, y0 + 0.05 * direction_y, z0 + 0.035),
-            mat_index=MAT_INDEX_STAIRS,
-            bevel_amount=0.012
-        )
-        for f in base_faces:
-            if f.is_valid:
-                for loop in f.loops:
-                    co = loop.vert.co
-                    v = (co.x - x0) * 0.85
-                    u = (co.y - y0) * 1.5 + (co.z - z0) * 1.5
-                    loop[uv_layer].uv = Vector((u, v))
-                f.tag = True
-    
-    # 2. Wooden Treads and Risers with grain strictly ALONG LENGTH (V axis) of each board
-    # Tread ends penetrate 10mm into stringer mortises so there is zero coplanar face conflict with stringer walls
-    for i in range(num_steps):
-        sz = z0 + i * step_h + step_h * 0.5
-        sy = y0 + i * step_d + step_d * 0.5
-        sx = x0
-        tread_faces = create_beveled_box(
-            bm,
-            size=(stair_width + 0.02, tread_d, tread_thick),
-            location=(sx, sy, sz),
-            mat_index=MAT_INDEX_WOOD,
-            bevel_amount=0.01
-        )
-        for f in tread_faces:
-            if not f.is_valid:
-                continue
-            for loop in f.loops:
-                co = loop.vert.co
-                v = (co.x - sx) * 0.85 + (i * 0.31)
-                u = (co.y - sy) * 1.5 + (co.z - sz) * 1.4
-                loop[uv_layer].uv = Vector((u, v))
-            f.tag = True
 
-        # Riser plank beneath tread (down to step below or floor)
-        riser_faces = create_box(
-            bm,
-            size=(stair_width - 0.02, 0.035, step_h),
-            location=(sx, sy - step_d * 0.5 + 0.015 * direction_y, sz - step_h * 0.5),
-            mat_index=MAT_INDEX_STAIRS
-        )
+    if axis == 'Y':
+        dir_run = direction_y
+        run_depth = stair_depth * dir_run
+        step_d = (stair_depth / num_steps) * dir_run
+    else:
+        dir_run = direction_x
+        run_depth = stair_depth * dir_run
+        step_d = (stair_depth / num_steps) * dir_run
+
+    tread_d = (stair_depth / num_steps) + 0.04
+    tread_thick = 0.045
+    stringer_thick = 0.08
+    stringer_h = 0.34
+
+    uv_layer = bm.loops.layers.uv.verify()
+
+    # Treads penetrate 12mm into stringers, risers penetrate 6mm so lateral end faces never touch
+    tread_w = stair_width - 2 * stringer_thick + 0.024
+    riser_w = stair_width - 2 * stringer_thick + 0.012
+
+    for i in range(num_steps):
+        # Embed riser top 5mm into tread above, and riser bottom 3mm into tread below (or 4mm into floor for i=0)
+        # to eliminate horizontal coplanar face overlaps with treads and floor
+        r_bot = (z0 - 0.004) if i == 0 else (z0 + i * step_h - 0.003)
+        r_top = z0 + (i + 1) * step_h + 0.005
+        this_riser_h = r_top - r_bot
+        rz = (r_bot + r_top) * 0.5
+        ru = (i * abs(step_d)) * dir_run
+
+        if axis == 'Y':
+            riser_loc = (x0, y0 + ru + 0.015 * dir_run, rz)
+            riser_size = (riser_w, 0.035, this_riser_h)
+        else:
+            riser_loc = (x0 + ru + 0.015 * dir_run, y0, rz)
+            riser_size = (0.035, riser_w, this_riser_h)
+
+        riser_faces = create_box(bm, size=riser_size, location=riser_loc, mat_index=MAT_INDEX_STAIRS)
         for f in riser_faces:
             if not f.is_valid:
                 continue
             for loop in f.loops:
                 co = loop.vert.co
-                v = (co.x - (sx - stair_width * 0.5)) * 0.85 + (i * 0.37 + 0.15)
-                u = (co.z - (sz - step_h * 0.5)) * 1.6 + (co.y - sy) * 1.2
+                if axis == 'Y':
+                    v = (co.x - (x0 - riser_w * 0.5)) * 0.85 + (i * 0.37 + 0.15)
+                    u = (co.z - r_bot) * 1.6 + (co.y - riser_loc[1]) * 1.2
+                else:
+                    v = (co.y - (y0 - riser_w * 0.5)) * 0.85 + (i * 0.37 + 0.15)
+                    u = (co.z - r_bot) * 1.6 + (co.x - riser_loc[0]) * 1.2
                 loop[uv_layer].uv = Vector((u, v))
             f.tag = True
-        
-    # 3. Side Stringer Boards (anchored from starter base to upper landing)
-    # Closed stringer beam (stringer_h=0.44, stringer_thick=0.10) to cover the sides of all
-    # step treads and risers, and directly carry all vertical balusters without an extra sill rail.
-    stringer_thick = 0.10
-    stringer_h = 0.44
-    diag_length = math.sqrt(dz * dz + stair_depth * stair_depth)
-    pitch_angle = math.atan2(dz, stair_depth) * direction_y
-    cos_pitch = math.cos(abs(pitch_angle))
-    sin_pitch = math.sin(abs(pitch_angle))
-    top_offset = (stringer_h * 0.5) / cos_pitch
 
-    # Shift along slope so bottom front corner meets the back of the bottom post flush
-    shift_along = (stringer_h * 0.5) * sin_pitch
-    shift_y = shift_along * cos_pitch * direction_y
-    shift_z = shift_along * sin_pitch
-    
-    for side in [-1, 1]:
-        str_x = x0 + side * (stair_width * 0.5 + stringer_thick * 0.5)
-        str_y = y0 + (stair_depth * 0.5) * direction_y + shift_y
-        str_z = z0 + dz * 0.5 + shift_z
-        # create_box automatically unwraps V strictly along the diagonal beam length (dy)
-        create_box(
-            bm,
-            size=(stringer_thick, diag_length, stringer_h),
-            location=(str_x, str_y, str_z),
-            rotation=(pitch_angle, 0.0, 0.0),
-            mat_index=MAT_INDEX_STAIRS
-        )
-        
-    # 4. Top Landing Anchor Timber (anchors stringers solidly to the upper floor).
-    # Dropped a touch below the floor so its top face never z-fights the slab.
-    if top_anchor:
-        top_faces = create_beveled_box(
-            bm,
-            size=(stair_width + 0.14, 0.22, 0.10),
-            location=(x0, y0 + stair_depth * direction_y, target_z - 0.09),
-            mat_index=MAT_INDEX_STAIRS,
-            bevel_amount=0.012
-        )
-        for f in top_faces:
-            if f.is_valid:
+        # Tread sits at top of riser. Intermediate treads only (last step is the upper floor slab!)
+        if i < num_steps - 1:
+            tz = z0 + (i + 1) * step_h - tread_thick * 0.5
+            tu = (i + 0.5) * step_d + 0.015 * dir_run
+            if axis == 'Y':
+                tread_loc = (x0, y0 + tu, tz)
+                tread_size = (tread_w, tread_d, tread_thick)
+            else:
+                tread_loc = (x0 + tu, y0, tz)
+                tread_size = (tread_d, tread_w, tread_thick)
+
+            tread_faces = create_beveled_box(
+                bm, size=tread_size, location=tread_loc,
+                mat_index=MAT_INDEX_WOOD, bevel_amount=0.01
+            )
+            for f in tread_faces:
+                if not f.is_valid:
+                    continue
                 for loop in f.loops:
                     co = loop.vert.co
-                    v = (co.x - x0) * 0.85
-                    u = (co.y - (y0 + stair_depth * direction_y)) * 1.5 + (co.z - target_z) * 1.2
+                    if axis == 'Y':
+                        v = (co.x - x0) * 0.85 + (i * 0.31)
+                        u = (co.y - tread_loc[1]) * 1.5 + (co.z - tz) * 1.4
+                    else:
+                        v = (co.y - y0) * 0.85 + (i * 0.31)
+                        u = (co.x - tread_loc[0]) * 1.5 + (co.z - tz) * 1.4
                     loop[uv_layer].uv = Vector((u, v))
                 f.tag = True
 
-    # 5. Guard railings on BOTH sides with prominent, taller end pillars (newel posts).
-    # End pillars are placed forward at the landing/step edges and grounded on floor/landing slabs.
-    # The handrail terminates cleanly into the sides of the pillars, and balusters enter
-    # directly into the top of the enlarged diagonal stringer beam without redundant sill beams.
-    POST_W = 0.10
-    bot_post_h = 1.15
-    top_post_h = 1.05
+    # 2. Structural Side Stringers (grounded at floor, capped below trim at head)
+    # Kept inside stair_width so the flight clears the floor hole and trim frame cleanly.
+    str_offset = stair_width * 0.5 - stringer_thick * 0.5
+    for side in [-1, 1]:
+        if axis == 'Y':
+            str_x = x0 + side * str_offset
+            p_s = (str_x, y0)
+            p_e = (str_x, y0 + run_depth)
+        else:
+            str_y = y0 + side * str_offset
+            p_s = (x0, str_y)
+            p_e = (x0 + run_depth, str_y)
+
+        _build_stringer_prism(
+            bm, p_s, p_e, z0, target_z, stringer_thick,
+            axis=axis, mat_index=MAT_INDEX_STAIRS,
+            trim_head_clearance=0.08, stringer_h=stringer_h
+        )
+
+    # 3. Guard Railings with End Pillars (Newel Posts)
+    POST_W = 0.16
+    bot_post_h = 1.10
+    top_post_h = 1.00
     rail_h = 0.68
     tan_pitch = dz / stair_depth
 
     for side in [-1, 1]:
-        rail_x = x0 + side * (stair_width * 0.5 + stringer_thick * 0.5)
-
-        # Skip rail if it is against an exterior wall or room boundary
-        if bounds is not None:
-            slab_xmin, slab_xmax, slab_ymin, slab_ymax = bounds
-            if side == -1 and (rail_x - slab_xmin < 0.35):
+        if axis == 'Y':
+            rail_s = x0 + side * str_offset
+            if bounds is not None:
+                slab_xmin, slab_xmax, slab_ymin, slab_ymax = bounds
+                if side == -1 and (rail_s - slab_xmin < 0.35):
+                    continue
+                if side == 1 and (slab_xmax - rail_s < 0.35):
+                    continue
+            if side == -1 and has_rail_left is False:
                 continue
-            if side == 1 and (slab_xmax - rail_x < 0.35):
+            if side == 1 and has_rail_right is False:
                 continue
 
-        # Bottom end pillar: at the foot of the stairs, standing firmly on the lower floor (z0)
-        bot_post_y = y0 + (POST_W * 0.5) * direction_y
-        build_railing_post(bm, rail_x, bot_post_y, z0, height=bot_post_h,
-                           iron_pin=False, jankiness=0.0)
+            bot_post_r = y0 + (POST_W * 0.5) * dir_run
+            top_post_r = y0 + (stair_depth - POST_W * 0.5) * dir_run
 
-        # Top end pillar: at the landing edge, standing firmly on the upper floor (target_z)
-        top_post_y = y0 + (stair_depth - POST_W * 0.5) * direction_y
-        build_railing_post(bm, rail_x, top_post_y, target_z, height=top_post_h,
-                           iron_pin=False, jankiness=0.0)
+            build_railing_post(bm, rail_s, bot_post_r, z0, height=bot_post_h,
+                               iron_pin=False, jankiness=0.0)
+            build_railing_post(bm, rail_s, top_post_r, target_z, height=top_post_h,
+                               iron_pin=False, jankiness=0.0)
 
-        # Sloped rail spans between the inner faces of bottom and top end pillars
-        y_rail_start = bot_post_y + (POST_W * 0.5) * direction_y
-        y_rail_end = top_post_y - (POST_W * 0.5) * direction_y
+            r_start = bot_post_r + (POST_W * 0.5) * dir_run
+            r_end = top_post_r - (POST_W * 0.5) * dir_run
+            dist_start = abs(r_start - y0)
+            dist_end = abs(r_end - y0)
+            z_start = z0 + dist_start * tan_pitch + 0.26
+            z_end = z0 + dist_end * tan_pitch + 0.26
 
-        dist_start = abs(y_rail_start - y0)
-        dist_end = abs(y_rail_end - y0)
-        z_start = z0 + dist_start * tan_pitch + top_offset
-        z_end = z0 + dist_end * tan_pitch + top_offset
+            build_railing(
+                bm, (rail_s, r_start), (rail_s, r_end),
+                z_start, height=rail_h, base_z_end=z_end,
+                has_sill=False, posts=False, post_at_start=False, post_at_end=False,
+                baluster_spacing=0.20, end_overhang=0.0, braces=False
+            )
+        else:
+            rail_s = y0 + side * str_offset
+            if bounds is not None:
+                slab_xmin, slab_xmax, slab_ymin, slab_ymax = bounds
+                if side == -1 and (rail_s - slab_ymin < 0.35):
+                    continue
+                if side == 1 and (slab_ymax - rail_s < 0.35):
+                    continue
+            if side == -1 and has_rail_left is False:
+                continue
+            if side == 1 and has_rail_right is False:
+                continue
 
-        build_railing(
-            bm,
-            (rail_x, y_rail_start),
-            (rail_x, y_rail_end),
-            z_start,
-            height=rail_h,
-            base_z_end=z_end,
-            has_sill=False,
-            posts=False,
-            post_at_start=False,
-            post_at_end=False,
-            baluster_spacing=0.20,
-            end_overhang=0.0,
-            braces=False,
-        )
+            bot_post_r = x0 + (POST_W * 0.5) * dir_run
+            top_post_r = x0 + (stair_depth - POST_W * 0.5) * dir_run
+
+            build_railing_post(bm, bot_post_r, rail_s, z0, height=bot_post_h,
+                               iron_pin=False, jankiness=0.0)
+            build_railing_post(bm, top_post_r, rail_s, target_z, height=top_post_h,
+                               iron_pin=False, jankiness=0.0)
+
+            r_start = bot_post_r + (POST_W * 0.5) * dir_run
+            r_end = top_post_r - (POST_W * 0.5) * dir_run
+            dist_start = abs(r_start - x0)
+            dist_end = abs(r_end - x0)
+            z_start = z0 + dist_start * tan_pitch + 0.26
+            z_end = z0 + dist_end * tan_pitch + 0.26
+
+            build_railing(
+                bm, (r_start, rail_s), (r_end, rail_s),
+                z_start, height=rail_h, base_z_end=z_end,
+                has_sill=False, posts=False, post_at_start=False, post_at_end=False,
+                baluster_spacing=0.20, end_overhang=0.0, braces=False
+            )
 
 def _l_stair_run(bm, foot_xy, top_xy, z0, z1, width, along_axis):
     """One flight of an L-stair: risers + treads climbing from z0 to z1, with

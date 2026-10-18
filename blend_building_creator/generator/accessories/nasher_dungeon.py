@@ -132,68 +132,25 @@ def _post(bm, x, y, zf):
 
 
 def _stair(bm, x_top, x_bot, z_top, z_bot, y0=None, y1=None):
-    n = max(6, int(math.ceil((z_top - z_bot) / 0.2)))
-    sgn = 1.0 if x_bot > x_top else -1.0
-    run = abs(x_bot - x_top) / n
-    rise = (z_top - z_bot) / n
+    from ..interior import build_straight_staircase
     sy0, sy1 = (STAIR_Y if y0 is None else (y0, y1))
-    from mathutils import Vector
-    uv_layer = bm.loops.layers.uv.verify()
-    nosing = 0.025 * sgn
-
-    # 1. Structural carriage ramp supporting the flight (kept clear of side rails)
-    diag_len = math.hypot(abs(x_bot - x_top), abs(z_top - z_bot))
-    pitch = math.atan2(z_bot - z_top, abs(x_bot - x_top)) * sgn
-    cx_ramp = (x_top + x_bot) * 0.5
-    cz_ramp = (z_top + z_bot) * 0.5 - 0.25
-    create_box(
-        bm, size=(diag_len, (sy1 - sy0) - 0.12, 0.30),
-        location=(cx_ramp, (sy0 + sy1) * 0.5, cz_ramp),
-        rotation=(0.0, -pitch, 0.0),
-        mat_index=WALL
+    stair_w = sy1 - sy0
+    stair_len = abs(x_top - x_bot)
+    dir_x = 1 if x_top > x_bot else -1
+    # North side (sy1) hugs the solid wall/rock; South side (sy0) opens to the hall/room.
+    # has_rail_left (-side, sy0) = True, has_rail_right (+side, sy1) = False.
+    build_straight_staircase(
+        bm,
+        start_pos=(x_bot, (sy0 + sy1) * 0.5, z_bot),
+        target_z=z_top,
+        stair_width=stair_w,
+        stair_depth=stair_len,
+        num_steps=max(6, int(round((z_top - z_bot) / 0.22))),
+        axis='X',
+        direction_x=dir_x,
+        has_rail_left=True,
+        has_rail_right=False,
     )
-
-    # 2. Individual step tread slabs and risers (zero coplanar face collisions)
-    tread_t = 0.06
-    for i in range(n):
-        top = z_top - (i + 1) * rise
-        if top <= z_bot + 0.03:
-            break
-        xa = x_top + sgn * i * run
-        xc = xa + sgn * (run * 0.5 + 0.015)
-        step_faces = create_beveled_box(
-            bm, size=(run + 0.03, sy1 - sy0, tread_t),
-            location=(xc, (sy0 + sy1) * 0.5, top - tread_t * 0.5),
-            mat_index=FLOOR, bevel_amount=0.01
-        )
-        for f in step_faces:
-            if not f.is_valid:
-                continue
-            for loop in f.loops:
-                co = loop.vert.co
-                v = (co.y - (sy0 + sy1) * 0.5) * 0.85
-                u = (co.x - xc) * 1.5 + (co.z - top) * 1.5
-                loop[uv_layer].uv = Vector((u, v))
-            f.tag = True
-
-        # Riser beneath tread (top embedded 6mm into tread slab to eliminate coplanar contact)
-        if rise > tread_t + 0.01:
-            riser_h = rise - tread_t + 0.006
-            r_faces = create_box(
-                bm, size=(0.04, sy1 - sy0 - 0.02, riser_h),
-                location=(xa, (sy0 + sy1) * 0.5, top - rise + riser_h * 0.5),
-                mat_index=WALL
-            )
-
-    # Proper timber handrails following the stair flight slope
-    from ..railing import build_railing
-    # If sy1 is against the north wall, only build on the open side sy0
-    rail_sides = (sy0,) if (y0 is not None and abs(sy1 - 52.40) < 0.20) else (sy0, sy1)
-    for sy in rail_sides:
-        build_railing(bm, (x_top, sy), (x_bot, sy),
-                      base_z=z_top, base_z_end=z_bot,
-                      height=0.95, post_spacing=1.80, baluster_spacing=0.25,
-                      braces=False, end_overhang=0.0)
 
 
 
@@ -351,9 +308,11 @@ def build_nasher_dungeon(bm, tier):
     corr_x0 = 2.40
     corr_x1 = 6.40
 
-    # 3. Clear shaft volume through rock / foundation / floor
+    z_top_casing = z_keep_floor - 0.12
+
+    # 3. Clear shaft volume through rock / foundation below the Keep floor slab:
     # Clear the stair flight volume in the Keep back wing:
-    carve_pass_through_portal(bm, x_span=(bs_x0 - 0.30, bs_x1 + 0.30), y_span=(bs_y0 - 0.20, bs_y1 + 0.20), z_span=(9.40, 15.05))
+    carve_pass_through_portal(bm, x_span=(bs_x0 - 0.05, bs_x1 + 0.05), y_span=(bs_y0 - 0.05, bs_y1 + 0.05), z_span=(9.40, z_top_casing))
     # Clear the wide stair bottom landing:
     carve_pass_through_portal(bm, x_span=(3.80, corr_x1 + 0.40), y_span=(bs_y0 - 0.20, bs_y1 + 0.20), z_span=(9.40, 13.60))
     # Clear the connecting passage between the stair landing (y = 50.80) and Level 0 north wall (y = 46.00):

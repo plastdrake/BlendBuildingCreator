@@ -49,14 +49,10 @@ def ensure_addon_registered():
 
 
 def export_name(family, tier_label):
-    """Return the stable Category_Family_Tier FBX basename."""
-    category = family.get("category", "OTHER")
-    if isinstance(category, (list, tuple, set)):
-        category = next(iter(category), "OTHER")
-    category = re.sub(r"[^A-Za-z0-9]+", "_", str(category)).strip("_").title()
+    """Return the stable Family_Tier FBX basename."""
     family_name = re.sub(r"[^A-Za-z0-9]+", "_", family["name"]).strip("_")
     tier = re.sub(r"[^A-Za-z0-9]+", "", tier_label)
-    return f"{category}_{family_name}_{tier}"
+    return f"{family_name}_{tier}"
 
 
 def jobs_for(category=None, family_id=None, tier=None):
@@ -101,6 +97,7 @@ def export_jobs(jobs, export_dir, keep_buildings=False):
     try:
         for index, (family, tier_label, preset_key, _description) in enumerate(job_list):
             basename = export_name(family, tier_label)
+            print(f"[{index + 1}/{len(job_list)}] Generating {basename}...")
             mesh = bpy.data.meshes.new(f"{basename}_Mesh")
             root = bpy.data.objects.new(basename, mesh)
             bpy.context.collection.objects.link(root)
@@ -137,8 +134,16 @@ def export_jobs(jobs, export_dir, keep_buildings=False):
                     add_leaf_bones=False,
                     apply_unit_scale=True,
                 )
+                filepath = os.path.join(export_dir, f"{basename}.fbx")
+                mesh_objects = [obj for obj in created if obj.type == "MESH"]
+                vertex_count = sum(len(obj.data.vertices) for obj in mesh_objects)
+                file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
                 exported += 1
-                print(f"[{exported}/{len(job_list)}] {basename}.fbx")
+                print(
+                    f"[{exported}/{len(job_list)}] Exported {basename}.fbx "
+                    f"({file_size_mb:.2f} MB, {len(created)} objects, "
+                    f"{vertex_count:,} vertices)"
+                )
             finally:
                 props.auto_update = old_auto
                 if not keep_buildings:

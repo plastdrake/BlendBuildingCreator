@@ -62,6 +62,8 @@ example:
 
 The default output folder is `fbx_exports` next to the current `.blend` file
 (or Blender's current working directory when the file has not been saved).
+During a UI export, Blender's progress indicator and status bar show the current
+preset and completed count. Terminal exports print the same count and filename.
 Always run the command from an existing PowerShell/Command Prompt window so
 errors remain visible; failed exports also write a traceback to
 `tools/generate_all_fbx_error.log`.

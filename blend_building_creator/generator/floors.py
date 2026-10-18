@@ -677,15 +677,20 @@ def build_floors(bm, props, ctx):
                         bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
                     )
                 elif (fl_idx - 1) % 2 == 0:
-                    # Void over the WEST lane: walkable floor lies to its east
-                    build_stair_guardrail(bm, sh_x2 + 0.18, sh_y1 - 0.18, sh_y2, z_floor + 0.05,
-                                          return_y=sh_y2 + 0.18, x_start=sh_x1 - 0.18)
+                    # Void over the WEST lane: flight climbed South -> North, arriving at sh_y2.
+                    # Next flight departs at sh_y2 climbing North -> South in East lane.
+                    # Guard ONLY the South end of the void to protect against the drop from the room floor.
+                    # Never guard along Y (sibling flight's stringer guards it) or across sh_y2 (transfer walkway).
+                    build_stair_guardrail(bm, sh_x1, sh_y1 - 0.14, sh_y1 - 0.14, z_floor + 0.05,
+                                          return_y=sh_y1 - 0.14, x_start=sh_x2)
                 else:
-                    # Void over the EAST lane: walkable floor on BOTH sides
-                    build_stair_guardrail(bm, sh_x1 - 0.18, sh_y1, sh_y2 + 0.18, z_floor + 0.05,
-                                          return_y=sh_y1 - 0.18, x_start=sh_x2 + 0.18)
-                    build_stair_guardrail(bm, min(slab_xmax - 0.08, sh_x2 + 0.18),
-                                          sh_y1, sh_y2 + 0.18, z_floor + 0.05)
+                    # Void over the EAST lane: flight climbed North -> South, arriving at sh_y1.
+                    # Next flight departs at sh_y1 climbing South -> North in West lane.
+                    # Guard ONLY the North end of the void to protect against the drop from the room floor.
+                    build_stair_guardrail(bm, sh_x1, sh_y2 + 0.14, sh_y2 + 0.14, z_floor + 0.05,
+                                          return_y=sh_y2 + 0.14, x_start=sh_x2)
+                    if slab_xmax - sh_x2 > 0.60:
+                        build_stair_guardrail(bm, sh_x2 + 0.14, sh_y1, sh_y2, z_floor + 0.05)
             else:
                 # Straight stairs: guard the open stairwell on all 3 sides except the climb-up side,
                 # offset 18 cm outward from the hole so it sits cleanly on the floor without overlapping
@@ -743,7 +748,7 @@ def build_floors(bm, props, ctx):
                     stair_hole=_w_hole,
                     mat_idx=floor_mat
                 )
-                if fl_idx > 0 and _w_hole is not None:
+                if _w_hole is not None:
                     build_stair_hole_trim(bm, _w_hole, z_floor + 0.05, thickness=0.12,
                                           mat_index=MAT_INDEX_TIMBER, open_side='N')
                 if fl_idx > 0 and fl_overhang > prev_fl_overhang:
