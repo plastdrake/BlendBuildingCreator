@@ -27,6 +27,45 @@ Or copy the `blend_building_creator` folder into:
    - **Materials & Colors** — material tier and surface colors.
 4. Click **Finalize Mesh** to bake the result into a standard editable mesh.
 
+### Batch FBX export
+
+Use **Export All Preset Tiers (FBX)** in the main panel to generate and export one
+FBX per preset tier. The batch covers every T1, T2, and T3 entry and writes stable
+names such as `Artisan_Baker_T1`, `Artisan_Baker_T2`, and `Artisan_Baker_T3`.
+The export uses mesh modifiers, Apply Transform, and **Smoothing: Edge**. Choose
+the destination folder in the export dialog; generated buildings are removed from
+the scene by default after each export, with an option to keep them.
+
+The same export engine is available from the terminal:
+
+```text
+blender --background --python tools/generate_all_fbx.py
+```
+
+The Fantasy Building sidebar provides the **Export All Preset Tiers (FBX)**
+button. It exports every valid preset and every tier using the same modifier,
+transform, and Edge smoothing FBX settings.
+
+These are Blender Python scripts and must be run by Blender; the regular Python
+interpreter does not provide Blender's `bpy` module. Do not run it with
+`python tools/generate_all_fbx.py`.
+If a script is double-clicked or started with the regular Python interpreter,
+it now displays an explanatory error and writes the traceback to the matching
+`tools/*_error.log` file.
+
+On Windows, if Blender is not on `PATH`, use its full executable path, for
+example:
+
+```powershell
+& "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" --background --python tools\generate_all_fbx.py
+```
+
+The default output folder is `fbx_exports` next to the current `.blend` file
+(or Blender's current working directory when the file has not been saved).
+Always run the command from an existing PowerShell/Command Prompt window so
+errors remain visible; failed exports also write a traceback to
+`tools/generate_all_fbx_error.log`.
+
 ## Documentation
 
 Full architectural guides, developer references, and system breakdowns are available in the [`docs/`](docs/README.md) directory:

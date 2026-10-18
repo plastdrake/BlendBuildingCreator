@@ -5,8 +5,10 @@ Operators for creating, randomizing, applying presets, resetting, and finalizing
 import bpy
 import random
 import json
+import os
+import re
 from .generator.building import generate_building
-from .presets import apply_preset
+from .presets import apply_preset, BUILDING_FAMILIES, PRESETS
 
 def get_props_dict(props):
     """Serialize all fantasy building properties into a dictionary."""
@@ -226,6 +228,136 @@ class BUILDING_OT_apply_preset(bpy.types.Operator):
             
         self.report({'INFO'}, f"Applied preset: {self.preset_key}")
         return {'FINISHED'}
+
+
+def _fbx_export_name(family, tier_label):
+    """Build the stable ``Category_Family_Tier`` filename used by batch exports."""
+    category = family.get('category', 'OTHER')
+    if isinstance(category, (list, tuple, set)):
+        category = next(iter(category), 'OTHER')
+    category = re.sub(r'[^A-Za-z0-9]+', '_', str(category)).strip('_').title()
+    family_name = re.sub(r"[^A-Za-z0-9]+", '_', family['name']).strip('_')
+    tier = re.sub(r'[^A-Za-z0-9]+', '', tier_label)
+    return f"{category}_{family_name}_{tier}"
+
+
+def _remove_objects(objects):
+    """Remove only objects created by one batch item, including generated children."""
+    for obj in reversed(list(objects)):
+        if obj and obj.name in bpy.data.objects:
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+
+def _export_fbx_jobs(context, jobs, export_dir, keep_buildings=False):
+    """Generate and export jobs using the shared FBX settings."""
+    export_dir = bpy.path.abspath(export_dir).rstrip("/\\")
+    if not export_dir:
+        raise ValueError("Choose an export directory")
+    os.makedirs(export_dir, exist_ok=True)
+
+    normalized_jobs = [
+        (family, tier_label, preset_key)
+        for family, tier_label, preset_key, *_rest in jobs
+    ]
+    if not normalized_jobs:
+        raise ValueError("No valid preset tiers were found")
+
+    props = context.scene.fantasy_building_settings
+    old_auto = getattr(props, 'auto_update', True)
+    wm = context.window_manager
+    wm.progress_begin(0, len(normalized_jobs))
+    try:
+        for index, (family, tier_label, preset_key) in enumerate(normalized_jobs):
+            export_name = _fbx_export_name(family, tier_label)
+            mesh = bpy.data.meshes.new(f"{export_name}_Mesh")
+            root = bpy.data.objects.new(export_name, mesh)
+            context.collection.objects.link(root)
+            root["is_fantasy_building"] = True
+            created = [root]
+
+            try:
+                props.auto_update = False
+                apply_preset(props, preset_key)
+                generate_building(root, props)
+                root["building_settings"] = json.dumps(get_props_dict(props))
+
+                # Estate and castle presets add parented outbuildings after the root.
+                for obj in list(bpy.data.objects):
+                    if obj is root or obj.parent == root or (
+                            obj.get("is_fantasy_building", False)
+                            and obj.name.startswith(f"{root.name}_")):
+                        if obj not in created:
+                            created.append(obj)
+
+                bpy.ops.object.select_all(action='DESELECT')
+                for obj in created:
+                    if obj.name in bpy.data.objects:
+                        obj.select_set(True)
+                context.view_layer.objects.active = root
+
+                bpy.ops.export_scene.fbx(
+                    filepath=os.path.join(export_dir, f"{export_name}.fbx"),
+                    use_selection=True,
+                    object_types={'MESH', 'EMPTY', 'ARMATURE'},
+                    use_mesh_modifiers=True,
+                    bake_space_transform=True,
+                    mesh_smooth_type='EDGE',
+                    add_leaf_bones=False,
+                    apply_unit_scale=True,
+                )
+            finally:
+                props.auto_update = old_auto
+                if not keep_buildings:
+                    _remove_objects(created)
+                wm.progress_update(index + 1)
+    finally:
+        props.auto_update = old_auto
+        wm.progress_end()
+        bpy.ops.object.select_all(action='DESELECT')
+
+    return len(normalized_jobs)
+
+
+class BUILDING_OT_export_all_preset_tiers_fbx(bpy.types.Operator):
+    """Generate and export one FBX for every preset tier."""
+    bl_idname = "building.export_all_preset_tiers_fbx"
+    bl_label = "Export All Preset Tiers as FBX"
+    bl_description = (
+        "Generate one building for every T1/T2/T3 preset and export each as an FBX "
+        "with modifiers, Apply Transform, and Edge smoothing"
+    )
+    bl_options = {'REGISTER'}
+
+    directory: bpy.props.StringProperty(
+        name="Export Directory",
+        description="Folder for the generated FBX files; relative paths use the current blend file",
+        subtype='DIR_PATH',
+        default="//fbx_exports"
+    )
+    keep_buildings: bpy.props.BoolProperty(
+        name="Keep Buildings in Scene",
+        description="Keep generated buildings after the FBX batch completes",
+        default=False
+    )
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=520)
+
+    def execute(self, context):
+        jobs = [
+            (family, tier_label, preset_key, description)
+            for family in BUILDING_FAMILIES
+            for tier_label, preset_key, description in family['tiers']
+            if preset_key in PRESETS
+        ]
+        try:
+            count = _export_fbx_jobs(context, jobs, self.directory, self.keep_buildings)
+            self.report({'INFO'}, f"Exported {count} FBX files to {bpy.path.abspath(self.directory)}")
+            return {'FINISHED'}
+        except Exception as exc:
+            self.report({'ERROR'}, f"FBX batch stopped: {exc}")
+            return {'CANCELLED'}
+
 
 class BUILDING_OT_toggle_door(bpy.types.Operator):
     """Toggle the front entrance door between Closed and Open for walk-in exploration"""
@@ -508,4 +640,3 @@ class BUILDING_OT_furnish_interior(bpy.types.Operator):
         generate_building(context.active_object, sprops)
         self.report({'INFO'}, "Interior furnished!")
         return {'FINISHED'}
-

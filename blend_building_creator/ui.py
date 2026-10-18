@@ -56,6 +56,11 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         col = layout.column(align=True)
         col.scale_y = 1.4
         col.operator("building.create_fantasy_building", text="Create New Building", icon='ADD')
+        col.operator(
+            "building.export_all_preset_tiers_fbx",
+            text="Export All Preset Tiers (FBX)",
+            icon='EXPORT',
+        )
 
         row_res = col.row(align=True)
         row_res.scale_y = 1.1
