@@ -114,7 +114,11 @@ def _ramp(x, y):
         return 0.0, 0.0
     for y0, z0, y1, z1 in RAMPS:
         if y0 <= y <= y1:
-            zr = (z0 + (z1 - z0) * (y - y0) / (y1 - y0)) - 0.45
+            depth_excav = 0.45
+            if abs(y0 - (-66.0)) < 0.1 or abs(y0 - (-40.0)) < 0.1 or abs(y0 - (-2.0)) < 0.1:
+                # Smoothly blend excavation depth so the rock bed meets z0 at the entrance apron
+                depth_excav = 0.45 * _smooth((y - y0) / 1.5)
+            zr = (z0 + (z1 - z0) * (y - y0) / (y1 - y0)) - depth_excav
             return w, zr
     return 0.0, 0.0
 
@@ -297,6 +301,41 @@ def _stair_flight(bm, y0, z0, y1, z1, width):
     run = (y1 - y0) / n
     rise = (z1 - z0) / n
     cheek_w = 0.5
+    is_climb_start = (abs(y0 - (-66.0)) < 0.1 or abs(y0 - (-40.0)) < 0.1 or abs(y0 - (-2.0)) < 0.1)
+    rail_w = cheek_w + 0.18
+    rail_thick = 0.16
+
+    # Approach threshold / apron at climb starts so stepping onto step 0 is a standard ~14cm rise
+    if is_climb_start:
+        apron_len = 1.4
+        apron_yc = y0 - apron_len * 0.5
+        apron_top = z0 + 0.025
+        # Deep stone foundation block
+        create_beveled_box(bm, size=(width, apron_len, 1.8),
+                           location=(0.0, apron_yc, apron_top - 0.12 - 0.9),
+                           mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
+        # Flush cut stone apron slab
+        create_beveled_box(bm, size=(width, apron_len + 0.05, 0.12),
+                           location=(0.0, apron_yc - 0.015, apron_top - 0.06),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+        for side in (-1.0, 1.0):
+            sx = side * (width * 0.5 + cheek_w * 0.5)
+            # Cheek wall flanking apron
+            create_beveled_box(bm, size=(cheek_w, apron_len, 1.1 + 0.9),
+                               location=(sx, apron_yc, z0 + 0.25),
+                               mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
+            # Cap rail along apron cheek wall
+            create_beveled_box(bm, size=(rail_w, apron_len + 0.05, rail_thick),
+                               location=(sx, apron_yc, z0 + 0.88),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+            # Monumental entry pedestal framing the approach
+            create_beveled_box(bm, size=(0.65, 0.65, 1.5),
+                               location=(sx, y0 - apron_len, z0 + 0.75),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+            create_beveled_box(bm, size=(0.74, 0.74, 0.18),
+                               location=(sx, y0 - apron_len, z0 + 1.50 + 0.09),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+
     for i in range(n):
         top = z0 + (i + 1) * rise
         ya = y0 + i * run
@@ -317,15 +356,13 @@ def _stair_flight(bm, y0, z0, y1, z1, width):
     pitch = math.atan2(dz, dy)
     yc = (y0 + y1) * 0.5
     zc = (z0 + z1) * 0.5 + 0.88
-    rail_w = cheek_w + 0.18
-    rail_thick = 0.16
     for side in (-1.0, 1.0):
         sx = side * (width * 0.5 + cheek_w * 0.5)
         create_beveled_box(bm, size=(rail_w, ln + 0.06, rail_thick),
                            location=(sx, yc, zc),
                            rotation=(pitch, 0.0, 0.0),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-        if abs(y0 - RAMPS[0][0]) < 0.1:
+        if not is_climb_start and abs(y0 - RAMPS[0][0]) < 0.1:
             create_beveled_box(bm, size=(0.6, 0.6, 1.5), location=(sx, y0, z0 + 0.75),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
         if abs(y1 - RAMPS[-1][2]) < 0.1:
@@ -470,6 +507,209 @@ def _build_step_riser_wall(bm, p, u_tangent, n_outward, z_a, z_b, thick, walk_w=
         mat_index=MAT_INDEX_STONE,
         bevel_amount=0.015
     )
+
+
+def _build_paved_road_strip(bm, waypoints, width=3.2, kerb_w=0.24, sample_step=1.2,
+                            pave_mat=MAT_INDEX_CUT_STONE, kerb_mat=MAT_INDEX_STONE,
+                            omit_kerb_zones=(), layer_offset=0.0):
+    """Lays a smooth, slightly meandering stone-paved road with raised dressed-stone kerb borders."""
+    pts = _spline_curve(waypoints, sample_step=sample_step)
+    if len(pts) < 2:
+        return
+
+    pave_w = max(0.6, width - 2.0 * kerb_w)
+    pave_depth = 0.38
+    kerb_h = 0.045
+    kerb_depth = pave_depth + kerb_h
+
+    for i in range(len(pts) - 1):
+        p0, p1 = pts[i], pts[i + 1]
+        dx = p1[0] - p0[0]
+        dy = p1[1] - p0[1]
+        ln = math.hypot(dx, dy)
+        if ln < 0.08:
+            continue
+        ux, uy = dx / ln, dy / ln
+        nx, ny = -uy, ux
+        mx = (p0[0] + p1[0]) * 0.5
+        my = (p0[1] + p1[1]) * 0.5
+        yaw = math.atan2(-ux, uy)
+
+        gz = ground_z(mx, my)
+        z_top = gz + 0.035 + layer_offset
+
+        # Paved road bed (Cut stone flags)
+        create_beveled_box(bm, size=(pave_w, ln + 0.05, pave_depth),
+                           location=(mx, my, z_top - pave_depth * 0.5),
+                           rotation=(0.0, 0.0, yaw),
+                           mat_index=pave_mat, bevel_amount=0.015)
+
+        # Raised kerbstones flanking both edges
+        for side in (-1.0, 1.0):
+            # Check if this kerb segment falls inside an omission zone (e.g. road fork/junction)
+            kx = mx + side * nx * (width * 0.5 - kerb_w * 0.5)
+            ky = my + side * ny * (width * 0.5 - kerb_w * 0.5)
+            skip_kerb = False
+            for z_side, z_x0, z_x1, z_y0, z_y1 in omit_kerb_zones:
+                if z_side == side and (z_x0 <= kx <= z_x1) and (z_y0 <= ky <= z_y1):
+                    skip_kerb = True
+                    break
+            if skip_kerb:
+                continue
+
+            create_beveled_box(bm, size=(kerb_w, ln + 0.05, kerb_depth),
+                               location=(kx, ky, z_top + kerb_h - kerb_depth * 0.5),
+                               rotation=(0.0, 0.0, yaw),
+                               mat_index=kerb_mat, bevel_amount=0.015)
+
+
+def build_cliff_paved_roads(bm, tier=3):
+    """
+    Constructs an organic, slightly meandering paved road network across the castle cliff terraces:
+    1. Middle Terrace (z=8.0): Central spine linking lower stairs arrival (y=-20.0) to upper stairs
+       approach (y=-3.4), with spurs branching out to the Great Hall entrance porch, East Hall entrance
+       porch, and flank towers.
+    2. Forecourt (z=3.0): Spine linking Flight 1 arrival (y=-50.0) to Flight 2 departure (y=-40.0),
+       with branches to Barracks and Armory.
+    3. Upper Citadel Ward (z=14.0): Spine linking Flight 3 arrival (y=18.0) to the Keep entrance portal
+       (y=31.8), with branches to Chapel and Archive Hall.
+    """
+    # ---------------- 1. Middle Terrace (Z = 8.0) ----------------
+    # Main Spine: Lower stairs arrival (y=-20.0) -> Upper stairs approach (y=-3.4)
+    # Organic subtle meander: slight drift west then east
+    spine_mid = [
+        (0.0, -20.0),
+        (-0.7, -16.0),
+        (-0.9, -12.5),
+        (0.4, -8.0),
+        (0.2, -5.0),
+        (0.0, -3.4),
+    ]
+    # Omit spine kerbs where branches fork off:
+    # West side (side=1.0) around y in [-14.5, -10.5] for Great Hall branch
+    # East side (side=-1.0) around y in [-11.0, -7.5] for East Hall branch
+    spine_omits = [
+        (1.0, -3.5, 0.5, -14.5, -10.5),
+        (-1.0, -0.5, 3.5, -11.0, -7.5),
+    ]
+    _build_paved_road_strip(bm, spine_mid, width=3.4, kerb_w=0.25, sample_step=1.2,
+                            omit_kerb_zones=spine_omits, layer_offset=0.003)
+
+    # Branch West: starts at west edge of spine (-2.2, -12.4) -> Great Hall entrance porch (-15.0, -10.8)
+    branch_west = [
+        (-2.2, -12.4),
+        (-5.5, -12.0),
+        (-9.0, -11.5),
+        (-12.0, -11.0),
+        (-15.0, -10.8),
+    ]
+    _build_paved_road_strip(bm, branch_west, width=2.6, kerb_w=0.22, sample_step=1.2, layer_offset=0.0)
+
+    # Spur continuing westward to West Flank Tower (-33.5, -8.0)
+    spur_west_tower = [
+        (-15.0, -10.8),
+        (-19.5, -10.2),
+        (-24.5, -9.4),
+        (-29.0, -8.6),
+        (-32.0, -8.0),
+    ]
+    _build_paved_road_strip(bm, spur_west_tower, width=2.4, kerb_w=0.20, sample_step=1.2, layer_offset=-0.002)
+
+    # Branch East: starts at east edge of spine (2.0, -9.2) -> East Hall entrance porch (15.0, -10.8) (Tier >= 2)
+    if tier >= 2:
+        branch_east = [
+            (2.0, -9.2),
+            (5.5, -9.8),
+            (9.0, -10.4),
+            (12.0, -10.8),
+            (15.0, -10.8),
+        ]
+        _build_paved_road_strip(bm, branch_east, width=2.6, kerb_w=0.22, sample_step=1.2, layer_offset=0.0)
+
+        # Spur continuing eastward to East Flank Tower (33.5, -8.0)
+        spur_east_tower = [
+            (15.0, -10.8),
+            (19.5, -10.2),
+            (24.5, -9.4),
+            (29.0, -8.6),
+            (32.0, -8.0),
+        ]
+        _build_paved_road_strip(bm, spur_east_tower, width=2.4, kerb_w=0.20, sample_step=1.2, layer_offset=-0.002)
+
+    # ---------------- 2. Forecourt (Z = 3.0) ----------------
+    # Forecourt Spine: Flight 1 arrival (0.0, -50.0) -> Flight 2 approach (0.0, -41.4)
+    spine_forecourt = [
+        (0.0, -50.0),
+        (0.4, -46.5),
+        (-0.3, -43.5),
+        (0.0, -41.4),
+    ]
+    fore_omits = [
+        (1.0, -3.5, 0.5, -47.0, -43.0),
+        (-1.0, -0.5, 3.5, -47.0, -43.0),
+    ] if tier >= 2 else ()
+    _build_paved_road_strip(bm, spine_forecourt, width=3.4, kerb_w=0.25, sample_step=1.2,
+                            omit_kerb_zones=fore_omits, layer_offset=0.003)
+
+    if tier >= 2:
+        # Branch West to Barracks (-17.0, -32.0)
+        branch_barracks = [
+            (-2.0, -44.5),
+            (-5.5, -42.0),
+            (-9.5, -38.0),
+            (-14.0, -34.0),
+            (-17.0, -32.0),
+        ]
+        _build_paved_road_strip(bm, branch_barracks, width=2.4, kerb_w=0.20, sample_step=1.2, layer_offset=0.0)
+
+        # Branch East to Armory (17.0, -32.0)
+        branch_armory = [
+            (2.0, -44.5),
+            (5.5, -42.0),
+            (9.5, -38.0),
+            (14.0, -34.0),
+            (17.0, -32.0),
+        ]
+        _build_paved_road_strip(bm, branch_armory, width=2.4, kerb_w=0.20, sample_step=1.2, layer_offset=0.0)
+
+    # ---------------- 3. Upper Citadel Ward (Z = 14.0) ----------------
+    # Citadel Spine: Flight 3 arrival (0.0, 18.0) -> Keep entrance portal (0.0, 31.8)
+    spine_citadel = [
+        (0.0, 18.0),
+        (-0.5, 21.5),
+        (0.6, 25.0),
+        (-0.3, 28.5),
+        (0.0, 31.8),
+    ]
+    citadel_omits = [
+        (1.0, -3.5, 0.5, 21.0, 25.0),
+        (-1.0, -0.5, 3.5, 24.0, 28.0),
+    ]
+    _build_paved_road_strip(bm, spine_citadel, width=3.6, kerb_w=0.25, sample_step=1.2,
+                            omit_kerb_zones=citadel_omits, layer_offset=0.003)
+
+    if tier >= 2:
+        # Branch West toward Chapel & Wizard Tower (-26.0, 39.0)
+        branch_chapel = [
+            (-2.2, 23.2),
+            (-5.5, 25.5),
+            (-11.0, 28.5),
+            (-17.0, 32.5),
+            (-22.0, 36.5),
+            (-26.0, 39.0),
+        ]
+        _build_paved_road_strip(bm, branch_chapel, width=2.4, kerb_w=0.20, sample_step=1.2, layer_offset=0.0)
+
+    if tier == 3:
+        # Branch East toward Archive Hall (19.0, 35.5)
+        branch_archive = [
+            (2.2, 26.2),
+            (5.5, 28.5),
+            (10.0, 31.5),
+            (15.0, 34.0),
+            (19.0, 35.5),
+        ]
+        _build_paved_road_strip(bm, branch_archive, width=2.4, kerb_w=0.20, sample_step=1.2, layer_offset=0.0)
 
 
 def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=(), top_z_forecourt=None, top_z_upper=None):

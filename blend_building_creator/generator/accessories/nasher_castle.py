@@ -8,7 +8,7 @@ import math
 
 from .nasher_site import (
     FORECOURT, TERRACE, build_citadel_mount, build_ramp_stairs, build_rim_walls,
-    ground_z, ring_towers,
+    build_cliff_paved_roads, ground_z, ring_towers,
 )
 from .castle import build_walkable_round_tower
 from .battlement import build_battlement_run
@@ -376,6 +376,7 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
     """Compose the whole castle for tier 1..3 on the shared rock mount."""
     build_citadel_mount(bm)
     build_ramp_stairs(bm)
+    build_cliff_paved_roads(bm, tier)
 
     if tier == 2:
         from .nasher_site import build_upper_citadel_perimeter_wall
