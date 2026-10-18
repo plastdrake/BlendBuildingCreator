@@ -2141,9 +2141,9 @@ def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
                 break
 
     # 7. Courtier / noble benches along side walls
-    _try_place_wall_prop(bm, 'BENCH', 1.80, 0.50, tracker, z_floor,
+    _try_place_wall_prop(bm, 'BENCH', 1.80, 0.55, tracker, z_floor,
                          candidate_walls=('WEST', 'EAST'), length=1.75)
-    _try_place_wall_prop(bm, 'BENCH', 1.80, 0.50, tracker, z_floor,
+    _try_place_wall_prop(bm, 'BENCH', 1.80, 0.55, tracker, z_floor,
                          candidate_walls=('EAST', 'WEST'), length=1.75)
 
     # 8. Flanking weapon racks / ceremonial guard halberds

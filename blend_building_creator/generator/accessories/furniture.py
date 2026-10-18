@@ -515,9 +515,15 @@ def build_bench(bm, x, y, z_ground=0.0, ang=0.0, length=1.75, with_back=True):
     seat_d = 0.40
     faces = []
 
+    # Center the combined bounding box of seat + backrest around (0, 0).
+    # When with_back=True, the backward-tilted backrest adds ~0.11m behind the seat.
+    # Shifting by dy_back = -0.065 ensures the back of the backrest sits cleanly at ~+0.25m,
+    # keeping the bench from embedding into walls or baseboards when placed along room walls.
+    dy = -0.065 if with_back else 0.0
+
     # Chunky slab seat (thick hand-hewn timber with heavy bevels)
     faces += create_beveled_box(bm, size=(L, seat_d, 0.08),
-                                location=(0.0, 0.0, seat_z),
+                                location=(0.0, dy, seat_z),
                                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.016, bevel_segments=2)
 
     # 4 Straight vertical legs (feet on the ground, tops embedded in the seat).
@@ -526,12 +532,12 @@ def build_bench(bm, x, y, z_ground=0.0, ang=0.0, length=1.75, with_back=True):
         for sy in (-seat_d * 0.30, seat_d * 0.30):
             faces += create_beveled_box(
                 bm, size=(leg_w, leg_w, seat_z),
-                location=(sx, sy, seat_z * 0.5),
+                location=(sx, sy + dy, seat_z * 0.5),
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
 
         # End cross stretchers tying the legs together (ends embedded in legs).
         faces += create_beveled_box(bm, size=(leg_w * 0.8, seat_d * 0.60 + 0.02, 0.07),
-                                    location=(sx, 0.0, 0.16),
+                                    location=(sx, dy, 0.16),
                                     mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
     if with_back:
@@ -541,7 +547,7 @@ def build_bench(bm, x, y, z_ground=0.0, ang=0.0, length=1.75, with_back=True):
         for sx in (-L * 0.5 + 0.18, L * 0.5 - 0.18):
             faces += create_beveled_box(
                 bm, size=(0.08, 0.08, post_h + 0.06),
-                location=(sx, seat_d * 0.42 + 0.04, seat_z + post_h * 0.5 - 0.03),
+                location=(sx, seat_d * 0.42 + 0.04 + dy, seat_z + post_h * 0.5 - 0.03),
                 rotation=(-tilt, 0.0, 0.0),
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
@@ -549,7 +555,7 @@ def build_bench(bm, x, y, z_ground=0.0, ang=0.0, length=1.75, with_back=True):
         for bz_off, bh in ((0.22, 0.12), (0.40, 0.12)):
             faces += create_beveled_box(
                 bm, size=(L, 0.065, bh),
-                location=(0.0, seat_d * 0.44 + bz_off * math.sin(tilt) + 0.04, seat_z + bz_off),
+                location=(0.0, seat_d * 0.44 + bz_off * math.sin(tilt) + 0.04 + dy, seat_z + bz_off),
                 rotation=(-tilt, 0.0, 0.0),
                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
 
