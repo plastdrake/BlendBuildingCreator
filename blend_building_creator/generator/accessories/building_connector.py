@@ -2164,19 +2164,9 @@ def build_archive_hall_portal(
     if party_wall_faces:
         bmesh.ops.delete(bm, geom=party_wall_faces, context='FACES')
 
-    # Purge any Archive Hall roof/gable/rafter faces penetrating inside Keep interior (x <= 12.05, z >= 22.0)
-    gable_faces = [
-        f for f in bm.faces if f.is_valid
-        and (10.50 <= f.calc_center_median().x <= 12.05)
-        and (34.80 <= f.calc_center_median().y <= 45.20)
-        and (22.00 <= f.calc_center_median().z <= 36.00)
-        and f.material_index in (
-            MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER, MAT_INDEX_PLASTER_EXT,
-            MAT_INDEX_WOOD
-        )
-    ]
-    if gable_faces:
-        bmesh.ops.delete(bm, geom=gable_faces, context='FACES')
+    # Note: Archive Hall roof properly abuts Keep exterior east wall at x=12.0
+    # via roof_abut_left=True, without penetrating Keep interior. Keep's own roof
+    # deck runs to x=12.0 and must not be purged.
 
     # 2. Clear any stray faces within the exact portal aperture opening volume
     hw = portal_w * 0.5
