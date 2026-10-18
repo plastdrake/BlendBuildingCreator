@@ -681,30 +681,37 @@ def build_tower_building_connector(
 
     fz_tower = min(floor_zs)
 
-    # 1. Cleanly purge props and carve the full walkway aperture through both building interfaces
-    x_corridor_start = min(x_tower_inner - 0.20, bld_wall_x + tower_dir * 0.45)
-    x_corridor_end = max(x_tower_inner - 0.20, bld_wall_x + tower_dir * 0.45)
-    corr_len = x_corridor_end - x_corridor_start
-    corr_cx = (x_corridor_start + x_corridor_end) * 0.5
+    # Walkway span strictly between tower exterior wall and building exterior wall
+    x_walk_0 = min(x_tower_outer, bld_wall_x)
+    x_walk_1 = max(x_tower_outer, bld_wall_x)
+    walk_span = max(0.2, x_walk_1 - x_walk_0)
+    walk_mid_x = (x_walk_0 + x_walk_1) * 0.5
+
+    # 1. Carve pass-through portal strictly through the BUILDING wall (NOT the round tower wall)
+    # The round tower doorway is already cleanly open with zero faces below 2.6m; bisecting it creates open holes.
+    bld_carve_x0 = min(bld_wall_x - tower_dir * 0.05, bld_wall_x + tower_dir * 0.50)
+    bld_carve_x1 = max(bld_wall_x - tower_dir * 0.05, bld_wall_x + tower_dir * 0.50)
 
     purge_props_in_volume(
         bm,
-        x_span=(x_corridor_start - 0.50, x_corridor_end + 0.50),
-        y_span=(mid_y - walk_w * 0.5 - 0.50, mid_y + walk_w * 0.5 + 0.50),
+        x_span=(bld_carve_x0 - 0.40, bld_carve_x1 + 0.40),
+        y_span=(mid_y - walk_w * 0.5 - 0.40, mid_y + walk_w * 0.5 + 0.40),
         z_span=(bld_floor_z - 0.10, max_z + 0.50)
     )
 
     carve_pass_through_portal(
         bm,
-        x_span=(x_corridor_start, x_corridor_end),
+        x_span=(bld_carve_x0, bld_carve_x1),
         y_span=(mid_y - walk_w * 0.5 + 0.02, mid_y + walk_w * 0.5 - 0.02),
         z_span=(bld_floor_z + 0.02, max_z - 0.02)
     )
 
-    # Purge any residual interior sliver faces inside the clear walkway envelope:
+    # Purge any residual interior sliver faces inside the connector walkway and building portal (excluding tower wall)
+    p_x0 = min(x_walk_0 + 0.02, bld_carve_x0 + 0.02)
+    p_x1 = max(x_walk_1 - 0.02, bld_carve_x1 - 0.02)
     walkway_interior_purge = [
         f for f in bm.faces if f.is_valid
-        and (x_corridor_start + 0.02 <= f.calc_center_median().x <= x_corridor_end - 0.02)
+        and (p_x0 <= f.calc_center_median().x <= p_x1)
         and (mid_y - walk_w * 0.5 + 0.03 <= f.calc_center_median().y <= mid_y + walk_w * 0.5 - 0.03)
         and (bld_floor_z + 0.04 <= f.calc_center_median().z <= max_z - 0.04)
         and f.material_index in (
@@ -717,21 +724,29 @@ def build_tower_building_connector(
         import bmesh
         bmesh.ops.delete(bm, geom=walkway_interior_purge, context='FACES')
 
-    # 2. Solid foundation plinth extending continuously underneath the full walkway span (ZERO HOLES, ZERO GAP)
+    # 2. Solid foundation plinth extending continuously underneath the walkway span (ZERO HOLES, ZERO GAP)
+    plinth_x0 = min(x_tower_outer - tower_dir * 0.08, bld_wall_x + tower_dir * 0.08)
+    plinth_x1 = max(x_tower_outer - tower_dir * 0.08, bld_wall_x + tower_dir * 0.08)
+    plinth_len = plinth_x1 - plinth_x0
+    plinth_cx = (plinth_x0 + plinth_x1) * 0.5
     plinth_top = bld_floor_z - 0.03
     plinth_h = plinth_top - tower_z_base
     if plinth_h > 0.05:
         create_beveled_box(
-            bm, size=(corr_len, walk_w + wall_t * 2.0, plinth_h),
-            location=(corr_cx, mid_y, tower_z_base + plinth_h * 0.5),
+            bm, size=(plinth_len, walk_w + wall_t * 2.0, plinth_h),
+            location=(plinth_cx, mid_y, tower_z_base + plinth_h * 0.5),
             mat_index=wall_mat, bevel_amount=0.03
         )
 
     # 3. Clean, continuous wooden floor deck spanning completely from Tower interior to Building interior
     # Level and flat with zero steps, holes, or elevation bumps
+    fl_x0 = min(x_tower_inner - tower_dir * 0.04, bld_wall_x + tower_dir * 0.42)
+    fl_x1 = max(x_tower_inner - tower_dir * 0.04, bld_wall_x + tower_dir * 0.42)
+    fl_len = fl_x1 - fl_x0
+    fl_cx = (fl_x0 + fl_x1) * 0.5
     create_beveled_box(
-        bm, size=(corr_len, walk_w, 0.10),
-        location=(corr_cx, mid_y, bld_floor_z + 0.02),
+        bm, size=(fl_len, walk_w, 0.10),
+        location=(fl_cx, mid_y, bld_floor_z + 0.02),
         mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
     )
 
@@ -751,42 +766,81 @@ def build_tower_building_connector(
         )
 
     # 5. Clean wooden ceiling with timber tie joists
+    # Spans strictly between the tower exterior wall and building exterior wall (ZERO wall penetration on either end)
     ceil_z = bld_floor_z + door_h + 0.05
     create_beveled_box(
-        bm, size=(corr_len, walk_w + 0.08, 0.08),
-        location=(corr_cx, mid_y, ceil_z),
+        bm, size=(walk_span, walk_w + 0.04, 0.08),
+        location=(walk_mid_x, mid_y, ceil_z),
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.005
     )
-    for bi_u in (-0.5, 0.0, 0.5):
-        bx = corr_cx + bi_u * (corr_len * 0.38)
+    for bi_u in (-0.32, 0.0, 0.32):
+        bx = walk_mid_x + bi_u * walk_span
         create_beveled_box(
-            bm, size=(0.18, walk_w + 0.12, 0.16),
+            bm, size=(0.18, walk_w + 0.10, 0.16),
             location=(bx, mid_y, ceil_z - 0.08),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
 
-    # 6. Timber portal encasements at both ends covering all cut wall edges
+    # 6. Timber portal encasements and full tower doorway tunnel lining
     jamb_w = 0.20
-    jamb_t = 0.38
     door_eff_w = walk_w - jamb_w * 2.0  # 1.10m clear walkthrough opening
     lintel_w = walk_w + 0.06
     lintel_h = 0.28
-    for door_pos in (bld_wall_x, x_tower_outer):
+    tw_depth = abs(x_tower_outer - x_tower_inner)
+    tw_cx = (x_tower_inner + x_tower_outer) * 0.5
+
+    # Full jamb & soffit lining through the thickness of the round tower wall:
+    for js in (-1.0, 1.0):
+        jy = mid_y + js * (walk_w * 0.5 - jamb_w * 0.5)
+        create_beveled_box(
+            bm, size=(tw_depth + 0.04, jamb_w, door_h + 0.04),
+            location=(tw_cx, jy, bld_floor_z + 0.07 + (door_h + 0.04) * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+        )
+    create_beveled_box(
+        bm, size=(tw_depth + 0.04, lintel_w, lintel_h),
+        location=(tw_cx, mid_y, bld_floor_z + 0.07 + door_h + lintel_h * 0.5),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+    )
+
+    # Architrave casing frame at x_tower_inner facing cleanly into the tower room
+    casing_t = 0.16
+    casing_x = x_tower_inner - tower_dir * (casing_t * 0.5 - 0.01)
+    create_beveled_box(
+        bm, size=(casing_t, lintel_w + 0.10, 0.04),
+        location=(casing_x, mid_y, bld_floor_z + 0.07 + 0.02),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+    )
+    for js in (-1.0, 1.0):
+        jy = mid_y + js * (walk_w * 0.5 - jamb_w * 0.5)
+        create_beveled_box(
+            bm, size=(casing_t, jamb_w + 0.06, door_h + 0.08),
+            location=(casing_x, jy, bld_floor_z + 0.07 + (door_h + 0.08) * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+        )
+    create_beveled_box(
+        bm, size=(casing_t, lintel_w + 0.12, lintel_h + 0.04),
+        location=(casing_x, mid_y, bld_floor_z + 0.07 + door_h + lintel_h * 0.5),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+    )
+
+    # Portal casings at walkway portals: bld_wall_x, x_tower_outer, and inside building wall
+    for door_pos in (bld_wall_x, x_tower_outer, bld_wall_x + tower_dir * 0.40):
         # Threshold plate
         create_beveled_box(
-            bm, size=(0.36, lintel_w, 0.04),
+            bm, size=(0.32, lintel_w, 0.04),
             location=(door_pos, mid_y, bld_floor_z + 0.07 + 0.02),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
         for js in (-1.0, 1.0):
             jy = mid_y + js * (walk_w * 0.5 - jamb_w * 0.5)
             create_beveled_box(
-                bm, size=(jamb_t, jamb_w, door_h + 0.04),
+                bm, size=(0.32, jamb_w, door_h + 0.04),
                 location=(door_pos, jy, bld_floor_z + 0.07 + (door_h + 0.04) * 0.5),
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
             )
         create_beveled_box(
-            bm, size=(jamb_t, lintel_w, lintel_h),
+            bm, size=(0.32, lintel_w, lintel_h),
             location=(door_pos, mid_y, bld_floor_z + 0.07 + door_h + lintel_h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
         )
