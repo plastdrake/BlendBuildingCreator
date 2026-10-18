@@ -549,6 +549,135 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
     return None
 
 
+def _try_place_wall_table_nook(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
+                               candidate_walls=('WEST', 'EAST'),
+                               target_pos: Optional[float] = None,
+                               table_radius: float = 0.48) -> Optional[Tuple[float, float, str]]:
+    """
+    Places a cozy courtier/tavern sitting nook flush along a wall:
+    a round pedestal table with tableware scatter and 2-3 wooden stools
+    tucked neatly against it, keeping room center and aisles completely unobstructed.
+    Returns (table_x, table_y, wall_name) if placed, or None.
+    """
+    rx0, rx1 = tracker.rx0, tracker.rx1
+    ry0, ry1 = tracker.ry0, tracker.ry1
+    _rb = getattr(tracker, 'room_bounds', None) or (rx0, rx1, ry0, ry1)
+    _wx0, _wx1, _wy0, _wy1 = _rb
+    rcx = (rx0 + rx1) * 0.5
+    rcy = (ry0 + ry1) * 0.5
+
+    tr = table_radius
+    wall_dist = tr + 0.16
+    nook_depth = wall_dist + tr + 0.55
+    half_span = tr + 0.52
+
+    _fvoid = getattr(tracker, 'floor_void', None)
+
+    for wall in candidate_walls:
+        if wall == 'WEST':
+            tx = _wx0 + wall_dist
+            min_y = ry0 + half_span + 0.20
+            max_y = ry1 - half_span - 0.20
+            center_y = target_pos if target_pos is not None else rcy
+            for cy in _sample_wall_positions(center_y, min_y, max_y, step=0.30):
+                bx0, bx1 = _wx0 + 0.01, _wx0 + nook_depth
+                by0, by1 = cy - half_span, cy + half_span
+                if _fvoid is not None:
+                    if _fvoid[0] - bx1 < 1.80 or not (by1 <= _fvoid[2] or by0 >= _fvoid[3] or bx1 <= _fvoid[0]):
+                        continue
+                if tracker.is_near_door(tx, cy, radius=1.60) or any(
+                    tracker.is_near_door(px, py, radius=1.20) for px in (bx0, bx1) for py in (by0, by1)
+                ):
+                    continue
+                if tracker.is_free(bx0, bx1, by0, by1, check_windows=False, bounds_slack=0.22):
+                    tracker.occupy(bx0, bx1, by0, by1)
+                    build_prop(bm, 'ROUND_TABLE', tx, cy, z_floor, rng.uniform(0.0, 6.28), radius=tr)
+                    scatter_prop = 'SCATTER_TABLEWARE' if rng.random() < 0.65 else 'BOTTLE_CLUSTER'
+                    build_prop(bm, scatter_prop, tx, cy, z_floor + 0.775, 0.0)
+                    build_prop(bm, 'STOOL', tx, cy + (tr + 0.28), z_floor, rng.uniform(0.0, 6.28))
+                    build_prop(bm, 'STOOL', tx, cy - (tr + 0.28), z_floor, rng.uniform(0.0, 6.28))
+                    build_prop(bm, 'STOOL', tx + (tr + 0.25), cy, z_floor, rng.uniform(0.0, 6.28))
+                    return (tx, cy, 'WEST')
+
+        elif wall == 'EAST':
+            tx = _wx1 - wall_dist
+            min_y = ry0 + half_span + 0.20
+            max_y = ry1 - half_span - 0.20
+            center_y = target_pos if target_pos is not None else rcy
+            for cy in _sample_wall_positions(center_y, min_y, max_y, step=0.30):
+                bx0, bx1 = _wx1 - nook_depth, _wx1 - 0.01
+                by0, by1 = cy - half_span, cy + half_span
+                if _fvoid is not None:
+                    if bx0 - _fvoid[1] < 1.80 or not (by1 <= _fvoid[2] or by0 >= _fvoid[3] or bx0 >= _fvoid[1]):
+                        continue
+                if tracker.is_near_door(tx, cy, radius=1.60) or any(
+                    tracker.is_near_door(px, py, radius=1.20) for px in (bx0, bx1) for py in (by0, by1)
+                ):
+                    continue
+                if tracker.is_free(bx0, bx1, by0, by1, check_windows=False, bounds_slack=0.22):
+                    tracker.occupy(bx0, bx1, by0, by1)
+                    build_prop(bm, 'ROUND_TABLE', tx, cy, z_floor, rng.uniform(0.0, 6.28), radius=tr)
+                    scatter_prop = 'SCATTER_TABLEWARE' if rng.random() < 0.65 else 'BOTTLE_CLUSTER'
+                    build_prop(bm, scatter_prop, tx, cy, z_floor + 0.775, 0.0)
+                    build_prop(bm, 'STOOL', tx, cy + (tr + 0.28), z_floor, rng.uniform(0.0, 6.28))
+                    build_prop(bm, 'STOOL', tx, cy - (tr + 0.28), z_floor, rng.uniform(0.0, 6.28))
+                    build_prop(bm, 'STOOL', tx - (tr + 0.25), cy, z_floor, rng.uniform(0.0, 6.28))
+                    return (tx, cy, 'EAST')
+
+        elif wall == 'SOUTH':
+            ty = _wy0 + wall_dist
+            min_x = rx0 + half_span + 0.20
+            max_x = rx1 - half_span - 0.20
+            center_x = target_pos if target_pos is not None else rcx
+            for cx in _sample_wall_positions(center_x, min_x, max_x, step=0.30):
+                bx0, bx1 = cx - half_span, cx + half_span
+                by0, by1 = _wy0 + 0.01, _wy0 + nook_depth
+                if _fvoid is not None:
+                    if _fvoid[2] - by1 < 1.80 or not (bx1 <= _fvoid[0] or bx0 >= _fvoid[1] or by1 <= _fvoid[2]):
+                        continue
+                if tracker.is_near_door(cx, ty, radius=1.60) or any(
+                    tracker.is_near_door(px, py, radius=1.20) for px in (bx0, bx1) for py in (by0, by1)
+                ):
+                    continue
+                if tracker.is_free(bx0, bx1, by0, by1, check_windows=False, bounds_slack=0.22):
+                    tracker.occupy(bx0, bx1, by0, by1)
+                    build_prop(bm, 'ROUND_TABLE', cx, ty, z_floor, rng.uniform(0.0, 6.28), radius=tr)
+                    scatter_prop = 'SCATTER_TABLEWARE' if rng.random() < 0.65 else 'BOTTLE_CLUSTER'
+                    build_prop(bm, scatter_prop, cx, ty, z_floor + 0.775, 0.0)
+                    build_prop(bm, 'STOOL', cx + (tr + 0.28), ty, z_floor, rng.uniform(0.0, 6.28))
+                    build_prop(bm, 'STOOL', cx - (tr + 0.28), ty, z_floor, rng.uniform(0.0, 6.28))
+                    build_prop(bm, 'STOOL', cx, ty + (tr + 0.25), z_floor, rng.uniform(0.0, 6.28))
+                    return (cx, ty, 'SOUTH')
+
+        elif wall == 'NORTH':
+            ty = _wy1 - wall_dist
+            min_x = rx0 + half_span + 0.20
+            max_x = rx1 - half_span - 0.20
+            center_x = target_pos if target_pos is not None else rcx
+            for cx in _sample_wall_positions(center_x, min_x, max_x, step=0.30):
+                bx0, bx1 = cx - half_span, cx + half_span
+                by0, by1 = _wy1 - nook_depth, _wy1 - 0.01
+                if _fvoid is not None:
+                    if by0 - _fvoid[3] < 1.80 or not (bx1 <= _fvoid[0] or bx0 >= _fvoid[1] or by0 >= _fvoid[3]):
+                        continue
+                if tracker.is_near_door(cx, ty, radius=1.60) or any(
+                    tracker.is_near_door(px, py, radius=1.20) for px in (bx0, bx1) for py in (by0, by1)
+                ):
+                    continue
+                if tracker.is_free(bx0, bx1, by0, by1, check_windows=False, bounds_slack=0.22):
+                    tracker.occupy(bx0, bx1, by0, by1)
+                    build_prop(bm, 'ROUND_TABLE', cx, ty, z_floor, rng.uniform(0.0, 6.28), radius=tr)
+                    scatter_prop = 'SCATTER_TABLEWARE' if rng.random() < 0.65 else 'BOTTLE_CLUSTER'
+                    build_prop(bm, scatter_prop, cx, ty, z_floor + 0.775, 0.0)
+                    build_prop(bm, 'STOOL', cx + (tr + 0.28), ty, z_floor, rng.uniform(0.0, 6.28))
+                    build_prop(bm, 'STOOL', cx - (tr + 0.28), ty, z_floor, rng.uniform(0.0, 6.28))
+                    build_prop(bm, 'STOOL', cx, ty - (tr + 0.25), z_floor, rng.uniform(0.0, 6.28))
+                    return (cx, ty, 'NORTH')
+
+    return None
+
+
+
 def _dress_desk(bm, tracker: RoomOccupancyTracker, cx: float, cy: float, yaw: float,
                 z_floor: float, rng, room_center: Optional[Tuple[float, float]] = None):
     """Put a chair at a desk plus a small book pile on the desktop."""
@@ -1993,6 +2122,24 @@ def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
     tracker.rug_count = 1
     tracker.no_rugs = True
 
+    # 5. Courtier round tables with stools along flanking walls
+    # (Placed neatly along the West and East walls, keeping the central aisle 100% open)
+    num_table_sets = 4 if rd >= 11.0 else (2 if rd >= 6.5 else 1)
+    cand_y_targets = [rcy - rd * 0.28, rcy + rd * 0.28, rcy - rd * 0.38, rcy + rd * 0.38]
+    cand_walls = ['WEST', 'EAST']
+    placed_tables = 0
+    for target_y in cand_y_targets:
+        if placed_tables >= num_table_sets:
+            break
+        wall_order = cand_walls if (placed_tables % 2 == 0) else list(reversed(cand_walls))
+        for wall in wall_order:
+            res = _try_place_wall_table_nook(bm, tracker, z_floor, rng,
+                                             candidate_walls=(wall,),
+                                             target_pos=target_y)
+            if res is not None:
+                placed_tables += 1
+                break
+
     # 7. Courtier / noble benches along side walls
     _try_place_wall_prop(bm, 'BENCH', 1.80, 0.50, tracker, z_floor,
                          candidate_walls=('WEST', 'EAST'), length=1.75)
@@ -2691,9 +2838,17 @@ def _place_goods_row(bm, tracker: RoomOccupancyTracker, z_floor: float, rng,
                   (rx1 - box - 0.05, ry0 + (ry1 - ry0) * f)]
     rng.shuffle(spots)
     placed = 0
+    stair_hole = getattr(tracker, 'stair_hole_rect', None)
     for cx, cy in spots:
         if placed >= count:
             break
+        # Never block stair landings — barrels/crates on stairs block egress.
+        if stair_hole is not None:
+            shx0, shx1, shy0, shy1 = stair_hole
+            margin = box + 0.45
+            if not (cx + box < shx0 - margin or cx - box > shx1 + margin or
+                    cy + box < shy0 - margin or cy - box > shy1 + margin):
+                continue
         if tracker.is_free(cx - box, cx + box, cy - box, cy + box):
             tracker.occupy(cx - box, cx + box, cy - box, cy + box)
             build_prop(bm, key, cx + _jit(rng, 0.08), cy + _jit(rng, 0.08),
@@ -4131,11 +4286,16 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                    or [])
         for ed in _extras:
             if ed.get('floor_idx', 0) == rm.floor_idx:
-                sax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
+                efac = ed.get('facade', '')
+                # Only include this extra doorway if the room actually borders this exterior facade!
+                if hasattr(rm, 'exterior_facades') and rm.exterior_facades:
+                    if efac not in rm.exterior_facades:
+                        continue
+                sax = ed.get('axis', 'Y' if efac in ('LEFT', 'RIGHT') else 'X')
                 if sax == 'X':
-                    ed_x, ed_y = ed.get('pos', 0.0), (ry1 if ed.get('facade') == 'BACK' else ry0)
+                    ed_x, ed_y = ed.get('pos', 0.0), (ry1 if efac == 'BACK' else ry0)
                 else:
-                    ed_x, ed_y = (rx0 if ed.get('facade') == 'LEFT' else rx1), ed.get('pos', 0.0)
+                    ed_x, ed_y = (rx0 if efac == 'LEFT' else rx1), ed.get('pos', 0.0)
                 ed_d = {'x': ed_x, 'y': ed_y, 'axis': sax, 'w': ed.get('w', 1.8), 'is_portal': ed.get('is_portal', True)}
                 if (rx0 - 0.55 <= ed_x <= rx1 + 0.55) and (ry0 - 0.55 <= ed_y <= ry1 + 0.55):
                     if ed_d not in all_doorways:
@@ -4186,8 +4346,13 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             rm.floor_idx)
         _wt = float(getattr(ctx, 'wall_t', 0.30) or 0.30)
         if _fwb is not None:
-            tracker.room_bounds = (_fwb[0] + _wt, _fwb[1] - _wt,
-                                   _fwb[2] + _wt, _fwb[3] - _wt)
+            # Only clamp to outer building bounds for exterior perimeter walls;
+            # interior partition walls stay strictly at (rx0, rx1, ry0, ry1).
+            _wx0 = (_fwb[0] + _wt) if abs(rx0 - (_fwb[0] + _wt)) < 0.6 else rx0
+            _wx1 = (_fwb[1] - _wt) if abs(rx1 - (_fwb[1] - _wt)) < 0.6 else rx1
+            _wy0 = (_fwb[2] + _wt) if abs(ry0 - (_fwb[2] + _wt)) < 0.6 else ry0
+            _wy1 = (_fwb[3] - _wt) if abs(ry1 - (_fwb[3] - _wt)) < 0.6 else ry1
+            tracker.room_bounds = (_wx0, _wx1, _wy0, _wy1)
     tracker.stair_hole = _stair_well
     # Turned-stair rooms are pre-inset off the walls that carry a flight, so
     # the generic side pad would double-dip and deny the whole inset wall.
@@ -4384,7 +4549,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     # Minimum-dressing guarantee: a living room the recipe left almost empty
     # (awkward stairwell, door-heavy plan) still gets a sitting nook. Bare
     # industrial fit-outs, walkways and stables are exempt by design.
-    if (not _bare and role not in ('STAIR_LANDING', 'CORRIDOR', 'STABLE_HALL', 'STORE', 'MEZZANINE_GALLERY', 'UPPER_GALLERY')
+    if (not _bare and role not in ('STAIR_LANDING', 'CORRIDOR', 'STABLE_HALL', 'STORE', 'MEZZANINE_GALLERY', 'UPPER_GALLERY', 'THRONE_ROOM')
             and len(tracker.occupied_boxes) - _occ_before < 3):
         try:
             _ensure_minimum_dressing(bm, tracker, rm, z_floor, rng)
