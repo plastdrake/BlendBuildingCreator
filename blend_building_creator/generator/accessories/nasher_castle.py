@@ -193,7 +193,7 @@ def _build_halls(bm, props, tier):
                 'has_bell_cote': False,
                 'roof_overhang': 0.50,
                 'extra_doorways': [
-                    {'floor_idx': 0, 'facade': 'RIGHT', 'pos': 3.8, 'w': 2.0, 'h': 2.6, 'is_portal': True},
+                    {'floor_idx': 0, 'facade': 'RIGHT', 'pos': 3.8, 'w': 2.2, 'h': 2.6, 'is_portal': True},
                     {'floor_idx': 0, 'facade': 'LEFT', 'pos': 0.0, 'w': 2.0, 'h': 2.6, 'is_portal': True},
                 ],
                 'extra_window_exclusions': [

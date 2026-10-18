@@ -7,6 +7,8 @@ import random
 import json
 import os
 import re
+import sys
+import subprocess
 from .generator.building import generate_building
 from .presets import apply_preset, BUILDING_FAMILIES, PRESETS
 
@@ -345,7 +347,7 @@ class BUILDING_OT_export_all_preset_tiers_fbx(bpy.types.Operator):
     bl_label = "Export All Preset Tiers as FBX"
     bl_description = (
         "Generate one building for every T1/T2/T3 preset and export each as an FBX "
-        "with modifiers, Apply Transform, and Edge smoothing"
+        "in a separate PowerShell window with modifiers, Apply Transform, and Edge smoothing"
     )
     bl_options = {'REGISTER'}
 
@@ -365,18 +367,44 @@ class BUILDING_OT_export_all_preset_tiers_fbx(bpy.types.Operator):
         return context.window_manager.invoke_props_dialog(self, width=520)
 
     def execute(self, context):
-        jobs = [
-            (family, tier_label, preset_key, description)
-            for family in BUILDING_FAMILIES
-            for tier_label, preset_key, description in family['tiers']
-            if preset_key in PRESETS
-        ]
         try:
-            count = _export_fbx_jobs(context, jobs, self.directory, self.keep_buildings)
-            self.report({'INFO'}, f"Exported {count} FBX files to {bpy.path.abspath(self.directory)}")
+            export_dir = bpy.path.abspath(self.directory).rstrip("/\\")
+            if not export_dir:
+                self.report({'ERROR'}, "Choose an export directory")
+                return {'CANCELLED'}
+            os.makedirs(export_dir, exist_ok=True)
+
+            escaped_dir = repr(export_dir)
+            keep = "True" if self.keep_buildings else "False"
+            expression = (
+                "import blend_building_creator.batch_export as b; "
+                f"b.export_all({escaped_dir}, keep_buildings={keep})"
+            )
+            command = (
+                f'& "{sys.executable}" --background --python-expr '
+                f'"{expression}"'
+            )
+            powershell = os.environ.get("COMSPEC", "powershell.exe")
+            if not powershell.lower().endswith(("powershell.exe", "pwsh.exe")):
+                powershell = "powershell.exe"
+            subprocess.Popen(
+                [
+                    powershell,
+                    "-NoLogo",
+                    "-NoExit",
+                    "-Command",
+                    command,
+                ],
+                cwd=os.path.dirname(os.path.dirname(__file__)),
+                creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+            )
+            self.report(
+                {'INFO'},
+                f"Started FBX export in a new PowerShell window: {export_dir}",
+            )
             return {'FINISHED'}
-        except Exception as exc:
-            self.report({'ERROR'}, f"FBX batch stopped: {exc}")
+        except (OSError, ValueError) as exc:
+            self.report({'ERROR'}, f"Could not start FBX export: {exc}")
             return {'CANCELLED'}
 
 

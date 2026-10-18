@@ -8,6 +8,7 @@ so command-line exports stay identical to exports started from the UI.
 """
 
 import json
+import argparse
 import os
 import re
 import sys
@@ -197,8 +198,18 @@ def pause_before_exit():
 
 def main():
     print("Generating one FBX for every valid T1/T2/T3 preset...")
-    export_dir = prompt_directory()
-    count = export_jobs(jobs_for(), export_dir)
+    parser = argparse.ArgumentParser(description="Export every building preset tier as FBX")
+    parser.add_argument("--output", help="Absolute output directory")
+    parser.add_argument(
+        "--keep-buildings",
+        action="store_true",
+        help="Keep generated buildings in the background Blender scene",
+    )
+    args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
+    export_dir = args.output or prompt_directory()
+    if args.output:
+        print(f"\nFBX files will be written to: {bpy.path.abspath(export_dir)}")
+    count = export_jobs(jobs_for(), export_dir, keep_buildings=args.keep_buildings)
     print(f"Completed: {count} FBX files exported to {bpy.path.abspath(export_dir)}")
 
 

@@ -43,8 +43,14 @@ blender --background --python tools/generate_all_fbx.py
 ```
 
 The Fantasy Building sidebar provides the **Export All Preset Tiers (FBX)**
-button. It exports every valid preset and every tier using the same modifier,
-transform, and Edge smoothing FBX settings.
+button. It opens a separate PowerShell window and runs the export in a
+background Blender process, so the main Blender interface remains responsive.
+The button uses the installed add-on's batch-export module, so it also works
+when the add-on is installed as a Blender extension rather than from the
+repository folder.
+The PowerShell window shows the current preset, completed count, file size,
+object count, and vertex count. It exports every valid preset and every tier
+using the same modifier, transform, and Edge smoothing FBX settings.
 
 These are Blender Python scripts and must be run by Blender; the regular Python
 interpreter does not provide Blender's `bpy` module. Do not run it with

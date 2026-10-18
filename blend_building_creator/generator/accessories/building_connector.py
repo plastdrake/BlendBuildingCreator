@@ -1984,26 +1984,85 @@ def build_chapel_connector(
         bevel_amount=0.006
     )
 
-    # 5. Clean vertical wood plank side walls (North and South) - ONLY WOOD VISIBLE!
-    # Bottom wall beam removed as requested; only top ceiling wall tie beam remains.
+    # 5. Dual-layer side walls (North and South):
+    # Exterior: White exterior plaster (MAT_INDEX_PLASTER_EXT) with authentic half-timber framing (MAT_INDEX_TIMBER)
+    # Interior: Vertical interior wood planks (MAT_INDEX_WOOD) with top ceiling wall tie beam
     wall_t = (width - deck_w) * 0.5
+    wall_t_int = 0.10
+    wall_t_ext = max(0.08, wall_t - wall_t_int)
     top_z = floor_z + ceiling_h
     wall_h = top_z - found_z1
+
     for side in (-1.0, 1.0):
-        wy = cy + side * (deck_w * 0.5 + wall_t * 0.5)
+        # Interior wood plank wall facing the corridor
+        wy_int = cy + side * (deck_w * 0.5 + wall_t_int * 0.5)
         create_beveled_box(
             bm,
-            size=(dx, wall_t, wall_h),
-            location=(cx, wy, found_z1 + wall_h * 0.5),
+            size=(dx, wall_t_int, wall_h),
+            location=(cx, wy_int, found_z1 + wall_h * 0.5),
             mat_index=MAT_INDEX_WOOD,
-            bevel_amount=0.015
+            bevel_amount=0.01
         )
+        # Top interior ceiling crown / tie beam
         create_beveled_box(
             bm,
             size=(dx + 0.02, 0.06, 0.16),
-            location=(cx, wy - side * (wall_t * 0.5 - 0.03), top_z - 0.08),
+            location=(cx, wy_int - side * (wall_t_int * 0.5 - 0.03), top_z - 0.08),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.005
+        )
+
+        # Exterior plaster wall facing outside (alley / courtyard)
+        wy_ext = cy + side * (deck_w * 0.5 + wall_t_int + wall_t_ext * 0.5)
+        create_beveled_box(
+            bm,
+            size=(dx, wall_t_ext, wall_h),
+            location=(cx, wy_ext, found_z1 + wall_h * 0.5),
+            mat_index=MAT_INDEX_PLASTER_EXT,
+            bevel_amount=0.01
+        )
+
+        # Exterior timber framing on the outer face
+        y_ext_face = cy + side * (deck_w * 0.5 + wall_t_int + wall_t_ext)
+        t_thick = 0.06
+        # Sill beam above stone foundation
+        create_beveled_box(
+            bm,
+            size=(dx, t_thick, 0.14),
+            location=(cx, y_ext_face - side * (t_thick * 0.5 - 0.01), found_z1 + 0.07),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.008
+        )
+        # Eaves plate beam under roof overhang
+        create_beveled_box(
+            bm,
+            size=(dx, t_thick, 0.14),
+            location=(cx, y_ext_face - side * (t_thick * 0.5 - 0.01), top_z - 0.07),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.008
+        )
+        # Corner timber posts at Chapel end and Keep end
+        create_beveled_box(
+            bm,
+            size=(0.14, t_thick, wall_h),
+            location=(min(x_chapel, x_keep) + 0.07, y_ext_face - side * (t_thick * 0.5 - 0.01), found_z1 + wall_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.008
+        )
+        create_beveled_box(
+            bm,
+            size=(0.14, t_thick, wall_h),
+            location=(max(x_chapel, x_keep) - 0.07, y_ext_face - side * (t_thick * 0.5 - 0.01), found_z1 + wall_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.008
+        )
+        # Intermediate vertical timber post
+        create_beveled_box(
+            bm,
+            size=(0.12, t_thick, wall_h),
+            location=(cx, y_ext_face - side * (t_thick * 0.5 - 0.01), found_z1 + wall_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.008
         )
 
     # 6. Clean flat wooden ceiling with timber tie joists
@@ -2091,48 +2150,54 @@ def build_chapel_connector(
         )
 
     # 8. Solid timber portal encasements, corridor wall linings, and header panels
-    jamb_w = 0.18
-    jamb_t = 0.52
-    casing_d = 0.05
-    casing_w = 0.12
+    jamb_w = 0.22
+    wall_depth = 0.38
+    jamb_t = wall_depth + 0.12  # 0.50m (extends 6cm past wall on both corridor and room sides)
+    casing_d = 0.06
+    casing_w = 0.16
 
     for x_end, base_fz, into_dir in ((x_keep, floor_z, 1.0), (x_chapel, chapel_floor_z, -1.0)):
         jh = portal_h
+        wall_cx = x_end + into_dir * (wall_depth * 0.5)
+
+        # Solid timber jambs centered directly over the wall cut line (portal_w * 0.5)
+        # and centered on the wall thickness (wall_cx), completely burying the cut edge from corridor to room.
         for side in (-1.0, 1.0):
-            jy = cy + side * (portal_w * 0.5 + jamb_w * 0.5)
+            jy = cy + side * (portal_w * 0.5)
             create_beveled_box(
                 bm,
                 size=(jamb_t, jamb_w, jh),
-                location=(x_end, jy, base_fz + 0.05 + jh * 0.5),
+                location=(wall_cx, jy, base_fz + 0.05 + jh * 0.5),
                 mat_index=MAT_INDEX_TIMBER,
                 bevel_amount=0.015
             )
-        
+
         lintel_w = portal_w + jamb_w * 2.0
-        lintel_h = 0.22
+        lintel_h = 0.24
+        # Lintel laps 4cm below the top wall cut to completely bury the top cut edge
         create_beveled_box(
             bm,
             size=(jamb_t, lintel_w, lintel_h),
-            location=(x_end, cy, base_fz + 0.05 + portal_h + lintel_h * 0.5),
+            location=(wall_cx, cy, base_fz + portal_h - 0.04 + lintel_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.015
         )
 
         # Header panel filling aperture space between lintel and ceiling
-        header_bot = base_fz + 0.05 + portal_h + lintel_h
+        header_bot = base_fz + portal_h - 0.04 + lintel_h
         header_h = top_z - header_bot
         if header_h > 0.02:
             create_box(
                 bm,
                 size=(jamb_t - 0.04, lintel_w, header_h),
-                location=(x_end, cy, header_bot + header_h * 0.5),
+                location=(wall_cx, cy, header_bot + header_h * 0.5),
                 mat_index=MAT_INDEX_WOOD,
                 is_wall=True
             )
             create_beveled_box(
                 bm,
                 size=(jamb_t, lintel_w + 0.04, 0.10),
-                location=(x_end, cy, top_z - 0.05),
+                location=(wall_cx, cy, top_z - 0.05),
                 mat_index=MAT_INDEX_TIMBER,
                 bevel_amount=0.008
             )
@@ -2142,7 +2207,7 @@ def build_chapel_connector(
         if flank_w > 0.04:
             for side in (-1.0, 1.0):
                 f_cy = cy + side * (lintel_w * 0.5 + flank_w * 0.5)
-                f_cx = x_end - into_dir * (jamb_t * 0.5 - 0.02)
+                f_cx = x_end - into_dir * 0.03
                 create_box(
                     bm,
                     size=(0.04, flank_w, top_z - found_z1),
@@ -2151,10 +2216,10 @@ def build_chapel_connector(
                     is_wall=True
                 )
 
-        # Architrave casings facing inside the room
-        room_x = x_end + into_dir * (jamb_t * 0.5 + casing_d * 0.5)
+        # Architrave casings facing inside the room (flush against interior room wall)
+        room_x = x_end + into_dir * (wall_depth + 0.06 + casing_d * 0.5)
         for side in (-1.0, 1.0):
-            ty = cy + side * (portal_w * 0.5 + casing_w * 0.5)
+            ty = cy + side * (portal_w * 0.5 + 0.02)
             create_beveled_box(
                 bm,
                 size=(casing_d, casing_w, jh + 0.04),
@@ -2166,7 +2231,26 @@ def build_chapel_connector(
         create_beveled_box(
             bm,
             size=(casing_d + 0.01, head_w, lintel_h),
-            location=(room_x, cy, base_fz + 0.05 + portal_h + lintel_h * 0.5),
+            location=(room_x, cy, base_fz + portal_h - 0.04 + lintel_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.008
+        )
+
+        # Architrave casings facing inside the corridor (flush against corridor end wall)
+        corr_x = x_end - into_dir * (0.06 + casing_d * 0.5)
+        for side in (-1.0, 1.0):
+            ty = cy + side * (portal_w * 0.5 + 0.02)
+            create_beveled_box(
+                bm,
+                size=(casing_d, casing_w, jh + 0.04),
+                location=(corr_x, ty, base_fz + 0.05 + (jh + 0.04) * 0.5),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.006
+            )
+        create_beveled_box(
+            bm,
+            size=(casing_d + 0.01, head_w, lintel_h),
+            location=(corr_x, cy, base_fz + portal_h - 0.04 + lintel_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.008
         )
