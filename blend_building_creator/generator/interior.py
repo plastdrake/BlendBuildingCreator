@@ -1700,14 +1700,32 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         rooms = [rm_west, rm_center, rm_east_s, rm_east_n]
 
     else:
-        _vwall(b_west, iy_min, iy_max, y_mid)
-        _vwall(b_east, iy_min, iy_max, y_mid)
-        _hwall(b_west, b_east, y_mid, 0.0)
+        dw_y_s = (iy_min + y_mid) * 0.5
+        dw_y_n = (y_mid + iy_max) * 0.5
+        dw_x_center = (b_west + b_east) * 0.5
+        dw_x_east = (b_east + ix_max) * 0.5
+
+        # West dividing walls between stair landing and central salons
+        _vwall(b_west, iy_min, y_mid, dw_y_s)
+        _vwall(b_west, y_mid, iy_max, dw_y_n)
+
+        # East dividing walls between central salons and library/treasury
+        _vwall(b_east, iy_min, y_mid, dw_y_s)
+        _vwall(b_east, y_mid, iy_max, dw_y_n)
+
+        # Horizontal partition dividing central salon into south and north rooms
+        _hwall(b_west, b_east, y_mid, dw_x_center)
+
+        # Horizontal partition dividing east wing into south and north rooms
+        _hwall(b_east, ix_max, y_mid, dw_x_east)
 
         rm_west = Room(
             id=f"fl{fl_idx}_stair_landing", floor_idx=fl_idx, role='STAIR_LANDING',
             bounds=(ix_min, b_west, iy_min, iy_max),
-            doorways=[{'x': b_west, 'y': y_mid, 'axis': 'Y', 'w': dw_w}],
+            doorways=[
+                {'x': b_west, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
+                {'x': b_west, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
+            ],
             stair_hole=_holds_stair((ix_min, b_west, iy_min, iy_max)),
             exterior_facades={'FRONT': (ix_min, b_west), 'BACK': (ix_min, b_west), 'LEFT': (iy_min, iy_max)}
         )
@@ -1715,8 +1733,9 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             id=f"fl{fl_idx}_royal_salon", floor_idx=fl_idx, role='GREAT_HALL',
             bounds=(b_west, b_east, iy_min, y_mid),
             doorways=[
-                {'x': b_west, 'y': y_mid - 1.5, 'axis': 'Y', 'w': dw_w},
-                {'x': 0.0, 'y': y_mid, 'axis': 'X', 'w': dw_w}
+                {'x': b_west, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
+                {'x': dw_x_center, 'y': y_mid, 'axis': 'X', 'w': dw_w},
+                {'x': b_east, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
             ],
             stair_hole=None,
             exterior_facades={'FRONT': (b_west, b_east)}
@@ -1725,17 +1744,20 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             id=f"fl{fl_idx}_royal_bed", floor_idx=fl_idx, role='MASTER_BED',
             bounds=(b_west, b_east, y_mid, iy_max),
             doorways=[
-                {'x': 0.0, 'y': y_mid, 'axis': 'X', 'w': dw_w},
-                {'x': b_east, 'y': y_mid + 1.5, 'axis': 'Y', 'w': dw_w}
+                {'x': b_west, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
+                {'x': dw_x_center, 'y': y_mid, 'axis': 'X', 'w': dw_w},
+                {'x': b_east, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
             ],
             stair_hole=None,
             exterior_facades={'BACK': (b_west, b_east)}
         )
-        _hwall(b_east, ix_max, y_mid, (b_east + ix_max) * 0.5)
         rm_east_s = Room(
             id=f"fl{fl_idx}_library", floor_idx=fl_idx, role='LIBRARY',
             bounds=(b_east, ix_max, iy_min, y_mid),
-            doorways=[{'x': (b_east + ix_max) * 0.5, 'y': y_mid, 'axis': 'X', 'w': dw_w}],
+            doorways=[
+                {'x': b_east, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
+                {'x': dw_x_east, 'y': y_mid, 'axis': 'X', 'w': dw_w},
+            ],
             stair_hole=None,
             exterior_facades={'FRONT': (b_east, ix_max), 'RIGHT': (iy_min, y_mid)}
         )
@@ -1743,8 +1765,8 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             id=f"fl{fl_idx}_treasury", floor_idx=fl_idx, role='OFFICE',
             bounds=(b_east, ix_max, y_mid, iy_max),
             doorways=[
-                {'x': b_east, 'y': y_mid, 'axis': 'Y', 'w': dw_w},
-                {'x': (b_east + ix_max) * 0.5, 'y': y_mid, 'axis': 'X', 'w': dw_w}
+                {'x': b_east, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
+                {'x': dw_x_east, 'y': y_mid, 'axis': 'X', 'w': dw_w},
             ],
             stair_hole=None,
             exterior_facades={'BACK': (b_east, ix_max), 'RIGHT': (y_mid, iy_max)}
