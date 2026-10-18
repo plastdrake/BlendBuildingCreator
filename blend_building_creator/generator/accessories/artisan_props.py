@@ -449,7 +449,7 @@ def build_fish_rail(bm, x, y, z_ground=0.0, ang=0.0, width=1.30):
     n = max(3, int(width / 0.26))
     for i in range(n):
         hx = -width * 0.5 + 0.22 + i * ((width - 0.44) / max(1, n - 1))
-        fl = 0.30 * _fish_scale(i)
+        fl = 0.40 * _fish_scale(i)
         # Rope hangs from the rail; its lower end sits inside the fish's body
         # and it is routed just behind the fish, so it vanishes into the tail.
         rope_len = 0.18 + 0.85 * fl
@@ -1453,7 +1453,7 @@ def build_fish_drying_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.60):
     for row, (bar_y, bar_z) in enumerate(((0.23, 1.55), (0.03, 0.95))):
         for i in range(n):
             hx = -width * 0.5 + 0.24 + i * ((width - 0.48) / max(1, n - 1))
-            fl = 0.30 * _fish_scale(row * 7 + i)
+            fl = 0.40 * _fish_scale(row * 7 + i)
             rope_len = 0.18 + 0.85 * fl
             # Rope hangs from the bar; its lower end runs 0.25*fl into the
             # fish's body near the tail so it vanishes instead of stopping at
@@ -1839,7 +1839,7 @@ def build_fish_stringer(bm, x, y, z_ceiling=3.0, ang=0.0, drops=3):
     )
     for i in range(drops):
         lx = (i - (drops - 1) * 0.5) * 0.28
-        fl = 0.30 * _fish_scale(i)
+        fl = 0.40 * _fish_scale(i)
         rope_len = 0.18 + 0.85 * fl
         faces += create_cylinder(
             bm, radius=0.006, height=rope_len, segments=6,
