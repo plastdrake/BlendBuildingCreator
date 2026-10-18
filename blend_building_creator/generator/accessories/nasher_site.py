@@ -509,15 +509,23 @@ def _build_step_riser_wall(bm, p, u_tangent, n_outward, z_a, z_b, thick, walk_w=
     )
 
 
-def _build_paved_road_strip(bm, waypoints, width=4.4, sample_step=1.2,
+def _build_paved_road_strip(bm, waypoints, width=4.4, sample_step=1.0,
                             pave_mat=MAT_INDEX_STONE, layer_offset=0.0):
-    """Lays a smooth stone-paved road following the cliff terrain with no raised kerb edges."""
+    """Lays a smooth stone-paved road following the cliff terrain with curve-aligned continuous UV mapping."""
     pts = _spline_curve(waypoints, sample_step=sample_step)
     if len(pts) < 2:
         return
 
+    uv_layer = bm.loops.layers.uv.verify()
     pave_w = width
     pave_depth = 0.38
+    scale = 1.0
+
+    # Pre-calculate cumulative distance along the spline curve
+    cum_dist = [0.0]
+    for i in range(len(pts) - 1):
+        d = math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1])
+        cum_dist.append(cum_dist[-1] + d)
 
     for i in range(len(pts) - 1):
         p0, p1 = pts[i], pts[i + 1]
@@ -527,6 +535,7 @@ def _build_paved_road_strip(bm, waypoints, width=4.4, sample_step=1.2,
         if ln < 0.08:
             continue
         ux, uy = dx / ln, dy / ln
+        nx, ny = -uy, ux
         mx = (p0[0] + p1[0]) * 0.5
         my = (p0[1] + p1[1]) * 0.5
         yaw = math.atan2(-ux, uy)
@@ -534,11 +543,41 @@ def _build_paved_road_strip(bm, waypoints, width=4.4, sample_step=1.2,
         gz = ground_z(mx, my)
         z_top = gz + 0.035 + layer_offset
 
-        # Paved road bed: MAT_INDEX_STONE gives mud fieldstone in T1, and castle stone in T2 & T3
-        create_beveled_box(bm, size=(pave_w, ln + 0.05, pave_depth),
-                           location=(mx, my, z_top - pave_depth * 0.5),
-                           rotation=(0.0, 0.0, yaw),
-                           mat_index=pave_mat, bevel_amount=0.015)
+        # Midpoint distance along the curve
+        s_mid = (cum_dist[i] + cum_dist[i + 1]) * 0.5
+
+        # Paved road bed
+        boxes = create_beveled_box(bm, size=(pave_w, ln + 0.05, pave_depth),
+                                   location=(mx, my, z_top - pave_depth * 0.5),
+                                   rotation=(0.0, 0.0, yaw),
+                                   mat_index=pave_mat, bevel_amount=0.015)
+
+        # Apply curve-following UV mapping to every face of this road segment
+        for f in boxes:
+            f.tag = True
+            is_top = f.normal.z > 0.5
+            for loop in f.loops:
+                v = loop.vert.co
+                # Local coordinates relative to segment center:
+                # d_lat: cross-path coordinate (-width/2 .. +width/2)
+                # d_long: along-path coordinate (-ln/2 .. +ln/2)
+                d_lat = (v.x - mx) * nx + (v.y - my) * ny
+                d_long = (v.x - mx) * ux + (v.y - my) * uy
+                s_curve = s_mid + d_long
+
+                if is_top:
+                    # Top surface: U is across path width, V is along curve direction
+                    u = d_lat * scale
+                    v = s_curve * scale
+                else:
+                    # Side/bottom faces: wrap neatly with depth
+                    if abs(f.normal.z) < 0.5:
+                        u = s_curve * scale
+                        v = v.z * scale
+                    else:
+                        u = d_lat * scale
+                        v = s_curve * scale
+                loop[uv_layer].uv = (u, v)
 
 
 def build_cliff_paved_roads(bm, tier=3):
