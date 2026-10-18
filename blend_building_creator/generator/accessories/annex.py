@@ -475,14 +475,14 @@ def build_tower_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                                       
         # Internal staircase (straight)
         if f < floors - 1:
-            from .interior import build_straight_stairs
+            from ..interior import build_straight_stairs
             stair_x = (_fx_min + _fx_max) * 0.5 + (1.0 if side_sgn > 0 else -1.0)
             build_straight_stairs(bm, start_pos=(stair_x, front_wall_y + 1.0, fz0 + 0.05),
                                   target_z=fz1 + 0.05, width=1.4, length=4.5,
                                   direction=Vector((0, 1, 0)), has_railings=True)
         else:
             # Final stair up to roof deck
-            from .interior import build_straight_stairs
+            from ..interior import build_straight_stairs
             stair_x = (_fx_min + _fx_max) * 0.5 + (1.0 if side_sgn > 0 else -1.0)
             build_straight_stairs(bm, start_pos=(stair_x, front_wall_y + 1.0, fz0 + 0.05),
                                   target_z=top_z + 0.35, width=1.4, length=4.5,
