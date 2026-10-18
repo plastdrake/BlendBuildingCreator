@@ -229,7 +229,7 @@ _KINDS = (
 def _level(bm, i, zf, depart_hole):
     _slab(bm, zf, hole=depart_hole)
     _wall(bm, True, Y0, X0, X1, zf)
-    _y1_doors = ((3.25, 1.5),) if i == 0 else ()
+    _y1_doors = ((4.40, 2.6),) if i == 0 else ()
     _wall(bm, True, Y1, X0, X1, zf, doors=_y1_doors)
     _wall(bm, False, X0, Y0, Y1, zf)
     _wall(bm, False, X1, Y0, Y1, zf)
@@ -248,7 +248,9 @@ def _level(bm, i, zf, depart_hole):
 
     rooms, halls = _KINDS[i]
     for (rx, ry), kind in zip(((-3.0, 33.0), (3.0, 33.0), (-3.0, 43.0), (3.0, 43.0)), rooms):
-        _dress_room(bm, kind, rx, ry, zf)
+        # In Level 0, shift the North-East room table to rx=1.6 so the wide corridor entry at x=4.40 has a completely clear walking aisle
+        actual_rx = 1.6 if (i == 0 and rx > 0 and ry > 40) else rx
+        _dress_room(bm, kind, actual_rx, ry, zf)
         if kind == 'cell':
             _bars(bm, rx - 0.8, rx + 0.8, CORR_S if ry < 36 else CORR_N, zf)
     for hx in (-12.0, 12.0):
@@ -280,13 +282,23 @@ def build_nasher_dungeon(bm, tier):
     z_keep_floor = 14.95
     t_w = 0.22
 
+    # Connecting corridor and wide stair bottom landing
+    # Foot of stairs lands at x = bs_x1 - 0.20 = 3.90.
+    # Widen corridor and bottom landing to span x in [corr_x0, corr_x1],
+    # giving a spacious 2.5m x 2.9m clear landing in front of the stairs
+    # and a 4.0m wide subterranean hallway (more than twice the previous 1.70m width).
+    corr_x0 = 2.40
+    corr_x1 = 6.40
+
     # 3. Clear shaft volume through rock / foundation / floor
     # Clear the stair flight volume in the Keep back wing:
-    carve_pass_through_portal(bm, x_span=(bs_x0 - 0.30, bs_x1 + 0.70), y_span=(bs_y0 - 0.20, bs_y1 + 0.20), z_span=(9.40, 15.05))
-    # Clear the connecting passage between the stair foot (y = 50.80) and Level 0 north wall (y = 46.00):
-    carve_pass_through_portal(bm, x_span=(2.40, 4.80), y_span=(45.80, 50.90), z_span=(9.40, 13.60))
-    # Clear the arched doorway through the north wall of Level 0 at y = 46.00:
-    carve_pass_through_portal(bm, x_span=(2.60, 4.60), y_span=(45.70, 46.30), z_span=(9.50, 12.50))
+    carve_pass_through_portal(bm, x_span=(bs_x0 - 0.30, bs_x1 + 0.30), y_span=(bs_y0 - 0.20, bs_y1 + 0.20), z_span=(9.40, 15.05))
+    # Clear the wide stair bottom landing:
+    carve_pass_through_portal(bm, x_span=(3.80, corr_x1 + 0.40), y_span=(bs_y0 - 0.20, bs_y1 + 0.20), z_span=(9.40, 13.60))
+    # Clear the connecting passage between the stair landing (y = 50.80) and Level 0 north wall (y = 46.00):
+    carve_pass_through_portal(bm, x_span=(corr_x0 - 0.20, corr_x1 + 0.40), y_span=(45.80, 50.90), z_span=(9.40, 13.60))
+    # Clear the grand arched doorway through the north wall of Level 0 at y = 46.00:
+    carve_pass_through_portal(bm, x_span=(2.90, 5.90), y_span=(45.70, 46.30), z_span=(9.50, 12.60))
 
     # Purge all residual cliff rock, foundation stone, floor slab slivers, and cut boundary faces inside/around the shaft casing
     # so NO duplicate or bisected sliver faces can ever coexist with the clean casing walls:
@@ -298,13 +310,13 @@ def build_nasher_dungeon(bm, tier):
              and bs_y0 + 0.01 <= f.calc_center_median().y <= bs_y1 - 0.01
              and 9.40 <= f.calc_center_median().z <= z_keep_floor + 0.05)
             or
-            # Inside the connecting passage: purge everything
-            (2.25 <= f.calc_center_median().x <= 4.25
-             and 45.75 <= f.calc_center_median().y <= bs_y0 + 0.05
+            # Inside the connecting passage and landing: purge everything
+            (corr_x0 - 0.15 <= f.calc_center_median().x <= corr_x1 + 0.15
+             and 45.75 <= f.calc_center_median().y <= bs_y1 + 0.05
              and 9.40 <= f.calc_center_median().z <= 13.20)
             or
             # Around perimeter: purge stone / cliffs / cut stone
-            (bs_x0 - 0.45 <= f.calc_center_median().x <= bs_x1 + 0.50
+            (bs_x0 - 0.45 <= f.calc_center_median().x <= corr_x1 + 0.50
              and 45.60 <= f.calc_center_median().y <= bs_y1 + 0.45
              and 9.40 <= f.calc_center_median().z <= z_keep_floor - 0.05
              and f.material_index in (MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_CLIFFS))
@@ -318,27 +330,34 @@ def build_nasher_dungeon(bm, tier):
         bmesh.ops.delete(bm, geom=loose_e, context='EDGES')
 
     # 4. Subterranean floor slab for the stair bottom landing and connecting passage
-    _box(bm, 2.30, 4.20, 45.80, bs_y1 + t_w, 9.50 - 0.30, 9.50 - 0.12, WALL)
-    _box(bm, 2.30, 4.20, 45.80, bs_y1 + t_w, 9.50 - 0.12, 9.50, FLOOR)
+    _box(bm, corr_x0 - 0.10, corr_x1 + 0.10, 45.80, bs_y1 + t_w, 9.50 - 0.30, 9.50 - 0.12, WALL)
+    _box(bm, corr_x0 - 0.10, corr_x1 + 0.10, 45.80, bs_y1 + t_w, 9.50 - 0.12, 9.50, FLOOR)
 
     # 5. Clean masonry shaft casing walls and subterranean connecting corridor
     z_top_casing = z_keep_floor - 0.12
-    # North wall along the full length of the stair flight:
-    _box(bm, bs_x0 - t_w, bs_x1 + t_w, bs_y1, bs_y1 + t_w, 9.50, z_top_casing, WALL)
+    # North wall along the full length of the stair flight and bottom landing:
+    _box(bm, bs_x0 - t_w, corr_x1 + t_w, bs_y1, bs_y1 + t_w, 9.50, z_top_casing, WALL)
     # West wall behind the top of the stair (retains the earth under the upper floor):
     _box(bm, bs_x0 - t_w, bs_x0, bs_y0 - t_w, bs_y1 + t_w, 9.50, z_top_casing, WALL)
     # South wall along the descending flight, from top down to the connecting corridor opening:
-    _box(bm, bs_x0 - t_w, 2.40, bs_y0 - t_w, bs_y0, 9.50, z_top_casing, WALL)
+    _box(bm, bs_x0 - t_w, corr_x0, bs_y0 - t_w, bs_y0, 9.50, z_top_casing, WALL)
+    # South headwall above the wide corridor opening, sealing the stair hall up to the Keep floor:
+    _box(bm, corr_x0, corr_x1 + t_w, bs_y0 - t_w, bs_y0, 13.00, z_top_casing, WALL)
     # West wall of the connecting corridor:
-    _box(bm, 2.20, 2.40, 45.80, bs_y0, 9.50, 13.00, WALL)
-    # East wall along the stair landing and connecting corridor:
-    _box(bm, bs_x1, bs_x1 + t_w, 45.80, bs_y1 + t_w, 9.50, 13.00, WALL)
-    _box(bm, bs_x1, bs_x1 + t_w, bs_y0, bs_y1 + t_w, 13.00, z_top_casing, WALL)
+    _box(bm, corr_x0 - t_w, corr_x0, 45.80, bs_y0, 9.50, 13.00, WALL)
+    # East wall along the stair landing (full height up to Keep floor):
+    _box(bm, corr_x1, corr_x1 + t_w, bs_y0, bs_y1 + t_w, 9.50, z_top_casing, WALL)
+    # East wall of the connecting corridor (up to corridor ceiling):
+    _box(bm, corr_x1, corr_x1 + t_w, 45.80, bs_y0, 9.50, 13.00, WALL)
     # Ceiling over the connecting corridor:
-    _box(bm, 2.20, bs_x1 + t_w, 45.80, bs_y0, 12.80, 13.10, WALL)
+    _box(bm, corr_x0 - t_w, corr_x1 + t_w, 45.80, bs_y0, 12.80, 13.10, WALL)
+    # Transverse heavy oak lintel beam across the entrance to the corridor at bs_y0:
+    _box(bm, corr_x0 - 0.05, corr_x1 + 0.05, bs_y0 - 0.10, bs_y0 + 0.10, 12.60, 13.00, BEAM, long_axis=0)
     # Decorative heavy timber ceiling beams across the connecting corridor:
-    _box(bm, 2.35, bs_x1 + 0.05, 47.30, 47.50, 12.60, 12.80, BEAM, long_axis=0)
-    _box(bm, 2.35, bs_x1 + 0.05, 49.00, 49.20, 12.60, 12.80, BEAM, long_axis=0)
+    _box(bm, corr_x0 - 0.05, corr_x1 + 0.05, 47.30, 47.50, 12.60, 12.80, BEAM, long_axis=0)
+    _box(bm, corr_x0 - 0.05, corr_x1 + 0.05, 49.00, 49.20, 12.60, 12.80, BEAM, long_axis=0)
+    # Decorative heavy timber beam across landing ceiling at underside of Keep floor:
+    _box(bm, bs_x1 - 0.05, corr_x1 + 0.05, 51.50, 51.70, z_top_casing - 0.22, z_top_casing, BEAM, long_axis=0)
 
     # Timber well-hole curb trimmers capping the floor slab edges neatly around the shaft opening in the wing
     trim_w = 0.14
