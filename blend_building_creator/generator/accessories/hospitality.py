@@ -429,6 +429,8 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
     # 2. Supply nook: barrels, crates & a jar tucked against the exterior
     #    foundation. Scanned across several spots so a wing, porch or annex can
     #    never silently delete the whole cluster (it used to vanish on T2/T3).
+    #    Fish racks are avoided so the barrels never sit under the hanging catch.
+    _fisher_rails = getattr(ctx, 'fisher_rails', None) or []
     side_sign = 1.0
     bx_base = door_x + porch_w * 0.5 + 0.55
     if not is_point_outside_building(bx_base + 0.40, face_y - 0.70, 0.40, ctx, margin=0.10):
@@ -453,6 +455,12 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
                 _nook_spots.append((bx_base + _sgn * _dx, face_y - _dy, _sgn))
     for _sx, _sy, _sg in _nook_spots:
         if not is_point_outside_building(_sx, _sy, 0.42, ctx, margin=0.05):
+            continue
+        # Keep props inside plot bounds (within building footprint + margin).
+        _pb = ctx.bounds_for(0)
+        _plot_hx = (_pb[1] - _pb[0]) / 2 * 1.10
+        _plot_hy = (_pb[3] - _pb[2]) / 2 * 1.10
+        if abs(_sx) > _plot_hx or abs(_sy) > _plot_hy:
             continue
         # Never block the door path: every piece of the cluster must sit
         # clear of the entrance corridor.

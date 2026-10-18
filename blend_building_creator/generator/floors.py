@@ -2714,6 +2714,8 @@ def build_floors(bm, props, ctx):
             fr_left = [(wy1 - y_min, wy2 - y_min) for w_elem, (wx1, wx2, wy1, wy2) in zip(wings, fl_wings_bounds) if w_elem['wall'] == 'LEFT'] if fl_has_wing else None
             fr_right = [(wy1 - y_min, wy2 - y_min) for w_elem, (wx1, wx2, wy1, wy2) in zip(wings, fl_wings_bounds) if w_elem['wall'] == 'RIGHT'] if fl_has_wing else None
 
+            _wall_splits = getattr(props, 'wall_splits', None) or (props.get('wall_splits', None) if hasattr(props, 'get') else None) or getattr(ctx, 'wall_splits', None) or {}
+
             build_wall_with_opening(
                 bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
                 mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding,
@@ -2722,7 +2724,8 @@ def build_floors(bm, props, ctx):
                 omit_top_log_row=omit_front or jetty_next,
                 force_omit_top_log_row=jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq,
-                flat_ranges=fr_front
+                flat_ranges=fr_front,
+                wall_splits=_wall_splits.get('FRONT', [])
             )
             build_wall_with_opening(
                 bm, (x_min, y_max), (x_max, y_max), z_floor, wall_top_z, wall_t, back_openings,
@@ -2732,7 +2735,8 @@ def build_floors(bm, props, ctx):
                 omit_top_log_row=omit_back or jetty_next,
                 force_omit_top_log_row=jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq,
-                flat_ranges=fr_back
+                flat_ranges=fr_back,
+                wall_splits=_wall_splits.get('BACK', [])
             )
             build_wall_with_opening(
                 bm, (x_min, y_min), (x_min, y_max), z_floor, wall_top_z, wall_t, left_openings,
@@ -2742,7 +2746,8 @@ def build_floors(bm, props, ctx):
                 omit_top_log_row=omit_left or jetty_next,
                 force_omit_top_log_row=jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq,
-                flat_ranges=fr_left
+                flat_ranges=fr_left,
+                wall_splits=_wall_splits.get('LEFT', [])
             )
             build_wall_with_opening(
                 bm, (x_max, y_min), (x_max, y_max), z_floor, wall_top_z, wall_t, right_openings,
@@ -2752,7 +2757,8 @@ def build_floors(bm, props, ctx):
                 omit_top_log_row=omit_right or jetty_next,
                 force_omit_top_log_row=jetty_next,
                 has_exposed_brick=has_brick, exposed_brick_freq=brick_freq,
-                flat_ranges=fr_right
+                flat_ranges=fr_right,
+                wall_splits=_wall_splits.get('RIGHT', [])
             )
             
             # Wing Solid Walls.
@@ -2915,6 +2921,16 @@ def build_floors(bm, props, ctx):
                         l_occs.append((pos - ed_m - y_min, pos + ed_m - y_min))
                     elif facade == 'RIGHT':
                         r_occs.append((pos - ed_m - y_min, pos + ed_m - y_min))
+
+            _timber_exclusions = getattr(props, 'timber_exclusions', None) or (props.get('timber_exclusions', None) if hasattr(props, 'get') else None) or getattr(ctx, 'timber_exclusions', None) or {}
+            for ex in _timber_exclusions.get('FRONT', []):
+                f_occs.append(ex)
+            for ex in _timber_exclusions.get('BACK', []):
+                b_occs.append(ex)
+            for ex in _timber_exclusions.get('LEFT', []):
+                l_occs.append(ex)
+            for ex in _timber_exclusions.get('RIGHT', []):
+                r_occs.append(ex)
 
             if not _stone_ground_fl:
                 build_exposed_wall_timber((x_min, y_min), (x_max, y_min), (0.0, -1.0), f_timber_ops, f_occs)

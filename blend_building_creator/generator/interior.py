@@ -1449,7 +1449,11 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         return pool[:num_rooms]
 
     if archetype == 'ARMORY':
-        pool = ['ARMORY', 'STORAGE', 'DRILL_HALL', 'ENTRANCE_HALL']
+        if num_rooms == 1:
+            return ['ARMORY']
+        if num_rooms == 2:
+            return ['ARMORY', 'STORAGE']
+        pool = ['ENTRANCE_HALL', 'ARMORY', 'STORAGE', 'DRILL_HALL']
         return pool[:num_rooms]
 
     if archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):

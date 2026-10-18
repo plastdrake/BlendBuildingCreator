@@ -137,6 +137,10 @@ def _build_halls(bm, props, tier):
             ov['has_double_height'] = True
             ov['has_cantilever'] = False
             ov['cantilever_overhang'] = 0.0
+            if tier == 3:
+                ov['wall_splits'] = {'RIGHT': [3.0, 13.0]}
+                ov['timber_exclusions'] = {'RIGHT': [(3.0, 13.0)]}
+                ov['window_right'] = False
             # Floor 0 chapel-link doorway on West facade (-X in world = LEFT in local space)
             # Positioned at pos=3.8 (+Y in local space, world Y = 43.8) well clear of the
             # Keep interior stairs at y in [-1.8, +1.8] (world Y in [38.2, 41.8]).
@@ -154,10 +158,14 @@ def _build_halls(bm, props, tier):
             ov['has_front_door'] = False
             ov['window_left'] = False
             ov['has_cantilever'] = False
-            ov['roof_overhang'] = 0.0
+            ov['roof_abut_left'] = True
+            ov['gable_left'] = False
             ov['stair_placement'] = 'RIGHT'
             ov['timber_left'] = False
             ov['corner_posts_left'] = False
+            ov['building_archetype'] = 'CIVIC'
+            ov['interior_program'] = 'CIVIC'
+            ov['interior_partition_style'] = 'OPEN'
             # Floor 0 east connecting wing doorway on South facade (-Y in world = FRONT in local space)
             if tier == 3:
                 extra_doors.append({'floor_idx': 0, 'facade': 'FRONT', 'pos': -4.0, 'w': 2.4, 'h': 2.85, 'is_portal': True})
@@ -171,13 +179,16 @@ def _build_halls(bm, props, tier):
             ov['extra_window_exclusions'] = extra_win_excl
         _merge_generated_building(bm, props, ov, pos=(x, y, pz - 0.3), rot_z=math.radians(rot))
     if tier >= 2:
-        # Chapel positioned cleanly between Keep (x=-12.0) and Wizard Tower (x=-27.6, r=4.2)
-        # with no side windows embedded into adjacent walls
+        # Left addition house: Armory, Storage & Gallery Hallway connecting Keep (x=-12.0) to Wizard Tower (x=-27.6)
         build_estate_chapel(
-            bm, props, pos=(-18.2, 40.0, 13.7), rot_z=0.0,
+            bm, props, pos=(-18.2, 40.0, 14.11), rot_z=0.0,
             tier=f"TIER_{tier}", width=7.6, depth=12.0, floors=1,
             extra_overrides={
-                'building_archetype': 'CHAPEL',
+                'building_archetype': 'ARMORY',
+                'interior_program': 'ARMORY',
+                'interior_partition_style': 'AUTO',
+                'has_interior_walls': True,
+                'has_stairs': False,
                 'has_chapel_kit': False,
                 'has_bell_cote': False,
                 'roof_overhang': 0.50,
@@ -194,7 +205,7 @@ def _build_halls(bm, props, tier):
         # Dedicated ground corridor link joining Chapel east wall to Keep west wall
         # with clean walls, floor, ceiling, and timber portal casings encasing cut wall edges.
         from .building_connector import build_chapel_connector
-        build_chapel_connector(bm, p_chapel=(-14.4, 43.8), p_keep=(-12.0, 43.8), tier=tier)
+        build_chapel_connector(bm, p_chapel=(-14.4, 43.8), p_keep=(-12.0, 43.8), floor_z=14.86, chapel_floor_z=14.86, tier=tier)
 
 
 def _gate_link(bm, tier):
@@ -259,8 +270,8 @@ def _build_towers(bm, registry, tier):
             door_angs = ((0, math.pi),)  # West-facing doorway on Floor 0 opening toward East Hall courtyard
             z = _tower_base(x, y, r, door_ang=math.pi)
         elif abs(x - (-27.6)) < 1.0:
-            door_angs = ((1, 0.0),)  # East-facing doorway on Floor 1 connecting into Chapel (z=14.0)
-            z = 14.45 - 4.2 - 1.0  # Floor 1 at 14.45 matching Chapel floor level
+            door_angs = ((1, 0.0),)  # East-facing doorway on Floor 1 connecting into Armory (z=14.86)
+            z = 14.86 - 4.2 - 1.0  # Floor 1 at 14.86 matching Armory and Keep floor level
             # Ensure stairs never cross the 0 deg East doorway:
             # Flight 0 starts at 180 deg (West) and lands at 315 deg (North-West).
             # Flight 1 starts at 60 deg (North-East) and climbs to 195 deg (South-West).
@@ -279,14 +290,14 @@ def _build_towers(bm, registry, tier):
             door_angs=door_angs,
             stair_base_deg=stair_base)
 
-        # Architectural connector vestibule for the Wizard's Spire tying into the Chapel
+        # Architectural connector vestibule for the Wizard's Spire tying into the Armory Hall
         if abs(x - (-27.6)) < 1.0:
             build_tower_building_connector(
                 bm, tower_cx=x, tower_cy=y, tower_r=r, tower_z_base=z,
                 bld_wall_x=-22.0, bld_y_span=(34.0, 46.0),
-                floor_zs=(14.0,),
-                bld_floor_z=14.45,
-                max_vest_z=17.2, hall_step=0.45
+                floor_zs=(14.86,),
+                bld_floor_z=14.86,
+                max_vest_z=17.6, hall_step=0.0
             )
 
         height = z + floors * 4.1 + (spire_h if roofed else 0.0)
@@ -406,7 +417,8 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
             bm, cx=16.5, y_start=5.0, y_end=35.0, width=6.6,
             z_low=8.86, z_high=14.86, stair_y_start=15.0, stair_y_end=24.0,
             has_bridge_door=True, bridge_door_y=26.0,
-            wall_y_north=35.0, roof_y_end_north=35.0
+            wall_y_north=35.0, roof_y_end_north=35.0,
+            include_door_leaves=getattr(props, 'include_door_leaves', False)
         )
         # Open-timbered trestle bridge spanning across the chasm to East Bluff Tower
         build_wooden_bridge(

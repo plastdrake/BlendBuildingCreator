@@ -407,7 +407,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
                             omit_top_log_row=False,
                             force_omit_top_log_row=False,
                             has_exposed_brick=False, exposed_brick_freq=0.25,
-                            inner_mat=None, flat_ranges=None):
+                            inner_mat=None, flat_ranges=None, wall_splits=None):
     """
     Builds a wall along the line p_start -> p_end, cleanly cutting around
     one or more openings (e.g. door or windows) without destructive booleans.
@@ -417,6 +417,8 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
     ``flat_ranges``: (u0, u1) spans where a wing interior backs the wall -
     no round logs there (see build_log_wall_segment); the flat core sealed on
     both faces forms the wing room's wall instead.
+    ``wall_splits``: list of u coordinates along the wall where independent wall segments
+    should be split (e.g. at building junctions or abutting wings).
     """
     x1, y1 = p_start
     x2, y2 = p_end
@@ -432,7 +434,7 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
     def pt_at(u):
         return (x1 + ux * u, y1 + uy * u)
 
-    if not openings and not flat_ranges:
+    if not openings and not flat_ranges and not wall_splits:
         build_wall_segment(
             bm, p_start, p_end, z_bottom, z_top, thickness, mat_ext=mat_ext,
             normal_vec=normal_vec, tier=tier, physical_siding=physical_siding,
@@ -486,6 +488,11 @@ def build_wall_with_opening(bm, p_start, p_end, z_bottom, z_top, thickness,
             if fu2_c - fu1_c > 0.01:
                 u_edges.add(fu1_c)
                 u_edges.add(fu2_c)
+    if wall_splits:
+        for su in wall_splits:
+            su_c = max(0.0, min(seg_len, su))
+            if 0.01 < su_c < seg_len - 0.01:
+                u_edges.add(su_c)
     edges = sorted(u_edges)
 
     # Opening rects in wall-local coords, used to keep exposed-brick patches

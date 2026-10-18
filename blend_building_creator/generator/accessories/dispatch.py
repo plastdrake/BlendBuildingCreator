@@ -874,6 +874,15 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
                 if abs(_ox) < 1.55:
                     continue  # door path stays clear (rack half-width + margin)
                 _px = _door_x + _ox
+                # Keep rails inside plot bounds (within building footprint).
+                if abs(_px) > hx - 0.15 or abs(_ry) > hy - 0.15:
+                    continue
+                # Keep clear of trade sign (sign hangs near door on facade).
+                if abs(_px - _door_x) < 1.30:
+                    continue  # sign hanging zone
+                # Keep clear of lantern post near door.
+                if abs(_px - _door_x) < 0.95:
+                    continue  # lantern post zone
                 # Rack frame is ~0.5 deep: 0.45 radius + 0.10 margin tucks it
                 # against the wall instead of stranding it mid-yard.
                 if is_point_outside_building(_px, _ry, 0.45, ctx, margin=0.10):

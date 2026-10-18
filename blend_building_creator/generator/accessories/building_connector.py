@@ -149,8 +149,8 @@ def purge_props_in_volume(bm, x_span, y_span, z_span, max_prop_area=2.5):
         sx = max(v.co.x for v in verts) - min(v.co.x for v in verts)
         sy = max(v.co.y for v in verts) - min(v.co.y for v in verts)
 
-        # Pillars, wall studs, framing, or siding wall runs are tall (sz >= 2.25) or broad (sx/sy >= 2.60)
-        if sz >= 2.25 or sx >= 2.60 or sy >= 2.60:
+        # Pillars, wall studs, framing, or siding wall runs are tall (sz >= 2.90) or broad (sx/sy >= 3.80)
+        if sz >= 2.90 or sx >= 3.80 or sy >= 3.80:
             continue
 
         components_to_purge.append(comp)
@@ -209,7 +209,7 @@ def purge_props_in_volume(bm, x_span, y_span, z_span, max_prop_area=2.5):
         sz = max(v.co.z for v in verts) - min(v.co.z for v in verts)
         sx = max(v.co.x for v in verts) - min(v.co.x for v in verts)
         sy = max(v.co.y for v in verts) - min(v.co.y for v in verts)
-        if sz >= 2.25 or sx >= 2.60 or sy >= 2.60:
+        if sz >= 2.90 or sx >= 3.80 or sy >= 3.80:
             continue
         for cf in comp:
             prop_faces.add(cf)
@@ -681,165 +681,120 @@ def build_tower_building_connector(
 
     fz_tower = min(floor_zs)
 
-    # 1. Cleanly purge any props in doorway zones and clear any bedrock/cliff/stone
-    # faces strictly inside the walkway footprint (no destructive giant bisects)
-    purge_props_in_volume(
-        bm,
-        x_span=(min(bld_wall_x, bld_wall_x + tower_dir * 2.20), max(bld_wall_x, bld_wall_x + tower_dir * 2.20)),
-        y_span=(mid_y - 2.0, mid_y + 2.0),
-        z_span=(bld_floor_z + 0.04, bld_floor_z + 2.80)
-    )
-    purge_props_in_volume(
-        bm,
-        x_span=(min(x_tower_inner - 2.0, x_tower_outer), max(x_tower_inner - 2.0, x_tower_outer)),
-        y_span=(mid_y - 2.0, mid_y + 2.0),
-        z_span=(fz_tower + 0.04, fz_tower + 2.80)
-    )
-    vest_aperture_faces = [
-        f for f in bm.faces if f.is_valid
-        and (min(x_tower_outer, bld_wall_x) - 0.15 <= f.calc_center_median().x <= max(x_tower_outer, bld_wall_x) + 0.15)
-        and (mid_y - walk_w * 0.52 <= f.calc_center_median().y <= mid_y + walk_w * 0.52)
-        and (13.70 <= f.calc_center_median().z <= bld_floor_z + door_h + 0.15)
-        and f.material_index in (MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_CLIFFS)
-    ]
-    if vest_aperture_faces:
-        import bmesh
-        bmesh.ops.delete(bm, geom=vest_aperture_faces, context='FACES')
+    # 1. Cleanly purge props and carve the full walkway aperture through both building interfaces
+    x_corridor_start = min(x_tower_inner - 0.20, bld_wall_x + tower_dir * 0.45)
+    x_corridor_end = max(x_tower_inner - 0.20, bld_wall_x + tower_dir * 0.45)
+    corr_len = x_corridor_end - x_corridor_start
+    corr_cx = (x_corridor_start + x_corridor_end) * 0.5
 
-    # 2. Solid foundation plinth strictly beneath the lowest floor level (plinth_top at 13.75 - ZERO Z-FIGHTING)
-    plinth_top = 13.75
+    purge_props_in_volume(
+        bm,
+        x_span=(x_corridor_start - 0.50, x_corridor_end + 0.50),
+        y_span=(mid_y - walk_w * 0.5 - 0.50, mid_y + walk_w * 0.5 + 0.50),
+        z_span=(bld_floor_z - 0.10, max_z + 0.50)
+    )
+
+    carve_pass_through_portal(
+        bm,
+        x_span=(x_corridor_start, x_corridor_end),
+        y_span=(mid_y - walk_w * 0.5 + 0.02, mid_y + walk_w * 0.5 - 0.02),
+        z_span=(bld_floor_z + 0.02, max_z - 0.02)
+    )
+
+    # Purge any residual interior sliver faces inside the clear walkway envelope:
+    walkway_interior_purge = [
+        f for f in bm.faces if f.is_valid
+        and (x_corridor_start + 0.02 <= f.calc_center_median().x <= x_corridor_end - 0.02)
+        and (mid_y - walk_w * 0.5 + 0.03 <= f.calc_center_median().y <= mid_y + walk_w * 0.5 - 0.03)
+        and (bld_floor_z + 0.04 <= f.calc_center_median().z <= max_z - 0.04)
+        and f.material_index in (
+            MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_CLIFFS,
+            MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER,
+            MAT_INDEX_WOOD
+        )
+    ]
+    if walkway_interior_purge:
+        import bmesh
+        bmesh.ops.delete(bm, geom=walkway_interior_purge, context='FACES')
+
+    # 2. Solid foundation plinth extending continuously underneath the full walkway span (ZERO HOLES, ZERO GAP)
+    plinth_top = bld_floor_z - 0.03
     plinth_h = plinth_top - tower_z_base
     if plinth_h > 0.05:
         create_beveled_box(
-            bm, size=(gap_len, walk_w + wall_t * 2.0, plinth_h),
-            location=(gap_cx, mid_y, tower_z_base + plinth_h * 0.5),
+            bm, size=(corr_len, walk_w + wall_t * 2.0, plinth_h),
+            location=(corr_cx, mid_y, tower_z_base + plinth_h * 0.5),
             mat_index=wall_mat, bevel_amount=0.03
         )
 
-    # 3. Flanking exterior masonry walls with warm interior wood plank lining
+    # 3. Clean, continuous wooden floor deck spanning completely from Tower interior to Building interior
+    # Level and flat with zero steps, holes, or elevation bumps
+    create_beveled_box(
+        bm, size=(corr_len, walk_w, 0.10),
+        location=(corr_cx, mid_y, bld_floor_z + 0.02),
+        mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
+    )
+
+    # 4. Flanking exterior masonry side walls (single clean wall per side, ZERO coplanar overlap)
+    w_span_start = min(x_tower_outer - tower_dir * 0.08, bld_wall_x + tower_dir * 0.05)
+    w_span_end = max(x_tower_outer - tower_dir * 0.08, bld_wall_x + tower_dir * 0.05)
+    w_len = w_span_end - w_span_start
+    w_cx = (w_span_start + w_span_end) * 0.5
     side_h = max_z - plinth_top
+
     for s_side in (-1.0, 1.0):
         wy = mid_y + s_side * (walk_w * 0.5 + wall_t * 0.5)
         create_beveled_box(
-            bm, size=(gap_len, wall_t, side_h),
-            location=(gap_cx, wy, plinth_top + side_h * 0.5),
+            bm, size=(w_len, wall_t, side_h),
+            location=(w_cx, wy, plinth_top + side_h * 0.5),
             mat_index=wall_mat, bevel_amount=0.02
         )
-        create_beveled_box(
-            bm, size=(gap_len - 0.04, 0.04, door_h),
-            location=(gap_cx, wy - s_side * (wall_t * 0.5 - 0.02), fz_tower + 0.02 + door_h * 0.5),
-            mat_index=MAT_INDEX_WOOD, bevel_amount=0.005
-        )
-        create_beveled_box(
-            bm, size=(gap_len, 0.06, 0.16),
-            location=(gap_cx, wy - s_side * (wall_t * 0.5 - 0.03), fz_tower + 0.08),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
-        )
-
-    # 4. Clean all-wood floor deck and 2 transition steps bridging the height difference
-    # Chapel floor is at 14.45, Wizard Spire floor is at 14.00 (delta = 0.45m).
-    # 2 clean steps: Upper level 14.45, intermediate step 14.225, lower level 14.00.
-    lx_step = gap_len / 3.0  # ~0.467m per step run
-    # Chapel upper landing / step (x from -22.0 down to -22.47)
-    x1_c = bld_wall_x - tower_dir * (lx_step * 0.5)
-    create_beveled_box(
-        bm, size=(lx_step + 0.02, walk_w, 0.10),
-        location=(x1_c, mid_y, bld_floor_z - 0.03),
-        mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
-    )
-    # Smooth threshold plate at Chapel doorway
-    create_beveled_box(
-        bm, size=(0.40, door_w + 0.16, 0.04),
-        location=(bld_wall_x + tower_dir * 0.12, mid_y, bld_floor_z + 0.03),
-        mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
-    )
-    # Riser 1 at step 1
-    riser1_x = bld_wall_x - tower_dir * lx_step
-    create_beveled_box(
-        bm, size=(0.04, walk_w, 0.23),
-        location=(riser1_x, mid_y, 14.225 + 0.23 * 0.5),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
-    )
-    # Intermediate step (x from -22.47 down to -22.93)
-    x2_c = bld_wall_x - tower_dir * (lx_step * 1.5)
-    create_beveled_box(
-        bm, size=(lx_step + 0.02, walk_w, 0.10),
-        location=(x2_c, mid_y, 14.225 - 0.03),
-        mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
-    )
-    # Riser 2 at step 2
-    riser2_x = bld_wall_x - tower_dir * (lx_step * 2.0)
-    create_beveled_box(
-        bm, size=(0.04, walk_w, 0.23),
-        location=(riser2_x, mid_y, fz_tower + 0.23 * 0.5),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
-    )
-    # Tower lower landing / step (x from -22.93 to -23.40)
-    x3_c = x_tower_outer + tower_dir * (lx_step * 0.5)
-    create_beveled_box(
-        bm, size=(lx_step + 0.02, walk_w, 0.10),
-        location=(x3_c, mid_y, fz_tower - 0.03),
-        mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
-    )
-    # Smooth threshold plate at Tower doorway
-    create_beveled_box(
-        bm, size=(0.40, door_w + 0.16, 0.04),
-        location=(x_tower_outer - tower_dir * 0.12, mid_y, fz_tower + 0.03),
-        mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
-    )
 
     # 5. Clean wooden ceiling with timber tie joists
-    ceil_z = bld_floor_z + door_h + 0.04
+    ceil_z = bld_floor_z + door_h + 0.05
     create_beveled_box(
-        bm, size=(gap_len, walk_w, 0.06),
-        location=(gap_cx, mid_y, ceil_z),
+        bm, size=(corr_len, walk_w + 0.08, 0.08),
+        location=(corr_cx, mid_y, ceil_z),
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.005
     )
-    create_beveled_box(
-        bm, size=(0.18, walk_w + 0.10, 0.16),
-        location=(gap_cx, mid_y, ceil_z - 0.08),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
-    )
+    for bi_u in (-0.5, 0.0, 0.5):
+        bx = corr_cx + bi_u * (corr_len * 0.38)
+        create_beveled_box(
+            bm, size=(0.18, walk_w + 0.12, 0.16),
+            location=(bx, mid_y, ceil_z - 0.08),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
 
     # 6. Timber portal encasements at both ends covering all cut wall edges
-    jamb_w = 0.24
-    jamb_t = 0.52
-    lintel_w = door_w + jamb_w * 2.0 - 0.04
+    jamb_w = 0.20
+    jamb_t = 0.38
+    door_eff_w = walk_w - jamb_w * 2.0  # 1.10m clear walkthrough opening
+    lintel_w = walk_w + 0.06
     lintel_h = 0.28
-    for door_pos, fz_local in ((bld_wall_x, bld_floor_z), (x_tower_outer, fz_tower)):
+    for door_pos in (bld_wall_x, x_tower_outer):
+        # Threshold plate
+        create_beveled_box(
+            bm, size=(0.36, lintel_w, 0.04),
+            location=(door_pos, mid_y, bld_floor_z + 0.07 + 0.02),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+        )
         for js in (-1.0, 1.0):
-            jy = mid_y + js * (door_w * 0.5 + jamb_w * 0.5 - 0.02)
+            jy = mid_y + js * (walk_w * 0.5 - jamb_w * 0.5)
             create_beveled_box(
                 bm, size=(jamb_t, jamb_w, door_h + 0.04),
-                location=(door_pos, jy, fz_local + (door_h + 0.04) * 0.5),
+                location=(door_pos, jy, bld_floor_z + 0.07 + (door_h + 0.04) * 0.5),
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
             )
         create_beveled_box(
             bm, size=(jamb_t, lintel_w, lintel_h),
-            location=(door_pos, mid_y, fz_local + door_h + lintel_h * 0.5),
+            location=(door_pos, mid_y, bld_floor_z + 0.07 + door_h + lintel_h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
         )
 
-    # 6b. Finished timber architrave trims on room interior and corridor sides
-    for door_pos, f_sign, fz_local in ((bld_wall_x, tower_dir, bld_floor_z), (x_tower_outer, -tower_dir, fz_tower)):
-        trim_x = door_pos + f_sign * (jamb_t * 0.5 + 0.01)
-        for js in (-1.0, 1.0):
-            ty = mid_y + js * (door_w * 0.5 + 0.06)
-            create_beveled_box(
-                bm, size=(0.04, 0.20, door_h + 0.04),
-                location=(trim_x, ty, fz_local + (door_h + 0.04) * 0.5),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
-            )
-        create_beveled_box(
-            bm, size=(0.04, lintel_w + 0.08, 0.18),
-            location=(trim_x, mid_y, fz_local + door_h + 0.10),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
-        )
-
-    # 7. Exterior stone coping / parapet crown capping the connector walls (stops flush at bld_wall_x)
+    # 7. Exterior stone coping capping the connector walls
     create_beveled_box(
-        bm, size=(gap_len, walk_w + wall_t * 2.0 + 0.15, 0.24),
-        location=(gap_cx, mid_y, max_z + 0.12),
+        bm, size=(w_len + 0.10, walk_w + wall_t * 2.0 + 0.15, 0.24),
+        location=(w_cx, mid_y, max_z + 0.12),
         mat_index=trim_mat, bevel_amount=0.03
     )
 
@@ -952,6 +907,7 @@ def build_connecting_wing(
     bridge_door_y=26.0,
     wall_y_north=None,
     roof_y_end_north=None,
+    include_door_leaves: bool = False,
 ):
     """
     Constructs a stair-stepped connecting wing joining a lower hall (e.g. Great Hall / East Hall)
@@ -1272,7 +1228,7 @@ def build_connecting_wing(
                 door_shape='ARCHED',
                 ground_floor_stone=True,
                 normal_axis='+X',
-                include_leaf=True
+                include_leaf=include_door_leaves
             )
 
     # Interior lining partitions covering the bare stone inside the passage:
@@ -1902,51 +1858,60 @@ def build_chapel_connector(
             bevel_amount=0.02
         )
 
-    # 4. Clean all-wood floor deck and integrated transition steps inside corridor
+    # 4. Clean all-wood floor deck bridging Keep and Chapel (100% flat and level, zero steps)
     deck_w = portal_w + 0.24  # 2.44m wide (comfortably fits within corridor width)
-    lx1 = 1.15
-    # Keep deck
-    create_beveled_box(
-        bm,
-        size=(lx1, deck_w, 0.10),
-        location=(x_keep - lx1 * 0.5, cy, floor_z - 0.03),
-        mat_index=MAT_INDEX_FLOOR,
-        bevel_amount=0.005
-    )
-    # Intermediate step
-    lx2 = 0.55
-    create_beveled_box(
-        bm,
-        size=(lx2, deck_w, 0.10),
-        location=(x_keep - lx1 - lx2 * 0.5, cy, 14.65 - 0.03),
-        mat_index=MAT_INDEX_FLOOR,
-        bevel_amount=0.005
-    )
-    # Vertical timber riser at step 1
-    create_beveled_box(
-        bm,
-        size=(0.04, deck_w, 0.21),
-        location=(x_keep - lx1, cy, 14.65 + 0.21 * 0.5),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.005
-    )
-    # Lower step (flush with Chapel floor)
-    lx3 = dx - lx1 - lx2
-    create_beveled_box(
-        bm,
-        size=(lx3, deck_w, 0.10),
-        location=(x_chapel + lx3 * 0.5, cy, chapel_floor_z - 0.03),
-        mat_index=MAT_INDEX_FLOOR,
-        bevel_amount=0.005
-    )
-    # Vertical timber riser at step 2
-    create_beveled_box(
-        bm,
-        size=(0.04, deck_w, 0.20),
-        location=(x_chapel + lx3, cy, chapel_floor_z + 0.20 * 0.5),
-        mat_index=MAT_INDEX_TIMBER,
-        bevel_amount=0.005
-    )
+    if abs(floor_z - chapel_floor_z) < 0.08:
+        create_beveled_box(
+            bm,
+            size=(dx + 0.24, deck_w, 0.10),
+            location=(cx, cy, floor_z - 0.03),
+            mat_index=MAT_INDEX_FLOOR,
+            bevel_amount=0.005
+        )
+    else:
+        lx1 = 1.15
+        # Keep deck
+        create_beveled_box(
+            bm,
+            size=(lx1, deck_w, 0.10),
+            location=(x_keep - lx1 * 0.5, cy, floor_z - 0.03),
+            mat_index=MAT_INDEX_FLOOR,
+            bevel_amount=0.005
+        )
+        # Intermediate step
+        lx2 = 0.55
+        create_beveled_box(
+            bm,
+            size=(lx2, deck_w, 0.10),
+            location=(x_keep - lx1 - lx2 * 0.5, cy, 14.65 - 0.03),
+            mat_index=MAT_INDEX_FLOOR,
+            bevel_amount=0.005
+        )
+        # Vertical timber riser at step 1
+        create_beveled_box(
+            bm,
+            size=(0.04, deck_w, 0.21),
+            location=(x_keep - lx1, cy, 14.65 + 0.21 * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.005
+        )
+        # Lower step (flush with Chapel floor)
+        lx3 = dx - lx1 - lx2
+        create_beveled_box(
+            bm,
+            size=(lx3, deck_w, 0.10),
+            location=(x_chapel + lx3 * 0.5, cy, chapel_floor_z - 0.03),
+            mat_index=MAT_INDEX_FLOOR,
+            bevel_amount=0.005
+        )
+        # Vertical timber riser at step 2
+        create_beveled_box(
+            bm,
+            size=(0.04, deck_w, 0.20),
+            location=(x_chapel + lx3, cy, chapel_floor_z + 0.20 * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.005
+        )
 
     # Wide smooth wood plank threshold plates standing proud of room stone floor slabs (zero stone bleed-through)
     th_h = 0.036
@@ -2184,27 +2149,64 @@ def build_archive_hall_portal(
     """
     import bmesh
 
-    # 1. Clear any stray faces within the exact portal aperture opening volume only
+    # 1. Cleanly purge duplicate exterior wall faces, corner posts, and foundation blocks along the shared party wall
+    party_wall_faces = [
+        f for f in bm.faces if f.is_valid
+        and (11.60 <= f.calc_center_median().x <= 12.40)
+        and (34.85 <= f.calc_center_median().y <= 45.15)
+        and all(34.85 <= v.co.y <= 45.15 for v in f.verts)
+        and (13.50 <= f.calc_center_median().z <= 26.50)
+        and f.material_index in (
+            MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_PLASTER_EXT,
+            MAT_INDEX_TIMBER
+        )
+    ]
+    if party_wall_faces:
+        bmesh.ops.delete(bm, geom=party_wall_faces, context='FACES')
+
+    # Purge any Archive Hall roof/gable/rafter faces penetrating inside Keep interior (x <= 12.05, z >= 22.0)
+    gable_faces = [
+        f for f in bm.faces if f.is_valid
+        and (10.50 <= f.calc_center_median().x <= 12.05)
+        and (34.80 <= f.calc_center_median().y <= 45.20)
+        and (22.00 <= f.calc_center_median().z <= 36.00)
+        and f.material_index in (
+            MAT_INDEX_SHINGLES, MAT_INDEX_TIMBER, MAT_INDEX_PLASTER_EXT,
+            MAT_INDEX_WOOD
+        )
+    ]
+    if gable_faces:
+        bmesh.ops.delete(bm, geom=gable_faces, context='FACES')
+
+    # 2. Clear any stray faces within the exact portal aperture opening volume
     hw = portal_w * 0.5
     aperture_faces = [
         f for f in bm.faces if f.is_valid
-        and (11.50 <= f.calc_center_median().x <= 12.50)
-        and (cy - hw - 0.04 <= f.calc_center_median().y <= cy + hw + 0.04)
-        and (z_floor + 0.02 <= f.calc_center_median().z <= z_floor + portal_h + 0.04)
+        and (11.45 <= f.calc_center_median().x <= 12.55)
+        and (cy - hw - 0.06 <= f.calc_center_median().y <= cy + hw + 0.06)
+        and (z_floor + 0.01 <= f.calc_center_median().z <= z_floor + portal_h + 0.08)
     ]
     if aperture_faces:
         bmesh.ops.delete(bm, geom=aperture_faces, context='FACES')
 
-    # 2. Seamless flush wooden threshold plank bridging the room joint (zero stone exposure)
+    # Purge any conflicting props in the doorway threshold
+    purge_props_in_volume(
+        bm,
+        x_span=(10.8, 13.2),
+        y_span=(cy - hw - 0.35, cy + hw + 0.35),
+        z_span=(z_floor + 0.02, z_floor + portal_h + 0.20)
+    )
+
+    # 3. Seamless flush wooden threshold plank bridging the room joint (zero stone exposure)
     create_beveled_box(
         bm,
-        size=(0.86, portal_w + 0.10, 0.03),
-        location=(x_wall, cy, z_floor + 0.015),
+        size=(0.86, portal_w + 0.10, 0.04),
+        location=(x_wall, cy, z_floor + 0.02),
         mat_index=MAT_INDEX_FLOOR,
         bevel_amount=0.005
     )
 
-    # 3. Smooth timber jamb lining across the party wall thickness (resting flush on wood floor)
+    # 4. Smooth timber jamb lining across the party wall thickness (resting flush on wood floor)
     jamb_t = 0.82  # Spans from Keep inner face (11.62) to Archive inner face (12.38)
     jamb_w = 0.10  # Jamb width
     for sgn in (-1.0, 1.0):
@@ -2217,7 +2219,7 @@ def build_archive_hall_portal(
             bevel_amount=0.012
         )
 
-    # 4. Overhead timber soffit / lintel beam spanning the opening
+    # 5. Overhead timber soffit / lintel beam spanning the opening
     create_beveled_box(
         bm,
         size=(jamb_t, portal_w + jamb_w * 2.0, 0.14),
@@ -2226,7 +2228,7 @@ def build_archive_hall_portal(
         bevel_amount=0.012
     )
 
-    # 5. Classic interior door architraves in MAT_INDEX_TIMBER matching interior room doors
+    # 6. Classic interior door architraves in MAT_INDEX_TIMBER matching interior room doors
     # Placed flush against the true inner wall faces: Keep at 11.62, Archive Hall at 12.38
     casing_d = 0.05
     casing_w = 0.10
@@ -2251,7 +2253,7 @@ def build_archive_hall_portal(
             bevel_amount=0.008
         )
 
-    # 6. Header fill panel sealing above the lintel up to ceiling slab
+    # 7. Header fill panel sealing above the lintel up to ceiling slab
     header_bot = z_floor + portal_h + 0.14
     header_top = z_floor + floor_h
     header_h = header_top - header_bot
@@ -2272,6 +2274,61 @@ def build_archive_hall_portal(
                 location=(fx_wall, cy, header_top - 0.04),
                 mat_index=MAT_INDEX_TIMBER,
                 bevel_amount=0.008
+            )
+
+    # 8. Finished interior vertical wood planking lining the party wall flanking the portal on Floor 0
+    # South flank: [35.05, cy - hw], North flank: [cy + hw, 44.95]
+    flanks = [
+        (35.05, cy - hw - 0.02),
+        (cy + hw + 0.02, 44.95),
+    ]
+    for y0, y1 in flanks:
+        flank_len = y1 - y0
+        if flank_len < 0.2:
+            continue
+        flank_my = (y0 + y1) * 0.5
+
+        # Keep side interior wall panel & trims (inner face facing -X into Keep)
+        create_box(
+            bm, size=(0.04, flank_len, floor_h),
+            location=(11.64, flank_my, z_floor + floor_h * 0.5),
+            mat_index=MAT_INDEX_WOOD, is_wall=True
+        )
+        create_beveled_box(
+            bm, size=(0.06, flank_len, 0.16),
+            location=(11.63, flank_my, z_floor + 0.08),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
+        )
+        create_beveled_box(
+            bm, size=(0.06, flank_len, 0.12),
+            location=(11.63, flank_my, z_floor + floor_h - 0.06),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
+        )
+
+        # Archive Hall side interior wall panel & trims (inner face facing +X into Archive Hall)
+        create_box(
+            bm, size=(0.04, flank_len, floor_h),
+            location=(12.36, flank_my, z_floor + floor_h * 0.5),
+            mat_index=MAT_INDEX_WOOD, is_wall=True
+        )
+        create_beveled_box(
+            bm, size=(0.06, flank_len, 0.16),
+            location=(12.37, flank_my, z_floor + 0.08),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
+        )
+        create_beveled_box(
+            bm, size=(0.06, flank_len, 0.12),
+            location=(12.37, flank_my, z_floor + floor_h - 0.06),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006
+        )
+
+    # 9. Corner pilasters sealing the inside corners where Archive Hall front/back walls meet party wall
+    for fx_corner in (11.63, 12.37):
+        for cy_corner in (35.05, 44.95):
+            create_beveled_box(
+                bm, size=(0.14, 0.14, floor_h),
+                location=(fx_corner, cy_corner, z_floor + floor_h * 0.5),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
             )
 
 

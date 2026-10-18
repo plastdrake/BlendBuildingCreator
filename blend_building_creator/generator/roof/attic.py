@@ -529,6 +529,17 @@ def build_roof_and_attic(bm, props, ctx):
         if roof_style in ('SWAY', 'GABLE'):
             roof_bm = bmesh.new()
             if is_rotated_roof:
+                loc_abut_front = getattr(props, 'roof_abut_left', False) or (props.get('roof_abut_left', False) if hasattr(props, 'get') else False)
+                loc_abut_back = getattr(props, 'roof_abut_right', False) or (props.get('roof_abut_right', False) if hasattr(props, 'get') else False)
+                loc_gable_ends = []
+                g_left = getattr(props, 'gable_left', True) if not hasattr(props, 'get') else props.get('gable_left', getattr(props, 'gable_left', True))
+                g_right = getattr(props, 'gable_right', True) if not hasattr(props, 'get') else props.get('gable_right', getattr(props, 'gable_right', True))
+                if not loc_abut_front and g_left:
+                    loc_gable_ends.append('FRONT')
+                if not loc_abut_back and g_right:
+                    loc_gable_ends.append('BACK')
+                loc_gable_ends = tuple(loc_gable_ends)
+
                 if roof_style == 'SWAY':
                     build_sway_roof(
                         roof_bm,
@@ -540,6 +551,9 @@ def build_roof_and_attic(bm, props, ctx):
                         overhang=props.roof_overhang,
                         sway_amount=props.roof_sway,
                         wall_thickness=wall_t,
+                        gable_ends=loc_gable_ends,
+                        abut_front=loc_abut_front,
+                        abut_back=loc_abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
@@ -558,6 +572,9 @@ def build_roof_and_attic(bm, props, ctx):
                         roof_height=props.roof_height,
                         overhang=props.roof_overhang,
                         wall_thickness=wall_t,
+                        gable_ends=loc_gable_ends,
+                        abut_front=loc_abut_front,
+                        abut_back=loc_abut_back,
                         segments_y=6,
                         tier=tier_val,
                         plank_direction=plank_dir,
@@ -571,6 +588,17 @@ def build_roof_and_attic(bm, props, ctx):
                 trans_m = Matrix.Translation(Vector((top_cx, top_cy, top_z)))
                 bmesh.ops.transform(roof_bm, matrix=trans_m @ rot_m, verts=roof_bm.verts)
             else:
+                loc_abut_front = getattr(props, 'roof_abut_front', False) or (props.get('roof_abut_front', False) if hasattr(props, 'get') else False)
+                loc_abut_back = getattr(props, 'roof_abut_back', False) or (props.get('roof_abut_back', False) if hasattr(props, 'get') else False)
+                loc_gable_ends = []
+                g_front = getattr(props, 'gable_front', True) if not hasattr(props, 'get') else props.get('gable_front', getattr(props, 'gable_front', True))
+                g_back = getattr(props, 'gable_back', True) if not hasattr(props, 'get') else props.get('gable_back', getattr(props, 'gable_back', True))
+                if not loc_abut_front and g_front:
+                    loc_gable_ends.append('FRONT')
+                if not loc_abut_back and g_back:
+                    loc_gable_ends.append('BACK')
+                loc_gable_ends = tuple(loc_gable_ends)
+
                 if roof_style == 'SWAY':
                     build_sway_roof(
                         roof_bm,
@@ -582,6 +610,9 @@ def build_roof_and_attic(bm, props, ctx):
                         overhang=props.roof_overhang,
                         sway_amount=props.roof_sway,
                         wall_thickness=wall_t,
+                        gable_ends=loc_gable_ends,
+                        abut_front=loc_abut_front,
+                        abut_back=loc_abut_back,
                         tier=tier_val,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
@@ -600,6 +631,9 @@ def build_roof_and_attic(bm, props, ctx):
                         roof_height=props.roof_height,
                         overhang=props.roof_overhang,
                         wall_thickness=wall_t,
+                        gable_ends=loc_gable_ends,
+                        abut_front=loc_abut_front,
+                        abut_back=loc_abut_back,
                         segments_y=6,
                         tier=tier_val,
                         plank_direction=plank_dir,

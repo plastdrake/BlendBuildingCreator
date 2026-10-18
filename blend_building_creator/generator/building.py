@@ -509,7 +509,7 @@ def _build_foundation(bm, props, ctx):
             bs_hole = (_shx - 0.80, _shx + 0.80, _shy - 1.80, _shy + 1.80)
         else:
             if getattr(props, 'has_throne_room', False):
-                bs_hole = (6.80, 11.40, 4.00, 5.40)
+                bs_hole = (-0.50, 4.10, 10.80, 12.40)
             else:
                 bs_hole = (1.10, 5.70, 4.00, 5.40)
 

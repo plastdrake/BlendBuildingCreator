@@ -353,6 +353,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('MAGE_TOWER', "Mage Tower", "Round wizard tower with a jettied belvedere, ring balcony and tall spire"),
             ('TENEMENT', "Tenement Row / Complex", "Multi-apartment residential complex with separate apartment suites"),
             ('BARRACKS', "Barracks / Garrison", "Military dormitories with bunk beds, armory, mess hall and drill yard"),
+            ('ARMORY', "Armory & Arsenal", "Military arsenal: weapon racks, armor stands, storage chests and guard post"),
             ('TOWN_HALL', "Town Hall / Civic", "Civic great hall with council chambers and archives"),
             ('BREWERY', "Brewery", "Brewhouse with vats, store and taproom"),
             ('BUTCHER', "Butcher Shop", "Butcher block workroom with cold store and storefront"),
@@ -998,6 +999,62 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         description="Eaves overhang distance beyond walls",
         min=0.2, max=1.4, default=0.65,
         unit='LENGTH',
+        update=on_property_updated
+    )
+
+    roof_abut_left: BoolProperty(
+        name="Roof Abut Left",
+        description="Flush terminate roof against wall on left facade without overhang or bargeboards",
+        default=False,
+        update=on_property_updated
+    )
+
+    roof_abut_right: BoolProperty(
+        name="Roof Abut Right",
+        description="Flush terminate roof against wall on right facade without overhang or bargeboards",
+        default=False,
+        update=on_property_updated
+    )
+
+    roof_abut_front: BoolProperty(
+        name="Roof Abut Front",
+        description="Flush terminate roof against wall on front facade without overhang or bargeboards",
+        default=False,
+        update=on_property_updated
+    )
+
+    roof_abut_back: BoolProperty(
+        name="Roof Abut Back",
+        description="Flush terminate roof against wall on back facade without overhang or bargeboards",
+        default=False,
+        update=on_property_updated
+    )
+
+    gable_left: BoolProperty(
+        name="Gable Left",
+        description="Build gable end wall and bargeboards on left facade",
+        default=True,
+        update=on_property_updated
+    )
+
+    gable_right: BoolProperty(
+        name="Gable Right",
+        description="Build gable end wall and bargeboards on right facade",
+        default=True,
+        update=on_property_updated
+    )
+
+    gable_front: BoolProperty(
+        name="Gable Front",
+        description="Build gable end wall and bargeboards on front facade",
+        default=True,
+        update=on_property_updated
+    )
+
+    gable_back: BoolProperty(
+        name="Gable Back",
+        description="Build gable end wall and bargeboards on back facade",
+        default=True,
         update=on_property_updated
     )
 
