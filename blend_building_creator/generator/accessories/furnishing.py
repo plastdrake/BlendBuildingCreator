@@ -2026,7 +2026,7 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
         tracker.occupy(rcx - tw * 0.5 - 0.40, rcx + tw * 0.5 + 0.40, rcy - td * 0.5 - 0.40, rcy + td * 0.5 + 0.40)
 
     # 3. Perimeter benches along walls
-    _try_place_wall_prop(bm, 'BENCH', 1.60, 0.45, tracker, z_floor,
+    _try_place_wall_prop(bm, 'BENCH', 1.60, 0.58, tracker, z_floor,
                          candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'), length=1.60)
 
     # 4. Storage chests for civic records
@@ -2141,9 +2141,9 @@ def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
                 break
 
     # 7. Courtier / noble benches along side walls
-    _try_place_wall_prop(bm, 'BENCH', 1.80, 0.55, tracker, z_floor,
+    _try_place_wall_prop(bm, 'BENCH', 1.80, 0.58, tracker, z_floor,
                          candidate_walls=('WEST', 'EAST'), length=1.75)
-    _try_place_wall_prop(bm, 'BENCH', 1.80, 0.55, tracker, z_floor,
+    _try_place_wall_prop(bm, 'BENCH', 1.80, 0.58, tracker, z_floor,
                          candidate_walls=('EAST', 'WEST'), length=1.75)
 
     # 8. Flanking weapon racks / ceremonial guard halberds
@@ -2198,7 +2198,7 @@ def _furnish_mezzanine_gallery(bm, rm, tracker: RoomOccupancyTracker, z_floor: f
         bench_walls.append('WEST')
 
     if bench_walls:
-        _try_place_wall_prop(bm, 'BENCH', 1.60, 0.45, tracker, z_floor,
+        _try_place_wall_prop(bm, 'BENCH', 1.60, 0.58, tracker, z_floor,
                              candidate_walls=tuple(bench_walls), length=1.50)
 
     # Bookcase / display cabinet requires deeper rim >= 2.65m
@@ -2281,7 +2281,7 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
         build_prop(bm, 'BOTTLE_CLUSTER', sideboard[0], sideboard[1], z_table, sideboard[2])
 
     # 4. Perimeter bench + chest.
-    _try_place_wall_prop(bm, 'BENCH', 1.60, 0.45, tracker, z_floor,
+    _try_place_wall_prop(bm, 'BENCH', 1.60, 0.58, tracker, z_floor,
                          candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'), length=1.60)
     _try_place_wall_prop(bm, 'CHEST', 1.00, 0.55, tracker, z_floor,
                          candidate_walls=('WEST', 'EAST', 'SOUTH'))
@@ -2321,7 +2321,7 @@ def _furnish_entrance_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
         if _d is not None:
             seats += 1
     if seats == 0:
-        _try_place_wall_prop(bm, 'BENCH', 1.60, 0.45, tracker, z_floor,
+        _try_place_wall_prop(bm, 'BENCH', 1.60, 0.58, tracker, z_floor,
                              candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'), length=1.6)
 
     # A pair of armchairs and a bookcase for a proper waiting lobby.
@@ -2365,7 +2365,7 @@ def _furnish_office(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
 
     # 4. Small visitor table or bench if room allows
     if rw >= 3.6 and rd >= 3.6:
-        _try_place_wall_prop(bm, 'BENCH', 1.20, 0.42, tracker, z_floor,
+        _try_place_wall_prop(bm, 'BENCH', 1.20, 0.58, tracker, z_floor,
                              candidate_walls=('SOUTH', 'EAST', 'WEST'), length=1.20)
 
     # 5. Executive ornate office area rugs (oversized + layered)
@@ -3780,7 +3780,7 @@ def _furnish_corridor(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
                      yaw_max=0.05)
 
     # 2. Bench or chest along clear wall
-    _try_place_wall_prop(bm, 'BENCH', 1.40, 0.45, tracker, z_floor,
+    _try_place_wall_prop(bm, 'BENCH', 1.40, 0.58, tracker, z_floor,
                          candidate_walls=('SOUTH', 'NORTH', 'WEST', 'EAST'), length=1.40)
 
     # 2b. Large landings double as sitting nooks so big upper halls never
