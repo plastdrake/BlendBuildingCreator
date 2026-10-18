@@ -583,9 +583,8 @@ def _build_paved_road_strip(bm, waypoints, width=4.4, sample_step=1.0,
 def build_cliff_paved_roads(bm, tier=3):
     """
     Constructs paved roads across the castle terraces:
-    - Main spine corridors matching the 4.4m stair flights with direct alignment between flights.
-    - Off-shoot paths leading directly to the front entrance porches/steps of buildings at the sides.
-    - Edges skipped (no kerb borders); paved with mud-stone in Tier 1 and castle stone in Tier 2 and Tier 3.
+    - Main straight spine corridors matching the 4.4m stair flights with direct alignment between flights.
+    - Side paths skipped per user preference (done manually later).
     """
     road_mat = MAT_INDEX_STONE  # Tier 1 = Mud Fieldstone, Tier 2/3 = Castle Stone
 
@@ -599,25 +598,6 @@ def build_cliff_paved_roads(bm, tier=3):
     ]
     _build_paved_road_strip(bm, spine_mid, width=4.4, sample_step=1.2, pave_mat=road_mat, layer_offset=0.003)
 
-    # Branch West: from spine directly to Great Hall front door steps at (-8.0, -10.8)
-    branch_west = [
-        (0.0, -11.5),
-        (-3.5, -11.3),
-        (-6.2, -11.0),
-        (-8.0, -10.8),
-    ]
-    _build_paved_road_strip(bm, branch_west, width=2.5, sample_step=1.0, pave_mat=road_mat, layer_offset=0.0)
-
-    # Branch East: from spine directly to East Hall front door steps at (8.0, -10.8) (Tier >= 2)
-    if tier >= 2:
-        branch_east = [
-            (0.0, -11.5),
-            (3.5, -11.3),
-            (6.2, -11.0),
-            (8.0, -10.8),
-        ]
-        _build_paved_road_strip(bm, branch_east, width=2.5, sample_step=1.0, pave_mat=road_mat, layer_offset=0.0)
-
     # ---------------- 2. Forecourt (Z = 3.0) ----------------
     # Forecourt Spine: Flight 1 arrival (0.0, -50.0) -> Flight 2 approach (0.0, -41.4)
     spine_forecourt = [
@@ -627,27 +607,6 @@ def build_cliff_paved_roads(bm, tier=3):
     ]
     _build_paved_road_strip(bm, spine_forecourt, width=4.4, sample_step=1.2, pave_mat=road_mat, layer_offset=0.003)
 
-    if tier >= 2:
-        # Branch West directly to Barracks entrance steps (-20.0, -33.8)
-        branch_barracks = [
-            (0.0, -45.5),
-            (-5.0, -44.5),
-            (-11.0, -41.5),
-            (-16.5, -37.5),
-            (-20.0, -33.8),
-        ]
-        _build_paved_road_strip(bm, branch_barracks, width=2.5, sample_step=1.2, pave_mat=road_mat, layer_offset=0.0)
-
-        # Branch East directly to Armory entrance steps (20.0, -33.8)
-        branch_armory = [
-            (0.0, -45.5),
-            (5.0, -44.5),
-            (11.0, -41.5),
-            (16.5, -37.5),
-            (20.0, -33.8),
-        ]
-        _build_paved_road_strip(bm, branch_armory, width=2.5, sample_step=1.2, pave_mat=road_mat, layer_offset=0.0)
-
     # ---------------- 3. Upper Citadel Ward (Z = 14.0) ----------------
     # Citadel Spine: Flight 3 arrival (0.0, 18.0) -> Keep entrance portal (0.0, 31.8)
     spine_citadel = [
@@ -656,28 +615,6 @@ def build_cliff_paved_roads(bm, tier=3):
         (0.0, 31.8),
     ]
     _build_paved_road_strip(bm, spine_citadel, width=4.4, sample_step=1.2, pave_mat=road_mat, layer_offset=0.003)
-
-    if tier >= 2:
-        # Branch West toward West Wing / Chapel entrance (-18.2, 33.5)
-        branch_chapel = [
-            (0.0, 24.5),
-            (-5.0, 26.5),
-            (-10.5, 29.5),
-            (-15.0, 32.0),
-            (-18.2, 33.5),
-        ]
-        _build_paved_road_strip(bm, branch_chapel, width=2.5, sample_step=1.2, pave_mat=road_mat, layer_offset=0.0)
-
-    if tier == 3:
-        # Branch East toward Archive Hall entrance (18.0, 34.5)
-        branch_archive = [
-            (0.0, 24.5),
-            (5.0, 26.5),
-            (10.5, 29.5),
-            (14.5, 32.2),
-            (18.0, 34.5),
-        ]
-        _build_paved_road_strip(bm, branch_archive, width=2.5, sample_step=1.2, pave_mat=road_mat, layer_offset=0.0)
 
 
 def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=(), top_z_forecourt=None, top_z_upper=None):
