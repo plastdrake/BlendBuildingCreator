@@ -1542,7 +1542,7 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         req_side_w = 4.5
 
     # If there is a basement stair hole or floor stair opening, ensure side bay has clearance to partition wall
-    if stair_hole:
+    if stair_hole and stair_hole[2] <= iy_max and stair_hole[3] >= iy_min:
         if stair_hole[0] > (ix_min + ix_max) * 0.5:
             # Stair on east side (e.g. basement stair in East Bay)
             req_side_w = max(req_side_w, (ix_max - stair_hole[0]) + 0.3)
@@ -2106,10 +2106,15 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                             if getattr(r, 'role', '') == 'THRONE_ROOM':
                                 if not any(abs(d.get('x', 0) - dw_wx) < 0.2 and abs(d.get('y', 0) - iy_max) < 0.2 for d in r.doorways):
                                     r.doorways.append({'x': dw_wx, 'y': iy_max, 'axis': 'X', 'w': dw_w_eff})
+                    _w_sh = None
+                    if stair_hole is not None:
+                        if not (stair_hole[1] < wb[0] or stair_hole[0] > wb[1]
+                                or stair_hole[3] < wb[2] or stair_hole[2] > wb[3]):
+                            _w_sh = stair_hole
                     _p_rooms.append(Room(
                         id=f"fl{fl_idx}_wing{wi}", floor_idx=fl_idx,
                         role=w_role, bounds=wb, is_wing=True, wing_id=wi,
-                        doorways=wing_dw, stair_hole=None, exterior_facades={}))
+                        doorways=wing_dw, stair_hole=_w_sh, exterior_facades={}))
             return _p_rooms, _p_walls
 
     is_wide_mansion = (W >= 15.0 and D >= 6.0
