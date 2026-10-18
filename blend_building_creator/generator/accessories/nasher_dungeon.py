@@ -243,8 +243,22 @@ def _level(bm, i, zf, depart_hole):
     _wall(bm, False, 0.0, Y0, CORR_S, zf, posts=False)
     _wall(bm, False, 0.0, CORR_N, Y1, zf, posts=False)
 
+    hole_above = _hole(i - 1) if i > 0 else None
     for jx in (-15.0, -9.0, -3.0, 3.0, 9.0, 15.0):
-        _box(bm, jx - 0.15, jx + 0.15, Y0 + 0.3, Y1 - 0.3, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=1)
+        if hole_above and (hole_above[0] - 0.15 <= jx <= hole_above[1] + 0.15):
+            hy0, hy1 = hole_above[2], hole_above[3]
+            # Beam south of stair opening:
+            _box(bm, jx - 0.15, jx + 0.15, Y0 + 0.3, hy0 - 0.05, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=1)
+            # Beam north of stair opening:
+            _box(bm, jx - 0.15, jx + 0.15, hy1 + 0.05, Y1 - 0.3, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=1)
+        else:
+            _box(bm, jx - 0.15, jx + 0.15, Y0 + 0.3, Y1 - 0.3, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=1)
+
+    if hole_above:
+        hx0, hx1, hy0, hy1 = hole_above
+        # Structural trimmer headers framing the north and south edges of the ceiling opening:
+        _box(bm, hx0, hx1, hy0 - 0.22, hy0 - 0.02, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=0)
+        _box(bm, hx0, hx1, hy1 + 0.02, hy1 + 0.22, zf + WALL_H - 0.3, zf + WALL_H - 0.02, BEAM, long_axis=0)
 
     rooms, halls = _KINDS[i]
     for (rx, ry), kind in zip(((-3.0, 33.0), (3.0, 33.0), (-3.0, 43.0), (3.0, 43.0)), rooms):
