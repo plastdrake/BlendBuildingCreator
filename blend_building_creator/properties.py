@@ -99,6 +99,67 @@ def on_tier_updated(self, context):
     
     on_property_updated(self, context)
 
+
+def export_category_items(_self, _context):
+    from .presets import BUILDING_FAMILIES
+
+    categories = sorted({
+        category
+        for family in BUILDING_FAMILIES
+        for category in (
+            family.get('category', 'OTHER')
+            if isinstance(family.get('category', 'OTHER'), (list, tuple, set))
+            else (family.get('category', 'OTHER'),)
+        )
+    })
+    return [('ALL', 'All Categories', 'Export every category')] + [
+        (category, category.title(), f'Export {category.title()} buildings')
+        for category in categories
+    ]
+
+
+def export_family_items(self, _context):
+    from .presets import BUILDING_FAMILIES
+
+    families = [
+        family for family in BUILDING_FAMILIES
+        if self.export_category == 'ALL'
+        or self.export_category in (
+            family.get('category', 'OTHER')
+            if isinstance(family.get('category', 'OTHER'), (list, tuple, set))
+            else (family.get('category', 'OTHER'),)
+        )
+    ]
+    return [('ALL', 'All Presets', 'Export every preset in the selected category')] + [
+        (family['id'], family['name'], family.get('description', ''))
+        for family in families
+    ]
+
+
+def export_tier_items(self, _context):
+    from .presets import BUILDING_FAMILIES, PRESETS
+
+    family = next(
+        (family for family in BUILDING_FAMILIES if family['id'] == self.export_family),
+        None,
+    )
+    if family is None or self.export_family == 'ALL':
+        return [('ALL', 'All Tiers', 'Export every tier in the selected scope')]
+    return [('ALL', 'All Tiers', 'Export every tier in the selected preset')] + [
+        (tier_label, tier_label, description)
+        for tier_label, preset_key, description in family['tiers']
+        if preset_key in PRESETS
+    ]
+
+
+def on_export_category_updated(self, _context):
+    self.export_family = 'ALL'
+    self.export_tier = 'ALL'
+
+
+def on_export_family_updated(self, _context):
+    self.export_tier = 'ALL'
+
 def on_palette_updated(self, context):
     """Applies curated stylized fantasy color palettes inspired by game and animation art."""
     if not getattr(self, "auto_update", True):
@@ -178,6 +239,35 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('CONSTRUCTION', "Construction", "Scaffolded buildings under construction"),
         ],
         default='ALL'
+    )
+
+    export_category: EnumProperty(
+        name="Export Category",
+        description="Category to export",
+        items=export_category_items,
+        update=on_export_category_updated,
+    )
+    export_family: EnumProperty(
+        name="Export Preset",
+        description="Preset to export, or all presets in the category",
+        items=export_family_items,
+        update=on_export_family_updated,
+    )
+    export_tier: EnumProperty(
+        name="Export Tier",
+        description="Tier to export, or all tiers in the preset",
+        items=export_tier_items,
+    )
+    export_directory: StringProperty(
+        name="Export Directory",
+        description="Folder for generated FBX files",
+        subtype='DIR_PATH',
+        default="//fbx_exports",
+    )
+    export_keep_buildings: BoolProperty(
+        name="Keep Buildings in Scene",
+        description="Keep generated buildings after export",
+        default=False,
     )
     
     # --- Dimensions & Floors ---

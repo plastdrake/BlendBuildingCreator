@@ -42,12 +42,16 @@ The same export engine is available from the terminal:
 blender --background --python tools/generate_all_fbx.py
 ```
 
-The Fantasy Building sidebar provides the **Export All Preset Tiers (FBX)**
-button. It opens a separate PowerShell window and runs the export in a
-background Blender process, so the main Blender interface remains responsive.
+The Fantasy Building sidebar provides an expandable **Exporting** section.
+**Export All Presets & Tiers (FBX)** opens a separate PowerShell window and
+runs the export in a background Blender process, so the main Blender interface
+remains responsive.
 The button uses the installed add-on's batch-export module, so it also works
 when the add-on is installed as a Blender extension rather than from the
 repository folder.
+The **Selected Scope** controls use dependent dropdowns: choose a category,
+then all presets in that category or one preset, then all tiers or one tier.
+**Export Selected Scope (FBX)** launches the matching background export.
 The PowerShell window shows the current preset, completed count, file size,
 object count, and vertex count. It exports every valid preset and every tier
 using the same modifier, transform, and Edge smoothing FBX settings.

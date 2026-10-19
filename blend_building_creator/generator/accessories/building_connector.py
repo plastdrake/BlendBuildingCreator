@@ -1876,12 +1876,13 @@ def build_chapel_connector(
         z_span=(chapel_floor_z + 0.04, chapel_floor_z + 2.40)
     )
 
-    # 2. Purge residual exterior wall/timber and foundation stone faces inside the aperture zones:
+    # 2. Purge residual exterior wall/timber and foundation stone faces inside the doorway passage volume
+    # (strictly within the walking door aperture, leaving the adjacent building walls intact):
     keep_aperture = [
         f for f in bm.faces if f.is_valid
-        and (x_keep - 0.35 <= f.calc_center_median().x <= x_keep + 0.35)
-        and (cy - width * 0.5 - 0.05 <= f.calc_center_median().y <= cy + width * 0.5 + 0.05)
-        and (13.60 <= f.calc_center_median().z <= floor_z + ceiling_h + 0.20)
+        and (x_keep - 0.08 <= f.calc_center_median().x <= x_keep + 0.40)
+        and (cy - 1.05 <= f.calc_center_median().y <= cy + 1.05)
+        and (floor_z - 0.10 <= f.calc_center_median().z <= floor_z + portal_h + 0.08)
         and f.material_index in (MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_CLIFFS, MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER)
     ]
     if keep_aperture:
@@ -1890,9 +1891,9 @@ def build_chapel_connector(
 
     chapel_aperture = [
         f for f in bm.faces if f.is_valid
-        and (x_chapel - 0.35 <= f.calc_center_median().x <= x_chapel + 0.35)
-        and (cy - width * 0.5 - 0.05 <= f.calc_center_median().y <= cy + width * 0.5 + 0.05)
-        and (13.60 <= f.calc_center_median().z <= chapel_floor_z + ceiling_h + 0.20)
+        and (x_chapel - 0.40 <= f.calc_center_median().x <= x_chapel + 0.08)
+        and (cy - 1.05 <= f.calc_center_median().y <= cy + 1.05)
+        and (chapel_floor_z - 0.10 <= f.calc_center_median().z <= chapel_floor_z + portal_h + 0.08)
         and f.material_index in (MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_CLIFFS, MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER)
     ]
     if chapel_aperture:
@@ -2149,19 +2150,20 @@ def build_chapel_connector(
             bevel_amount=0.01
         )
 
-    # 8. Solid timber portal encasements, corridor wall linings, and header panels
+    # 8. Single unified timber portal encasements, header panels, and flush architrave trims
+    # Replaces redundant triple-nested frames with one clean, snug casing sitting flush with wall surfaces
+    wall_depth = 0.34
+    jamb_t = wall_depth + 0.04  # 0.38m (spans snugly through the wall, sitting flush on both sides)
     jamb_w = 0.22
-    wall_depth = 0.38
-    jamb_t = wall_depth + 0.12  # 0.50m (extends 6cm past wall on both corridor and room sides)
-    casing_d = 0.06
-    casing_w = 0.16
+    jh = portal_h
+    casing_d = 0.025
+    casing_w = 0.12
 
     for x_end, base_fz, into_dir in ((x_keep, floor_z, 1.0), (x_chapel, chapel_floor_z, -1.0)):
-        jh = portal_h
         wall_cx = x_end + into_dir * (wall_depth * 0.5)
 
         # Solid timber jambs centered directly over the wall cut line (portal_w * 0.5)
-        # and centered on the wall thickness (wall_cx), completely burying the cut edge from corridor to room.
+        # completely encasing and burying the cut wall edges from corridor to room
         for side in (-1.0, 1.0):
             jy = cy + side * (portal_w * 0.5)
             create_beveled_box(
@@ -2169,18 +2171,17 @@ def build_chapel_connector(
                 size=(jamb_t, jamb_w, jh),
                 location=(wall_cx, jy, base_fz + 0.05 + jh * 0.5),
                 mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.015
+                bevel_amount=0.012
             )
 
         lintel_w = portal_w + jamb_w * 2.0
-        lintel_h = 0.24
-        # Lintel laps 4cm below the top wall cut to completely bury the top cut edge
+        lintel_h = 0.22
         create_beveled_box(
             bm,
             size=(jamb_t, lintel_w, lintel_h),
             location=(wall_cx, cy, base_fz + portal_h - 0.04 + lintel_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.015
+            bevel_amount=0.012
         )
 
         # Header panel filling aperture space between lintel and ceiling
@@ -2189,70 +2190,49 @@ def build_chapel_connector(
         if header_h > 0.02:
             create_box(
                 bm,
-                size=(jamb_t - 0.04, lintel_w, header_h),
+                size=(0.10, lintel_w, header_h),
                 location=(wall_cx, cy, header_bot + header_h * 0.5),
                 mat_index=MAT_INDEX_WOOD,
                 is_wall=True
             )
-            create_beveled_box(
-                bm,
-                size=(jamb_t, lintel_w + 0.04, 0.10),
-                location=(wall_cx, cy, top_z - 0.05),
-                mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.008
-            )
 
-        # Corridor end wall lining: covers corridor-facing wall strip flanking the doorway
-        flank_w = (width - lintel_w) * 0.5
-        if flank_w > 0.04:
-            for side in (-1.0, 1.0):
-                f_cy = cy + side * (lintel_w * 0.5 + flank_w * 0.5)
-                f_cx = x_end - into_dir * 0.03
-                create_box(
-                    bm,
-                    size=(0.04, flank_w, top_z - found_z1),
-                    location=(f_cx, f_cy, found_z1 + (top_z - found_z1) * 0.5),
-                    mat_index=MAT_INDEX_WOOD,
-                    is_wall=True
-                )
-
-        # Architrave casings facing inside the room (flush against interior room wall)
-        room_x = x_end + into_dir * (wall_depth + 0.06 + casing_d * 0.5)
+        # Flush architrave casing on the room side (sits flush against interior room wall, not protruding into room)
+        room_x = x_end + into_dir * (wall_depth + casing_d * 0.5)
         for side in (-1.0, 1.0):
-            ty = cy + side * (portal_w * 0.5 + 0.02)
+            ty = cy + side * (portal_w * 0.5 + casing_w * 0.5 - 0.04)
             create_beveled_box(
                 bm,
                 size=(casing_d, casing_w, jh + 0.04),
                 location=(room_x, ty, base_fz + 0.05 + (jh + 0.04) * 0.5),
                 mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.006
+                bevel_amount=0.005
             )
-        head_w = portal_w + casing_w * 2.0 + 0.04
+        head_w = portal_w + casing_w * 2.0
         create_beveled_box(
             bm,
-            size=(casing_d + 0.01, head_w, lintel_h),
+            size=(casing_d, head_w, lintel_h),
             location=(room_x, cy, base_fz + portal_h - 0.04 + lintel_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.008
+            bevel_amount=0.005
         )
 
-        # Architrave casings facing inside the corridor (flush against corridor end wall)
-        corr_x = x_end - into_dir * (0.06 + casing_d * 0.5)
+        # Flush architrave casing on the corridor side (sits flush against corridor end wall)
+        corr_x = x_end - into_dir * (casing_d * 0.5)
         for side in (-1.0, 1.0):
-            ty = cy + side * (portal_w * 0.5 + 0.02)
+            ty = cy + side * (portal_w * 0.5 + casing_w * 0.5 - 0.04)
             create_beveled_box(
                 bm,
                 size=(casing_d, casing_w, jh + 0.04),
                 location=(corr_x, ty, base_fz + 0.05 + (jh + 0.04) * 0.5),
                 mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.006
+                bevel_amount=0.005
             )
         create_beveled_box(
             bm,
-            size=(casing_d + 0.01, head_w, lintel_h),
+            size=(casing_d, head_w, lintel_h),
             location=(corr_x, cy, base_fz + portal_h - 0.04 + lintel_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.008
+            bevel_amount=0.005
         )
 
 

@@ -610,6 +610,12 @@ def _build_stringer_prism(bm, p_start, p_end, z0, z_head, stringer_thick,
 
     bmesh.ops.recalc_face_normals(bm, faces=faces)
 
+    diag_len = math.sqrt(L * L + dz * dz)
+    t_r = (L / diag_len) * dir_r
+    t_z = dz / diag_len
+    n_r = -(dz / diag_len) * dir_r
+    n_z = L / diag_len
+
     uv_layer = bm.loops.layers.uv.verify()
     for f in faces:
         if not f.is_valid:
@@ -617,22 +623,17 @@ def _build_stringer_prism(bm, p_start, p_end, z0, z_head, stringer_thick,
         f.material_index = mat_index
         nx = abs(f.normal.x)
         ny = abs(f.normal.y)
+        is_side = (axis == 'Y' and nx > 0.5) or (axis == 'X' and ny > 0.5)
         for loop in f.loops:
             co = loop.vert.co
-            if axis == 'Y':
-                if nx > 0.5:
-                    u_coord = (co.y - r0) * 0.85
-                    v_coord = (co.z - z0) * 1.5
-                else:
-                    u_coord = (co.x - s0) * 1.5
-                    v_coord = (co.y - r0) * 0.85 + (co.z - z0) * 1.2
-            else:
-                if ny > 0.5:
-                    u_coord = (co.x - r0) * 0.85
-                    v_coord = (co.z - z0) * 1.5
-                else:
-                    u_coord = (co.y - s0) * 1.5
-                    v_coord = (co.x - r0) * 0.85 + (co.z - z0) * 1.2
+            dist_run = (co.y - r0) if axis == 'Y' else (co.x - r0)
+            delta_z = co.z - z0
+            dist_along = dist_run * t_r + delta_z * t_z
+            dist_perp = dist_run * n_r + delta_z * n_z
+            dist_lat = (co.x - s0) if axis == 'Y' else (co.y - s0)
+
+            v_coord = dist_along * 0.40
+            u_coord = dist_perp * 1.2 if is_side else dist_lat * 1.2
             loop[uv_layer].uv = Vector((u_coord, v_coord))
         f.tag = True
 
@@ -680,11 +681,12 @@ def build_straight_staircase(
     riser_w = stair_width - 2 * stringer_thick + 0.012
 
     for i in range(num_steps):
-        # Embed riser top 5mm into tread above, and riser bottom 3mm into tread below (or 4mm into floor for i=0)
-        # to eliminate horizontal coplanar face overlaps with treads and floor
-        r_bot = (z0 - 0.004) if i == 0 else (z0 + i * step_h - 0.003)
-        r_top = z0 + (i + 1) * step_h + 0.005
-        this_riser_h = r_top - r_bot
+        # Embed riser top 2mm into underside of tread above to seal joint without protruding,
+        # and embed riser bottom 2mm into tread below (or floor for i=0).
+        # Tread sits cleanly ON TOP of the riser.
+        r_bot = (z0 - 0.003) if i == 0 else (z0 + i * step_h - 0.002)
+        r_top = z0 + (i + 1) * step_h - tread_thick + 0.002
+        this_riser_h = max(0.04, r_top - r_bot)
         rz = (r_bot + r_top) * 0.5
         ru = (i * abs(step_d)) * dir_run
 
@@ -710,34 +712,33 @@ def build_straight_staircase(
                 loop[uv_layer].uv = Vector((u, v))
             f.tag = True
 
-        # Tread sits at top of riser. Intermediate treads only (last step is the upper floor slab!)
-        if i < num_steps - 1:
-            tz = z0 + (i + 1) * step_h - tread_thick * 0.5
-            tu = (i + 0.5) * step_d + 0.015 * dir_run
-            if axis == 'Y':
-                tread_loc = (x0, y0 + tu, tz)
-                tread_size = (tread_w, tread_d, tread_thick)
-            else:
-                tread_loc = (x0 + tu, y0, tz)
-                tread_size = (tread_d, tread_w, tread_thick)
+        # Tread sits cleanly on top of riser for every step including the final top step
+        tz = z0 + (i + 1) * step_h - tread_thick * 0.5
+        tu = (i + 0.5) * step_d + 0.015 * dir_run
+        if axis == 'Y':
+            tread_loc = (x0, y0 + tu, tz)
+            tread_size = (tread_w, tread_d, tread_thick)
+        else:
+            tread_loc = (x0 + tu, y0, tz)
+            tread_size = (tread_d, tread_w, tread_thick)
 
-            tread_faces = create_beveled_box(
-                bm, size=tread_size, location=tread_loc,
-                mat_index=MAT_INDEX_WOOD, bevel_amount=0.01
-            )
-            for f in tread_faces:
-                if not f.is_valid:
-                    continue
-                for loop in f.loops:
-                    co = loop.vert.co
-                    if axis == 'Y':
-                        v = (co.x - x0) * 0.85 + (i * 0.31)
-                        u = (co.y - tread_loc[1]) * 1.5 + (co.z - tz) * 1.4
-                    else:
-                        v = (co.y - y0) * 0.85 + (i * 0.31)
-                        u = (co.x - tread_loc[0]) * 1.5 + (co.z - tz) * 1.4
-                    loop[uv_layer].uv = Vector((u, v))
-                f.tag = True
+        tread_faces = create_beveled_box(
+            bm, size=tread_size, location=tread_loc,
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.01
+        )
+        for f in tread_faces:
+            if not f.is_valid:
+                continue
+            for loop in f.loops:
+                co = loop.vert.co
+                if axis == 'Y':
+                    v = (co.x - x0) * 0.85 + (i * 0.31)
+                    u = (co.y - tread_loc[1]) * 1.5 + (co.z - tz) * 1.4
+                else:
+                    v = (co.y - y0) * 0.85 + (i * 0.31)
+                    u = (co.x - tread_loc[0]) * 1.5 + (co.z - tz) * 1.4
+                loop[uv_layer].uv = Vector((u, v))
+            f.tag = True
 
     # 2. Structural Side Stringers (grounded at floor, capped below trim at head)
     # Kept inside stair_width so the flight clears the floor hole and trim frame cleanly.
@@ -798,7 +799,7 @@ def build_straight_staircase(
                 bm, (rail_s, r_start), (rail_s, r_end),
                 z_start, height=rail_h, base_z_end=z_end,
                 has_sill=False, posts=False, post_at_start=False, post_at_end=False,
-                baluster_spacing=0.20, end_overhang=0.0, braces=False
+                baluster_spacing=0.20, end_overhang=0.06, braces=False
             )
         else:
             rail_s = y0 + side * str_offset
@@ -832,7 +833,7 @@ def build_straight_staircase(
                 bm, (r_start, rail_s), (r_end, rail_s),
                 z_start, height=rail_h, base_z_end=z_end,
                 has_sill=False, posts=False, post_at_start=False, post_at_end=False,
-                baluster_spacing=0.20, end_overhang=0.0, braces=False
+                baluster_spacing=0.20, end_overhang=0.06, braces=False
             )
 
 def _l_stair_run(bm, foot_xy, top_xy, z0, z1, width, along_axis):

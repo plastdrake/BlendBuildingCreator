@@ -7,7 +7,6 @@ import random
 import json
 import os
 import re
-import sys
 import subprocess
 from .generator.building import generate_building
 from .presets import apply_preset, BUILDING_FAMILIES, PRESETS
@@ -341,6 +340,45 @@ def _export_fbx_jobs(context, jobs, export_dir, keep_buildings=False):
     return len(normalized_jobs)
 
 
+def _launch_background_export(operator, output_dir, method, **kwargs):
+    """Launch an installed-addon export in a visible background Blender process."""
+    blender_binary = bpy.app.binary_path
+    if not blender_binary or not os.path.isfile(blender_binary):
+        operator.report(
+            {'ERROR'},
+            f"Blender executable not found: {blender_binary or '<empty path>'}",
+        )
+        return False
+
+    addon_module = __package__ or "blend_building_creator"
+    batch_module = f"{addon_module}.batch_export"
+    arguments = ", ".join(
+        f"{name}={value!r}" for name, value in kwargs.items()
+    )
+    expression = (
+        "import importlib; "
+        f"b=importlib.import_module({batch_module!r}); "
+        f"b.{method}({output_dir!r}, {arguments})"
+    )
+    command = (
+        f'& "{blender_binary}" --background --python-expr '
+        f'"{expression}" --addons "{addon_module}"'
+    )
+    powershell = "powershell.exe"
+    subprocess.Popen(
+        [
+            powershell,
+            "-NoLogo",
+            "-NoExit",
+            "-Command",
+            command,
+        ],
+        cwd=os.path.dirname(os.path.dirname(__file__)),
+        creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+    )
+    return True
+
+
 class BUILDING_OT_export_all_preset_tiers_fbx(bpy.types.Operator):
     """Generate and export one FBX for every preset tier."""
     bl_idname = "building.export_all_preset_tiers_fbx"
@@ -374,30 +412,10 @@ class BUILDING_OT_export_all_preset_tiers_fbx(bpy.types.Operator):
                 return {'CANCELLED'}
             os.makedirs(export_dir, exist_ok=True)
 
-            escaped_dir = repr(export_dir)
-            keep = "True" if self.keep_buildings else "False"
-            expression = (
-                "import blend_building_creator.batch_export as b; "
-                f"b.export_all({escaped_dir}, keep_buildings={keep})"
-            )
-            command = (
-                f'& "{sys.executable}" --background --python-expr '
-                f'"{expression}"'
-            )
-            powershell = os.environ.get("COMSPEC", "powershell.exe")
-            if not powershell.lower().endswith(("powershell.exe", "pwsh.exe")):
-                powershell = "powershell.exe"
-            subprocess.Popen(
-                [
-                    powershell,
-                    "-NoLogo",
-                    "-NoExit",
-                    "-Command",
-                    command,
-                ],
-                cwd=os.path.dirname(os.path.dirname(__file__)),
-                creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
-            )
+            if not _launch_background_export(
+                    self, export_dir, "export_all",
+                    keep_buildings=self.keep_buildings):
+                return {'CANCELLED'}
             self.report(
                 {'INFO'},
                 f"Started FBX export in a new PowerShell window: {export_dir}",
@@ -406,6 +424,35 @@ class BUILDING_OT_export_all_preset_tiers_fbx(bpy.types.Operator):
         except (OSError, ValueError) as exc:
             self.report({'ERROR'}, f"Could not start FBX export: {exc}")
             return {'CANCELLED'}
+
+
+class BUILDING_OT_export_selected_preset_fbx(bpy.types.Operator):
+    """Export the selected category, preset family, or tier."""
+    bl_idname = "building.export_selected_preset_fbx"
+    bl_label = "Export Selected Scope (FBX)"
+    bl_description = "Export the selected category, preset, or tier in a new PowerShell window"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        props = context.scene.fantasy_building_settings
+        export_dir = bpy.path.abspath(props.export_directory).rstrip("/\\")
+        if not export_dir:
+            self.report({'ERROR'}, "Choose an export directory")
+            return {'CANCELLED'}
+        try:
+            os.makedirs(export_dir, exist_ok=True)
+            if not _launch_background_export(
+                    self, export_dir, "export_selected",
+                    category=props.export_category,
+                    family_id=props.export_family,
+                    tier=props.export_tier,
+                    keep_buildings=props.export_keep_buildings):
+                return {'CANCELLED'}
+        except OSError as exc:
+            self.report({'ERROR'}, f"Could not create export directory: {exc}")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"Started selected FBX export: {export_dir}")
+        return {'FINISHED'}
 
 
 class BUILDING_OT_toggle_door(bpy.types.Operator):

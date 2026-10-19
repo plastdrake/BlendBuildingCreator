@@ -2856,10 +2856,10 @@ def setup_building_material_slots(obj, props):
     mat_cliffs = create_stylized_cliffs("M_Building_Cliffs")
     mat_dg_wall = create_dungeon_material(
         "M_Building_Dungeon_Wall", ("dungeon_wall_diffuse.jpg", "stone_wall_diffuse.jpg"),
-        (0.42, 0.42, 0.46, 1.0), (0.45, 0.45, 1.0))
+        (0.42, 0.42, 0.46, 1.0), (1.0, 1.0, 1.0))
     mat_dg_floor = create_dungeon_material(
         "M_Building_Dungeon_Floor", ("dungeon_floor_diffuse.jpg", "cut_stone_diffuse.jpg"),
-        (0.34, 0.34, 0.36, 1.0), (0.6, 0.6, 1.0), roughness=0.8)
+        (0.34, 0.34, 0.36, 1.0), (1.0, 1.0, 1.0), roughness=0.8)
     mat_dg_beam = create_dungeon_material(
         "M_Building_Dungeon_Beam", ("dungeon_beam_diffuse.jpg", "timber_beam_diffuse.jpg"),
         (0.42, 0.30, 0.22, 1.0), (1.0, 1.0, 1.0), roughness=0.85, bump=0.3)

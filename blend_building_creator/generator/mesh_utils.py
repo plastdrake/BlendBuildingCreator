@@ -176,8 +176,8 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                 f.loops[2][uv_layer].uv = Vector((u1, dy * sv))
                 f.loops[3][uv_layer].uv = Vector((u1, 0.0))
             f.tag = True
-        elif mat_index in (0, 1, 3, 8, 11):
-            # Masonry / stone / plaster / cut stone / floor box (foundations, steps, plinths, slabs, pillars, stone blocks):
+        elif mat_index in (0, 1, 3, 8, 11, 43, 44):
+            # Masonry / stone / plaster / cut stone / floor / dungeon wall & floor box (foundations, steps, plinths, slabs, pillars, stone blocks):
             # Normalized world-space meter scaling (1.0/m).
             # Height is ALWAYS V (upward along Z axis).
             # Horizontal span is ALWAYS U (along X for front/back, along Y for left/right).
@@ -195,6 +195,7 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                     u = (lv.y + sy) * scale + u_offset
                     v = (lv.z + sz) * scale + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+            f.tag = True
         elif dz >= dx and dz >= dy:
             # Vertical post / column: V along longitudinal Z axis, U around circumference
             su = scale * 1.2

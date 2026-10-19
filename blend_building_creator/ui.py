@@ -56,11 +56,6 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         col = layout.column(align=True)
         col.scale_y = 1.4
         col.operator("building.create_fantasy_building", text="Create New Building", icon='ADD')
-        col.operator(
-            "building.export_all_preset_tiers_fbx",
-            text="Export All Preset Tiers (FBX)",
-            icon='EXPORT',
-        )
 
         row_res = col.row(align=True)
         row_res.scale_y = 1.1
@@ -122,6 +117,40 @@ class VIEW3D_PT_fantasy_building_presets(bpy.types.Panel):
             for tier_label, preset_key, desc in family['tiers']:
                 op = row.operator("building.apply_preset", text=tier_label)
                 op.preset_key = preset_key
+
+
+class VIEW3D_PT_fantasy_building_export(bpy.types.Panel):
+    """Batch and scoped FBX export controls."""
+    bl_label = "Exporting"
+    bl_idname = "VIEW3D_PT_fantasy_building_export"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Fantasy Building"
+    bl_parent_id = "VIEW3D_PT_fantasy_building_main"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.fantasy_building_settings
+
+        layout.operator(
+            "building.export_all_preset_tiers_fbx",
+            text="Export All Presets & Tiers (FBX)",
+            icon='EXPORT',
+        )
+        box = layout.box()
+        box.label(text="Selected Scope", icon='FILTER')
+        box.prop(props, "export_category")
+        box.prop(props, "export_family")
+        if props.export_family != 'ALL':
+            box.prop(props, "export_tier")
+        box.prop(props, "export_directory")
+        box.prop(props, "export_keep_buildings")
+        box.operator(
+            "building.export_selected_preset_fbx",
+            text="Export Selected Scope (FBX)",
+            icon='EXPORT',
+        )
 
 
 # ---------------------------------------------------------------------------

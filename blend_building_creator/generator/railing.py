@@ -21,8 +21,8 @@ from .materials import (
 
 # Cross sections (metres) - deliberately chunky so rails read as real joinery.
 SILL_W, SILL_T = 0.13, 0.11
-RAIL_W, RAIL_T = 0.14, 0.11
-CAP_W, CAP_T = 0.19, 0.045
+HANDRAIL_W, HANDRAIL_T = 0.16, 0.09
+RAIL_W, RAIL_T = 0.16, 0.09
 MID_W, MID_T = 0.10, 0.065
 LOW_W, LOW_T = 0.09, 0.055
 POST_W = 0.16
@@ -61,7 +61,10 @@ def _beam(bm, p0, p1, z0, z1, cross_w, cross_t, mat, bevel=0.012):
                                location=((x0 + x1) * 0.5, (y0 + y1) * 0.5, (z0 + z1) * 0.5),
                                rotation=tuple(rot.to_euler()), mat_index=mat,
                                bevel_amount=bevel)
-    pass
+    for f in faces:
+        if f.is_valid:
+            f.tag = True
+    return faces
 
 
 def build_railing_post(bm, x, y, base_z, height=1.05,
@@ -117,24 +120,15 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
                    z0 + 0.003 + SILL_T * 0.5, z1 + 0.003 + SILL_T * 0.5,
                    SILL_W, SILL_T, rail_mat, bevel=0.010)
 
-    # 2. Handrail and cap board
+    # 2. Single unified handrail spanning cleanly between posts with zero floating cuts
     rx0 = x0 - ux * end_overhang
     ry0 = y0 - uy * end_overhang
     rx1 = x1 + ux * end_overhang
     ry1 = y1 + uy * end_overhang
 
     _rail_beam(bm, rx0, ry0, rx1, ry1,
-               z0 + height - RAIL_T * 0.5, z1 + height - RAIL_T * 0.5,
-               RAIL_W, RAIL_T, rail_mat, bevel=0.010)
-    # Embedded 2mm into handrail so bottom face is buried inside solid beam (zero coplanar face conflict),
-    # and offset 3mm at ends so cap end cut faces never share planes with handrail beam end cuts.
-    cx0 = rx0 - ux * 0.003
-    cy0 = ry0 - uy * 0.003
-    cx1 = rx1 + ux * 0.003
-    cy1 = ry1 + uy * 0.003
-    _rail_beam(bm, cx0, cy0, cx1, cy1,
-               z0 + height + CAP_T * 0.5 - 0.002, z1 + height + CAP_T * 0.5 - 0.002,
-               CAP_W, CAP_T, baluster_mat, bevel=0.008)
+               z0 + height - HANDRAIL_T * 0.5, z1 + height - HANDRAIL_T * 0.5,
+               HANDRAIL_W, HANDRAIL_T, rail_mat, bevel=0.012)
 
     # 3. Newel posts: both ends plus evenly spaced in between
     n_post = max(1, int(round(run / max(0.6, post_spacing))))
@@ -162,7 +156,7 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
         for k in range(1, n_bal + 1):
             t = ta + (tb - ta) * (k / (n_bal + 1))
             px, py, pz = at(t)
-            bal_h = height - sill_offset - RAIL_T
+            bal_h = height - sill_offset - HANDRAIL_T
             if bal_h < 0.12:
                 continue
             idx = bi * 100 + k

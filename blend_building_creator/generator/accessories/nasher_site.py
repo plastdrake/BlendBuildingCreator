@@ -8,6 +8,7 @@ between tiers; only what stands on it does.
 """
 
 import math
+from mathutils import Vector
 
 from ..materials import MAT_INDEX_CLIFFS, MAT_INDEX_CUT_STONE, MAT_INDEX_STONE
 from ..mesh_utils import create_beveled_box
@@ -552,32 +553,24 @@ def _build_paved_road_strip(bm, waypoints, width=4.4, sample_step=1.0,
                                    rotation=(0.0, 0.0, yaw),
                                    mat_index=pave_mat, bevel_amount=0.015)
 
-        # Apply curve-following UV mapping to every face of this road segment
+        # Apply continuous, undistorted world-space UV mapping to every face of this road segment
         for f in boxes:
             f.tag = True
-            is_top = f.normal.z > 0.5
+            is_horiz = abs(f.normal.z) > 0.5
             for loop in f.loops:
                 v = loop.vert.co
-                # Local coordinates relative to segment center:
-                # d_lat: cross-path coordinate (-width/2 .. +width/2)
-                # d_long: along-path coordinate (-ln/2 .. +ln/2)
-                d_lat = (v.x - mx) * nx + (v.y - my) * ny
-                d_long = (v.x - mx) * ux + (v.y - my) * uy
-                s_curve = s_mid + d_long
-
-                if is_top:
-                    # Top surface: U is across path width, V is along curve direction
-                    u = d_lat * scale
-                    v = s_curve * scale
+                if is_horiz:
+                    # Top/bottom pavement surface: seamless world-space XY coordinates (1.0/m)
+                    # matching castle stairs, terrace landings, and courtyards perfectly with zero distortion
+                    u = v.x * scale
+                    v_coord = v.y * scale
+                elif abs(f.normal.x) > abs(f.normal.y):
+                    u = v.y * scale
+                    v_coord = v.z * scale
                 else:
-                    # Side/bottom faces: wrap neatly with depth
-                    if abs(f.normal.z) < 0.5:
-                        u = s_curve * scale
-                        v = v.z * scale
-                    else:
-                        u = d_lat * scale
-                        v = s_curve * scale
-                loop[uv_layer].uv = (u, v)
+                    u = v.x * scale
+                    v_coord = v.z * scale
+                loop[uv_layer].uv = Vector((u, v_coord))
 
 
 def build_cliff_paved_roads(bm, tier=3):
