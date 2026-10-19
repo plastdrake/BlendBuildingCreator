@@ -145,7 +145,7 @@ def _build_halls(bm, props, tier):
             # Positioned at pos=3.8 (+Y in local space, world Y = 43.8) well clear of the
             # Keep interior stairs at y in [-1.8, +1.8] (world Y in [38.2, 41.8]).
             if tier >= 2:
-                extra_doors.append({'floor_idx': 0, 'facade': 'LEFT', 'pos': 3.8, 'w': 2.2, 'h': 2.6, 'is_portal': True})
+                extra_doors.append({'floor_idx': 0, 'facade': 'LEFT', 'pos': 3.8, 'w': 2.2, 'h': 2.85, 'is_portal': True})
             # Floor 0 west connecting wing doorway on South facade (-Y in world = FRONT in local space)
             # West Connecting Wing is at cx = -8.5. Keep center is 0.0, so local pos = -8.5
             if tier == 3:
@@ -193,8 +193,8 @@ def _build_halls(bm, props, tier):
                 'has_bell_cote': False,
                 'roof_overhang': 0.50,
                 'extra_doorways': [
-                    {'floor_idx': 0, 'facade': 'RIGHT', 'pos': 3.8, 'w': 2.2, 'h': 2.6, 'is_portal': True},
-                    {'floor_idx': 0, 'facade': 'LEFT', 'pos': 0.0, 'w': 2.0, 'h': 2.6, 'is_portal': True},
+                    {'floor_idx': 0, 'facade': 'RIGHT', 'pos': 3.8, 'w': 2.2, 'h': 2.85, 'is_portal': True},
+                    {'floor_idx': 0, 'facade': 'LEFT', 'pos': 0.0, 'w': 2.0, 'h': 2.85, 'is_portal': True},
                 ],
                 'extra_window_exclusions': [
                     {'facade': 'RIGHT', 'min': 2.0, 'max': 5.6, 'floor_min': 0, 'floor_max': 0},

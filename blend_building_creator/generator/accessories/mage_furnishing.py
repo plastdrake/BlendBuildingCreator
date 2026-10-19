@@ -40,8 +40,8 @@ OFFSET = -math.pi * 0.5 - BAY_ANG * 0.5
 STAIR_W = 1.85
 STAIR_ARC = 135.0
 STAIR_OPEN = 75.0
-TABLE_SURF = 0.775
-DESK_SURF = 0.79
+TABLE_SURF = 0.99
+DESK_SURF = 0.98
 
 
 def _local_to_world(pos, ang, lx, ly):

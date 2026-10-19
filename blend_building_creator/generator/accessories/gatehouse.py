@@ -32,9 +32,9 @@ def build_portcullis(bm, cx, cy, z_ground=0.0, width=2.6, height=2.9,
     tx, ty = -oy, ox                      # wall tangent
     ang = math.atan2(ty, tx)
 
-    eff_raised = max(3.10, height * 0.85) if raised is None else float(raised)
+    eff_raised = max(3.85, height * 0.90) if raised is None else float(raised)
     z0 = z_ground + eff_raised
-    z1 = z_ground + height + 1.20
+    z1 = z_ground + max(eff_raised + 0.85, height + 1.20)
 
     # Side guide channels biting into the jambs.
     chan_h = height + 1.40
@@ -319,7 +319,7 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
     tx, ty = -oy, ox
     ang = math.atan2(ty, tx)
 
-    H = tower_h if tower_h is not None else wall_h + 1.85
+    H = tower_h if tower_h is not None else max(wall_h + 2.8, 6.8)
     talus_h = 0.85
     pier_w = tower_r * 2.0
 

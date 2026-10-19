@@ -45,8 +45,8 @@ RAMPS = tuple(_stair_run(-66.0, 0.0, -50.0, 3.0, 2) + _stair_run(-40.0, 3.0, -20
 SHAFT_CUT = (-8.6, -5.4, 21.4, 30.0)
 
 _BOTTOM_Z = -6.0
-_ANGULAR = 112
-_RADIAL_STEPS = 14
+_ANGULAR = 224
+_RADIAL_STEPS = 28
 _STRATA = 1.7
 
 
@@ -241,7 +241,7 @@ def _build_rock(bm, spec):
 
 def _boulder(bm, x, y, radius, seed):
     import bmesh
-    res = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=radius)
+    res = bmesh.ops.create_icosphere(bm, subdivisions=2, radius=radius)
     verts = res['verts']
     for i, v in enumerate(verts):
         j = 0.62 + 0.55 * (0.5 + 0.5 * math.sin(i * 12.9898 + seed * 78.233))
@@ -254,6 +254,7 @@ def _boulder(bm, x, y, radius, seed):
     faces = {f for v in verts for f in v.link_faces}
     for f in faces:
         f.material_index = MAT_INDEX_CLIFFS
+        f.smooth = True
     return list(faces)
 
 
@@ -302,6 +303,8 @@ def build_citadel_mount(bm):
                 continue
             faces += _boulder(bm, x, y, 0.9 + 1.6 * (0.5 + 0.5 * math.sin(n * 3.3)), n)
     cliff_faces = [f for f in bm.faces if f.is_valid and f.material_index == MAT_INDEX_CLIFFS]
+    for f in cliff_faces:
+        f.smooth = True
     map_planar_faces(bm, cliff_faces, scale=1.5)
 
 
@@ -764,10 +767,11 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
             eff_gate_y = 18.0
 
     if gate and eff_gate_y is not None:
+        eff_wall_h = max(eff_gate_wall_h, 4.8)
         build_curtain_wall_gate_portal(
             bm, cx=0.0, cy=eff_gate_y, z_ground=z,
-            outward=(0.0, -1.0), gate_w=4.8, gate_h=min(eff_gate_wall_h - 0.6, height + 0.4),
-            wall_h=eff_gate_wall_h, tower_h=eff_gate_wall_h, thickness=thick + 0.35,
+            outward=(0.0, -1.0), gate_w=4.8, gate_h=4.2,
+            wall_h=eff_wall_h, tower_h=max(eff_wall_h + 2.8, 7.5), thickness=thick + 0.35,
             raised_portcullis=True
         )
 
@@ -888,15 +892,15 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
     all_pts = pts1 + pts2 + pts3
     top_z = max([ground_z(px, py) for px, py in all_pts]) + height
 
-    # 3. Fortified Gatehouse with twin flanking gate towers matching the wall height exactly
+    # 3. Fortified Gatehouse with twin flanking gate towers rising prominently above the wall
     gate_cx = 0.0
     gate_cy = -19.5
     gate_z = ground_z(gate_cx, gate_cy)
-    gate_wall_h = top_z - gate_z
+    gate_wall_h = max(top_z - gate_z, 4.8)
     build_curtain_wall_gate_portal(
         bm, cx=gate_cx, cy=gate_cy, z_ground=gate_z,
-        outward=(0.0, -1.0), gate_w=4.8, gate_h=min(gate_wall_h - 1.0, 4.5),
-        wall_h=gate_wall_h, tower_h=gate_wall_h, thickness=thick + 0.35,
+        outward=(0.0, -1.0), gate_w=4.8, gate_h=4.2,
+        wall_h=gate_wall_h, tower_h=max(gate_wall_h + 2.8, 7.5), thickness=thick + 0.35,
         raised_portcullis=True
     )
 

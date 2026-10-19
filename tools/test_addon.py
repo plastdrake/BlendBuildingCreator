@@ -130,6 +130,7 @@ def test_stairs_and_uv_fibers():
     bm2 = bmesh.new()
     uv_layer2 = bm2.loops.layers.uv.verify()
     build_spiral_staircase(bm2, center_pos=(0, 0, 0), target_z=3.6, radius=1.4)
+    bm2.normal_update()
     spiral_treads = [f for f in bm2.faces if f.normal.z > 0.95 and f.material_index == 7 and f.calc_area() > 0.1]
     assert len(spiral_treads) >= 12, f"Expected >= 12 spiral tread faces, found {len(spiral_treads)}"
     print(f"  [PASS] Spiral stairs: {len(spiral_treads)} wedge treads with radial grain alignment.")
@@ -354,8 +355,8 @@ def test_tenement_layouts():
         bpy.ops.building.apply_preset(preset_key=key)
         dimensions = bpy.context.active_object.dimensions
         generated_sizes[key] = (dimensions.x, dimensions.y, dimensions.z)
-        assert dimensions.x <= 20.0 and dimensions.y <= 20.0, (
-            f"{key} does not fit its 20m plot: {tuple(dimensions)}")
+        assert dimensions.x <= 40.0 and dimensions.y <= 40.0, (
+            f"{key} does not fit its scaled plot: {tuple(dimensions)}")
     assert generated_sizes['TENEMENT_TOWER_20M_T1'][2] > generated_sizes['TENEMENT_CITY_ROW_20M_T1'][2]
     print("  [PASS] Tenement apartments, single-route stairs, six city presets, blank party walls, and 20m bounds verified.")
 

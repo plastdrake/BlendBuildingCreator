@@ -494,27 +494,28 @@ def build_skybridge_link(
             )
 
         # 2. Solid timber portal encasements covering cut wall edges at both interfaces
-        jamb_w = 0.28
-        jamb_t = 0.52  # thoroughly covers the wall thickness
-        thresh_h = 0.088  # Raised by 5 cm (from 0.038m to 0.088m) to prevent coplanar conflicts
+        # Snug, flush profile centered directly on the facade wall plane (never jutting deep into rooms)
+        jamb_w = 0.22
+        jamb_t = 0.32  # snugly spans through the wall thickness
+        thresh_h = 0.015  # smooth flush floor transition (no tripping hurdle)
         thresh_embed = 0.020
         thresh_thick = thresh_h + thresh_embed
-        thresh_d = jamb_t + 0.10
+        thresh_d = 0.34
         jh = portal_h - thresh_h  # pillar height resting on threshold up to portal opening top
-        lintel_h = max(0.40, ceiling_h_val - portal_h)  # beam extends from portal top up to ceiling
+        lintel_h = max(0.35, ceiling_h_val - portal_h)  # beam extends from portal top up to ceiling
         lintel_w = portal_w + jamb_w * 2.0
         lintel_cz = floor_z + 0.05 + portal_h + lintel_h * 0.5
 
         for end_sign, pt in ((-1.0, v1), (1.0, v2)):
             into_bld_vec = end_sign * span_dir
-            frame_c = pt + into_bld_vec * 0.15
+            frame_c = pt  # centered directly over the wall cut line
 
-            # A. Grounded threshold plate covering floor seam and cut wall base (zero coplanar conflicts)
+            # A. Grounded threshold plate covering floor seam and cut wall base (flush with room floor)
             create_beveled_box(
                 bm, size=(thresh_d, lintel_w + 0.04, thresh_thick),
                 location=(frame_c.x, frame_c.y, floor_z + 0.05 + thresh_h * 0.5 - thresh_embed * 0.5),
                 rotation=(0.0, 0.0, yaw),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+                mat_index=deck_mat, bevel_amount=0.005
             )
 
             # B. Left & Right timber jambs resting flush on threshold plate up to portal_h
@@ -524,7 +525,7 @@ def build_skybridge_link(
                     bm, size=(jamb_t, jamb_w, jh),
                     location=(j_pos.x, j_pos.y, floor_z + 0.05 + thresh_h + jh * 0.5),
                     rotation=(0.0, 0.0, yaw),
-                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
                 )
 
             # C. Top timber lintel beam resting directly ON TOP of the pillars up to the ceiling (zero gap, zero overlap)
@@ -532,22 +533,22 @@ def build_skybridge_link(
                 bm, size=(jamb_t, lintel_w, lintel_h),
                 location=(frame_c.x, frame_c.y, lintel_cz),
                 rotation=(0.0, 0.0, yaw),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
             )
 
-            # D. Architrave casing trims on both room-facing and bridge-facing sides
+            # D. Architrave casing trims on both room-facing and bridge-facing sides (slim 3.5cm flat trims)
             for face_sgn in (-1.0, 1.0):
-                trim_pos = frame_c + into_bld_vec * (face_sgn * (jamb_t * 0.5 + 0.015))
+                trim_pos = frame_c + into_bld_vec * (face_sgn * (jamb_t * 0.5 + 0.012))
                 for side in (-1.0, 1.0):
                     t_pos = trim_pos + trans_dir * (side * (portal_w * 0.5 + jamb_w * 0.5))
                     create_beveled_box(
-                        bm, size=(0.05, jamb_w + 0.04, jh),
+                        bm, size=(0.035, jamb_w + 0.04, jh),
                         location=(t_pos.x, t_pos.y, floor_z + 0.05 + thresh_h + jh * 0.5),
                         rotation=(0.0, 0.0, yaw),
                         mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
                     )
                 create_beveled_box(
-                    bm, size=(0.05, lintel_w + 0.06, lintel_h),
+                    bm, size=(0.035, lintel_w + 0.06, lintel_h),
                     location=(trim_pos.x, trim_pos.y, lintel_cz),
                     rotation=(0.0, 0.0, yaw),
                     mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
@@ -691,35 +692,35 @@ def build_tower_building_connector(
 
     # 1. Carve pass-through portal strictly through the BUILDING wall (NOT the round tower wall)
     # The round tower doorway is already cleanly open with zero faces below 2.6m; bisecting it creates open holes.
-    bld_carve_x0 = min(bld_wall_x - tower_dir * 0.05, bld_wall_x + tower_dir * 0.50)
-    bld_carve_x1 = max(bld_wall_x - tower_dir * 0.05, bld_wall_x + tower_dir * 0.50)
+    bld_carve_x0 = min(bld_wall_x - tower_dir * 0.10, bld_wall_x + tower_dir * 0.45)
+    bld_carve_x1 = max(bld_wall_x - tower_dir * 0.10, bld_wall_x + tower_dir * 0.45)
+    carve_w = 2.10
 
     purge_props_in_volume(
         bm,
         x_span=(bld_carve_x0 - 0.40, bld_carve_x1 + 0.40),
-        y_span=(mid_y - walk_w * 0.5 - 0.40, mid_y + walk_w * 0.5 + 0.40),
+        y_span=(mid_y - carve_w * 0.5 - 0.20, mid_y + carve_w * 0.5 + 0.20),
         z_span=(bld_floor_z - 0.10, max_z + 0.50)
     )
 
     carve_pass_through_portal(
         bm,
         x_span=(bld_carve_x0, bld_carve_x1),
-        y_span=(mid_y - walk_w * 0.5 + 0.02, mid_y + walk_w * 0.5 - 0.02),
-        z_span=(bld_floor_z + 0.02, max_z - 0.02)
+        y_span=(mid_y - carve_w * 0.5 + 0.02, mid_y + carve_w * 0.5 - 0.02),
+        z_span=(bld_floor_z + 0.02, bld_floor_z + 2.86)
     )
 
-    # Purge any residual interior sliver faces inside the connector walkway and building portal (excluding tower wall)
-    p_x0 = min(x_walk_0 + 0.02, bld_carve_x0 + 0.02)
-    p_x1 = max(x_walk_1 - 0.02, bld_carve_x1 - 0.02)
+    # Purge any residual wall, stone, plaster or timber faces inside the portal volume across full 2.10m aperture
+    p_x0 = min(x_walk_0 + 0.02, bld_carve_x0)
+    p_x1 = max(x_walk_1 - 0.02, bld_carve_x1)
     walkway_interior_purge = [
         f for f in bm.faces if f.is_valid
         and (p_x0 <= f.calc_center_median().x <= p_x1)
-        and (mid_y - walk_w * 0.5 + 0.03 <= f.calc_center_median().y <= mid_y + walk_w * 0.5 - 0.03)
-        and (bld_floor_z + 0.04 <= f.calc_center_median().z <= max_z - 0.04)
+        and (mid_y - carve_w * 0.5 <= f.calc_center_median().y <= mid_y + carve_w * 0.5)
+        and (bld_floor_z + 0.04 <= f.calc_center_median().z <= bld_floor_z + 2.88)
         and f.material_index in (
             MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_CLIFFS,
-            MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER,
-            MAT_INDEX_WOOD
+            MAT_INDEX_PLASTER_EXT, MAT_INDEX_PLASTER_INT, MAT_INDEX_TIMBER
         )
     ]
     if walkway_interior_purge:
@@ -727,8 +728,8 @@ def build_tower_building_connector(
         bmesh.ops.delete(bm, geom=walkway_interior_purge, context='FACES')
 
     # 2. Solid foundation plinth extending continuously underneath the walkway span (ZERO HOLES, ZERO GAP)
-    plinth_x0 = min(x_tower_outer - tower_dir * 0.08, bld_wall_x + tower_dir * 0.08)
-    plinth_x1 = max(x_tower_outer - tower_dir * 0.08, bld_wall_x + tower_dir * 0.08)
+    plinth_x0 = min(x_tower_outer - tower_dir * 0.08, bld_wall_x)
+    plinth_x1 = max(x_tower_outer - tower_dir * 0.08, bld_wall_x)
     plinth_len = plinth_x1 - plinth_x0
     plinth_cx = (plinth_x0 + plinth_x1) * 0.5
     plinth_top = bld_floor_z - 0.03
@@ -742,8 +743,8 @@ def build_tower_building_connector(
 
     # 3. Clean, continuous wooden floor deck spanning completely from Tower interior to Building interior
     # Level and flat with zero steps, holes, or elevation bumps
-    fl_x0 = min(x_tower_inner - tower_dir * 0.04, bld_wall_x + tower_dir * 0.42)
-    fl_x1 = max(x_tower_inner - tower_dir * 0.04, bld_wall_x + tower_dir * 0.42)
+    fl_x0 = min(x_tower_inner - tower_dir * 0.04, bld_wall_x + tower_dir * 0.30)
+    fl_x1 = max(x_tower_inner - tower_dir * 0.04, bld_wall_x + tower_dir * 0.30)
     fl_len = fl_x1 - fl_x0
     fl_cx = (fl_x0 + fl_x1) * 0.5
     create_beveled_box(
@@ -752,9 +753,9 @@ def build_tower_building_connector(
         mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
     )
 
-    # 4. Flanking exterior masonry side walls (single clean wall per side, ZERO coplanar overlap)
-    w_span_start = min(x_tower_outer - tower_dir * 0.08, bld_wall_x + tower_dir * 0.05)
-    w_span_end = max(x_tower_outer - tower_dir * 0.08, bld_wall_x + tower_dir * 0.05)
+    # 4. Flanking exterior masonry side walls (single clean wall per side, stops flush at bld_wall_x)
+    w_span_start = min(x_tower_outer - tower_dir * 0.08, bld_wall_x)
+    w_span_end = max(x_tower_outer - tower_dir * 0.08, bld_wall_x)
     w_len = w_span_end - w_span_start
     w_cx = (w_span_start + w_span_end) * 0.5
     side_h = max_z - plinth_top
@@ -783,69 +784,102 @@ def build_tower_building_connector(
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
 
-    # 6. Timber portal encasements and full tower doorway tunnel lining
-    jamb_w = 0.20
-    door_eff_w = walk_w - jamb_w * 2.0  # 1.10m clear walkthrough opening
-    lintel_w = walk_w + 0.06
-    lintel_h = 0.28
+    # 6. Clean, unified timber portal encasements (NO redundant nested frames)
+    # Lintel beams rest SQUARELY ON TOP of pillars (zero overlap!)
+    # Architrave casings sit flat against wall surfaces (never jutting deep into rooms)
+    door_eff_w = 1.60
+    jamb_w = 0.22
+    lintel_w = door_eff_w + jamb_w * 2.0  # 2.04m wide (matches wall aperture)
+    lintel_h = 0.24
+    casing_d = 0.035
+    casing_w = 0.12
+    post_bot = bld_floor_z + 0.015
+    post_top = bld_floor_z + 0.015 + door_h
+    jh = post_top - post_bot
+
+    # --- A. BUILDING PORTAL (Chapel / Armory wall interface) ---
+    bld_wall_depth = 0.28
+    bld_wall_cx = bld_wall_x + tower_dir * (bld_wall_depth * 0.5)
+
+    # Threshold plate flush with floor (no tripping hurdle)
+    create_beveled_box(
+        bm, size=(bld_wall_depth + 0.04, lintel_w, 0.03),
+        location=(bld_wall_cx, mid_y, bld_floor_z + 0.015),
+        mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
+    )
+
+    # Left & Right timber jamb pillars through the wall aperture
+    for js in (-1.0, 1.0):
+        jy = mid_y + js * (door_eff_w * 0.5 + jamb_w * 0.5)
+        create_beveled_box(
+            bm, size=(bld_wall_depth, jamb_w, jh),
+            location=(bld_wall_cx, jy, (post_bot + post_top) * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+        )
+
+    # Overhead lintel beam resting SQUARELY on top of the two pillars
+    create_beveled_box(
+        bm, size=(bld_wall_depth, lintel_w, lintel_h),
+        location=(bld_wall_cx, mid_y, post_top + lintel_h * 0.5),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+    )
+
+    # Architrave casing facing cleanly into the Chapel room (flat 3.5cm trim sitting flat on the wall)
+    room_casing_x = bld_wall_x + tower_dir * (bld_wall_depth + casing_d * 0.5)
+    for js in (-1.0, 1.0):
+        jy = mid_y + js * (door_eff_w * 0.5 + jamb_w * 0.5)
+        create_beveled_box(
+            bm, size=(casing_d, jamb_w + 0.04, jh),
+            location=(room_casing_x, jy, (post_bot + post_top) * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+        )
+    create_beveled_box(
+        bm, size=(casing_d, lintel_w + 0.08, lintel_h),
+        location=(room_casing_x, mid_y, post_top + lintel_h * 0.5),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+    )
+
+    # --- B. TOWER PORTAL (Round tower wall interface) ---
     tw_depth = abs(x_tower_outer - x_tower_inner)
     tw_cx = (x_tower_inner + x_tower_outer) * 0.5
 
-    # Full jamb & soffit lining through the thickness of the round tower wall:
-    for js in (-1.0, 1.0):
-        jy = mid_y + js * (walk_w * 0.5 - jamb_w * 0.5)
-        create_beveled_box(
-            bm, size=(tw_depth + 0.04, jamb_w, door_h + 0.04),
-            location=(tw_cx, jy, bld_floor_z + 0.07 + (door_h + 0.04) * 0.5),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
-        )
+    # Threshold plate flush with floor through tower wall
     create_beveled_box(
-        bm, size=(tw_depth + 0.04, lintel_w, lintel_h),
-        location=(tw_cx, mid_y, bld_floor_z + 0.07 + door_h + lintel_h * 0.5),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+        bm, size=(tw_depth + 0.04, lintel_w, 0.03),
+        location=(tw_cx, mid_y, bld_floor_z + 0.015),
+        mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
     )
 
-    # Architrave casing frame at x_tower_inner facing cleanly into the tower room
-    casing_t = 0.16
-    casing_x = x_tower_inner - tower_dir * (casing_t * 0.5 - 0.01)
-    create_beveled_box(
-        bm, size=(casing_t, lintel_w + 0.10, 0.04),
-        location=(casing_x, mid_y, bld_floor_z + 0.07 + 0.02),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
-    )
+    # Left & Right timber jamb pillars through the round tower wall
     for js in (-1.0, 1.0):
-        jy = mid_y + js * (walk_w * 0.5 - jamb_w * 0.5)
+        jy = mid_y + js * (door_eff_w * 0.5 + jamb_w * 0.5)
         create_beveled_box(
-            bm, size=(casing_t, jamb_w + 0.06, door_h + 0.08),
-            location=(casing_x, jy, bld_floor_z + 0.07 + (door_h + 0.08) * 0.5),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+            bm, size=(tw_depth, jamb_w, jh),
+            location=(tw_cx, jy, (post_bot + post_top) * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
         )
+
+    # Overhead lintel beam resting SQUARELY on top of the pillars through the tower wall
     create_beveled_box(
-        bm, size=(casing_t, lintel_w + 0.12, lintel_h + 0.04),
-        location=(casing_x, mid_y, bld_floor_z + 0.07 + door_h + lintel_h * 0.5),
-        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
+        bm, size=(tw_depth, lintel_w, lintel_h),
+        location=(tw_cx, mid_y, post_top + lintel_h * 0.5),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
     )
 
-    # Portal casings at walkway portals: bld_wall_x, x_tower_outer, and inside building wall
-    for door_pos in (bld_wall_x, x_tower_outer, bld_wall_x + tower_dir * 0.40):
-        # Threshold plate
+    # Architrave casing facing cleanly into the Tower room (flat 3.5cm trim sitting flat on the inner wall)
+    tower_casing_x = x_tower_inner - tower_dir * (casing_d * 0.5 + 0.005)
+    for js in (-1.0, 1.0):
+        jy = mid_y + js * (door_eff_w * 0.5 + jamb_w * 0.5)
         create_beveled_box(
-            bm, size=(0.32, lintel_w, 0.04),
-            location=(door_pos, mid_y, bld_floor_z + 0.07 + 0.02),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+            bm, size=(casing_d, jamb_w + 0.04, jh),
+            location=(tower_casing_x, jy, (post_bot + post_top) * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
         )
-        for js in (-1.0, 1.0):
-            jy = mid_y + js * (walk_w * 0.5 - jamb_w * 0.5)
-            create_beveled_box(
-                bm, size=(0.32, jamb_w, door_h + 0.04),
-                location=(door_pos, jy, bld_floor_z + 0.07 + (door_h + 0.04) * 0.5),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
-            )
-        create_beveled_box(
-            bm, size=(0.32, lintel_w, lintel_h),
-            location=(door_pos, mid_y, bld_floor_z + 0.07 + door_h + lintel_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015
-        )
+    create_beveled_box(
+        bm, size=(casing_d, lintel_w + 0.08, lintel_h),
+        location=(tower_casing_x, mid_y, post_top + lintel_h * 0.5),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+    )
 
     # 7. Exterior stone coping capping the connector walls
     create_beveled_box(
@@ -882,9 +916,14 @@ def build_curtain_wall_gate_portal(
     tx, ty = -oy, ox  # Wall tangent
     ang = math.atan2(ty, tx)
 
+    gate_h = max(4.0, float(gate_h))
     half_gate = gate_w * 0.5
     tower_rad = 2.10
-    tower_height = tower_h if tower_h is not None else wall_h
+    arch_thick = thickness + 0.40
+    lintel_cz = z_ground + gate_h + 0.35
+    lintel_top = lintel_cz + 0.35
+    gate_deck_z = max(z_ground + wall_h, lintel_top + 0.40)
+    tower_height = tower_h if tower_h is not None else max(wall_h + 2.8, (gate_deck_z - z_ground) + 1.8)
 
     # 1. TWIN FLANKING D-SHAPED BASTION GATE TOWERS (matching main gate style)
     from .gatehouse import build_flanking_gate_towers
@@ -895,8 +934,6 @@ def build_curtain_wall_gate_portal(
     )
 
     # 2. ARCHED GATE LINTEL BAND & VOUSSOIRS SPANNING BETWEEN THE TOWERS
-    arch_thick = thickness + 0.40
-    lintel_cz = z_ground + gate_h + 0.35
     create_beveled_box(
         bm, size=(gate_w + 0.90, arch_thick, 0.70),
         location=(cx, cy, lintel_cz),
@@ -905,9 +942,7 @@ def build_curtain_wall_gate_portal(
     )
 
     # Solid curtain wall fill above the portcullis lintel up to the parapet deck
-    lintel_top = lintel_cz + 0.35
-    parapet_z = z_ground + wall_h
-    wall_fill_h = parapet_z - lintel_top
+    wall_fill_h = gate_deck_z - lintel_top
     if wall_fill_h > 0.05:
         create_beveled_box(
             bm, size=(gate_w + 0.90, arch_thick, wall_fill_h),
@@ -919,7 +954,7 @@ def build_curtain_wall_gate_portal(
     # 3. FORTIFIED STONE PARAPET & MERLONS ATOP THE CENTRAL GATE ARCH
     create_beveled_box(
         bm, size=(gate_w + 1.20, arch_thick + 0.20, 0.25),
-        location=(cx, cy, parapet_z + 0.125),
+        location=(cx, cy, gate_deck_z + 0.125),
         rotation=(0.0, 0.0, ang),
         mat_index=mat_cut_stone, bevel_amount=0.02
     )
@@ -930,16 +965,16 @@ def build_curtain_wall_gate_portal(
         m_y1 = cy + ty * (gate_w * 0.5 + 0.40) + oy * (f_sign * arch_thick * 0.5)
         build_battlement_run(
             bm, (m_x0, m_y0), (m_x1, m_y1),
-            z_base=parapet_z + 0.25, height=0.95,
+            z_base=gate_deck_z + 0.25, height=0.95,
             thickness=0.34, style='STONE'
         )
 
-    # 4. AUTHENTIC RAISED IRON PORTCULLIS WITH SPIKED TEETH
+    # 4. AUTHENTIC RAISED IRON PORTCULLIS WITH SPIKED TEETH (generous 3.8m+ headroom clearance)
     if raised_portcullis:
         build_portcullis(
             bm, cx, cy, z_ground=z_ground,
             width=gate_w - 0.20, height=gate_h - 0.20,
-            outward=(ox, oy), raised=gate_h * 0.85
+            outward=(ox, oy), raised=max(3.90, gate_h - 0.25)
         )
 
 
@@ -1970,23 +2005,24 @@ def build_chapel_connector(
             bevel_amount=0.005
         )
 
-    # Wide smooth wood plank threshold plates standing proud of room floor slabs (zero coplanar conflicts)
-    th_step = 0.086  # Raised by 5 cm (from 0.036m to 0.086m) to prevent coplanar conflicts
-    th_embed = 0.020  # Embedded 2 cm down into floor slab so bottom face never z-fights
+    # Smooth wood plank threshold plates flush with floor slabs (snug, zero deep protrusion)
+    th_step = 0.015  # Low smooth floor transition (no tripping hurdle)
+    th_embed = 0.020
     th_thick = th_step + th_embed
+    thresh_len = 0.32
     create_beveled_box(
         bm,
-        size=(0.82, portal_w + 0.36, th_thick),
-        location=(x_keep, cy, floor_z + 0.05 + th_step * 0.5 - th_embed * 0.5),
+        size=(thresh_len, portal_w + 0.24, th_thick),
+        location=(x_keep + 0.14, cy, floor_z + 0.05 + th_step * 0.5 - th_embed * 0.5),
         mat_index=MAT_INDEX_FLOOR,
-        bevel_amount=0.006
+        bevel_amount=0.005
     )
     create_beveled_box(
         bm,
-        size=(0.82, portal_w + 0.36, th_thick),
-        location=(x_chapel, cy, chapel_floor_z + 0.05 + th_step * 0.5 - th_embed * 0.5),
+        size=(thresh_len, portal_w + 0.24, th_thick),
+        location=(x_chapel - 0.14, cy, chapel_floor_z + 0.05 + th_step * 0.5 - th_embed * 0.5),
         mat_index=MAT_INDEX_FLOOR,
-        bevel_amount=0.006
+        bevel_amount=0.005
     )
 
     # 5. Dual-layer side walls (North and South):
@@ -2155,25 +2191,24 @@ def build_chapel_connector(
         )
 
     # 8. Single unified timber portal encasements, header panels, and flush architrave trims
-    # Replaces redundant triple-nested frames with one clean, snug casing sitting flush with wall surfaces
-    wall_depth = 0.34
-    jamb_t = wall_depth + 0.04  # 0.38m (spans snugly through the wall, sitting flush on both sides)
-    jamb_w = 0.22
+    # Snug, flush profile sitting flat against wall surfaces (never jutting deep into rooms)
+    wall_depth = 0.28
+    jamb_t = wall_depth + 0.02  # 0.30m (snugly spans through the wall thickness)
+    jamb_w = 0.20
     jh = portal_h
-    casing_d = 0.025
+    casing_d = 0.035
     casing_w = 0.12
 
     for x_end, base_fz, into_dir in ((x_keep, floor_z, 1.0), (x_chapel, chapel_floor_z, -1.0)):
         wall_cx = x_end + into_dir * (wall_depth * 0.5)
 
         # Solid timber jambs centered directly over the wall cut line (portal_w * 0.5)
-        # resting directly on top of the raised threshold plate
-        th_step = 0.086
+        th_step = 0.015
         post_bot = base_fz + 0.05 + th_step
         post_top = base_fz + 0.05 + portal_h
         jh = post_top - post_bot
         for side in (-1.0, 1.0):
-            jy = cy + side * (portal_w * 0.5)
+            jy = cy + side * (portal_w * 0.5 + jamb_w * 0.5)
             create_beveled_box(
                 bm,
                 size=(jamb_t, jamb_w, jh),
@@ -2191,6 +2226,25 @@ def build_chapel_connector(
             location=(wall_cx, cy, post_top + lintel_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.012
+        )
+
+        # Flat architrave trim facing room interior (sits flat on room wall, does not jut into room)
+        trim_x = wall_cx + into_dir * (jamb_t * 0.5 + casing_d * 0.5)
+        for side in (-1.0, 1.0):
+            jy = cy + side * (portal_w * 0.5 + jamb_w * 0.5)
+            create_beveled_box(
+                bm,
+                size=(casing_d, jamb_w + 0.04, jh),
+                location=(trim_x, jy, (post_bot + post_top) * 0.5),
+                mat_index=MAT_INDEX_TIMBER,
+                bevel_amount=0.005
+            )
+        create_beveled_box(
+            bm,
+            size=(casing_d, lintel_w + 0.06, lintel_h),
+            location=(trim_x, cy, post_top + lintel_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.005
         )
 
         # Header panel filling aperture space between lintel and ceiling
