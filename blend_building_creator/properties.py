@@ -100,20 +100,33 @@ def on_tier_updated(self, context):
     on_property_updated(self, context)
 
 
+def _export_category_for_family(family):
+    """Return the user-facing category used by the scoped export controls."""
+    if family.get('id') == 'KNIGHTS_MANOR':
+        return 'MILITARY'
+    if family.get('id') == 'SCAFFOLD':
+        return 'CONSTRUCTION_BUILDINGS'
+    if family.get('id') == 'SCAFFOLD_EMPTY':
+        return 'CONSTRUCTION'
+    category = family.get('category', 'OTHER')
+    if isinstance(category, (list, tuple, set)):
+        return next(iter(category), 'OTHER')
+    return category
+
+
 def export_category_items(_self, _context):
     from .presets import BUILDING_FAMILIES
 
     categories = sorted({
-        category
+        _export_category_for_family(family)
         for family in BUILDING_FAMILIES
-        for category in (
-            family.get('category', 'OTHER')
-            if isinstance(family.get('category', 'OTHER'), (list, tuple, set))
-            else (family.get('category', 'OTHER'),)
-        )
     })
+    labels = {
+        'CONSTRUCTION_BUILDINGS': 'Scaffolded Buildings',
+    }
     return [('ALL', 'All Categories', 'Export every category')] + [
-        (category, category.title(), f'Export {category.title()} buildings')
+        (category, labels.get(category, category.title()),
+         f'Export {labels.get(category, category.title())} buildings')
         for category in categories
     ]
 
@@ -124,11 +137,7 @@ def export_family_items(self, _context):
     families = [
         family for family in BUILDING_FAMILIES
         if self.export_category == 'ALL'
-        or self.export_category in (
-            family.get('category', 'OTHER')
-            if isinstance(family.get('category', 'OTHER'), (list, tuple, set))
-            else (family.get('category', 'OTHER'),)
-        )
+        or self.export_category == _export_category_for_family(family)
     ]
     return [('ALL', 'All Presets', 'Export every preset in the selected category')] + [
         (family['id'], family['name'], family.get('description', ''))

@@ -496,7 +496,9 @@ def build_skybridge_link(
         # 2. Solid timber portal encasements covering cut wall edges at both interfaces
         jamb_w = 0.28
         jamb_t = 0.52  # thoroughly covers the wall thickness
-        thresh_h = 0.038  # 3.8cm raised threshold plate
+        thresh_h = 0.088  # Raised by 5 cm (from 0.038m to 0.088m) to prevent coplanar conflicts
+        thresh_embed = 0.020
+        thresh_thick = thresh_h + thresh_embed
         thresh_d = jamb_t + 0.10
         jh = portal_h - thresh_h  # pillar height resting on threshold up to portal opening top
         lintel_h = max(0.40, ceiling_h_val - portal_h)  # beam extends from portal top up to ceiling
@@ -509,8 +511,8 @@ def build_skybridge_link(
 
             # A. Grounded threshold plate covering floor seam and cut wall base (zero coplanar conflicts)
             create_beveled_box(
-                bm, size=(thresh_d, lintel_w + 0.04, thresh_h),
-                location=(frame_c.x, frame_c.y, floor_z + 0.05 + thresh_h * 0.5),
+                bm, size=(thresh_d, lintel_w + 0.04, thresh_thick),
+                location=(frame_c.x, frame_c.y, floor_z + 0.05 + thresh_h * 0.5 - thresh_embed * 0.5),
                 rotation=(0.0, 0.0, yaw),
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
             )
@@ -1968,19 +1970,21 @@ def build_chapel_connector(
             bevel_amount=0.005
         )
 
-    # Wide smooth wood plank threshold plates standing proud of room stone floor slabs (zero stone bleed-through)
-    th_h = 0.036
+    # Wide smooth wood plank threshold plates standing proud of room floor slabs (zero coplanar conflicts)
+    th_step = 0.086  # Raised by 5 cm (from 0.036m to 0.086m) to prevent coplanar conflicts
+    th_embed = 0.020  # Embedded 2 cm down into floor slab so bottom face never z-fights
+    th_thick = th_step + th_embed
     create_beveled_box(
         bm,
-        size=(0.82, portal_w + 0.36, th_h),
-        location=(x_keep, cy, floor_z + 0.05 + th_h * 0.5),
+        size=(0.82, portal_w + 0.36, th_thick),
+        location=(x_keep, cy, floor_z + 0.05 + th_step * 0.5 - th_embed * 0.5),
         mat_index=MAT_INDEX_FLOOR,
         bevel_amount=0.006
     )
     create_beveled_box(
         bm,
-        size=(0.82, portal_w + 0.36, th_h),
-        location=(x_chapel, cy, chapel_floor_z + 0.05 + th_h * 0.5),
+        size=(0.82, portal_w + 0.36, th_thick),
+        location=(x_chapel, cy, chapel_floor_z + 0.05 + th_step * 0.5 - th_embed * 0.5),
         mat_index=MAT_INDEX_FLOOR,
         bevel_amount=0.006
     )
@@ -2163,29 +2167,34 @@ def build_chapel_connector(
         wall_cx = x_end + into_dir * (wall_depth * 0.5)
 
         # Solid timber jambs centered directly over the wall cut line (portal_w * 0.5)
-        # completely encasing and burying the cut wall edges from corridor to room
+        # resting directly on top of the raised threshold plate
+        th_step = 0.086
+        post_bot = base_fz + 0.05 + th_step
+        post_top = base_fz + 0.05 + portal_h
+        jh = post_top - post_bot
         for side in (-1.0, 1.0):
             jy = cy + side * (portal_w * 0.5)
             create_beveled_box(
                 bm,
                 size=(jamb_t, jamb_w, jh),
-                location=(wall_cx, jy, base_fz + 0.05 + jh * 0.5),
+                location=(wall_cx, jy, (post_bot + post_top) * 0.5),
                 mat_index=MAT_INDEX_TIMBER,
                 bevel_amount=0.012
             )
 
         lintel_w = portal_w + jamb_w * 2.0
         lintel_h = 0.22
+        # Clean post-and-beam joinery: beam rests squarely on top of the posts with zero vertical intersection
         create_beveled_box(
             bm,
             size=(jamb_t, lintel_w, lintel_h),
-            location=(wall_cx, cy, base_fz + portal_h - 0.04 + lintel_h * 0.5),
+            location=(wall_cx, cy, post_top + lintel_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.012
         )
 
         # Header panel filling aperture space between lintel and ceiling
-        header_bot = base_fz + portal_h - 0.04 + lintel_h
+        header_bot = post_top + lintel_h
         header_h = top_z - header_bot
         if header_h > 0.02:
             create_box(
@@ -2196,44 +2205,6 @@ def build_chapel_connector(
                 is_wall=True
             )
 
-        # Flush architrave casing on the room side (sits flush against interior room wall, not protruding into room)
-        room_x = x_end + into_dir * (wall_depth + casing_d * 0.5)
-        for side in (-1.0, 1.0):
-            ty = cy + side * (portal_w * 0.5 + casing_w * 0.5 - 0.04)
-            create_beveled_box(
-                bm,
-                size=(casing_d, casing_w, jh + 0.04),
-                location=(room_x, ty, base_fz + 0.05 + (jh + 0.04) * 0.5),
-                mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.005
-            )
-        head_w = portal_w + casing_w * 2.0
-        create_beveled_box(
-            bm,
-            size=(casing_d, head_w, lintel_h),
-            location=(room_x, cy, base_fz + portal_h - 0.04 + lintel_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.005
-        )
-
-        # Flush architrave casing on the corridor side (sits flush against corridor end wall)
-        corr_x = x_end - into_dir * (casing_d * 0.5)
-        for side in (-1.0, 1.0):
-            ty = cy + side * (portal_w * 0.5 + casing_w * 0.5 - 0.04)
-            create_beveled_box(
-                bm,
-                size=(casing_d, casing_w, jh + 0.04),
-                location=(corr_x, ty, base_fz + 0.05 + (jh + 0.04) * 0.5),
-                mat_index=MAT_INDEX_TIMBER,
-                bevel_amount=0.005
-            )
-        create_beveled_box(
-            bm,
-            size=(casing_d, head_w, lintel_h),
-            location=(corr_x, cy, base_fz + portal_h - 0.04 + lintel_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER,
-            bevel_amount=0.005
-        )
 
 
 def build_archive_hall_portal(
@@ -2305,11 +2276,14 @@ def build_archive_hall_portal(
         z_span=(z_floor + 0.02, z_floor + portal_h + 0.20)
     )
 
-    # 3. Seamless flush wooden threshold plank bridging the room joint (zero stone exposure)
+    # 3. Seamless raised wooden threshold plank bridging the room joint (zero coplanar conflicts)
+    th_step = 0.086  # Raised by 5 cm to prevent coplanar conflicts
+    th_embed = 0.020
+    th_thick = th_step + th_embed
     create_beveled_box(
         bm,
-        size=(0.86, portal_w + 0.10, 0.04),
-        location=(x_wall, cy, z_floor + 0.02),
+        size=(0.86, portal_w + 0.10, th_thick),
+        location=(x_wall, cy, z_floor + 0.05 + th_step * 0.5 - th_embed * 0.5),
         mat_index=MAT_INDEX_FLOOR,
         bevel_amount=0.005
     )

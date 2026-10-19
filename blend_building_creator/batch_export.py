@@ -7,6 +7,19 @@ from .operators import _export_fbx_jobs
 from .presets import BUILDING_FAMILIES, PRESETS
 
 
+def _export_category_for_family(family):
+    if family.get("id") == "KNIGHTS_MANOR":
+        return "MILITARY"
+    if family.get("id") == "SCAFFOLD":
+        return "CONSTRUCTION_BUILDINGS"
+    if family.get("id") == "SCAFFOLD_EMPTY":
+        return "CONSTRUCTION"
+    category = family.get("category", "OTHER")
+    if isinstance(category, (list, tuple, set)):
+        return next(iter(category), "OTHER")
+    return category
+
+
 def export_all(output_dir, keep_buildings=False):
     """Register the addon if needed and export every valid preset tier."""
     if not hasattr(bpy.types.Scene, "fantasy_building_settings"):
@@ -36,11 +49,7 @@ def export_selected(output_dir, category='ALL', family_id='ALL', tier='ALL',
     jobs = [
         (family, tier_label, preset_key, description)
         for family in BUILDING_FAMILIES
-        if category == 'ALL' or category in (
-            family.get('category', 'OTHER')
-            if isinstance(family.get('category', 'OTHER'), (list, tuple, set))
-            else (family.get('category', 'OTHER'),)
-        )
+        if (category == 'ALL' or category == _export_category_for_family(family))
         and (family_id == 'ALL' or family['id'] == family_id)
         for tier_label, preset_key, description in family['tiers']
         if preset_key in PRESETS

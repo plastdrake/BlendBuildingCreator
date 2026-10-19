@@ -6655,6 +6655,7 @@ def apply_preset(props, preset_key):
                 'has_estate_training_grounds', 'has_throne_room',
                 'has_estate_fountain', 'outbuilding_offset_x', 'outbuilding_offset_y',
                 'plot_setback', 'plot_offset_x', 'estate_awnings',
+                'has_castle_citadel', 'castle_tier',
                 'has_construction', 'construction_mode', 'construction_plot', 'scaffold_padding',
                 'scaffold_width', 'scaffold_depth', 'scaffold_height',
                 'scaffold_levels', 'scaffold_tarp', 'construction_piles',
@@ -6728,7 +6729,6 @@ def apply_preset(props, preset_key):
         obj = context.active_object
         if obj and obj.get("is_fantasy_building", False):
             generate_building(obj, props)
-
 
 
 

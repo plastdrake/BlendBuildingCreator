@@ -562,7 +562,8 @@ def build_floors(bm, props, ctx):
                         or _h[3] < slab_ymin or _h[2] > slab_ymax):
                     _main_hole = _h
                     build_stair_hole_trim(bm, _main_hole, slab_z, thickness=0.12,
-                                          mat_index=MAT_INDEX_TIMBER, open_side='W')
+                                          mat_index=MAT_INDEX_TIMBER, open_side='W',
+                                          bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax))
             _cur_void = (getattr(props, 'floor_voids', None) or getattr(ctx, 'floor_voids', None) or {}).get(fl_idx, None)
             if _cur_void is None and fl_idx == 1:
                 _f1_rooms = (getattr(ctx, 'floor_rooms', {}) or {}).get(1, [])
@@ -631,7 +632,8 @@ def build_floors(bm, props, ctx):
                 dir_y = int(stair_ascend_sign) if ((fl_idx - 1) % 2 == 0) else int(-stair_ascend_sign)
                 _open_side = 'N' if dir_y == 1 else 'S'
             build_stair_hole_trim(bm, cur_stair_hole, slab_z, thickness=0.12,
-                                  mat_index=MAT_INDEX_TIMBER, open_side=_open_side)
+                                  mat_index=MAT_INDEX_TIMBER, open_side=_open_side,
+                                  bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax))
 
             rail_x = min(slab_xmax - 0.10, sh_x2 + 0.05)
             if getattr(props, 'stair_style', 'STRAIGHT') == 'TURN':
@@ -749,8 +751,10 @@ def build_floors(bm, props, ctx):
                     mat_idx=floor_mat
                 )
                 if _w_hole is not None:
+                    _open_s = 'W' if (fl_idx == 0 and getattr(props, 'has_basement_stair', False)) else 'N'
                     build_stair_hole_trim(bm, _w_hole, z_floor + 0.05, thickness=0.12,
-                                          mat_index=MAT_INDEX_TIMBER, open_side='N')
+                                          mat_index=MAT_INDEX_TIMBER, open_side=_open_s,
+                                          bounds=(w_slab_xmin, w_slab_xmax, w_slab_ymin, w_slab_ymax))
                 if fl_idx > 0 and fl_overhang > prev_fl_overhang:
                     overhang_step = fl_overhang - prev_fl_overhang
                     prev_wb = w_elem.get('bounds_fl', {}).get(fl_idx - 1, None)

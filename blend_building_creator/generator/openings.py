@@ -880,6 +880,7 @@ def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, st
                 new_f = bm.faces.new([vert_map[v] for v in f.verts])
                 new_f.material_index = f.material_index
                 new_f.smooth = f.smooth
+                new_f.tag = True
                 for l_src, l_dst in zip(f.loops, new_f.loops):
                     l_dst[uv_dst].uv = l_src[uv_src].uv
             except ValueError:
@@ -904,6 +905,8 @@ def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, st
         is_wood = mat_index in (MAT_INDEX_TIMBER, MAT_INDEX_WOOD)
         uv_layer = bm.loops.layers.uv.verify()
         for f in step_faces:
+            f.normal_update()
+            f.tag = True
             nx, ny, nz = abs(f.normal.x), abs(f.normal.y), abs(f.normal.z)
             for loop in f.loops:
                 co = loop.vert.co

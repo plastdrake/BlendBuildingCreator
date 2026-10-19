@@ -109,6 +109,8 @@ def _ramp(x, y):
     The stair width is 4.4m with cheek walls and railings out to abs(x)=2.80.
     We keep the rock bed excavated 45cm below the step treads/landings up to
     abs(x)=3.30 so cliff rock geometry never overlaps or clips into the steps.
+    Corridor excavation continues past the top of each climb to trench through the
+    raised rock rim of each terrace so the road and landings join seamlessly.
     """
     w = 1.0 - _smooth((abs(x) - 3.3) / 1.1)
     if w <= 0.0:
@@ -120,6 +122,12 @@ def _ramp(x, y):
                 # Smoothly blend excavation depth so the rock bed meets z0 at the entrance apron
                 depth_excav = 0.45 * _smooth((y - y0) / 1.5)
             zr = (z0 + (z1 - z0) * (y - y0) / (y1 - y0)) - depth_excav
+            return w, zr
+        elif y1 < y <= y1 + 2.5 and (abs(y1 - (-50.0)) < 0.1 or abs(y1 - (-20.0)) < 0.1 or abs(y1 - 18.0) < 0.1):
+            # Continue excavation through top landing and terrace rim ridge, smoothly tapering into terrace pad
+            t = (y - y1) / 2.5
+            depth_excav = 0.45 * (1.0 - _smooth(t))
+            zr = z1 - depth_excav
             return w, zr
     return 0.0, 0.0
 
@@ -366,8 +374,37 @@ def _stair_flight(bm, y0, z0, y1, z1, width):
         if not is_climb_start and abs(y0 - RAMPS[0][0]) < 0.1:
             create_beveled_box(bm, size=(0.6, 0.6, 1.5), location=(sx, y0, z0 + 0.75),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-        if abs(y1 - RAMPS[-1][2]) < 0.1:
-            create_beveled_box(bm, size=(0.6, 0.6, 1.5), location=(sx, y1, z1 + 0.75),
+
+    # Top arrival landing & monumental terminal pedestals at climb ends
+    is_climb_end = (abs(y1 - (-50.0)) < 0.1 or abs(y1 - (-20.0)) < 0.1 or abs(y1 - 18.0) < 0.1)
+    if is_climb_end:
+        land_len = 1.6
+        land_yc = y1 + land_len * 0.5
+        land_top = z1 + 0.025
+        # Deep stone foundation block
+        create_beveled_box(bm, size=(width, land_len, 1.8),
+                           location=(0.0, land_yc, land_top - 0.12 - 0.9),
+                           mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
+        # Flush cut stone landing slab
+        create_beveled_box(bm, size=(width, land_len + 0.05, 0.12),
+                           location=(0.0, land_yc + 0.015, land_top - 0.06),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+        for side in (-1.0, 1.0):
+            sx = side * (width * 0.5 + cheek_w * 0.5)
+            # Cheek wall flanking top landing
+            create_beveled_box(bm, size=(cheek_w, land_len, 1.1 + 0.9),
+                               location=(sx, land_yc, z1 + 0.25),
+                               mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
+            # Cap rail along top landing cheek wall
+            create_beveled_box(bm, size=(rail_w, land_len + 0.05, rail_thick),
+                               location=(sx, land_yc, z1 + 0.88),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+            # Monumental terminal pedestal framing the terrace arrival
+            create_beveled_box(bm, size=(0.65, 0.65, 1.5),
+                               location=(sx, y1 + land_len, z1 + 0.75),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+            create_beveled_box(bm, size=(0.74, 0.74, 0.18),
+                               location=(sx, y1 + land_len, z1 + 1.50 + 0.09),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
 
 
@@ -555,6 +592,7 @@ def _build_paved_road_strip(bm, waypoints, width=4.4, sample_step=1.0,
 
         # Apply continuous, undistorted world-space UV mapping to every face of this road segment
         for f in boxes:
+            f.normal_update()
             f.tag = True
             is_horiz = abs(f.normal.z) > 0.5
             for loop in f.loops:
@@ -582,29 +620,29 @@ def build_cliff_paved_roads(bm, tier=3):
     road_mat = MAT_INDEX_STONE  # Tier 1 = Mud Fieldstone, Tier 2/3 = Castle Stone
 
     # ---------------- 1. Middle Terrace (Z = 8.0) ----------------
-    # Main Spine: Flight 2 arrival (0.0, -20.0) -> Flight 3 departure (0.0, -3.4)
+    # Main Spine: Flight 2 arrival landing (0.0, -18.4) -> Flight 3 departure apron (0.0, -3.4)
     # Direct straight connection matching the 4.4m wide stairs
     spine_mid = [
-        (0.0, -20.0),
-        (0.0, -11.5),
+        (0.0, -18.4),
+        (0.0, -11.0),
         (0.0, -3.4),
     ]
     _build_paved_road_strip(bm, spine_mid, width=4.4, sample_step=1.2, pave_mat=road_mat, layer_offset=0.003)
 
     # ---------------- 2. Forecourt (Z = 3.0) ----------------
-    # Forecourt Spine: Flight 1 arrival (0.0, -50.0) -> Flight 2 approach (0.0, -41.4)
+    # Forecourt Spine: Flight 1 arrival landing (0.0, -48.4) -> Flight 2 approach apron (0.0, -41.4)
     spine_forecourt = [
-        (0.0, -50.0),
-        (0.0, -45.5),
+        (0.0, -48.4),
+        (0.0, -45.0),
         (0.0, -41.4),
     ]
     _build_paved_road_strip(bm, spine_forecourt, width=4.4, sample_step=1.2, pave_mat=road_mat, layer_offset=0.003)
 
     # ---------------- 3. Upper Citadel Ward (Z = 14.0) ----------------
-    # Citadel Spine: Flight 3 arrival (0.0, 18.0) -> Keep entrance portal (0.0, 31.8)
+    # Citadel Spine: Flight 3 arrival landing (0.0, 19.6) -> Keep entrance portal (0.0, 31.8)
     spine_citadel = [
-        (0.0, 18.0),
-        (0.0, 24.5),
+        (0.0, 19.6),
+        (0.0, 25.5),
         (0.0, 31.8),
     ]
     _build_paved_road_strip(bm, spine_citadel, width=4.4, sample_step=1.2, pave_mat=road_mat, layer_offset=0.003)

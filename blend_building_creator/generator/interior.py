@@ -318,10 +318,12 @@ def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
                          z_ceil - trim_h_ceil * 0.5 - 0.008, 0.026, trim_h_ceil, 0.008)
 
 def build_stair_hole_trim(bm, hole, floor_z, thickness=0.12, mat_index=MAT_INDEX_TIMBER,
-                          open_side=None, curb_w=0.06):
+                          open_side=None, curb_w=0.06, bounds=None, wall_sides=None):
     """
-    Builds a neat timber curb trim framing the 4 cut edges of a floor slab around a stair opening.
+    Builds a neat timber curb trim framing the cut edges of a floor slab around a stair opening.
     Capping timbers sit directly over the cut edges, preventing any raw board ends from showing.
+    Any edge bordering a wall is skipped so it never overlaps or z-fights with the wall's bottom baseboard trim.
+    Perpendicular curbs terminating into a wall stop cleanly at the baseboard line (trim_margin ~ 0.038m).
     Closed sides are raised 8mm proud of the floor (floor_z + 0.008) and extend 8mm below the soffit
     (floor_z - thickness - 0.008) to completely eliminate any coplanar z-fighting with floor planks or ceiling.
     The open/walk-off side sits at floor_z + 0.002 (2mm beveled threshold) for a smooth walking surface.
@@ -335,16 +337,41 @@ def build_stair_hole_trim(bm, hole, floor_z, thickness=0.12, mat_index=MAT_INDEX
     hw = curb_w * 0.5
     z_bot = floor_z - thickness - 0.008
 
-    # Edge definitions: (side, x0, x1, y0, y1, axis)
-    # North and South curbs span full X. West and East curbs fit cleanly between them
-    # with a 1mm hairline carpentry seam (0.001m), making all 4 board bounding boxes
-    # strictly disjoint in 3D space with ZERO coplanar face or volume overlap.
-    edges = [
-        ('S', hx0 - hw, hx1 + hw, hy0 - hw, hy0 + hw, 'X'),
-        ('N', hx0 - hw, hx1 + hw, hy1 - hw, hy1 + hw, 'X'),
-        ('W', hx0 - hw, hx0 + hw, hy0 + hw + 0.001, hy1 - hw - 0.001, 'Y'),
-        ('E', hx1 - hw, hx1 + hw, hy0 + hw + 0.001, hy1 - hw - 0.001, 'Y'),
-    ]
+    # Detect wall proximity: any side within 0.45m of the bounding perimeter is considered along a wall
+    wsides = set(wall_sides or ())
+    if bounds is not None:
+        b_xmin, b_xmax, b_ymin, b_ymax = bounds
+        if hx0 - b_xmin < 0.45:
+            wsides.add('W')
+        if b_xmax - hx1 < 0.45:
+            wsides.add('E')
+        if hy0 - b_ymin < 0.45:
+            wsides.add('S')
+        if b_ymax - hy1 < 0.45:
+            wsides.add('N')
+
+    # Trim margin to cleanly butt into wall baseboard without penetration (baseboard depth is 0.028 + 0.008)
+    trim_margin = 0.038
+
+    # Calculate X extent for S and N curbs:
+    # If W or E borders a wall, stop at the wall margin instead of extending past the hole edge
+    x_start = (hx0 + trim_margin) if ('W' in wsides) else (hx0 - hw)
+    x_end = (hx1 - trim_margin) if ('E' in wsides) else (hx1 + hw)
+
+    # Calculate Y extent for W and E curbs:
+    # If S or N borders a wall, stop at the wall margin instead of extending into the baseboard
+    y_start = (hy0 + trim_margin) if ('S' in wsides) else (hy0 + hw + 0.001)
+    y_end = (hy1 - trim_margin) if ('N' in wsides) else (hy1 - hw - 0.001)
+
+    edges = []
+    if 'S' not in wsides:
+        edges.append(('S', x_start, x_end, hy0 - hw, hy0 + hw, 'X'))
+    if 'N' not in wsides:
+        edges.append(('N', x_start, x_end, hy1 - hw, hy1 + hw, 'X'))
+    if 'W' not in wsides:
+        edges.append(('W', hx0 - hw, hx0 + hw, y_start, y_end, 'Y'))
+    if 'E' not in wsides:
+        edges.append(('E', hx1 - hw, hx1 + hw, y_start, y_end, 'Y'))
 
     uv_layer = bm.loops.layers.uv.verify()
 
@@ -835,6 +862,34 @@ def build_straight_staircase(
                 has_sill=False, posts=False, post_at_start=False, post_at_end=False,
                 baluster_spacing=0.20, end_overhang=0.06, braces=False
             )
+
+
+def build_straight_stairs(bm, start_pos, target_z, width=1.40, length=2.6,
+                          direction=None, has_railings=True):
+    """Compatibility wrapper for callers using the older straight-stair API."""
+    direction_y = 1
+    direction_x = 1
+    axis = 'Y'
+    if direction is not None:
+        if abs(direction.x) > abs(direction.y):
+            axis = 'X'
+            direction_x = 1 if direction.x >= 0 else -1
+        else:
+            direction_y = 1 if direction.y >= 0 else -1
+
+    return build_straight_staircase(
+        bm,
+        start_pos=start_pos,
+        target_z=target_z,
+        stair_width=width,
+        stair_depth=length,
+        direction_y=direction_y,
+        direction_x=direction_x,
+        axis=axis,
+        has_rail_left=has_railings,
+        has_rail_right=has_railings,
+    )
+
 
 def _l_stair_run(bm, foot_xy, top_xy, z0, z1, width, along_axis):
     """One flight of an L-stair: risers + treads climbing from z0 to z1, with
@@ -3702,5 +3757,4 @@ def build_floor_interior_walls(bm, interior_walls, z_floor, z_ceil,
             mat_index=mat_index, casing_mat=casing_mat,
             plank_direction=plank_direction
         )
-
 
