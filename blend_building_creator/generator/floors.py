@@ -187,7 +187,7 @@ def build_floors(bm, props, ctx):
     fl0_iy_max = base_d * 0.5 - wall_t * 0.5
 
     stair_w = props.stair_width
-    landing_depth = max(1.10, stair_w * 0.75)
+    landing_depth = max(1.85, stair_w * 0.85)
 
     is_tenement_stairs = (
         effective_archetype == 'TENEMENT'
@@ -1046,8 +1046,8 @@ def build_floors(bm, props, ctx):
         # Doorway placement on Ground Floor (Front, Rear/Back, and Side Entrances)
         if fl_idx == 0:
             tier_val = getattr(props, 'material_tier', 'TIER_3')
-            dw = getattr(props, 'door_width', 1.45)
-            dh = getattr(props, 'door_height', 2.80)
+            dw = getattr(props, 'door_width', 1.75)
+            dh = getattr(props, 'door_height', 3.00)
             frame_margin = 0.08 if tier_val == 'TIER_1' else 0.12
             door_top_z = z_floor + dh + frame_margin
             door_cx = 0.0
@@ -1070,7 +1070,7 @@ def build_floors(bm, props, ctx):
                         'y_bot': stair_y_bot, 'y_top': stair_y_top,
                         'y_ascend': stair_ascend_sign,
                         'has_stairs': props.has_stairs, 'style': props.stair_style,
-                        'switchback': stair_switchback, 'walk_w': 1.05
+                        'switchback': stair_switchback, 'walk_w': 1.85
                     } if props.has_stairs else None
                     _f0_rooms, _f0_walls = plan_floor_rooms(
                         0, (ix_min, ix_max, iy_min, iy_max),
@@ -1407,19 +1407,20 @@ def build_floors(bm, props, ctx):
                 jamb_w = 0.18
                 jamb_d = wall_t + 0.10  # Proud of wall into both rooms by 0.05m
                 lower = 0.018
-                portal_h = min(2.15, floor_h * 0.72)
                 lintel_h = 0.20
+                portal_h = max(2.85, min(getattr(props, 'door_height', 3.00) + 0.10, floor_h - lintel_h - 0.10))
+
 
                 if w_wall in ('FRONT', 'BACK'):
                     wing_span = w_xmax - w_xmin
                     clear_margin = wall_t + jamb_w + 0.22
                     max_pw = max(1.2, wing_span - clear_margin * 2.0)
                     if getattr(props, 'has_throne_room', False) and w_wall == 'BACK':
-                        p_w = min(max_pw, 1.30)
+                        p_w = min(max_pw, 1.75)
                         # Shift doorway to the left of the throne dais
                         p_cx = max(w_xmin + p_w * 0.5 + 0.35, min(-2.20 - p_w * 0.5, (w_xmin + w_xmax) * 0.5 - 3.00))
                     else:
-                        p_w = min(max_pw, 2.2)
+                        p_w = min(max_pw, 2.60)
                         p_cx = (w_xmin + w_xmax) * 0.5
                     p_yf = y_min if w_wall == 'FRONT' else y_max
                     # Nudge frame a hair into the main room so wood faces never sit coplanar with plaster
@@ -1504,14 +1505,14 @@ def build_floors(bm, props, ctx):
                     if _s == facade]
 
         if has_mw and _mw_spread.get(fl_idx):
-            mw_portal_h = min(2.15, floor_h * 0.78)
+            lintel_h = 0.18
+            mw_portal_h = max(2.85, min(getattr(props, 'door_height', 3.00), floor_h - lintel_h - 0.10))
             shift_in = 0.05
             shift_down = 0.0
             jamb_w = 0.16
             # Reveal liner: centred on the wall and just a hair deeper, so it
             # lines the whole reveal instead of poking out of the outer face.
             jamb_d = wall_t + 0.02
-            lintel_h = 0.18
             trim_clr = jamb_w - shift_in + 0.015
             _wall_c = {
                 'FRONT': (None, y_min + wall_t * 0.5),
@@ -1521,7 +1522,7 @@ def build_floors(bm, props, ctx):
             }
 
             for mw_side_i, _off, _mw_pw, _mw_pd in _mw_spread.get(fl_idx, []):
-                mw_portal_w = min(1.30, max(0.0, _mw_pw) - 0.45)
+                mw_portal_w = min(1.75, max(0.0, _mw_pw) - 0.35)
                 lintel_w = mw_portal_w + jamb_w * 2.0 - shift_in * 2.0 + 0.08
                 _wc_x, _wc_y = _wall_c.get(mw_side_i, (None, None))
                 if mw_side_i in ('FRONT', 'BACK'):
@@ -3160,8 +3161,8 @@ def _place_exterior_stair_doors(bm, props, ctx, fl_idx, z_floor,
             out.append((c, edw * 0.5 + d.get('w', 1.2) * 0.5 + 0.30))
         return out
 
-    edw = min(1.20, getattr(props, 'door_width', 1.20))
-    edh = min(2.40, getattr(props, 'door_height', 2.40))
+    edw = min(1.65, getattr(props, 'door_width', 1.65))
+    edh = min(2.95, getattr(props, 'door_height', 2.95))
     e_margin = 0.12
     e_top_z = z_floor + edh + e_margin
 
@@ -3218,7 +3219,7 @@ def _place_extra_doorways(
             continue
         facade = ed.get('facade', 'RIGHT')
         dw_w = ed.get('w', 1.80)
-        dw_h = ed.get('h', 2.60)
+        dw_h = ed.get('h', 2.95)
         pos = ed.get('pos', 0.0)
         is_portal = ed.get('is_portal', True)
         e_margin = 0.02 if is_portal else 0.12

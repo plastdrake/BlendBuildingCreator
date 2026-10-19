@@ -43,15 +43,15 @@ def base_settings():
         'building_shape': 'RECTANGLE',
         'wing_placement': 'FRONT', 'wing_side': 'RIGHT',
         'num_floors': 1, 'wing_floors': 1, 'floor_height': 4.4,
-        'width': 8.0, 'depth': 8.0, 'wing_width': 3.5, 'wing_depth': 3.0,
-        'courtyard_width': 3.5, 'wall_thickness': 0.28,
+        'width': 12.0, 'depth': 12.0, 'wing_width': 5.0, 'wing_depth': 4.5,
+        'courtyard_width': 5.0, 'wall_thickness': 0.28,
         'has_cantilever': False, 'overhang_mode': 'SECOND_FLOOR_ONLY',
         'cantilever_overhang': 0.35, 'wonkiness': 0.0, 'enable_bevels': False,
         'has_foundation': True, 'foundation_type': 'STONE',
         'foundation_height': 0.5, 'ground_floor_stone': False,
         'has_front_steps': True,
         # Interior
-        'has_stairs': True, 'stair_style': 'STRAIGHT', 'stair_width': 1.45,
+        'has_stairs': True, 'stair_style': 'STRAIGHT', 'stair_width': 1.80,
         'has_ceiling_beams': True,
         'has_interior_walls': True, 'interior_partition_style': 'AUTO',
         'interior_wall_thickness': 0.16,
@@ -60,7 +60,7 @@ def base_settings():
         'has_front_door': True, 'front_door_offset_x': 0.0,
         'has_back_door': False, 'has_back_portal': False,
         'has_side_door': False, 'side_door_facade': 'RIGHT',
-        'door_width': 1.45, 'door_height': 2.80, 'door_angle': 0.0,
+        'door_width': 1.80, 'door_height': 3.00, 'door_angle': 0.0,
         'door_shape': 'SQUARE',
         'has_windows': True,
         'window_front': True, 'window_back': True,
@@ -174,20 +174,20 @@ def _dense_tenement_settings(material_tier, num_floors, floor_height,
         'building_shape': 'RECTANGLE',
         'material_tier': material_tier,
         'num_floors': num_floors,
-        'floor_height': floor_height,
-        'width': 18.6, 'depth': 18.0, 'wall_thickness': 0.30,
+        'floor_height': max(3.8, floor_height),
+        'width': 26.0, 'depth': 24.0, 'wall_thickness': 0.30,
         'has_cantilever': is_stone, 'overhang_mode': 'SECOND_FLOOR_ONLY',
         'cantilever_overhang': 0.25,
         'has_foundation': True, 'foundation_type': 'STONE',
         'foundation_height': 0.45 if not is_stone else 0.65,
         'ground_floor_stone': is_stone,
         'has_front_steps': True,
-        'has_stairs': True, 'stair_style': 'STRAIGHT', 'stair_width': 1.35,
+        'has_stairs': True, 'stair_style': 'STRAIGHT', 'stair_width': 1.80,
         'has_exterior_stairs': False,
         'has_ceiling_beams': True,
         'has_interior_walls': True, 'interior_partition_style': 'AUTO',
         'has_front_door': True, 'has_back_door': False, 'has_side_door': False,
-        'door_width': 1.35, 'door_height': 2.75,
+        'door_width': 1.75, 'door_height': 3.00,
         'has_windows': True,
         'window_front': True, 'window_back': True,
         'window_left': False, 'window_right': False,
@@ -6076,7 +6076,7 @@ BUILDING_FAMILIES = [
         'id': 'TOWN_HALL',
         'name': "Town Hall",
         'category': 'CIVIC',
-        'plot': "40m x 40m",
+        'plot': "56m x 56m",
         'shape': "T-Shaped",
         'icon': 'COMMUNITY',
         'tiers': [
@@ -6089,7 +6089,7 @@ BUILDING_FAMILIES = [
         'id': 'WAREHOUSE',
         'name': "Warehouse",
         'category': 'INDUSTRIAL',
-        'plot': "20m x 20m",
+        'plot': "28m x 28m",
         'shape': "L-Shaped",
         'icon': 'MOD_BUILD',
         'tiers': [
@@ -6102,7 +6102,7 @@ BUILDING_FAMILIES = [
         'id': 'LUMBERMILL',
         'name': "Lumbermill",
         'category': 'INDUSTRIAL',
-        'plot': "20m x 20m",
+        'plot': "28m x 28m",
         'shape': "Rectangular",
         'icon': 'OUTLINER_OB_MESH',
         'tiers': [
@@ -6115,7 +6115,7 @@ BUILDING_FAMILIES = [
         'id': 'STONE_QUARRY',
         'name': "Stone Quarry",
         'category': 'INDUSTRIAL',
-        'plot': "100m x 100m",
+        'plot': "140m x 140m",
         'shape': "Worksite Yard",
         'icon': 'SNAP_VOLUME',
         'tiers': [
@@ -6128,7 +6128,7 @@ BUILDING_FAMILIES = [
         'id': 'INFANTRY_BARRACKS',
         'name': "Infantry Barracks",
         'category': 'MILITARY',
-        'plot': "40m x 40m",
+        'plot': "56m x 56m",
         'shape': "U-Shaped",
         'icon': 'GROUP',
         'tiers': [
@@ -6141,7 +6141,7 @@ BUILDING_FAMILIES = [
         'id': 'HOUSE_1_SMALL',
         'name': "House 1 Small",
         'category': 'RESIDENTIAL',
-        'plot': "12m x 12m",
+        'plot': "16m x 16m",
         'shape': "Square",
         'icon': 'HOME',
         'tiers': [
@@ -6154,7 +6154,7 @@ BUILDING_FAMILIES = [
         'id': 'HOUSE_2_SMALL',
         'name': "House 2 Small",
         'category': 'RESIDENTIAL',
-        'plot': "12m x 12m",
+        'plot': "16m x 16m",
         'shape': "Square (Fairytale)",
         'icon': 'LIGHT_SUN',
         'tiers': [
@@ -6167,7 +6167,7 @@ BUILDING_FAMILIES = [
         'id': 'HOUSE_1_MEDIUM',
         'name': "House 1 Medium",
         'category': ('RESIDENTIAL', 'ESTATE'),
-        'plot': "20m x 20m",
+        'plot': "28m x 28m",
         'shape': "Square",
         'icon': 'HOME',
         'tiers': [
@@ -6180,7 +6180,7 @@ BUILDING_FAMILIES = [
         'id': 'HOUSE_2_MEDIUM',
         'name': "House 2 Medium",
         'category': 'RESIDENTIAL',
-        'plot': "12m x 20m",
+        'plot': "16m x 28m",
         'shape': "Rectangular Narrow",
         'icon': 'FILE_TEXT',
         'tiers': [
@@ -6193,7 +6193,7 @@ BUILDING_FAMILIES = [
         'id': 'HOUSE_3_MEDIUM',
         'name': "House 3 Medium",
         'category': ('RESIDENTIAL', 'ESTATE'),
-        'plot': "20m x 20m (10m cutout)",
+        'plot': "28m x 28m (14m cutout)",
         'shape': "L-Shaped",
         'icon': 'SNAP_VOLUME',
         'tiers': [
@@ -6206,7 +6206,7 @@ BUILDING_FAMILIES = [
         'id': 'TAVERN',
         'name': "Tavern",
         'category': 'HOSPITALITY',
-        'plot': "20m x 20m",
+        'plot': "28m x 28m",
         'shape': "Pub",
         'icon': 'SORT_DESC',
         'tiers': [
@@ -6219,7 +6219,7 @@ BUILDING_FAMILIES = [
         'id': 'TAVERN_LONG',
         'name': "Tavern Long",
         'category': 'HOSPITALITY',
-        'plot': "12m x 20m",
+        'plot': "16m x 28m",
         'shape': "Long Pub",
         'icon': 'ALIGN_JUSTIFY',
         'tiers': [
@@ -6232,7 +6232,7 @@ BUILDING_FAMILIES = [
         'id': 'INN',
         'name': "Inn",
         'category': 'HOSPITALITY',
-        'plot': "40m x 40m",
+        'plot': "56m x 56m",
         'shape': "Coaching Inn",
         'icon': 'HOME',
         'tiers': [
@@ -6245,7 +6245,7 @@ BUILDING_FAMILIES = [
         'id': 'NOBLE_MANOR',
         'name': "Noble Manor",
         'category': ('ESTATE', 'CIVIC'),
-        'plot': "100m x 100m",
+        'plot': "140m x 140m",
         'shape': "Palatial Estate",
         'icon': 'COMMUNITY',
         'tiers': [
@@ -6258,7 +6258,7 @@ BUILDING_FAMILIES = [
         'id': 'NASHERS_MANOR',
         'name': "Nasher's Manor",
         'category': ('ESTATE', 'CIVIC'),
-        'plot': "320m x 320m",
+        'plot': "440m x 440m",
         'shape': "Palatial Compound",
         'icon': 'COMMUNITY',
         'tiers': [
@@ -6271,7 +6271,7 @@ BUILDING_FAMILIES = [
         'id': 'ARTISAN_BAKERY',
         'name': "Artisan Bakery",
         'category': 'ARTISAN',
-        'plot': "20m x 20m",
+        'plot': "28m x 28m",
         'shape': "Half-Timbered Bakery",
         'icon': 'SOLO_ON',
         'tiers': [
@@ -6284,7 +6284,7 @@ BUILDING_FAMILIES = [
         'id': 'ARTISAN_TAILOR',
         'name': "Artisan Tailor",
         'category': 'ARTISAN',
-        'plot': "12m x 20m",
+        'plot': "16m x 28m",
         'shape': "Narrow Townhouse",
         'icon': 'COLOR',
         'tiers': [
@@ -6297,7 +6297,7 @@ BUILDING_FAMILIES = [
         'id': 'ARTISAN_TOOLSMITH',
         'name': "Artisan Toolsmith",
         'category': 'ARTISAN',
-        'plot': "20m x 20m (10m cutout)",
+        'plot': "28m x 28m (14m cutout)",
         'shape': "L-Courtyard Smithy",
         'icon': 'TOOL_SETTINGS',
         'tiers': [
@@ -6310,7 +6310,7 @@ BUILDING_FAMILIES = [
         'id': 'ARTISAN_JEWELER',
         'name': "Artisan Jeweler",
         'category': 'ARTISAN',
-        'plot': "20m x 20m",
+        'plot': "28m x 28m",
         'shape': "Refined Gem Boutique",
         'icon': 'LIGHT_SUN',
         'tiers': [
@@ -6323,7 +6323,7 @@ BUILDING_FAMILIES = [
         'id': 'ARTISAN_BREWERY',
         'name': "Artisan Brewery",
         'category': 'ARTISAN',
-        'plot': "20m x 20m (10m cutout)",
+        'plot': "28m x 28m (14m cutout)",
         'shape': "Brewery & Keg Yard",
         'icon': 'SORT_DESC',
         'tiers': [
@@ -6336,7 +6336,7 @@ BUILDING_FAMILIES = [
         'id': 'ARTISAN_FISHER',
         'name': "Artisan Fisher",
         'category': 'ARTISAN',
-        'plot': "12m x 12m",
+        'plot': "16m x 16m",
         'shape': "Stilt Fisher Cabin",
         'icon': 'OUTLINER_OB_MESH',
         'tiers': [
@@ -6349,7 +6349,7 @@ BUILDING_FAMILIES = [
         'id': 'ARTISAN_FURNITURE_MAKER',
         'name': "Artisan Furniture Maker",
         'category': 'ARTISAN',
-        'plot': "12m x 20m",
+        'plot': "16m x 28m",
         'shape': "Narrow Woodwright Workshop",
         'icon': 'MOD_BUILD',
         'tiers': [
@@ -6362,7 +6362,7 @@ BUILDING_FAMILIES = [
         'id': 'ARTISAN_BUTCHER',
         'name': "Artisan Butcher",
         'category': 'ARTISAN',
-        'plot': "20m x 20m",
+        'plot': "28m x 28m",
         'shape': "Butcher & Smokehouse",
         'icon': 'SNAP_VOLUME',
         'tiers': [
@@ -6375,7 +6375,7 @@ BUILDING_FAMILIES = [
         'id': 'STABLE',
         'name': "Stable & Carriage Barn",
         'category': 'ESTATE',
-        'plot': "16m x 12m",
+        'plot': "22m x 16m",
         'shape': "Half-Timbered Barn",
         'icon': 'HOME',
         'tiers': [
@@ -6388,7 +6388,7 @@ BUILDING_FAMILIES = [
         'id': 'ARCHERY_RANGE',
         'name': "Archery Range",
         'category': 'MILITARY',
-        'plot': "40m x 40m",
+        'plot': "56m x 56m",
         'shape': "Butts Field",
         'icon': 'TRACKER',
         'tiers': [
@@ -6401,7 +6401,7 @@ BUILDING_FAMILIES = [
         'id': 'KNIGHTS_MANOR',
         'name': "Knights Manor",
         'category': ('ESTATE', 'MILITARY'),
-        'plot': "40m x 40m",
+        'plot': "56m x 56m",
         'shape': "Fortified Hall",
         'icon': 'COMMUNITY',
         'tiers': [
@@ -6414,7 +6414,7 @@ BUILDING_FAMILIES = [
         'id': 'HEALERS_CHAPEL',
         'name': "Healers' Chapel",
         'category': 'MILITARY',
-        'plot': "40m x 40m",
+        'plot': "56m x 56m",
         'shape': "Chapel & Bell Tower",
         'icon': 'LIGHT',
         'tiers': [
@@ -6427,7 +6427,7 @@ BUILDING_FAMILIES = [
         'id': 'MAGE_TOWER',
         'name': "Mage Tower",
         'category': 'MILITARY',
-        'plot': "20m x 20m",
+        'plot': "28m x 28m",
         'shape': "Round Wizard Tower",
         'icon': 'LIGHT_SUN',
         'tiers': [
@@ -6440,7 +6440,7 @@ BUILDING_FAMILIES = [
         'id': 'TENEMENT_ROW_MEDIUM',
         'name': "Tenement Row",
         'category': 'RESIDENTIAL',
-        'plot': "12m x 20m",
+        'plot': "16m x 28m",
         'shape': "Wall-to-Wall Row",
         'icon': 'ALIGN_JUSTIFY',
         'tiers': [
@@ -6453,7 +6453,7 @@ BUILDING_FAMILIES = [
         'id': 'TENEMENT_COMPLEX_LARGE',
         'name': "Tenement Complex",
         'category': 'RESIDENTIAL',
-        'plot': "40m x 40m",
+        'plot': "56m x 56m",
         'shape': "Courtyard Tenement Complex",
         'icon': 'COMMUNITY',
         'tiers': [
@@ -6466,7 +6466,7 @@ BUILDING_FAMILIES = [
         'id': 'TENEMENT_TOWER_20M',
         'name': "Tenement Tower",
         'category': 'RESIDENTIAL',
-        'plot': "20m x 20m",
+        'plot': "28m x 28m",
         'shape': "Tall Urban Tenement",
         'icon': 'COMMUNITY',
         'tiers': [
@@ -6479,7 +6479,7 @@ BUILDING_FAMILIES = [
         'id': 'TENEMENT_CITY_ROW_20M',
         'name': "Tenement City Row",
         'category': 'RESIDENTIAL',
-        'plot': "20m x 20m",
+        'plot': "28m x 28m",
         'shape': "Party-Wall City Row",
         'icon': 'ALIGN_JUSTIFY',
         'tiers': [
@@ -6492,28 +6492,28 @@ BUILDING_FAMILIES = [
         'id': 'SCAFFOLD',
         'name': "Construction Site",
         'category': 'CONSTRUCTION',
-        'plot': "12m - 100m",
+        'plot': "16m - 140m",
         'shape': "Scaffold + Building",
         'icon': 'MOD_BUILD',
         'tiers': [
-            ('Small', 'SCAFFOLD_SMALL', "Small 12m plot scaffold + building"),
-            ('Med', 'SCAFFOLD_MEDIUM', "Medium 20m plot scaffold + building"),
-            ('Large', 'SCAFFOLD_LARGE', "Large 40m plot scaffold + building"),
-            ('Huge', 'SCAFFOLD_HUGE', "Huge 100m plot scaffold + building"),
+            ('Small', 'SCAFFOLD_SMALL', "Small 16m plot scaffold + building"),
+            ('Med', 'SCAFFOLD_MEDIUM', "Medium 28m plot scaffold + building"),
+            ('Large', 'SCAFFOLD_LARGE', "Large 56m plot scaffold + building"),
+            ('Huge', 'SCAFFOLD_HUGE', "Huge 140m plot scaffold + building"),
         ]
     },
     {
         'id': 'SCAFFOLD_EMPTY',
         'name': "Empty Scaffold Site",
         'category': 'CONSTRUCTION',
-        'plot': "12m - 100m",
+        'plot': "16m - 140m",
         'shape': "Scaffold Only",
         'icon': 'OUTLINER_OB_EMPTY',
         'tiers': [
-            ('Small', 'SCAFFOLD_EMPTY_SMALL', "Small 12m empty site, no building"),
-            ('Med', 'SCAFFOLD_EMPTY_MEDIUM', "Medium 20m empty site, no building"),
-            ('Large', 'SCAFFOLD_EMPTY_LARGE', "Large 40m empty site, no building"),
-            ('Huge', 'SCAFFOLD_EMPTY_HUGE', "Huge 100m empty site, no building"),
+            ('Small', 'SCAFFOLD_EMPTY_SMALL', "Small 16m empty site, no building"),
+            ('Med', 'SCAFFOLD_EMPTY_MEDIUM', "Medium 28m empty site, no building"),
+            ('Large', 'SCAFFOLD_EMPTY_LARGE', "Large 56m empty site, no building"),
+            ('Huge', 'SCAFFOLD_EMPTY_HUGE', "Huge 140m empty site, no building"),
         ]
     },
 ]
@@ -6624,6 +6624,42 @@ _ALL_KIT_FLAGS = (
     'kit_archery', 'kit_tournament', 'kit_chapel', 'kit_stable',
 )
 
+def _scale_preset_val_for_3rd_person(k, v):
+    """Proactively scale building footprint and interior openings by ~1.35x-1.4x
+    to nice clean even numbers suitable for 3rd-person camera and character gameplay."""
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        return v
+    # 1. Footprint width & depth: scale by ~1.38x to clean even meters
+    if k in ('width', 'depth'):
+        scaled = v * 1.38
+        even = round(scaled / 2.0) * 2.0
+        return float(max(6.0, even))
+    # 2. Projecting wings and courtyards: scale by ~1.38x, clean even or half-meter
+    elif k in ('wing_width', 'wing_depth', 'courtyard_width'):
+        scaled = v * 1.38
+        return float(max(4.0, round(scaled * 2.0) / 2.0))
+    # 3. Floor heights: minimum 3.8m, scaling up lower ceilings so 3rd person camera doesn't clip
+    elif k == 'floor_height':
+        return float(max(3.8, round(v * 1.12 * 10.0) / 10.0))
+    # 4. Door width: minimum 1.75m
+    elif k in ('door_width', 'rampart_door_width'):
+        return float(max(1.75, round(v * 1.25 * 20.0) / 20.0))
+    # 5. Door height: minimum 3.00m
+    elif k == 'door_height':
+        return float(max(3.00, round(v * 1.10 * 10.0) / 10.0))
+    # 6. Stair width: minimum 1.80m
+    elif k == 'stair_width':
+        return float(max(1.80, round(v * 1.25 * 20.0) / 20.0))
+    # 7. Scaffold dimensions
+    elif k in ('scaffold_width', 'scaffold_depth'):
+        scaled = v * 1.38
+        even = round(scaled / 2.0) * 2.0
+        return float(max(8.0, even))
+    # 8. Window spacing
+    elif k == 'window_spacing':
+        return float(max(2.4, round(v * 1.25 * 10.0) / 10.0))
+    return v
+
 def apply_preset(props, preset_key):
     """Applies preset dictionary values to the PropertyGroup."""
     if preset_key not in PRESETS:
@@ -6686,7 +6722,8 @@ def apply_preset(props, preset_key):
     for k, v in data.items():
         if hasattr(props, k):
             try:
-                setattr(props, k, v)
+                val = _scale_preset_val_for_3rd_person(k, v)
+                setattr(props, k, val)
             except Exception:
                 pass
 

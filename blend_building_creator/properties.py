@@ -290,7 +290,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     floor_height: FloatProperty(
         name="Floor Height",
         description="Height per storey in meters (Mage Towers use very tall levels)",
-        min=2.4, max=8.0, default=3.6,
+        min=2.8, max=8.0, default=3.8,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -298,7 +298,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     width: FloatProperty(
         name="Width",
         description="Building width (X axis) in meters",
-        min=3.5, max=80.0, default=6.0,
+        min=4.0, max=120.0, default=10.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -306,7 +306,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     depth: FloatProperty(
         name="Depth",
         description="Building depth (Y axis) in meters",
-        min=3.5, max=80.0, default=5.0,
+        min=4.0, max=120.0, default=10.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -335,7 +335,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     wing_width: FloatProperty(
         name="Wing Width",
         description="Width of the projecting wing",
-        min=2.5, max=30.0, default=3.5,
+        min=3.0, max=40.0, default=5.0,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -343,7 +343,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     wing_depth: FloatProperty(
         name="Wing Projection",
         description="Forward or outward projection distance of the wing",
-        min=2.0, max=30.0, default=3.0,
+        min=2.5, max=40.0, default=4.5,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -610,10 +610,10 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         description="Plot the scaffold is sized for. The scaffold stays inside the plot with walk-around padding",
         items=[
             ('AUTO', "Auto (Fit Building)", "Size the scaffold to the current building plus a work margin"),
-            ('SMALL', "Small 12m x 12m", "Scaffold for a 12m x 12m plot"),
-            ('MEDIUM', "Medium 20m x 20m", "Scaffold for a 20m x 20m plot"),
-            ('LARGE', "Large 40m x 40m", "Scaffold for a 40m x 40m plot"),
-            ('HUGE', "Huge 100m x 100m", "Scaffold for a 100m x 100m plot"),
+            ('SMALL', "Small 16m x 16m", "Scaffold for a 16m x 16m plot"),
+            ('MEDIUM', "Medium 28m x 28m", "Scaffold for a 28m x 28m plot"),
+            ('LARGE', "Large 56m x 56m", "Scaffold for a 56m x 56m plot"),
+            ('HUGE', "Huge 140m x 140m", "Scaffold for a 140m x 140m plot"),
             ('CUSTOM', "Custom Size", "Set the scaffold width, depth and height manually below"),
         ],
         default='AUTO',
@@ -744,7 +744,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     stair_width: FloatProperty(
         name="Stair Width",
         description="Width of interior staircase and floor cutout",
-        min=0.8, max=3.5, default=1.45,
+        min=1.2, max=4.5, default=1.80,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -867,7 +867,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     door_width: FloatProperty(
         name="Door Width",
         description="Width of door opening in meters",
-        min=0.8, max=3.5, default=1.45,
+        min=1.2, max=4.5, default=1.75,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -875,7 +875,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     door_height: FloatProperty(
         name="Door Height",
         description="Height of door opening in meters",
-        min=1.9, max=4.5, default=2.80,
+        min=2.4, max=5.0, default=3.00,
         unit='LENGTH',
         update=on_property_updated
     )
@@ -2054,7 +2054,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     curtain_wall_height: FloatProperty(
         name="Curtain Height",
         description="Height of the stone curtain wall in meters",
-        min=2.4, max=8.0, default=3.2,
+        min=2.4, max=10.0, default=4.2,
         unit='LENGTH',
         update=on_property_updated
     )

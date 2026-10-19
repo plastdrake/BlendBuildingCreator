@@ -32,12 +32,12 @@ def build_portcullis(bm, cx, cy, z_ground=0.0, width=2.6, height=2.9,
     tx, ty = -oy, ox                      # wall tangent
     ang = math.atan2(ty, tx)
 
-    eff_raised = max(2.15, height * 0.75) if raised is None else float(raised)
+    eff_raised = max(3.10, height * 0.85) if raised is None else float(raised)
     z0 = z_ground + eff_raised
-    z1 = z_ground + height + 0.70
+    z1 = z_ground + height + 1.20
 
     # Side guide channels biting into the jambs.
-    chan_h = height + 0.90
+    chan_h = height + 1.40
     for s in (-1.0, 1.0):
         px = cx + tx * (s * (width * 0.5 + 0.09))
         py = cy + ty * (s * (width * 0.5 + 0.09))

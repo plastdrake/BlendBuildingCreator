@@ -1350,18 +1350,18 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
     # Resolve doorway
     has_door = False
     u_door_cx = 0.0
-    door_w = 1.30
-    door_h = min(2.65, H - 0.30)
+    door_w = 1.75
+    door_h = min(2.95, H - 0.25)
 
     if doorway is not None:
         if isinstance(doorway, dict):
             dw_x = doorway.get('x', (x1 + x2) * 0.5)
             dw_y = doorway.get('y', (y1 + y2) * 0.5)
             u_door_cx = (dw_x - x1) * ux + (dw_y - y1) * uy
-            door_w = doorway.get('w', 1.30)
-            door_h = min(doorway.get('h', 2.65), H - 0.30)
+            door_w = doorway.get('w', 1.75)
+            door_h = min(doorway.get('h', 2.95), H - 0.25)
         elif isinstance(doorway, (tuple, list)) and len(doorway) >= 3:
-            u_door_cx, door_w, door_h = doorway[0], doorway[1], min(doorway[2], H - 0.30)
+            u_door_cx, door_w, door_h = doorway[0], doorway[1], min(doorway[2], H - 0.25)
         has_door = True
 
     jamb_w = 0.09
@@ -2101,10 +2101,10 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
 
     if stair_pos_info:
         _sw = float(stair_pos_info.get('w', 1.5))
-        c_stair_w = max(3.6, _sw + 1.8)
+        c_stair_w = max(4.2, _sw + 2.2)
     else:
-        c_stair_w = 4.0
-    c_stair_w = min(max(c_stair_w, 3.5), W * 0.28)
+        c_stair_w = 4.6
+    c_stair_w = min(max(c_stair_w, 3.8), W * 0.28)
 
     rem_w = W - c_stair_w
     num_bays = 3 if rem_w >= 13.0 else 2
@@ -2356,8 +2356,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     program = getattr(props, 'interior_program', 'AUTO')
     has_stairs_landing = (fl_idx > 0 and stair_hole is not None)
 
-    dw_w = 1.30
-    dw_h = min(2.65, floor_h - 0.35)
+    dw_w = 1.75
+    dw_h = min(2.95, floor_h - 0.25)
 
     def _holds_stair(rb):
         if stair_hole is None:
@@ -2405,6 +2405,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             return _p_rooms, _p_walls
 
     is_wide_mansion = (W >= 15.0 and D >= 6.0
+                       and effective_archetype in ('NONE', 'HOUSE', 'AUTO', 'MANOR')
                        and not getattr(props, 'has_throne_room', False)
                        and not getattr(props, 'has_double_height', False))
     if (effective_archetype == 'MANOR' or is_wide_mansion) and has_interior_walls \
@@ -2526,7 +2527,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
     # Safe boundaries around stairs (left side)
     stair_switchback = bool((stair_pos_info or {}).get('switchback', False))
-    walk_w = float((stair_pos_info or {}).get('walk_w', 1.05) or 1.05)
+    walk_w = float((stair_pos_info or {}).get('walk_w', 1.85) or 1.85)
     if stair_pos_info:
         stair_safe_x = stair_pos_info.get('cx', ix_min + 1.4) + stair_pos_info.get('w', 1.2) * 0.5 + 0.20
         stair_safe_y_bot = min(iy_max - 3.4, stair_pos_info.get('y_bot', iy_max - 3.4))
@@ -2591,8 +2592,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     # rooms wrap around it instead of being squeezed into a side strip.
     is_deep = ((D > W * 1.25 and D >= 6.5) or _turn_layout) \
         and effective_archetype != 'TENEMENT'
-    can_3_rooms = (partition_style in ('AUTO', 'HALL_CHAMBERS')) and (W >= 7.2 and D >= 5.4)
-    can_4_rooms = can_3_rooms and (D >= 8.0 or effective_archetype in ('INN', 'TENEMENT'))
+    can_3_rooms = (partition_style in ('AUTO', 'HALL_CHAMBERS')) and (W >= 10.5 and D >= 7.5)
+    can_4_rooms = can_3_rooms and (W >= 13.5 and D >= 10.5)
 
     rooms = []
     interior_walls = []
@@ -2669,17 +2670,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         # Smarter room division: refuse long narrow corridor-rooms. Peek the
         # chamber roles so the single kitchen gets a bigger share, then
         # downgrade 4 -> 3 -> 2 rooms whenever the strip would slice into
-        # proportions worse than ~2.6:1 (or any side under 2m).
+        # proportions worse than ~2.4:1 (or any side under 3.6m for 3rd-person gameplay).
         def _strip_chunky(hw, cw, fracs):
-            if min(hw, cw) < 2.0:
+            if min(hw, cw) < 3.6:
                 return False
-            if D / max(hw, 0.5) > 3.2:
+            if D / max(hw, 0.5) > 2.8:
                 return False
             for f in fracs:
                 d = D * f
-                if min(cw, d) < 2.0:
+                if min(cw, d) < 3.6:
                     return False
-                if max(cw, d) / max(min(cw, d), 0.5) > 2.6:
+                if max(cw, d) / max(min(cw, d), 0.5) > 2.4:
                     return False
             return True
 
@@ -2795,10 +2796,10 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     # sized from the stair geometry first.  The percentage
                     # guardrails still apply wherever they can reach that far,
                     # but never squeeze the stairwell into the apartments.
-                    min_hw = max(2.40, (stair_safe_x - ix_min) + walk_w)
+                    min_hw = max(3.20, (stair_safe_x - ix_min) + walk_w)
                     if door_cx is not None:
                         min_hw = max(min_hw, (door_cx + dw_w * 0.5 + 0.30) - ix_min)
-                    hall_w = min(max(min_hw, 2.50), max(W * 0.36, min_hw))
+                    hall_w = min(max(min_hw, 3.20), max(W * 0.38, min_hw))
                 else:
                     # Single-lane corridor: stair lane (~1.55m from wall) + clear walking aisle of at least 2.5m
                     # (2.5m is the smallest walkable area in game)
@@ -2847,10 +2848,10 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 rooms = [rm_hall]
 
                 apt_w = ix_max - hall_x
-                if apt_w >= 4.0:
+                if apt_w >= 7.5:
                     apt_split_x = _clear_doorway_span(
                         hall_x + apt_w * 0.48, axis='X',
-                        lo=hall_x + 1.8, hi=ix_max - 1.8)
+                        lo=hall_x + 2.5, hi=ix_max - 2.5)
                     # Internal doors inside apartments connecting kitchen/living to bedroom
                     interior_walls.append({
                         'p1': (apt_split_x, iy_min), 'p2': (apt_split_x, split_y),
@@ -2965,17 +2966,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             _k1, _k2 = (0.42, 0.70) if (len(roles) > 1 and roles[1] == 'KITCHEN') else (0.35, 0.68)
             # Clear in order and keep the chambers stacked with room to spare.
             split_y1 = _clear_doorway_span(iy_min + D * _k1, axis='Y',
-                                            hi=iy_min + D * _k2 - 1.6)
+                                            hi=iy_min + D * _k2 - 3.2)
             split_y2 = _clear_doorway_span(iy_min + D * _k2, axis='Y',
-                                            lo=split_y1 + 1.6)
+                                            lo=split_y1 + 3.2)
             if oven_band is not None:
                 # Keep both chamber lines out of the oven masonry, preserving
-                # their order and a walkable 1.6m minimum chamber depth.
-                split_y1 = _dodge_oven_band(split_y1, iy_min + 1.6, iy_max - 3.2)
-                split_y2 = _dodge_oven_band(max(split_y2, split_y1 + 1.6),
-                                            split_y1 + 1.6, iy_max - 1.6)
+                # their order and a walkable 3.2m minimum chamber depth.
+                split_y1 = _dodge_oven_band(split_y1, iy_min + 3.2, iy_max - 5.0)
+                split_y2 = _dodge_oven_band(max(split_y2, split_y1 + 3.2),
+                                            split_y1 + 3.2, iy_max - 3.2)
                 if oven_band[0] <= split_y2 <= oven_band[1]:
-                    split_y2 = min(iy_max - 1.6, oven_band[1])
+                    split_y2 = min(iy_max - 3.2, oven_band[1])
 
             dw_y1 = (iy_min + split_y1) * 0.5
             dw_y2 = (split_y1 + split_y2) * 0.5
@@ -3278,8 +3279,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                         _wx0, _wx1 = stair_hole[0], stair_hole[1]
                 else:
                     _wx0, _wx1 = stair_hole[0], stair_hole[1]
-                _bay = _clear_doorway_span(_wx1 + 1.0, axis='X',
-                                           lo=_wx1 + 0.6, hi=_hx1 - 2.2)
+                _bay = _clear_doorway_span(_wx1 + 1.80, axis='X',
+                                           lo=_wx1 + 1.20, hi=_hx1 - 2.8)
                 if front_door_info is not None and fl_idx == 0:
                     _dcx, _ddw = front_door_info
                     if abs(_bay - _dcx) < _ddw * 0.5 + 0.65:
@@ -3348,8 +3349,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             # simply one room.
             _col_top = stair_safe_y_top + 0.35
             _avail = iy_max - _col_top
-            _nrooms = int(_avail / 3.6)
-            while _nrooms >= 1 and _avail / _nrooms < 2.8:
+            _nrooms = int(_avail / 4.5)
+            while _nrooms >= 1 and _avail / _nrooms < 3.6:
                 _nrooms -= 1
             if _nrooms >= 1 and (_col_top - iy_min) >= 1.6:
                 _splits = [_col_top]

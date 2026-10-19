@@ -253,7 +253,14 @@ def _create_detached_outbuilding(base_props, overrides, pos=(0.0, 0.0, 0.0), rot
                 if preset_key in PRESETS:
                     apply_preset(op, preset_key)
                     op.auto_update = False
-                    op.building_archetype = 'STABLE' if _is_stable else 'NONE'
+                    if _is_stable:
+                        op.building_archetype = 'STABLE'
+                        op.interior_program = 'STABLE'
+                        op.has_interior_furnishing = True
+                        op.has_interior_walls = False
+                        op.interior_partition_style = 'OPEN'
+                    else:
+                        op.building_archetype = 'NONE'
             except Exception:
                 pass
         op.material_tier = getattr(base_props, 'material_tier', 'TIER_1')
@@ -360,9 +367,14 @@ def _merge_generated_building(bm, base_props, overrides, pos=0.0, rot_z=0.0, pre
                 if preset_key in PRESETS:
                     apply_preset(op, preset_key)
                     op.auto_update = False
-                    # Working stable barns keep their STABLE archetype so the
-                    # interior dresses as stalls + hay storage, never bedrooms.
-                    op.building_archetype = 'STABLE' if _is_stable else 'NONE'
+                    if _is_stable:
+                        op.building_archetype = 'STABLE'
+                        op.interior_program = 'STABLE'
+                        op.has_interior_furnishing = True
+                        op.has_interior_walls = False
+                        op.interior_partition_style = 'OPEN'
+                    else:
+                        op.building_archetype = 'NONE'
             except Exception:
                 pass
         op.material_tier = getattr(base_props, 'material_tier', 'TIER_1')

@@ -532,11 +532,60 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
                        location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.14),
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
-    # Fortified cut-stone crown coping above the gatehouse arch
-    create_beveled_box(bm, size=(gap_w + 1.45, frame_depth + 0.08, 0.20),
-                       location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.38),
+
+    # Elevated Defensive Superstructure & Fighting Platform
+    # Rises above the flanking curtain wall walkways, giving clear command of the approach.
+    platform_z = max(wall_h + 1.25, ground_z + gate_h + 0.85)
+    super_h = platform_z - (ground_z + gate_h + 0.28)
+    if super_h > 0.05:
+        # Solid cut-stone breastwork wall above lintel up to platform floor
+        create_beveled_box(bm, size=(gap_w + 1.24, frame_depth, super_h),
+                           location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.28 + super_h * 0.5),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+
+    # Overhanging machicolated defensive platform / fighting deck
+    plat_w = gap_w + 1.80
+    plat_depth = frame_depth + 0.50
+    plat_push = push + 0.20
+    create_beveled_box(bm, size=(plat_w, plat_depth, 0.22),
+                       location=(cx + ox * plat_push, cy + oy * plat_push, platform_z + 0.11),
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+
+    # Stone corbels supporting the cantilevered fighting platform
+    n_corbels = max(3, int(plat_w / 1.10))
+    corbel_step = (plat_w - 0.40) / max(1, n_corbels - 1)
+    for ci in range(n_corbels):
+        cu = -(plat_w - 0.40) * 0.5 + ci * corbel_step
+        cpx = cx + tx * cu + ox * (push + 0.22)
+        cpy = cy + ty * cu + oy * (push + 0.22)
+        create_beveled_box(bm, size=(0.28, 0.45, 0.38),
+                           location=(cpx, cpy, platform_z - 0.19),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+
+    # Defensive crenellated battlements atop the elevated platform
+    parapet_h = 0.45
+    merlon_h = 0.65
+    front_edge_push = plat_push + plat_depth * 0.5 - 0.12
+    # Base parapet along front
+    create_beveled_box(bm, size=(plat_w, 0.24, parapet_h),
+                       location=(cx + ox * front_edge_push, cy + oy * front_edge_push, platform_z + 0.22 + parapet_h * 0.5),
+                       rotation=(0.0, 0.0, ang),
+                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+    # Merlons (crenellations) along the front edge
+    n_merlons = max(3, int(plat_w / 1.15))
+    merlon_w = 0.52
+    m_step = (plat_w - merlon_w) / max(1, n_merlons - 1)
+    for mi in range(n_merlons):
+        mu = -(plat_w - merlon_w) * 0.5 + mi * m_step
+        mpx = cx + tx * mu + ox * front_edge_push
+        mpy = cy + ty * mu + oy * front_edge_push
+        create_beveled_box(bm, size=(merlon_w, 0.24, merlon_h),
+                           location=(mpx, mpy, platform_z + 0.22 + parapet_h + merlon_h * 0.5),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
 
     if gate_towers:
         from .gatehouse import build_flanking_gate_towers
@@ -583,9 +632,9 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
     gate_half = max(1.35, (getattr(props, 'door_width', 1.2) + 1.6) * 0.5)
     g0, g1 = gate_cx - gate_half, gate_cx + gate_half
 
-    H = height if height is not None else getattr(props, 'curtain_wall_height', 3.2)
+    H = height if height is not None else getattr(props, 'curtain_wall_height', 4.2)
     T = thickness if thickness is not None else getattr(props, 'curtain_wall_thickness', 0.55)
-    gate_h = max(2.2, min(3.0, H - 0.55))
+    gate_h = max(3.5, min(4.4, H * 0.88))
 
     # Towers ARE the corners: runs stop at the tower faces so the wall
     # terminates into the bastion (its outer faces continue the wall plane).

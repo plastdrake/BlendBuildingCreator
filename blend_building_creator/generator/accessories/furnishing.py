@@ -204,8 +204,8 @@ def _jit(rng, amount: float) -> float:
 
 
 def _try_place_chair(bm, tracker: RoomOccupancyTracker, cx: float, cy: float,
-                     yaw: float, z_floor: float, seat_h: float = 0.48,
-                     half: float = 0.30) -> bool:
+                     yaw: float, z_floor: float, seat_h: float = 0.62,
+                     half: float = 0.35) -> bool:
     """Places one chair only when its footprint is inside the room and clear
     of stairs, doorways, windows and other props. Chairs placed without this
     check used to land inside stairwells and block the climb."""
@@ -214,6 +214,68 @@ def _try_place_chair(bm, tracker: RoomOccupancyTracker, cx: float, cy: float,
         build_prop(bm, 'CHAIR', cx, cy, z_floor, yaw, seat_h=seat_h)
         return True
     return False
+
+
+def _place_ceiling_light(bm, tracker: Optional[RoomOccupancyTracker], rcx: float, rcy: float,
+                         z_ceil: float, prop_name: str = 'CHAIN_LANTERN', **kwargs):
+    """Places a ceiling-mounted light fixture safely clear of stairs.
+    
+    Checks stair_hole, stair_box, floor_void, and stair approaches. If the requested (rcx, rcy)
+    falls within or dangerously close to stairs (where a player climbing stairs would bump their head),
+    it nudges the light into the clear walkable room area away from the staircase, or omits it if
+    the space is an open stair shaft without clearance.
+    """
+    if tracker is None:
+        build_prop(bm, prop_name, rcx, rcy, z_ceil, 0.0, **kwargs)
+        return
+
+    lx, ly = rcx, rcy
+
+    def _conflicts_with_stairs(x, y, margin=0.65):
+        sh = getattr(tracker, 'stair_hole', None) or getattr(tracker, 'stair_hole_rect', None)
+        if sh is not None:
+            sx0, sx1, sy0, sy1 = sh
+            if (sx0 - margin <= x <= sx1 + margin) and (sy0 - margin <= y <= sy1 + margin):
+                return True
+        sb = getattr(tracker, 'stair_box', None)
+        if sb is not None:
+            bx0, bx1, by0, by1 = sb
+            if (bx0 - margin <= x <= bx1 + margin) and (by0 - margin <= y <= by1 + margin):
+                return True
+        fv = getattr(tracker, 'floor_void', None)
+        if fv is not None:
+            vx0, vx1, vy0, vy1 = fv
+            if (vx0 - margin <= x <= vx1 + margin) and (vy0 - margin <= y <= vy1 + margin):
+                return True
+        for ab in getattr(tracker, 'stair_approach', []):
+            ax0, ax1, ay0, ay1 = ab
+            if (ax0 - 0.20 <= x <= ax1 + 0.20) and (ay0 - 0.20 <= y <= ay1 + 0.20):
+                return True
+        return False
+
+    if _conflicts_with_stairs(lx, ly):
+        rx0, rx1 = tracker.rx0 + 0.50, tracker.rx1 - 0.50
+        ry0, ry1 = tracker.ry0 + 0.50, tracker.ry1 - 0.50
+        candidates = []
+        step = 0.40
+        curr_y = ry0
+        while curr_y <= ry1:
+            curr_x = rx0
+            while curr_x <= rx1:
+                if not _conflicts_with_stairs(curr_x, curr_y, margin=0.75):
+                    d = math.hypot(curr_x - rcx, curr_y - rcy)
+                    candidates.append((d, curr_x, curr_y))
+                curr_x += step
+            curr_y += step
+
+        if candidates:
+            candidates.sort(key=lambda c: c[0])
+            lx, ly = candidates[0][1], candidates[0][2]
+        else:
+            return
+
+    build_prop(bm, prop_name, lx, ly, z_ceil, 0.0, **kwargs)
+
 
 
 def _freest_spot(tracker: RoomOccupancyTracker, rng, step: float = 0.40):
@@ -701,7 +763,7 @@ def _dress_desk(bm, tracker: RoomOccupancyTracker, cx: float, cy: float, yaw: fl
 
 
 def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
-                   length: float = 2.0, width: float = 1.2) -> Optional[Tuple[float, float, float]]:
+                   length: float = 2.45, width: float = 1.55) -> Optional[Tuple[float, float, float]]:
     """Places a timber bed with headboard against a wall, facing into the room."""
     rx0, rx1 = tracker.rx0, tracker.rx1
     ry0, ry1 = tracker.ry0, tracker.ry1
@@ -1054,14 +1116,14 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
 
     # 1. Bed — scale down for small/narrow tenement rooms
     if narrow_room:
-        bed_w = 0.95
-        bed_len = 1.90
+        bed_w = 1.25
+        bed_len = 2.25
     elif is_master:
-        bed_w = 1.30
-        bed_len = 2.05
+        bed_w = 1.85
+        bed_len = 2.65
     else:
-        bed_w = 1.10
-        bed_len = 1.95
+        bed_w = 1.55
+        bed_len = 2.45
     bed_info = _try_place_bed(bm, tracker, z_floor, length=bed_len, width=bed_w)
 
     # 2. Bedside chest at foot of bed — only if room is wide enough
@@ -1186,9 +1248,9 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
 
     # 6. Ceiling light
     if is_master and (rw * rd >= 16.0):
-        build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.42)
+        _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil, prop_name='CHANDELIER', radius=0.48)
     else:
-        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+        _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_study_library(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -1257,7 +1319,7 @@ def _furnish_study_library(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
                  run_w, run_l, allow_overlap=False)
 
     # 7. Ceiling lantern
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -1851,7 +1913,7 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                  min(1.20, rw * 0.35), min(2.20, rd * 0.45), yaw_max=0.01, allow_overlap=False)
 
     # 6. Ceiling light
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -1869,24 +1931,25 @@ def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     # 2. Central Dining Table with 4 Chairs and Table Clutter (jittered anchor)
     dtx = rcx + _jit(rng, 0.22)
     dty = rcy + _jit(rng, 0.22)
-    tw, td = 1.50, 0.90
-    if tracker.is_free(dtx - tw * 0.5 - 0.35, dtx + tw * 0.5 + 0.35, dty - td * 0.5 - 0.35, dty + td * 0.5 + 0.35):
+    tw, td = 2.10, 1.15
+    z_table = z_floor + 0.97
+    if tracker.is_free(dtx - tw * 0.5 - 0.40, dtx + tw * 0.5 + 0.40, dty - td * 0.5 - 0.40, dty + td * 0.5 + 0.40):
         build_prop(bm, 'INDOOR_TABLE', dtx, dty, z_floor, 0.0, length=tw, width=td)
-        build_prop(bm, 'SCATTER_TABLEWARE', dtx - 0.25, dty, z_table, 0.0)
+        build_prop(bm, 'SCATTER_TABLEWARE', dtx - 0.35, dty, z_table, 0.0)
         if rng.random() < 0.45:
-            build_prop(bm, 'POTTED_PLANT_SMALL', dtx + 0.35, dty, z_table, rng.uniform(0.0, 6.28))
+            build_prop(bm, 'POTTED_PLANT_SMALL', dtx + 0.45, dty, z_table, rng.uniform(0.0, 6.28))
         else:
-            build_prop(bm, 'BOTTLE_CLUSTER', dtx + 0.35, dty, z_table, 0.0)
+            build_prop(bm, 'BOTTLE_CLUSTER', dtx + 0.45, dty, z_table, 0.0)
         # 4 Chairs around table facing inward towards center
         chair_positions = [
-            (dtx, dty - (td * 0.5 + 0.30), math.pi),
-            (dtx, dty + (td * 0.5 + 0.30), 0.0),
-            (dtx - (tw * 0.5 + 0.30), dty, math.pi * 0.5),
-            (dtx + (tw * 0.5 + 0.30), dty, -math.pi * 0.5),
+            (dtx, dty - (td * 0.5 + 0.38), math.pi),
+            (dtx, dty + (td * 0.5 + 0.38), 0.0),
+            (dtx - (tw * 0.5 + 0.38), dty, math.pi * 0.5),
+            (dtx + (tw * 0.5 + 0.38), dty, -math.pi * 0.5),
         ]
         for chx, chy, chang in chair_positions:
             _try_place_chair(bm, tracker, chx, chy, chang, z_floor)
-        tracker.occupy(dtx - tw * 0.5 - 0.35, dtx + tw * 0.5 + 0.35, dty - td * 0.5 - 0.35, dty + td * 0.5 + 0.35)
+        tracker.occupy(dtx - tw * 0.5 - 0.40, dtx + tw * 0.5 + 0.40, dty - td * 0.5 - 0.40, dty + td * 0.5 + 0.40)
 
     # 3. Fireside Lounge / Seating: Plush Sofa or Armchair facing hearth/center
     if rw >= 4.0 or rd >= 4.0:
@@ -2335,9 +2398,9 @@ def _furnish_entrance_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
         _try_place_plant(bm, tracker, z_floor, rng, large=True)
 
     if min(rw, rd) >= 5.0:
-        build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.44)
+        _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil, prop_name='CHANDELIER', radius=0.48)
     else:
-        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+        _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_office(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -2381,7 +2444,7 @@ def _furnish_office(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
                  min(1.60, rw * 0.40), min(3.00, rd * 0.46), allow_overlap=False)
 
     # 6. Ceiling light
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_industrial_bay(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -2498,7 +2561,7 @@ def _furnish_industrial_bay(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
     if not bare:
         _try_place_wall_prop(bm, 'CHEST', 1.05, 0.55, tracker, z_floor,
                              candidate_walls=('SOUTH', 'WEST', 'EAST'))
-        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+        _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_stone_store(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -2628,7 +2691,7 @@ def _furnish_stone_store(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
                 build_prop(bm, 'BARREL', cx, cy, z_floor, rng.uniform(0, 6.28))
 
     # 6. Industrial chain lanterns suspended from rafters
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
     if rw >= 8.0:
         build_prop(bm, 'CHAIN_LANTERN', rcx - rw * 0.28, rcy, z_ceil, 0.0)
         build_prop(bm, 'CHAIN_LANTERN', rcx + rw * 0.28, rcy, z_ceil, 0.0)
@@ -2668,7 +2731,7 @@ def _furnish_workshop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
     # 5. Work-floor rug is laid by the room decor pass (skipped in bare
     #    industrial workshops), so nothing to do here.
 
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 # ---------------------------------------------------------------------------
@@ -2894,7 +2957,7 @@ def _furnish_bakehouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
     rug_w = min(2.60, max(1.60, rw * 0.55))
     rug_l = min(3.40, max(2.00, rd * 0.55))
     _lay_rug(bm, tracker, rm, rng, 'RUG_FOREST', rcx, rcy, z_floor, rug_w, rug_l)
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_brewhouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -2927,7 +2990,7 @@ def _furnish_brewhouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
                 build_prop(bm, 'PEWTER_TANKARD', tx + 0.18, ty + 0.10, z_table, 0.0)
                 build_prop(bm, 'BOTTLE_CLUSTER', tx, ty - 0.22, z_table, 0.0)
                 break
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_butchery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -2975,7 +3038,7 @@ def _furnish_butchery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
         _try_place_wall_prop(bm, 'LOG_PILE', 1.15, 0.95, tracker, z_floor,
                              candidate_walls=('SOUTH', 'WEST', 'EAST'),
                              length=1.00, radius=0.11, rows=2)  # smoke fuel
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_tailor_atelier(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3009,7 +3072,7 @@ def _furnish_tailor_atelier(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
     rug_w = min(2.60, max(1.60, rw * 0.55))
     rug_l = min(3.40, max(2.00, rd * 0.55))
     _lay_rug(bm, tracker, rm, rng, 'RUG_SAPPHIRE', rcx, rcy, z_floor, rug_w, rug_l)
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_goldsmith(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3045,7 +3108,7 @@ def _furnish_goldsmith(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
     rug_w = min(2.40, max(1.50, rw * 0.50))
     rug_l = min(3.00, max(1.80, rd * 0.50))
     _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor, rug_w, rug_l)
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_smithy(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3074,7 +3137,7 @@ def _furnish_smithy(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
     if rng.random() < density:
         _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
                              candidate_walls=('SOUTH', 'WEST', 'EAST'))
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_joinery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3112,7 +3175,7 @@ def _furnish_joinery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                              candidate_walls=('SOUTH', 'EAST', 'WEST'))
         _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
                              candidate_walls=('SOUTH', 'WEST', 'EAST'))
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3170,7 +3233,7 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                          candidate_walls=('EAST', 'NORTH', 'WEST'))  # tackle
     if rng.random() < density:
         _place_goods_row(bm, tracker, z_floor, rng, 'CLAY_POT', count=2, box=0.30)
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
@@ -3572,7 +3635,7 @@ def _furnish_storage(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                 p = 'CRATE' if rng.random() < 0.5 else 'BARREL'
                 build_prop(bm, p, cx, cy, z_floor, 0.0)
 
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _build_stall_divider(bm, x: float, y_back: float, depth: float, z_floor: float, height: float = 1.85):
@@ -3727,7 +3790,7 @@ def _furnish_stable_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
             build_prop(bm, 'HAY_BALE', px, py, z_floor, rng.random() * 0.5)
             build_prop(bm, 'HAY_PILE', px - 0.32, py + 0.18, z_floor, rng.random() * 6.28)
 
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_corridor(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3741,7 +3804,7 @@ def _furnish_corridor(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
     if 'cellar_stair' in getattr(rm, 'id', ''):
         # Dedicated cellar stairwell room: keep the stair landing and hole completely
         # free of rugs, furniture or clutter. Only place ceiling lantern.
-        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+        _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
         return
 
     # 1. Hallway runner rugs (kept off the stair opening, staggered, slight yaw)
@@ -3793,7 +3856,7 @@ def _furnish_corridor(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_c
                              candidate_walls=('NORTH', 'WEST', 'EAST', 'SOUTH'))
 
     # 3. Ceiling chain lantern
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3846,7 +3909,7 @@ def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
              allow_overlap=False)
 
     # 4. Ceiling lantern
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_mess_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3907,7 +3970,7 @@ def _furnish_mess_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
              min(1.60, rw * 0.35), min(3.60, rd * 0.50), yaw_max=0.06,
              allow_overlap=False)
 
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_archery_range(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3942,7 +4005,7 @@ def _furnish_archery_range(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
         rd = rm.bounds[3] - rm.bounds[2]
         _lay_rug(bm, tracker, rm, rng, 'RUG_FOREST', rcx, rcy, z_floor,
                  min(2.20, rw * 0.50), min(3.00, rd * 0.50), yaw_max=0.10)
-        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+        _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
         return
 
     # RANGE: straw butt against the far (north) wall facing down the lane.
@@ -3963,7 +4026,7 @@ def _furnish_archery_range(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
                 tracker.occupy(cx - 0.28, cx + 0.28, cy - 0.28, cy + 0.28)
                 build_prop(bm, 'BARREL', cx, cy, z_floor, 0.0)
                 break
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_armory(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -4008,7 +4071,7 @@ def _furnish_armory(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
     _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor,
              min(1.70, rw * 0.38), min(3.40, rd * 0.52), yaw_max=0.06)
 
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -4217,7 +4280,7 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
             _rug_cy = _placed_counter['cy'] - _placed_counter['mdy'] * 1.60
         _lay_rug(bm, tracker, rm, rng, rug_choice, _rug_cx, _rug_cy, z_floor, rug_w, rug_l)
 
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _furnish_infirmary(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -4252,7 +4315,7 @@ def _furnish_infirmary(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
     rug_l = min(rug_l, max(1.5, rd - 0.35))
     _lay_rug(bm, tracker, rm, rng, 'RUG_SAPPHIRE', rcx, rcy, z_floor, rug_w, rug_l)
 
-    build_prop(bm, 'CHAIN_LANTERN', rcx, rcy, z_ceil, 0.0)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
 def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
@@ -4260,6 +4323,12 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                        floor_has_dining: bool = False):
     """Dresses one functional room using the appropriate layout algorithm."""
     rx0, rx1, ry0, ry1 = rm.bounds
+    if getattr(rm, 'is_wing', False):
+        _wt = float(getattr(ctx, 'wall_t', 0.30) if ctx is not None else 0.30)
+        rx0 += _wt
+        rx1 -= _wt
+        ry0 += _wt
+        ry1 -= _wt
     # Inset room boundaries slightly from structural walls so props never clip into plaster
     inset = 0.15
 
@@ -4341,7 +4410,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     # inset a metre+ off a wall that carries a flight elsewhere); the precise
     # stair/door/prop boxes still reject any slot the flight actually uses.
     tracker.room_bounds = (rx0, rx1, ry0, ry1)
-    if ctx is not None:
+    if ctx is not None and not getattr(rm, 'is_wing', False):
         _fwb = (getattr(ctx, 'floor_wall_bounds', None) or {}).get(
             rm.floor_idx)
         _wt = float(getattr(ctx, 'wall_t', 0.30) or 0.30)
@@ -4558,8 +4627,8 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                 raise
 
     # Every room gets at least one rug, except back-of-house rooms in an
-    # industrial fit-out (warehouses/lumbermills stay bare).
-    if not _bare and role not in ('THRONE_ROOM', 'MEZZANINE_GALLERY', 'UPPER_GALLERY') and getattr(tracker, 'rug_count', 0) == 0 and not getattr(tracker, 'no_rugs', False):
+    # industrial fit-out (warehouses/lumbermills stay bare) and stables.
+    if not _bare and role not in ('THRONE_ROOM', 'MEZZANINE_GALLERY', 'UPPER_GALLERY', 'STABLE_HALL') and getattr(tracker, 'rug_count', 0) == 0 and not getattr(tracker, 'no_rugs', False):
         rw = (rx1 - rx0) - inset * 2.0
         rd = (ry1 - ry0) - inset * 2.0
         if rw >= 1.0 and rd >= 1.0:

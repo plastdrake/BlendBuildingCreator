@@ -27,10 +27,10 @@ from ..materials import (
 )
 
 PLOT_SIZES = {
-    'SMALL': 12.0,
-    'MEDIUM': 20.0,
-    'LARGE': 40.0,
-    'HUGE': 100.0,
+    'SMALL': 16.0,
+    'MEDIUM': 28.0,
+    'LARGE': 56.0,
+    'HUGE': 140.0,
 }
 
 # Dressing scale per plot (DRY): bigger sites read busier with no extra

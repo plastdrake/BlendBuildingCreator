@@ -347,7 +347,7 @@ def _create_quilt_and_cuff(bm, x_start=-0.38, x_end=0.92, w_mat=0.49, w_rail=0.6
     return faces
 
 
-def build_bed(bm, x, y, z_ground=0.0, ang=0.0, length=2.0, width=1.2):
+def build_bed(bm, x, y, z_ground=0.0, ang=0.0, length=2.45, width=1.55):
     """Realistic wooden bedstead with headboard, footboard, and cozy bedding.
 
     Features 4 sturdy corner timber posts, wood headboard & footboard panels,
@@ -446,7 +446,7 @@ def build_bed(bm, x, y, z_ground=0.0, ang=0.0, length=2.0, width=1.2):
     return faces
 
 
-def build_bunk_bed(bm, x, y, z_ground=0.0, ang=0.0, length=2.0, width=1.1):
+def build_bunk_bed(bm, x, y, z_ground=0.0, ang=0.0, length=2.45, width=1.35):
     """Sturdy military bunk bed: four tall posts, two dressed sleeping berths
     (mattress + pillow + draped quilt each), an upper safety rail and a
     climbing ladder on the +Y side. Local frame matches build_bed
@@ -561,10 +561,10 @@ def build_bunk_bed(bm, x, y, z_ground=0.0, ang=0.0, length=2.0, width=1.1):
     return faces
 
 
-def build_indoor_table(bm, x, y, z_ground=0.0, ang=0.0, length=1.6, width=0.9):
+def build_indoor_table(bm, x, y, z_ground=0.0, ang=0.0, length=2.10, width=1.15):
     """Rectangular indoor dining/work table with an H-stretcher between the legs."""
     faces = []
-    top_z, top_t = 0.74, 0.07
+    top_z, top_t = 0.95, 0.08
     faces += create_beveled_box(bm, size=(length, width, top_t),
                                 location=(0.0, 0.0, top_z),
                                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
@@ -590,20 +590,21 @@ def build_indoor_table(bm, x, y, z_ground=0.0, ang=0.0, length=1.6, width=0.9):
     return faces
 
 
-def build_round_table(bm, x, y, z_ground=0.0, ang=0.0, radius=0.55):
+def build_round_table(bm, x, y, z_ground=0.0, ang=0.0, radius=0.70):
     """Round tavern table on a pedestal foot."""
     faces = []
-    faces += create_cylinder(bm, radius=radius, height=0.07, segments=16,
-                             location=(0.0, 0.0, 0.74), mat_index=MAT_INDEX_WOOD)
-    faces += create_cylinder(bm, radius=0.09, height=0.70, segments=10,
-                             location=(0.0, 0.0, 0.37), mat_index=MAT_INDEX_TIMBER)
-    faces += create_cylinder(bm, radius=0.30, height=0.07, segments=12,
-                             location=(0.0, 0.0, 0.035), mat_index=MAT_INDEX_TIMBER)
+    top_z = 0.95
+    faces += create_cylinder(bm, radius=radius, height=0.08, segments=16,
+                             location=(0.0, 0.0, top_z), mat_index=MAT_INDEX_WOOD)
+    faces += create_cylinder(bm, radius=0.11, height=top_z - 0.05, segments=10,
+                             location=(0.0, 0.0, (top_z - 0.05) * 0.5), mat_index=MAT_INDEX_TIMBER)
+    faces += create_cylinder(bm, radius=0.38, height=0.08, segments=12,
+                             location=(0.0, 0.0, 0.04), mat_index=MAT_INDEX_TIMBER)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
 
-def build_shelf(bm, x, y, z_ground=0.0, ang=0.0, width=1.4, height=1.7):
+def build_shelf(bm, x, y, z_ground=0.0, ang=0.0, width=1.65, height=2.20):
     """Open wall shelf with evenly spaced boards and varied stored goods.
 
     Boards are embedded into the sides, gaps are equal, and goods (jars,
@@ -662,7 +663,7 @@ def build_shelf(bm, x, y, z_ground=0.0, ang=0.0, width=1.4, height=1.7):
     return faces
 
 
-def build_wardrobe(bm, x, y, z_ground=0.0, ang=0.0, width=1.2, height=1.9):
+def build_wardrobe(bm, x, y, z_ground=0.0, ang=0.0, width=1.55, height=2.40):
     """Closed cupboard/wardrobe with proud double doors, full-height dark stile.
 
     The centre stile runs the full carcass height in dark timber, the door
@@ -670,7 +671,7 @@ def build_wardrobe(bm, x, y, z_ground=0.0, ang=0.0, width=1.2, height=1.9):
     instead of just touching it.
     """
     faces = []
-    depth = 0.55
+    depth = 0.70
     front = -depth / 2
     faces += create_beveled_box(bm, size=(width, depth, height),
                                 location=(0.0, 0.0, height / 2),
@@ -706,14 +707,14 @@ def build_wardrobe(bm, x, y, z_ground=0.0, ang=0.0, width=1.2, height=1.9):
     return faces
 
 
-def build_chest(bm, x, y, z_ground=0.0, ang=0.0, width=0.9):
+def build_chest(bm, x, y, z_ground=0.0, ang=0.0, width=1.15):
     """Low storage chest with overlapping lid and wrap-over iron bands.
 
     The lid overlaps 15mm into the body and the straps stand 3mm proud of
     the faces they cross, so nothing is coplanar.
     """
     faces = []
-    h, d = 0.48, 0.50
+    h, d = 0.65, 0.65
     faces += create_beveled_box(bm, size=(width, d, h),
                                 location=(0.0, 0.0, h / 2),
                                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
@@ -735,10 +736,10 @@ def build_chest(bm, x, y, z_ground=0.0, ang=0.0, width=0.9):
     return faces
 
 
-def build_desk(bm, x, y, z_ground=0.0, ang=0.0, width=1.4):
+def build_desk(bm, x, y, z_ground=0.0, ang=0.0, width=1.85):
     """Writing desk: top slab on two full panel legs (no floating drawers)."""
     faces = []
-    top_z, depth = 0.76, 0.65
+    top_z, depth = 0.95, 0.82
     faces += create_beveled_box(bm, size=(width, depth, 0.06),
                                 location=(0.0, 0.0, top_z),
                                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
@@ -750,10 +751,10 @@ def build_desk(bm, x, y, z_ground=0.0, ang=0.0, width=1.4):
     return faces
 
 
-def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.4):
+def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.8):
     """Tavern bar counter with plank front and top slab."""
     faces = []
-    h, d = 1.02, 0.60
+    h, d = 1.18, 0.78
     faces += create_beveled_box(bm, size=(length, d, h),
                                 location=(0.0, 0.0, h / 2),
                                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
@@ -1161,7 +1162,7 @@ def build_book_single(bm, x, y, z_ground=0.0, ang=0.0):
     return faces
 
 
-def build_bookshelf(bm, x, y, z_ground=0.0, ang=0.0, width=1.2, height=1.8):
+def build_bookshelf(bm, x, y, z_ground=0.0, ang=0.0, width=1.65, height=2.45):
     """Lived-in bookshelf: every shelf dressed differently (stacks/gaps/leaner)."""
     from ..materials import MAT_INDEX_LEATHER as MAT_LEATHER
     from ..materials import MAT_INDEX_LEATHER_2 as MAT_LEATHER_2
@@ -1184,7 +1185,7 @@ def build_bookshelf(bm, x, y, z_ground=0.0, ang=0.0, width=1.2, height=1.8):
     return faces
 
 
-def build_bookshelf_neat(bm, x, y, z_ground=0.0, ang=0.0, width=1.2, height=1.8):
+def build_bookshelf_neat(bm, x, y, z_ground=0.0, ang=0.0, width=1.65, height=2.45):
     """Ordered bookcase: four identical even runs, no stacks or leaners."""
     from ..materials import MAT_INDEX_LEATHER as MAT_LEATHER
     from ..materials import MAT_INDEX_LEATHER_2 as MAT_LEATHER_2
@@ -2118,12 +2119,12 @@ def build_foodprep_clutter(bm, x, y, z_ground=0.0, ang=0.0):
     return faces
 
 
-def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84,
+def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=2.40, depth=1.05,
                fabric_mat=MAT_INDEX_LEATHER):
     """Luxurious 3-cushion salon sofa / settee with damask upholstery,
     turned wooden feet, twin deep plush cushions, rolled arms, and throw pillows."""
     faces = []
-    deck_h = 0.34
+    deck_h = 0.44
     foot_h = 0.080
     foot_r = 0.042
     foot_inset_x = length * 0.5 - 0.10
@@ -2215,13 +2216,13 @@ def build_sofa(bm, x, y, z_ground=0.0, ang=0.0, length=1.92, depth=0.84,
     return faces
 
 
-def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=0.86, depth=0.82,
+def build_armchair(bm, x, y, z_ground=0.0, ang=0.0, width=1.10, depth=1.02,
                    fabric_mat=MAT_INDEX_LEATHER):
     """High-end fireside lounge armchair with continuous damask upholstery,
     turned wooden bun feet, deep plush seat cushion, rolled scroll armrests,
     enveloping winged backrest with rolled crest, and cozy throw pillow."""
     faces = []
-    deck_h = 0.34
+    deck_h = 0.44
     foot_h = 0.080
     foot_r = 0.042
     foot_inset_x = width * 0.5 - 0.08
@@ -2319,8 +2320,8 @@ build_sofa_chair = build_armchair
 
 
 def build_chair(bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
-                ang: float = 0.0, seat_h: float = 0.48, width: float = 0.46,
-                depth: float = 0.44, back_h: float = 0.92):
+                ang: float = 0.0, seat_h: float = 0.62, width: float = 0.58,
+                depth: float = 0.56, back_h: float = 1.20):
     """Stylized medieval tavern / dining chair with chamfered timber legs,
     lower stretchers, comfortable contoured seat, and curved ladderback rails."""
     faces = []

@@ -168,11 +168,12 @@ def _apply_ao(tree, bsdf, color_socket, strength=0.52, distance=0.18):
     tree.links.new(mul.outputs["Result"], bsdf.inputs["Base Color"])
 
 
-def _setup_pbr(tree, bsdf, out, roughness=0.90, metallic=0.0):
-    _set_bsdf_input(bsdf, "Roughness", roughness)
+def _setup_pbr(tree, bsdf, out, roughness=1.0, metallic=0.0):
+    _set_bsdf_input(bsdf, "Roughness", 1.0)
     _set_bsdf_input(bsdf, "Metallic", metallic)
+    _set_bsdf_input(bsdf, "IOR", 1.0)
     for n in ("Specular IOR Level", "Specular"):
-        _set_bsdf_input(bsdf, n, 0.04)
+        _set_bsdf_input(bsdf, n, 0.0)
     tree.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
 
 
@@ -599,7 +600,8 @@ def create_dungeon_material(name, filenames, tint, scale, roughness=0.9, bump=0.
             break
     if tex is None:
         _set_bsdf_input(bsdf, "Base Color", tint)
-        _set_bsdf_input(bsdf, "Roughness", roughness)
+        _set_bsdf_input(bsdf, "Roughness", 1.0)
+        _set_bsdf_input(bsdf, "IOR", 1.0)
         tree.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
         return mat
     mix = tree.nodes.new("ShaderNodeMix")
@@ -664,7 +666,8 @@ def create_stylized_cut_stone(name="M_Building_Cut_Stone", color=None, tier='TIE
         return mat
 
     _set_bsdf_input(bsdf, "Base Color", c_use)
-    _set_bsdf_input(bsdf, "Roughness", rough)
+    _set_bsdf_input(bsdf, "Roughness", 1.0)
+    _set_bsdf_input(bsdf, "IOR", 1.0)
     tree.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
     return mat
 
@@ -1201,13 +1204,7 @@ def create_stylized_timber(name="M_Building_Timber", color=None, tier='TIER_3'):
         tint.inputs["B"].default_value = c_use
         painted = _warm_painterly_pass(tree, c, tint.outputs["Result"], loc_x=20, loc_y=-260, strength=0.08, scale=1.35)
         _apply_ao(tree, bsdf, painted, strength=ao_str, distance=0.14)
-        _setup_pbr(tree, bsdf, out, roughness=rough)
-        if "Specular IOR Level" in bsdf.inputs:
-            bsdf.inputs["Specular IOR Level"].default_value = spec
-        elif "Specular" in bsdf.inputs:
-            bsdf.inputs["Specular"].default_value = spec
-        if tier == 'TIER_3' and "IOR" in bsdf.inputs:
-            bsdf.inputs["IOR"].default_value = 1.52
+        _setup_pbr(tree, bsdf, out, roughness=1.0)
         return mat
 
     c_dark  = (c_use[0] * 0.20, c_use[1] * 0.14, c_use[2] * 0.09, 1.0)
@@ -1271,7 +1268,8 @@ def create_stylized_floorboards(name="M_Building_Floor",
         return mat
 
     _set_bsdf_input(bsdf, "Base Color", c_use)
-    _set_bsdf_input(bsdf, "Roughness", 0.60 if tier == 'TIER_3' else 0.74)
+    _set_bsdf_input(bsdf, "Roughness", 1.0)
+    _set_bsdf_input(bsdf, "IOR", 1.0)
     tree.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
     return mat
 
@@ -2601,7 +2599,7 @@ def create_stylized_bottle_glass(name="M_Building_Bottle_Glass", color=(0.12, 0.
     elif "Transmission" in bsdf.inputs:
         bsdf.inputs["Transmission"].default_value = 0.82
     if "IOR" in bsdf.inputs:
-        bsdf.inputs["IOR"].default_value = 1.48
+        bsdf.inputs["IOR"].default_value = 1.0
     return mat
 
 
@@ -2616,7 +2614,7 @@ def create_stylized_water(name="M_Water", color=(0.16, 0.38, 0.50, 1.0)):
     elif "Transmission" in bsdf.inputs:
         bsdf.inputs["Transmission"].default_value = 0.75
     if "IOR" in bsdf.inputs:
-        bsdf.inputs["IOR"].default_value = 1.33
+        bsdf.inputs["IOR"].default_value = 1.0
     return mat
 
 
@@ -2670,8 +2668,9 @@ def setup_building_material_slots(obj, props):
                 else:
                     eff_wall_mat = 'LOGS'
 
-    is_outbuilding = bool(obj and (obj.get("is_castle_outbuilding", False) or obj.get("is_estate_outbuilding", False)))
-    mat_prefix = "M_Outbuilding_" if is_outbuilding else "M_Building_"
+    # Materials consistency: Outbuildings share the canonical M_Building_ materials
+    # so materials with identical textures are never duplicated into M_Outbuilding_ variants.
+    mat_prefix = "M_Building_"
 
     # 0. Stone (stone_wall_diffuse.jpg / mud_fieldstone / squared_fieldstone / ashlar_stone)
     stone_tier = tier

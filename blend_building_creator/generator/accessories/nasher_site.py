@@ -1011,7 +1011,7 @@ _RING = (
 _GATE_Y = -88.0
 _GATE_HALF = 1.8
 _GATE_SPAN = 10.0
-_WALL = {1: (3.4, 0.5), 2: (4.2, 0.9), 3: (5.4, 1.1)}
+_WALL = {1: (3.8, 0.55), 2: (4.8, 0.95), 3: (6.0, 1.2)}
 _SAMPLE = 3.5
 
 
@@ -1224,7 +1224,7 @@ def build_nasher_enclosure(bm, props, ctx):
                 build_curtain_wall_run(
                     bm, s, e, outward, 0.0, height, thick, seed=seed,
                     gate={'u0': _GATE_SPAN - _GATE_HALF, 'u1': _GATE_SPAN + _GATE_HALF,
-                          'h': 3.0, 'breach': gate_stair_top_offset(True) + 1.5})
+                          'h': 3.8, 'breach': gate_stair_top_offset(True) + 1.5})
             else:
                 mc_start = 0.50 if (j == 0 and tier > 1) else 0.0
                 mc_end = 0.50 if (j == n_parts - 1 and tier > 1) else 0.0
@@ -1255,7 +1255,7 @@ def build_nasher_enclosure(bm, props, ctx):
         _gate_post(bm, _GATE_HALF, _GATE_Y, 0.0, height)
     else:
         build_gate_house(bm, 0.0, _GATE_Y, (0.0, -1.0), _GATE_HALF * 2.0, 0.0, thick,
-                         gate_h=3.0, portcullis=getattr(props, 'has_portcullis', False),
+                         gate_h=3.8, portcullis=getattr(props, 'has_portcullis', False),
                          drawbridge=getattr(props, 'has_drawbridge', False),
                          drawbridge_angle=getattr(props, 'drawbridge_angle', 0.0),
                          gate_towers=getattr(props, 'has_gate_towers', False), wall_h=height)

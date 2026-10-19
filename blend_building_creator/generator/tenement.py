@@ -31,8 +31,8 @@ LANE_GAP = 0.20   # air gap between the two switchback lanes
 STEP_D = 0.28     # tread depth
 STEP_H = 0.19     # riser height cap
 
-DW = 1.20         # apartment entrance door width
-DWI = 1.15        # internal room doorway width
+DW = 1.65         # apartment entrance door width
+DWI = 1.55        # internal room doorway width
 
 
 def _clamp(v, lo, hi):
@@ -94,7 +94,7 @@ def rectangle_layout(bounds, side):
     for k in range(2):
         ay0 = iy_min + D * k / 2.0
         ay1 = iy_min + D * (k + 1) / 2.0
-        if W >= 6.8:
+        if W >= 8.5:
             # Wide enough to split across the width: kitchen on the walkway
             # side, private bedroom away from the street.
             ax = _clear((ix_min + ix_max) * 0.5, ix_min, ix_max, 2.6)
@@ -152,7 +152,7 @@ def courtyard_gap(wings):
 def courtyard_cut_x(ix_min, ix_max, wings):
     """X boundaries of the back-block flats (outer flats absorb the wings)."""
     gap0, gap1, gap_w = courtyard_gap(wings)
-    k_main = int(_clamp(round(gap_w / 4.6), 2, 4))
+    k_main = int(_clamp(round(gap_w / 6.0), 1, 3))
     cut = [gap0 + gap_w * i / k_main for i in range(k_main + 1)]
     cut[0] = ix_min
     cut[-1] = ix_max

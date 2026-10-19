@@ -34,7 +34,7 @@ from ..tenement import (
 _RAIL_H = 0.95
 _EDGE = 0.70              # wall run kept clear at each corner
 _LAND_LEN = 2.50          # landing depth along the wall (2.5m wide turn-around room)
-DW_HALF = 0.60            # rough entrance half-width used for railing gaps
+DW_HALF = 0.825           # rough entrance half-width used for railing gaps (for 1.65m doors)
 
 
 def _stair_clearance(props):
