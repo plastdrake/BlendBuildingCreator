@@ -456,7 +456,7 @@ def build_tower_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
         
         if f > 0:
             build_window_assembly(bm, (outer_wall_x, cy), sill, win_w, win_h, wall_t,
-                                  normal_vec=out_normal, shape='ARCHED', has_shutters=False,
+                                  normal_axis=out_normal, shape='ARCHED', has_shutters=False,
                                   tier=tier, depth_offset=0.06)
 
         ucx = abs(outer_x - inner_x) * 0.5
@@ -470,7 +470,7 @@ def build_tower_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             if f > 0:
                 wx = (inner_x + outer_x) * 0.5
                 build_window_assembly(bm, (wx, wy), sill, win_w, win_h, wall_t,
-                                      normal_vec=nvec, shape='ARCHED', has_shutters=False,
+                                      normal_axis=nvec, shape='ARCHED', has_shutters=False,
                                       tier=tier, depth_offset=0.06)
                                       
         # Internal staircase (straight)

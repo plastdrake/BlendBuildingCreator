@@ -58,7 +58,11 @@ def export_name(family, tier_label):
 
 def jobs_for(category=None, family_id=None, tier=None):
     """Yield valid preset jobs, optionally filtered by category/family/tier."""
-    for family in BUILDING_FAMILIES:
+    families = sorted(
+        BUILDING_FAMILIES,
+        key=lambda family: family.get("id") == "NASHERS_MANOR",
+    )
+    for family in families:
         if family_id is not None and family["id"] != family_id:
             continue
         categories = family.get("category", "OTHER")

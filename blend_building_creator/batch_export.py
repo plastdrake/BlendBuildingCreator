@@ -20,6 +20,11 @@ def _export_category_for_family(family):
     return category
 
 
+def _nasher_jobs_last(jobs):
+    """Keep the expensive castle jobs at the end of a complete batch."""
+    return sorted(jobs, key=lambda job: job[0].get("id") == "NASHERS_MANOR")
+
+
 def export_all(output_dir, keep_buildings=False):
     """Register the addon if needed and export every valid preset tier."""
     if not hasattr(bpy.types.Scene, "fantasy_building_settings"):
@@ -33,7 +38,7 @@ def export_all(output_dir, keep_buildings=False):
     ]
     count = _export_fbx_jobs(
         bpy.context,
-        jobs,
+        _nasher_jobs_last(jobs),
         output_dir,
         keep_buildings=keep_buildings,
     )
