@@ -790,8 +790,11 @@ def build_straight_staircase(
     POST_W = 0.16
     bot_post_h = 1.10
     top_post_h = 1.00
-    rail_h = 0.68
+    rail_h = 0.85
     tan_pitch = dz / stair_depth
+    u_start = 0.162
+    z_head_cut = target_z - 0.08
+    h_front = min(0.24, max(0.16, dz / 14 + 0.04))
 
     for side in [-1, 1]:
         if axis == 'Y':
@@ -819,8 +822,8 @@ def build_straight_staircase(
             r_end = top_post_r - (POST_W * 0.5) * dir_run
             dist_start = abs(r_start - y0)
             dist_end = abs(r_end - y0)
-            z_start = z0 + dist_start * tan_pitch + 0.26
-            z_end = z0 + dist_end * tan_pitch + 0.26
+            z_start = min(z_head_cut, z0 + h_front + tan_pitch * max(0.0, dist_start - u_start))
+            z_end = min(z_head_cut, z0 + h_front + tan_pitch * max(0.0, dist_end - u_start))
 
             build_railing(
                 bm, (rail_s, r_start), (rail_s, r_end),
@@ -853,8 +856,8 @@ def build_straight_staircase(
             r_end = top_post_r - (POST_W * 0.5) * dir_run
             dist_start = abs(r_start - x0)
             dist_end = abs(r_end - x0)
-            z_start = z0 + dist_start * tan_pitch + 0.26
-            z_end = z0 + dist_end * tan_pitch + 0.26
+            z_start = min(z_head_cut, z0 + h_front + tan_pitch * max(0.0, dist_start - u_start))
+            z_end = min(z_head_cut, z0 + h_front + tan_pitch * max(0.0, dist_end - u_start))
 
             build_railing(
                 bm, (r_start, rail_s), (r_end, rail_s),
@@ -1616,15 +1619,15 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         if _p is not None:
             return _p
     if archetype == 'MANOR':
-        # Grand residence: banquet hall + compact service rooms + library.
+        # Grand residence: banquet hall, living salon, suites, and guest rooms.
         if has_stairs_landing:
-            pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'LIBRARY',
-                    'STUDY', 'GUEST_ROOM']
+            pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM',
+                    'LIBRARY', 'BEDROOM']
             return pool[:num_rooms]
         if total_floors == 1:
-            pool = ['BANQUET_HALL', 'KITCHEN', 'BEDROOM', 'LIBRARY', 'STUDY']
+            pool = ['BANQUET_HALL', 'HOUSE_HALL', 'KITCHEN', 'MASTER_BED', 'BEDROOM']
             return pool[:num_rooms]
-        pool = ['BANQUET_HALL', 'KITCHEN', 'PANTRY', 'LIBRARY', 'STUDY']
+        pool = ['BANQUET_HALL', 'HOUSE_HALL', 'KITCHEN', 'PANTRY', 'DINING']
         return pool[:num_rooms]
     if has_stairs_landing:
         # On upper floors with stairs, Room 0 (around stair hole) is the protected landing/corridor.
@@ -1673,7 +1676,7 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             pool = ['STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL']
             return pool[:num_rooms]
         else:  # HOUSE, MANOR, default
-            pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'STUDY', 'GUEST_ROOM']
+            pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM', 'BEDROOM']
             return pool[:num_rooms]
 
     # Ground floor (or single floor without stair landing)
@@ -1741,13 +1744,12 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         pool = ['STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL']
         return pool[:num_rooms]
 
-    # Default HOUSE / MANOR. A house only needs ONE pantry; the largest plots
-    # get a library/reading room instead of a second storage room.
+    # Default HOUSE. Living hall, kitchen, dining and bedrooms.
     if total_floors == 1:
-        pool = ['HOUSE_HALL', 'KITCHEN', 'BEDROOM', 'LIBRARY']
+        pool = ['HOUSE_HALL', 'KITCHEN', 'MASTER_BED', 'BEDROOM']
         return pool[:num_rooms]
     else:
-        pool = ['HOUSE_HALL', 'KITCHEN', 'PANTRY', 'LIBRARY']
+        pool = ['HOUSE_HALL', 'KITCHEN', 'PANTRY', 'DINING']
         return pool[:num_rooms]
 
 
@@ -1991,7 +1993,8 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'FRONT': (ix_min, b_west), 'BACK': (ix_min, b_west), 'LEFT': (iy_min, iy_max)}
         )
         rm_center_s = Room(
-            id=f"fl{fl_idx}_royal_salon", floor_idx=fl_idx, role='GREAT_HALL',
+            id=f"fl{fl_idx}_royal_salon", floor_idx=fl_idx,
+            role='GREAT_HALL' if fl_idx == 2 else 'HOUSE_HALL',
             bounds=(b_west, b_east, iy_min, y_mid),
             doorways=[
                 {'x': b_west, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
@@ -2002,7 +2005,8 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'FRONT': (b_west, b_east)}
         )
         rm_center_n = Room(
-            id=f"fl{fl_idx}_royal_bed", floor_idx=fl_idx, role='MASTER_BED',
+            id=f"fl{fl_idx}_royal_bed", floor_idx=fl_idx,
+            role='MASTER_BED' if fl_idx == 2 else 'BEDROOM',
             bounds=(b_west, b_east, y_mid, iy_max),
             doorways=[
                 {'x': b_west, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
@@ -2013,7 +2017,7 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'BACK': (b_west, b_east)}
         )
         rm_east_s = Room(
-            id=f"fl{fl_idx}_library", floor_idx=fl_idx, role='LIBRARY',
+            id=f"fl{fl_idx}_bedchamber", floor_idx=fl_idx, role='BEDROOM',
             bounds=(b_east, ix_max, iy_min, y_mid),
             doorways=[
                 {'x': b_east, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
@@ -2023,7 +2027,7 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'FRONT': (b_east, ix_max), 'RIGHT': (iy_min, y_mid)}
         )
         rm_east_n = Room(
-            id=f"fl{fl_idx}_treasury", floor_idx=fl_idx, role='OFFICE',
+            id=f"fl{fl_idx}_guest_room", floor_idx=fl_idx, role='GUEST_ROOM',
             bounds=(b_east, ix_max, y_mid, iy_max),
             doorways=[
                 {'x': b_east, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
@@ -2033,6 +2037,27 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'BACK': (b_east, ix_max), 'RIGHT': (y_mid, iy_max)}
         )
         rooms = [rm_west, rm_center_s, rm_center_n, rm_east_s, rm_east_n]
+
+    # Register external portals (connector doorways, skybridge entrances) in room boundaries
+    for r in rooms:
+        rx0, rx1, ry0, ry1 = r.bounds
+        for ed in (extra_doorways or []):
+            if ed.get('floor_idx', fl_idx) == fl_idx:
+                sax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
+                if sax == 'X':
+                    ed_x = ed.get('x', ed.get('pos', 0.0))
+                    ed_y = iy_max if ed.get('facade') == 'BACK' else iy_min
+                    if (rx0 - 0.45 <= ed_x <= rx1 + 0.45) and (abs(ed_y - ry0) < 0.45 or abs(ed_y - ry1) < 0.45):
+                        ed_entry = {'x': ed_x, 'y': ed_y, 'axis': 'X', 'w': ed.get('w', 2.4), 'is_portal': True}
+                        if not any(abs(d.get('x', 0) - ed_x) < 0.2 and abs(d.get('y', 0) - ed_y) < 0.2 for d in r.doorways):
+                            r.doorways.append(ed_entry)
+                else:
+                    ed_y = ed.get('y', ed.get('pos', 0.0))
+                    ed_x = ix_max if ed.get('facade') == 'RIGHT' else ix_min
+                    if (ry0 - 0.45 <= ed_y <= ry1 + 0.45) and (abs(ed_x - rx0) < 0.45 or abs(ed_x - rx1) < 0.45):
+                        ed_entry = {'x': ed_x, 'y': ed_y, 'axis': 'Y', 'w': ed.get('w', 2.4), 'is_portal': True}
+                        if not any(abs(d.get('x', 0) - ed_x) < 0.2 and abs(d.get('y', 0) - ed_y) < 0.2 for d in r.doorways):
+                            r.doorways.append(ed_entry)
 
     return rooms, walls
 
@@ -2292,20 +2317,24 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             if y_h is not None:
                 _hwall(cx0, cx1, y_h, (cx0 + cx1) * 0.5)
             if fl_idx == 0:
-                r_south = 'KITCHEN' if ci == 0 else 'PANTRY'
-                r_north = 'PANTRY' if ci == 0 else 'STORAGE'
+                r_south = 'KITCHEN' if ci == 0 else 'HOUSE_HALL'
+                r_north = 'PANTRY' if ci == 0 else 'BANQUET_HALL'
             elif fl_idx == 1:
-                r_south = 'LIBRARY'
-                r_north = 'STUDY'
+                if ci == 0:
+                    r_south = 'MASTER_BED'
+                    r_north = 'BEDROOM'
+                else:
+                    r_south = 'LIBRARY'
+                    r_north = 'GUEST_ROOM'
             elif fl_idx == 2:
-                r_south = 'MASTER_BED'
-                r_north = 'BEDROOM'
+                r_south = 'BEDROOM'
+                r_north = 'GUEST_ROOM'
             elif fl_idx == 3:
                 r_south = 'PARLOR'
-                r_north = 'STUDY'
+                r_north = 'BEDROOM'
             else:
                 r_south = 'BEDROOM'
-                r_north = 'STORAGE'
+                r_north = 'GUEST_ROOM'
 
             _rb_s = (cx0, cx1, iy_min, y_mid)
             _rb_n = (cx0, cx1, y_mid, iy_max)
@@ -2329,6 +2358,27 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
                 bounds=_rb_n, doorways=_doors_n, stair_hole=_holds_stair(_rb_n),
                 exterior_facades={'BACK': (cx0, cx1), **({'LEFT': (y_mid, iy_max)} if ci == 0 else {}), **({'RIGHT': (y_mid, iy_max)} if ci == len(cols) - 1 else {})}
             ))
+
+    # Register external portals (connector doorways, skybridge entrances) in room boundaries
+    for r in rooms:
+        rx0, rx1, ry0, ry1 = r.bounds
+        for ed in (extra_doorways or []):
+            if ed.get('floor_idx', fl_idx) == fl_idx:
+                sax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
+                if sax == 'X':
+                    ed_x = ed.get('x', ed.get('pos', 0.0))
+                    ed_y = iy_max if ed.get('facade') == 'BACK' else iy_min
+                    if (rx0 - 0.45 <= ed_x <= rx1 + 0.45) and (abs(ed_y - ry0) < 0.45 or abs(ed_y - ry1) < 0.45):
+                        ed_entry = {'x': ed_x, 'y': ed_y, 'axis': 'X', 'w': ed.get('w', 2.4), 'is_portal': True}
+                        if not any(abs(d.get('x', 0) - ed_x) < 0.2 and abs(d.get('y', 0) - ed_y) < 0.2 for d in r.doorways):
+                            r.doorways.append(ed_entry)
+                else:
+                    ed_y = ed.get('y', ed.get('pos', 0.0))
+                    ed_x = ix_max if ed.get('facade') == 'RIGHT' else ix_min
+                    if (ry0 - 0.45 <= ed_y <= ry1 + 0.45) and (abs(ed_x - rx0) < 0.45 or abs(ed_x - rx1) < 0.45):
+                        ed_entry = {'x': ed_x, 'y': ed_y, 'axis': 'Y', 'w': ed.get('w', 2.4), 'is_portal': True}
+                        if not any(abs(d.get('x', 0) - ed_x) < 0.2 and abs(d.get('y', 0) - ed_y) < 0.2 for d in r.doorways):
+                            r.doorways.append(ed_entry)
 
     return rooms, walls
 
@@ -2378,7 +2428,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             _p_rooms, _p_walls = _palace
             if fl_wings_bounds:
                 for wi, wb in enumerate(fl_wings_bounds):
-                    w_role = 'LIBRARY' if fl_idx == 0 else ('MASTER_BED' if fl_idx == 1 else 'GUEST_ROOM')
+                    w_role = ('BANQUET_HALL' if wi == 0 else 'GUEST_ROOM') if fl_idx == 0 else (('MASTER_BED' if wi == 0 else 'BEDROOM') if fl_idx == 1 else ('GUEST_ROOM' if wi == 0 else 'BEDROOM'))
                     wing_dw = []
                     dw_wx = (wb[0] + wb[1]) * 0.5
                     dw_w_eff = dw_w

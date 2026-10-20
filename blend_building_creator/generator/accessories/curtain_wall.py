@@ -44,6 +44,484 @@ def _subtract_gaps(total, gaps):
     return segs
 
 
+
+def build_continuous_curtain_wall_path(
+    bm,
+    path_pts,
+    outward_hint=None,
+    ground_z_fn=0.0,
+    base_z_list=None,
+    top_z=None,
+    top_z_list=None,
+    height=3.2,
+    thickness=0.85,
+    walk_width=0.95,
+    merlon_h=0.78,
+    embed_depth=2.0,
+    has_walkway=True,
+    has_outer_parapet=True,
+    has_inner_parapet=True,
+    has_string_course=True,
+    has_corbels=True,
+    has_piers=True,
+    merlon_end_clear=(0.0, 0.0),
+    seed=42,
+):
+    """
+    Builds a single continuous curved or straight curtain-wall run with transversal loopcuts along path_pts.
+    Eliminates all overlapping segment boxes, hidden internal end-caps, and z-fighting.
+    Generates seamless wall body, cut-stone string course, walkable deck, parapet breastwork,
+    and evenly spaced crenellated merlons with cut-stone caps.
+    """
+    clean_pts = []
+    for p in path_pts:
+        pt = (float(p[0]), float(p[1]))
+        if not clean_pts or math.hypot(pt[0] - clean_pts[-1][0], pt[1] - clean_pts[-1][1]) > 0.04:
+            clean_pts.append(pt)
+    if len(clean_pts) < 2:
+        return
+
+    n_pts = len(clean_pts)
+    u_cum = [0.0]
+    for i in range(1, n_pts):
+        d = math.hypot(clean_pts[i][0] - clean_pts[i-1][0], clean_pts[i][1] - clean_pts[i-1][1])
+        u_cum.append(u_cum[-1] + d)
+    total_len = u_cum[-1]
+    if total_len < 0.2:
+        return
+
+    # Unit segment vectors
+    seg_dirs = []
+    for i in range(n_pts - 1):
+        dx = clean_pts[i+1][0] - clean_pts[i][0]
+        dy = clean_pts[i+1][1] - clean_pts[i][1]
+        ln = math.hypot(dx, dy)
+        seg_dirs.append((dx / ln, dy / ln))
+
+    # Station tangents
+    station_tangents = []
+    for i in range(n_pts):
+        if i == 0:
+            station_tangents.append(seg_dirs[0])
+        elif i == n_pts - 1:
+            station_tangents.append(seg_dirs[-1])
+        else:
+            tx = seg_dirs[i-1][0] + seg_dirs[i][0]
+            ty = seg_dirs[i-1][1] + seg_dirs[i][1]
+            t_len = math.hypot(tx, ty)
+            station_tangents.append((tx / t_len, ty / t_len) if t_len > 1e-5 else seg_dirs[i])
+
+    # Outward normals and miter scaling
+    station_normals = []
+    station_miter = []
+    for i in range(n_pts):
+        tx, ty = station_tangents[i]
+        nx, ny = ty, -tx
+        if outward_hint is not None:
+            if nx * outward_hint[0] + ny * outward_hint[1] < 0:
+                nx, ny = -nx, -ny
+        elif i > 0 and (nx * station_normals[-1][0] + ny * station_normals[-1][1] < 0):
+            nx, ny = -nx, -ny
+
+        if i == 0 or i == n_pts - 1:
+            miter = 1.0
+        else:
+            cos_theta = seg_dirs[i-1][0] * tx + seg_dirs[i-1][1] * ty
+            miter = 1.0 / max(0.707, min(1.0, cos_theta))
+        station_normals.append((nx, ny))
+        station_miter.append(miter)
+
+    # Station heights
+    station_base_z = []
+    station_top_z = []
+    for i in range(n_pts):
+        px, py = clean_pts[i]
+        if base_z_list is not None and i < len(base_z_list):
+            bz = base_z_list[i]
+        elif callable(ground_z_fn):
+            gz = ground_z_fn(px, py)
+            bz = gz - embed_depth
+        elif isinstance(ground_z_fn, (int, float)):
+            bz = float(ground_z_fn) - embed_depth
+        else:
+            bz = 0.0
+
+        if top_z_list is not None and i < len(top_z_list):
+            tz = top_z_list[i]
+        elif isinstance(top_z, (int, float)):
+            tz = float(top_z)
+        else:
+            tz = bz + embed_depth + height
+
+        station_base_z.append(bz)
+        station_top_z.append(tz)
+
+    uv_layer = bm.loops.layers.uv.verify()
+
+    # 1. MAIN WALL BODY (Single continuous extruded ribbon with loopcuts)
+    ext_bot, ext_top, int_top, int_bot = [], [], [], []
+    for i in range(n_pts):
+        px, py = clean_pts[i]
+        nx, ny = station_normals[i]
+        mit = station_miter[i]
+        off_x = nx * mit * (thickness * 0.5)
+        off_y = ny * mit * (thickness * 0.5)
+
+        ex, ey = px + off_x, py + off_y
+        ix, iy = px - off_x, py - off_y
+
+        bz = station_base_z[i]
+        tz = station_top_z[i]
+
+        ext_bot.append(bm.verts.new((ex, ey, bz)))
+        ext_top.append(bm.verts.new((ex, ey, tz)))
+        int_top.append(bm.verts.new((ix, iy, tz)))
+        int_bot.append(bm.verts.new((ix, iy, bz)))
+
+    for i in range(n_pts - 1):
+        u0, u1 = u_cum[i], u_cum[i+1]
+        bz0, bz1 = station_base_z[i], station_base_z[i+1]
+        tz0, tz1 = station_top_z[i], station_top_z[i+1]
+
+        # Exterior face (+N)
+        f_ext = bm.faces.new([ext_bot[i], ext_bot[i+1], ext_top[i+1], ext_top[i]])
+        f_ext.material_index = MAT_INDEX_STONE
+        f_ext.tag = True
+        f_ext.loops[0][uv_layer].uv = Vector((u0, bz0))
+        f_ext.loops[1][uv_layer].uv = Vector((u1, bz1))
+        f_ext.loops[2][uv_layer].uv = Vector((u1, tz1))
+        f_ext.loops[3][uv_layer].uv = Vector((u0, tz0))
+
+        # Interior face (-N)
+        f_int = bm.faces.new([int_bot[i+1], int_bot[i], int_top[i], int_top[i+1]])
+        f_int.material_index = MAT_INDEX_STONE
+        f_int.tag = True
+        f_int.loops[0][uv_layer].uv = Vector((u1, bz1))
+        f_int.loops[1][uv_layer].uv = Vector((u0, bz0))
+        f_int.loops[2][uv_layer].uv = Vector((u0, tz0))
+        f_int.loops[3][uv_layer].uv = Vector((u1, tz1))
+
+        # Top face (+Z)
+        f_top = bm.faces.new([ext_top[i], ext_top[i+1], int_top[i+1], int_top[i]])
+        f_top.material_index = MAT_INDEX_STONE
+
+        # Bottom face (-Z)
+        f_bot = bm.faces.new([ext_bot[i+1], ext_bot[i], int_bot[i], int_bot[i+1]])
+        f_bot.material_index = MAT_INDEX_STONE
+
+    # Start and End caps
+    bm.faces.new([ext_bot[0], ext_top[0], int_top[0], int_bot[0]]).material_index = MAT_INDEX_STONE
+    bm.faces.new([ext_bot[-1], int_bot[-1], int_top[-1], ext_top[-1]]).material_index = MAT_INDEX_STONE
+
+    # 2. STRING COURSE (Projecting cut-stone coping band at wall top)
+    str_h = 0.16
+    str_proj = 0.09
+    if has_string_course:
+        str_eb, str_et, str_it, str_ib = [], [], [], []
+        for i in range(n_pts):
+            px, py = clean_pts[i]
+            nx, ny = station_normals[i]
+            mit = station_miter[i]
+            ex = px + nx * mit * (thickness * 0.5 + str_proj)
+            ey = py + ny * mit * (thickness * 0.5 + str_proj)
+            ix = px - nx * mit * (thickness * 0.5 + 0.02)
+            iy = py - ny * mit * (thickness * 0.5 + 0.02)
+
+            tz = station_top_z[i]
+            str_eb.append(bm.verts.new((ex, ey, tz)))
+            str_et.append(bm.verts.new((ex, ey, tz + str_h)))
+            str_it.append(bm.verts.new((ix, iy, tz + str_h)))
+            str_ib.append(bm.verts.new((ix, iy, tz)))
+
+        for i in range(n_pts - 1):
+            bm.faces.new([str_eb[i], str_eb[i+1], str_et[i+1], str_et[i]]).material_index = MAT_INDEX_CUT_STONE
+            bm.faces.new([str_et[i], str_et[i+1], str_it[i+1], str_it[i]]).material_index = MAT_INDEX_CUT_STONE
+            bm.faces.new([str_ib[i+1], str_ib[i], str_it[i], str_it[i+1]]).material_index = MAT_INDEX_CUT_STONE
+            bm.faces.new([str_eb[i+1], str_eb[i], str_ib[i], str_ib[i+1]]).material_index = MAT_INDEX_CUT_STONE
+
+        bm.faces.new([str_eb[0], str_et[0], str_it[0], str_ib[0]]).material_index = MAT_INDEX_CUT_STONE
+        bm.faces.new([str_eb[-1], str_ib[-1], str_it[-1], str_et[-1]]).material_index = MAT_INDEX_CUT_STONE
+
+    # 3. MACHICOLATION CORBELS (Spaced along the outer curve)
+    if has_corbels and total_len >= 1.6:
+        corbel_spacing = 2.4
+        n_cb = max(1, int(round(total_len / corbel_spacing)))
+        cb_step = total_len / n_cb
+        for ci in range(n_cb + 1):
+            cu = ci * cb_step
+            if cu < 0.35 or cu > total_len - 0.35:
+                continue
+            span_idx = 0
+            while span_idx < n_pts - 2 and u_cum[span_idx + 1] < cu:
+                span_idx += 1
+            t_span = (cu - u_cum[span_idx]) / max(1e-5, u_cum[span_idx + 1] - u_cum[span_idx])
+            t_span = max(0.0, min(1.0, t_span))
+
+            p0 = clean_pts[span_idx]
+            p1 = clean_pts[span_idx + 1]
+            c_px = p0[0] + (p1[0] - p0[0]) * t_span
+            c_py = p0[1] + (p1[1] - p0[1]) * t_span
+
+            tx, ty = seg_dirs[span_idx]
+            nx = station_normals[span_idx][0] * (1.0 - t_span) + station_normals[span_idx + 1][0] * t_span
+            ny = station_normals[span_idx][1] * (1.0 - t_span) + station_normals[span_idx + 1][1] * t_span
+            n_len = math.hypot(nx, ny)
+            if n_len > 1e-5:
+                nx, ny = nx / n_len, ny / n_len
+
+            cb_x = c_px + nx * (thickness * 0.5 + 0.05)
+            cb_y = c_py + ny * (thickness * 0.5 + 0.05)
+            c_tz = station_top_z[span_idx] * (1.0 - t_span) + station_top_z[span_idx + 1] * t_span
+            ang = math.atan2(ty, tx)
+
+            create_beveled_box(bm, size=(0.24, 0.22, 0.34),
+                               location=(cb_x, cb_y, c_tz - 0.12),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+
+    # 4. WALKWAY DECK (Chemin de ronde on inner side)
+    if has_walkway:
+        dk_out_top, dk_inn_top, dk_inn_bot, dk_out_bot = [], [], [], []
+        deck_th = 0.14
+        for i in range(n_pts):
+            px, py = clean_pts[i]
+            nx, ny = station_normals[i]
+            mit = station_miter[i]
+
+            ox = px - nx * mit * (thickness * 0.5 - 0.05)
+            oy = py - ny * mit * (thickness * 0.5 - 0.05)
+            ix = px - nx * mit * (thickness * 0.5 + walk_width)
+            iy = py - ny * mit * (thickness * 0.5 + walk_width)
+
+            tz = station_top_z[i]
+            z_top_deck = tz + str_h
+            z_bot_deck = z_top_deck - deck_th
+
+            dk_out_top.append(bm.verts.new((ox, oy, z_top_deck)))
+            dk_inn_top.append(bm.verts.new((ix, iy, z_top_deck)))
+            dk_inn_bot.append(bm.verts.new((ix, iy, z_bot_deck)))
+            dk_out_bot.append(bm.verts.new((ox, oy, z_bot_deck)))
+
+        for i in range(n_pts - 1):
+            bm.faces.new([dk_out_top[i], dk_out_top[i+1], dk_inn_top[i+1], dk_inn_top[i]]).material_index = MAT_INDEX_CUT_STONE
+            bm.faces.new([dk_inn_bot[i], dk_inn_bot[i+1], dk_inn_top[i+1], dk_inn_top[i]]).material_index = MAT_INDEX_CUT_STONE
+            bm.faces.new([dk_out_bot[i+1], dk_out_bot[i], dk_inn_bot[i], dk_inn_bot[i+1]]).material_index = MAT_INDEX_CUT_STONE
+            bm.faces.new([dk_out_top[i+1], dk_out_top[i], dk_out_bot[i], dk_out_bot[i+1]]).material_index = MAT_INDEX_CUT_STONE
+
+        bm.faces.new([dk_out_top[0], dk_inn_top[0], dk_inn_bot[0], dk_out_bot[0]]).material_index = MAT_INDEX_CUT_STONE
+        bm.faces.new([dk_out_top[-1], dk_out_bot[-1], dk_inn_bot[-1], dk_inn_top[-1]]).material_index = MAT_INDEX_CUT_STONE
+
+    # 5. INNER SUPPORT PIERS (Rampart buttresses along bailey)
+    if has_piers and has_walkway and total_len >= 2.0:
+        pier_spacing = 2.8
+        n_piers = max(1, int(round(total_len / pier_spacing)))
+        p_step = total_len / n_piers
+        for pi in range(n_piers + 1):
+            pu = pi * p_step
+            if pu < 0.35 or pu > total_len - 0.35:
+                continue
+            span_idx = 0
+            while span_idx < n_pts - 2 and u_cum[span_idx + 1] < pu:
+                span_idx += 1
+            t_span = (pu - u_cum[span_idx]) / max(1e-5, u_cum[span_idx + 1] - u_cum[span_idx])
+            t_span = max(0.0, min(1.0, t_span))
+
+            p0 = clean_pts[span_idx]
+            p1 = clean_pts[span_idx + 1]
+            c_px = p0[0] + (p1[0] - p0[0]) * t_span
+            c_py = p0[1] + (p1[1] - p0[1]) * t_span
+
+            tx, ty = seg_dirs[span_idx]
+            nx = station_normals[span_idx][0] * (1.0 - t_span) + station_normals[span_idx + 1][0] * t_span
+            ny = station_normals[span_idx][1] * (1.0 - t_span) + station_normals[span_idx + 1][1] * t_span
+            n_len = math.hypot(nx, ny)
+            if n_len > 1e-5:
+                nx, ny = nx / n_len, ny / n_len
+
+            p_lat = -(thickness * 0.5 + walk_width * 0.5 - 0.05)
+            px_c = c_px + nx * p_lat
+            py_c = c_py + ny * p_lat
+            c_tz = station_top_z[span_idx] * (1.0 - t_span) + station_top_z[span_idx + 1] * t_span
+            c_bz = station_base_z[span_idx] * (1.0 - t_span) + station_base_z[span_idx + 1] * t_span
+            p_h = c_tz - c_bz
+            ang = math.atan2(ty, tx)
+
+            create_beveled_box(bm, size=(0.42, walk_width * 0.85, p_h),
+                               location=(px_c, py_c, c_bz + p_h * 0.5),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
+            create_beveled_box(bm, size=(0.54, walk_width * 0.90, 0.30),
+                               location=(px_c, py_c, c_tz - 0.15),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+
+    # 6. OUTER PARAPET BREASTWORK & MERLONS (Continuous ribbon + crenels)
+    par_t = 0.30
+    base_h = 0.38
+    mer_h = merlon_h - base_h
+    if has_outer_parapet:
+        p_eb, p_et, p_it, p_ib = [], [], [], []
+        for i in range(n_pts):
+            px, py = clean_pts[i]
+            nx, ny = station_normals[i]
+            mit = station_miter[i]
+
+            ex = px + nx * mit * (thickness * 0.5 + 0.02)
+            ey = py + ny * mit * (thickness * 0.5 + 0.02)
+            ix = px + nx * mit * (thickness * 0.5 + 0.02 - par_t)
+            iy = py + ny * mit * (thickness * 0.5 + 0.02 - par_t)
+
+            z0 = station_top_z[i] + str_h
+            z1 = z0 + base_h
+
+            p_eb.append(bm.verts.new((ex, ey, z0)))
+            p_et.append(bm.verts.new((ex, ey, z1)))
+            p_it.append(bm.verts.new((ix, iy, z1)))
+            p_ib.append(bm.verts.new((ix, iy, z0)))
+
+        for i in range(n_pts - 1):
+            bm.faces.new([p_eb[i], p_eb[i+1], p_et[i+1], p_et[i]]).material_index = MAT_INDEX_STONE
+            bm.faces.new([p_et[i], p_et[i+1], p_it[i+1], p_it[i]]).material_index = MAT_INDEX_CUT_STONE
+            bm.faces.new([p_ib[i+1], p_ib[i], p_it[i], p_it[i+1]]).material_index = MAT_INDEX_STONE
+            bm.faces.new([p_eb[i+1], p_eb[i], p_ib[i], p_ib[i+1]]).material_index = MAT_INDEX_STONE
+
+        bm.faces.new([p_eb[0], p_et[0], p_it[0], p_ib[0]]).material_index = MAT_INDEX_CUT_STONE
+        bm.faces.new([p_eb[-1], p_ib[-1], p_it[-1], p_et[-1]]).material_index = MAT_INDEX_CUT_STONE
+
+        # Merlons spaced along the curve
+        merlon_w = 0.55
+        crenel_w = 0.50
+        pitch = merlon_w + crenel_w
+        mc0, mc1 = merlon_end_clear
+        eff_len = total_len - (mc0 + mc1)
+        if eff_len >= 0.8:
+            n_merlons = max(2, int(round(eff_len / pitch)))
+            m_step = eff_len / n_merlons
+            mw = merlon_w * 0.65
+            for mi in range(n_merlons + 1):
+                mu = mc0 + mi * m_step
+                if mu < mc0 + 0.05 or mu > total_len - mc1 - 0.05:
+                    continue
+                span_idx = 0
+                while span_idx < n_pts - 2 and u_cum[span_idx + 1] < mu:
+                    span_idx += 1
+                t_span = (mu - u_cum[span_idx]) / max(1e-5, u_cum[span_idx + 1] - u_cum[span_idx])
+                t_span = max(0.0, min(1.0, t_span))
+
+                p0 = clean_pts[span_idx]
+                p1 = clean_pts[span_idx + 1]
+                m_px = p0[0] + (p1[0] - p0[0]) * t_span
+                m_py = p0[1] + (p1[1] - p0[1]) * t_span
+
+                tx, ty = seg_dirs[span_idx]
+                nx = station_normals[span_idx][0] * (1.0 - t_span) + station_normals[span_idx + 1][0] * t_span
+                ny = station_normals[span_idx][1] * (1.0 - t_span) + station_normals[span_idx + 1][1] * t_span
+                n_len = math.hypot(nx, ny)
+                if n_len > 1e-5:
+                    nx, ny = nx / n_len, ny / n_len
+
+                m_lat = thickness * 0.5 + 0.02 - par_t * 0.5
+                mx = m_px + nx * m_lat
+                my = m_py + ny * m_lat
+                m_tz = station_top_z[span_idx] * (1.0 - t_span) + station_top_z[span_idx + 1] * t_span
+                z_merlon_base = m_tz + str_h + base_h
+                ang = math.atan2(ty, tx)
+
+                create_beveled_box(
+                    bm, size=(mw, par_t * 1.06, mer_h),
+                    location=(mx, my, z_merlon_base + mer_h * 0.5),
+                    rotation=(0.0, 0.0, ang),
+                    mat_index=MAT_INDEX_STONE, bevel_amount=0.012
+                )
+                create_beveled_box(
+                    bm, size=(merlon_w * 0.75, par_t * 1.16, 0.10),
+                    location=(mx, my, z_merlon_base + mer_h + 0.05),
+                    rotation=(0.0, 0.0, ang),
+                    mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.008
+                )
+
+    # 7. INNER BATTLEMENTS (Bailey edge of walkway)
+    if has_inner_parapet and has_walkway and total_len >= 1.2:
+        in_p_eb, in_p_et, in_p_it, in_p_ib = [], [], [], []
+        in_par_t = 0.28
+        in_base_h = 0.35
+        in_mer_h = 0.38
+        for i in range(n_pts):
+            px, py = clean_pts[i]
+            nx, ny = station_normals[i]
+            mit = station_miter[i]
+
+            ox = px - nx * mit * (thickness * 0.5 + walk_width - in_par_t)
+            oy = py - ny * mit * (thickness * 0.5 + walk_width - in_par_t)
+            ix = px - nx * mit * (thickness * 0.5 + walk_width)
+            iy = py - ny * mit * (thickness * 0.5 + walk_width)
+
+            z0 = station_top_z[i] + str_h
+            z1 = z0 + in_base_h
+
+            in_p_eb.append(bm.verts.new((ox, oy, z0)))
+            in_p_et.append(bm.verts.new((ox, oy, z1)))
+            in_p_it.append(bm.verts.new((ix, iy, z1)))
+            in_p_ib.append(bm.verts.new((ix, iy, z0)))
+
+        for i in range(n_pts - 1):
+            bm.faces.new([in_p_eb[i+1], in_p_eb[i], in_p_et[i], in_p_et[i+1]]).material_index = MAT_INDEX_STONE
+            bm.faces.new([in_p_et[i+1], in_p_et[i], in_p_it[i], in_p_it[i+1]]).material_index = MAT_INDEX_CUT_STONE
+            bm.faces.new([in_p_ib[i], in_p_ib[i+1], in_p_it[i+1], in_p_it[i]]).material_index = MAT_INDEX_STONE
+            bm.faces.new([in_p_eb[i], in_p_eb[i+1], in_p_ib[i+1], in_p_ib[i]]).material_index = MAT_INDEX_STONE
+
+        bm.faces.new([in_p_eb[0], in_p_ib[0], in_p_it[0], in_p_et[0]]).material_index = MAT_INDEX_CUT_STONE
+        bm.faces.new([in_p_eb[-1], in_p_et[-1], in_p_it[-1], in_p_ib[-1]]).material_index = MAT_INDEX_CUT_STONE
+
+        # Inner merlons
+        in_merlon_w = 0.52
+        in_pitch = 1.10
+        n_in_m = max(1, int(round((total_len - 0.8) / in_pitch)))
+        in_step = (total_len - 0.8) / max(1, n_in_m)
+        in_mw = in_merlon_w * 0.65
+        for mi in range(n_in_m + 1):
+            mu = 0.40 + mi * in_step
+            if mu < 0.40 or mu > total_len - 0.40:
+                continue
+            span_idx = 0
+            while span_idx < n_pts - 2 and u_cum[span_idx + 1] < mu:
+                span_idx += 1
+            t_span = (mu - u_cum[span_idx]) / max(1e-5, u_cum[span_idx + 1] - u_cum[span_idx])
+            t_span = max(0.0, min(1.0, t_span))
+
+            p0 = clean_pts[span_idx]
+            p1 = clean_pts[span_idx + 1]
+            m_px = p0[0] + (p1[0] - p0[0]) * t_span
+            m_py = p0[1] + (p1[1] - p0[1]) * t_span
+
+            tx, ty = seg_dirs[span_idx]
+            nx = station_normals[span_idx][0] * (1.0 - t_span) + station_normals[span_idx + 1][0] * t_span
+            ny = station_normals[span_idx][1] * (1.0 - t_span) + station_normals[span_idx + 1][1] * t_span
+            n_len = math.hypot(nx, ny)
+            if n_len > 1e-5:
+                nx, ny = nx / n_len, ny / n_len
+
+            m_lat = -(thickness * 0.5 + walk_width - in_par_t * 0.5)
+            mx = m_px + nx * m_lat
+            my = m_py + ny * m_lat
+            m_tz = station_top_z[span_idx] * (1.0 - t_span) + station_top_z[span_idx + 1] * t_span
+            z_merlon_base = m_tz + str_h + in_base_h
+            ang = math.atan2(ty, tx)
+
+            create_beveled_box(
+                bm, size=(in_mw, in_par_t * 1.06, in_mer_h),
+                location=(mx, my, z_merlon_base + in_mer_h * 0.5),
+                rotation=(0.0, 0.0, ang),
+                mat_index=MAT_INDEX_STONE, bevel_amount=0.012
+            )
+            create_beveled_box(
+                bm, size=(in_merlon_w * 0.75, in_par_t * 1.16, 0.10),
+                location=(mx, my, z_merlon_base + in_mer_h + 0.05),
+                rotation=(0.0, 0.0, ang),
+                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.008
+            )
+
+
 def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
                            height=3.2, thickness=0.55, plinth_h=0.45,
                            walk_width=0.95, merlon_h=0.78,
@@ -605,9 +1083,11 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
 
     if drawbridge:
         from .gatehouse import build_drawbridge
-        build_drawbridge(bm, cx, cy, ground_z, width=gap_w, length=max(3.8, gate_h * 1.40),
+        fwd_thresh = push + frame_depth * 0.5
+        db_w = max(2.2, gap_w - 0.24)
+        build_drawbridge(bm, cx, cy, ground_z, width=db_w, length=max(3.8, gate_h * 1.40),
                          outward=(ox, oy), angle_deg=drawbridge_angle, has_chains=True,
-                         pier_h=gate_h)
+                         pier_h=gate_h, wall_t=thickness, fwd_offset=fwd_thresh)
 
     # Courtyard rampart access stairs flanking the gate
     build_gatehouse_access_stairs(bm, cx, cy, (ox, oy), gap_w, ground_z,

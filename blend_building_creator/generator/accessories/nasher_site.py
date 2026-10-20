@@ -136,17 +136,22 @@ def _connector_wing_corridor(x, y, z):
     """Caps bedrock height under the West and East connecting wings so the stairs and floors are 100% clear."""
     for cx, y_max in ((-8.5, 33.5), (16.5, 36.5)):
         dx = abs(x - cx)
-        if dx > 4.4:
+        if dx > 4.8:
             continue
-        if not (3.5 <= y <= y_max + 1.0):
+        if not (2.5 <= y <= y_max + 1.5):
             continue
-        wx = 1.0 - _smooth((dx - 3.4) / 1.0)
-        wy = 1.0
-        if y < 4.5:
-            wy = _smooth((y - 3.5) / 1.0)
-        elif y > y_max:
-            wy = 1.0 - _smooth((y - y_max) / 1.0)
-        w = wx * wy
+        # Unconditional full clearance within the wing corridor footprint
+        if dx <= 3.8 and 3.5 <= y <= y_max:
+            w = 1.0
+        else:
+            wx = 1.0 if dx <= 3.8 else max(0.0, 1.0 - _smooth((dx - 3.8) / 1.0))
+            wy = 1.0
+            if y < 3.5:
+                wy = max(0.0, _smooth((y - 2.5) / 1.0))
+            elif y > y_max:
+                wy = max(0.0, 1.0 - _smooth((y - y_max) / 1.5))
+            w = wx * wy
+
         if w <= 0.0:
             continue
         if y <= 15.0:
@@ -159,6 +164,7 @@ def _connector_wing_corridor(x, y, z):
         if z > z_target:
             z = z + (z_target - z) * w
     return z
+
 
 
 def _mesh_z(spec, x, y):
@@ -445,47 +451,105 @@ def _in_boxes(x, y, boxes, margin):
     return False
 
 
+def _clip_path_into_continuous_runs(pts, boxes=(), gate_y=None, gap_x=0.0, margin=0.30):
+    """
+    Slices a continuous polyline into open continuous sub-paths, cleanly dropping
+    sections that fall inside building bounding boxes or gate openings.
+    Ensures that where a wall meets a building, it extends slightly (0.35m) into the building
+    wall so it embeds cleanly with zero gap.
+    Returns a list of continuous point lists: [ [p0, p1, ...], [pa, pb, ...], ... ]
+    """
+    if len(pts) < 2:
+        return []
+
+    runs = []
+    current_run = []
+
+    def is_blocked(x, y):
+        if gap_x > 0 and abs(x) < gap_x:
+            return True
+        if gate_y is not None and abs(x) < 7.2 and abs(y - gate_y) < 6.0:
+            return True
+        if _in_boxes(x, y, boxes, margin):
+            return True
+        return False
+
+    n_segs = len(pts) - 1
+    for i in range(n_segs):
+        s = pts[i]
+        e = pts[i + 1]
+        mid_x = (s[0] + e[0]) * 0.5
+        mid_y = (s[1] + e[1]) * 0.5
+
+        blocked = is_blocked(mid_x, mid_y)
+        if blocked:
+            if len(current_run) >= 2:
+                # Extend end of current run slightly into the obstacle
+                ln = math.hypot(current_run[-1][0] - current_run[-2][0], current_run[-1][1] - current_run[-2][1])
+                if ln > 1e-4:
+                    ux = (current_run[-1][0] - current_run[-2][0]) / ln
+                    uy = (current_run[-1][1] - current_run[-2][1]) / ln
+                    current_run[-1] = (current_run[-1][0] + ux * 0.35, current_run[-1][1] + uy * 0.35)
+                runs.append(current_run)
+            current_run = []
+        else:
+            if not current_run:
+                # Entering open run from an obstacle - extend start backwards slightly
+                ln = math.hypot(e[0] - s[0], e[1] - s[1])
+                if ln > 1e-4:
+                    ux = (e[0] - s[0]) / ln
+                    uy = (e[1] - s[1]) / ln
+                    if i > 0 and is_blocked((pts[i-1][0] + s[0]) * 0.5, (pts[i-1][1] + s[1]) * 0.5):
+                        p_start = (s[0] - ux * 0.35, s[1] - uy * 0.35)
+                    else:
+                        p_start = s
+                else:
+                    p_start = s
+                current_run.append(p_start)
+            current_run.append(e)
+
+    if len(current_run) >= 2:
+        runs.append(current_run)
+
+    # Filter out tiny runs < 0.4m
+    valid_runs = []
+    for r in runs:
+        r_len = sum(math.hypot(r[k+1][0] - r[k][0], r[k+1][1] - r[k][1]) for k in range(len(r) - 1))
+        if r_len >= 0.4:
+            valid_runs.append(r)
+    return valid_runs
+
+
+def _build_clipped_curtain_wall_path(bm, path_pts, boxes=(), top_z=None, top_z_list=None,
+                                     height=3.2, thick=0.85, gate_y=None, gap_x=0.0,
+                                     outward_hint=None, merlon_end_clear=(0.0, 0.0),
+                                     embed_depth=2.5, seed=42):
+    """
+    Builds one or more continuous curved curtain-wall runs along path_pts with loopcuts,
+    automatically clipped against building bounding boxes and gate openings.
+    Replaces choppy overlapping segment boxes with single seamless meshes.
+    """
+    from .curtain_wall import build_continuous_curtain_wall_path
+    runs = _clip_path_into_continuous_runs(path_pts, boxes=boxes, gate_y=gate_y, gap_x=gap_x)
+    n_runs = len(runs)
+    for r_idx, r_pts in enumerate(runs):
+        mc0 = merlon_end_clear[0] if r_idx == 0 else 0.0
+        mc1 = merlon_end_clear[1] if r_idx == n_runs - 1 else 0.0
+        build_continuous_curtain_wall_path(
+            bm, r_pts, outward_hint=outward_hint,
+            ground_z_fn=ground_z, top_z=top_z, top_z_list=top_z_list,
+            height=height, thickness=thick, embed_depth=embed_depth,
+            merlon_end_clear=(mc0, mc1), seed=seed + r_idx * 17
+        )
+
+
 def _build_clipped_wall_run(bm, build_run, s, e, outward, boxes, top_z, thick, seed,
                             extend_start=True, extend_end=True, merlon_end_clear=(0.0, 0.0)):
-    """Build a wall run clipped around building boxes with no pinhole gaps.
-
-    The run is split into quarters; pieces inside a box (0.3 margin) are dropped
-    while kept pieces extend 0.35 past their ends so consecutive runs overlap.
-    Every piece shares the loop-wide top elevation and reaches 1.5 m into the rock.
-    """
-    segs = []
-    for q in range(4):
-        t0, t1 = q / 4.0, (q + 1) / 4.0
-        mx = s[0] + (e[0] - s[0]) * (t0 + t1) * 0.5
-        my = s[1] + (e[1] - s[1]) * (t0 + t1) * 0.5
-        if not _in_boxes(mx, my, boxes, 0.30):
-            segs.append((t0, t1))
-    if not segs:
-        return
-    # Merge adjacent kept quarters, then extend each merged piece 0.35 past
-    # its ends so runs overlap instead of gapping.
-    merged = [segs[0]]
-    for t0, t1 in segs[1:]:
-        if abs(t0 - merged[-1][1]) < 1e-6:
-            merged[-1] = (merged[-1][0], t1)
-        else:
-            merged.append((t0, t1))
-    ln = math.hypot(e[0] - s[0], e[1] - s[1])
-    if ln < 0.2:
-        return
-    ux, uy = (e[0] - s[0]) / ln, (e[1] - s[1]) / ln
-    for t0, t1 in merged:
-        ext0 = 0.40 if (t0 > 0.0 or extend_start) else 0.0
-        ext1 = 0.40 if (t1 < 1.0 or extend_end) else 0.0
-        p0 = (s[0] + (e[0] - s[0]) * t0 - ux * ext0, s[1] + (e[1] - s[1]) * t0 - uy * ext0)
-        p1 = (s[0] + (e[0] - s[0]) * t1 + ux * ext1, s[1] + (e[1] - s[1]) * t1 + uy * ext1)
-        zs = ground_z(p0[0], p0[1])
-        ze = ground_z(p1[0], p1[1])
-        # Extend base deep into the cliff rock so walls never float on slopes
-        min_g = min(zs, ze)
-        base_z = min(-0.50, min_g - 2.50) if min_g <= 4.0 else (min_g - 2.50)
-        build_run(bm, p0, p1, outward, base_z, top_z - base_z, thick,
-                  slits=False, seed=seed, merlon_end_clear=merlon_end_clear)
+    """Legacy chord adapter forwarding to continuous curtain wall builder."""
+    _build_clipped_curtain_wall_path(
+        bm, [s, e], boxes=boxes, top_z=top_z, thick=thick,
+        outward_hint=outward, merlon_end_clear=merlon_end_clear, seed=seed
+    )
     return
 
 
@@ -674,52 +738,29 @@ def build_flank_connecting_walls(bm, height=3.2, thick=0.85, bld_boxes=(), top_z
 
     for chain, seed_base, is_ascending in ((chain_west, 201, False), (chain_east, 251, True)):
         sub_pts = _spline_curve(chain, sample_step=1.8)
-        n_segs = max(1, len(sub_pts) - 1)
+        n_pts = len(sub_pts)
 
-        # 1. Precalculate top_z for each segment
-        seg_top_z = []
-        for i in range(n_segs):
-            s, e = sub_pts[i], sub_pts[i + 1]
-            zs = ground_z(s[0], s[1])
-            ze = ground_z(e[0], e[1])
-            t = (i + 0.5) / n_segs
+        # 1. Precalculate top_z for each station vertex along the slope
+        station_top_z = []
+        for i in range(n_pts):
+            pt = sub_pts[i]
+            zs = ground_z(pt[0], pt[1])
+            t = i / max(1, n_pts - 1)
             if is_ascending:
                 top_z = top_z_forecourt + t * (top_z_upper - top_z_forecourt)
             else:
                 top_z = top_z_upper + t * (top_z_forecourt - top_z_upper)
-            top_z = max(top_z, max(zs, ze) + height)
-            seg_top_z.append(top_z)
+            top_z = max(top_z, zs + height)
+            station_top_z.append(top_z)
 
-        # 2. Build clipped curtain wall runs for each segment
-        for i in range(n_segs):
-            s, e = sub_pts[i], sub_pts[i + 1]
-            ln = math.hypot(e[0] - s[0], e[1] - s[1])
-            if ln < 0.2:
-                continue
-            outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
-            top_z = seg_top_z[i]
-            ux, uy = (e[0] - s[0]) / ln, (e[1] - s[1]) / ln
-            p0 = (s[0] - ux * 0.40, s[1] - uy * 0.40)
-            p1 = (e[0] + ux * 0.40, e[1] + uy * 0.40)
-            _build_clipped_wall_run(bm, build_curtain_wall_run, p0, p1, outward,
-                                    bld_boxes, top_z, thick, seed=seed_base + i)
+        # 2. Build continuous curtain wall run with loopcuts along the connecting flank
+        _build_clipped_curtain_wall_path(
+            bm, sub_pts, boxes=bld_boxes, top_z_list=station_top_z,
+            height=height, thick=thick, seed=seed_base
+        )
 
-        # 3. Cover all step riser holes between height differences with stone brick walls
-        for i in range(n_segs - 1):
-            P = sub_pts[i + 1]
-            s_prev = sub_pts[i]
-            e_next = sub_pts[i + 2]
-            tx = e_next[0] - s_prev[0]
-            ty = e_next[1] - s_prev[1]
-            t_len = math.hypot(tx, ty)
-            u_tan = (tx / t_len, ty / t_len) if t_len > 1e-4 else (1.0, 0.0)
-            n_out = (u_tan[1], -u_tan[0])
-            ref_out = (-1.0, 0.0) if not is_ascending else (1.0, 0.0)
-            if n_out[0] * ref_out[0] + n_out[1] * ref_out[1] < 0:
-                n_out = (-n_out[0], -n_out[1])
-            _build_step_riser_wall(bm, P, u_tan, n_out, seg_top_z[i], seg_top_z[i + 1], thick)
-
-        # 4. Boundary step risers at start and end connections
+        seg_top_z = station_top_z
+        # 3. Boundary step risers at start and end connections if height difference remains
         z_start_target = top_z_upper if not is_ascending else top_z_forecourt
         z_end_target = top_z_forecourt if not is_ascending else top_z_upper
         p_start_tan = (sub_pts[1][0] - sub_pts[0][0], sub_pts[1][1] - sub_pts[0][1])
@@ -775,24 +816,14 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
             raised_portcullis=True
         )
 
-    # 3. Curtain wall runs along the plateau rim: one level top everywhere,
+    # 3. Curtain wall runs along the plateau rim: one continuous mesh with loopcuts everywhere,
     # bases driven deep through the cliffs, clipped (never gapped) at buildings.
     # The gate opening stays clear including the flanking gate towers.
-    for i in range(len(pts) - 1):
-        s, e = pts[i], pts[i + 1]
-        mid_x = (s[0] + e[0]) * 0.5
-        mid_y = (s[1] + e[1]) * 0.5
-        if abs(mid_x) < gap_x:
-            continue
-        if gate and eff_gate_y is not None and abs(mid_x) < 7.2 and abs(mid_y - eff_gate_y) < 6.0:
-            continue
-
-        ln = math.hypot(e[0] - s[0], e[1] - s[1])
-        if ln < 0.2:
-            continue
-        outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
-        _build_clipped_wall_run(bm, build_curtain_wall_run, s, e, outward,
-                                bld_boxes, top_z, thick, seed=i + 7)
+    _build_clipped_curtain_wall_path(
+        bm, pts, boxes=bld_boxes, top_z=top_z, height=height, thick=thick,
+        gate_y=eff_gate_y if gate else None, gap_x=gap_x, outward_hint=(0.0, -1.0),
+        seed=42
+    )
 
     # 4. Connecting walls linking the forecourt rim ends up to the upper citadel perimeter wall
     if connect_upper and spec[0] == "forecourt_rock":
@@ -911,29 +942,12 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         (pts3, True, False),   # Leg 3: c_west to gate (start touches tower)
     ]
     for leg_idx, (leg_pts, touches_tower_start, touches_tower_end) in enumerate(legs):
-        n_segs = len(leg_pts) - 1
-        for i in range(n_segs):
-            s, e = leg_pts[i], leg_pts[i + 1]
-            ln = math.hypot(e[0] - s[0], e[1] - s[1])
-            if ln < 0.2:
-                continue
-
-            outward = ((e[1] - s[1]) / ln, -(e[0] - s[0]) / ln)
-            is_first = (i == 0)
-            is_last = (i == n_segs - 1)
-
-            mc_start = 0.50 if (is_first and touches_tower_start) else 0.0
-            mc_end = 0.50 if (is_last and touches_tower_end) else 0.0
-            ext_start = not (is_first and touches_tower_start)
-            ext_end = not (is_last and touches_tower_end)
-
-            seed = 101 + leg_idx * 50 + i
-            _build_clipped_wall_run(
-                bm, build_curtain_wall_run, s, e, outward,
-                bld_boxes, top_z, thick, seed=seed,
-                extend_start=ext_start, extend_end=ext_end,
-                merlon_end_clear=(mc_start, mc_end)
-            )
+        mc_s = 0.50 if touches_tower_start else 0.0
+        mc_e = 0.50 if touches_tower_end else 0.0
+        _build_clipped_curtain_wall_path(
+            bm, leg_pts, boxes=bld_boxes, top_z=top_z, height=height, thick=thick,
+            merlon_end_clear=(mc_s, mc_e), seed=101 + leg_idx * 50
+        )
 
     # 5. Dressed cut-stone junction abutment clasps at all 4 tower wall intersections
     # Leg 1 end -> East Flank Tower

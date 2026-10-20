@@ -121,19 +121,23 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
                    SILL_W, SILL_T, rail_mat, bevel=0.010)
 
     # 2. Single unified handrail spanning cleanly between posts with zero floating cuts
+    # When end_overhang > 0 on sloped runs, adjust handrail z along the slope so pitch is exact
+    slope = (z1 - z0) / run if run > 1e-5 else 0.0
     rx0 = x0 - ux * end_overhang
     ry0 = y0 - uy * end_overhang
     rx1 = x1 + ux * end_overhang
     ry1 = y1 + uy * end_overhang
+    rz0 = (z0 - slope * end_overhang) + height - HANDRAIL_T * 0.5
+    rz1 = (z1 + slope * end_overhang) + height - HANDRAIL_T * 0.5
 
     _rail_beam(bm, rx0, ry0, rx1, ry1,
-               z0 + height - HANDRAIL_T * 0.5, z1 + height - HANDRAIL_T * 0.5,
+               rz0, rz1,
                HANDRAIL_W, HANDRAIL_T, rail_mat, bevel=0.012)
 
     # 3. Newel posts: both ends plus evenly spaced in between
     n_post = max(1, int(round(run / max(0.6, post_spacing))))
-    posts_t = [i / n_post for i in range(n_post + 1)]
     if posts:
+        posts_t = [i / n_post for i in range(n_post + 1)]
         for i, t in enumerate(posts_t):
             if i == 0 and not post_at_start:
                 continue
@@ -142,10 +146,15 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
             px, py, pz = at(t)
             build_railing_post(bm, px, py, pz, height, rail_mat, baluster_mat,
                                iron_pins, jankiness, i, seed)
-    elif len(posts_t) < 2:
+    else:
+        # When posts are disabled (e.g. stair flights between terminal newel posts),
+        # treat the entire run as a single continuous bay so balusters are evenly spaced
+        # without missing-post gaps.
         posts_t = [0.0, 1.0]
 
     # 4. Clean vertical balusters inside every bay
+    # Embed 16mm into bottom sill/stringer and 16mm into handrail underside to eliminate any floating gap
+    embed = 0.016
     sill_offset = SILL_T if has_sill else 0.0
     for bi in range(len(posts_t) - 1):
         ta, tb = posts_t[bi], posts_t[bi + 1]
@@ -156,14 +165,16 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
         for k in range(1, n_bal + 1):
             t = ta + (tb - ta) * (k / (n_bal + 1))
             px, py, pz = at(t)
-            bal_h = height - sill_offset - HANDRAIL_T
-            if bal_h < 0.12:
+            clear_h = height - sill_offset - HANDRAIL_T
+            if clear_h < 0.10:
                 continue
+            bal_h = clear_h + embed * 2.0
+            bal_z = (pz + sill_offset - embed) + bal_h * 0.5
             idx = bi * 100 + k
             t_x = _jitter(jankiness, idx, 27.0, seed, 0.02)
             t_y = _jitter(jankiness, idx, 30.0, seed, 0.02)
             create_beveled_box(bm, size=(0.055, 0.055, bal_h),
-                               location=(px, py, pz + sill_offset + bal_h * 0.5),
+                               location=(px, py, bal_z),
                                rotation=(t_x, t_y, 0.0),
                                mat_index=baluster_mat, bevel_amount=0.006,
                                u_offset=k * 0.23, v_offset=pz + sill_offset)

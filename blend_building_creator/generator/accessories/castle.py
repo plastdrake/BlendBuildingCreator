@@ -176,16 +176,80 @@ def build_walkable_round_tower(
     """
     from ..mage_tower import _witch_hat_roof, _build_curved_wall_stairs, _build_watertight_floor, _stair_arc_deg
 
+    def _is_angle_in_arc(a, s, e):
+        a = a % 360.0
+        s = s % 360.0
+        e = e % 360.0
+        return (s <= a <= e) if s <= e else (a >= s or a <= e)
+
+    def _get_angular_diff(a, b):
+        return (b - a + 180.0) % 360.0 - 180.0
+
+    stair_arcs_by_floor = {}
+    if stair_base_deg is not None:
+        if isinstance(stair_base_deg, dict):
+            for fl in range(num_floors):
+                s_ang = stair_base_deg.get(fl, (stair_base_deg.get('default', 0.0) + fl * 200.0) % 360.0)
+                stair_arcs_by_floor[fl] = (s_ang, (s_ang + 135.0) % 360.0)
+        elif callable(stair_base_deg):
+            for fl in range(num_floors):
+                stair_arcs_by_floor[fl] = stair_base_deg(fl)
+        else:
+            for fl in range(num_floors):
+                s_ang = (stair_base_deg + fl * 200.0) % 360.0
+                stair_arcs_by_floor[fl] = (s_ang, (s_ang + 135.0) % 360.0)
+    else:
+        # Automatically compute optimal, door-aware stair trajectories so NO doorway on any floor is blocked
+        prev_s = None
+        for fl in range(num_floors):
+            doors_this = [math.degrees(a) % 360.0 for (d_fl, a) in door_angs if d_fl == fl]
+            doors_next = [math.degrees(a) % 360.0 for (d_fl, a) in door_angs if d_fl == fl + 1]
+
+            best_s = None
+            best_score = -1e9
+            for step in range(72):
+                cand_s = (step * 5.0) % 360.0
+                cand_e = (cand_s + 135.0) % 360.0
+                score = 0.0
+
+                for d in doors_this:
+                    # Doorway corridor (+/- 25 deg buffer) must be completely clear of stairs
+                    if _is_angle_in_arc(d, (cand_s - 25.0) % 360.0, (cand_e + 25.0) % 360.0):
+                        score -= 10000.0
+                    else:
+                        diff = (cand_s - d) % 360.0
+                        if 40.0 <= diff <= 90.0:
+                            score += 500.0 - abs(diff - 55.0) * 5.0
+                        elif 90.0 < diff <= 180.0:
+                            score += 200.0 - (diff - 90.0)
+                        else:
+                            score += 50.0
+
+                for d in doors_next:
+                    if _is_angle_in_arc(d, (cand_e - 60.0) % 360.0, (cand_e + 20.0) % 360.0):
+                        score -= 10000.0
+                    else:
+                        score += 100.0
+
+                if prev_s is not None:
+                    natural_s = (prev_s + 135.0 + 25.0) % 360.0
+                    ang_err = abs(_get_angular_diff(cand_s, natural_s))
+                    score += 150.0 - ang_err * 0.8
+                elif not doors_this:
+                    ang_err = abs(_get_angular_diff(cand_s, 330.0))
+                    score += 100.0 - ang_err
+
+                if score > best_score:
+                    best_score = score
+                    best_s = cand_s
+
+            if best_s is None:
+                best_s = 0.0
+            stair_arcs_by_floor[fl] = (best_s, (best_s + 135.0) % 360.0)
+            prev_s = best_s
+
     def _get_stair_deg(f_idx):
-        if stair_base_deg is not None:
-            if isinstance(stair_base_deg, dict):
-                s_ang = stair_base_deg.get(f_idx, (stair_base_deg.get('default', 0.0) + f_idx * 200.0) % 360.0)
-            elif callable(stair_base_deg):
-                return stair_base_deg(f_idx)
-            else:
-                s_ang = (stair_base_deg + f_idx * 200.0) % 360.0
-            return (s_ang, (s_ang + 135.0) % 360.0)
-        return _stair_arc_deg(f_idx)
+        return stair_arcs_by_floor.get(f_idx, _stair_arc_deg(f_idx))
 
     segments = 32
     wall_t = 0.75 if radius >= 3.4 else 0.6
@@ -286,16 +350,77 @@ def build_walkable_round_tower(
                                    rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_CUT_STONE,
                                    bevel_amount=0.02)
 
-        # Door jambs and lintel frame in cut stone.
+        # Door jambs, lintels, architrave casings, and floor threshold in timber and cut stone.
         for d_fl, d_a in door_angs:
             if d_fl == fl:
+                ca_d, sa_d = math.cos(d_a), math.sin(d_a)
+                tx_d, ty_d = -sa_d, ca_d  # tangent across door width
+                door_w = 1.35
+                dh = 2.60
+                r_mid = radius - wall_t * 0.5
+                depth_span = wall_t + 0.18
+                jamb_w = 0.22
+                lintel_w = door_w + jamb_w * 2.0
+                lintel_h = 0.24
+                casing_d = 0.038
+                z_fl_floor = z_fl + 0.06
+
+                # 1. Wooden threshold plate flush with floor covering the foundation stone cylinder
+                create_beveled_box(
+                    bm, size=(depth_span + 0.04, door_w + 0.24, 0.045),
+                    location=(cx + r_mid * ca_d, cy + r_mid * sa_d, z_fl_floor + 0.0125),
+                    rotation=(0.0, 0.0, d_a),
+                    mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005
+                )
+
+                # 2. Left & Right heavy timber jambs through the wall thickness
                 for s in (-1.0, 1.0):
-                    ja = d_a + s * d_ang * 1.6
-                    jr = radius - wall_t * 0.5
-                    create_beveled_box(bm, size=(wall_t + 0.1, 0.3, 2.6),
-                                       location=(cx + jr * math.cos(ja), cy + jr * math.sin(ja), z_fl + 1.3),
-                                       rotation=(0.0, 0.0, ja), mat_index=MAT_INDEX_CUT_STONE,
-                                       bevel_amount=0.02)
+                    jx = cx + r_mid * ca_d + tx_d * (s * (door_w * 0.5 + jamb_w * 0.5))
+                    jy = cy + r_mid * sa_d + ty_d * (s * (door_w * 0.5 + jamb_w * 0.5))
+                    create_beveled_box(
+                        bm, size=(depth_span, jamb_w, dh),
+                        location=(jx, jy, z_fl_floor + dh * 0.5),
+                        rotation=(0.0, 0.0, d_a),
+                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+                    )
+
+                # 3. Overhead timber lintel beam squarely resting on top of jambs
+                create_beveled_box(
+                    bm, size=(depth_span, lintel_w, lintel_h),
+                    location=(cx + r_mid * ca_d, cy + r_mid * sa_d, z_fl_floor + dh + lintel_h * 0.5),
+                    rotation=(0.0, 0.0, d_a),
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+                )
+
+                # 4. Architrave casing trims on both inside room face and outside face (dual casing)
+                for face_sgn in (-1.0, 1.0):
+                    cr_pos = r_mid + face_sgn * (depth_span * 0.5 + casing_d * 0.5)
+                    for s in (-1.0, 1.0):
+                        tx = cx + cr_pos * ca_d + tx_d * (s * (door_w * 0.5 + jamb_w * 0.5))
+                        ty = cy + cr_pos * sa_d + ty_d * (s * (door_w * 0.5 + jamb_w * 0.5))
+                        create_beveled_box(
+                            bm, size=(casing_d, jamb_w + 0.04, dh),
+                            location=(tx, ty, z_fl_floor + dh * 0.5),
+                            rotation=(0.0, 0.0, d_a),
+                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+                        )
+                    create_beveled_box(
+                        bm, size=(casing_d, lintel_w + 0.08, lintel_h),
+                        location=(cx + cr_pos * ca_d, cy + cr_pos * sa_d, z_fl_floor + dh + lintel_h * 0.5),
+                        rotation=(0.0, 0.0, d_a),
+                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005
+                    )
+
+                # 5. Outer cut-stone quoin blocks flanking the doorway
+                for s in (-1.0, 1.0):
+                    ja = d_a + s * d_ang * 1.8
+                    jr = radius - wall_t * 0.5 + 0.02
+                    create_beveled_box(
+                        bm, size=(wall_t + 0.12, 0.32, dh),
+                        location=(cx + jr * math.cos(ja), cy + jr * math.sin(ja), z_fl_floor + dh * 0.5),
+                        rotation=(0.0, 0.0, ja), mat_index=MAT_INDEX_CUT_STONE,
+                        bevel_amount=0.02
+                    )
 
         # Exterior cut-stone belt course molding around tower perimeter (never penetrates room interior)
         ring_slab(bm, r_in=radius - 0.04, r_out=radius + 0.14, z=z_ceil - 0.11,
@@ -317,14 +442,9 @@ def build_walkable_round_tower(
 
     if tower_type == 'SPIRE':
         # Mage-tower trim: fascia disc + soffit + corbels sealing the eaves so
-        # no gap shows backfaces under the witch hat (finial stays plain iron).
+        # no gap shows backfaces under the witch hat.
         _witch_hat_roof(bm, cx, cy, z_top + 0.35, radius=corbel_r, height=spire_h,
                         segments=segments, corbels=True, finial=False)
-        tip = z_top + 0.35 + spire_h
-        create_cylinder(bm, radius=0.045, height=2.4, segments=8,
-                        location=(cx, cy, tip + 1.0), mat_index=MAT_INDEX_IRON)
-        create_box(bm, size=(0.85, 0.03, 0.45),
-                   location=(cx + 0.42, cy, tip + 1.7), mat_index=MAT_INDEX_IRON)
         return
 
     # Roof battlement deck with open stairwell cutout (walk straight onto the roof deck)

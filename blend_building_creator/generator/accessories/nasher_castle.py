@@ -186,8 +186,8 @@ def _build_halls(bm, props, tier):
             extra_overrides={
                 'building_archetype': 'ARMORY',
                 'interior_program': 'ARMORY',
-                'interior_partition_style': 'AUTO',
-                'has_interior_walls': True,
+                'interior_partition_style': 'OPEN',
+                'has_interior_walls': False,
                 'has_stairs': False,
                 'has_chapel_kit': False,
                 'has_bell_cote': False,
@@ -433,6 +433,10 @@ def build_nasher_castle(bm, props, ctx, registry, tier):
 
     _build_towers(bm, registry, tier)
     build_nasher_dungeon(bm, tier)
+
+    # Clean any detached or orphaned floating prop clutter across the castle grounds
+    from .building_connector import clean_orphan_floating_props
+    clean_orphan_floating_props(bm)
 
     _register(registry, tier)
 

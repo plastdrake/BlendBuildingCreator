@@ -98,7 +98,8 @@ def build_chain_run(bm, p_start, p_end, major_r=0.060, minor_r=0.013, pitch=0.08
 
 
 def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
-                     outward=(0.0, -1.0), angle_deg=0.0, has_chains=True, pier_h=3.2):
+                     outward=(0.0, -1.0), angle_deg=0.0, has_chains=True, pier_h=3.2,
+                     wall_t=0.0, fwd_offset=None):
     """Fortified castle drawbridge with heavy oak plank deck, perimeter iron strapping,
     ditch pit curb, iron pivot hinges, and taut forged iron suspension chains.
 
@@ -115,6 +116,15 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
         ox, oy = 0.0, -1.0
     else:
         ox, oy = ox / on, oy / on
+
+    # Advance the drawbridge hinge & portal anchorage to the outer threshold face of the gate
+    # so the bridge hinges outside the gateframe and chains run entirely in front of the wall.
+    if fwd_offset is None:
+        fwd_offset = (wall_t * 0.5 + 0.32) if wall_t > 0.0 else 0.0
+    if fwd_offset > 0.0:
+        cx = cx + ox * fwd_offset
+        cy = cy + oy * fwd_offset
+
     tx, ty = -oy, ox
     ang_wall = math.atan2(ty, tx)
     # ang_gate faces forward along outward
@@ -279,19 +289,19 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
             create_torus_ring(bm, location=cp, rotation=rot_euler,
                               major_radius=0.075, minor_radius=0.016, mat_index=MAT_INDEX_IRON)
 
-        # High chain portals in gate piers
+        # High chain portals in gate piers directly above deck eyelets
         chain_h = max(2.6, pier_h + 0.35)
-        # Left wall hawse: in negative tangent direction (-tx, -ty)
-        p_wall_L = Vector((cx, cy, z_ground + chain_h)) - Vector((tx, ty, 0.0)) * (width * 0.5 + 0.42) + Vector((ox, oy, 0.0)) * 0.25
-        # Right wall hawse: in positive tangent direction (+tx, +ty)
-        p_wall_R = Vector((cx, cy, z_ground + chain_h)) + Vector((tx, ty, 0.0)) * (width * 0.5 + 0.42) + Vector((ox, oy, 0.0)) * 0.25
+        # Left wall hawse: aligned with left deck eyelet on the outer portal face
+        p_wall_L = Vector((cx, cy, z_ground + chain_h)) - Vector((tx, ty, 0.0)) * (width * 0.5 - 0.15) + Vector((ox, oy, 0.0)) * 0.05
+        # Right wall hawse: aligned with right deck eyelet on the outer portal face
+        p_wall_R = Vector((cx, cy, z_ground + chain_h)) + Vector((tx, ty, 0.0)) * (width * 0.5 - 0.15) + Vector((ox, oy, 0.0)) * 0.05
 
         for wp in (p_wall_L, p_wall_R):
             create_beveled_box(bm, size=(0.28, 0.28, 0.28),
                                location=(wp.x, wp.y, wp.z),
                                rotation=(0.0, 0.0, ang_wall),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-            create_torus_ring(bm, location=wp + Vector((ox * 0.15, oy * 0.15, 0.0)),
+            create_torus_ring(bm, location=wp + Vector((ox * 0.14, oy * 0.14, 0.0)),
                               rotation=(1.5708, 0.0, ang_wall),
                               major_radius=0.080, minor_radius=0.018, mat_index=MAT_INDEX_IRON)
 
@@ -323,7 +333,7 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
     talus_h = 0.85
     pier_w = tower_r * 2.0
 
-    tc_dist = gap_w * 0.5 + tower_r + 0.15
+    tc_dist = gap_w * 0.5 + tower_r + 0.20
 
     for sgn in (-1.0, 1.0):
         # Tower centered to frame gate opening cleanly without pinching the passage
