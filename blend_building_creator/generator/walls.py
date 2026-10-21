@@ -657,8 +657,11 @@ def build_facade_timber(bm, p_start, p_end, z_bottom, z_top, wall_thickness,
         solid_intervals = []
         last_u = 0.0
         for op in sorted(openings, key=lambda o: o['u_start']):
-            ou1 = max(0.0, min(span, op['u_start'] - 0.12))
-            ou2 = max(0.0, min(span, op['u_end'] + 0.12))
+            # Keep a generous margin around every opening so a diagonal brace
+            # can never cross the door frame (or its architrave) that stands in
+            # the same wall.
+            ou1 = max(0.0, min(span, op['u_start'] - 0.45))
+            ou2 = max(0.0, min(span, op['u_end'] + 0.45))
             if ou1 > last_u + 1.3:
                 solid_intervals.append((last_u, ou1))
             last_u = max(last_u, ou2)

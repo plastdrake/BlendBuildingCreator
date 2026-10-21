@@ -38,6 +38,18 @@ _TOWERS = (
     (48.0, 26.0, 4.4, 4, 10.0, 3, 'major', False),
 )
 
+# Room mix per hall. The outlying garrison houses get a real kitchen, mess
+# hall and store room downstairs with dormitory bedrooms above; the great
+# halls are residential; the keep is a palace with a royal kitchen.
+_HALL_PROGRAM = {
+    'keep': 'PALACE',
+    'great_hall': 'RESIDENTIAL',
+    'east_hall': 'RESIDENTIAL',
+    'barracks': 'GARRISON',
+    'armory': 'GARRISON',
+    'archive_hall': 'CIVIC',
+}
+
 
 def _hall_overrides(tier, w, d, floors, shape, facade, ww, wd, roof_h, hid=""):
     o = {
@@ -83,6 +95,11 @@ def _hall_overrides(tier, w, d, floors, shape, facade, ww, wd, roof_h, hid=""):
         'wall_material_override': 'STUCCO' if tier == 3 else ('WOOD_PLANKS' if tier == 2 else 'LOGS'),
         'physical_siding': tier == 1,
         'has_exposed_brick': False,
+        # Every hall of the castle gets a real room mix instead of the generic
+        # fallback, so the interiors read as proper living quarters.
+        'interior_program': _HALL_PROGRAM.get(hid, 'RESIDENTIAL'),
+        'interior_partition_style': 'AUTO',
+        'has_interior_walls': True,
     }
     if shape != 'RECTANGLE':
         o.update({'wing_placement': facade, 'wing_width': ww, 'wing_depth': wd,
@@ -137,6 +154,9 @@ def _build_halls(bm, props, tier):
             ov['has_double_height'] = True
             ov['has_cantilever'] = False
             ov['cantilever_overhang'] = 0.0
+            # A castle keep must have a working kitchen.
+            ov['has_royal_kitchen'] = True
+            ov['interior_program'] = 'PALACE'
             if tier == 3:
                 ov['wall_splits'] = {'RIGHT': [3.0, 13.0]}
                 ov['timber_exclusions'] = {'RIGHT': [(3.0, 13.0)]}
@@ -164,8 +184,11 @@ def _build_halls(bm, props, tier):
             ov['timber_left'] = False
             ov['corner_posts_left'] = False
             ov['building_archetype'] = 'CIVIC'
-            ov['interior_program'] = 'CIVIC'
-            ov['interior_partition_style'] = 'OPEN'
+            # The royal archive wing: the great banquet hall lives on its open
+            # ground floor, the upper storeys are proper chambers.
+            ov['interior_program'] = 'ROYAL_ARCHIVE'
+            ov['interior_partition_style'] = 'AUTO'
+            ov['open_ground_floor'] = True
             # Floor 0 east connecting wing doorway on South facade (-Y in world = FRONT in local space)
             if tier == 3:
                 extra_doors.append({'floor_idx': 0, 'facade': 'FRONT', 'pos': -4.0, 'w': 2.4, 'h': 2.85, 'is_portal': True})
@@ -185,9 +208,9 @@ def _build_halls(bm, props, tier):
             tier=f"TIER_{tier}", width=7.6, depth=12.0, floors=1,
             extra_overrides={
                 'building_archetype': 'ARMORY',
-                'interior_program': 'ARMORY',
-                'interior_partition_style': 'OPEN',
-                'has_interior_walls': False,
+                'interior_program': 'GARRISON',
+                'interior_partition_style': 'AUTO',
+                'has_interior_walls': True,
                 'has_stairs': False,
                 'has_chapel_kit': False,
                 'has_bell_cote': False,

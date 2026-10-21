@@ -468,7 +468,10 @@ def _clip_path_into_continuous_runs(pts, boxes=(), gate_y=None, gap_x=0.0, margi
     def is_blocked(x, y):
         if gap_x > 0 and abs(x) < gap_x:
             return True
-        if gate_y is not None and abs(x) < 7.2 and abs(y - gate_y) < 6.0:
+        # The gate flanking towers reach out to ~6.8 m from the gate centre, so
+        # the curtain wall has to start INSIDE that footprint (6.6 m) - clipping
+        # it any further out left a visible gap between the tower and the wall.
+        if gate_y is not None and abs(x) < 6.6 and abs(y - gate_y) < 6.0:
             return True
         if _in_boxes(x, y, boxes, margin):
             return True
@@ -811,7 +814,7 @@ def build_rim_walls(bm, spec, a0, a1, height=3.2, thick=0.8, gap_x=3.2, inset=0.
         eff_wall_h = max(eff_gate_wall_h, 4.8)
         build_curtain_wall_gate_portal(
             bm, cx=0.0, cy=eff_gate_y, z_ground=z,
-            outward=(0.0, -1.0), gate_w=4.8, gate_h=4.2,
+            outward=(0.0, -1.0), gate_w=4.40, gate_h=4.00,
             wall_h=eff_wall_h, tower_h=max(eff_wall_h + 2.8, 7.5), thickness=thick + 0.35,
             raised_portcullis=True
         )
@@ -854,7 +857,7 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
     # 1. Three legs connecting Gate and Flank Towers
     # Leg 1: Gate right flank (East arm of Terrace rim) into East Flank Tower
     leg1_way = [
-        (7.2, -19.5),
+        (6.6, -19.5),
         (10.0, -19.0),
         (18.0, -18.2),
         (25.0, -16.8),
@@ -914,7 +917,7 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
         (-25.0, -16.8),
         (-18.0, -18.2),
         (-10.0, -19.0),
-        (-7.2, -19.5),
+        (-6.6, -19.5),
     ]
     pts3 = _spline_curve(leg3_way, sample_step=1.8)
     pts3 = _trim_leg(pts3, c_west, r_embed, None, 0.0)
@@ -930,7 +933,7 @@ def build_upper_citadel_perimeter_wall(bm, height=3.4, thick=0.90, bld_boxes=(),
     gate_wall_h = max(top_z - gate_z, 4.8)
     build_curtain_wall_gate_portal(
         bm, cx=gate_cx, cy=gate_cy, z_ground=gate_z,
-        outward=(0.0, -1.0), gate_w=4.8, gate_h=4.2,
+        outward=(0.0, -1.0), gate_w=4.40, gate_h=4.00,
         wall_h=gate_wall_h, tower_h=max(gate_wall_h + 2.8, 7.5), thickness=thick + 0.35,
         raised_portcullis=True
     )
@@ -1272,8 +1275,8 @@ def build_nasher_enclosure(bm, props, ctx):
         _gate_post(bm, -_GATE_HALF, _GATE_Y, 0.0, height)
         _gate_post(bm, _GATE_HALF, _GATE_Y, 0.0, height)
     else:
-        build_gate_house(bm, 0.0, _GATE_Y, (0.0, -1.0), _GATE_HALF * 2.0, 0.0, thick,
-                         gate_h=3.8, portcullis=getattr(props, 'has_portcullis', False),
+        build_gate_house(bm, 0.0, _GATE_Y, (0.0, -1.0), 4.40, 0.0, thick,
+                         gate_h=4.00, portcullis=getattr(props, 'has_portcullis', False),
                          drawbridge=getattr(props, 'has_drawbridge', False),
                          drawbridge_angle=getattr(props, 'drawbridge_angle', 0.0),
                          gate_towers=getattr(props, 'has_gate_towers', False), wall_h=height)

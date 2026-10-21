@@ -999,7 +999,7 @@ def build_floors(bm, props, ctx):
                 'z_start': z_floor,
                 'z_end': _pz1 + _lh * 0.5
             })
-            ctx.floor_doorways.setdefault(fl_idx, []).append({'x': _tcx, 'y': y_max, 'axis': 'X', 'w': _pw})
+            ctx.floor_doorways.setdefault(fl_idx, []).append({'x': _tcx, 'y': y_max, 'axis': 'X', 'w': _pw, 'is_portal': True})
 
             # Left and Right Heavy Timber Casing Jambs:
             for _s in (-1.0, 1.0):
@@ -1541,7 +1541,7 @@ def build_floors(bm, props, ctx):
                 if mw_side_i == 'FRONT':
                     front_openings.append(mw_op)
                     p_cx = (x_min + x_max) * 0.5 + _off
-                    ctx.floor_doorways.setdefault(fl_idx, []).append({'x': p_cx, 'y': y_min, 'axis': 'X', 'w': mw_portal_w})
+                    ctx.floor_doorways.setdefault(fl_idx, []).append({'x': p_cx, 'y': y_min, 'axis': 'X', 'w': mw_portal_w, 'is_portal': True})
                     create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
                                        location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, _wc_y, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
@@ -1554,7 +1554,7 @@ def build_floors(bm, props, ctx):
                 elif mw_side_i == 'BACK':
                     back_openings.append(mw_op)
                     p_cx = (x_min + x_max) * 0.5 + _off
-                    ctx.floor_doorways.setdefault(fl_idx, []).append({'x': p_cx, 'y': y_max, 'axis': 'X', 'w': mw_portal_w})
+                    ctx.floor_doorways.setdefault(fl_idx, []).append({'x': p_cx, 'y': y_max, 'axis': 'X', 'w': mw_portal_w, 'is_portal': True})
                     create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
                                        location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, _wc_y, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
@@ -1567,7 +1567,7 @@ def build_floors(bm, props, ctx):
                 elif mw_side_i == 'LEFT':
                     left_openings.append(mw_op)
                     p_cy = (y_min + y_max) * 0.5 + _off
-                    ctx.floor_doorways.setdefault(fl_idx, []).append({'x': x_min, 'y': p_cy, 'axis': 'Y', 'w': mw_portal_w})
+                    ctx.floor_doorways.setdefault(fl_idx, []).append({'x': x_min, 'y': p_cy, 'axis': 'Y', 'w': mw_portal_w, 'is_portal': True})
                     create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
                                        location=(_wc_x, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
@@ -1580,7 +1580,7 @@ def build_floors(bm, props, ctx):
                 elif mw_side_i == 'RIGHT':
                     right_openings.append(mw_op)
                     p_cy = (y_min + y_max) * 0.5 + _off
-                    ctx.floor_doorways.setdefault(fl_idx, []).append({'x': x_max, 'y': p_cy, 'axis': 'Y', 'w': mw_portal_w})
+                    ctx.floor_doorways.setdefault(fl_idx, []).append({'x': x_max, 'y': p_cy, 'axis': 'Y', 'w': mw_portal_w, 'is_portal': True})
                     create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
                                        location=(_wc_x, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
                                        mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)

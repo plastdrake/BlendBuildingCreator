@@ -1568,6 +1568,19 @@ _INTERIOR_PROGRAMS = {
         'ground': ('ARMORY', 'STORAGE', 'ENTRANCE_HALL'),
         'upper': ('ARMORY', 'STORAGE', 'ENTRANCE_HALL'),
     },
+    'GARRISON': {
+        # Outlying garrison houses: a real kitchen, a dining hall, a store room
+        # and a drill space downstairs, real bedrooms (dorms) upstairs.
+        'ground': ('MESS_HALL', 'KITCHEN', 'STORAGE', 'ARMORY'),
+        'upper': ('STAIR_LANDING', 'BARRACKS_DORM', 'BARRACKS_DORM', 'OFFICER_QUARTERS'),
+    },
+    'ROYAL_ARCHIVE': {
+        # The royal archive wing: one great banquet hall on the ground floor,
+        # proper chambers (library, study, royal apartments) on the floors
+        # above.
+        'ground': ('BANQUET_HALL',),
+        'upper': ('STAIR_LANDING', 'LIBRARY', 'STUDY', 'MASTER_BED', 'GUEST_ROOM'),
+    },
 }
 
 _ARCHETYPE_PROGRAM = {
@@ -1865,17 +1878,28 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         return stair_hole
 
     y_mid = (iy_min + iy_max) * 0.5
+    _y_split = None
 
     if fl_idx == 0:
         _vwall(b_west, iy_min, iy_max, y_mid)
         _vwall(b_east, iy_min, iy_max, y_mid)
 
+        # Optional royal kitchen: the north end of the west bay becomes a real
+        # service kitchen (hearth, cauldron, prep table, stores) so a castle
+        # keep is never left without a kitchen.
+        _royal_kitchen = bool(getattr(props, 'has_royal_kitchen', False))
+        _y_split = None
+        if _royal_kitchen and (iy_max - iy_min) >= 11.0:
+            _y_split = max(iy_min + 4.2, iy_max - 5.2)
+            _hwall(ix_min, b_west, _y_split, (ix_min + b_west) * 0.5)
+
         rm_west = Room(
             id=f"fl{fl_idx}_stair_hall", floor_idx=fl_idx, role='CORRIDOR',
-            bounds=(ix_min, b_west, iy_min, iy_max),
+            bounds=(ix_min, b_west, iy_min, _y_split if _y_split is not None else iy_max),
             doorways=[{'x': b_west, 'y': y_mid, 'axis': 'Y', 'w': dw_w}],
             stair_hole=_holds_stair((ix_min, b_west, iy_min, iy_max)),
-            exterior_facades={'FRONT': (ix_min, b_west), 'BACK': (ix_min, b_west), 'LEFT': (iy_min, iy_max)}
+            exterior_facades={'FRONT': (ix_min, b_west), 'BACK': (ix_min, b_west),
+                              'LEFT': (iy_min, _y_split if _y_split is not None else iy_max)}
         )
         rm_center = Room(
             id=f"fl{fl_idx}_throne_room", floor_idx=fl_idx, role='THRONE_ROOM',
@@ -1899,7 +1923,7 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'FRONT': (b_east, ix_max), 'RIGHT': (iy_min, split_y_east)}
         )
         rm_east_n = Room(
-            id=f"fl{fl_idx}_banquet_hall", floor_idx=fl_idx, role='BANQUET_HALL',
+            id=f"fl{fl_idx}_banquet_hall", floor_idx=fl_idx, role='LIBRARY',
             bounds=(b_east, ix_max, split_y_east, iy_max),
             doorways=[
                 {'x': b_east, 'y': y_mid, 'axis': 'Y', 'w': dw_w},
@@ -1910,6 +1934,15 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'BACK': (b_east, ix_max), 'RIGHT': (split_y_east, iy_max)}
         )
         rooms = [rm_west, rm_center, rm_east_s, rm_east_n]
+        if _y_split is not None:
+            rm_kitchen = Room(
+                id=f"fl{fl_idx}_royal_kitchen", floor_idx=fl_idx, role='KITCHEN',
+                bounds=(ix_min, b_west, _y_split, iy_max),
+                doorways=[{'x': (ix_min + b_west) * 0.5, 'y': _y_split, 'axis': 'X', 'w': dw_w}],
+                stair_hole=None,
+                exterior_facades={'BACK': (ix_min, b_west), 'LEFT': (_y_split, iy_max)}
+            )
+            rooms.append(rm_kitchen)
 
     elif fl_idx == 1 and bool(getattr(props, 'has_throne_room', False) or getattr(props, 'has_double_height', False)):
         _vwall(b_west, iy_min, iy_max, y_mid)
@@ -2495,7 +2528,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     # Working stable barns stay one open hall (stall rows + hay storage),
     # never partitioned into bedrooms.
     stable_open = (effective_archetype == 'STABLE')
-    if not has_interior_walls or partition_style == 'OPEN' or (W < 4.2 and D < 4.2) or loom_open or stable_open:
+    if not has_interior_walls or partition_style == 'OPEN' or (W < 4.2 and D < 4.2) or loom_open or stable_open \
+            or (fl_idx == 0 and bool(getattr(props, 'open_ground_floor', False))):
         if effective_archetype == 'QUARRY':
             roles = ['STONE_STORE']
         elif effective_archetype == 'LUMBERMILL':

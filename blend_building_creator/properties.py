@@ -2557,6 +2557,8 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('HOSPITALITY', "Hospitality", "Taprooms, guest rooms, kitchens, cellars"),
             ('CIVIC', "Civic", "Great halls, council chambers, offices, archives"),
             ('MILITARY', "Military", "Drill halls, mess halls, armouries, dormitories"),
+            ('GARRISON', "Garrison House", "Mess hall, kitchen, store room, armouries below; dormitory bedrooms above"),
+            ('ROYAL_ARCHIVE', "Royal Archive Wing", "One great banquet hall on the ground floor; library, study and chambers above"),
             ('SACRED', "Sacred", "Chapel halls, infirmaries, studies"),
             ('PALACE', "Palace / Castle", "Throne room, banquet hall, council chamber, treasury, master bed"),
             ('COMMERCIAL', "Commercial / Artisan", "Shop + workshop below, home above"),
@@ -2569,6 +2571,20 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     has_throne_room: BoolProperty(
         name="Castle Throne Room",
         description="Designate the grand hall as a royal throne room with raised dais, throne chair, red ceremonial carpet, banners, and braziers",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_royal_kitchen: BoolProperty(
+        name="Royal Kitchen",
+        description="Carve a service kitchen (hearth, cauldron, prep table, stores) out of the ground floor of a castle keep next to the service wing",
+        default=False,
+        update=on_property_updated
+    )
+
+    open_ground_floor: BoolProperty(
+        name="Open Ground Floor",
+        description="Leave the ground floor as one single large hall (no interior partition walls) while the upper floors are split into proper rooms",
         default=False,
         update=on_property_updated
     )

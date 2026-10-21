@@ -201,17 +201,36 @@ def build_continuous_curtain_wall_path(
         f_int.loops[2][uv_layer].uv = Vector((u0, tz0))
         f_int.loops[3][uv_layer].uv = Vector((u1, tz1))
 
-        # Top face (+Z)
+        # Top face (+Z) - unwrapped in world units across the wall thickness so
+        # the wall walk shows the masonry courses instead of one flat texel.
         f_top = bm.faces.new([ext_top[i], ext_top[i+1], int_top[i+1], int_top[i]])
         f_top.material_index = MAT_INDEX_STONE
+        f_top.loops[0][uv_layer].uv = Vector((u0, 0.0))
+        f_top.loops[1][uv_layer].uv = Vector((u1, 0.0))
+        f_top.loops[2][uv_layer].uv = Vector((u1, thickness))
+        f_top.loops[3][uv_layer].uv = Vector((u0, thickness))
 
         # Bottom face (-Z)
         f_bot = bm.faces.new([ext_bot[i+1], ext_bot[i], int_bot[i], int_bot[i+1]])
         f_bot.material_index = MAT_INDEX_STONE
+        f_bot.loops[0][uv_layer].uv = Vector((u1, 0.0))
+        f_bot.loops[1][uv_layer].uv = Vector((u0, 0.0))
+        f_bot.loops[2][uv_layer].uv = Vector((u0, thickness))
+        f_bot.loops[3][uv_layer].uv = Vector((u1, thickness))
 
     # Start and End caps
-    bm.faces.new([ext_bot[0], ext_top[0], int_top[0], int_bot[0]]).material_index = MAT_INDEX_STONE
-    bm.faces.new([ext_bot[-1], int_bot[-1], int_top[-1], ext_top[-1]]).material_index = MAT_INDEX_STONE
+    _cap0 = bm.faces.new([ext_bot[0], ext_top[0], int_top[0], int_bot[0]])
+    _cap0.material_index = MAT_INDEX_STONE
+    _cap0.loops[0][uv_layer].uv = Vector((0.0, station_base_z[0]))
+    _cap0.loops[1][uv_layer].uv = Vector((0.0, station_top_z[0]))
+    _cap0.loops[2][uv_layer].uv = Vector((thickness, station_top_z[0]))
+    _cap0.loops[3][uv_layer].uv = Vector((thickness, station_base_z[0]))
+    _cap1 = bm.faces.new([ext_bot[-1], int_bot[-1], int_top[-1], ext_top[-1]])
+    _cap1.material_index = MAT_INDEX_STONE
+    _cap1.loops[0][uv_layer].uv = Vector((0.0, station_base_z[-1]))
+    _cap1.loops[1][uv_layer].uv = Vector((thickness, station_base_z[-1]))
+    _cap1.loops[2][uv_layer].uv = Vector((thickness, station_top_z[-1]))
+    _cap1.loops[3][uv_layer].uv = Vector((0.0, station_top_z[-1]))
 
     # 2. STRING COURSE (Projecting cut-stone coping band at wall top)
     str_h = 0.16
@@ -234,13 +253,45 @@ def build_continuous_curtain_wall_path(
             str_ib.append(bm.verts.new((ix, iy, tz)))
 
         for i in range(n_pts - 1):
-            bm.faces.new([str_eb[i], str_eb[i+1], str_et[i+1], str_et[i]]).material_index = MAT_INDEX_CUT_STONE
-            bm.faces.new([str_et[i], str_et[i+1], str_it[i+1], str_it[i]]).material_index = MAT_INDEX_CUT_STONE
-            bm.faces.new([str_ib[i+1], str_ib[i], str_it[i], str_it[i+1]]).material_index = MAT_INDEX_CUT_STONE
-            bm.faces.new([str_eb[i+1], str_eb[i], str_ib[i], str_ib[i+1]]).material_index = MAT_INDEX_CUT_STONE
+            u0, u1 = u_cum[i], u_cum[i + 1]
+            tz0, tz1 = station_top_z[i], station_top_z[i + 1]
+            _f = bm.faces.new([str_eb[i], str_eb[i+1], str_et[i+1], str_et[i]])
+            _f.material_index = MAT_INDEX_CUT_STONE
+            _f.loops[0][uv_layer].uv = Vector((u0, tz0))
+            _f.loops[1][uv_layer].uv = Vector((u1, tz1))
+            _f.loops[2][uv_layer].uv = Vector((u1, tz1 + str_h))
+            _f.loops[3][uv_layer].uv = Vector((u0, tz0 + str_h))
+            _f = bm.faces.new([str_et[i], str_et[i+1], str_it[i+1], str_it[i]])
+            _f.material_index = MAT_INDEX_CUT_STONE
+            _f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+            _f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+            _f.loops[2][uv_layer].uv = Vector((u1, max(0.05, str_proj - 0.02)))
+            _f.loops[3][uv_layer].uv = Vector((u0, max(0.05, str_proj - 0.02)))
+            _f = bm.faces.new([str_ib[i+1], str_ib[i], str_it[i], str_it[i+1]])
+            _f.material_index = MAT_INDEX_CUT_STONE
+            _f.loops[0][uv_layer].uv = Vector((u1, tz1))
+            _f.loops[1][uv_layer].uv = Vector((u0, tz0))
+            _f.loops[2][uv_layer].uv = Vector((u0, tz0 + str_h))
+            _f.loops[3][uv_layer].uv = Vector((u1, tz1 + str_h))
+            _f = bm.faces.new([str_eb[i+1], str_eb[i], str_ib[i], str_ib[i+1]])
+            _f.material_index = MAT_INDEX_CUT_STONE
+            _f.loops[0][uv_layer].uv = Vector((u1, 0.0))
+            _f.loops[1][uv_layer].uv = Vector((u0, 0.0))
+            _f.loops[2][uv_layer].uv = Vector((u0, max(0.05, str_proj - 0.02)))
+            _f.loops[3][uv_layer].uv = Vector((u1, max(0.05, str_proj - 0.02)))
 
-        bm.faces.new([str_eb[0], str_et[0], str_it[0], str_ib[0]]).material_index = MAT_INDEX_CUT_STONE
-        bm.faces.new([str_eb[-1], str_ib[-1], str_it[-1], str_et[-1]]).material_index = MAT_INDEX_CUT_STONE
+        _f = bm.faces.new([str_eb[0], str_et[0], str_it[0], str_ib[0]])
+        _f.material_index = MAT_INDEX_CUT_STONE
+        _f.loops[0][uv_layer].uv = Vector((0.0, station_top_z[0]))
+        _f.loops[1][uv_layer].uv = Vector((0.0, station_top_z[0] + str_h))
+        _f.loops[2][uv_layer].uv = Vector((max(0.05, str_proj - 0.02), station_top_z[0] + str_h))
+        _f.loops[3][uv_layer].uv = Vector((max(0.05, str_proj - 0.02), station_top_z[0]))
+        _f = bm.faces.new([str_eb[-1], str_ib[-1], str_it[-1], str_et[-1]])
+        _f.material_index = MAT_INDEX_CUT_STONE
+        _f.loops[0][uv_layer].uv = Vector((0.0, station_top_z[-1]))
+        _f.loops[1][uv_layer].uv = Vector((max(0.05, str_proj - 0.02), station_top_z[-1]))
+        _f.loops[2][uv_layer].uv = Vector((max(0.05, str_proj - 0.02), station_top_z[-1] + str_h))
+        _f.loops[3][uv_layer].uv = Vector((0.0, station_top_z[-1] + str_h))
 
     # 3. MACHICOLATION CORBELS (Spaced along the outer curve)
     if has_corbels and total_len >= 1.6:
@@ -303,13 +354,48 @@ def build_continuous_curtain_wall_path(
             dk_out_bot.append(bm.verts.new((ox, oy, z_bot_deck)))
 
         for i in range(n_pts - 1):
-            bm.faces.new([dk_out_top[i], dk_out_top[i+1], dk_inn_top[i+1], dk_inn_top[i]]).material_index = MAT_INDEX_CUT_STONE
-            bm.faces.new([dk_inn_bot[i], dk_inn_bot[i+1], dk_inn_top[i+1], dk_inn_top[i]]).material_index = MAT_INDEX_CUT_STONE
-            bm.faces.new([dk_out_bot[i+1], dk_out_bot[i], dk_inn_bot[i], dk_inn_bot[i+1]]).material_index = MAT_INDEX_CUT_STONE
-            bm.faces.new([dk_out_top[i+1], dk_out_top[i], dk_out_bot[i], dk_out_bot[i+1]]).material_index = MAT_INDEX_CUT_STONE
+            u0, u1 = u_cum[i], u_cum[i + 1]
+            _zt0 = station_top_z[i] + str_h
+            _zt1 = station_top_z[i + 1] + str_h
+            _f = bm.faces.new([dk_out_top[i], dk_out_top[i+1], dk_inn_top[i+1], dk_inn_top[i]])
+            _f.material_index = MAT_INDEX_CUT_STONE
+            _f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+            _f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+            _f.loops[2][uv_layer].uv = Vector((u1, walk_width))
+            _f.loops[3][uv_layer].uv = Vector((u0, walk_width))
+            _f = bm.faces.new([dk_inn_bot[i], dk_inn_bot[i+1], dk_inn_top[i+1], dk_inn_top[i]])
+            _f.material_index = MAT_INDEX_CUT_STONE
+            _f.loops[0][uv_layer].uv = Vector((u0, _zt0 - deck_th))
+            _f.loops[1][uv_layer].uv = Vector((u1, _zt1 - deck_th))
+            _f.loops[2][uv_layer].uv = Vector((u1, _zt1))
+            _f.loops[3][uv_layer].uv = Vector((u0, _zt0))
+            _f = bm.faces.new([dk_out_bot[i+1], dk_out_bot[i], dk_inn_bot[i], dk_inn_bot[i+1]])
+            _f.material_index = MAT_INDEX_CUT_STONE
+            _f.loops[0][uv_layer].uv = Vector((u1, 0.0))
+            _f.loops[1][uv_layer].uv = Vector((u0, 0.0))
+            _f.loops[2][uv_layer].uv = Vector((u0, walk_width))
+            _f.loops[3][uv_layer].uv = Vector((u1, walk_width))
+            _f = bm.faces.new([dk_out_top[i+1], dk_out_top[i], dk_out_bot[i], dk_out_bot[i+1]])
+            _f.material_index = MAT_INDEX_CUT_STONE
+            _f.loops[0][uv_layer].uv = Vector((u1, _zt1))
+            _f.loops[1][uv_layer].uv = Vector((u0, _zt0))
+            _f.loops[2][uv_layer].uv = Vector((u0, _zt0 - deck_th))
+            _f.loops[3][uv_layer].uv = Vector((u1, _zt1 - deck_th))
 
-        bm.faces.new([dk_out_top[0], dk_inn_top[0], dk_inn_bot[0], dk_out_bot[0]]).material_index = MAT_INDEX_CUT_STONE
-        bm.faces.new([dk_out_top[-1], dk_out_bot[-1], dk_inn_bot[-1], dk_inn_top[-1]]).material_index = MAT_INDEX_CUT_STONE
+        _zt0 = station_top_z[0] + str_h
+        _f = bm.faces.new([dk_out_top[0], dk_inn_top[0], dk_inn_bot[0], dk_out_bot[0]])
+        _f.material_index = MAT_INDEX_CUT_STONE
+        _f.loops[0][uv_layer].uv = Vector((0.0, _zt0))
+        _f.loops[1][uv_layer].uv = Vector((0.0, _zt0))
+        _f.loops[2][uv_layer].uv = Vector((walk_width, _zt0))
+        _f.loops[3][uv_layer].uv = Vector((walk_width, _zt0))
+        _zt1 = station_top_z[-1] + str_h
+        _f = bm.faces.new([dk_out_top[-1], dk_out_bot[-1], dk_inn_bot[-1], dk_inn_top[-1]])
+        _f.material_index = MAT_INDEX_CUT_STONE
+        _f.loops[0][uv_layer].uv = Vector((0.0, _zt1))
+        _f.loops[1][uv_layer].uv = Vector((0.0, _zt1 - deck_th))
+        _f.loops[2][uv_layer].uv = Vector((walk_width, _zt1 - deck_th))
+        _f.loops[3][uv_layer].uv = Vector((walk_width, _zt1))
 
     # 5. INNER SUPPORT PIERS (Rampart buttresses along bailey)
     if has_piers and has_walkway and total_len >= 2.0:
@@ -380,10 +466,33 @@ def build_continuous_curtain_wall_path(
             p_ib.append(bm.verts.new((ix, iy, z0)))
 
         for i in range(n_pts - 1):
-            bm.faces.new([p_eb[i], p_eb[i+1], p_et[i+1], p_et[i]]).material_index = MAT_INDEX_STONE
-            bm.faces.new([p_et[i], p_et[i+1], p_it[i+1], p_it[i]]).material_index = MAT_INDEX_CUT_STONE
-            bm.faces.new([p_ib[i+1], p_ib[i], p_it[i], p_it[i+1]]).material_index = MAT_INDEX_STONE
-            bm.faces.new([p_eb[i+1], p_eb[i], p_ib[i], p_ib[i+1]]).material_index = MAT_INDEX_STONE
+            u0, u1 = u_cum[i], u_cum[i + 1]
+            pz0 = station_top_z[i] + str_h
+            pz1 = station_top_z[i + 1] + str_h
+            _f = bm.faces.new([p_eb[i], p_eb[i+1], p_et[i+1], p_et[i]])
+            _f.material_index = MAT_INDEX_STONE
+            _f.loops[0][uv_layer].uv = Vector((u0, pz0))
+            _f.loops[1][uv_layer].uv = Vector((u1, pz1))
+            _f.loops[2][uv_layer].uv = Vector((u1, pz1 + base_h))
+            _f.loops[3][uv_layer].uv = Vector((u0, pz0 + base_h))
+            _f = bm.faces.new([p_et[i], p_et[i+1], p_it[i+1], p_it[i]])
+            _f.material_index = MAT_INDEX_CUT_STONE
+            _f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+            _f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+            _f.loops[2][uv_layer].uv = Vector((u1, max(0.05, par_t)))
+            _f.loops[3][uv_layer].uv = Vector((u0, max(0.05, par_t)))
+            _f = bm.faces.new([p_ib[i+1], p_ib[i], p_it[i], p_it[i+1]])
+            _f.material_index = MAT_INDEX_STONE
+            _f.loops[0][uv_layer].uv = Vector((u1, pz1))
+            _f.loops[1][uv_layer].uv = Vector((u0, pz0))
+            _f.loops[2][uv_layer].uv = Vector((u0, pz0 + base_h))
+            _f.loops[3][uv_layer].uv = Vector((u1, pz1 + base_h))
+            _f = bm.faces.new([p_eb[i+1], p_eb[i], p_ib[i], p_ib[i+1]])
+            _f.material_index = MAT_INDEX_STONE
+            _f.loops[0][uv_layer].uv = Vector((u1, 0.0))
+            _f.loops[1][uv_layer].uv = Vector((u0, 0.0))
+            _f.loops[2][uv_layer].uv = Vector((u0, max(0.05, par_t)))
+            _f.loops[3][uv_layer].uv = Vector((u1, max(0.05, par_t)))
 
         bm.faces.new([p_eb[0], p_et[0], p_it[0], p_ib[0]]).material_index = MAT_INDEX_CUT_STONE
         bm.faces.new([p_eb[-1], p_ib[-1], p_it[-1], p_et[-1]]).material_index = MAT_INDEX_CUT_STONE
@@ -465,10 +574,33 @@ def build_continuous_curtain_wall_path(
             in_p_ib.append(bm.verts.new((ix, iy, z0)))
 
         for i in range(n_pts - 1):
-            bm.faces.new([in_p_eb[i+1], in_p_eb[i], in_p_et[i], in_p_et[i+1]]).material_index = MAT_INDEX_STONE
-            bm.faces.new([in_p_et[i+1], in_p_et[i], in_p_it[i], in_p_it[i+1]]).material_index = MAT_INDEX_CUT_STONE
-            bm.faces.new([in_p_ib[i], in_p_ib[i+1], in_p_it[i+1], in_p_it[i]]).material_index = MAT_INDEX_STONE
-            bm.faces.new([in_p_eb[i], in_p_eb[i+1], in_p_ib[i+1], in_p_ib[i]]).material_index = MAT_INDEX_STONE
+            u0, u1 = u_cum[i], u_cum[i + 1]
+            iz0 = station_top_z[i] + str_h
+            iz1 = station_top_z[i + 1] + str_h
+            _f = bm.faces.new([in_p_eb[i+1], in_p_eb[i], in_p_et[i], in_p_et[i+1]])
+            _f.material_index = MAT_INDEX_STONE
+            _f.loops[0][uv_layer].uv = Vector((u1, iz1))
+            _f.loops[1][uv_layer].uv = Vector((u0, iz0))
+            _f.loops[2][uv_layer].uv = Vector((u0, iz0 + in_base_h))
+            _f.loops[3][uv_layer].uv = Vector((u1, iz1 + in_base_h))
+            _f = bm.faces.new([in_p_et[i+1], in_p_et[i], in_p_it[i], in_p_it[i+1]])
+            _f.material_index = MAT_INDEX_CUT_STONE
+            _f.loops[0][uv_layer].uv = Vector((u1, 0.0))
+            _f.loops[1][uv_layer].uv = Vector((u0, 0.0))
+            _f.loops[2][uv_layer].uv = Vector((u0, max(0.05, in_par_t)))
+            _f.loops[3][uv_layer].uv = Vector((u1, max(0.05, in_par_t)))
+            _f = bm.faces.new([in_p_ib[i], in_p_ib[i+1], in_p_it[i+1], in_p_it[i]])
+            _f.material_index = MAT_INDEX_STONE
+            _f.loops[0][uv_layer].uv = Vector((u0, iz0))
+            _f.loops[1][uv_layer].uv = Vector((u1, iz1))
+            _f.loops[2][uv_layer].uv = Vector((u1, iz1 + in_base_h))
+            _f.loops[3][uv_layer].uv = Vector((u0, iz0 + in_base_h))
+            _f = bm.faces.new([in_p_eb[i], in_p_eb[i+1], in_p_ib[i+1], in_p_ib[i]])
+            _f.material_index = MAT_INDEX_STONE
+            _f.loops[0][uv_layer].uv = Vector((u0, 0.0))
+            _f.loops[1][uv_layer].uv = Vector((u1, 0.0))
+            _f.loops[2][uv_layer].uv = Vector((u1, max(0.05, in_par_t)))
+            _f.loops[3][uv_layer].uv = Vector((u0, max(0.05, in_par_t)))
 
         bm.faces.new([in_p_eb[0], in_p_ib[0], in_p_it[0], in_p_et[0]]).material_index = MAT_INDEX_CUT_STONE
         bm.faces.new([in_p_eb[-1], in_p_et[-1], in_p_it[-1], in_p_ib[-1]]).material_index = MAT_INDEX_CUT_STONE
@@ -789,9 +921,6 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                                location=(lx_p, ly_p, deck_top + (rail_h + 0.10) * 0.5),
                                rotation=(0.0, 0.0, ang),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-            create_cone(bm, radius1=0.10, radius2=0.0, height=0.08, segments=4,
-                        location=(lx_p, ly_p, deck_top + rail_h + 0.14),
-                        rotation=(0.0, 0.0, ang + math.pi * 0.25), mat_index=MAT_INDEX_TIMBER)
         # Landing horizontal handrail and mid-rail
         lx_r, ly_r = at(u_land, outer_rail_lat_land)
         create_beveled_box(bm, size=(land_len + 0.10, 0.12, 0.08),
@@ -839,9 +968,6 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                                location=(p_pos_x, p_pos_y, pz + (rail_h + 0.08) * 0.5),
                                rotation=(0.0, 0.0, ang),
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-            create_cone(bm, radius1=0.10, radius2=0.0, height=0.08, segments=4,
-                        location=(p_pos_x, p_pos_y, pz + rail_h + 0.12),
-                        rotation=(0.0, 0.0, ang + math.pi * 0.25), mat_index=MAT_INDEX_TIMBER)
 
         # Smooth diagonal handrail pitched correctly along the stairs
         mid_u = u_land + sgn * (land_len * 0.5 + total_flight_len * 0.5)
@@ -929,9 +1055,6 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                                    location=(pl_x, pl_y, top_z + (rail_h + 0.08) * 0.5),
                                    rotation=(0.0, 0.0, ang),
                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-                create_cone(bm, radius1=0.10, radius2=0.0, height=0.08, segments=4,
-                            location=(pl_x, pl_y, top_z + rail_h + 0.12),
-                            rotation=(0.0, 0.0, ang + math.pi * 0.25), mat_index=MAT_INDEX_TIMBER)
             rl_x, rl_y = at(top_land_u, land_outer_lat)
             create_beveled_box(bm, size=(1.35, 0.12, 0.08),
                                location=(rl_x, rl_y, top_z + rail_h),
@@ -1005,22 +1128,30 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
 
-    # Deep lintel band across the opening
+    # Deep lintel band across the opening - the same masonry as the curtain
+    # wall, so the portcullis housing never reads as a different block glued
+    # onto the gate.
     create_beveled_box(bm, size=(gap_w + 1.20, frame_depth, 0.32),
                        location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.14),
                        rotation=(0.0, 0.0, ang),
-                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.02)
+                       mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
 
     # Elevated Defensive Superstructure & Fighting Platform
     # Rises above the flanking curtain wall walkways, giving clear command of the approach.
-    platform_z = max(wall_h + 1.25, ground_z + gate_h + 0.85)
+    # The deck is lifted high enough for the portcullis grille to be fully
+    # swallowed by its housing instead of poking out through the parapet.
+    _pc_h = gate_h
+    _pc_raised = gate_h - 0.35
+    _pc_top = max(_pc_raised + 0.85, _pc_h + 1.20)
+    platform_z = max(wall_h + 1.25, ground_z + gate_h + 0.85, ground_z + _pc_top + 0.30)
     super_h = platform_z - (ground_z + gate_h + 0.28)
     if super_h > 0.05:
-        # Solid cut-stone breastwork wall above lintel up to platform floor
+        # Solid breastwork wall above lintel up to platform floor, in the same
+        # masonry as the curtain wall (NOT a separate cut stone block).
         create_beveled_box(bm, size=(gap_w + 1.24, frame_depth, super_h),
                            location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.28 + super_h * 0.5),
                            rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+                           mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
 
     # Overhanging machicolated defensive platform / fighting deck
     plat_w = gap_w + 1.80
@@ -1067,19 +1198,22 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
 
     if gate_towers:
         from .gatehouse import build_flanking_gate_towers
-        # Tower-local tangent offset where the continuation-stair top landing
-        # laps over the tower deck (must match build_gatehouse_access_stairs):
-        # top_land_u - tower_c = top_off - tower_r - 3.98 for either flank.
         _top_off = gate_stair_top_offset(True)
         _rear_mid = _top_off - 1.90 - 3.98
+        # Same tower radius / height as the two cliff gates so all three
+        # castle gates read as one family.
         build_flanking_gate_towers(bm, cx, cy, ground_z, gap_w=gap_w,
                                    wall_h=wall_h, wall_t=thickness, outward=(ox, oy),
+                                   tower_r=2.10, tower_h=max(wall_h + 2.8, 7.5),
                                    rear_door=(_rear_mid, 0.85))
 
     if portcullis:
         from .gatehouse import build_portcullis
-        build_portcullis(bm, cx, cy, ground_z, width=gap_w, height=gate_h,
-                         outward=(ox, oy))
+        # Spikes hang just inside the opening (same as the cliff gates) so the
+        # portcullis is always visible instead of being buried in the housing.
+        build_portcullis(bm, cx, cy, ground_z, width=gap_w - 0.20,
+                         height=gate_h - 0.20, outward=(ox, oy),
+                         raised=gate_h - 0.35)
 
     if drawbridge:
         from .gatehouse import build_drawbridge

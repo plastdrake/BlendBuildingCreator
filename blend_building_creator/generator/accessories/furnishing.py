@@ -87,6 +87,10 @@ class RoomOccupancyTracker:
         # A stair-landing foot is NOT a doorway corridor: it reserves exactly
         # its 2x2 m approach square so it can never starve a room like a portal
         # corridor (3.2 m deep) would.
+        # Only doorways that are explicitly flagged as portals reserve the deep
+        # 3.2 m connector corridor. A wide interior partition door is still just
+        # a door - reserving 3.2 m for it used to starve small chambers of every
+        # single prop, which is why the narrow rooms came out empty.
         if doorways:
             for d in doorways:
                 dcx = d.get('x', (rx0 + rx1) * 0.5)
@@ -97,9 +101,9 @@ class RoomOccupancyTracker:
                     continue
                 axis = d.get('axis', 'X')
                 dw = d.get('w', 0.95)
-                is_p = bool(d.get('is_portal', False) or dw >= 1.70)
-                clr = 3.20 if is_p else 2.00  # clear walking corridor depth inside room (3.2m for portals/connectors)
-                w_margin = (dw * 0.5 + 0.85) if is_p else (dw * 0.5 + 0.55)
+                is_p = bool(d.get('is_portal', False))
+                clr = 3.20 if is_p else 1.80  # clear walking corridor depth inside room
+                w_margin = (dw * 0.5 + 0.55) if is_p else (dw * 0.5 + 0.30)
                 if axis == 'X':
                     self.occupied_boxes.append((dcx - w_margin, dcx + w_margin,
                                                 dcy - clr, dcy + clr))
@@ -200,6 +204,27 @@ class RoomOccupancyTracker:
 def _jit(rng, amount: float) -> float:
     """Signed random offset in metres (0 when no RNG is available)."""
     return rng.uniform(-amount, amount) if rng is not None else 0.0
+
+
+# Real footprint depth (metres, measured across the wall) of the props that are
+# pushed flush against a wall. Without these the placement used a guessed depth
+# and a piece could end up buried in the wall it stands against.
+_WALL_PROP_DEPTH = {
+    'INDOOR_TABLE': 1.15,
+    'ROUND_TABLE': 0.78,
+    'BOOKSHELF': 0.34,
+    'BOOKSHELF_NEAT': 0.34,
+    'SHELF': 0.38,
+    'CHEST': 0.60,
+    'BENCH': 0.60,
+    'DESK': 0.78,
+    'COUNTER': 0.72,
+    'WARDROBE': 0.64,
+    'HEARTH': 0.70,
+    'ARMOUR': 0.55,
+    'WEAPON_RACK': 0.45,
+    'POTTED_PLANT_LARGE': 0.50,
+}
 
 
 def _try_place_chair(bm, tracker: RoomOccupancyTracker, cx: float, cy: float,
@@ -508,6 +533,12 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
     """
     rx0, rx1 = tracker.rx0, tracker.rx1
     ry0, ry1 = tracker.ry0, tracker.ry1
+    # Real footprint depth of the props that get pushed against a wall. Using a
+    # guessed depth meant a piece could be pushed half way into the wall it
+    # stands against (the dining table is 1.15 m wide, not 0.60 m).
+    _real_depth = _WALL_PROP_DEPTH.get(key)
+    if _real_depth is not None:
+        depth = _real_depth
     if key == 'ARMCHAIR':
         width = max(width, 1.10)
         depth = max(depth, 1.02)
@@ -531,9 +562,12 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
     corner_pad_y = min(0.72, max(0.40, (y_span - width) * 0.5 - 0.05)) if y_span > width + 0.80 else 0.40
 
     for wall in candidate_walls:
+        # Wall props keep a small stand-off from the wall face and the collision
+        # test is tightened to match, so a table/shelf can never end up half
+        # sunk into the wall it stands against.
         if wall == 'NORTH':
             # Back at +Y, front at -Y -> yaw = 0.0
-            cy = _wy1 - depth * 0.5 - 0.01
+            cy = _wy1 - depth * 0.5 - 0.04
             yaw = 0.0
             min_x = rx0 + width * 0.5 + corner_pad_x
             max_x = rx1 - width * 0.5 - corner_pad_x
@@ -546,14 +580,14 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                 if tracker.is_near_door(cx, cy, radius=1.25) or any(tracker.is_near_door(px, py, radius=1.05) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
                 if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, check_windows=check_windows, ignore_stair=ignore_stair,
-                                   bounds_slack=0.16):
+                                   bounds_slack=0.10):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
                     return (cx, cy, yaw)
 
         elif wall == 'SOUTH':
             # Back at -Y, front at +Y -> yaw = math.pi
-            cy = _wy0 + depth * 0.5 + 0.01
+            cy = _wy0 + depth * 0.5 + 0.04
             yaw = math.pi
             min_x = rx0 + width * 0.5 + corner_pad_x
             max_x = rx1 - width * 0.5 - corner_pad_x
@@ -566,14 +600,14 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                 if tracker.is_near_door(cx, cy, radius=1.25) or any(tracker.is_near_door(px, py, radius=1.05) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
                 if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, check_windows=check_windows, ignore_stair=ignore_stair,
-                                   bounds_slack=0.16):
+                                   bounds_slack=0.10):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
                     return (cx, cy, yaw)
 
         elif wall == 'EAST':
             # Back at +X, front at -X -> yaw = -math.pi / 2
-            cx = _wx1 - depth * 0.5 - 0.01
+            cx = _wx1 - depth * 0.5 - 0.04
             yaw = -math.pi / 2
             min_y = ry0 + width * 0.5 + corner_pad_y
             max_y = ry1 - width * 0.5 - corner_pad_y
@@ -586,14 +620,14 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                 if tracker.is_near_door(cx, cy, radius=1.25) or any(tracker.is_near_door(px, py, radius=1.05) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
                 if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, check_windows=check_windows, ignore_stair=ignore_stair,
-                                   bounds_slack=0.16):
+                                   bounds_slack=0.10):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
                     return (cx, cy, yaw)
 
         elif wall == 'WEST':
             # Back at -X, front at +X -> yaw = math.pi / 2
-            cx = _wx0 + depth * 0.5 + 0.01
+            cx = _wx0 + depth * 0.5 + 0.04
             yaw = math.pi / 2
             min_y = ry0 + width * 0.5 + corner_pad_y
             max_y = ry1 - width * 0.5 - corner_pad_y
@@ -606,7 +640,7 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                 if tracker.is_near_door(cx, cy, radius=1.25) or any(tracker.is_near_door(px, py, radius=1.05) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
                 if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, check_windows=check_windows, ignore_stair=ignore_stair,
-                                   bounds_slack=0.16):
+                                   bounds_slack=0.10):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
                     return (cx, cy, yaw)
@@ -1943,18 +1977,44 @@ def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     # 1. Warm stone hearth (attaches to chimney if present)
     _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
 
-    # 2. Central Dining Table with 4 Chairs and Table Clutter (jittered anchor)
+    # 2. Central Dining Table with 4 Chairs and Table Clutter (jittered anchor).
+    # The table is scaled to the room so a narrow chamber still gets a usable
+    # dining set instead of nothing at all: the long side follows the room's
+    # long axis and both dimensions shrink to leave room for the chairs.
+    usable_w = max(1.20, rw - 0.30)
+    usable_d = max(1.20, rd - 0.30)
+    if rd >= rw * 1.25:
+        table_yaw = math.pi * 0.5
+        tw = min(1.15, max(0.80, usable_w - 1.50))   # across the room
+        td = min(2.10, max(1.30, usable_d - 1.55))   # along the room
+    else:
+        table_yaw = 0.0
+        tw = min(2.10, max(1.30, usable_w - 1.55))   # along the room
+        td = min(1.15, max(0.80, usable_d - 1.50))   # across the room
     dtx = rcx + _jit(rng, 0.22)
     dty = rcy + _jit(rng, 0.22)
-    tw, td = 2.10, 1.15
     z_table = z_floor + 0.97
-    if tracker.is_free(dtx - tw * 0.5 - 0.40, dtx + tw * 0.5 + 0.40, dty - td * 0.5 - 0.40, dty + td * 0.5 + 0.40):
-        build_prop(bm, 'INDOOR_TABLE', dtx, dty, z_floor, 0.0, length=tw, width=td)
-        build_prop(bm, 'SCATTER_TABLEWARE', dtx - 0.35, dty, z_table, 0.0)
+    # Try the room centre first, then slide the set along the long axis so a
+    # doorway corridor or a stair flight can never starve the room of its
+    # dining set entirely.
+    if rd >= rw * 1.25:
+        _cands = [(dtx, dty), (dtx, dty - rd * 0.24), (dtx, dty + rd * 0.24)]
+    else:
+        _cands = [(dtx, dty), (dtx - rw * 0.24, dty), (dtx + rw * 0.24, dty)]
+    _table_ok = False
+    for (cx_t, cy_t) in _cands:
+        if tracker.is_free(cx_t - tw * 0.5 - 0.40, cx_t + tw * 0.5 + 0.40,
+                           cy_t - td * 0.5 - 0.40, cy_t + td * 0.5 + 0.40):
+            dtx, dty = cx_t, cy_t
+            _table_ok = True
+            break
+    if _table_ok:
+        build_prop(bm, 'INDOOR_TABLE', dtx, dty, z_floor, table_yaw, length=tw, width=td)
+        build_prop(bm, 'SCATTER_TABLEWARE', dtx - 0.35, dty, z_table, table_yaw)
         if rng.random() < 0.45:
             build_prop(bm, 'POTTED_PLANT_SMALL', dtx + 0.45, dty, z_table, rng.uniform(0.0, 6.28))
         else:
-            build_prop(bm, 'BOTTLE_CLUSTER', dtx + 0.45, dty, z_table, 0.0)
+            build_prop(bm, 'BOTTLE_CLUSTER', dtx + 0.45, dty, z_table, table_yaw)
         # 4 Chairs around table facing inward towards center
         chair_positions = [
             (dtx, dty - (td * 0.5 + 0.38), math.pi),
@@ -2315,19 +2375,45 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
+    ix_lo, ix_hi, iy_lo, iy_hi = rm.bounds
     z_table = z_floor + 0.99
 
     # 1. Warm stone hearth if chimney exists
     _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
 
     # 2. Long feast table along the room's long axis with chairs around all sides.
+    # The table is sized to the room (a narrow hall gets a shorter board) and
+    # slides along the long axis until it finds clear floor, so the banquet
+    # hall always ends up with its long table and a full ring of chairs.
     along_y = rd >= rw
+    usable_w = max(1.20, rw - 0.30)
+    usable_d = max(1.20, rd - 0.30)
     if along_y:
-        tw, td, yaw = 1.05, min(4.6, max(2.2, rd * 0.62)), math.pi * 0.5
+        tw, td, yaw = 1.05, min(4.60, max(1.60, usable_d - 1.40)), math.pi * 0.5
     else:
-        tw, td, yaw = min(4.6, max(2.2, rw * 0.62)), 1.05, 0.0
-    tx, ty = rcx + _jit(rng, 0.15), rcy + _jit(rng, 0.15)
+        tw, td, yaw = min(4.60, max(1.60, usable_w - 1.40)), 1.05, 0.0
+    _jit_x = _jit(rng, 0.15)
+    _jit_y = _jit(rng, 0.15)
+    if along_y:
+        _cands = [(rcx + _jit_x, rcy + _jit_y),
+                  (rcx + _jit_x, rcy - rd * 0.20),
+                  (rcx + _jit_x, rcy + rd * 0.20),
+                  (rcx + _jit_x, rcy - rd * 0.34),
+                  (rcx + _jit_x, rcy + rd * 0.34)]
+    else:
+        _cands = [(rcx + _jit_x, rcy + _jit_y),
+                  (rcx - rw * 0.20, rcy + _jit_y),
+                  (rcx + rw * 0.20, rcy + _jit_y),
+                  (rcx - rw * 0.34, rcy + _jit_y),
+                  (rcx + rw * 0.34, rcy + _jit_y)]
     hw, hd = (0.55, td * 0.5 + 0.40) if along_y else (tw * 0.5 + 0.40, 0.95)
+    tx = ty = None
+    for (cx_t, cy_t) in _cands:
+        if tracker.is_free(cx_t - hw, cx_t + hw, cy_t - hd, cy_t + hd):
+            tx, ty = cx_t, cy_t
+            break
+    if tx is None:
+        tx, ty = rcx, rcy
     if tracker.is_free(tx - hw, tx + hw, ty - hd, ty + hd):
         # Seats are placed BEFORE the table's margin box is reserved: chairs
         # tuck against the table edge, so checking them against the margin
@@ -2344,8 +2430,18 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
                 tracker.occupy(cx - 0.30, cx + 0.30, cy - 0.30, cy + 0.30)
                 build_prop(bm, 'CHAIR', cx, cy, z_floor, yaw, seat_h=h)
 
+        def _high_seat(cx, cy, yaw, _ay, _alen, _tx, _ty):
+            """A taller chair at the head of the table, nudged clear if busy."""
+            for _push in (0.0, 0.26, 0.52):
+                _ox = cx + (_push * (1.0 if yaw >= 0 else -1.0) if not _ay else 0.0)
+                _oy = cy + (0.0 if not _ay else (_push * (1.0 if yaw > 0 else -1.0)))
+                if tracker.is_free(_ox - 0.34, _ox + 0.34, _oy - 0.34, _oy + 0.34):
+                    tracker.occupy(_ox - 0.34, _ox + 0.34, _oy - 0.34, _oy + 0.34)
+                    build_prop(bm, 'CHAIR', _ox, _oy, z_floor, yaw, seat_h=0.62)
+                    return
+
         long_len = max(tw, td)
-        n_side = max(2, int(long_len / 0.85))
+        n_side = max(3, int(long_len / 0.78))
         step = long_len / n_side
         for ci in range(n_side):
             off = -long_len * 0.5 + (ci + 0.5) * step
@@ -2355,13 +2451,37 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
             else:
                 _seat(tx + off, ty - 0.85, math.pi)
                 _seat(tx + off, ty + 0.85, 0.0)
+        # High seats at both ends of the table. The head of the table gets a
+        # taller chair (and is retried further out if the first slot is busy),
+        # so the long table always reads as a proper feast with a seat at each
+        # end.
         if along_y:
-            _seat(tx, ty - (long_len * 0.5 + 0.38), math.pi, h=0.54)
-            _seat(tx, ty + (long_len * 0.5 + 0.38), 0.0, h=0.54)
+            _high_seat(tx, ty - (long_len * 0.5 + 0.42), math.pi, along_y, long_len, tx, ty)
+            _high_seat(tx, ty + (long_len * 0.5 + 0.42), 0.0, along_y, long_len, tx, ty)
         else:
-            _seat(tx - (long_len * 0.5 + 0.38), ty, math.pi * 0.5, h=0.54)
-            _seat(tx + (long_len * 0.5 + 0.38), ty, -math.pi * 0.5, h=0.54)
+            _high_seat(tx - (long_len * 0.5 + 0.42), ty, math.pi * 0.5, along_y, long_len, tx, ty)
+            _high_seat(tx + (long_len * 0.5 + 0.42), ty, -math.pi * 0.5, along_y, long_len, tx, ty)
         tracker.occupy(tx - hw, tx + hw, ty - hd, ty + hd)
+
+        # Feasting clutter spread over the whole board: tankards, platters,
+        # bottles and candles down the centre line plus a couple of clusters
+        # at the ends, so the table never looks like a bare plank.
+        _z_tab = z_table
+        for ci in range(n_side):
+            off = -long_len * 0.5 + (ci + 0.5) * step
+            if along_y:
+                build_prop(bm, 'SCATTER_TABLEWARE', tx, ty + off, _z_tab, yaw)
+                if ci % 2 == 0:
+                    build_prop(bm, 'BOTTLE_CLUSTER', tx + _jit(rng, 0.12), ty + off, _z_tab, yaw)
+            else:
+                build_prop(bm, 'SCATTER_TABLEWARE', tx + off, ty, _z_tab, yaw)
+                if ci % 2 == 0:
+                    build_prop(bm, 'BOTTLE_CLUSTER', tx + off, ty + _jit(rng, 0.12), _z_tab, yaw)
+        if rng.random() < 0.7:
+            build_prop(bm, 'BOTTLE_CLUSTER', tx + _jit(rng, 0.20), ty + _jit(rng, 0.20), _z_tab, yaw)
+        if rng.random() < 0.6:
+            build_prop(bm, 'POTTED_PLANT_SMALL', tx + _jit(rng, 0.30), ty + _jit(rng, 0.30), _z_tab,
+                       rng.uniform(0.0, 6.28))
 
     # 3. Sideboard with bottles against a free wall.
     sideboard = _try_place_wall_prop(bm, 'INDOOR_TABLE', 1.40, 0.60, tracker, z_floor,
@@ -2370,11 +2490,26 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
     if sideboard is not None:
         build_prop(bm, 'BOTTLE_CLUSTER', sideboard[0], sideboard[1], z_table, sideboard[2])
 
-    # 4. Perimeter bench + chest.
-    _try_place_wall_prop(bm, 'BENCH', 1.60, 0.58, tracker, z_floor,
-                         candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'), length=1.60)
-    _try_place_wall_prop(bm, 'CHEST', 1.00, 0.55, tracker, z_floor,
-                         candidate_walls=('WEST', 'EAST', 'SOUTH'))
+    # 4. Perimeter dressing so the walls of the hall are not bare: benches
+    #    along both long walls, chests, a bookcase and a couple of standing
+    #    urns/plants in the corners.
+    for _w in ('WEST', 'EAST', 'SOUTH', 'NORTH'):
+        _try_place_wall_prop(bm, 'BENCH', 1.70, 0.58, tracker, z_floor,
+                             candidate_walls=(_w,), length=1.70)
+    for _w in ('WEST', 'EAST', 'SOUTH', 'NORTH'):
+        _try_place_wall_prop(bm, 'CHEST', 1.05, 0.55, tracker, z_floor,
+                             candidate_walls=(_w,))
+    for _w in ('WEST', 'EAST', 'SOUTH', 'NORTH'):
+        _try_place_wall_prop(bm, 'BOOKSHELF', 1.25, 0.38, tracker, z_floor,
+                             candidate_walls=(_w,))
+    # Corner urns / planters break up the empty wall stretches.
+    for _cx, _cy in ((rm.bounds[0] + 0.75, rm.bounds[2] + 0.75),
+                     (rm.bounds[1] - 0.75, rm.bounds[2] + 0.75),
+                     (rm.bounds[0] + 0.75, rm.bounds[3] - 0.75),
+                     (rm.bounds[1] - 0.75, rm.bounds[3] - 0.75)):
+        if tracker.is_free(_cx - 0.40, _cx + 0.40, _cy - 0.40, _cy + 0.40):
+            tracker.occupy(_cx - 0.40, _cx + 0.40, _cy - 0.40, _cy + 0.40)
+            build_prop(bm, 'POTTED_PLANT_LARGE', _cx, _cy, z_floor, rng.uniform(0.0, 6.28))
 
     # 5. Ceremonial runner under the feast table.
     run_w = min(3.0, max(1.8, min(rw, rd) * 0.55))
@@ -4392,8 +4527,29 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                     ed_x, ed_y = ed.get('pos', 0.0), (ry1 if efac == 'BACK' else ry0)
                 else:
                     ed_x, ed_y = (rx0 if efac == 'LEFT' else rx1), ed.get('pos', 0.0)
+                # Anchor the doorway on the TRUE exterior wall plane, not on the
+                # (often inset) room bound. Otherwise the keep-clear corridor in
+                # front of a portal is reserved in the wrong place and furniture
+                # ends up parked right inside the doorway.
+                _fwb = (getattr(ctx, 'floor_wall_bounds', None) or {}).get(
+                    rm.floor_idx) if ctx is not None else None
+                if _fwb is not None:
+                    _wt2 = float(getattr(ctx, 'wall_t', 0.30) or 0.30)
+                    if efac == 'RIGHT':
+                        ed_x = _fwb[1] - _wt2
+                    elif efac == 'LEFT':
+                        ed_x = _fwb[0] + _wt2
+                    elif efac == 'BACK':
+                        ed_y = _fwb[3] - _wt2
+                    elif efac == 'FRONT':
+                        ed_y = _fwb[2] + _wt2
                 ed_d = {'x': ed_x, 'y': ed_y, 'axis': sax, 'w': ed.get('w', 1.8), 'is_portal': ed.get('is_portal', True)}
-                if (rx0 - 0.55 <= ed_x <= rx1 + 0.55) and (ry0 - 0.55 <= ed_y <= ry1 + 0.55):
+                # The doorway must lie along this room's wall span.
+                if sax == 'X':
+                    _along_ok = (rx0 - 0.55 <= ed_x <= rx1 + 0.55)
+                else:
+                    _along_ok = (ry0 - 0.55 <= ed_y <= ry1 + 0.55)
+                if _along_ok:
                     if ed_d not in all_doorways:
                         all_doorways.append(ed_d)
 
