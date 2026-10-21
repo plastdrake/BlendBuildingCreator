@@ -2461,7 +2461,9 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             _p_rooms, _p_walls = _palace
             if fl_wings_bounds:
                 for wi, wb in enumerate(fl_wings_bounds):
-                    w_role = ('BANQUET_HALL' if wi == 0 else 'GUEST_ROOM') if fl_idx == 0 else (('MASTER_BED' if wi == 0 else 'BEDROOM') if fl_idx == 1 else ('GUEST_ROOM' if wi == 0 else 'BEDROOM'))
+                    # The great banquet hall now lives in the archive wing, so
+                    # the keep's rear wing becomes the royal dining room.
+                    w_role = ('DINING' if wi == 0 else 'GUEST_ROOM') if fl_idx == 0 else (('MASTER_BED' if wi == 0 else 'BEDROOM') if fl_idx == 1 else ('GUEST_ROOM' if wi == 0 else 'BEDROOM'))
                     wing_dw = []
                     dw_wx = (wb[0] + wb[1]) * 0.5
                     dw_w_eff = dw_w
@@ -2491,8 +2493,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                        and effective_archetype in ('NONE', 'HOUSE', 'AUTO', 'MANOR')
                        and not getattr(props, 'has_throne_room', False)
                        and not getattr(props, 'has_double_height', False))
+    # A building with an "open ground floor" keeps its ground storey as one
+    # grand hall (banquet hall, great hall) and only partitions the floors
+    # above it into proper chambers.
+    _open_ground = (fl_idx == 0 and bool(getattr(props, 'open_ground_floor', False)))
     if (effective_archetype == 'MANOR' or is_wide_mansion) and has_interior_walls \
-            and partition_style in ('AUTO', 'HALL_CHAMBERS'):
+            and partition_style in ('AUTO', 'HALL_CHAMBERS') and not _open_ground:
         _manor = _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t,
                                    dw_w, dw_h, has_stairs_landing,
                                    stair_pos_info=stair_pos_info,
