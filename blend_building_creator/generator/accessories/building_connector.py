@@ -242,29 +242,41 @@ def purge_props_in_volume(bm, x_span, y_span, z_span, max_prop_area=2.5):
     # run 8+ times during a single generation.
     CASCADE_DIST = 0.05
     if prop_faces:
-        # Index every small prop-material face not yet marked, by the grid cell
-        # of each of its vertices. Built once per purge call.
+        # Index candidate faces by grid cell, split into two tiers:
+        #   * PROP_ONLY_MATERIALS (fabrics, upholstery, leather, books, rugs):
+        #     cascade freely - these never appear in architecture, so we can
+        #     safely pull in detached cushions/pillows/mattress parts.
+        #   * Shared materials (WOOD, TIMBER, IRON): only index faces inside
+        #     the ORIGINAL purge volume. This catches prop parts clipped by the
+        #     portal/doorway without letting the cascade wander into a nearby
+        #     wall plank or beam and punch a hole in the architecture.
         cand_grid = {}
+        shared_grid = {}
 
         def _cell(c):
             return (int(c.x / CASCADE_DIST), int(c.y / CASCADE_DIST), int(c.z / CASCADE_DIST))
 
+        def _in_volume(c):
+            return x0 <= c.x <= x1 and y0 <= c.y <= y1 and z0 <= c.z <= z1
+
         for f in bm.faces:
             if not f.is_valid or f in prop_faces:
                 continue
-            # Cascade only into PROP-EXCLUSIVE materials (fabrics, upholstery,
-            # leather, books, rugs, etc.). Wood / timber / iron are shared with
-            # the architecture (wall planks, beams, iron straps) and must never
-            # be eaten by the prop cascade, or we punch holes in walls.
-            if f.material_index in NON_PROP_MATERIALS or f.material_index not in PROP_ONLY_MATERIALS:
+            if f.material_index in NON_PROP_MATERIALS or f.material_index not in PROP_ALLOWED_MATERIALS:
                 continue
             if f.calc_area() > max_prop_area:
                 continue
             for v in f.verts:
-                cand_grid.setdefault(_cell(v.co), []).append(f)
+                cell = _cell(v.co)
+                if f.material_index in PROP_ONLY_MATERIALS:
+                    cand_grid.setdefault(cell, []).append(f)
+                else:
+                    # Shared material: only consider if inside the purge volume
+                    if _in_volume(v.co):
+                        shared_grid.setdefault(cell, []).append(f)
 
         # Worklist flood-fill: expand from faces just marked for deletion,
-        # discovering detached parts of the same prop (legs, tabletop, etc.).
+        # discovering detached parts of the same prop (legs, tabletop, cushions).
         worklist = list(prop_faces)
         while worklist:
             f = worklist.pop()
@@ -274,16 +286,34 @@ def purge_props_in_volume(bm, x_span, y_span, z_span, max_prop_area=2.5):
                 for dx in (-1, 0, 1):
                     for dy in (-1, 0, 1):
                         for dz in (-1, 0, 1):
-                            for nf in cand_grid.get((gx + dx, gy + dy, gz + dz), ()):
+                            cell = (gx + dx, gy + dy, gz + dz)
+                            # Prop-exclusive materials: cascade freely by proximity.
+                            for nf in cand_grid.get(cell, ()):
                                 if nf in prop_faces:
                                     continue
-                                near = any(
+                                if not any(
                                     abs(nv.co.x - c.x) <= CASCADE_DIST
                                     and abs(nv.co.y - c.y) <= CASCADE_DIST
                                     and abs(nv.co.z - c.z) <= CASCADE_DIST
                                     for nv in nf.verts
-                                )
-                                if not near:
+                                ):
+                                    continue
+                                prop_faces.add(nf)
+                                worklist.append(nf)
+                            # Shared materials: only cascade into faces that lie
+                            # inside the original purge volume, so architecture
+                            # outside the volume (wall planks, beams) is spared.
+                            for nf in shared_grid.get(cell, ()):
+                                if nf in prop_faces:
+                                    continue
+                                if not _in_volume(nf.calc_center_median()):
+                                    continue
+                                if not any(
+                                    abs(nv.co.x - c.x) <= CASCADE_DIST
+                                    and abs(nv.co.y - c.y) <= CASCADE_DIST
+                                    and abs(nv.co.z - c.z) <= CASCADE_DIST
+                                    for nv in nf.verts
+                                ):
                                     continue
                                 prop_faces.add(nf)
                                 worklist.append(nf)
