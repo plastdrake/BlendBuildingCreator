@@ -383,6 +383,7 @@ def carve_pass_through_portal(bm, x_span, y_span, z_span):
     legs, no missing chair parts, no half-finished stoves). If a piece of
     furniture clips a doorway, the user can move or delete it manually in Blender.
     """
+    import bmesh
     x0, x1 = min(x_span), max(x_span)
     y0, y1 = min(y_span), max(y_span)
     z0, z1 = min(z_span), max(z_span)
