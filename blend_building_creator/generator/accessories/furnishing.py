@@ -212,9 +212,9 @@ def _jit(rng, amount: float) -> float:
 _WALL_PROP_DEPTH = {
     'INDOOR_TABLE': 1.15,
     'ROUND_TABLE': 0.78,
-    'BOOKSHELF': 0.34,
-    'BOOKSHELF_NEAT': 0.34,
-    'SHELF': 0.38,
+    'BOOKSHELF': 0.36,
+    'BOOKSHELF_NEAT': 0.36,
+    'SHELF': 0.36,
     'CHEST': 0.68,
     'BENCH': 0.62,
     'DESK': 0.82,
@@ -225,6 +225,39 @@ _WALL_PROP_DEPTH = {
     'WEAPON_RACK': 0.45,
     'POTTED_PLANT_LARGE': 0.50,
 }
+
+
+def _wall_prop_footprint(key: str, width: float, depth: float, params: Optional[dict] = None):
+    """Return the *real* built footprint (along-wall width, across-wall depth).
+
+    ``_try_place_wall_prop`` used to reserve space with the caller's nominal
+    size while ``build_prop`` actually builds the prop at its registry default
+    size.  A bookshelf therefore occupied 1.25 m of collision space but built
+    1.65 m wide, so neighbouring pieces (desk, chest) interpenetrated and the
+    overhang poked through side walls.  Resolve the same defaults ``build_prop``
+    will use so collision boxes always contain the real geometry.
+    """
+    try:
+        from .prop_registry import PROP_REGISTRY
+        spec = PROP_REGISTRY.get(key)
+    except Exception:
+        spec = None
+    if spec is not None:
+        merged = dict(spec.defaults)
+        merged.update(params or {})
+        if 'length' in merged:
+            width = max(width, float(merged['length']))
+        elif 'width' in merged:
+            width = max(width, float(merged['width']))
+        if 'depth' in merged:
+            depth = max(depth, float(merged['depth']))
+        elif 'length' in merged and 'width' in merged:
+            # Piles / tables use ``width`` as the across-wall dimension.
+            depth = max(depth, float(merged['width']))
+    real_depth = _WALL_PROP_DEPTH.get(key)
+    if real_depth is not None:
+        depth = max(depth, real_depth)
+    return width, depth
 
 
 def _try_place_chair(bm, tracker: RoomOccupancyTracker, cx: float, cy: float,
@@ -533,12 +566,10 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
     """
     rx0, rx1 = tracker.rx0, tracker.rx1
     ry0, ry1 = tracker.ry0, tracker.ry1
-    # Real footprint depth of the props that get pushed against a wall. Using a
-    # guessed depth meant a piece could be pushed half way into the wall it
-    # stands against (the dining table is 1.15 m wide, not 0.60 m).
-    _real_depth = _WALL_PROP_DEPTH.get(key)
-    if _real_depth is not None:
-        depth = _real_depth
+    # Reserve the REAL built footprint: registry defaults + caller params.
+    # Using the caller's smaller nominal size let neighbouring props overlap
+    # and let the overhang clip through perpendicular walls.
+    width, depth = _wall_prop_footprint(key, width, depth, params)
     if key == 'ARMCHAIR':
         width = max(width, 1.10)
         depth = max(depth, 1.02)
@@ -886,7 +917,10 @@ def _try_place_plant(bm, tracker, z_floor: float, rng,
         return False
     key = 'POTTED_PLANT_LARGE'
     if box is None:
-        box = 0.34
+        # The urn is ~0.47 m across but the leaf fans reach ~1.0 m. Reserve the
+        # foliage radius, not just the pot, so leaves never poke through a
+        # doorway or a wall.
+        box = 0.55
     rx0, rx1 = tracker.rx0, tracker.rx1
     ry0, ry1 = tracker.ry0, tracker.ry1
     xs = [rx0 + box, rx1 - box]
@@ -895,9 +929,15 @@ def _try_place_plant(bm, tracker, z_floor: float, rng,
     rng.shuffle(ys)
     for cx in xs:
         for cy in ys:
-            jx = cx + _jit(rng, 0.12)
-            jy = cy + _jit(rng, 0.12)
-            if tracker.is_free(jx - box, jx + box, jy - box, jy + box):
+            # Jitter towards the room only: never let the foliage cross the wall.
+            jx = min(max(cx + _jit(rng, 0.10), rx0 + box), rx1 - box)
+            jy = min(max(cy + _jit(rng, 0.10), ry0 + box), ry1 - box)
+            # Explicit doorway check: the reserved corridor box alone can be
+            # missed by the old tiny 0.34 m pot footprint, parking a planter
+            # right in a portal.
+            if tracker.is_near_door(jx, jy, radius=box + 0.45):
+                continue
+            if tracker.is_free(jx - box, jx + box, jy - box, jy + box, margin=0.05):
                 tracker.occupy(jx - box, jx + box, jy - box, jy + box)
                 build_prop(bm, key, jx, jy, z_floor, rng.uniform(0.0, math.pi * 2.0))
                 return True
@@ -1179,7 +1219,9 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         # Chest at foot of bed
         fcx = bcx + fwd_x * (bed_len * 0.5 + 0.38)
         fcy = bcy + fwd_y * (bed_len * 0.5 + 0.38)
-        cw, cd = 0.85, 0.45
+        # Chest is 0.85 x 0.65 m; reserving only 0.45 m of depth let it sink
+        # into the wall / overlap the next prop.
+        cw, cd = 0.85, 0.68
         cbx0 = fcx - (cd * 0.5 if abs(fwd_x) > 0.5 else cw * 0.5)
         cbx1 = fcx + (cd * 0.5 if abs(fwd_x) > 0.5 else cw * 0.5)
         cby0 = fcy - (cw * 0.5 if abs(fwd_x) > 0.5 else cd * 0.5)
@@ -2518,8 +2560,11 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
                      (rm.bounds[1] - 0.75, rm.bounds[2] + 0.75),
                      (rm.bounds[0] + 0.75, rm.bounds[3] - 0.75),
                      (rm.bounds[1] - 0.75, rm.bounds[3] - 0.75)):
-        if tracker.is_free(_cx - 0.40, _cx + 0.40, _cy - 0.40, _cy + 0.40):
-            tracker.occupy(_cx - 0.40, _cx + 0.40, _cy - 0.40, _cy + 0.40)
+        # Reserve the full leaf spread (not just the urn) and keep clear of portals.
+        if tracker.is_near_door(_cx, _cy, radius=1.0):
+            continue
+        if tracker.is_free(_cx - 0.55, _cx + 0.55, _cy - 0.55, _cy + 0.55):
+            tracker.occupy(_cx - 0.55, _cx + 0.55, _cy - 0.55, _cy + 0.55)
             build_prop(bm, 'POTTED_PLANT_LARGE', _cx, _cy, z_floor, rng.uniform(0.0, 6.28))
 
     # 5. Ceremonial runner under the feast table.
