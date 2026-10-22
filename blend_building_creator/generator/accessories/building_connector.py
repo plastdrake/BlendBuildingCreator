@@ -252,7 +252,11 @@ def purge_props_in_volume(bm, x_span, y_span, z_span, max_prop_area=2.5):
         for f in bm.faces:
             if not f.is_valid or f in prop_faces:
                 continue
-            if f.material_index in NON_PROP_MATERIALS or f.material_index not in PROP_ALLOWED_MATERIALS:
+            # Cascade only into PROP-EXCLUSIVE materials (fabrics, upholstery,
+            # leather, books, rugs, etc.). Wood / timber / iron are shared with
+            # the architecture (wall planks, beams, iron straps) and must never
+            # be eaten by the prop cascade, or we punch holes in walls.
+            if f.material_index in NON_PROP_MATERIALS or f.material_index not in PROP_ONLY_MATERIALS:
                 continue
             if f.calc_area() > max_prop_area:
                 continue
