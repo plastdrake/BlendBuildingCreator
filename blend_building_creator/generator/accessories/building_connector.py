@@ -88,244 +88,21 @@ CARVE_STRUCTURAL_MATERIALS = {
 
 def purge_props_in_volume(bm, x_span, y_span, z_span, max_prop_area=2.5):
     """
-    Finds any props (furniture, kitchen items, dishes, rugs, decorations, clutter)
-    whose geometry touches or overlaps the given box, and cleanly deletes the
-    ENTIRE connected prop mesh component and adjacent detached pieces (bun feet,
-    cushions, armrests, pillows, pots, books, lantern glow) without slicing or leaving
-    stumps behind.
-    Structural architectural elements (walls, corner pillars, timber wall framing,
-    window assemblies, roofs, foundations, floors) are strictly protected.
+    Disabled: furniture is no longer auto-purged by the generator.
 
-    A prop is always removed WHOLE or not at all: the connected component is
-    grown across every prop-material face (including large ones such as a
-    table top or a mattress), so a table can never lose its legs and keep its
-    board. Components that belong to the architecture (too big, or physically
-    touching stone/plaster/floor) are left alone.
+    Previously this deleted any furniture touching portal/doorway volumes, which
+    left rooms half-empty (missing table legs, chair parts, stove pieces, etc.)
+    and punched holes in walls when the cascade wandered into architectural
+    wood/timber/iron faces.
+
+    Furniture is now left completely alone: every prop is either fully present
+    or fully absent. If a piece clips a doorway or sits in an inconvenient spot,
+    the user can move or delete it manually in Blender. The house stays
+    walkable because doorways are still carved through walls (see
+    carve_pass_through_portal) - we just no longer slice or delete furniture
+    to achieve it.
     """
-    x0, x1 = min(x_span), max(x_span)
-    y0, y1 = min(y_span), max(y_span)
-    z0, z1 = min(z_span), max(z_span)
-
-    # 1. Identify seed candidate faces strictly within [x0, x1] x [y0, y1] x [z0, z1]
-    candidate_faces = []
-    for f in bm.faces:
-        if not f.is_valid:
-            continue
-        if f.material_index in NON_PROP_MATERIALS:
-            continue
-        if f.material_index not in PROP_ALLOWED_MATERIALS:
-            continue
-        c = f.calc_center_median()
-        if (x0 <= c.x <= x1) and (y0 <= c.y <= y1) and (z0 <= c.z <= z1):
-            candidate_faces.append(f)
-
-    if not candidate_faces:
-        return
-
-    # 2. Group candidate faces into full connected components and validate they are genuine props
-    visited = set()
-    components_to_purge = []
-
-    for f in candidate_faces:
-        if f in visited or not f.is_valid:
-            continue
-        comp = [f]
-        visited.add(f)
-        q = [f]
-        touches_non_prop = False
-
-        while q:
-            curr = q.pop()
-            for e in curr.edges:
-                for nxt in e.link_faces:
-                    if not nxt.is_valid:
-                        continue
-                    if nxt.material_index in NON_PROP_MATERIALS:
-                        touches_non_prop = True
-                        continue
-                    if nxt.material_index not in PROP_ALLOWED_MATERIALS:
-                        continue
-                    # Grow across EVERY prop face (large ones included) so the
-                    # prop is always removed as one whole piece.
-                    if nxt not in visited:
-                        visited.add(nxt)
-                        comp.append(nxt)
-                        q.append(nxt)
-
-        if touches_non_prop:
-            # Component is physically connected to stone/plaster/floor/shingles -> Structural architecture!
-            continue
-
-        # Check component bounding dimensions
-        verts = set(v for cf in comp for v in cf.verts)
-        sz = max(v.co.z for v in verts) - min(v.co.z for v in verts)
-        sx = max(v.co.x for v in verts) - min(v.co.x for v in verts)
-        sy = max(v.co.y for v in verts) - min(v.co.y for v in verts)
-
-        # Pillars, wall studs, framing, or siding wall runs are tall (sz >= 2.90) or broad (sx/sy >= 3.80)
-        if sz >= 2.90 or sx >= 3.80 or sy >= 3.80:
-            continue
-
-        components_to_purge.append(comp)
-
-    if not components_to_purge:
-        return
-
-    prop_faces = set(f for comp in components_to_purge for f in comp)
-
-    # 3. Single tight cluster sweep: pick up small disjoint pieces that belong to
-    # an already purged prop (bun feet, cushions, jars, plants) but NEVER widen the
-    # search volume. The old 3-round sweep grew the box by 1.4 m every round and
-    # stripped whole buildings of their furniture.
-    p_x0 = min(v.co.x for pf in prop_faces for v in pf.verts) - 0.35
-    p_x1 = max(v.co.x for pf in prop_faces for v in pf.verts) + 0.35
-    p_y0 = min(v.co.y for pf in prop_faces for v in pf.verts) - 0.35
-    p_y1 = max(v.co.y for pf in prop_faces for v in pf.verts) + 0.35
-    p_z0 = min(v.co.z for pf in prop_faces for v in pf.verts) - 0.25
-    p_z1 = max(v.co.z for pf in prop_faces for v in pf.verts) + 0.60
-
-    extra_seeds = []
-    for f in bm.faces:
-        if not f.is_valid or f in visited:
-            continue
-        if f.material_index in NON_PROP_MATERIALS or f.material_index not in PROP_ALLOWED_MATERIALS:
-            continue
-        c = f.calc_center_median()
-        if (p_x0 <= c.x <= p_x1) and (p_y0 <= c.y <= p_y1) and (p_z0 <= c.z <= p_z1):
-            extra_seeds.append(f)
-
-    for f in extra_seeds:
-        if f in visited or not f.is_valid:
-            continue
-        comp = [f]
-        visited.add(f)
-        q = [f]
-        touches_non_prop = False
-        while q:
-            curr = q.pop()
-            for e in curr.edges:
-                for nxt in e.link_faces:
-                    if not nxt.is_valid:
-                        continue
-                    if nxt.material_index in NON_PROP_MATERIALS:
-                        touches_non_prop = True
-                        continue
-                    if nxt.material_index not in PROP_ALLOWED_MATERIALS:
-                        continue
-                    if nxt not in visited:
-                        visited.add(nxt)
-                        comp.append(nxt)
-                        q.append(nxt)
-        if touches_non_prop:
-            continue
-        verts = set(v for cf in comp for v in cf.verts)
-        sz = max(v.co.z for v in verts) - min(v.co.z for v in verts)
-        sx = max(v.co.x for v in verts) - min(v.co.x for v in verts)
-        sy = max(v.co.y for v in verts) - min(v.co.y for v in verts)
-        if sz >= 2.90 or sx >= 3.80 or sy >= 3.80:
-            continue
-        for cf in comp:
-            prop_faces.add(cf)
-
-    # Cascade-delete nearby parts of the same prop. Parts of the same prop
-    # (e.g. table legs and tabletop, shelf boards and side panels) are often
-    # separate bmesh components with no shared edges. If any part sits in the
-    # purge volume, the whole prop should go - otherwise we leave "half-loaded"
-    # furniture (floating tabletops, headless shelves, etc.).
-    #
-    # Implemented as a single-pass worklist flood-fill instead of repeatedly
-    # rescanning the whole bmesh: each candidate face is indexed once by its
-    # vertices, and we only expand from faces just marked for deletion. Each
-    # face enters the purge set at most once, so the cascade is linear in the
-    # number of prop faces rather than quadratic in the whole mesh. This matters
-    # on large citadels such as Nasher's Manor, where purge_props_in_volume is
-    # run 8+ times during a single generation.
-    CASCADE_DIST = 0.05
-    if prop_faces:
-        # Index candidate faces by grid cell, split into two tiers:
-        #   * PROP_ONLY_MATERIALS (fabrics, upholstery, leather, books, rugs):
-        #     cascade freely - these never appear in architecture, so we can
-        #     safely pull in detached cushions/pillows/mattress parts.
-        #   * Shared materials (WOOD, TIMBER, IRON): only index faces inside
-        #     the ORIGINAL purge volume. This catches prop parts clipped by the
-        #     portal/doorway without letting the cascade wander into a nearby
-        #     wall plank or beam and punch a hole in the architecture.
-        cand_grid = {}
-        shared_grid = {}
-
-        def _cell(c):
-            return (int(c.x / CASCADE_DIST), int(c.y / CASCADE_DIST), int(c.z / CASCADE_DIST))
-
-        def _in_volume(c):
-            return x0 <= c.x <= x1 and y0 <= c.y <= y1 and z0 <= c.z <= z1
-
-        for f in bm.faces:
-            if not f.is_valid or f in prop_faces:
-                continue
-            if f.material_index in NON_PROP_MATERIALS or f.material_index not in PROP_ALLOWED_MATERIALS:
-                continue
-            if f.calc_area() > max_prop_area:
-                continue
-            for v in f.verts:
-                cell = _cell(v.co)
-                if f.material_index in PROP_ONLY_MATERIALS:
-                    cand_grid.setdefault(cell, []).append(f)
-                else:
-                    # Shared material: only consider if inside the purge volume
-                    if _in_volume(v.co):
-                        shared_grid.setdefault(cell, []).append(f)
-
-        # Worklist flood-fill: expand from faces just marked for deletion,
-        # discovering detached parts of the same prop (legs, tabletop, cushions).
-        worklist = list(prop_faces)
-        while worklist:
-            f = worklist.pop()
-            for v in f.verts:
-                c = v.co
-                gx, gy, gz = _cell(c)
-                for dx in (-1, 0, 1):
-                    for dy in (-1, 0, 1):
-                        for dz in (-1, 0, 1):
-                            cell = (gx + dx, gy + dy, gz + dz)
-                            # Prop-exclusive materials: cascade freely by proximity.
-                            for nf in cand_grid.get(cell, ()):
-                                if nf in prop_faces:
-                                    continue
-                                if not any(
-                                    abs(nv.co.x - c.x) <= CASCADE_DIST
-                                    and abs(nv.co.y - c.y) <= CASCADE_DIST
-                                    and abs(nv.co.z - c.z) <= CASCADE_DIST
-                                    for nv in nf.verts
-                                ):
-                                    continue
-                                prop_faces.add(nf)
-                                worklist.append(nf)
-                            # Shared materials: only cascade into faces that lie
-                            # inside the original purge volume, so architecture
-                            # outside the volume (wall planks, beams) is spared.
-                            for nf in shared_grid.get(cell, ()):
-                                if nf in prop_faces:
-                                    continue
-                                if not _in_volume(nf.calc_center_median()):
-                                    continue
-                                if not any(
-                                    abs(nv.co.x - c.x) <= CASCADE_DIST
-                                    and abs(nv.co.y - c.y) <= CASCADE_DIST
-                                    and abs(nv.co.z - c.z) <= CASCADE_DIST
-                                    for nv in nf.verts
-                                ):
-                                    continue
-                                prop_faces.add(nf)
-                                worklist.append(nf)
-    if prop_faces:
-        import bmesh
-        bmesh.ops.delete(bm, geom=list(prop_faces), context='FACES')
-        loose_edges = [e for e in bm.edges if not e.link_faces]
-        if loose_edges:
-            bmesh.ops.delete(bm, geom=loose_edges, context='EDGES')
-        orphan_verts = [v for v in bm.verts if not v.link_faces and not v.link_edges]
-        if orphan_verts:
-            bmesh.ops.delete(bm, geom=orphan_verts, context='VERTS')
+    return
 
 
 def clean_orphan_floating_props(bm):
@@ -459,10 +236,13 @@ def clean_orphan_floating_props(bm):
 def carve_pass_through_portal(bm, x_span, y_span, z_span):
     """Cuts through existing structural geometry in a box [x0, x1] x [y0, y1] x [z0, z1]
     so that doorways / portals are clear of intersecting walls.
-    Removes whole props first so furniture is never sliced or booleaned through."""
-    purge_props_in_volume(bm, x_span, y_span, z_span)
 
-    import bmesh
+    Furniture is NEVER touched: prop materials are excluded from both the bisect
+    and the residual-face deletion, so every prop stays whole (no sliced table
+    legs, no missing chair parts, no half-finished stoves). If a piece of
+    furniture clips a doorway, the user can move or delete it manually in Blender.
+    """
+    # purge_props_in_volume is intentionally disabled - furniture is left alone.
     x0, x1 = min(x_span), max(x_span)
     y0, y1 = min(y_span), max(y_span)
     z0, z1 = min(z_span), max(z_span)
@@ -477,9 +257,12 @@ def carve_pass_through_portal(bm, x_span, y_span, z_span):
                     max(zs) < z0 - pad or min(zs) > z1 + pad)
 
     # Only bisect non-prop structural materials (stone, plaster, walls).
+    # Prop materials (wood, timber, iron, fabrics, etc.) are excluded so
+    # furniture is never sliced by the carving planes.
     # Floors are NEVER cut - that used to punch holes in the floor slabs.
     cand_faces = [f for f in bm.faces if f.is_valid
                   and f.material_index in CARVE_STRUCTURAL_MATERIALS
+                  and f.material_index not in PROP_ALLOWED_MATERIALS
                   and _face_overlaps_box(f)]
     if cand_faces:
         geom = list({v for f in cand_faces for v in f.verts}) + list({e for f in cand_faces for e in f.edges}) + cand_faces
@@ -500,6 +283,7 @@ def carve_pass_through_portal(bm, x_span, y_span, z_span):
 
     to_delete = [f for f in bm.faces if f.is_valid
                  and f.material_index in CARVE_STRUCTURAL_MATERIALS
+                 and f.material_index not in PROP_ALLOWED_MATERIALS
                  and (x0 + 0.02 <= f.calc_center_median().x <= x1 - 0.02) and
                  (y0 + 0.02 <= f.calc_center_median().y <= y1 - 0.02) and
                  (z0 + 0.02 <= f.calc_center_median().z <= z1 - 0.02)]
