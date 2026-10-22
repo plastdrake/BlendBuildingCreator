@@ -593,11 +593,14 @@ def build_indoor_table(bm, x, y, z_ground=0.0, ang=0.0, length=2.10, width=1.15)
 def build_round_table(bm, x, y, z_ground=0.0, ang=0.0, radius=0.70):
     """Round tavern table on a pedestal foot."""
     faces = []
-    top_z = 0.95
-    faces += create_cylinder(bm, radius=radius, height=0.08, segments=16,
+    top_z, top_t = 0.95, 0.08
+    faces += create_cylinder(bm, radius=radius, height=top_t, segments=16,
                              location=(0.0, 0.0, top_z), mat_index=MAT_INDEX_WOOD)
-    faces += create_cylinder(bm, radius=0.11, height=top_z - 0.05, segments=10,
-                             location=(0.0, 0.0, (top_z - 0.05) * 0.5), mat_index=MAT_INDEX_TIMBER)
+    # Pedestal: height from floor to just under tabletop (touching it so they
+    # form one connected component - if any part is purged, the whole table goes)
+    pedestal_h = top_z - top_t * 0.5  # top of pedestal = bottom of tabletop
+    faces += create_cylinder(bm, radius=0.11, height=pedestal_h, segments=10,
+                             location=(0.0, 0.0, pedestal_h * 0.5), mat_index=MAT_INDEX_TIMBER)
     faces += create_cylinder(bm, radius=0.38, height=0.08, segments=12,
                              location=(0.0, 0.0, 0.04), mat_index=MAT_INDEX_TIMBER)
     transform_faces(faces, _place(x, y, z_ground, ang))

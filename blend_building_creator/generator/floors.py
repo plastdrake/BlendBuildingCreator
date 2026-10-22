@@ -669,16 +669,10 @@ def build_floors(bm, props, ctx):
             elif stair_switchback:
                 # Switchback floor: this storey's opening is the lane the flight
                 # below climbed, and the sibling lane is solid floor carrying the
-                # next flight. On top floor, no next flight ascends so all 3 sides are guarded.
-                if fl_idx == num_floors - 1:
-                    dir_y = int(stair_ascend_sign) if ((fl_idx - 1) % 2 == 0) else int(-stair_ascend_sign)
-                    climb_side = 'NORTH' if dir_y == 1 else 'SOUTH'
-                    build_stair_guardrail_3sided(
-                        bm, sh_x1, sh_x2, sh_y1, sh_y2, z_floor + 0.05,
-                        climb_side=climb_side, offset=0.18, rail_h=0.95,
-                        bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
-                    )
-                elif (fl_idx - 1) % 2 == 0:
+                # next flight. Every floor guards its void in exactly the same
+                # way - the closed foot end only - so the same opening never
+                # ends up with a different amount of railing storey to storey.
+                if (fl_idx - 1) % 2 == 0:
                     # Void over the WEST lane: flight climbed South -> North, arriving at sh_y2.
                     # Next flight departs at sh_y2 climbing North -> South in East lane.
                     # Guard ONLY the South end of the void to protect against the drop from the room floor.
@@ -696,15 +690,15 @@ def build_floors(bm, props, ctx):
             else:
                 # Straight stairs: guard the open stairwell on all 3 sides except the climb-up side,
                 # offset 18 cm outward from the hole so it sits cleanly on the floor without overlapping
-                # any stair stringers or pillars.
-                if fl_idx == num_floors - 1:
-                    dir_y = int(stair_ascend_sign) if ((fl_idx - 1) % 2 == 0) else int(-stair_ascend_sign)
-                    climb_side = 'NORTH' if dir_y == 1 else 'SOUTH'
-                    build_stair_guardrail_3sided(
-                        bm, sh_x1, sh_x2, sh_y1, sh_y2, z_floor + 0.05,
-                        climb_side=climb_side, offset=0.18, rail_h=0.95,
-                        bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
-                    )
+                # any stair stringers or pillars. The climb side comes from the flight's own
+                # direction, which is the SAME on every storey, so one hole always gets one railing.
+                dir_y = int(stair_ascend_sign)
+                climb_side = 'NORTH' if dir_y == 1 else 'SOUTH'
+                build_stair_guardrail_3sided(
+                    bm, sh_x1, sh_x2, sh_y1, sh_y2, z_floor + 0.05,
+                    climb_side=climb_side, offset=0.18, rail_h=0.95,
+                    bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
+                )
         
         # Wing floor slabs for compound shapes (never on open-air temporary
         # stockpiles: the yard stays bare dirt with pallets and awnings).

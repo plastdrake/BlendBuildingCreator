@@ -227,6 +227,62 @@ def purge_props_in_volume(bm, x_span, y_span, z_span, max_prop_area=2.5):
         for cf in comp:
             prop_faces.add(cf)
 
+    # Cascade-delete nearby parts of the same prop. Parts of the same prop
+    # (e.g. table legs and tabletop, shelf boards and side panels) are often
+    # separate bmesh components with no shared edges. If any part sits in the
+    # purge volume, the whole prop should go - otherwise we leave "half-loaded"
+    # furniture (floating tabletops, headless shelves, etc.).
+    #
+    # Implemented as a single-pass worklist flood-fill instead of repeatedly
+    # rescanning the whole bmesh: each candidate face is indexed once by its
+    # vertices, and we only expand from faces just marked for deletion. Each
+    # face enters the purge set at most once, so the cascade is linear in the
+    # number of prop faces rather than quadratic in the whole mesh. This matters
+    # on large citadels such as Nasher's Manor, where purge_props_in_volume is
+    # run 8+ times during a single generation.
+    CASCADE_DIST = 0.05
+    if prop_faces:
+        # Index every small prop-material face not yet marked, by the grid cell
+        # of each of its vertices. Built once per purge call.
+        cand_grid = {}
+
+        def _cell(c):
+            return (int(c.x / CASCADE_DIST), int(c.y / CASCADE_DIST), int(c.z / CASCADE_DIST))
+
+        for f in bm.faces:
+            if not f.is_valid or f in prop_faces:
+                continue
+            if f.material_index in NON_PROP_MATERIALS or f.material_index not in PROP_ALLOWED_MATERIALS:
+                continue
+            if f.calc_area() > max_prop_area:
+                continue
+            for v in f.verts:
+                cand_grid.setdefault(_cell(v.co), []).append(f)
+
+        # Worklist flood-fill: expand from faces just marked for deletion,
+        # discovering detached parts of the same prop (legs, tabletop, etc.).
+        worklist = list(prop_faces)
+        while worklist:
+            f = worklist.pop()
+            for v in f.verts:
+                c = v.co
+                gx, gy, gz = _cell(c)
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        for dz in (-1, 0, 1):
+                            for nf in cand_grid.get((gx + dx, gy + dy, gz + dz), ()):
+                                if nf in prop_faces:
+                                    continue
+                                near = any(
+                                    abs(nv.co.x - c.x) <= CASCADE_DIST
+                                    and abs(nv.co.y - c.y) <= CASCADE_DIST
+                                    and abs(nv.co.z - c.z) <= CASCADE_DIST
+                                    for nv in nf.verts
+                                )
+                                if not near:
+                                    continue
+                                prop_faces.add(nf)
+                                worklist.append(nf)
     if prop_faces:
         import bmesh
         bmesh.ops.delete(bm, geom=list(prop_faces), context='FACES')

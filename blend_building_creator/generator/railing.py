@@ -70,14 +70,20 @@ def _beam(bm, p0, p1, z0, z1, cross_w, cross_t, mat, bevel=0.012):
 def build_railing_post(bm, x, y, base_z, height=1.05,
                        rail_mat=MAT_INDEX_TIMBER, cap_mat=MAT_INDEX_TIMBER,
                        iron_pin=False, jankiness=0.0, index=0, seed=0):
-    """A single capped newel post matching build_railing's joinery."""
+    """A single capped newel post matching build_railing's joinery.
+
+    The post stops UNDER the handrail (its top face is the handrail's underside)
+    so the two pieces meet as clean joinery instead of the post being driven
+    through the handboard.
+    """
     tilt_x = _jitter(jankiness, index, 1.7, seed, 0.035)
     tilt_y = _jitter(jankiness, index, 4.1, seed, 0.035)
     ox = _jitter(jankiness, index, 7.3, seed, 0.020)
     oy = _jitter(jankiness, index, 9.9, seed, 0.020)
     px, py = x + ox, y + oy
-    create_beveled_box(bm, size=(POST_W, POST_W, height),
-                       location=(px, py, base_z + height * 0.5),
+    post_h = max(0.12, height - HANDRAIL_T)
+    create_beveled_box(bm, size=(POST_W, POST_W, post_h),
+                       location=(px, py, base_z + post_h * 0.5),
                        rotation=(tilt_x, tilt_y, 0.0),
                        mat_index=rail_mat, bevel_amount=0.012,
                        u_offset=index * 0.31, v_offset=base_z)
@@ -134,7 +140,10 @@ def build_railing(bm, p_start, p_end, base_z, height=1.05, base_z_end=None,
                rz0, rz1,
                HANDRAIL_W, HANDRAIL_T, rail_mat, bevel=0.012)
 
-    # 3. Newel posts: both ends plus evenly spaced in between
+    # 3. Newel posts: both ends plus evenly spaced in between.
+    #    The posts stop UNDER the handrail (the rail's underside is the post's
+    #    top face) so the two never intersect and the joint reads as clean
+    #    joinery instead of a post driven through the handboard.
     n_post = max(1, int(round(run / max(0.6, post_spacing))))
     if posts:
         posts_t = [i / n_post for i in range(n_post + 1)]

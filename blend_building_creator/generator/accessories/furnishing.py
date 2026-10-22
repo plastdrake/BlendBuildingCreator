@@ -102,7 +102,7 @@ class RoomOccupancyTracker:
                 axis = d.get('axis', 'X')
                 dw = d.get('w', 0.95)
                 is_p = bool(d.get('is_portal', False))
-                clr = 3.20 if is_p else 1.80  # clear walking corridor depth inside room
+                clr = 2.40 if is_p else 1.80  # clear walking corridor depth inside room
                 w_margin = (dw * 0.5 + 0.55) if is_p else (dw * 0.5 + 0.30)
                 if axis == 'X':
                     self.occupied_boxes.append((dcx - w_margin, dcx + w_margin,
@@ -215,11 +215,11 @@ _WALL_PROP_DEPTH = {
     'BOOKSHELF': 0.34,
     'BOOKSHELF_NEAT': 0.34,
     'SHELF': 0.38,
-    'CHEST': 0.60,
-    'BENCH': 0.60,
-    'DESK': 0.78,
+    'CHEST': 0.68,
+    'BENCH': 0.62,
+    'DESK': 0.82,
     'COUNTER': 0.72,
-    'WARDROBE': 0.64,
+    'WARDROBE': 0.70,
     'HEARTH': 0.70,
     'ARMOUR': 0.55,
     'WEAPON_RACK': 0.45,
@@ -2429,10 +2429,21 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
             if tracker.is_free(cx - 0.30, cx + 0.30, cy - 0.30, cy + 0.30):
                 tracker.occupy(cx - 0.30, cx + 0.30, cy - 0.30, cy + 0.30)
                 build_prop(bm, 'CHAIR', cx, cy, z_floor, yaw, seat_h=h)
+                return
+            # Chair blocked by a doorway corridor or other prop: nudge it to find
+            # a free spot so the table never reads half-empty.
+            for push in (0.18, 0.36, 0.54, 0.72):
+                for dx, dy in ((push, 0.0), (-push, 0.0), (0.0, push), (0.0, -push),
+                               (push * 0.70, push * 0.70), (-push * 0.70, -push * 0.70)):
+                    nx, ny = cx + dx, cy + dy
+                    if tracker.is_free(nx - 0.30, nx + 0.30, ny - 0.30, ny + 0.30):
+                        tracker.occupy(nx - 0.30, nx + 0.30, ny - 0.30, ny + 0.30)
+                        build_prop(bm, 'CHAIR', nx, ny, z_floor, yaw, seat_h=h)
+                        return
 
         def _high_seat(cx, cy, yaw, _ay, _alen, _tx, _ty):
             """A taller chair at the head of the table, nudged clear if busy."""
-            for _push in (0.0, 0.26, 0.52):
+            for _push in (0.0, 0.26, 0.52, 0.78, 1.04):
                 _ox = cx + (_push * (1.0 if yaw >= 0 else -1.0) if not _ay else 0.0)
                 _oy = cy + (0.0 if not _ay else (_push * (1.0 if yaw > 0 else -1.0)))
                 if tracker.is_free(_ox - 0.34, _ox + 0.34, _oy - 0.34, _oy + 0.34):
@@ -4570,10 +4581,13 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     elif not chimney_positions:
         chimney_positions = []
 
-    # Stairwell footprint for this floor: the room's own hole, else the
-    # ceiling slab's hole one storey up (the stairs rising from here). Both
-    # are reserved so no prop or display ever sits inside the staircase.
+    # Stairwell footprint: the room's own hole, the hole cut in THIS floor's
+    # slab (stairs going down), and the hole one storey up (stairs rising).
+    # All three are reserved so no prop or light ever sits inside the staircase.
     _stair_well = rm.stair_hole
+    if _stair_well is None and ctx is not None:
+        _stair_well = (getattr(ctx, 'floor_stair_holes', None) or {}).get(
+            rm.floor_idx)
     if _stair_well is None and ctx is not None:
         _stair_well = (getattr(ctx, 'floor_stair_holes', None) or {}).get(
             rm.floor_idx + 1)

@@ -886,11 +886,11 @@ def build_sanctuary_chapel(
     build_candlestick(bm, x=cx - 0.7, y=cy + half_d - 1.2, z_ground=z0 + 1.0)
     build_candlestick(bm, x=cx + 0.7, y=cy + half_d - 1.2, z_ground=z0 + 1.0)
 
-    # Worship benches / pews
+    # Worship benches / pews (both face inwards towards the nave centre)
     for i in range(3):
         py = cy - half_d + 3.5 + i * 2.2
         build_bench(bm, x=cx - 1.8, y=py, z_ground=z0 + 0.18, ang=math.pi * 0.5, length=1.8)
-        build_bench(bm, x=cx + 1.8, y=py, z_ground=z0 + 0.18, ang=math.pi * 0.5, length=1.8)
+        build_bench(bm, x=cx + 1.8, y=py, z_ground=z0 + 0.18, ang=-math.pi * 0.5, length=1.8)
 
     # Secret Crypt Trapdoor in floor
     create_beveled_box(bm, size=(1.2, 1.4, 0.08),

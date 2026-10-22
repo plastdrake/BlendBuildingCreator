@@ -1884,14 +1884,12 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         _vwall(b_west, iy_min, iy_max, y_mid)
         _vwall(b_east, iy_min, iy_max, y_mid)
 
-        # Optional royal kitchen: the north end of the west bay becomes a real
-        # service kitchen (hearth, cauldron, prep table, stores) so a castle
-        # keep is never left without a kitchen.
+        # Optional royal kitchen. It is placed in the SOUTH half of the east bay
+        # (a proper 5 x 5 m service room) and NOT in the west bay: the west
+        # bay is the stair hall and a partition there would stand right in
+        # front of the flight and block the way up.
         _royal_kitchen = bool(getattr(props, 'has_royal_kitchen', False))
         _y_split = None
-        if _royal_kitchen and (iy_max - iy_min) >= 11.0:
-            _y_split = max(iy_min + 4.2, iy_max - 5.2)
-            _hwall(ix_min, b_west, _y_split, (ix_min + b_west) * 0.5)
 
         rm_west = Room(
             id=f"fl{fl_idx}_stair_hall", floor_idx=fl_idx, role='CORRIDOR',
@@ -1914,9 +1912,17 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         # Partition the East Bay into Council Chamber (south) and Banquet/Archive Hall (north).
         # Shift the cross-wall to y_mid - 2.8 so it never intersects the Archive portal at y_mid!
         split_y_east = y_mid - 2.8
-        _hwall(b_east, ix_max, split_y_east, (b_east + ix_max) * 0.5)
+        if _royal_kitchen and (iy_max - iy_min) >= 11.0:
+            # The royal kitchen takes the southern half of the east bay and the
+            # council chamber moves north of it.
+            split_y_east = iy_min + (iy_max - iy_min) * 0.5
+        # Only build the partition wall if we are NOT using the royal kitchen,
+        # otherwise the wall would block the doorway into the addition building.
+        if not _royal_kitchen:
+            _hwall(b_east, ix_max, split_y_east, (b_east + ix_max) * 0.5)
         rm_east_s = Room(
-            id=f"fl{fl_idx}_council_chamber", floor_idx=fl_idx, role='COUNCIL_CHAMBER',
+            id=f"fl{fl_idx}_council_chamber", floor_idx=fl_idx,
+            role='KITCHEN' if _royal_kitchen else 'COUNCIL_CHAMBER',
             bounds=(b_east, ix_max, iy_min, split_y_east),
             doorways=[{'x': (b_east + ix_max) * 0.5, 'y': split_y_east, 'axis': 'X', 'w': dw_w}],
             stair_hole=None,
@@ -1934,15 +1940,6 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'BACK': (b_east, ix_max), 'RIGHT': (split_y_east, iy_max)}
         )
         rooms = [rm_west, rm_center, rm_east_s, rm_east_n]
-        if _y_split is not None:
-            rm_kitchen = Room(
-                id=f"fl{fl_idx}_royal_kitchen", floor_idx=fl_idx, role='KITCHEN',
-                bounds=(ix_min, b_west, _y_split, iy_max),
-                doorways=[{'x': (ix_min + b_west) * 0.5, 'y': _y_split, 'axis': 'X', 'w': dw_w}],
-                stair_hole=None,
-                exterior_facades={'BACK': (ix_min, b_west), 'LEFT': (_y_split, iy_max)}
-            )
-            rooms.append(rm_kitchen)
 
     elif fl_idx == 1 and bool(getattr(props, 'has_throne_room', False) or getattr(props, 'has_double_height', False)):
         _vwall(b_west, iy_min, iy_max, y_mid)
