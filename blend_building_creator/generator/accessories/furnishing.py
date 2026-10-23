@@ -841,66 +841,103 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
     _rb = getattr(tracker, 'room_bounds', None) or (rx0, rx1, ry0, ry1)
     _wx0, _wx1, _wy0, _wy1 = _rb
 
-    # 1. Try West wall (headboard at -X, bed extends +X into room). Slide
-    # outward along the wall-normal when the first slot is clipped (e.g. by a
-    # stair keep-out) instead of abandoning the whole wall.
     y_span = ry1 - ry0
-    bed_pad_y = min(0.70, max(0.30, (y_span - width) * 0.5 - 0.05)) if y_span > width + 0.60 else 0.20
     x_span = rx1 - rx0
-    bed_pad_x = min(0.70, max(0.30, (x_span - width) * 0.5 - 0.05)) if x_span > width + 0.60 else 0.20
 
-    min_y = ry0 + width * 0.5 + bed_pad_y
-    max_y = ry1 - width * 0.5 - bed_pad_y
-    for dx in (0.0, 0.30, 0.60):
-        cx = _wx0 + length * 0.5 + 0.01 + dx
-        if cx + length * 0.5 > _wx1 - 0.15:
-            break
-        for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
-            if tracker.is_near_door(cx, cy, radius=1.60):
-                continue
-            b = (cx - length * 0.5, cx + length * 0.5, cy - width * 0.5, cy + width * 0.5)
-            if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, bounds_slack=0.16):
-                tracker.occupy(b[0], b[1], b[2], b[3])
-                build_prop(bm, 'BED', cx, cy, z_floor, 0.0, length=length, width=width)
-                return (cx, cy, 0.0)
+    # Multi-tier candidate sizes and tolerances so small / cramped rooms
+    # are guaranteed to fit a bed rather than abandoning it.
+    candidates = [
+        (length, width, 1.40, 0.12, 0.16),
+        (min(length, 2.15), min(width, 1.25), 1.10, 0.08, 0.18),
+        (min(length, 1.95), min(width, 1.05), 0.85, 0.04, 0.20),
+        (min(length, 1.80), min(width, 0.95), 0.60, 0.02, 0.22),
+    ]
 
-    # 2. Try East wall (headboard at +X, bed extends -X into room)
-    for dx in (0.0, 0.30, 0.60):
-        cx = _wx1 - length * 0.5 - 0.01 - dx
-        if cx - length * 0.5 < _wx0 + 0.15:
-            break
-        for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
-            if tracker.is_near_door(cx, cy, radius=1.60):
-                continue
-            b = (cx - length * 0.5, cx + length * 0.5, cy - width * 0.5, cy + width * 0.5)
-            if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, bounds_slack=0.16):
-                tracker.occupy(b[0], b[1], b[2], b[3])
-                build_prop(bm, 'BED', cx, cy, z_floor, math.pi, length=length, width=width)
-                return (cx, cy, math.pi)
+    for cand_l, cand_w, door_rad, free_margin, bounds_slack in candidates:
+        bed_pad_y = min(0.60, max(0.12, (y_span - cand_w) * 0.5 - 0.05)) if y_span > cand_w + 0.35 else 0.06
+        bed_pad_x = min(0.60, max(0.12, (x_span - cand_w) * 0.5 - 0.05)) if x_span > cand_w + 0.35 else 0.06
 
-    # 3. Try North wall (headboard at +Y, bed extends -Y into room)
-    cy = _wy1 - length * 0.5 - 0.01
-    min_x = rx0 + width * 0.5 + bed_pad_x
-    max_x = rx1 - width * 0.5 - bed_pad_x
-    for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
-        if tracker.is_near_door(cx, cy, radius=1.60):
-            continue
-        b = (cx - width * 0.5, cx + width * 0.5, cy - length * 0.5, cy + length * 0.5)
-        if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, bounds_slack=0.16):
-            tracker.occupy(b[0], b[1], b[2], b[3])
-            build_prop(bm, 'BED', cx, cy, z_floor, -math.pi / 2, length=length, width=width)
-            return (cx, cy, -math.pi / 2)
+        min_y = ry0 + cand_w * 0.5 + bed_pad_y
+        max_y = ry1 - cand_w * 0.5 - bed_pad_y
+        min_x = rx0 + cand_w * 0.5 + bed_pad_x
+        max_x = rx1 - cand_w * 0.5 - bed_pad_x
 
-    # 4. Try South wall (headboard at -Y, bed extends +Y into room)
-    cy = _wy0 + length * 0.5 + 0.01
-    for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
-        if tracker.is_near_door(cx, cy, radius=1.60):
-            continue
-        b = (cx - width * 0.5, cx + width * 0.5, cy - length * 0.5, cy + length * 0.5)
-        if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, bounds_slack=0.16):
-            tracker.occupy(b[0], b[1], b[2], b[3])
-            build_prop(bm, 'BED', cx, cy, z_floor, math.pi / 2, length=length, width=width)
-            return (cx, cy, math.pi / 2)
+        y_pts = _sample_wall_positions(rcy, min_y, max_y, step=0.20)
+        if not y_pts and y_span >= cand_w + 0.08:
+            y_pts = [rcy]
+
+        x_pts = _sample_wall_positions(rcx, min_x, max_x, step=0.20)
+        if not x_pts and x_span >= cand_w + 0.08:
+            x_pts = [rcx]
+
+        # 1. Try West wall (headboard at -X, bed extends +X into room)
+        for dx in (0.0, 0.25, 0.50):
+            cx = _wx0 + cand_l * 0.5 + 0.01 + dx
+            if cx + cand_l * 0.5 > _wx1 - 0.10:
+                break
+            for cy in y_pts:
+                if tracker.is_near_door(cx, cy, radius=door_rad):
+                    continue
+                b = (cx - cand_l * 0.5, cx + cand_l * 0.5, cy - cand_w * 0.5, cy + cand_w * 0.5)
+                if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin, bounds_slack=bounds_slack):
+                    tracker.occupy(b[0], b[1], b[2], b[3])
+                    build_prop(bm, 'BED', cx, cy, z_floor, 0.0, length=cand_l, width=cand_w)
+                    return (cx, cy, 0.0)
+
+        # 2. Try East wall (headboard at +X, bed extends -X into room)
+        for dx in (0.0, 0.25, 0.50):
+            cx = _wx1 - cand_l * 0.5 - 0.01 - dx
+            if cx - cand_l * 0.5 < _wx0 + 0.10:
+                break
+            for cy in y_pts:
+                if tracker.is_near_door(cx, cy, radius=door_rad):
+                    continue
+                b = (cx - cand_l * 0.5, cx + cand_l * 0.5, cy - cand_w * 0.5, cy + cand_w * 0.5)
+                if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin, bounds_slack=bounds_slack):
+                    tracker.occupy(b[0], b[1], b[2], b[3])
+                    build_prop(bm, 'BED', cx, cy, z_floor, math.pi, length=cand_l, width=cand_w)
+                    return (cx, cy, math.pi)
+
+        # 3. Try North wall (headboard at +Y, bed extends -Y into room)
+        for dy in (0.0, 0.25, 0.50):
+            cy = _wy1 - cand_l * 0.5 - 0.01 - dy
+            if cy - cand_l * 0.5 < _wy0 + 0.10:
+                break
+            for cx in x_pts:
+                if tracker.is_near_door(cx, cy, radius=door_rad):
+                    continue
+                b = (cx - cand_w * 0.5, cx + cand_w * 0.5, cy - cand_l * 0.5, cy + cand_l * 0.5)
+                if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin, bounds_slack=bounds_slack):
+                    tracker.occupy(b[0], b[1], b[2], b[3])
+                    build_prop(bm, 'BED', cx, cy, z_floor, -math.pi / 2, length=cand_l, width=cand_w)
+                    return (cx, cy, -math.pi / 2)
+
+        # 4. Try South wall (headboard at -Y, bed extends +Y into room)
+        for dy in (0.0, 0.25, 0.50):
+            cy = _wy0 + cand_l * 0.5 + 0.01 + dy
+            if cy + cand_l * 0.5 > _wy1 - 0.10:
+                break
+            for cx in x_pts:
+                if tracker.is_near_door(cx, cy, radius=door_rad):
+                    continue
+                b = (cx - cand_w * 0.5, cx + cand_w * 0.5, cy - cand_l * 0.5, cy + cand_l * 0.5)
+                if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin, bounds_slack=bounds_slack):
+                    tracker.occupy(b[0], b[1], b[2], b[3])
+                    build_prop(bm, 'BED', cx, cy, z_floor, math.pi / 2, length=cand_l, width=cand_w)
+                    return (cx, cy, math.pi / 2)
+
+    # Hard guarantee fallback: scan interior floor grid for any clear spot
+    final_l, final_w = 1.85, 0.95
+    for orient, l_val, w_val, yaw in (('X', final_l, final_w, 0.0), ('Y', final_w, final_l, -math.pi / 2)):
+        xs = [rx0 + l_val * 0.5 + 0.10 + i * 0.25 for i in range(int(max(1.0, x_span - l_val - 0.20) / 0.25) + 1)]
+        ys = [ry0 + w_val * 0.5 + 0.10 + i * 0.25 for i in range(int(max(1.0, y_span - w_val - 0.20) / 0.25) + 1)]
+        for cx in xs:
+            for cy in ys:
+                b = (cx - l_val * 0.5, cx + l_val * 0.5, cy - w_val * 0.5, cy + w_val * 0.5)
+                if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.02, bounds_slack=0.25):
+                    tracker.occupy(b[0], b[1], b[2], b[3])
+                    build_prop(bm, 'BED', cx, cy, z_floor, yaw, length=final_l, width=final_w)
+                    return (cx, cy, yaw)
 
     return None
 
@@ -3478,6 +3515,7 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'FISHERMAN': ['FISH', 'FISH', 'FISH', 'FOODPREP_CLUTTER'],
         'JEWELER': ['RING_TRAY', 'GEM_TRAY'],
         'BREWERY': ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'BOTTLE_CLUSTER'],
+        'HUNTER': ['TARGET_STRAW_SMALL', 'MEAT_SMALL', 'PEWTER_TANKARD'],
     }.get(arch)
     # Trade showpieces that do not fit on the table.
     if arch == 'BAKERY':
@@ -3520,6 +3558,9 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
                              candidate_walls=('WEST', 'EAST', 'NORTH'))
     elif arch == 'JEWELER':
         _lay_out_jeweler_counter(bm, tracker, z_floor, rng)
+    elif arch == 'HUNTER':
+        _try_place_wall_prop(bm, 'WEAPON_RACK', 1.40, 0.40, tracker, z_floor,
+                             candidate_walls=('NORTH', 'EAST', 'WEST'))
     elif arch in ('TOOLSMITH', 'BLACKSMITH'):
         # The artist's smith tools are too large for the stepped display, so
         # they hang on dedicated wall tool racks instead — several around the
@@ -3618,6 +3659,9 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'FISHERMAN': [['FISH', 'FISH', 'FISH'],
                       ['FISH', 'FISH', 'FISH'],
                       ['FISH', 'FISH', 'FISH', 'FISH']],
+        'HUNTER': [['TARGET_STRAW_SMALL', 'MEAT_SMALL', 'TARGET_STRAW_SMALL'],
+                   ['MEAT_SMALL', 'MEAT_SMALL', 'MEAT_SMALL'],
+                   ['PEWTER_TANKARD', 'MEAT_SMALL', 'PEWTER_TANKARD']],
     }.get(arch)
     if not _tier_goods:
         return
@@ -4923,6 +4967,36 @@ def furnish_building_interior(bm, props, ctx):
 
     floor_rooms_dict = getattr(ctx, 'floor_rooms', {})
 
+    # Hard requirement: every residential home (HOUSE, NONE, AUTO, COTTAGE, MANOR, ARTISAN, TENEMENT)
+    # MUST have at least one bedroom (or cottage living/sleeping room) with a bed!
+    _arch = getattr(ctx, 'effective_archetype', 'NONE')
+    _residential = (_arch in ('NONE', 'HOUSE', 'AUTO', '', 'MANOR', 'COTTAGE', 'TENEMENT',
+                              'BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY', 'BUTCHER',
+                              'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER', 'HUNTER')
+                    or _arch.startswith('ARTISAN'))
+    if _residential and floor_rooms_dict:
+        _bed_roles = {'MASTER_BED', 'BEDROOM', 'COTTAGE', 'GUEST_ROOM', 'TENEMENT_BEDROOM',
+                      'ROYAL_CHAMBER', 'OFFICER_QUARTERS', 'LIVING_QUARTERS'}
+        _all_rooms = [rm for fl_rms in floor_rooms_dict.values() for rm in fl_rms]
+        if _all_rooms and not any(getattr(rm, 'role', '') in _bed_roles for rm in _all_rooms):
+            # No bedroom exists in the whole house! Assign a bedroom to guarantee a bed.
+            if ctx.num_floors > 1:
+                # Top floor room
+                _top_rms = floor_rooms_dict.get(ctx.num_floors - 1, [])
+                _target = next((r for r in reversed(_top_rms) if r.role != 'STAIR_LANDING'), None)
+                if _target is None and _top_rms:
+                    _target = _top_rms[0]
+                if _target is not None:
+                    _target.role = 'MASTER_BED'
+            else:
+                # Single-storey house: 1 room -> COTTAGE (bed + hearth + dining), 2+ rooms -> MASTER_BED
+                _f0_rms = floor_rooms_dict.get(0, [])
+                if len(_f0_rms) == 1:
+                    _f0_rms[0].role = 'COTTAGE'
+                elif len(_f0_rms) >= 2:
+                    _target = next((r for r in reversed(_f0_rms) if r.role != 'HOUSE_HALL'), _f0_rms[-1])
+                    _target.role = 'MASTER_BED'
+
     for fl in range(ctx.num_floors):
         # Match the lowered T1 ground slab (floors.py): quarry / lumbermill
         # open-timber ground floors sit 3 cm lower, so props rest ON the slab
@@ -4953,12 +5027,15 @@ def furnish_building_interior(bm, props, ctx):
             arch = getattr(ctx, 'effective_archetype', 'NONE')
             if arch in ('TAVERN', 'INN'):
                 role = 'TAVERN_TAPROOM' if fl == 0 else 'BEDROOM'
-            elif arch in ('BLACKSMITH', 'WAREHOUSE', 'LUMBERMILL', 'BAKERY'):
+            elif arch in ('BLACKSMITH', 'WAREHOUSE', 'LUMBERMILL', 'BAKERY', 'HUNTER'):
                 role = 'WORKSHOP' if fl == 0 else 'LODGE'
             elif arch == 'CHAPEL':
                 role = 'CHAPEL_HALL'
             else:
-                role = 'HOUSE_HALL' if fl == 0 else 'BEDROOM'
+                if ctx.num_floors == 1:
+                    role = 'COTTAGE'
+                else:
+                    role = 'HOUSE_HALL' if fl == 0 else 'BEDROOM'
 
             from ..interior import Room
             fallback_rm = Room(

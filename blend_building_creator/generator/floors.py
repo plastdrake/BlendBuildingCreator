@@ -1042,8 +1042,15 @@ def build_floors(bm, props, ctx):
             tier_val = getattr(props, 'material_tier', 'TIER_3')
             dw = getattr(props, 'door_width', 1.75)
             dh = getattr(props, 'door_height', 3.00)
-            frame_margin = 0.08 if tier_val == 'TIER_1' else 0.12
-            door_top_z = z_floor + dh + frame_margin
+            door_gf_stone = props.ground_floor_stone and tier_val != 'TIER_1'
+            door_shape_val = getattr(props, 'door_shape', 'AUTO')
+            is_door_arched = (door_shape_val == 'ARCHED') or (door_shape_val == 'AUTO' and door_gf_stone and dw < 1.6)
+            if is_door_arched:
+                frame_margin = 0.23
+                door_top_z = z_floor + dh + 0.42
+            else:
+                frame_margin = 0.08 if tier_val == 'TIER_1' else 0.14
+                door_top_z = z_floor + dh + frame_margin
             door_cx = 0.0
             extra_front_doors = []
 
@@ -1500,7 +1507,9 @@ def build_floors(bm, props, ctx):
 
         if has_mw and _mw_spread.get(fl_idx):
             lintel_h = 0.18
-            mw_portal_h = max(2.85, min(getattr(props, 'door_height', 3.00), floor_h - lintel_h - 0.10))
+            # Outcrop portal doorway must be low enough to comfortably fit inside the outcrop room
+            # without exceeding the outcrop roof line (which causes a hole in the host wall).
+            mw_portal_h = min(2.50, max(2.15, floor_h - 1.10))
             shift_in = 0.05
             shift_down = 0.0
             jamb_w = 0.16

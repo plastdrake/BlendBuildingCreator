@@ -459,6 +459,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('TAILOR', "Tailor Shop", "Clothier workroom with fitting area and storefront"),
             ('JEWELER', "Jeweler Shop", "Goldsmith workbench with display counter and strongroom"),
             ('FURNITURE_MAKER', "Furniture Workshop", "Joinery workshop with lumber racks and showroom"),
+            ('HUNTER', "Hunter & Furrier Lodge", "Hunter and trapper lodge: game shop, bow racks, pelt storage and living quarters"),
         ],
         default='AUTO',
         update=on_property_updated
@@ -1910,6 +1911,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('tannery_sign.png', "Tannery", "Tannery stretched hide sign"),
             ('general_store_sign.png', "General Store", "General store scales sign"),
             ('market_sign.png', "Market", "Market goods sign"),
+            ('hunter_sign.png', "Hunter", "Hunter bow and pelt sign"),
         ],
         default='AUTO',
         update=on_property_updated

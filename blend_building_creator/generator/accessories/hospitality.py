@@ -82,7 +82,7 @@ def build_hospitality_scene(bm, props, ctx, tier):
 
     # No wells in artisan yards (they read as cluttered next to the workshops).
     _ARTISAN_ARCH = {'BAKERY', 'TAILOR', 'BLACKSMITH', 'JEWELER', 'BREWERY',
-                     'FISHERMAN', 'BUTCHER', 'FURNITURE_MAKER'}
+                     'FISHERMAN', 'BUTCHER', 'FURNITURE_MAKER', 'HUNTER'}
     if _prop(props, 'has_well', False) and ctx.effective_archetype not in _ARTISAN_ARCH:
         _build_well(bm, props, ctx)
 
@@ -91,8 +91,9 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
     """A hanging sign on the ground-storey facade near the entrance.
 
     Mounted on the outer face of the ground storey, a bit above the door, on a
-    spot that does NOT cover any ground-floor window and does not hang through
-    the porch roof. Returns True when a sign was placed, else False.
+    spot that does NOT cover any ground-floor window and strictly does not
+    overlap or penetrate any porch roof, veranda awning, or wing roof overhang.
+    Returns True when a sign was placed, else False.
     """
     door_x = ctx.main_door_cx
     outer = _wall_out(props, ctx, _prop(props, 'material_tier', 'TIER_2'))
@@ -108,11 +109,22 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
     # whole sign (bracket included) below the storey top so it never pokes up
     # through an upper-floor jetty/overhang.
     z_top = ctx.found_h + ctx.floor_h - 0.46
-    # Do not poke through a veranda/porch roof.
+    # On 1-floor buildings with a rotated roof, ensure bracket clears the front eave.
+    if ctx.num_floors == 1 and ctx.is_rotated_roof:
+        z_top = min(z_top, ctx.top_z - 0.58)
+
+    # Porch / veranda roof clearances
+    has_arched = _prop(props, 'has_arched_porch', False) and getattr(ctx, 'effective_archetype', None) != 'STABLE'
+    _dw = float(_prop(props, 'door_width', 1.45) or 1.45)
+    _half_span = max(1.5, _dw * 0.5 + 0.45) if has_arched else 0.0
+    arched_clear = (_half_span + 0.80) if has_arched else 0.0
+
+    veranda_clear = 0.0
     if porch_info is not None:
-        _amz = porch_info.get('awning_mid_z')
-        if _amz is not None and z_top + 0.14 > _amz:
-            z_top = _amz - 0.14
+        p_w = float(porch_info.get('porch_w', 2.8) or 2.8)
+        veranda_clear = p_w * 0.5 + 0.55
+
+    porch_clear = max(arched_clear, veranda_clear)
     board_top = z_top - 0.34
     board_bot = board_top - board_h
 
@@ -128,60 +140,69 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
                 return False
         return True
 
-    # Candidates: scan from just beside the door outwards to the corners, so we
-    # pick the window-free spot nearest the entrance. When a porch/veranda
-    # exists, start beyond it so the sign is not hidden behind the porch posts.
-    cands = []
-    _half = (b[1] - b[0]) * 0.5
-    _n = int(_half / 0.25) + 1
-    _base = door_half + 0.55
-    if porch_info is not None:
-        _base = max(_base, 1.95)
-    for _i in range(1, _n + 1):
-        for _s in (1.0, -1.0):
-            mx = door_x + _s * (_base + _i * 0.25)
-            if b[0] + 0.60 <= mx <= b[1] - 0.60:
-                cands.append(mx)
+    # Front wing roof clearance (footprint + roof overhang + bargeboards):
     _wings = get_building_footprint_boxes(ctx)[1:]
+    roof_ov = float(_prop(props, 'roof_overhang', 0.70) or 0.70)
+    wing_clear = max(1.05, roof_ov + 0.35)
 
     def _wing_blocked(mx):
         for wx0, wx1, wy0, _wy1 in _wings:
-            if (wx0 - 0.35) <= mx <= (wx1 + 0.35) and wy0 <= face_y + 0.20:
+            if (wx0 - wing_clear) <= mx <= (wx1 + wing_clear) and wy0 <= face_y + 0.20:
                 return True
         return False
 
-    for mx in cands:
-        # Never bury it behind a front-wing footprint.
+    def _roof_overlap(mx):
+        if has_arched and abs(mx - door_x) < arched_clear:
+            return True
+        if porch_info is not None and abs(mx - door_x) < veranda_clear:
+            return True
         if _wing_blocked(mx):
-            continue
-        if not _free(mx):
-            continue
-        # Projecting hanging sign (perpendicular to the wall, board faces along
-        # the street) so it reads as a proper shop sign and is never pressed
-        # flat against the wall.
+            return True
+        return False
+
+    # Candidates: scan from just beside the door / porch outwards to the corners,
+    # strictly outside any porch roof, veranda awning, or wing overhang.
+    cands = []
+    _half = (b[1] - b[0]) * 0.5
+    _n = int(_half / 0.25) + 1
+    _base = max(door_half + 0.55, porch_clear)
+
+    for _i in range(1, _n + 1):
+        for _s in (1.0, -1.0):
+            mx = door_x + _s * (_base + _i * 0.25)
+            if b[0] + 0.75 <= mx <= b[1] - 0.75:
+                if not _roof_overlap(mx):
+                    cands.append(mx)
+
+    # 1. Prefer a roof-safe spot that also completely avoids ground windows:
+    for mx in cands:
+        if _free(mx):
+            build_hanging_sign(
+                bm, mx, face_y - 0.03, z_top,
+                run_ang=-math.pi * 0.5, bracket_len=bracket_len,
+                board_w=board_w, board_h=board_h, light_board=True)
+            return True
+
+    # 2. Fallback among roof-safe spots: pick candidate with minimal window overlap:
+    if cands:
+        def _win_overlap(mx):
+            bx0, bx1 = mx - board_w * 0.5 - 0.08, mx + board_w * 0.5 + 0.08
+            tot = 0.0
+            for wx0, wx1, wz0, wz1 in _wins:
+                if not (bx1 < wx0 or bx0 > wx1 or board_top < wz0 or board_bot > wz1):
+                    tot += min(bx1, wx1) - max(bx0, wx0)
+            return tot
+
+        best_mx = min(cands, key=_win_overlap)
         build_hanging_sign(
-            bm, mx, face_y - 0.03, z_top,
+            bm, best_mx, face_y - 0.03, z_top,
             run_ang=-math.pi * 0.5, bracket_len=bracket_len,
             board_w=board_w, board_h=board_h, light_board=True)
         return True
-    # Last resort: mount it BESIDE the entrance (never over the doorway) at the
-    # slot that overlaps the fewest windows/shutters, so it stays at shopper
-    # height without blocking the door or burying a window.
-    def _win_overlap(mx):
-        bx0, bx1 = mx - board_w * 0.5 - 0.08, mx + board_w * 0.5 + 0.08
-        tot = 0.0
-        for wx0, wx1, wz0, wz1 in _wins:
-            if not (bx1 < wx0 or bx0 > wx1 or board_top < wz0 or board_bot > wz1):
-                tot += min(bx1, wx1) - max(bx0, wx0)
-        return tot
 
-    _mx = min(cands, key=_win_overlap) if cands \
-        else (door_x + door_half + board_w * 0.5 + 0.35)
-    build_hanging_sign(
-        bm, _mx, face_y - 0.03, z_top,
-        run_ang=-math.pi * 0.5, bracket_len=bracket_len,
-        board_w=board_w, board_h=board_h, light_board=True)
-    return True
+    # 3. If no spot on the facade is clear of roofs and corners, return False
+    # so the caller falls back to the high roof gable sign.
+    return False
 
 
 
@@ -240,11 +261,31 @@ def _build_gable_signs(bm, props, ctx, tier):
         ang = 0.0 if side_sgn > 0 else math.pi
         anchors.append((ax, 0.0, atop + max(0.8, a_roof * 0.5), ang))
 
+    # Clear any entrance porch roof below front gable anchors
+    has_arched = _prop(props, 'has_arched_porch', False) and getattr(ctx, 'effective_archetype', None) != 'STABLE'
+    _dh = float(_prop(props, 'door_height', 2.80) or 2.80)
+    _dw = float(_prop(props, 'door_width', 1.45) or 1.45)
+    _half_span = max(1.5, _dw * 0.5 + 0.45) if has_arched else 0.0
+    door_x = ctx.main_door_cx
+
+    valid_anchors = []
     for ax, ay, az, ang in anchors:
+        if abs(ang - (-math.pi * 0.5)) < 0.05:
+            if has_arched and abs(ax - door_x) < _half_span + 0.75:
+                porch_roof_top = max(2.9, _dh + 0.25) + 1.50
+                # Board hangs 0.34 + 1.84 = 2.18m below az
+                min_az = porch_roof_top + 2.18 + 0.25
+                if az < min_az:
+                    az = min_az
+            if az + 0.15 > ctx.top_z + roof_h:
+                continue
+        valid_anchors.append((ax, ay, az, ang))
+
+    for ax, ay, az, ang in valid_anchors:
         build_hanging_sign(bm, ax, ay, az, run_ang=ang,
                            bracket_len=2.50, board_w=2.10, board_h=1.84,
                            light_board=True)
-    return len(anchors)
+    return len(valid_anchors)
 
 
 def _build_window_flower_boxes(bm, props, ctx, tier):

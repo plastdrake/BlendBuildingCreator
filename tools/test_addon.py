@@ -201,9 +201,10 @@ def test_room_zoning_and_furnishing():
     assert 'GUEST_ROOM' in upper_inn
     print("  [PASS] Inn: ground floor is taproom/kitchen, upper floor is guest bedrooms with protected landing.")
 
-    # 2. Artisans: all 8 families must have at least 2 floors in T1, and shop/workshop downstairs
+    # 2. Artisans: all 9 families must have at least 2 floors in T1, and shop/workshop downstairs
     artisan_families = ['ARTISAN_BAKERY', 'ARTISAN_TAILOR', 'ARTISAN_TOOLSMITH', 'ARTISAN_JEWELER',
-                        'ARTISAN_BREWERY', 'ARTISAN_FISHER', 'ARTISAN_FURNITURE_MAKER', 'ARTISAN_BUTCHER']
+                        'ARTISAN_BREWERY', 'ARTISAN_FISHER', 'ARTISAN_FURNITURE_MAKER', 'ARTISAN_BUTCHER',
+                        'ARTISAN_HUNTER']
     for fam in artisan_families:
         t1_floors = PRESETS[f'{fam}_T1']['settings']['num_floors']
         assert t1_floors >= 2, f"{fam}_T1 has only {t1_floors} floors (expected >= 2)"
@@ -212,7 +213,7 @@ def test_room_zoning_and_furnishing():
 
     ground_artisan = _resolve_room_roles('BAKERY', fl_idx=0, num_rooms=2, has_stairs_landing=False)
     assert 'STORE' in ground_artisan or 'WORKSHOP' in ground_artisan
-    print("  [PASS] All 8 Artisan families have >= 2 floors in T1, >= 3 floors in T2, with ground storefronts.")
+    print("  [PASS] All 9 Artisan families have >= 2 floors in T1, >= 3 floors in T2, with ground storefronts.")
 
     # 3. Small houses: split into bedroom + kitchen
     ground_house = _resolve_room_roles('HOUSE', fl_idx=0, num_rooms=2, has_stairs_landing=False, total_floors=1)
@@ -355,7 +356,7 @@ def test_tenement_layouts():
         bpy.ops.building.apply_preset(preset_key=key)
         dimensions = bpy.context.active_object.dimensions
         generated_sizes[key] = (dimensions.x, dimensions.y, dimensions.z)
-        assert dimensions.x <= 40.0 and dimensions.y <= 40.0, (
+        assert dimensions.x <= 28.0 and dimensions.y <= 28.0, (
             f"{key} does not fit its scaled plot: {tuple(dimensions)}")
     assert generated_sizes['TENEMENT_TOWER_20M_T1'][2] > generated_sizes['TENEMENT_CITY_ROW_20M_T1'][2]
     print("  [PASS] Tenement apartments, single-route stairs, six city presets, blank party walls, and 20m bounds verified.")

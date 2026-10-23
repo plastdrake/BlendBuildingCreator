@@ -256,7 +256,7 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             wall_x_min=_ow_anchor_lo, wall_x_max=_ow_anchor_hi,
             wall_y_min=cy - 1.6, wall_y_max=cy + 1.6,
             z_base=found_h + floor_h, width=min(2.2, width * 0.55), depth=0.9,
-            height=min(2.0, floor_h * 0.72), roof_style='LEAN_TO',
+            height=max(2.80, min(3.20, floor_h - 0.55)), roof_style='LEAN_TO',
             tier=tier, floor_h=floor_h,
             lower_bounds=(_ow_anchor_lo, _ow_anchor_hi, cy - 1.6, cy + 1.6),
         )

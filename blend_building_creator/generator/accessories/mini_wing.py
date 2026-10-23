@@ -266,7 +266,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                 lb[0] += off_along
                 lb[1] += off_along
             lower_bounds = tuple(lb)
-    height = max(2.20, min(height, floor_h * 0.82))
+    height = max(2.80, min(height, floor_h - 0.45))
     if frame is None:
         frame = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
     else:

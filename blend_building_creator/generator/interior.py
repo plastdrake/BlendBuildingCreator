@@ -10,7 +10,7 @@ import math
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Any, Optional
 from mathutils import Vector, Euler, Matrix
-from .mesh_utils import create_box, create_beveled_box, create_cylinder
+from .mesh_utils import create_box, create_beveled_box, create_cylinder, recalc_face_normals_safe
 from .railing import build_railing, build_railing_post
 from .materials import (
     MAT_INDEX_FLOOR, MAT_INDEX_STONE, MAT_INDEX_WOOD, MAT_INDEX_TIMBER,
@@ -635,7 +635,7 @@ def _build_stringer_prism(bm, p_start, p_end, z0, z_head, stringer_thick,
         f_rim = bm.faces.new([v_in[i], v_in[i_next], v_out[i_next], v_out[i]])
         faces.append(f_rim)
 
-    bmesh.ops.recalc_face_normals(bm, faces=faces)
+    recalc_face_normals_safe(bm, faces)
 
     diag_len = math.sqrt(L * L + dz * dz)
     t_r = (L / diag_len) * dir_r
@@ -1598,7 +1598,7 @@ _ARCHETYPE_PROGRAM = {
     'QUARRY': 'INDUSTRIAL',
     'BAKERY': 'COMMERCIAL', 'FISHERMAN': 'COMMERCIAL', 'BREWERY': 'COMMERCIAL',
     'BUTCHER': 'COMMERCIAL', 'TAILOR': 'COMMERCIAL', 'TOOLSMITH': 'COMMERCIAL',
-    'JEWELER': 'COMMERCIAL', 'FURNITURE_MAKER': 'COMMERCIAL',
+    'JEWELER': 'COMMERCIAL', 'FURNITURE_MAKER': 'COMMERCIAL', 'HUNTER': 'COMMERCIAL',
 }
 
 
@@ -1623,6 +1623,22 @@ def _program_roles(program, fl_idx, num_rooms, has_stairs_landing):
     return pool[:num_rooms]
 
 
+# Dedicated craft workshops per artisan trade: the street-facing shop plus
+# the trade's own production rooms (never generic offices or studies).
+_ARTISAN_GROUND = {
+    'BAKERY': ['STORE', 'BAKEHOUSE', 'BAKEHOUSE', 'STORAGE'],
+    'BREWERY': ['STORE', 'BREWHOUSE', 'BREWHOUSE', 'STORAGE'],
+    'BUTCHER': ['STORE', 'BUTCHERY', 'BUTCHERY', 'STORAGE'],
+    'TAILOR': ['STORE', 'TAILOR_ATELIER', 'TAILOR_ATELIER', 'STORAGE'],
+    'JEWELER': ['STORE', 'GOLDSMITH', 'GOLDSMITH', 'STORAGE'],
+    'BLACKSMITH': ['STORE', 'SMITHY', 'SMITHY', 'STORAGE'],
+    'TOOLSMITH': ['STORE', 'SMITHY', 'SMITHY', 'STORAGE'],
+    'FURNITURE_MAKER': ['STORE', 'JOINERY', 'JOINERY', 'STORAGE'],
+    'FISHERMAN': ['STORE', 'FISHERY', 'FISHERY', 'STORAGE'],
+    'HUNTER': ['STORE', 'FLETCHER_WORKSHOP', 'LODGE', 'STORAGE'],
+}
+
+
 def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, total_floors=1,
                         program=None):
 
@@ -1634,10 +1650,16 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
     if archetype == 'MANOR':
         # Grand residence: banquet hall, living salon, suites, and guest rooms.
         if has_stairs_landing:
+            if num_rooms == 1:
+                return ['MASTER_BED']
             pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM',
                     'LIBRARY', 'BEDROOM']
             return pool[:num_rooms]
         if total_floors == 1:
+            if num_rooms == 1:
+                return ['COTTAGE']
+            elif num_rooms == 2:
+                return ['BANQUET_HALL', 'MASTER_BED']
             pool = ['BANQUET_HALL', 'HOUSE_HALL', 'KITCHEN', 'MASTER_BED', 'BEDROOM']
             return pool[:num_rooms]
         pool = ['BANQUET_HALL', 'HOUSE_HALL', 'KITCHEN', 'PANTRY', 'DINING']
@@ -1653,15 +1675,19 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             pool = ['STAIR_LANDING', 'STONE_STORE' if archetype == 'QUARRY' else 'STORAGE', 'WORKSHOP', 'OFFICE']
             return pool[:num_rooms]
         elif archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
-                          'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER') or archetype.startswith('ARTISAN'):
+                          'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER', 'HUNTER') or archetype.startswith('ARTISAN'):
             # Artisan live/work house: trade below, family home above. Upper
             # storeys are strictly residential (no offices, no studies).
             # Floor 2 pairs the bedroom with an eat-in kitchen (no separate
             # hall on these narrow floors, so the kitchen lays its full
             # dining set) instead of a third narrow chamber.
             if fl_idx == 1:
+                if num_rooms == 1:
+                    return ['BEDROOM']
                 pool = ['STAIR_LANDING', 'BEDROOM', 'KITCHEN', 'HOUSE_HALL']
             else:
+                if num_rooms == 1:
+                    return ['MASTER_BED']
                 pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM']
             return pool[:num_rooms]
         elif archetype == 'ARMORY':
@@ -1683,12 +1709,17 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             pool = ['STAIR_LANDING', 'MAYOR_OFFICE', 'OFFICE', 'STUDY', 'ARCHIVE']
             return pool[:num_rooms]
         elif archetype in ('TENEMENT',):
+            if num_rooms == 1:
+                return ['TENEMENT_BEDROOM']
             pool = ['STAIR_LANDING', 'TENEMENT_KITCHEN', 'TENEMENT_BEDROOM', 'TENEMENT_KITCHEN', 'TENEMENT_BEDROOM']
             return pool[:num_rooms]
         elif archetype in ('STABLE',):
             pool = ['STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL']
             return pool[:num_rooms]
-        else:  # HOUSE, MANOR, default
+        else:  # HOUSE, default
+            # A 1-room upper floor in a house is the sleeping chamber/loft
+            if num_rooms == 1:
+                return ['MASTER_BED']
             pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM', 'BEDROOM']
             return pool[:num_rooms]
 
@@ -1701,19 +1732,6 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         pool = ['TAVERN_TAPROOM', 'KITCHEN', 'CELLAR', 'PANTRY']
         return pool[:num_rooms]
 
-    # Dedicated craft workshops per artisan trade: the street-facing shop plus
-    # the trade's own production rooms (never generic offices or studies).
-    _ARTISAN_GROUND = {
-        'BAKERY': ['STORE', 'BAKEHOUSE', 'BAKEHOUSE', 'STORAGE'],
-        'BREWERY': ['STORE', 'BREWHOUSE', 'BREWHOUSE', 'STORAGE'],
-        'BUTCHER': ['STORE', 'BUTCHERY', 'BUTCHERY', 'STORAGE'],
-        'TAILOR': ['STORE', 'TAILOR_ATELIER', 'TAILOR_ATELIER', 'STORAGE'],
-        'JEWELER': ['STORE', 'GOLDSMITH', 'GOLDSMITH', 'STORAGE'],
-        'BLACKSMITH': ['STORE', 'SMITHY', 'SMITHY', 'STORAGE'],
-        'TOOLSMITH': ['STORE', 'SMITHY', 'SMITHY', 'STORAGE'],
-        'FURNITURE_MAKER': ['STORE', 'JOINERY', 'JOINERY', 'STORAGE'],
-        'FISHERMAN': ['STORE', 'FISHERY', 'FISHERY', 'STORAGE'],
-    }
     if archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY'):
         if archetype == 'QUARRY':
             pool = ['STONE_STORE', 'STORAGE', 'WORKSHOP', 'OFFICE']
@@ -1758,9 +1776,16 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         return pool[:num_rooms]
 
     # Default HOUSE. Living hall, kitchen, dining and bedrooms.
+    # Hard requirement: small houses MUST have a bed or bedroom.
     if total_floors == 1:
-        pool = ['HOUSE_HALL', 'KITCHEN', 'MASTER_BED', 'BEDROOM']
-        return pool[:num_rooms]
+        if num_rooms == 1:
+            return ['COTTAGE']
+        elif num_rooms == 2:
+            return ['HOUSE_HALL', 'MASTER_BED']
+        elif num_rooms == 3:
+            return ['HOUSE_HALL', 'KITCHEN', 'MASTER_BED']
+        else:
+            return ['HOUSE_HALL', 'KITCHEN', 'MASTER_BED', 'BEDROOM'][:num_rooms]
     else:
         pool = ['HOUSE_HALL', 'KITCHEN', 'PANTRY', 'DINING']
         return pool[:num_rooms]
@@ -2727,7 +2752,130 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 break
         return min(hi, max(lo, pos))
 
-    if not is_deep:
+    if fl_idx == 0 and effective_archetype in ('INN', 'TAVERN'):
+        # Ground floor of Inn/Tavern: Fewer, bigger rooms!
+        # Either 1 grand open taproom (for small footprints or open_ground_floor)
+        # or 2 spacious rooms: a massive Great Taproom (~70% of floor space)
+        # plus a service Kitchen (~30% of space) for food/drink prep.
+        if (W < 9.0 and D < 9.0) or bool(getattr(props, 'open_ground_floor', False)):
+            rm0 = Room(
+                id=f"fl{fl_idx}_taproom", floor_idx=fl_idx, role='TAVERN_TAPROOM',
+                bounds=(ix_min, ix_max, iy_min, iy_max),
+                doorways=[], stair_hole=stair_hole,
+                exterior_facades={'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
+                                  'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)}
+            )
+            rooms = [rm0]
+        elif D > W * 1.10:
+            # Deep tavern: front grand taproom (~68% depth) + rear service kitchen (~32% depth)
+            split_y = iy_min + D * 0.68
+            min_split_y = iy_min + 3.5
+            if stair_guards_north:
+                min_split_y = max(min_split_y, stair_safe_y_top + 0.65)
+            if stair_hole is not None:
+                min_split_y = max(min_split_y, stair_hole[3] + 0.50)
+            split_y = max(min_split_y, split_y)
+            split_y = min(iy_max - 2.5, max(iy_min + 3.5, split_y))
+            split_y = _clear_doorway_span(split_y, axis='Y', lo=iy_min + 3.0, hi=iy_max - 2.2)
+
+            dw_x = (ix_min + ix_max) * 0.5
+            if abs(dw_x - (door_cx or 0.0)) < 0.4:
+                dw_x += 0.85
+            dw_x = _clear_doorway_span(dw_x, axis='X', lo=ix_min + 1.8, hi=ix_max - 1.8)
+
+            interior_walls.append({
+                'p1': (ix_min, split_y), 'p2': (ix_max, split_y),
+                'axis': 'X', 'pos': split_y, 'thickness': wall_t,
+                'doorway': {'x': dw_x, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
+            })
+            rm0 = Room(
+                id=f"fl{fl_idx}_taproom", floor_idx=fl_idx, role='TAVERN_TAPROOM',
+                bounds=(ix_min, ix_max, iy_min, split_y),
+                doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
+                stair_hole=_holds_stair((ix_min, ix_max, iy_min, split_y)),
+                exterior_facades={'FRONT': (ix_min, ix_max), 'LEFT': (iy_min, split_y), 'RIGHT': (iy_min, split_y)}
+            )
+            rm1 = Room(
+                id=f"fl{fl_idx}_kitchen", floor_idx=fl_idx, role='KITCHEN',
+                bounds=(ix_min, ix_max, split_y, iy_max),
+                doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
+                stair_hole=_holds_stair((ix_min, ix_max, split_y, iy_max)),
+                exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (split_y, iy_max), 'RIGHT': (split_y, iy_max)}
+            )
+            rooms = [rm0, rm1]
+        else:
+            # Wide tavern: grand taproom (~70% width) + service kitchen (~30% width)
+            stair_on_right = bool(
+                (stair_pos_info and float(stair_pos_info.get('cx', ix_min)) > (ix_min + ix_max) * 0.5)
+                or getattr(props, 'stair_placement', 'LEFT') == 'RIGHT'
+            )
+            if stair_on_right:
+                stair_w = float((stair_pos_info or {}).get('w', 1.2) or 1.2)
+                stair_cx = float((stair_pos_info or {}).get('cx', ix_max - 1.4) or (ix_max - 1.4))
+                stair_safe_x_left = stair_cx - stair_w * 0.5 - 0.20
+                max_split_x = stair_safe_x_left - 0.60
+                if stair_hole is not None:
+                    max_split_x = min(max_split_x, stair_hole[0] - 0.50)
+                if door_cx is not None:
+                    max_split_x = min(max_split_x, door_cx - 0.95)
+                split_x = min(max_split_x, ix_max - W * 0.70)
+                split_x = max(ix_min + 2.5, split_x)
+                split_x = _clear_doorway_span(split_x, axis='X', lo=ix_min + 2.2, hi=min(ix_max - 3.0, max_split_x))
+                dw_y = (iy_min + iy_max) * 0.5
+                dw_y = _clear_doorway_span(dw_y, axis='Y', lo=iy_min + 1.8, hi=iy_max - 1.8)
+                interior_walls.append({
+                    'p1': (split_x, iy_min), 'p2': (split_x, iy_max),
+                    'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                    'doorway': {'x': split_x, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+                })
+                rm0 = Room(
+                    id=f"fl{fl_idx}_kitchen", floor_idx=fl_idx, role='KITCHEN',
+                    bounds=(ix_min, split_x, iy_min, iy_max),
+                    doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                    stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
+                    exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
+                )
+                rm1 = Room(
+                    id=f"fl{fl_idx}_taproom", floor_idx=fl_idx, role='TAVERN_TAPROOM',
+                    bounds=(split_x, ix_max, iy_min, iy_max),
+                    doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                    stair_hole=_holds_stair((split_x, ix_max, iy_min, iy_max)),
+                    exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
+                )
+                rooms = [rm0, rm1]
+            else:
+                min_split_x = stair_safe_x + 0.60
+                if stair_hole is not None:
+                    min_split_x = max(min_split_x, stair_hole[1] + 0.50)
+                if door_cx is not None:
+                    min_split_x = max(min_split_x, door_cx + 0.95)
+                split_x = max(min_split_x, ix_min + W * 0.70)
+                split_x = min(ix_max - 2.5, split_x)
+                split_x = _clear_doorway_span(split_x, axis='X', lo=max(ix_min + 3.0, min_split_x), hi=ix_max - 2.2)
+                dw_y = (iy_min + iy_max) * 0.5
+                dw_y = _clear_doorway_span(dw_y, axis='Y', lo=iy_min + 1.8, hi=iy_max - 1.8)
+                interior_walls.append({
+                    'p1': (split_x, iy_min), 'p2': (split_x, iy_max),
+                    'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                    'doorway': {'x': split_x, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+                })
+                rm0 = Room(
+                    id=f"fl{fl_idx}_taproom", floor_idx=fl_idx, role='TAVERN_TAPROOM',
+                    bounds=(ix_min, split_x, iy_min, iy_max),
+                    doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                    stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
+                    exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
+                )
+                rm1 = Room(
+                    id=f"fl{fl_idx}_kitchen", floor_idx=fl_idx, role='KITCHEN',
+                    bounds=(split_x, ix_max, iy_min, iy_max),
+                    doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                    stair_hole=_holds_stair((split_x, ix_max, iy_min, iy_max)),
+                    exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
+                )
+                rooms = [rm0, rm1]
+
+    elif not is_deep:
         # Partition along Y (vertical wall at X = split_x, running from iy_min to iy_max)
         stair_on_right = bool(
             (stair_pos_info and float(stair_pos_info.get('cx', ix_min)) > (ix_min + ix_max) * 0.5)
@@ -2821,30 +2969,6 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                                       'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)}
                 )
                 rooms = [rm0]
-
-        elif effective_archetype in ('INN', 'TAVERN') and fl_idx == 0:
-            # Ground floor of Inn/Tavern: Great Taproom on Left + ONE big spacious Kitchen on Right
-            dw_y = (iy_min + iy_max) * 0.5
-            interior_walls.append({
-                'p1': (split_x, iy_min), 'p2': (split_x, iy_max),
-                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
-                'doorway': {'x': split_x, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
-            })
-            rm0 = Room(
-                id=f"fl{fl_idx}_taproom", floor_idx=fl_idx, role='TAVERN_TAPROOM',
-                bounds=(ix_min, split_x, iy_min, iy_max),
-                doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
-                exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
-            )
-            rm1 = Room(
-                id=f"fl{fl_idx}_kitchen", floor_idx=fl_idx, role='KITCHEN',
-                bounds=(split_x, ix_max, iy_min, iy_max),
-                doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=_holds_stair((split_x, ix_max, iy_min, iy_max)),
-                exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
-            )
-            rooms = [rm0, rm1]
 
         elif effective_archetype == 'TENEMENT':
             # Dedicated Tenement Multi-Apartment System:
@@ -3351,8 +3475,13 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         # and stays walkable end to end. Skipped for small footprints and for
         # archetypes with bespoke layouts (they manage their own stairs).
         if (rooms and rooms[0].stair_hole is not None and stair_hole is not None
+                and fl_idx > 0
                 and effective_archetype not in ('TOWN_HALL', 'CIVIC', 'GUILDHALL',
-                                                'TAVERN', 'INN', 'TENEMENT', 'MANOR')
+                                                'TAVERN', 'INN', 'TENEMENT', 'MANOR',
+                                                'BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
+                                                'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER',
+                                                'FURNITURE_MAKER', 'HUNTER')
+                and not effective_archetype.startswith('ARTISAN')
                 and D >= 7.0):
             _hall = rooms[0]
             _hx0, _hx1, _hy0, _hy1 = _hall.bounds
@@ -3424,7 +3553,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         # 2-room split when the stairwell leaves no room for more bands.
         if fl_idx == 0 and (effective_archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
                                                  'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER',
-                                                 'FURNITURE_MAKER') or effective_archetype.startswith('ARTISAN')):
+                                                 'FURNITURE_MAKER', 'HUNTER') or effective_archetype.startswith('ARTISAN')):
             _deep_target = 2
         else:
             _deep_target = 4 if D >= 16.8 else (3 if D >= 10.5 else 2)
@@ -3793,9 +3922,11 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 hall_rm.floor_void = v_rect
                 hall_rm.role = 'MEZZANINE_GALLERY'
 
-    # Fishmonger ground floor: ONE big open shop room (no side chambers) so the
-    # trade has room to work; the catch is stored in barrels.
-    if fl_idx == 0 and effective_archetype == 'FISHERMAN':
+    # Artisan ground floor: ONE big open shop room (no side chambers or corridor slivers)
+    # so the trade has plenty of space for the store-desk, displays, customer browsing,
+    # and trade showpieces, while living quarters are on upper floors.
+    _is_artisan = (effective_archetype in _ARTISAN_GROUND or effective_archetype.startswith('ARTISAN'))
+    if fl_idx == 0 and (_is_artisan or effective_archetype == 'FISHERMAN' or bool(getattr(props, 'open_ground_floor', False))):
         _wings = [r for r in rooms if getattr(r, 'is_wing', False)]
         _cand = []
         for _r in rooms:

@@ -2791,6 +2791,8 @@ def setup_building_material_slots(obj, props):
             _sign_icon = 'fisher_sign.png'
         elif _arch == 'BLACKSMITH':
             _sign_icon = 'toolsmith_sign.png'
+        elif _arch == 'HUNTER':
+            _sign_icon = 'hunter_sign.png'
         else:
             _sign_icon = 'tavern_sign.png'
     mat_sign = getattr(props, 'custom_sign', None) or create_stylized_sign(

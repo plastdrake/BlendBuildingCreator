@@ -1633,9 +1633,9 @@ def build_estate_outbuildings(bm, props, ctx, host_obj=None):
     stable_slot = None
     servant_slot = None
 
-    # On grand estate compounds (such as the 200m x 200m Nasher's Manor plot where spread_x > 35m):
-    # Outbuildings scale dramatically across tiers, culminating in a complete citadel mini-city in Tier 3!
-    is_grand_plot = spread_x > 35.0
+    # Grand plots (e.g. Nasher's Manor 320m x 320m fortress compound where spread_x >= 50m)
+    # use fixed circular/radial citadel outbuilding coordinates around the central mount.
+    is_grand_plot = (spread_x >= 50.0) or (float(getattr(props, 'curtain_wall_offset_x', 0.0)) >= 50.0)
 
     if is_grand_plot:
         def _inward_rot(bx, by, jitter=0.0):
@@ -1899,7 +1899,54 @@ def build_estate_outbuildings(bm, props, ctx, host_obj=None):
                                   stable=stable_slot, servant=servant_slot)
         return
 
-    # Standard Plot / Tier 1 Layout
+    # Standard Plot / Tier 1-3 Estate Layout
+    # Dynamically guarantee outbuildings strictly clear the main building's wings,
+    # clock tower, corner turrets, bastion towers, and roof eaves so they never overlap
+    # into the manor even after the user changes dimensions or wing sizing.
+    if not is_grand_plot:
+        main_x_min = -ctx.hx
+        main_x_max = ctx.hx
+        if ctx.wings:
+            for w in ctx.wings:
+                b = w.get('base', (0, 0, 0, 0)) if isinstance(w, dict) else getattr(w, 'base', (0, 0, 0, 0))
+                main_x_min = min(main_x_min, b[0])
+                main_x_max = max(main_x_max, b[1])
+
+        if getattr(props, 'has_clock_tower', False):
+            ct_sz = float(getattr(props, 'clock_tower_size', 3.0))
+            if getattr(props, 'clock_tower_side', 'RIGHT') == 'LEFT':
+                main_x_min -= ct_sz
+            else:
+                main_x_max += ct_sz
+        if getattr(props, 'has_corner_turrets', False):
+            ts = float(getattr(props, 'corner_turret_size', 1.8))
+            main_x_min -= ts
+            main_x_max += ts
+        if getattr(props, 'has_bastion_towers', False):
+            bs = float(getattr(props, 'bastion_tower_size', 3.5))
+            main_x_min -= bs
+            main_x_max += bs
+        overhang = max(0.5, float(getattr(props, 'roof_overhang', 0.8)))
+        main_x_min -= overhang
+        main_x_max += overhang
+
+        # Outbuilding lateral half-extents along X:
+        # Stable: barn depth/2 + roof eave (0.85m) + front paddock fence pen (~6.2m)
+        st_dims = _stable_dims(tier)
+        _st_rot = (getattr(props, 'stable_rotate', False) or spread_x > 18.0)
+        st_half_x = (st_dims[1] * 0.5 + 6.2 + 0.85) if _st_rot else (st_dims[0] * 0.5 + 0.85)
+
+        # Servant Quarters: depth/2 + roof eave + lean-to awning extension (~2.8m)
+        sq_d_eff = 7.5 if tier == 'TIER_3' else 6.8
+        sq_w_eff = 13.5 if tier == 'TIER_3' else (12.0 if tier == 'TIER_2' else 10.5)
+        _sq_rot = (spread_x > 18.0)
+        sq_half_x = (sq_d_eff * 0.5 + 2.8 + 0.85) if _sq_rot else (sq_w_eff * 0.5 + 0.85)
+
+        walkway_clearance = 3.5
+        min_spread_left = abs(main_x_min) + st_half_x + walkway_clearance
+        min_spread_right = main_x_max + sq_half_x + walkway_clearance
+        spread_x = max(spread_x, min_spread_left, min_spread_right)
+
     # 2. Horse Stable & Carriage Barn
     if has_stable:
         st_sgn = -1.0 if stable_side == 'LEFT' else 1.0

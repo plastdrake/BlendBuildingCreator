@@ -68,7 +68,7 @@ def _build_mini_wing(bm, props, ctx, tier):
                 z_base=ctx.found_h + fl * ctx.floor_h,
                 width=width,
                 depth=depth,
-                height=min(2.05, ctx.floor_h * 0.72),
+                height=max(2.85, min(3.25, ctx.floor_h - 0.55)),
                 roof_style=_prop(props, 'mini_wing_roof', 'LEAN_TO'),
                 tier=tier, floor_h=ctx.floor_h, lower_bounds=lower,
                 win_w=_prop(props, 'window_width', 0.85),

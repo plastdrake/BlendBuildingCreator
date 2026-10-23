@@ -175,7 +175,7 @@ def _dense_tenement_settings(material_tier, num_floors, floor_height,
         'material_tier': material_tier,
         'num_floors': num_floors,
         'floor_height': max(3.8, floor_height),
-        'width': 26.0, 'depth': 24.0, 'wall_thickness': 0.30,
+        'width': 18.0, 'depth': 16.0, 'wall_thickness': 0.30,
         'has_cantilever': is_stone, 'overhang_mode': 'SECOND_FLOOR_ONLY',
         'cantilever_overhang': 0.25,
         'has_foundation': True, 'foundation_type': 'STONE',
@@ -2947,7 +2947,7 @@ PRESETS = {
             'has_servant_quarters': True,
             'servant_quarters_side': 'RIGHT',
             'has_estate_fountain': True,
-            'outbuilding_offset_x': 30.0,
+            'outbuilding_offset_x': 35.0,
             'outbuilding_offset_y': -14.0,
             'plot_setback': 21.0,
             'estate_awnings': True,
@@ -3046,7 +3046,7 @@ PRESETS = {
             'has_servant_quarters': True,
             'servant_quarters_side': 'RIGHT',
             'has_estate_fountain': True,
-            'outbuilding_offset_x': 34.0,
+            'outbuilding_offset_x': 42.0,
             'outbuilding_offset_y': -16.0,
             'plot_setback': 24.0,
             'estate_awnings': True,
@@ -3448,6 +3448,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': 'Warm rustic two-storey village bakery establishing a 10.5m x 9.5m footprint: bakehouse and shop below, home above, outdoor brick bread oven, pretzel sign, bread awning, chimney flue and flour sacks.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_1',
             'tier1_wall_style': 'WATTLE_DAUB',
@@ -3508,6 +3509,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': 'Three-storey town bakery and flour loft on the 10.5m x 9.5m footprint: business below, two living floors above, brick bread oven, terracotta flared sway roof, entrance veranda with pretzel sign, flour-loft dormer, flower boxes and stone base.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_2',
             'open_timber_frame': False,
@@ -3572,6 +3574,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': 'Four-storey master guild patisserie and bakery on the 10.5m x 9.5m footprint: shop and bakehouse below, three living floors above, brick bread oven, carved entrance veranda, pretzel sign, double dormers and stone plinth.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_3',
             'open_timber_frame': False,
@@ -3642,6 +3645,7 @@ PRESETS = {
         'plot': "12m x 20m",
         'description': 'Two-storey seamstress and draper cottage establishing an 8m x 14.5m footprint for narrow deep plots: cloth shop below, home above, timber framing, shop entrance canopy, tailor shears sign, display windows and bolt cutting room.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_1',
             'tier1_wall_style': 'WATTLE_DAUB',
@@ -3698,6 +3702,7 @@ PRESETS = {
         'plot': "12m x 20m",
         'description': 'Three-storey master draper and tailor townhouse on the 8m x 16.5m footprint: shop below, two living floors above, cantilevered jetty, delicate sway roof, hanging tailor sign, upper fitting salon with dormers, rhythmic shopfront windows and flower boxes.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_2',
             'open_timber_frame': False,
@@ -3762,6 +3767,7 @@ PRESETS = {
         'plot': "12m x 20m",
         'description': 'Four-storey haute mercery and silk guildhouse on the 8m x 16.5m footprint: cloth hall below, three living floors above, cut-stone base, grand timber jetties, second-floor fashion balcony, tailor sign, roof spire, dormers and lush window flower boxes.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_3',
             'open_timber_frame': False,
@@ -3836,6 +3842,7 @@ PRESETS = {
         'plot': "20m x 20m (10m cutout)",
         'description': 'Two-storey village tool smithy establishing a 13m x 6.8m + 6m wing courtyard footprint: forge and shop below, home above, fieldstone hearth chimney, toolsmith hammer sign and outdoor workbench yard.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'L_SHAPE',
             'wing_placement': 'FRONT',
             'wing_side': 'RIGHT',
@@ -3899,6 +3906,7 @@ PRESETS = {
         'plot': "20m x 20m (10m cutout)",
         'description': 'Three-storey town toolmaker and cutler workshop on the 13m x 6.8m + 6m wing footprint: forge and shop below, two living floors above, covered forge canopy, stone furnace and anvil, heavy stone base, toolsmith sign.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'L_SHAPE',
             'wing_placement': 'FRONT',
             'wing_side': 'RIGHT',
@@ -3967,6 +3975,7 @@ PRESETS = {
         'plot': "20m x 20m (10m cutout)",
         'description': 'Four-storey master ironmonger and tool guild on the 13m x 6.8m + 6m wing footprint: forge and shop below, three living floors above, heavy dressed stone plinth, outdoor forge canopy with chimney and anvil, courtyard quench well, toolsmith sign and double flues.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'L_SHAPE',
             'wing_placement': 'FRONT',
             'wing_side': 'RIGHT',
@@ -4040,6 +4049,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': "Two-storey gemcutter's lapidary shop establishing a 10.5m x 10m footprint: secure workshop and showroom below, home above, stone plinth, iron-barred windows and heavy shutters, gemstone sign, entrance steps and stone hearth.",
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_1',
             'tier1_wall_style': 'WATTLE_DAUB',
@@ -4097,6 +4107,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': 'Three-storey goldsmith and jeweler salon on the 10.5m x 10m footprint: showroom and workshop below, two living floors above, jettied upper showroom, front veranda with gemstone sign, second-floor appraisal balcony, dormers, flower boxes and stone base.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_2',
             'open_timber_frame': False,
@@ -4163,6 +4174,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': "Four-storey master jeweler's vault and guildhouse on the 10.5m x 10m footprint: vault and salon below, three living floors above, cut-stone plinth, corner turrets, clock spire, grand arched entrance porch, gem sign, upper salon balcony, secure shutters and courtyard well.",
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_3',
             'open_timber_frame': False,
@@ -4239,6 +4251,7 @@ PRESETS = {
         'plot': "20m x 20m (10m cutout)",
         'description': 'Two-storey rustic brewhouse and ale cellar establishing a 13m x 6.8m + 6m wing footprint: brewhouse below, home above, barrel loading yard, copper brew kettle stone chimney, beer mug sign and entrance veranda.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'L_SHAPE',
             'wing_placement': 'FRONT',
             'wing_side': 'RIGHT',
@@ -4304,6 +4317,7 @@ PRESETS = {
         'plot': "20m x 20m (10m cutout)",
         'description': 'Three-storey hop and malt brewhouse on the 13m x 6.8m + 6m wing footprint: brewing mash floor below, two living floors above, upper malt ventilation dormers, brew kettle chimney, courtyard well, brewery sign and keg yard.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'L_SHAPE',
             'wing_placement': 'FRONT',
             'wing_side': 'RIGHT',
@@ -4376,6 +4390,7 @@ PRESETS = {
         'plot': "20m x 20m (10m cutout)",
         'description': 'Four-storey master ale and stout brewery on the 13m x 6.8m + 6m wing footprint: brewhouse below, three living floors above, cut-stone base, dual brew chimneys, stone well for pure brewing water, brewery sign, beer garden benches and terracotta sway roof.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'L_SHAPE',
             'wing_placement': 'FRONT',
             'wing_side': 'RIGHT',
@@ -4454,6 +4469,7 @@ PRESETS = {
         'plot': "12m x 12m",
         'description': "Two-storey fisher's stilt shack establishing a 9m x 9m footprint inside a small 12m x 12m plot: smokehouse and net loft below, home above, raised timber pier stilts, outdoor fish drying net frame, mooring bollards, fisher sign and barrel props.",
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_1',
             'tier1_wall_style': 'LOGS',
@@ -4511,6 +4527,7 @@ PRESETS = {
         'plot': "12m x 12m",
         'description': 'Three-storey wharf fishmonger and tackle loft on the 9m x 9m footprint (12m x 12m plot): stall and smokehouse below, two living floors above, pier stilts, cantilevered upper tackle loft with dormer, fish drying racks, fisher sign and entrance lanterns.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_2',
             'open_timber_frame': False,
@@ -4573,6 +4590,7 @@ PRESETS = {
         'plot': "12m x 12m",
         'description': 'Four-storey harbor master and smoked fish haven on the 9m x 9m footprint (12m x 12m plot): curing store below, three living floors above, timber pier stilts, water-facing upper lookout balcony, fish drying frames, fish smokehouse chimney and fisher sign.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_3',
             'open_timber_frame': False,
@@ -4646,6 +4664,7 @@ PRESETS = {
         'plot': "12m x 20m",
         'description': 'Two-storey rustic woodwright and carpenter workshop establishing an 8m x 14.5m footprint: joinery below, home above, timber seasoning stock, deep sheltering eaves, furniture maker sign and work yard.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_1',
             'tier1_wall_style': 'LOGS',
@@ -4700,6 +4719,7 @@ PRESETS = {
         'plot': "12m x 20m",
         'description': 'Three-storey joiner and cabinetmaker guildshop on the 8m x 14.5m footprint: workshop and showroom below, two living floors above, prominent cantilever overhang with intricate timber diagonals, furniture maker sign and flower boxes.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_2',
             'open_timber_frame': False,
@@ -4763,6 +4783,7 @@ PRESETS = {
         'plot': "12m x 20m",
         'description': 'Four-storey master ebeniste and fine furniture guild on the 8m x 14.5m footprint: cabinet works below, three living floors above, masterwork multi-level timber jetties, upper balcony, furniture maker sign, dormers, veranda and flower boxes.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_3',
             'open_timber_frame': False,
@@ -4833,6 +4854,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': 'Two-storey village butcher and meat smokehouse establishing a 10.5m x 10m footprint: cutting shop below, home above, fieldstone foundation, large smokehouse chimney, meat display veranda, cleaver sign and salting barrels.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_1',
             'tier1_wall_style': 'WATTLE_DAUB',
@@ -4891,6 +4913,7 @@ PRESETS = {
         'plot': "20m x 20m",
         'description': 'Three-storey guild butcher and charcuterie on the 10.5m x 10m footprint: curing rooms and shop below, two living floors above, stone ground storey, half-timber upper residence, smokehouse chimney, veranda with cleaver sign, salting barrels and flower boxes.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_2',
             'open_timber_frame': False,
@@ -4955,6 +4978,7 @@ PRESETS = {
         'plot': '20m x 20m',
         'description': 'Four-storey master butcher and provisions merchant on the 10.5m x 10m footprint: smokehouse and shop below, three living floors above, salting barrels and brine well, large multi-flue smokehouse chimney, arched entrance, cleaver sign and dormers.',
         'settings': {
+            'open_ground_floor': True,
             'building_shape': 'RECTANGLE',
             'material_tier': 'TIER_3',
             'open_timber_frame': False,
@@ -5010,6 +5034,214 @@ PRESETS = {
             'color_shingles': (0.54, 0.22, 0.12, 1.0),
             'color_wall_ext': (0.92, 0.88, 0.80, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
+            'color_stone': (0.46, 0.44, 0.42, 1.0),
+            'window_glow_strength': 3.5
+        }
+    },
+
+    # =========================================================================
+    # ARTISAN: HUNTER (Plot: 20m x 20m)
+    # =========================================================================
+    'ARTISAN_HUNTER_T1': {
+        'category': 'ARTISAN',
+        'family': 'ARTISAN_HUNTER',
+        'tier': 1,
+        'name': "Artisan Hunter (Tier 1)",
+        'plot': "20m x 20m",
+        'description': "Two-storey rustic hunter & trapper lodge on a 10m x 9.5m footprint: ground floor game shop, bow & pelt storage, living quarters above, fieldstone foundation, heavy chimney, front veranda with hunter sign, outdoor woodpile and pelt racks.",
+        'settings': {
+            'open_ground_floor': True,
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_1',
+            'tier1_wall_style': 'LOGS',
+            'tier1_roof_style': 'WOOD_SHINGLES',
+            'open_timber_frame': False,
+            'num_floors': 2,
+            'floor_height': 3.5,
+            'width': 10.0,
+            'depth': 9.5,
+            'wall_thickness': 0.28,
+            'has_cantilever': False,
+            'wonkiness': 0.0,
+            'has_foundation': True,
+            'foundation_type': 'STONE',
+            'foundation_height': 0.50,
+            'ground_floor_stone': False,
+            'has_front_steps': True,
+            'has_stairs': True,
+            'has_ceiling_beams': True,
+            'has_front_door': True,
+            'door_width': 1.55,
+            'door_height': 2.85,
+            'door_angle': 0.0,
+            'door_shape': 'SQUARE',
+            'has_windows': True,
+            'window_spacing': 2.3,
+            'has_shutters': True,
+            'shutter_state': 'OPEN',
+            'has_timber_framing': True,
+            'timber_diagonals': True,
+            'roof_style': 'GABLE',
+            'roof_orientation': 'FRONT_BACK',
+            'roof_height': 3.2,
+            'roof_overhang': 0.65,
+            'has_roof_shingles': True,
+            'shingle_rows': 7,
+            'has_dormers': False,
+            'has_chimney': True,
+            'chimney_pos_x': 0.55,
+            'chimney_pos_y': -0.35,
+            'has_veranda': True,
+            'has_trade_sign': True,
+            'sign_icon': 'hunter_sign.png',
+            'has_outdoor_decor': True,
+            'has_interior_furnishing': True,
+            'furnishing_style': 'AUTO',
+            'furnishing_density': 1.0,
+            'color_shingles': (0.36, 0.22, 0.14, 1.0),
+            'color_wall_ext': (0.84, 0.78, 0.68, 1.0),
+            'color_timber': (0.22, 0.13, 0.07, 1.0),
+            'color_stone': (0.42, 0.40, 0.38, 1.0),
+            'window_glow_strength': 2.8
+        }
+    },
+    'ARTISAN_HUNTER_T2': {
+        'category': 'ARTISAN',
+        'family': 'ARTISAN_HUNTER',
+        'tier': 2,
+        'name': "Artisan Hunter (Tier 2)",
+        'plot': "20m x 20m",
+        'description': "Three-storey master hunter & furrier lodge on a 10m x 9.5m footprint: cured pelt store and fletcher workshop below, two residential living floors above, stone ground storey, timber upper residence, veranda with hunter sign, well and flower boxes.",
+        'settings': {
+            'open_ground_floor': True,
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_2',
+            'open_timber_frame': False,
+            'num_floors': 3,
+            'floor_height': 3.5,
+            'width': 10.0,
+            'depth': 9.5,
+            'wall_thickness': 0.28,
+            'has_cantilever': True,
+            'overhang_mode': 'SECOND_FLOOR_ONLY',
+            'cantilever_overhang': 0.30,
+            'wonkiness': 0.0,
+            'has_foundation': True,
+            'foundation_type': 'STONE',
+            'foundation_height': 0.60,
+            'ground_floor_stone': True,
+            'has_front_steps': True,
+            'has_stairs': True,
+            'stair_style': 'STRAIGHT',
+            'has_ceiling_beams': True,
+            'has_front_door': True,
+            'door_width': 1.50,
+            'door_height': 2.90,
+            'door_angle': 0.0,
+            'door_shape': 'ARCHED',
+            'has_windows': True,
+            'window_spacing': 2.2,
+            'has_shutters': True,
+            'shutter_state': 'OPEN',
+            'has_timber_framing': True,
+            'timber_diagonals': True,
+            'roof_style': 'GABLE',
+            'roof_orientation': 'FRONT_BACK',
+            'roof_height': 3.5,
+            'roof_flare': 0.30,
+            'roof_overhang': 0.68,
+            'has_roof_shingles': True,
+            'shingle_rows': 8,
+            'has_dormers': True,
+            'dormer_count': 1,
+            'dormer_sides': 'FRONT',
+            'has_chimney': True,
+            'chimney_pos_x': 0.60,
+            'chimney_pos_y': -0.30,
+            'has_veranda': True,
+            'has_trade_sign': True,
+            'sign_icon': 'hunter_sign.png',
+            'has_well': True,
+            'has_flower_boxes': True,
+            'has_outdoor_decor': True,
+            'has_interior_furnishing': True,
+            'furnishing_style': 'AUTO',
+            'furnishing_density': 1.0,
+            'color_shingles': (0.48, 0.20, 0.12, 1.0),
+            'color_wall_ext': (0.88, 0.84, 0.76, 1.0),
+            'color_timber': (0.20, 0.11, 0.06, 1.0),
+            'color_stone': (0.45, 0.43, 0.40, 1.0),
+            'window_glow_strength': 3.0
+        }
+    },
+    'ARTISAN_HUNTER_T3': {
+        'category': 'ARTISAN',
+        'family': 'ARTISAN_HUNTER',
+        'tier': 3,
+        'name': "Artisan Hunter (Tier 3)",
+        'plot': "20m x 20m",
+        'description': "Four-storey grand ranger & falconer guildhouse on a 10.5m x 10m footprint: ground floor trophy hall, fletcher workshop and bowyer store, three residential floors above, stone lower floors, jettied upper floors, multi-flue stone chimney, arched entrance and dormers.",
+        'settings': {
+            'open_ground_floor': True,
+            'building_shape': 'RECTANGLE',
+            'material_tier': 'TIER_3',
+            'open_timber_frame': False,
+            'num_floors': 4,
+            'floor_height': 3.5,
+            'width': 10.5,
+            'depth': 10.0,
+            'wall_thickness': 0.30,
+            'has_cantilever': True,
+            'overhang_mode': 'SECOND_FLOOR_ONLY',
+            'cantilever_overhang': 0.35,
+            'wonkiness': 0.0,
+            'has_foundation': True,
+            'foundation_type': 'CUT_STONE',
+            'foundation_height': 0.80,
+            'ground_floor_stone': True,
+            'physical_siding': True,
+            'has_front_steps': True,
+            'has_stairs': True,
+            'stair_style': 'STRAIGHT',
+            'stair_width': 1.50,
+            'has_ceiling_beams': True,
+            'has_front_door': True,
+            'door_width': 1.50,
+            'door_height': 2.95,
+            'door_angle': 0.0,
+            'door_shape': 'ARCHED',
+            'has_windows': True,
+            'window_spacing': 2.2,
+            'has_shutters': True,
+            'shutter_state': 'OPEN',
+            'has_timber_framing': True,
+            'timber_diagonals': True,
+            'roof_style': 'SWAY',
+            'roof_orientation': 'AUTO',
+            'roof_height': 3.8,
+            'roof_sway': 0.22,
+            'roof_flare': 0.36,
+            'roof_overhang': 0.72,
+            'has_roof_shingles': True,
+            'shingle_rows': 9,
+            'has_dormers': True,
+            'dormer_count': 2,
+            'dormer_sides': 'BOTH',
+            'has_chimney': True,
+            'chimney_pos_x': 0.65,
+            'chimney_pos_y': -0.25,
+            'has_veranda': True,
+            'has_trade_sign': True,
+            'sign_icon': 'hunter_sign.png',
+            'has_well': True,
+            'has_flower_boxes': True,
+            'has_outdoor_decor': True,
+            'has_interior_furnishing': True,
+            'furnishing_style': 'AUTO',
+            'furnishing_density': 1.0,
+            'color_shingles': (0.52, 0.22, 0.12, 1.0),
+            'color_wall_ext': (0.92, 0.88, 0.80, 1.0),
+            'color_timber': (0.18, 0.10, 0.05, 1.0),
             'color_stone': (0.46, 0.44, 0.42, 1.0),
             'window_glow_strength': 3.5
         }
@@ -6372,6 +6604,19 @@ BUILDING_FAMILIES = [
         ]
     },
     {
+        'id': 'ARTISAN_HUNTER',
+        'name': "Artisan Hunter",
+        'category': 'ARTISAN',
+        'plot': "20m x 20m",
+        'shape': "Hunter Lodge & Furrier",
+        'icon': 'TRACKER',
+        'tiers': [
+            ('T1', 'ARTISAN_HUNTER_T1', "Tier 1: Rustic Trapper Lodge & Game Larder"),
+            ('T2', 'ARTISAN_HUNTER_T2', "Tier 2: Master Hunter & Furrier Outpost"),
+            ('T3', 'ARTISAN_HUNTER_T3', "Tier 3: Grand Ranger & Falconer Guildhouse"),
+        ]
+    },
+    {
         'id': 'STABLE',
         'name': "Stable & Carriage Barn",
         'category': 'ESTATE',
@@ -6581,6 +6826,9 @@ ARCHETYPE_MAP = {
     'ARTISAN_FISHER_T1': 'FISHERMAN',
     'ARTISAN_FISHER_T2': 'FISHERMAN',
     'ARTISAN_FISHER_T3': 'FISHERMAN',
+    'ARTISAN_HUNTER_T1': 'HUNTER',
+    'ARTISAN_HUNTER_T2': 'HUNTER',
+    'ARTISAN_HUNTER_T3': 'HUNTER',
     'ARTISAN_TOOLSMITH_T2': 'BLACKSMITH',
     'ARTISAN_TOOLSMITH_T3': 'BLACKSMITH',
     'ARCHERY_RANGE_T1': 'ARCHERY_RANGE',
@@ -6622,6 +6870,72 @@ _ALL_KIT_FLAGS = (
     'kit_blacksmith', 'kit_windmill', 'kit_watchtower', 'kit_fisherman',
     'kit_bakery', 'kit_warehouse', 'kit_lumbermill', 'kit_quarry',
     'kit_archery', 'kit_tournament', 'kit_chapel', 'kit_stable',
+)
+
+_ALL_OPTIONAL_FEATURE_KEYS = (
+    # Fortifications & Military
+    'has_palisade', 'palisade_style', 'palisade_height', 'palisade_offset',
+    'palisade_offset_x', 'palisade_offset_y', 'palisade_depth_extra',
+    'has_curtain_wall', 'curtain_wall_height', 'curtain_wall_thickness',
+    'curtain_wall_offset', 'curtain_wall_offset_x', 'curtain_wall_offset_y',
+    'curtain_wall_depth_extra', 'has_portcullis', 'has_drawbridge', 'drawbridge_angle', 'has_gate_towers',
+    'has_banners', 'banner_count', 'has_battlements', 'battlement_style',
+    'has_military_props', 'military_props_count',
+    'military_rack_count', 'military_dummy_count', 'military_target_count',
+    'has_mounted_shields', 'shield_placement',
+    'has_gable_crest', 'gable_crest_style', 'gable_crest_scale',
+    'has_bastion_towers', 'bastion_tower_style', 'bastion_tower_count', 'bastion_tower_size', 'bastion_tower_height',
+
+    # Corner turrets, clock towers, ramparts, roof turrets/spires
+    'has_corner_turrets', 'corner_turret_size',
+    'has_clock_tower', 'clock_tower_side', 'clock_tower_size',
+    'has_side_rampart', 'rampart_side', 'rampart_door_width',
+    'has_roof_clock_spire', 'roof_clock_scale', 'roof_clock_pos_x', 'roof_clock_pos_y',
+    'has_roof_turret', 'roof_turret_style', 'roof_turret_scale', 'roof_turret_pos_x', 'roof_turret_pos_y',
+    'town_hall_composer',
+
+    # Wings, balconies, porches, ramps, annexes
+    'has_mini_wing', 'mini_wing_width', 'mini_wing_depth', 'mini_wing_roof', 'mini_wing_count',
+    'mini_wing_random', 'mini_wing_random_size', 'mini_wing_random_width', 'mini_wing_random_depth',
+    'mini_wing_shingle_rot', 'mini_wing_shingle_scale',
+    'has_balcony', 'balcony_side', 'balcony_mode', 'balcony_floor', 'balcony_fl2', 'balcony_fl3',
+    'balcony_fl4', 'balcony_fl5', 'balcony_width', 'balcony_depth',
+    'has_pillared_overhang', 'pillared_overhang_side', 'pillared_overhang_depth',
+    'pillared_overhang_pillars', 'pillared_overhang_style',
+    'has_entry_ramp', 'has_arched_porch', 'has_veranda',
+    'has_side_annex', 'annex_floors', 'annex_side', 'has_tower_annex',
+    'has_cliffs',
+
+    # Estate & Castle
+    'has_castle_citadel', 'castle_tier', 'has_dungeon', 'has_basement_stair',
+    'has_stable', 'stable_side', 'stable_rotate', 'has_servant_quarters', 'servant_quarters_side',
+    'has_estate_guardhouse', 'has_estate_forge', 'has_estate_granary', 'has_estate_chapel',
+    'has_estate_training_grounds', 'has_throne_room',
+    'has_estate_fountain', 'outbuilding_offset_x', 'outbuilding_offset_y',
+    'plot_setback', 'plot_offset_x', 'estate_awnings',
+
+    # Hospitality / Yard / Props
+    'has_trade_sign', 'sign_icon', 'has_flower_boxes',
+    'has_outdoor_decor', 'has_well',
+
+    # Special kits & Archetypes
+    *_ALL_KIT_FLAGS,
+    'has_mage_outcrops', 'mage_outcrop_count',
+    'has_upper_cargo_crane', 'has_loft_hatch', 'cargo_dock_facade', 'mill_grade',
+
+    # Construction
+    'has_construction', 'construction_mode', 'construction_plot', 'scaffold_padding',
+    'scaffold_width', 'scaffold_depth', 'scaffold_height',
+    'scaffold_levels', 'scaffold_tarp', 'construction_piles',
+    'construction_crane',
+
+    # Interior & Layout overrides
+    'interior_program', 'rug_in_utility_rooms',
+    'has_royal_kitchen', 'open_ground_floor', 'has_double_height', 'has_exterior_stairs',
+
+    # Material overrides
+    'roof_orientation',
+    'roof_material_override', 'wall_material_override', 'tier1_wall_style', 'tier1_roof_style'
 )
 
 def _scale_preset_val_for_3rd_person(k, v):
@@ -6672,35 +6986,7 @@ def apply_preset(props, preset_key):
 
     # Optional features are cleared first so a preset that omits
     # them does not inherit the previous building's state (no leakage).
-    for _fk in ('has_palisade', 'palisade_style', 'palisade_height', 'palisade_offset',
-                'palisade_offset_x', 'palisade_offset_y', 'palisade_depth_extra',
-                'has_curtain_wall', 'curtain_wall_height', 'curtain_wall_thickness',
-                'curtain_wall_offset', 'curtain_wall_offset_x', 'curtain_wall_offset_y',
-                'curtain_wall_depth_extra', 'has_portcullis', 'has_drawbridge', 'drawbridge_angle', 'has_gate_towers',
-                'has_banners', 'banner_count', 'has_battlements', 'battlement_style',
-                'has_military_props', 'military_props_count',
-                'military_rack_count', 'military_dummy_count', 'military_target_count',
-                'has_mounted_shields', 'shield_placement',
-                'has_gable_crest', 'gable_crest_style', 'gable_crest_scale',
-                'has_bastion_towers', 'bastion_tower_style', 'bastion_tower_count', 'bastion_tower_size', 'bastion_tower_height',
-                'has_veranda', 'has_arched_porch', 'has_trade_sign', 'sign_icon', 'has_flower_boxes',
-                'has_outdoor_decor', 'has_well',
-                'has_side_annex', 'annex_floors', 'annex_side',
-                'has_stable', 'stable_side', 'stable_rotate', 'has_servant_quarters', 'servant_quarters_side',
-                'has_estate_guardhouse', 'has_estate_forge', 'has_estate_granary', 'has_estate_chapel',
-                'has_estate_training_grounds', 'has_throne_room',
-                'has_estate_fountain', 'outbuilding_offset_x', 'outbuilding_offset_y',
-                'plot_setback', 'plot_offset_x', 'estate_awnings',
-                'has_castle_citadel', 'castle_tier',
-                'has_construction', 'construction_mode', 'construction_plot', 'scaffold_padding',
-                'scaffold_width', 'scaffold_depth', 'scaffold_height',
-                'scaffold_levels', 'scaffold_tarp', 'construction_piles',
-                'construction_crane',
-                'interior_program', 'rug_in_utility_rooms',
-                'has_basement_stair',
-                *_ALL_KIT_FLAGS,
-                'roof_orientation',
-                'roof_material_override', 'wall_material_override', 'tier1_wall_style', 'tier1_roof_style'):
+    for _fk in _ALL_OPTIONAL_FEATURE_KEYS:
         if hasattr(props, _fk):
             try:
                 props.property_unset(_fk)
@@ -6734,6 +7020,9 @@ def apply_preset(props, preset_key):
         props.include_door_leaves = False
     if 'has_interior_furnishing' not in data and hasattr(props, 'has_interior_furnishing'):
         props.has_interior_furnishing = True
+    preset_cat = PRESETS[preset_key].get('category')
+    if preset_cat == 'ARTISAN' and 'open_ground_floor' not in data and hasattr(props, 'open_ground_floor'):
+        props.open_ground_floor = True
 
     # Structural rules applied to every preset:
     #  * Tier 1 log walls never carry a jettying overhang (the log crowns and

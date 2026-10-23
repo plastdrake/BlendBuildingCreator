@@ -198,6 +198,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 new_f = bm.faces.new([vert_map[v] for v in f.verts])
                 new_f.material_index = f.material_index
                 new_f.smooth = f.smooth
+                new_f.tag = f.tag
                 for l_src, l_dst in zip(f.loops, new_f.loops):
                     l_dst[uv_dst].uv = l_src[uv_src].uv
             except ValueError:
@@ -207,17 +208,19 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
 
     frame_thick = 0.12
     is_arched = (door_shape == 'ARCHED') or (door_shape == 'AUTO' and ground_floor_stone and door_w < 1.6)
-    frame_depth = wall_thickness + 0.04
     
     if is_arched:
+        # Full-depth stone casing spanning cleanly through the wall from exterior to interior
+        frame_depth = wall_thickness + 0.16
+        yf_stone = y_front + wall_thickness * 0.5
         R_in = door_w * 0.5
         R_out = R_in + 0.22
         z_spring = z_base + door_h - R_in
         
         create_beveled_box(
             bm,
-            size=(door_w + 0.55, frame_depth + 0.08, 0.09),
-            location=(center_x, y_front, z_base + 0.045),
+            size=(door_w + 0.55, frame_depth + 0.04, 0.09),
+            location=(center_x, yf_stone, z_base + 0.045),
             mat_index=MAT_INDEX_CUT_STONE,
             bevel_amount=0.018
         )
@@ -233,8 +236,8 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 bx = center_x + side_sign * (R_in + bw * 0.5)
                 create_beveled_box(
                     bm,
-                    size=(bw, frame_depth + 0.03, block_step - 0.008),
-                    location=(bx, y_front, bz),
+                    size=(bw, frame_depth + 0.02, block_step - 0.008),
+                    location=(bx, yf_stone, bz),
                     mat_index=MAT_INDEX_CUT_STONE,
                     bevel_amount=0.015
                 )
@@ -243,8 +246,9 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         sp_top_z = z_spring + R_in + 0.25
         num_arc = 20
         
-        yf_f = y_front - frame_depth * 0.5 - 0.012
-        yf_b = y_front + frame_depth * 0.5 + 0.012
+        yf_f = yf_stone - frame_depth * 0.5
+        yf_b = yf_stone + frame_depth * 0.5
+        uv_layer = bm.loops.layers.uv.verify()
         
         for side_sign in [-1, 1]:
             if side_sign < 0:
@@ -284,6 +288,22 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 f_b.material_index = MAT_INDEX_CUT_STONE
                 f_s.material_index = MAT_INDEX_CUT_STONE
                 sp_faces.extend([f_f, f_b, f_s])
+
+                # UV unwrap front and back arc triangles:
+                for l in f_f.loops:
+                    l[uv_layer].uv = Vector((l.vert.co.x, l.vert.co.z))
+                for l in f_b.loops:
+                    l[uv_layer].uv = Vector((l.vert.co.x, l.vert.co.z))
+
+                # Soffit cylindrical unwrap: arc distance along curve for U, frame depth across Y for V
+                a0 = arc_angles[ai]
+                a1 = arc_angles[ai + 1]
+                s0 = (math.pi - a0 if side_sign < 0 else a0) * R_in
+                s1 = (math.pi - a1 if side_sign < 0 else a1) * R_in
+                f_s.loops[0][uv_layer].uv = Vector((s0, 0.0))
+                f_s.loops[1][uv_layer].uv = Vector((s0, frame_depth))
+                f_s.loops[2][uv_layer].uv = Vector((s1, frame_depth))
+                f_s.loops[3][uv_layer].uv = Vector((s1, 0.0))
                 
             first_vf = arc_vf[0] if side_sign < 0 else arc_vf[-1]
             first_vb = arc_vb[0] if side_sign < 0 else arc_vb[-1]
@@ -315,6 +335,29 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 f_center = bm.faces.new([apex_vf, apex_vb, v_top_b, v_top_f])
             for f_elem in [f_top_f, f_top_b, f_top_roof, f_center]:
                 f_elem.material_index = MAT_INDEX_CUT_STONE
+            sp_faces.extend([f_top_f, f_top_b, f_top_roof, f_center])
+
+            # UV unwrap planar boundary faces:
+            for l in f_bot_f.loops:
+                l[uv_layer].uv = Vector((l.vert.co.x, l.vert.co.z))
+            for l in f_bot_b.loops:
+                l[uv_layer].uv = Vector((l.vert.co.x, l.vert.co.z))
+            for l in f_side.loops:
+                l[uv_layer].uv = Vector((l.vert.co.y, l.vert.co.z))
+            for l in f_base.loops:
+                l[uv_layer].uv = Vector((l.vert.co.x, l.vert.co.y))
+            for l in f_top_f.loops:
+                l[uv_layer].uv = Vector((l.vert.co.x, l.vert.co.z))
+            for l in f_top_b.loops:
+                l[uv_layer].uv = Vector((l.vert.co.x, l.vert.co.z))
+            for l in f_top_roof.loops:
+                l[uv_layer].uv = Vector((l.vert.co.x, l.vert.co.y))
+            for l in f_center.loops:
+                l[uv_layer].uv = Vector((l.vert.co.y, l.vert.co.z))
+
+            for sf in sp_faces:
+                sf.tag = True
+
             recalc_face_normals_safe(bm, sp_faces)
             sp_vol = 0.0
             for sf in sp_faces:
@@ -326,7 +369,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
                 
         create_beveled_box(
             bm, size=(door_w + 0.44, frame_depth + 0.04, 0.16),
-            location=(center_x, y_front, sp_top_z + 0.08),
+            location=(center_x, yf_stone, sp_top_z + 0.08),
             mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015
         )
     else:
@@ -388,7 +431,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
 
     leaf_t = 0.055
     arch_clear = 0.014
-    outer_face_y = (y_front - frame_depth * 0.5) if is_arched else (y_front - 0.12)
+    outer_face_y = (yf_stone - frame_depth * 0.5 + 0.04) if is_arched else (y_front - 0.12)
     hinge_y_out = outer_face_y + 0.033
 
     if door_w >= 1.6:
