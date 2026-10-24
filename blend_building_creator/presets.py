@@ -5040,14 +5040,14 @@ PRESETS = {
     },
 
     # =========================================================================
-    # ARTISAN: HUNTER (Plot: 20m x 20m)
+    # ARTISAN: HUNTER (Plot: 16m x 16m)
     # =========================================================================
     'ARTISAN_HUNTER_T1': {
         'category': 'ARTISAN',
         'family': 'ARTISAN_HUNTER',
         'tier': 1,
         'name': "Artisan Hunter (Tier 1)",
-        'plot': "20m x 20m",
+        'plot': "16m x 16m",
         'description': "Two-storey rustic hunter & trapper lodge on a 10m x 9.5m footprint: ground floor game shop, bow & pelt storage, living quarters above, fieldstone foundation, heavy chimney, front veranda with hunter sign, outdoor woodpile and pelt racks.",
         'settings': {
             'open_ground_floor': True,
@@ -5110,7 +5110,7 @@ PRESETS = {
         'family': 'ARTISAN_HUNTER',
         'tier': 2,
         'name': "Artisan Hunter (Tier 2)",
-        'plot': "20m x 20m",
+        'plot': "16m x 16m",
         'description': "Three-storey master hunter & furrier lodge on a 10m x 9.5m footprint: cured pelt store and fletcher workshop below, two residential living floors above, stone ground storey, timber upper residence, veranda with hunter sign, well and flower boxes.",
         'settings': {
             'open_ground_floor': True,
@@ -5179,7 +5179,7 @@ PRESETS = {
         'family': 'ARTISAN_HUNTER',
         'tier': 3,
         'name': "Artisan Hunter (Tier 3)",
-        'plot': "20m x 20m",
+        'plot': "16m x 16m",
         'description': "Four-storey grand ranger & falconer guildhouse on a 10.5m x 10m footprint: ground floor trophy hall, fletcher workshop and bowyer store, three residential floors above, stone lower floors, jettied upper floors, multi-flue stone chimney, arched entrance and dormers.",
         'settings': {
             'open_ground_floor': True,
@@ -6568,7 +6568,7 @@ BUILDING_FAMILIES = [
         'id': 'ARTISAN_FISHER',
         'name': "Artisan Fisher",
         'category': 'ARTISAN',
-        'plot': "16m x 16m",
+        'plot': "12m x 12m",
         'shape': "Stilt Fisher Cabin",
         'icon': 'OUTLINER_OB_MESH',
         'tiers': [
@@ -6607,7 +6607,7 @@ BUILDING_FAMILIES = [
         'id': 'ARTISAN_HUNTER',
         'name': "Artisan Hunter",
         'category': 'ARTISAN',
-        'plot': "20m x 20m",
+        'plot': "16m x 16m",
         'shape': "Hunter Lodge & Furrier",
         'icon': 'TRACKER',
         'tiers': [
