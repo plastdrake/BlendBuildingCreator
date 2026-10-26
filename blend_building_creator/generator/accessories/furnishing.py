@@ -2713,7 +2713,7 @@ def _furnish_industrial_bay(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
     arch = getattr(tracker, 'archetype', '')
-    is_warehouse = (arch == 'WAREHOUSE')
+    is_warehouse = (arch in ('WAREHOUSE', 'BUILDER'))
     is_quarry = (arch == 'QUARRY') or rm.role == 'STONE_STORE'
     # Tier-1 open-air warehouse stockpiles carry product only: no shelving,
     # chests or hanging lanterns (there is no ceiling to hang them from).
@@ -3515,7 +3515,7 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'FISHERMAN': ['FISH', 'FISH', 'FISH', 'FOODPREP_CLUTTER'],
         'JEWELER': ['RING_TRAY', 'GEM_TRAY'],
         'BREWERY': ['PEWTER_TANKARD', 'PEWTER_TANKARD', 'BOTTLE_CLUSTER'],
-        'HUNTER': ['TARGET_STRAW_SMALL', 'MEAT_SMALL', 'PEWTER_TANKARD'],
+        'HUNTER': ['CLEAVER', 'MEAT', 'MEAT_SMALL'],
     }.get(arch)
     # Trade showpieces that do not fit on the table.
     if arch == 'BAKERY':
@@ -3560,6 +3560,12 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
         _lay_out_jeweler_counter(bm, tracker, z_floor, rng)
     elif arch == 'HUNTER':
         _try_place_wall_prop(bm, 'WEAPON_RACK', 1.40, 0.40, tracker, z_floor,
+                             candidate_walls=('NORTH', 'EAST', 'WEST'))
+        # Game cutting block with Cleaver.fbx and fresh meat cuts
+        _try_place_wall_prop(bm, 'BUTCHER_BLOCK', 0.85, 0.85, tracker, z_floor,
+                             candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'))
+        # Hanging game cuts on wall rail
+        _try_place_wall_prop(bm, 'SAUSAGE_STRING', 1.00, 0.35, tracker, z_floor,
                              candidate_walls=('NORTH', 'EAST', 'WEST'))
     elif arch in ('TOOLSMITH', 'BLACKSMITH'):
         # The artist's smith tools are too large for the stepped display, so
@@ -3659,8 +3665,8 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         'FISHERMAN': [['FISH', 'FISH', 'FISH'],
                       ['FISH', 'FISH', 'FISH'],
                       ['FISH', 'FISH', 'FISH', 'FISH']],
-        'HUNTER': [['TARGET_STRAW_SMALL', 'MEAT_SMALL', 'TARGET_STRAW_SMALL'],
-                   ['MEAT_SMALL', 'MEAT_SMALL', 'MEAT_SMALL'],
+        'HUNTER': [['TARGET_STRAW_SMALL', 'MEAT', 'TARGET_STRAW_SMALL'],
+                   ['MEAT_SMALL', 'CLEAVER', 'MEAT'],
                    ['PEWTER_TANKARD', 'MEAT_SMALL', 'PEWTER_TANKARD']],
     }.get(arch)
     if not _tier_goods:
@@ -4765,7 +4771,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             pass
     tracker.bare_stockpile = bool(getattr(ctx, 'bare_stockpile', False)) if ctx is not None else False
     tracker.is_quarry = (tracker.archetype == 'QUARRY')
-    tracker.industrial = getattr(ctx, 'industrial', False) or (tracker.archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY'))
+    tracker.industrial = getattr(ctx, 'industrial', False) or (tracker.archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY', 'BUILDER'))
     # The treadwheel sawmill stands near the middle of a lumbermill hall and is
     # built as kit geometry (not tracked), so reserve its working area here to
     # keep storage piles and shelves from overlapping the machinery. The box
@@ -4940,6 +4946,9 @@ def furnish_building_interior(bm, props, ctx):
     if getattr(ctx, 'shape', 'RECTANGLE') == 'ROUND_TOWER':
         return  # round tower owns its own interior; skip to avoid clipping
 
+    if getattr(ctx, 'effective_archetype', 'NONE') == 'BUILDER' and (getattr(props, 'material_tier', 'TIER_1') == 'TIER_1' or props.roof_style == 'NONE'):
+        return
+
     density = float(getattr(props, 'furnishing_density', 1.0))
     if density <= 0.01:
         return
@@ -5027,7 +5036,7 @@ def furnish_building_interior(bm, props, ctx):
             arch = getattr(ctx, 'effective_archetype', 'NONE')
             if arch in ('TAVERN', 'INN'):
                 role = 'TAVERN_TAPROOM' if fl == 0 else 'BEDROOM'
-            elif arch in ('BLACKSMITH', 'WAREHOUSE', 'LUMBERMILL', 'BAKERY', 'HUNTER'):
+            elif arch in ('BLACKSMITH', 'WAREHOUSE', 'LUMBERMILL', 'BAKERY', 'HUNTER', 'BUILDER'):
                 role = 'WORKSHOP' if fl == 0 else 'LODGE'
             elif arch == 'CHAPEL':
                 role = 'CHAPEL_HALL'

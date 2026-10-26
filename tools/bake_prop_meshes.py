@@ -27,6 +27,7 @@ FBX_PROPS = {
     'hoe_tool': 'Hoe_Tool.fbx',
     'pickaxe_tool': 'Pickaxe_Tool.fbx',
     'royal_throne': 'Throne.fbx',
+    'cleaver': 'Cleaver.fbx',
 }
 
 # Canonical material slot indices (mirrors generator/materials.py). The artist
@@ -157,6 +158,9 @@ lines.append('}')
 lines.append('if "royal_throne" in PROP_MESHES:')
 lines.append('    PROP_MESHES["Throne"] = PROP_MESHES["royal_throne"]')
 lines.append('    PROP_MESHES["throne"] = PROP_MESHES["royal_throne"]')
+lines.append('if "cleaver" in PROP_MESHES:')
+lines.append('    PROP_MESHES["Cleaver"] = PROP_MESHES["cleaver"]')
+lines.append('    PROP_MESHES["cleaver.fbx"] = PROP_MESHES["cleaver"]')
 lines.append('')
 
 os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)

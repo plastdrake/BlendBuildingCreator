@@ -529,7 +529,7 @@ def build_floors(bm, props, ctx):
         cur_stair_hole = floor_stair_holes.get(fl_idx, None)
 
         is_temporary_stockpile = (
-            effective_archetype == 'WAREHOUSE'
+            effective_archetype in ('WAREHOUSE', 'BUILDER')
             and getattr(props, 'material_tier', 'TIER_1') == 'TIER_1'
             and props.roof_style == 'NONE'
         )
@@ -2607,8 +2607,12 @@ def build_floors(bm, props, ctx):
             mat_w = MAT_INDEX_PLASTER_EXT
             phys_siding = False
         elif eff_wall_mat == 'LOGS':
-            mat_w = MAT_INDEX_WOOD
-            phys_siding = True
+            if fl_idx == 0 and props.ground_floor_stone and tier_val != 'TIER_1':
+                mat_w = MAT_INDEX_STONE
+                phys_siding = False
+            else:
+                mat_w = MAT_INDEX_WOOD
+                phys_siding = True
         elif eff_wall_mat == 'WOOD_PLANKS':
             mat_w = MAT_INDEX_WOOD
             phys_siding = getattr(props, 'physical_siding', True)
@@ -2634,6 +2638,7 @@ def build_floors(bm, props, ctx):
                 phys_siding = False
             elif fl_idx == 0 and props.ground_floor_stone and tier_val == 'TIER_2':
                 phys_siding = False
+        wall_tier = 'TIER_1' if (eff_wall_mat == 'LOGS' and phys_siding) else tier_val
         plank_dir = getattr(props, 'plank_direction', 'VERTICAL')
         plank_jank = getattr(props, 'plank_jankiness', 0.35)
         stone_scale = getattr(props, 'stone_block_scale', 1.0)
@@ -2726,7 +2731,7 @@ def build_floors(bm, props, ctx):
             # A Tier-1 log crown may only be dropped on the walls that sit under
             # an eave (which is where the roof deck overlaps). Gable-end walls
             # must keep their top log so the gable siding meets it with no gap.
-            omit_crown = (tier_val == 'TIER_1' and phys_siding and num_floors > 1
+            omit_crown = ((tier_val == 'TIER_1' or eff_wall_mat == 'LOGS') and phys_siding and num_floors > 1
                           and fl_idx == num_floors - 1)
             omit_front = omit_crown and is_rotated_roof
             omit_back = omit_crown and is_rotated_roof
@@ -2751,7 +2756,7 @@ def build_floors(bm, props, ctx):
 
             build_wall_with_opening(
                 bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
-                mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=tier_val, physical_siding=phys_siding,
+                mat_ext=mat_w, normal_vec=(0.0, -1.0), tier=wall_tier, physical_siding=phys_siding,
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
                 omit_top_log_row=omit_front or jetty_next,
@@ -2762,7 +2767,7 @@ def build_floors(bm, props, ctx):
             )
             build_wall_with_opening(
                 bm, (x_min, y_max), (x_max, y_max), z_floor, wall_top_z, wall_t, back_openings,
-                mat_ext=mat_w, normal_vec=(0.0, 1.0), tier=tier_val, physical_siding=phys_siding,
+                mat_ext=mat_w, normal_vec=(0.0, 1.0), tier=wall_tier, physical_siding=phys_siding,
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
                 omit_top_log_row=omit_back or jetty_next,
@@ -2773,7 +2778,7 @@ def build_floors(bm, props, ctx):
             )
             build_wall_with_opening(
                 bm, (x_min, y_min), (x_min, y_max), z_floor, wall_top_z, wall_t, left_openings,
-                mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
+                mat_ext=mat_w, normal_vec=(-1.0, 0.0), tier=wall_tier, physical_siding=phys_siding,
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
                 omit_top_log_row=omit_left or jetty_next,
@@ -2784,7 +2789,7 @@ def build_floors(bm, props, ctx):
             )
             build_wall_with_opening(
                 bm, (x_max, y_min), (x_max, y_max), z_floor, wall_top_z, wall_t, right_openings,
-                mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=tier_val, physical_siding=phys_siding,
+                mat_ext=mat_w, normal_vec=(1.0, 0.0), tier=wall_tier, physical_siding=phys_siding,
                 plank_direction=plank_dir, plank_jankiness=plank_jank,
                 stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
                 omit_top_log_row=omit_right or jetty_next,
@@ -2808,7 +2813,7 @@ def build_floors(bm, props, ctx):
                 for p1, p2, w_ops, norm_v in wing_wall_openings:
                     build_wall_with_opening(
                         bm, p1, p2, z_floor, wall_top_z, wall_t, w_ops,
-                        mat_ext=mat_w, normal_vec=norm_v, tier=tier_val, physical_siding=phys_siding,
+                        mat_ext=mat_w, normal_vec=norm_v, tier=wall_tier, physical_siding=phys_siding,
                         plank_direction=plank_dir, plank_jankiness=plank_jank,
                         stone_block_scale=stone_scale, stone_disorder=stone_disorder, seed=seed,
                         is_corner_start=not _inside_main(p1),
@@ -2821,7 +2826,8 @@ def build_floors(bm, props, ctx):
         # Corner posts stay even on a stone ground storey so the frame reads as continuous;
         # only the infill/brace timbering is dropped there to keep the base solid masonry.
         _stone_ground_fl = (fl_idx == 0 and props.ground_floor_stone)
-        _frame_here = (tier_val != 'TIER_1') or _stone_ground_fl or tier1_wattle
+        _is_log_floor = (wall_tier == 'TIER_1' and phys_siding)
+        _frame_here = not _is_log_floor and ((tier_val != 'TIER_1') or _stone_ground_fl or tier1_wattle)
         if not open_timber and props.has_timber_framing and effective_archetype != 'WATCHTOWER' and _frame_here:
             post_w = 0.30
             timber_jank = props.wonkiness * 0.5

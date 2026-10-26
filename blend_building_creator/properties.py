@@ -460,6 +460,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('JEWELER', "Jeweler Shop", "Goldsmith workbench with display counter and strongroom"),
             ('FURNITURE_MAKER', "Furniture Workshop", "Joinery workshop with lumber racks and showroom"),
             ('HUNTER', "Hunter & Furrier Lodge", "Hunter and trapper lodge: game shop, bow racks, pelt storage and living quarters"),
+            ('BUILDER', "Industrial Builder Yard & Guild", "City construction yard: work awnings, building supply stockpiles, cranes, ladders and builder guildhall"),
         ],
         default='AUTO',
         update=on_property_updated
@@ -583,6 +584,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     kit_stable: BoolProperty(
         name="Stable Yard",
         description="Open stall row and fenced paddock pen beside the barn (any building)",
+        default=False,
+        update=on_property_updated
+    )
+
+    kit_builder: BoolProperty(
+        name="Builder's Yard & Guild",
+        description="City construction yard: cranes, work awnings, supply piles, ladders and guild workshop (any building)",
         default=False,
         update=on_property_updated
     )
@@ -2657,6 +2665,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('BOTTLE_CLUSTER', "Bottle Cluster", "Trio of wine, spirits, and potion bottles with corks"),
             ('PUMPKIN', "Pumpkin", "Segmented orange pumpkin with green stem"),
             ('FOODPREP_CLUTTER', "Foodprep Clutter", "Butcher cutting board, cleaver, bread, cheese, prep bowl"),
+            ('CLEAVER', "Meat Cleaver", "Forged butcher cleaver with wooden haft"),
+            ('MEAT', "Meat Cut", "Artist butcher cut"),
+            ('MEAT_SMALL', "Meat Cut (Small)", "Artist small butcher cut"),
             ('POTTED_PLANT_SMALL', "Potted Plant (Small)", "Tabletop terracotta pot with lush green leaves"),
             ('POTTED_PLANT_LARGE', "Potted Plant (Floor)", "Large ornamental urn with tall indoor ficus/shrub"),
             ('POTTED_HERB', "Potted Herb Bowl", "Earthenware kitchen bowl with culinary herbs"),

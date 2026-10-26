@@ -165,6 +165,7 @@ def build_roof_and_attic(bm, props, ctx):
     eff_wall_mat = get_effective_wall_material(props)
     is_wattle = (tier_val == 'TIER_1' and (eff_wall_mat == 'WATTLE_DAUB' or is_tier1_wattle_daub(props)))
     eff_roof_mat = get_effective_roof_material(props)
+    roof_tier = 'TIER_1' if (eff_wall_mat == 'LOGS' and getattr(props, 'physical_siding', True)) else tier_val
 
     # Loft hatch resolved below by the roof builder. Initialised here so builds
     # that raise no gable/sway roof (watchtower, turret, round tower) leave them
@@ -554,7 +555,7 @@ def build_roof_and_attic(bm, props, ctx):
                         gable_ends=loc_gable_ends,
                         abut_front=loc_abut_front,
                         abut_back=loc_abut_back,
-                        tier=tier_val,
+                        tier=roof_tier,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=dormer_apertures,
@@ -576,7 +577,7 @@ def build_roof_and_attic(bm, props, ctx):
                         abut_front=loc_abut_front,
                         abut_back=loc_abut_back,
                         segments_y=6,
-                        tier=tier_val,
+                        tier=roof_tier,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=dormer_apertures,
@@ -613,7 +614,7 @@ def build_roof_and_attic(bm, props, ctx):
                         gable_ends=loc_gable_ends,
                         abut_front=loc_abut_front,
                         abut_back=loc_abut_back,
-                        tier=tier_val,
+                        tier=roof_tier,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=dormer_apertures,
@@ -635,7 +636,7 @@ def build_roof_and_attic(bm, props, ctx):
                         abut_front=loc_abut_front,
                         abut_back=loc_abut_back,
                         segments_y=6,
-                        tier=tier_val,
+                        tier=roof_tier,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=dormer_apertures,
@@ -893,7 +894,7 @@ def build_roof_and_attic(bm, props, ctx):
                         gable_ends=w_gable_fb,
                         loft_hatch=w_loft_arg,
                         abut_back=abut_back,
-                        tier=tier_val,
+                        tier=roof_tier,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
@@ -916,7 +917,7 @@ def build_roof_and_attic(bm, props, ctx):
                         # Denser ridge steps so valley-notch edges run smooth.
                         segments_y=10,
                         abut_back=abut_back,
-                        tier=tier_val,
+                        tier=roof_tier,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
@@ -1063,7 +1064,7 @@ def build_roof_and_attic(bm, props, ctx):
                         loft_hatch=w_loft_arg,
                         abut_front=abut_front,
                         abut_back=False,
-                        tier=tier_val,
+                        tier=roof_tier,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
@@ -1087,7 +1088,7 @@ def build_roof_and_attic(bm, props, ctx):
                         segments_y=10,
                         abut_front=abut_front,
                         abut_back=False,
-                        tier=tier_val,
+                        tier=roof_tier,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
@@ -1262,7 +1263,7 @@ def build_roof_and_attic(bm, props, ctx):
                         wall_thickness=wall_t,
                         gable_ends=w_gable_lr,
                         abut_back=loc_abut_back,
-                        tier=tier_val,
+                        tier=roof_tier,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,
@@ -1284,7 +1285,7 @@ def build_roof_and_attic(bm, props, ctx):
                         # Denser ridge steps so valley-notch edges run smooth.
                         segments_y=10,
                         abut_back=loc_abut_back,
-                        tier=tier_val,
+                        tier=roof_tier,
                         plank_direction=plank_dir,
                         roof_flare=flare_val,
                         dormer_apertures=w_dormer_apertures,

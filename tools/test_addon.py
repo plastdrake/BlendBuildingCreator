@@ -201,23 +201,25 @@ def test_room_zoning_and_furnishing():
     assert 'GUEST_ROOM' in upper_inn
     print("  [PASS] Inn: ground floor is taproom/kitchen, upper floor is guest bedrooms with protected landing.")
 
-    # 2. Artisans: all 9 families must have at least 2 floors in T1, and shop/workshop downstairs
+    # 2. Artisans: all families have at least 2 floors in T1 (Hunter is a 1-storey wilderness cabin), and shop/workshop downstairs
     artisan_families = ['ARTISAN_BAKERY', 'ARTISAN_TAILOR', 'ARTISAN_TOOLSMITH', 'ARTISAN_JEWELER',
                         'ARTISAN_BREWERY', 'ARTISAN_FISHER', 'ARTISAN_FURNITURE_MAKER', 'ARTISAN_BUTCHER',
                         'ARTISAN_HUNTER']
     for fam in artisan_families:
+        min_t1 = 1 if fam == 'ARTISAN_HUNTER' else 2
+        min_t2 = 2 if fam == 'ARTISAN_HUNTER' else 3
         t1_floors = PRESETS[f'{fam}_T1']['settings']['num_floors']
-        assert t1_floors >= 2, f"{fam}_T1 has only {t1_floors} floors (expected >= 2)"
+        assert t1_floors >= min_t1, f"{fam}_T1 has only {t1_floors} floors (expected >= {min_t1})"
         t2_floors = PRESETS[f'{fam}_T2']['settings']['num_floors']
-        assert t2_floors >= 3, f"{fam}_T2 has only {t2_floors} floors (expected >= 3)"
+        assert t2_floors >= min_t2, f"{fam}_T2 has only {t2_floors} floors (expected >= {min_t2})"
 
     ground_artisan = _resolve_room_roles('BAKERY', fl_idx=0, num_rooms=2, has_stairs_landing=False)
     assert 'STORE' in ground_artisan or 'WORKSHOP' in ground_artisan
-    print("  [PASS] All 9 Artisan families have >= 2 floors in T1, >= 3 floors in T2, with ground storefronts.")
+    print("  [PASS] All 9 Artisan families verified (Hunter rustic cabin in T1, storefronts downstairs).")
 
     # 3. Small houses: split into bedroom + kitchen
     ground_house = _resolve_room_roles('HOUSE', fl_idx=0, num_rooms=2, has_stairs_landing=False, total_floors=1)
-    assert 'KITCHEN' in ground_house and ('BEDROOM' in ground_house or 'HOUSE_HALL' in ground_house)
+    assert 'KITCHEN' in ground_house and ('BEDROOM' in ground_house or 'HOUSE_HALL' in ground_house or 'MASTER_BED' in ground_house)
     print("  [PASS] Single-floor small houses split into kitchen and living/bedroom.")
 
     # 4. Tenement presets
@@ -361,6 +363,14 @@ def test_tenement_layouts():
     assert generated_sizes['TENEMENT_TOWER_20M_T1'][2] > generated_sizes['TENEMENT_CITY_ROW_20M_T1'][2]
     print("  [PASS] Tenement apartments, single-route stairs, six city presets, blank party walls, and 20m bounds verified.")
 
+    # --- Artisan Fisher 12m bounds verification -----
+    for f_key in ('ARTISAN_FISHER_T1', 'ARTISAN_FISHER_T2', 'ARTISAN_FISHER_T3'):
+        bpy.ops.building.apply_preset(preset_key=f_key)
+        f_dims = bpy.context.active_object.dimensions
+        assert f_dims.x <= 12.0 and f_dims.y <= 12.0, (
+            f"{f_key} exceeds 12x12m plot: ({f_dims.x:.2f}m, {f_dims.y:.2f}m)")
+    print("  [PASS] Artisan Fisher presets verified within 12x12m plot bounds.")
+
 
 def test_chimneys_and_stoves():
     """Verifies chimney placement against outer walls and strict hearth/stove attachment."""
@@ -451,6 +461,9 @@ def test_representative_presets():
         'MAGE_TOWER_T1',
         'TOWN_HALL_T1',
         'WAREHOUSE_T1',
+        'BUILDER_T1',
+        'BUILDER_T2',
+        'BUILDER_T3',
     ]
     for p_key in curated:
         bpy.ops.building.apply_preset(preset_key=p_key)

@@ -1593,7 +1593,7 @@ _ARCHETYPE_PROGRAM = {
     'STABLE': 'STABLE',
     'ARCHERY': 'RANGER', 'ARCHERY_RANGE': 'RANGER',
     'CHAPEL': 'SACRED', 'HEALERS_CHAPEL': 'SACRED',
-    'WAREHOUSE': 'INDUSTRIAL', 'LUMBERMILL': 'INDUSTRIAL',
+    'WAREHOUSE': 'INDUSTRIAL', 'LUMBERMILL': 'INDUSTRIAL', 'BUILDER': 'INDUSTRIAL',
     'BLACKSMITH': 'COMMERCIAL',
     'QUARRY': 'INDUSTRIAL',
     'BAKERY': 'COMMERCIAL', 'FISHERMAN': 'COMMERCIAL', 'BREWERY': 'COMMERCIAL',
@@ -1670,7 +1670,7 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         if archetype in ('TAVERN', 'INN'):
             pool = ['STAIR_LANDING', 'GUEST_ROOM', 'GUEST_ROOM', 'GUEST_ROOM', 'MASTER_BED', 'STUDY']
             return pool[:num_rooms]
-        elif archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY'):
+        elif archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY', 'BUILDER'):
             # Industrial upper floors are work/storage, never bedrooms or kitchens.
             pool = ['STAIR_LANDING', 'STONE_STORE' if archetype == 'QUARRY' else 'STORAGE', 'WORKSHOP', 'OFFICE']
             return pool[:num_rooms]
@@ -1732,7 +1732,7 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         pool = ['TAVERN_TAPROOM', 'KITCHEN', 'CELLAR', 'PANTRY']
         return pool[:num_rooms]
 
-    if archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY'):
+    if archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY', 'BUILDER'):
         if archetype == 'QUARRY':
             pool = ['STONE_STORE', 'STORAGE', 'WORKSHOP', 'OFFICE']
         else:
@@ -1781,7 +1781,7 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         if num_rooms == 1:
             return ['COTTAGE']
         elif num_rooms == 2:
-            return ['HOUSE_HALL', 'MASTER_BED']
+            return ['KITCHEN', 'MASTER_BED']
         elif num_rooms == 3:
             return ['HOUSE_HALL', 'KITCHEN', 'MASTER_BED']
         else:
@@ -2621,7 +2621,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                         w_role = _craft_wing
                     else:
                         w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
-                                           ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH')) else 'GUEST_ROOM'
+                                           ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH', 'BUILDER')) else 'GUEST_ROOM'
                     w_doorways = []
                 w_rm = Room(
                     id=f"fl{fl_idx}_wing{wi}",

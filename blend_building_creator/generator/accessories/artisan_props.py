@@ -352,18 +352,8 @@ def build_butcher_block(bm, x, y, z_ground=0.0, ang=0.0):
                 mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.022
             )
     faces += [f for f in list(bm.faces)[_n0:] if f.is_valid]
-    # Heavy cleaver buried in the block.
-    faces += create_beveled_box(
-        bm, size=(0.175, 0.018, 0.10),
-        location=(0.02, 0.10, top_z + 0.10),
-        rotation=(0.30, 0.0, -0.15),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.004
-    )
-    faces += create_cylinder(
-        bm, radius=0.016, height=0.11, segments=8,
-        location=(0.02, 0.10, top_z + 0.20),
-        rotation=(0.30, 0.0, 0.0), mat_index=MAT_INDEX_WOOD
-    )
+    # Artist's heavy cleaver (Cleaver.fbx) buried in the block.
+    faces += build_cleaver(bm, 0.02, 0.06, top_z, ang=0.0, length=0.36, stuck=True)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
@@ -1743,6 +1733,104 @@ def _procedural_hoe(bm, x, y, z_ground=0.0, ang=0.0, length=0.78, variant=0):
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
+
+
+
+def build_cleaver(bm, x, y, z_ground=0.0, ang=0.0, length=0.36, stuck=False, bury_depth=0.035):
+    """Heavy meat cleaver — uses the artist's Cleaver.fbx with wooden haft, iron blade body,
+    and polished silver cutting edge.
+
+    When stuck=True: cutting edge chops down into a chopping block / stump with
+    the handle angled up.
+    When stuck=False: rests flat on its side on z_ground.
+    Falls back to a procedural cleaver if unbaked.
+    """
+    from mathutils import Matrix as _M, Vector as _V, Euler as _E
+    from .artisan_meshdata import PROP_MESHES
+    it = PROP_MESHES.get('cleaver')
+    if it:
+        verts = it['verts']
+        xs = [v[0] for v in verts]
+        ys = [v[1] for v in verts]
+        zs = [v[2] for v in verts]
+        span = max(xs) - min(xs)
+        s = length / (span or 1.0)
+        cz0 = min(zs)
+
+        if stuck:
+            rot = _E((math.pi * 0.5, 0.20, 0.35)).to_matrix().to_4x4()
+            min_z = min((rot @ (_V(v) * s)).z for v in verts)
+            local = (_M.Translation((x, y, z_ground - min_z - bury_depth))
+                     @ _M.Rotation(ang, 4, 'Z')
+                     @ rot @ _M.Diagonal((s, s, s, 1.0)))
+        else:
+            # Laid flat on its side: thickness is along Z, resting on z_ground
+            local = (_M.Translation((x, y, z_ground - cz0 * s))
+                     @ _M.Rotation(ang, 4, 'Z')
+                     @ _M.Diagonal((s, s, s, 1.0)))
+
+        uv_layer = bm.loops.layers.uv.verify()
+        remap = {}
+        used = set(vi for poly in it['polys'] for vi, _ in poly)
+        for i in used:
+            remap[i] = bm.verts.new(local @ _V(verts[i]))
+        _pm = it.get('poly_mats')
+        seen = set()
+        faces = []
+        for pi, poly in enumerate(it['polys']):
+            idx = [vi for vi, _ in poly]
+            if len(set(idx)) < 3:
+                continue
+            kf = tuple(sorted(idx))
+            if kf in seen:
+                continue
+            seen.add(kf)
+            f = bm.faces.new([remap[i] for i in idx])
+            f.material_index = (_pm[pi] if (_pm is not None and pi < len(_pm)
+                                            and _pm[pi] >= 0) else MAT_INDEX_IRON)
+            f.smooth = True
+            f.tag = True
+            uvm = {vi: uv for vi, uv in poly}
+            src = {remap[i]: i for i in idx}
+            for loop in f.loops:
+                sv = src.get(loop.vert)
+                if sv is not None and sv in uvm:
+                    loop[uv_layer].uv = uvm[sv]
+            faces.append(f)
+        return faces
+
+    return _procedural_cleaver(bm, x, y, z_ground, ang, length=length, stuck=stuck)
+
+
+def _procedural_cleaver(bm, x, y, z_ground=0.0, ang=0.0, length=0.36, stuck=False):
+    """Fallback stylized cleaver with beveled blade and cylindrical wooden haft."""
+    faces = []
+    scale = length / 0.36
+    if stuck:
+        faces += create_beveled_box(
+            bm, size=(0.18 * scale, 0.02 * scale, 0.12 * scale),
+            location=(0.02, 0.06, z_ground + 0.07 * scale),
+            rotation=(0.30, 0.0, -0.15),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.004 * scale
+        )
+        faces += create_cylinder(
+            bm, radius=0.016 * scale, height=0.12 * scale, segments=8,
+            location=(0.02, 0.06, z_ground + 0.17 * scale),
+            rotation=(0.30, 0.0, 0.0), mat_index=MAT_INDEX_WOOD
+        )
+    else:
+        faces += create_beveled_box(
+            bm, size=(0.18 * scale, 0.12 * scale, 0.016 * scale),
+            location=(0.05 * scale, 0.0, z_ground + 0.008 * scale),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.003 * scale
+        )
+        faces += create_cylinder(
+            bm, radius=0.014 * scale, height=0.12 * scale, segments=8,
+            location=(-0.08 * scale, 0.02 * scale, z_ground + 0.014 * scale),
+            rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_WOOD
+        )
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
 
 
 def build_wine_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.10):

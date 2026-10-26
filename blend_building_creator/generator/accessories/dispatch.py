@@ -327,15 +327,17 @@ def _build_generic_annex(bm, props, ctx, tier):
     a_floors = max(1, min(2, _prop(props, 'annex_floors', 2)))
     base_hx = ctx.base_w * 0.5
     base_hy = ctx.base_d * 0.5
+    _eff_wall = get_effective_wall_material(props)
+    annex_tier = 'TIER_1' if _eff_wall == 'LOGS' else tier
     a_w = min(6.0, max(3.6, ctx.base_d * 0.72))
-    a_d = 3.6 if tier == 'TIER_1' else 4.0
-    a_roof = 3.0 if tier == 'TIER_3' else 2.6
+    a_d = 3.6 if annex_tier == 'TIER_1' else 4.0
+    a_roof = 3.0 if annex_tier == 'TIER_3' else 2.6
     for side_sgn in side_sgns:
         build_side_annex(
             bm, side_sgn=side_sgn, main_hx=base_hx,
             main_cy0=-base_hy, main_cy1=base_hy,
             z_ground=0.0, found_h=ctx.found_h, floors=a_floors, floor_h=ctx.floor_h,
-            tier=tier, width=a_w, depth=a_d, roof_h=a_roof,
+            tier=annex_tier, width=a_w, depth=a_d, roof_h=a_roof,
             plank_direction=ctx.plank_dir,
             main_bounds_by_floor=ctx.floor_wall_bounds,
             main_roof={
@@ -349,8 +351,8 @@ def _build_generic_annex(bm, props, ctx, tier):
                 'style': _prop(props, 'roof_style', 'SWAY'),
                 'ov': _prop(props, 'roof_overhang', 0.70),
             },
-            # Log (Tier 1) buildings get a plain log annex, never half-timbering.
-            timber_framing=bool(_prop(props, 'has_timber_framing', True)) and tier != 'TIER_1',
+            # Log buildings get a plain log annex, never half-timbering.
+            timber_framing=bool(_prop(props, 'has_timber_framing', True)) and annex_tier != 'TIER_1',
             diagonals=bool(_prop(props, 'timber_diagonals', True)),
         )
 
@@ -372,11 +374,12 @@ def build_architectural_accessories(bm, props, ctx):
     # Manor-borne fortifications (mounted shields, gable crests) travel with it.
     _build_manor_fortifications(bm, props, ctx)
     # Whole-room interior furnishing travels with the manor (before setback).
-    try:
-        from .furnishing import furnish_building_interior
-        furnish_building_interior(bm, props, ctx)
-    except Exception:
-        pass
+    if not (_kit_on(props, ctx, 'kit_builder', 'BUILDER') and (tier == 'TIER_1' or props.roof_style == 'NONE')):
+        try:
+            from .furnishing import furnish_building_interior
+            furnish_building_interior(bm, props, ctx)
+        except Exception:
+            pass
 
     setback = _prop(props, 'plot_setback', 0.0)
     off_x = _prop(props, 'plot_offset_x', 0.0)
@@ -844,6 +847,17 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
         _build_warehouse_kit(bm, props, ctx, tier, hx, hy, shape, wings, seed)
     if _kit_on(props, ctx, 'kit_lumbermill', 'LUMBERMILL'):
         _build_lumbermill_kit(bm, props, ctx, hx, hy, base_w, shape, wings, open_timber, seed)
+    if _kit_on(props, ctx, 'kit_builder', 'BUILDER'):
+        try:
+            from .builder import build_builder_tier1_yard, build_builder_tier2_yard, build_builder_tier3_yard
+            if tier == 'TIER_1' or props.roof_style == 'NONE':
+                build_builder_tier1_yard(bm, min_x=-hx, max_x=hx, min_y=-hy, max_y=hy, z_floor=found_h, seed=seed)
+            elif tier == 'TIER_2':
+                build_builder_tier2_yard(bm, props, ctx, hx, hy, seed=seed)
+            else:
+                build_builder_tier3_yard(bm, props, ctx, hx, hy, seed=seed)
+        except Exception:
+            pass
     # Brewery cellar: sunken courtyard undercroft (tier-scaled).
     if getattr(ctx, 'effective_archetype', '') == 'BREWERY':
         try:
@@ -890,6 +904,68 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
                     ctx.fisher_rails.append((_px - 0.65, _px + 0.65,
                                              _ry - 0.45, _ry + 0.45))
                     _n += 1
+        except Exception:
+            pass
+
+    # Hunter yard / porch: game curing rails with hanging meat cuts (meat.fbx, meat1.fbx)
+    # and outdoor game chopping stump with buried Cleaver.fbx.
+    if getattr(ctx, 'effective_archetype', '') == 'HUNTER':
+        try:
+            from .artisan_props import build_sausage_string, build_butcher_block
+            from .hospitality import is_point_outside_building
+            _door_x = ctx.main_door_cx
+            _n_want = 1 if tier == 'TIER_1' else (2 if tier == 'TIER_2' else 3)
+            _ry = -hy - 0.75
+            _offs = []
+            _step, _start = 1.60, 2.10
+            for _k in range(5):
+                _offs.append(-(_start + _k * _step))
+                _offs.append(_start + _k * _step)
+            ctx.hunter_rails = []
+            _n = 0
+            for _ox in _offs:
+                if _n >= _n_want:
+                    break
+                if abs(_ox) < 1.65:
+                    continue  # door corridor clear
+                _px = _door_x + _ox
+                if abs(_px) > hx - 0.15 or abs(_ry) > hy - 0.15:
+                    continue
+                if abs(_px - _door_x) < 1.35:
+                    continue
+                if is_point_outside_building(_px, _ry, 0.50, ctx, margin=0.10):
+                    build_sausage_string(bm, _px, _ry, 0.0, 0.0, width=1.15)
+                    ctx.hunter_rails.append((_px - 0.65, _px + 0.65, _ry - 0.45, _ry + 0.45))
+                    _n += 1
+            # Outdoor game cleaning & chopping stump with artist cleaver and cuts
+            _bx = _door_x + (1.95 if tier == 'TIER_1' else -2.25)
+            _by = -hy - 0.65
+            if is_point_outside_building(_bx, _by, 0.42, ctx, margin=0.08):
+                build_butcher_block(bm, _bx, _by, 0.0, ang=0.25)
+        except Exception:
+            pass
+
+    # Butcher yard: meat hanging rails and butcher block with proper artist cleaver.
+    if getattr(ctx, 'effective_archetype', '') == 'BUTCHER':
+        try:
+            from .artisan_props import build_sausage_string, build_butcher_block
+            from .hospitality import is_point_outside_building
+            _door_x = ctx.main_door_cx
+            _offs = [2.20, -2.20, 3.80, -3.80]
+            _ry = -hy - 0.75
+            for _ox in _offs:
+                if abs(_ox) < 1.65:
+                    continue
+                _px = _door_x + _ox
+                if abs(_px) > hx - 0.15 or abs(_ry) > hy - 0.15:
+                    continue
+                if is_point_outside_building(_px, _ry, 0.50, ctx, margin=0.10):
+                    build_sausage_string(bm, _px, _ry, 0.0, 0.0, width=1.15)
+                    break
+            _bx = _door_x - 2.10
+            _by = -hy - 0.65
+            if is_point_outside_building(_bx, _by, 0.42, ctx, margin=0.08):
+                build_butcher_block(bm, _bx, _by, 0.0, ang=-0.20)
         except Exception:
             pass
 
