@@ -667,26 +667,36 @@ def build_floors(bm, props, ctx):
                 build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
                                       return_y=ret_y, x_start=sh_x1)
             elif stair_switchback:
-                # Switchback floor: this storey's opening is the lane the flight
-                # below climbed, and the sibling lane is solid floor carrying the
-                # next flight. Every floor guards its void in exactly the same
-                # way - the closed foot end only - so the same opening never
-                # ends up with a different amount of railing storey to storey.
-                if (fl_idx - 1) % 2 == 0:
-                    # Void over the WEST lane: flight climbed South -> North, arriving at sh_y2.
-                    # Next flight departs at sh_y2 climbing North -> South in East lane.
-                    # Guard ONLY the South end of the void to protect against the drop from the room floor.
-                    # Never guard along Y (sibling flight's stringer guards it) or across sh_y2 (transfer walkway).
-                    build_stair_guardrail(bm, sh_x1, sh_y1 - 0.14, sh_y1 - 0.14, z_floor + 0.05,
-                                          return_y=sh_y1 - 0.14, x_start=sh_x2)
+                # Switchback stairwell guardrail:
+                # The flight climbing up from fl_below arrived at arrival_y on this floor.
+                # The foot of that flight was at foot_y (where the void drops down to the floor below).
+                # The foot end MUST be guarded with a cross-rail to protect against the drop.
+                # The arrival end MUST remain 100% open so players can freely step off onto the floor.
+                fl_below = fl_idx - 1
+                if fl_below % 2 == 0:
+                    foot_y = stair_y_foot
+                    arrival_y = stair_y_head
                 else:
-                    # Void over the EAST lane: flight climbed North -> South, arriving at sh_y1.
-                    # Next flight departs at sh_y1 climbing South -> North in West lane.
-                    # Guard ONLY the North end of the void to protect against the drop from the room floor.
-                    build_stair_guardrail(bm, sh_x1, sh_y2 + 0.14, sh_y2 + 0.14, z_floor + 0.05,
-                                          return_y=sh_y2 + 0.14, x_start=sh_x2)
-                    if slab_xmax - sh_x2 > 0.60:
-                        build_stair_guardrail(bm, sh_x2 + 0.14, sh_y1, sh_y2, z_floor + 0.05)
+                    foot_y = stair_y_head
+                    arrival_y = stair_y_foot
+
+                if foot_y > arrival_y:
+                    guard_y = sh_y2 + 0.14
+                else:
+                    guard_y = sh_y1 - 0.14
+
+                build_stair_guardrail(bm, sh_x1, guard_y, guard_y, z_floor + 0.05,
+                                      return_y=guard_y, x_start=sh_x2)
+
+                # On the top floor (no ascending flight in the sibling lane), protect
+                # the open walking aisle edge (+X or -X) against the stair drop/slope,
+                # ending cleanly at arrival_y so it never wraps or blocks the exit.
+                if fl_idx == num_floors - 1:
+                    is_right = (stair_side_opt == 'RIGHT')
+                    aisle_x = (sh_x1 - 0.14) if is_right else (sh_x2 + 0.14)
+                    has_aisle = (sh_x1 - slab_xmin > 0.60) if is_right else (slab_xmax - sh_x2 > 0.60)
+                    if has_aisle:
+                        build_stair_guardrail(bm, aisle_x, min(foot_y, arrival_y), max(foot_y, arrival_y), z_floor + 0.05)
             else:
                 # Straight stairs: guard the open stairwell on all 3 sides except the climb-up side,
                 # offset 18 cm outward from the hole so it sits cleanly on the floor without overlapping

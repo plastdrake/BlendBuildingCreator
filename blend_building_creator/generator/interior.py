@@ -1684,7 +1684,7 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             if fl_idx == 1:
                 if num_rooms == 1:
                     return ['BEDROOM']
-                pool = ['STAIR_LANDING', 'BEDROOM', 'KITCHEN', 'HOUSE_HALL']
+                pool = ['STAIR_LANDING', 'HOUSE_HALL', 'MASTER_BED', 'BEDROOM']
             else:
                 if num_rooms == 1:
                     return ['MASTER_BED']
@@ -3558,23 +3558,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         else:
             _deep_target = 4 if D >= 16.8 else (3 if D >= 10.5 else 2)
         _deep_splits = None
-        if _turn_layout and has_stairs_landing:
-            # Turned-stair floors: the front band is the stair column; whatever
-            # depth is left behind it is divided into evenly-sized (square-ish)
-            # rooms. No corridor slivers, and if only one decent room fits it is
-            # simply one room.
-            _col_top = stair_safe_y_top + 0.35
-            _avail = iy_max - _col_top
-            _nrooms = int(_avail / 4.5)
-            while _nrooms >= 1 and _avail / _nrooms < 3.6:
-                _nrooms -= 1
-            if _nrooms >= 1 and (_col_top - iy_min) >= 1.6:
-                _splits = [_col_top]
-                for _ri in range(1, _nrooms):
-                    _splits.append(_col_top + _avail * _ri / _nrooms)
-                _deep_splits = _splits
-                _deep_target = _nrooms + 1
-        elif _deep_target >= 3:
+        if not _turn_layout and _deep_target >= 3:
             for _try_n in range(_deep_target, 2, -1):
                 _raw = [iy_min + D * i / _try_n for i in range(1, _try_n)]
                 _ok = True
@@ -3585,18 +3569,29 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     _sp = _dodge_oven_band(_sp, _lo, iy_max - 1.8)
                     _sp = min(max(_sp, _lo), iy_max - 1.8)
                     _hs0 = _hs1 = None
-                    if _turn_layout:
-                        # Keep the partition clear of the WHOLE turned-stair
-                        # column (flights, landings and all), not just the slab
-                        # opening, so no wall ever runs through the stairs.
-                        _hs0, _hs1 = stair_safe_y_bot - 0.35, stair_safe_y_top + 0.35
-                    elif stair_hole is not None:
-                        _hs0, _hs1 = stair_hole[2] - 0.80, stair_hole[3] + 0.80
+                    sy_b = (stair_pos_info or {}).get('y_bot', stair_hole[2] if stair_hole is not None else None)
+                    sy_t = (stair_pos_info or {}).get('y_top', stair_hole[3] if stair_hole is not None else None)
+                    if sy_b is not None and sy_t is not None:
+                        # Guarantee at least 2.20m walkable landing corridor at both
+                        # foot and head landings so partition walls never block stair egress.
+                        stair_land_pad = 2.20
+                        _hs0 = min(sy_b, sy_t) - stair_land_pad
+                        _hs1 = max(sy_b, sy_t) + stair_land_pad
                     if _hs0 is not None:
                         # A split exactly on the clearance edge is already
                         # safe; only the open interval is forbidden.
                         if _hs0 < _sp < _hs1:
-                            _sp = _hs0 if (_sp - _hs0) <= (_hs1 - _sp) else _hs1
+                            can_lo = (_hs0 >= _lo)
+                            can_hi = (_hs1 <= iy_max - 1.8)
+                            if can_lo and can_hi:
+                                _sp = _hs0 if (_sp - _hs0) <= (_hs1 - _sp) else _hs1
+                            elif can_lo:
+                                _sp = _hs0
+                            elif can_hi:
+                                _sp = _hs1
+                            else:
+                                _ok = False
+                                break
                             _sp = min(max(_sp, _lo), iy_max - 1.8)
                         if _hs0 < _sp < _hs1:
                             _ok = False
@@ -3605,106 +3600,192 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     _lo = _sp + 2.2
                 if not (_ok and _fixed and iy_max - _fixed[-1] >= 2.2 - 1e-6):
                     continue
-                if _turn_layout:
-                    # Prefer squarer rooms: reject a band set that contains a
-                    # corridor-thin slice and retry with one band fewer.
-                    _ed = [iy_min] + list(_fixed) + [iy_max]
-                    if min(_ed[_i + 1] - _ed[_i] for _i in range(len(_ed) - 1)) < 2.8:
-                        continue
                 _deep_splits = _fixed
                 _deep_target = _try_n
                 break
-        # Reject corridor-thin bands on turned-stair floors: a floor sliced into
-        # shallow strips reads as hallways. Prefer a single room instead.
-        if _deep_splits is not None and _turn_layout:
-            _bd = [iy_min] + list(_deep_splits) + [iy_max]
-            if min(_bd[_i + 1] - _bd[_i] for _i in range(len(_bd) - 1)) < 2.8:
-                _deep_splits = None
+
         if _turn_layout and has_stairs_landing:
-            # The corner-loop stair hugs the walls, so the CENTRE of the floor
-            # stays free: put square-ish rooms there (one combined living room
-            # on a small floor; a short row of them on a deep one).
-            # Inset the room only off the walls that actually carry a flight on
-            # THIS floor (the one coming up and the one going up); the free
-            # walls stay as the room boundary so furniture hugs the real walls
-            # instead of lining a virtual box in the middle of the floor.
-            _sides = set()
-            for _hrect in (stair_hole, (stair_pos_info or {}).get('ascend_hole')):
-                if not _hrect:
-                    continue
-                _hx0, _hx1, _hy0, _hy1 = _hrect
-                if _hx0 - ix_min < 0.95:
-                    _sides.add('W')
-                if ix_max - _hx1 < 0.95:
-                    _sides.add('E')
-                if _hy0 - iy_min < 0.95:
-                    _sides.add('S')
-                if iy_max - _hy1 < 0.95:
-                    _sides.add('N')
-            _ins = 1.75
-            _rx0 = ix_min + (_ins if 'W' in _sides else 0.0)
-            _rx1 = ix_max - (_ins if 'E' in _sides else 0.0)
-            _ry0 = iy_min + (_ins if 'S' in _sides else 0.0)
-            _ry1 = iy_max - (_ins if 'N' in _sides else 0.0)
-            _rw, _rd = _rx1 - _rx0, _ry1 - _ry0
-            _fac = {'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
-                    'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)}
-            # Roles per floor: a small home (2 storeys) gets one combined
-            # kitchen/bed/living room upstairs; taller homes keep them on
-            # SEPARATE floors so a stove is never in a bedroom.
-            _tf = max(1, int(total_floors or 1))
-            if _tf <= 2:
-                _first_role = 'COTTAGE'
-            elif fl_idx <= 1:
-                _first_role = 'KITCHEN'
+            # Turned-stair floors: the stair column occupies the front zone (from iy_min to _col_top).
+            # It is isolated into a dedicated STAIR_LANDING corridor room with real partition walls,
+            # ensuring stair flights and landings are 100% walkable and clutter-free (strictly no beds or couches).
+            # The generous floor area behind it (from _col_top to iy_max) is partitioned into
+            # elegant, well-proportioned rooms with cased walkthrough doorways.
+            _col_top = stair_safe_y_top + 0.35
+            _col_top = max(iy_min + 2.8, min(iy_max - 2.8, _col_top))
+            _col_top = _clear_doorway_span(_col_top, axis='Y', lo=iy_min + 2.4, hi=iy_max - 2.4)
+            _col_top = _dodge_oven_band(_col_top, iy_min + 2.4, iy_max - 2.4)
+
+            has_ascend = (fl_idx < total_floors - 1 and getattr(props, 'has_stairs', True))
+            if has_ascend and (fl_idx % 4 == 1):
+                # Ascending flight climbs along the North wall of the stair column from West to East.
+                # Safe flat landing approach is at the NW arrival corner (corner 1).
+                dw_x = ix_min + 1.25
+                dw_x = _clear_doorway_span(dw_x, axis='X', lo=ix_min + 1.0, hi=ix_min + 1.6)
+                dw_w_eff = min(dw_w, 1.30)
             else:
-                _first_role = 'MASTER_BED' if fl_idx >= _tf - 1 else 'BEDROOM'
-            if _rw > 1.8 and _rd > 1.8:
-                _n = 1
-                while _n < 4 and _rd / _n > _rw * 1.85:
-                    _n += 1
-                _roles = [_first_role] + ['BEDROOM'] * (_n - 1)
-                rooms = []
-                for _i in range(_n):
-                    _b0 = _ry0 + _rd * _i / _n
-                    _b1 = _ry0 + _rd * (_i + 1) / _n
-                    rooms.append(Room(
-                        id=f"fl{fl_idx}_room{_i}", floor_idx=fl_idx,
-                        role=_roles[_i], bounds=(_rx0, _rx1, _b0, _b1),
-                        doorways=list(doorways or []),
-                        stair_hole=(stair_hole if _i == 0 else None),
-                        exterior_facades=dict(_fac)))
+                dw_x = (ix_min + ix_max) * 0.5
+                if door_cx is not None and abs(dw_x - door_cx) < 0.4:
+                    dw_x += 0.85
+                dw_x = _clear_doorway_span(dw_x, axis='X', lo=ix_min + 1.8, hi=ix_max - 1.8)
+                dw_w_eff = dw_w
+
+            interior_walls.append({
+                'p1': (ix_min, _col_top), 'p2': (ix_max, _col_top),
+                'axis': 'X', 'pos': _col_top, 'thickness': wall_t,
+                'doorway': {'x': dw_x, 'y': _col_top, 'w': dw_w_eff, 'h': dw_h, 'axis': 'X'}
+            })
+            rm_landing = Room(
+                id=f"fl{fl_idx}_stair_landing", floor_idx=fl_idx, role='STAIR_LANDING',
+                bounds=(ix_min, ix_max, iy_min, _col_top),
+                doorways=[{'x': dw_x, 'y': _col_top, 'axis': 'X', 'w': dw_w_eff}],
+                stair_hole=stair_hole,
+                exterior_facades={'FRONT': (ix_min, ix_max), 'LEFT': (iy_min, _col_top), 'RIGHT': (iy_min, _col_top)}
+            )
+
+            avail_d = iy_max - _col_top
+            avail_w = ix_max - ix_min
+
+            if avail_d < 4.2 or (partition_style == 'TWO_ROOMS' and avail_d < 6.8):
+                # Single chamber behind landing
+                rm_role = 'MASTER_BED' if fl_idx <= 1 else 'BEDROOM'
+                rm_chamber = Room(
+                    id=f"fl{fl_idx}_chamber", floor_idx=fl_idx, role=rm_role,
+                    bounds=(ix_min, ix_max, _col_top, iy_max),
+                    doorways=[{'x': dw_x, 'y': _col_top, 'axis': 'X', 'w': dw_w_eff}],
+                    stair_hole=None,
+                    exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (_col_top, iy_max), 'RIGHT': (_col_top, iy_max)}
+                )
+                rooms = [rm_landing, rm_chamber]
+            elif avail_d < 6.8 or avail_w < 6.8 or partition_style == 'TWO_ROOMS':
+                # Two chambers divided along Y (front-to-back): Middle Salon + Rear Bedroom
+                split_y2 = (_col_top + iy_max) * 0.5
+                split_y2 = _clear_doorway_span(split_y2, axis='Y', lo=_col_top + 2.0, hi=iy_max - 2.0)
+                split_y2 = _dodge_oven_band(split_y2, _col_top + 2.0, iy_max - 2.0)
+                dw_x2 = (ix_min + ix_max) * 0.5
+                dw_x2 = _clear_doorway_span(dw_x2, axis='X', lo=ix_min + 1.8, hi=ix_max - 1.8)
+                interior_walls.append({
+                    'p1': (ix_min, split_y2), 'p2': (ix_max, split_y2),
+                    'axis': 'X', 'pos': split_y2, 'thickness': wall_t,
+                    'doorway': {'x': dw_x2, 'y': split_y2, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
+                })
+                role_mid = 'HOUSE_HALL' if fl_idx <= 1 else ('MASTER_BED' if total_floors > 2 else 'BEDROOM')
+                role_rear = 'MASTER_BED' if fl_idx <= 1 else 'BEDROOM'
+                rm_mid = Room(
+                    id=f"fl{fl_idx}_salon", floor_idx=fl_idx, role=role_mid,
+                    bounds=(ix_min, ix_max, _col_top, split_y2),
+                    doorways=[{'x': dw_x, 'y': _col_top, 'axis': 'X', 'w': dw_w_eff},
+                              {'x': dw_x2, 'y': split_y2, 'axis': 'X', 'w': dw_w}],
+                    stair_hole=None,
+                    exterior_facades={'LEFT': (_col_top, split_y2), 'RIGHT': (_col_top, split_y2)}
+                )
+                rm_rear = Room(
+                    id=f"fl{fl_idx}_bed", floor_idx=fl_idx, role=role_rear,
+                    bounds=(ix_min, ix_max, split_y2, iy_max),
+                    doorways=[{'x': dw_x2, 'y': split_y2, 'axis': 'X', 'w': dw_w}],
+                    stair_hole=None,
+                    exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (split_y2, iy_max), 'RIGHT': (split_y2, iy_max)}
+                )
+                rooms = [rm_landing, rm_mid, rm_rear]
             else:
-                rooms = [Room(
-                    id=f"fl{fl_idx}_cottage", floor_idx=fl_idx, role=_first_role,
-                    bounds=(ix_min, ix_max, iy_min, iy_max),
-                    doorways=list(doorways or []),
-                    stair_hole=stair_hole, exterior_facades=dict(_fac))]
+                # Large deep floor (e.g. Tailor 8m x 16.5m):
+                # Middle Living Salon / Fitting Parlor + Two Private Rear Chambers!
+                split_y2 = _col_top + avail_d * 0.48
+                split_y2 = _clear_doorway_span(split_y2, axis='Y', lo=_col_top + 2.8, hi=iy_max - 3.0)
+                split_y2 = _dodge_oven_band(split_y2, _col_top + 2.8, iy_max - 3.0)
+
+                split_x2 = (ix_min + ix_max) * 0.5
+                split_x2 = _clear_doorway_span(split_x2, axis='X', lo=ix_min + 2.8, hi=ix_max - 2.8)
+
+                dw_x_l = (ix_min + split_x2) * 0.5
+                dw_x_l = _clear_doorway_span(dw_x_l, axis='X', lo=ix_min + 1.2, hi=split_x2 - 1.2)
+                dw_x_r = (split_x2 + ix_max) * 0.5
+                dw_x_r = _clear_doorway_span(dw_x_r, axis='X', lo=split_x2 + 1.2, hi=ix_max - 1.2)
+
+                # Cross-partition wall at split_y2 with doorways into each rear chamber
+                interior_walls.append({
+                    'p1': (ix_min, split_y2), 'p2': (split_x2, split_y2),
+                    'axis': 'X', 'pos': split_y2, 'thickness': wall_t,
+                    'doorway': {'x': dw_x_l, 'y': split_y2, 'w': min(dw_w, 1.40), 'h': dw_h, 'axis': 'X'}
+                })
+                interior_walls.append({
+                    'p1': (split_x2, split_y2), 'p2': (ix_max, split_y2),
+                    'axis': 'X', 'pos': split_y2, 'thickness': wall_t,
+                    'doorway': {'x': dw_x_r, 'y': split_y2, 'w': min(dw_w, 1.40), 'h': dw_h, 'axis': 'X'}
+                })
+                # Vertical dividing wall between the two rear chambers
+                interior_walls.append({
+                    'p1': (split_x2, split_y2), 'p2': (split_x2, iy_max),
+                    'axis': 'Y', 'pos': split_x2, 'thickness': wall_t,
+                })
+
+                role_mid = 'HOUSE_HALL' if fl_idx <= 1 else ('MASTER_BED' if total_floors > 2 else 'BEDROOM')
+                role_l = 'MASTER_BED' if fl_idx <= 1 else 'BEDROOM'
+                role_r = 'BEDROOM' if fl_idx <= 1 else 'GUEST_ROOM'
+
+                rm_salon = Room(
+                    id=f"fl{fl_idx}_salon", floor_idx=fl_idx, role=role_mid,
+                    bounds=(ix_min, ix_max, _col_top, split_y2),
+                    doorways=[
+                        {'x': dw_x, 'y': _col_top, 'axis': 'X', 'w': dw_w_eff},
+                        {'x': dw_x_l, 'y': split_y2, 'axis': 'X', 'w': min(dw_w, 1.40)},
+                        {'x': dw_x_r, 'y': split_y2, 'axis': 'X', 'w': min(dw_w, 1.40)},
+                    ],
+                    stair_hole=None,
+                    exterior_facades={'LEFT': (_col_top, split_y2), 'RIGHT': (_col_top, split_y2)}
+                )
+                rm_bed_l = Room(
+                    id=f"fl{fl_idx}_bed_w", floor_idx=fl_idx, role=role_l,
+                    bounds=(ix_min, split_x2, split_y2, iy_max),
+                    doorways=[{'x': dw_x_l, 'y': split_y2, 'axis': 'X', 'w': min(dw_w, 1.40)}],
+                    stair_hole=None,
+                    exterior_facades={'LEFT': (split_y2, iy_max), 'BACK': (ix_min, split_x2)}
+                )
+                rm_bed_r = Room(
+                    id=f"fl{fl_idx}_bed_e", floor_idx=fl_idx, role=role_r,
+                    bounds=(split_x2, ix_max, split_y2, iy_max),
+                    doorways=[{'x': dw_x_r, 'y': split_y2, 'axis': 'X', 'w': min(dw_w, 1.40)}],
+                    stair_hole=None,
+                    exterior_facades={'RIGHT': (split_y2, iy_max), 'BACK': (split_x2, ix_max)}
+                )
+                rooms = [rm_landing, rm_salon, rm_bed_l, rm_bed_r]
         elif _deep_splits is None:
             _deep_target = 2
             roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors, program=program)
-            # Keep the cross partition clear of the stair band on whichever side
-            # the switchback actually occupies, so it never bisects the flights.
+            sy_b = (stair_pos_info or {}).get('y_bot', stair_hole[2] if stair_hole is not None else None)
+            sy_t = (stair_pos_info or {}).get('y_top', stair_hole[3] if stair_hole is not None else None)
+            if sy_b is not None and sy_t is not None:
+                pad_2rm = 2.00
+                _hh0 = min(sy_b, sy_t) - pad_2rm
+                _hh1 = max(sy_b, sy_t) + pad_2rm
+            elif stair_hole is not None:
+                _hh0, _hh1 = stair_hole[2] - 1.80, stair_hole[3] + 1.80
+            else:
+                _hh0 = _hh1 = None
+
             if stair_guards_north:
-                split_y = min(stair_safe_y_bot - 0.65, iy_min + D * 0.48)
+                split_y = min((_hh0 if _hh0 is not None else (stair_safe_y_bot - 0.65)), iy_min + D * 0.48)
                 split_y = max(iy_min + 2.3, split_y)
             else:
-                split_y = max(stair_safe_y_top + 0.65, iy_min + D * 0.48)
+                split_y = max((_hh1 if _hh1 is not None else (stair_safe_y_top + 0.65)), iy_min + D * 0.48)
                 split_y = min(iy_max - 2.3, split_y)
             split_y = _clear_doorway_span(split_y, axis='Y',
                                           lo=iy_min + 2.3, hi=iy_max - 1.8)
             split_y = _dodge_oven_band(split_y, iy_min + 2.3, iy_max - 1.8)
-            if stair_hole is not None:
-                # Never bisect the stair flight itself: nudge to the nearest
-                # clear edge when the depth clamps forced the split inside it.
-                _hh0, _hh1 = stair_hole[2] - 0.50, stair_hole[3] + 0.50
+            if _hh0 is not None:
                 if _hh0 < split_y < _hh1:
                     split_y = _hh0 if (split_y - _hh0) <= (_hh1 - split_y) else _hh1
                     split_y = min(max(split_y, iy_min + 2.3), iy_max - 1.8)
 
-            dw_x = (ix_min + ix_max) * 0.5
-            if abs(dw_x - (door_cx or 0.0)) < 0.4:
+            if stair_pos_info and (stair_hole is not None or getattr(props, 'has_stairs', False)):
+                if stair_safe_x < (ix_min + ix_max) * 0.5:
+                    dw_x = (stair_safe_x + ix_max) * 0.5
+                else:
+                    dw_x = (ix_min + stair_safe_x) * 0.5
+            else:
+                dw_x = (ix_min + ix_max) * 0.5
+            if door_cx is not None and abs(dw_x - door_cx) < 0.4:
                 dw_x += 0.85
+            dw_x = _clear_doorway_span(dw_x, axis='X', lo=ix_min + 1.2, hi=ix_max - 1.2)
 
             interior_walls.append({
                 'p1': (ix_min, split_y), 'p2': (ix_max, split_y),
@@ -3771,9 +3852,16 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     if _li != _hb:
                         _room_roles[_li], _room_roles[_hb] = _room_roles[_hb], _room_roles[_li]
 
-            dw_x = (ix_min + ix_max) * 0.5
-            if abs(dw_x - (door_cx or 0.0)) < 0.4:
+            if stair_pos_info and (stair_hole is not None or getattr(props, 'has_stairs', False)):
+                if stair_safe_x < (ix_min + ix_max) * 0.5:
+                    dw_x = (stair_safe_x + ix_max) * 0.5
+                else:
+                    dw_x = (ix_min + stair_safe_x) * 0.5
+            else:
+                dw_x = (ix_min + ix_max) * 0.5
+            if door_cx is not None and abs(dw_x - door_cx) < 0.4:
                 dw_x += 0.85
+            dw_x = _clear_doorway_span(dw_x, axis='X', lo=ix_min + 1.2, hi=ix_max - 1.2)
 
             rooms = []
             for _bi, (_b0, _b1) in enumerate(_bounds):
