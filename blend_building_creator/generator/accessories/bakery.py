@@ -53,7 +53,7 @@ def bakery_oven_rect(hx, wall_t, base_y=0.0):
     plus a 1m working apron in front of the mouth."""
     base_x = (hx - wall_t) - 1.35 * 0.5
     return (base_x - (1.35 * 0.5 + 0.24 + 1.00), hx - wall_t + 0.05,
-            base_y - 1.05, base_y + 1.05)
+            base_y - 1.25, base_y + 1.25)
 
 
 def _right_window_ys(ctx):

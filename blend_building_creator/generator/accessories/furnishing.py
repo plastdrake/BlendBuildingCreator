@@ -577,6 +577,9 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
         width = max(width, float(params.get('length', 1.80)))
         depth = max(depth, 1.05)
 
+    if key == 'COUNTER':
+        ignore_stair = False
+
     _rb = getattr(tracker, 'room_bounds', None) or (rx0, rx1, ry0, ry1)
     _wx0, _wx1, _wy0, _wy1 = _rb
     rcx = (rx0 + rx1) * 0.5
@@ -3197,16 +3200,16 @@ def _furnish_bakehouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
                                ['FOODPREP_CLUTTER', 'BREAD_LOAF', 'BREAD_LOAF'], span=1.15)
         _stool_near(bm, tracker, t[0], t[1], t[2], z_floor, rng)
 
-    # Cooling rack laden with loaves along a free wall.
+    # Cooling rack laden with loaves along a free wall (kept off oven wall).
     _try_place_wall_prop(bm, 'BREAD_RACK', 1.50, 0.50, tracker, z_floor,
-                         candidate_walls=('EAST', 'NORTH', 'WEST'))
+                         candidate_walls=('NORTH', 'WEST', 'SOUTH'))
 
     _place_goods_row(bm, tracker, z_floor, rng, 'SACK', count=4)  # flour
     _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
-                         candidate_walls=('EAST', 'NORTH', 'WEST'))  # loaf shelves
+                         candidate_walls=('NORTH', 'WEST', 'SOUTH'))  # loaf shelves (clear of oven)
     if rng.random() < density:
         _try_place_wall_prop(bm, 'LOG_PILE', 1.15, 0.95, tracker, z_floor,
-                             candidate_walls=('SOUTH', 'WEST', 'EAST'),
+                             candidate_walls=('SOUTH', 'WEST', 'NORTH'),
                              length=1.00, radius=0.11, rows=2)  # oven fuel
 
     rug_w = min(2.60, max(1.60, rw * 0.55))
@@ -4359,46 +4362,31 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     tracker.shop_counter = None
 
     # 1. Merchant counter: freestanding across a wall with a working strip
-    # behind it, else wall-backed.
-    _counter_len = min(2.0, max(1.2, min(rw, rd) * 0.45))
+    # behind it, else     _counter_len = min(2.0, max(1.2, min(rw, rd) * 0.45))
     _placed_counter = None
-    # Fishmonger: the west side is the staircase, so place the counter
-    # freestanding in the clear (east) half — never up against the stairs.
-    if getattr(tracker, 'archetype', '') == 'FISHERMAN':
-        _cxc = (tracker.rx0 + tracker.rx1) * 0.5
-        _cyc = (tracker.ry0 + tracker.ry1) * 0.5
-        for _ox, _oy in ((1.15, 0.0), (1.15, -1.15), (1.15, 1.15),
-                         (0.6, -1.5), (0.6, 1.5)):
-            _ccx, _ccy = _cxc + _ox, _cyc + _oy
-            if not tracker.is_free(_ccx - 1.15, _ccx + 1.15,
-                                   _ccy - 0.45, _ccy + 0.45, ignore_stair=True):
-                continue
-            tracker.occupy(_ccx - 1.15, _ccx + 1.15, _ccy - 0.45, _ccy + 0.45)
-            build_prop(bm, 'COUNTER', _ccx, _ccy, z_floor, 0.0, length=2.0)
-            _stx, _sty = _ccx + 0.72, _ccy
-            if tracker.is_free(_stx - 0.26, _stx + 0.26, _sty - 0.26,
-                               _sty + 0.26, ignore_stair=True):
-                tracker.occupy(_stx - 0.26, _stx + 0.26, _sty - 0.26, _sty + 0.26)
-                build_prop(bm, 'STOOL', _stx, _sty, z_floor, math.pi * 0.5)
-            _placed_counter = {'cx': _ccx, 'cy': _ccy, 'yaw': 0.0,
-                               'wall': 'FREESTAND', 'freestanding': True,
-                               'mdx': 1.0, 'mdy': 0.0, 'length': 2.0,
-                               'top_z': z_floor + 1.235}
-            break
-    # Pass 1 keeps clear of the staircase (so the counter is not buried under
-    # the flight); pass 2 may use the space beneath it in cramped shops.
-    # (wall, yaw so the plank front faces the room, merchant dir into wall)
-    _wall_order = (('NORTH', 0.0, 0.0, 1.0),
-                   ('EAST', -math.pi * 0.5, 1.0, 0.0),
-                   ('WEST', math.pi * 0.5, -1.0, 0.0),
-                   ('SOUTH', math.pi, 0.0, -1.0))
-    if getattr(tracker, 'archetype', '') == 'FISHERMAN':
-        # Keep the fishmonger counter off the west staircase.
+
+    # Determine staircase side so the counter prioritizes the opposite clear wall
+    _sw = getattr(tracker, 'stair_hole', None)
+    _stair_on_left = True
+    if _sw is not None:
+        _sxc = (_sw[0] + _sw[1]) * 0.5
+        _stair_on_left = (_sxc < (tracker.rx0 + tracker.rx1) * 0.5)
+
+    if _stair_on_left:
+        # Stair is on West: prioritize East wall, then North/South, never West near stairs
         _wall_order = (('EAST', -math.pi * 0.5, 1.0, 0.0),
-                       ('SOUTH', math.pi, 0.0, -1.0),
                        ('NORTH', 0.0, 0.0, 1.0),
+                       ('SOUTH', math.pi, 0.0, -1.0),
                        ('WEST', math.pi * 0.5, -1.0, 0.0))
-    for _ig in (False, True):
+    else:
+        # Stair is on East: prioritize West wall, then North/South, never East near stairs
+        _wall_order = (('WEST', math.pi * 0.5, -1.0, 0.0),
+                       ('NORTH', 0.0, 0.0, 1.0),
+                       ('SOUTH', math.pi, 0.0, -1.0),
+                       ('EAST', -math.pi * 0.5, 1.0, 0.0))
+
+    # Strict stair clearance: counters must NEVER ignore stairs or sit below/under them!
+    for _ig in (False,):
         if _placed_counter is not None:
             break
         for _wall, _yaw, _mdx, _mdy in _wall_order:
@@ -4446,15 +4434,13 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
                 break
             if _placed_counter is not None:
                 break
-    # Guarantee a counter: widen the fallback (all four walls, ignoring the
-    # stair reserve), then compact wall counters, then a freestanding one.
+    # Fallback wall counters: still strictly never ignoring stairs
     if _placed_counter is None:
-        for _cl, _cwalls in ((_counter_len, ('NORTH', 'EAST', 'WEST', 'SOUTH')),
-                             (1.20, ('NORTH', 'EAST', 'WEST', 'SOUTH')),
-                             (1.00, ('EAST', 'WEST', 'NORTH', 'SOUTH'))):
+        _cand_walls = [w for w, _, _, _ in _wall_order if (w != 'WEST' if _stair_on_left else w != 'EAST')]
+        for _cl in (_counter_len, 1.20, 1.00):
             _d_counter = _try_place_wall_prop(
                 bm, 'COUNTER', _cl, 0.60, tracker, z_floor,
-                candidate_walls=_cwalls, length=_cl, ignore_stair=True)
+                candidate_walls=_cand_walls, length=_cl, ignore_stair=False)
             if _d_counter:
                 _placed_counter = {'cx': _d_counter[0], 'cy': _d_counter[1],
                                    'yaw': _d_counter[2], 'wall': None,
@@ -4463,15 +4449,16 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
                 break
     if _placed_counter is None:
         # Absolute last resort: a compact freestanding counter at the freest
-        # open patch, so the shop always has its counter.
+        # open patch strictly clear of all stairs and doorways.
         _sp = _freest_spot(tracker, rng, step=0.30)
         if _sp is not None and _sp[2] >= 0.45:
             _chw, _chd = min(0.62, _sp[2]), min(0.45, _sp[2])
-            tracker.occupy(_sp[0] - _chw, _sp[0] + _chw, _sp[1] - _chd, _sp[1] + _chd)
-            build_prop(bm, 'COUNTER', _sp[0], _sp[1], z_floor, 0.0, length=1.20)
-            _placed_counter = {'cx': _sp[0], 'cy': _sp[1], 'yaw': 0.0,
-                               'wall': None, 'freestanding': True, 'mdx': 0.0,
-                               'mdy': 0.0, 'length': 1.20, 'top_z': z_floor + 1.235}
+            if tracker.is_free(_sp[0] - _chw, _sp[0] + _chw, _sp[1] - _chd, _sp[1] + _chd, ignore_stair=False):
+                tracker.occupy(_sp[0] - _chw, _sp[0] + _chw, _sp[1] - _chd, _sp[1] + _chd)
+                build_prop(bm, 'COUNTER', _sp[0], _sp[1], z_floor, 0.0, length=1.20)
+                _placed_counter = {'cx': _sp[0], 'cy': _sp[1], 'yaw': 0.0,
+                                   'wall': None, 'freestanding': True, 'mdx': 0.0,
+                                   'mdy': 0.0, 'length': 1.20, 'top_z': z_floor + 1.235}
     tracker.shop_counter = _placed_counter
     if _placed_counter:
         _cc = _placed_counter
@@ -4502,10 +4489,13 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
         _try_place_wall_prop(bm, 'MEAT_RACK', 1.40, 0.40, tracker, z_floor,
                              candidate_walls=('WEST', 'NORTH', 'SOUTH'))
     elif _arch0 not in ('FISHERMAN', 'TOOLSMITH', 'BLACKSMITH'):
+        _is_bakery = (_arch0 == 'BAKERY' or bool(getattr(props, 'kit_bakery', False)))
+        _swall1 = ('SOUTH', 'NORTH', 'WEST') if _is_bakery else ('EAST', 'SOUTH', 'NORTH')
+        _swall2 = ('SOUTH', 'WEST', 'NORTH') if _is_bakery else ('EAST', 'SOUTH', 'WEST', 'NORTH')
         _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
-                             candidate_walls=('EAST', 'SOUTH', 'NORTH'))
+                             candidate_walls=_swall1)
         _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
-                             candidate_walls=('EAST', 'SOUTH', 'WEST', 'NORTH'))
+                             candidate_walls=_swall2)
 
     # 4. Goods crates and merchandise barrels — kept OFF the corners so the
     #    wall corners stay free for the trade display (placed above). The
@@ -4726,25 +4716,23 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         except ValueError:
             pass
         _sx0, _sx1, _sy0, _sy1 = _stair_well
-        tracker.stair_box = (_sx0 - 0.25, _sx1 + 0.25,
-                             _sy0 - 2.10, _sy1 + 2.10)
+        tracker.stair_box = (_sx0 - 0.80, _sx1 + 0.80,
+                             _sy0 - 2.20, _sy1 + 2.20)
         tracker.occupied_boxes.append(tracker.stair_box)
     # A ceiling stair-hole (no opening in THIS floor's own slab) sits over a
-    # solid floor, so the walkable space beneath the flight is usable.
+    # solid floor only above ground floor (on ground floor the stair rises from the slab).
     _own_hole = None
     if ctx is not None:
         _own_hole = (getattr(ctx, 'floor_stair_holes', None) or {}).get(rm.floor_idx)
-    tracker.stair_is_ceiling = bool(_stair_well is not None and _own_hole is None)
-    # Reserve the full staircase footprint only above the ground floor: on the
-    # ground floor the ascending staircase is ABOVE the slab, so reserving its
-    # whole footprint would needlessly starve the room (the snug base stair_box
-    # still keeps props off the actual staircase).
+    tracker.stair_is_ceiling = bool(_stair_well is not None and _own_hole is None and rm.floor_idx > 0)
+    # Reserve the full staircase footprint on all floors so props and counters
+    # never clip or crowd the staircase or its landings.
     _full_stair = getattr(ctx, 'full_stair_box', None)
-    if _full_stair is not None and rm.floor_idx > 0:
+    if _full_stair is not None:
         fs_x0, fs_x1, fs_y0, fs_y1 = _full_stair
         # If this room overlaps the staircase footprint, reserve the full well + landings
         if not (rx1 < fs_x0 or rx0 > fs_x1 or ry1 < fs_y0 or ry0 > fs_y1):
-            pad_land = 2.10
+            pad_land = 2.20
             pad_side = 0.80
             stair_keepout = (fs_x0 - pad_side, fs_x1 + pad_side, fs_y0 - pad_land, fs_y1 + pad_land)
             tracker.occupy(*stair_keepout)
@@ -4752,8 +4740,10 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                 tracker.stair_box = stair_keepout
     tracker.rng = rng
     tracker.archetype = getattr(ctx, 'effective_archetype', 'NONE') if ctx is not None else 'NONE'
-    if getattr(ctx, 'effective_archetype', 'NONE') == 'BAKERY' and ctx is not None:
-        # Hearth-oven masonry keep-out: the ground-floor bakehouse reserves
+    _is_bakery_oven = (tracker.archetype == 'BAKERY'
+                       or bool(getattr(props, 'kit_bakery', False)))
+    if _is_bakery_oven and ctx is not None:
+        # Hearth-oven masonry keep-out: the ground-floor reserves
         # the oven body + work apron, and upper storeys reserve the flue
         # shaft rising through them, so props never intersect the masonry.
         try:
@@ -4762,11 +4752,17 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _hy = float(getattr(ctx, 'hy', 0.0))
             _wt = float(getattr(ctx, 'wall_t', 0.30))
             _oy = _pick_oven_y(ctx, _hy, _wt, 0.975)
-            if rm.floor_idx == 0 and rm.role == 'BAKEHOUSE':
-                tracker.occupy(*bakery_oven_rect(_hx, _wt, _oy))
+            if rm.floor_idx == 0:
+                _ov_box = bakery_oven_rect(_hx, _wt, _oy)
+                if not (rm.bounds[1] < _ov_box[0] or rm.bounds[0] > _ov_box[1] or
+                        rm.bounds[3] < _ov_box[2] or rm.bounds[2] > _ov_box[3]):
+                    tracker.occupy(*_ov_box)
             elif rm.floor_idx > 0:
                 _fx = (_hx - _wt) - 1.35 * 0.5
-                tracker.occupy(_fx - 0.50, _fx + 0.50, _oy - 0.50, _oy + 0.50)
+                _flue_box = (_fx - 0.70, _fx + 0.70, _oy - 0.70, _oy + 0.70)
+                if not (rm.bounds[1] < _flue_box[0] or rm.bounds[0] > _flue_box[1] or
+                        rm.bounds[3] < _flue_box[2] or rm.bounds[2] > _flue_box[3]):
+                    tracker.occupy(*_flue_box)
         except Exception:
             pass
     tracker.bare_stockpile = bool(getattr(ctx, 'bare_stockpile', False)) if ctx is not None else False
@@ -4785,7 +4781,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         for _yb in getattr(ctx, 'yard_keepouts', None) or ():
             if rm.floor_idx == 0:
                 tracker.occupy(_yb[0], _yb[1], _yb[2], _yb[3])
-    if tracker.archetype == 'LUMBERMILL' and rm.floor_idx == 0:
+    if (tracker.archetype == 'LUMBERMILL' or bool(getattr(props, 'kit_lumbermill', False))) and rm.floor_idx == 0:
         _mill_box = None
         if ctx is not None:
             _mill_box = getattr(ctx, 'mill_keepout', None)
@@ -4887,7 +4883,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _d = min(1.0, density * 0.8)
             _prev_nr = getattr(tracker, 'no_rugs', False)
             _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, _d,
-                             is_master=False)
+                             is_master=True)
             tracker.no_rugs = True
             if getattr(rm, 'floor_idx', 1) <= 1:
                 # The hall below owns the single dining set, so the kitchen

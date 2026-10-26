@@ -686,6 +686,8 @@ def create_stylized_plaster(name="M_Building_Plaster", color=None, is_interior=F
     - Tier 3: Smooth Ivory Stucco — Flawlessly smooth creamy white / brilliant clean ivory stucco
               on overhangs with subtle, elegant shading.
     """
+    if name == "M_Building_Plaster" and tier == 'TIER_1':
+        name = "M_Building_WattleDaub"
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1400)
     c = _coord(tree, loc_x=-1100)
@@ -1444,10 +1446,6 @@ def create_stylized_shingles(name="M_Building_Shingles",
     - TERRACOTTA: Terracotta mission clay tiles (rich reds/burnt oranges, roughness 0.50)
     - SLATE: Heavy slate stone tiles (slate blues, cyan rim highlights, roughness 0.36)
     """
-    mat, tree = _new_mat(name)
-    out, bsdf = _out_bsdf(tree, loc_x=1200)
-    c = _coord(tree, loc_x=-900)
-
     if roof_mat is None:
         if tier == 'TIER_1':
             roof_mat = 'THATCH'
@@ -1455,6 +1453,17 @@ def create_stylized_shingles(name="M_Building_Shingles",
             roof_mat = 'TERRACOTTA'
         else:
             roof_mat = 'SLATE'
+
+    if name == "M_Building_Shingles":
+        if roof_mat == 'THATCH':
+            name = "M_Building_Thatch"
+        else:
+            t_sfx = 'T1' if tier in ('TIER_1', 1, '1') else ('T2' if tier in ('TIER_2', 2, '2') else 'T3')
+            name = f"M_Building_Shingles_{t_sfx}"
+
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-900)
 
     if roof_mat == 'WOOD_SHINGLES':
         default_clr = (0.75, 0.60, 0.45, 1.0)
@@ -2018,13 +2027,38 @@ def create_stylized_dirt(name="M_Building_Dirt", color=(0.33, 0.23, 0.15, 1.0)):
     return mat
 
 
-def create_stylized_sign(name="M_Building_Sign", icon_filename="tavern_sign.png"):
+def create_stylized_sign(name="M_Sign", icon_filename="tavern_sign.png"):
     """Hanging trade sign face: a handpainted icon decal for a light plank board.
 
     The supplied icons are dark line-art on a fully transparent background, so
     the icon's own alpha channel is the cut-out mask and the board shows through
     everywhere else.
     """
+    if name in ("M_Sign", "M_Building_Sign"):
+        _sign_name_map = {
+            'bakery_sign.png': 'M_Sign_Bakery',
+            'tailor_sign.png': 'M_Sign_Tailor',
+            'toolsmith_sign.png': 'M_Sign_Toolsmith',
+            'jeweler_sign.png': 'M_Sign_Jeweler',
+            'brewery_sign.png': 'M_Sign_Brewery',
+            'fisher_sign.png': 'M_Sign_Fisher',
+            'furniture_maker_sign.png': 'M_Sign_FurnitureMaker',
+            'butcher_sign.png': 'M_Sign_Butcher',
+            'tavern_sign.png': 'M_Sign_Tavern',
+            'inn_sign.png': 'M_Sign_Inn',
+            'mill_sign.png': 'M_Sign_Mill',
+            'armorsmith_sign.png': 'M_Sign_Armorsmith',
+            'weaponsmith_sign.png': 'M_Sign_Weaponsmith',
+            'weaver_sign.png': 'M_Sign_Weaver',
+            'tannery_sign.png': 'M_Sign_Tannery',
+            'general_store_sign.png': 'M_Sign_GeneralStore',
+            'market_sign.png': 'M_Sign_Market',
+            'hunter_sign.png': 'M_Sign_Hunter',
+        }
+        _clean_key = icon_filename.replace('_sign.png', '').replace('.png', '')
+        _default_name = "M_Sign_" + ''.join(part.capitalize() for part in _clean_key.split('_'))
+        name = _sign_name_map.get(icon_filename, _default_name)
+
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1000)
     c = _coord(tree, loc_x=-1000)
@@ -2685,9 +2719,10 @@ def setup_building_material_slots(obj, props):
 
     # 1. Plaster (wattle_daub / stucco_plaster / smooth_ivory_stucco)
     freq = getattr(props, 'exposed_brick_frequency', 0.25)
-    if eff_wall_mat == 'WATTLE_DAUB':
+    from .style import is_tier1_wattle_daub
+    if eff_wall_mat == 'WATTLE_DAUB' or (tier == 'TIER_1' and is_tier1_wattle_daub(props)):
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_plaster(f"{mat_prefix}Plaster", color=props.color_wall_ext, is_interior=False, tier='TIER_1'))
+                       create_stylized_plaster(f"{mat_prefix}WattleDaub", color=props.color_wall_ext, is_interior=False, tier='TIER_1'))
     elif eff_wall_mat == 'STUCCO':
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
                        create_stylized_plaster(f"{mat_prefix}Plaster", color=props.color_wall_ext, is_interior=False, tier='TIER_2'))
@@ -2719,8 +2754,13 @@ def setup_building_material_slots(obj, props):
     mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards(f"{mat_prefix}Floor", color=clr_floor, tier=tier)
 
     # 4. Shingles (thatch / wood shingles / terracotta / slate)
+    if eff_roof_mat == 'THATCH':
+        shingle_mat_name = f"{mat_prefix}Thatch"
+    else:
+        tier_sfx = 'T1' if tier in ('TIER_1', 1, '1') else ('T2' if tier in ('TIER_2', 2, '2') else 'T3')
+        shingle_mat_name = f"{mat_prefix}Shingles_{tier_sfx}"
     mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_shingles(
-        f"{mat_prefix}Shingles",
+        shingle_mat_name,
         color=getattr(props, 'color_shingles', None),
         tier=tier,
         roof_mat=eff_roof_mat
@@ -2783,20 +2823,49 @@ def setup_building_material_slots(obj, props):
         _sign_icon = _prop_icon
     else:
         _arch = getattr(props, 'building_archetype', 'AUTO')
-        if _arch == 'INN':
-            _sign_icon = 'inn_sign.png'
-        elif _arch == 'BAKERY':
-            _sign_icon = 'bakery_sign.png'
-        elif _arch == 'FISHERMAN':
-            _sign_icon = 'fisher_sign.png'
-        elif _arch == 'BLACKSMITH':
-            _sign_icon = 'toolsmith_sign.png'
-        elif _arch == 'HUNTER':
-            _sign_icon = 'hunter_sign.png'
-        else:
-            _sign_icon = 'tavern_sign.png'
+        _arch_to_sign = {
+            'BAKERY': 'bakery_sign.png',
+            'TAILOR': 'tailor_sign.png',
+            'TOOLSMITH': 'toolsmith_sign.png',
+            'BLACKSMITH': 'toolsmith_sign.png',
+            'JEWELER': 'jeweler_sign.png',
+            'BREWERY': 'brewery_sign.png',
+            'FISHERMAN': 'fisher_sign.png',
+            'FURNITURE_MAKER': 'furniture_maker_sign.png',
+            'BUTCHER': 'butcher_sign.png',
+            'HUNTER': 'hunter_sign.png',
+            'INN': 'inn_sign.png',
+            'TAVERN': 'tavern_sign.png',
+            'LUMBERMILL': 'mill_sign.png',
+            'MILL': 'mill_sign.png',
+        }
+        _sign_icon = _arch_to_sign.get(_arch, 'tavern_sign.png')
+
+    _sign_name_map = {
+        'bakery_sign.png': 'M_Sign_Bakery',
+        'tailor_sign.png': 'M_Sign_Tailor',
+        'toolsmith_sign.png': 'M_Sign_Toolsmith',
+        'jeweler_sign.png': 'M_Sign_Jeweler',
+        'brewery_sign.png': 'M_Sign_Brewery',
+        'fisher_sign.png': 'M_Sign_Fisher',
+        'furniture_maker_sign.png': 'M_Sign_FurnitureMaker',
+        'butcher_sign.png': 'M_Sign_Butcher',
+        'tavern_sign.png': 'M_Sign_Tavern',
+        'inn_sign.png': 'M_Sign_Inn',
+        'mill_sign.png': 'M_Sign_Mill',
+        'armorsmith_sign.png': 'M_Sign_Armorsmith',
+        'weaponsmith_sign.png': 'M_Sign_Weaponsmith',
+        'weaver_sign.png': 'M_Sign_Weaver',
+        'tannery_sign.png': 'M_Sign_Tannery',
+        'general_store_sign.png': 'M_Sign_GeneralStore',
+        'market_sign.png': 'M_Sign_Market',
+        'hunter_sign.png': 'M_Sign_Hunter',
+    }
+    _clean_key = _sign_icon.replace('_sign.png', '').replace('.png', '')
+    _default_sign_name = "M_Sign_" + ''.join(part.capitalize() for part in _clean_key.split('_'))
+    sign_mat_name = _sign_name_map.get(_sign_icon, _default_sign_name)
     mat_sign = getattr(props, 'custom_sign', None) or create_stylized_sign(
-        "M_Building_Sign", icon_filename=_sign_icon)
+        sign_mat_name, icon_filename=_sign_icon)
 
     # 18. Rope (rope_diffuse.jpg) - well windlass, bucket and tie cords
     mat_rope = getattr(props, 'custom_rope', None) or create_stylized_rope("M_Building_Rope")
@@ -3012,6 +3081,12 @@ def canonical_slot_index(name):
         base = base[:-3]
     if base.startswith("M_Outbuilding_"):
         base = "M_Building_" + base[len("M_Outbuilding_"):]
+    if base == "M_Building_WattleDaub":
+        return 1
+    if base == "M_Building_Thatch":
+        return 4
+    if base.startswith("M_Sign") or base.startswith("M_Building_Sign"):
+        return 17
     try:
         return CANONICAL_SLOT_NAMES.index(base)
     except ValueError:

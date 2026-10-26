@@ -1683,11 +1683,11 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             # dining set) instead of a third narrow chamber.
             if fl_idx == 1:
                 if num_rooms == 1:
-                    return ['BEDROOM']
+                    return ['COTTAGE']
                 pool = ['STAIR_LANDING', 'HOUSE_HALL', 'MASTER_BED', 'BEDROOM']
             else:
                 if num_rooms == 1:
-                    return ['MASTER_BED']
+                    return ['COTTAGE']
                 pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM']
             return pool[:num_rooms]
         elif archetype == 'ARMORY':
@@ -1717,9 +1717,9 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             pool = ['STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL', 'STABLE_HALL']
             return pool[:num_rooms]
         else:  # HOUSE, default
-            # A 1-room upper floor in a house is the sleeping chamber/loft
+            # A 1-room upper floor in a house is a combined living/sleeping cottage
             if num_rooms == 1:
-                return ['MASTER_BED']
+                return ['COTTAGE']
             pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM', 'BEDROOM']
             return pool[:num_rooms]
 
@@ -2552,11 +2552,28 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     # Single open room fallback (only when explicitly requested, plot is tiny
     # < 4.2m, or the archetype is an open industrial hall such as a lumbermill
     # whose equipment fills the floor).
+    _turn_layout = (getattr(props, 'stair_style', 'STRAIGHT') == 'TURN')
     loom_open = (effective_archetype in ('LUMBERMILL', 'QUARRY'))
     # Working stable barns stay one open hall (stall rows + hay storage),
     # never partitioned into bedrooms.
     stable_open = (effective_archetype == 'STABLE')
-    if not has_interior_walls or partition_style == 'OPEN' or (W < 4.2 and D < 4.2) or loom_open or stable_open \
+
+    # Detect floors too small to divide into separate rooms:
+    # 1. Turned-stair floors with D < 13.0 or W < 8.0 (flights wrap around multiple walls)
+    # 2. Upper floors with W < 7.5 and D < 7.5 (dividing leaves cramped rooms < 3.2m)
+    # 3. Small artisan live/work buildings (Fisherman, Hunter, etc. with W < 9.0 and D < 9.0)
+    # 4. Explicit partition_style in ('OPEN', 'ONE_ROOM') or not has_interior_walls
+    _too_small_to_divide = False
+    if fl_idx > 0:
+        if _turn_layout and (D < 13.0 or W < 8.0):
+            _too_small_to_divide = True
+        elif W < 7.5 and D < 7.5:
+            _too_small_to_divide = True
+        elif effective_archetype in ('FISHERMAN', 'HUNTER') and (W < 9.0 and D < 9.0):
+            _too_small_to_divide = True
+
+    if not has_interior_walls or partition_style in ('OPEN', 'ONE_ROOM') or (W < 4.2 and D < 4.2) or loom_open or stable_open \
+            or _too_small_to_divide \
             or (fl_idx == 0 and bool(getattr(props, 'open_ground_floor', False))):
         if effective_archetype == 'QUARRY':
             roles = ['STONE_STORE']
@@ -2564,10 +2581,13 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             roles = ['WORKSHOP' if fl_idx == 0 else 'STORAGE']
         elif effective_archetype == 'STABLE':
             roles = ['STABLE_HALL']
+        elif fl_idx > 0 and _too_small_to_divide and effective_archetype not in ('WAREHOUSE', 'BUILDER'):
+            # Combined living area on upper floors: bedroom and kitchen get highest priority!
+            roles = ['COTTAGE']
         else:
             roles = _resolve_room_roles(effective_archetype, fl_idx, 1, has_stairs_landing, total_floors, program=program)
         main_room = Room(
-            id=f"fl{fl_idx}_main",
+            id=f"fl{fl_idx}_living" if (fl_idx > 0 and roles[0] == 'COTTAGE') else f"fl{fl_idx}_main",
             floor_idx=fl_idx,
             role=roles[0],
             bounds=(ix_min, ix_max, iy_min, iy_max),
@@ -3445,29 +3465,108 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             _force_bakehouse_chamber(rooms)
 
         else:
-            # 2 Rooms along Y (Left Room + Right Room)
+            # 2 Rooms: choose the cardinal direction (Y vertical or X horizontal) that
+            # produces squareish rooms rather than long corridors.
             roles = _resolve_room_roles(effective_archetype, fl_idx, 2, has_stairs_landing, total_floors, program=program)
-            dw_y = (iy_min + iy_max) * 0.5
-            interior_walls.append({
-                'p1': (split_x, iy_min), 'p2': (split_x, iy_max),
-                'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
-                'doorway': {'x': split_x, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
-            })
-            rm0 = Room(
-                id=f"fl{fl_idx}_hall", floor_idx=fl_idx, role=roles[0],
-                bounds=(ix_min, split_x, iy_min, iy_max),
-                doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
-                exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
-            )
-            rm1 = Room(
-                id=f"fl{fl_idx}_chamber", floor_idx=fl_idx, role=roles[1],
-                bounds=(split_x, ix_max, iy_min, iy_max),
-                doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
-                stair_hole=_holds_stair((split_x, ix_max, iy_min, iy_max)),
-                exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
-            )
-            rooms = [rm0, rm1]
+            w_left = split_x - ix_min
+            w_right = ix_max - split_x
+            ar_y = max(D / max(w_left, 0.5), D / max(w_right, 0.5), max(w_left, w_right) / max(D, 0.5))
+
+            # Candidate horizontal split (axis='X')
+            sy_b = (stair_pos_info or {}).get('y_bot', stair_hole[2] if stair_hole is not None else None)
+            sy_t = (stair_pos_info or {}).get('y_top', stair_hole[3] if stair_hole is not None else None)
+            if sy_b is not None and sy_t is not None:
+                pad_2rm = 2.00
+                _hh0 = min(sy_b, sy_t) - pad_2rm
+                _hh1 = max(sy_b, sy_t) + pad_2rm
+            elif stair_hole is not None:
+                _hh0, _hh1 = stair_hole[2] - 1.80, stair_hole[3] + 1.80
+            else:
+                _hh0 = _hh1 = None
+
+            if stair_guards_north:
+                cand_split_y = min((_hh0 if _hh0 is not None else (stair_safe_y_bot - 0.65)), iy_min + D * 0.48)
+                cand_split_y = max(iy_min + 2.3, cand_split_y)
+            else:
+                cand_split_y = max((_hh1 if _hh1 is not None else (stair_safe_y_top + 0.65)), iy_min + D * 0.48)
+                cand_split_y = min(iy_max - 2.3, cand_split_y)
+            cand_split_y = _clear_doorway_span(cand_split_y, axis='Y', lo=iy_min + 2.3, hi=iy_max - 1.8)
+            cand_split_y = _dodge_oven_band(cand_split_y, iy_min + 2.3, iy_max - 1.8)
+            if _hh0 is not None and _hh0 < cand_split_y < _hh1:
+                cand_split_y = _hh0 if (cand_split_y - _hh0) <= (_hh1 - cand_split_y) else _hh1
+                cand_split_y = min(max(cand_split_y, iy_min + 2.3), iy_max - 1.8)
+
+            d_front = cand_split_y - iy_min
+            d_back = iy_max - cand_split_y
+            can_x_split = (d_front >= 2.2 and d_back >= 2.2)
+            ar_x = max(W / max(d_front, 0.5), W / max(d_back, 0.5), max(d_front, d_back) / max(W, 0.5)) if can_x_split else 999.0
+
+            if can_x_split and (ar_x < ar_y * 0.90 or (D >= W * 1.15 and ar_x <= 2.2)):
+                # Split the other cardinal direction (X - horizontal wall) to avoid narrow vertical strips
+                split_y = cand_split_y
+                if stair_pos_info and (stair_hole is not None or getattr(props, 'has_stairs', False)):
+                    if stair_safe_x < (ix_min + ix_max) * 0.5:
+                        dw_x = (stair_safe_x + ix_max) * 0.5
+                    else:
+                        dw_x = (ix_min + stair_safe_x) * 0.5
+                else:
+                    dw_x = (ix_min + ix_max) * 0.5
+                if door_cx is not None and abs(dw_x - door_cx) < 0.4:
+                    dw_x += 0.85
+                dw_x = _clear_doorway_span(dw_x, axis='X', lo=ix_min + 1.2, hi=ix_max - 1.2)
+
+                interior_walls.append({
+                    'p1': (ix_min, split_y), 'p2': (ix_max, split_y),
+                    'axis': 'X', 'pos': split_y, 'thickness': wall_t,
+                    'doorway': {'x': dw_x, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
+                })
+                front_role = ('STAIR_LANDING' if (has_stairs_landing and not stair_guards_north)
+                              else (roles[1] if has_stairs_landing else roles[0]))
+                back_role = ('STAIR_LANDING' if (has_stairs_landing and stair_guards_north)
+                             else (roles[0] if has_stairs_landing else roles[1]))
+                if back_role == 'STAIR_LANDING':
+                    _pool2 = _resolve_room_roles(effective_archetype, fl_idx, 2, False, total_floors, program=program)
+                    back_role = next((r for r in reversed(_pool2) if r != 'STAIR_LANDING'), None) or 'BEDROOM'
+                rm0 = Room(
+                    id=f"fl{fl_idx}_front", floor_idx=fl_idx, role=front_role,
+                    bounds=(ix_min, ix_max, iy_min, split_y),
+                    doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
+                    stair_hole=_holds_stair((ix_min, ix_max, iy_min, split_y)),
+                    exterior_facades={'FRONT': (ix_min, ix_max), 'LEFT': (iy_min, split_y), 'RIGHT': (iy_min, split_y)}
+                )
+                rm1 = Room(
+                    id=f"fl{fl_idx}_back", floor_idx=fl_idx, role=back_role,
+                    bounds=(ix_min, ix_max, split_y, iy_max),
+                    doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
+                    stair_hole=_holds_stair((ix_min, ix_max, split_y, iy_max)),
+                    exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (split_y, iy_max), 'RIGHT': (split_y, iy_max)}
+                )
+                rooms = [rm0, rm1]
+            else:
+                # Vertical split (axis='Y')
+                dw_y = (iy_min + iy_max) * 0.5
+                dw_y = _clear_doorway_span(dw_y, axis='Y', lo=iy_min + 1.8, hi=iy_max - 1.8)
+                dw_y = _dodge_oven_band(dw_y, iy_min + 1.8, iy_max - 1.8)
+                interior_walls.append({
+                    'p1': (split_x, iy_min), 'p2': (split_x, iy_max),
+                    'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                    'doorway': {'x': split_x, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+                })
+                rm0 = Room(
+                    id=f"fl{fl_idx}_hall", floor_idx=fl_idx, role=roles[0],
+                    bounds=(ix_min, split_x, iy_min, iy_max),
+                    doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                    stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
+                    exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
+                )
+                rm1 = Room(
+                    id=f"fl{fl_idx}_chamber", floor_idx=fl_idx, role=roles[1],
+                    bounds=(split_x, ix_max, iy_min, iy_max),
+                    doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                    stair_hole=_holds_stair((split_x, ix_max, iy_min, iy_max)),
+                    exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
+                )
+                rooms = [rm0, rm1]
 
         # Dedicated stair bay: when the landing hall is roomy, split the stair
         # well (plus a 1m walkway) off into its own narrow full-depth stairwell
@@ -3501,7 +3600,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     _dcx, _ddw = front_door_info
                     if abs(_bay - _dcx) < _ddw * 0.5 + 0.65:
                         _bay = _dcx + _ddw * 0.5 + 0.65
-                if _hx1 - _bay >= 2.2 and _bay - _hx0 >= 2.0:
+                if _hx1 - _bay >= 3.2 and _bay - _hx0 >= 2.0 and D / (_hx1 - _bay) <= 2.6:
                     _ym = (iy_min + iy_max) * 0.5
                     _bd0 = (_bay, (iy_min + _ym) * 0.5)
                     _bd1 = (_bay, (_ym + iy_max) * 0.5)
@@ -3598,13 +3697,29 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                             break
                     _fixed.append(_sp)
                     _lo = _sp + 2.2
-                if not (_ok and _fixed and iy_max - _fixed[-1] >= 2.2 - 1e-6):
+                if not (_ok and len(_fixed) == len(_raw) and iy_max - _fixed[-1] >= 2.2 - 1e-6):
+                    continue
+                _b_spans = [(iy_min, _fixed[0])] + [(_fixed[i], _fixed[i + 1]) for i in range(len(_fixed) - 1)] + [(_fixed[-1], iy_max)]
+                _min_d = min(_b1 - _b0 for _b0, _b1 in _b_spans)
+                if not (_min_d >= 2.75 and (W / _min_d) <= 2.85):
                     continue
                 _deep_splits = _fixed
                 _deep_target = _try_n
                 break
 
         if _turn_layout and has_stairs_landing:
+            if D < 13.0 or W < 8.0 or partition_style == 'ONE_ROOM':
+                # Too small to divide: single generous open combined living area
+                rm_living = Room(
+                    id=f"fl{fl_idx}_living", floor_idx=fl_idx, role='COTTAGE',
+                    bounds=(ix_min, ix_max, iy_min, iy_max),
+                    doorways=[],
+                    stair_hole=stair_hole,
+                    exterior_facades={'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
+                                      'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)}
+                )
+                return [rm_living], []
+
             # Turned-stair floors: the stair column occupies the front zone (from iy_min to _col_top).
             # It is isolated into a dedicated STAIR_LANDING corridor room with real partition walls,
             # ensuring stair flights and landings are 100% walkable and clutter-free (strictly no beds or couches).
@@ -3646,16 +3761,62 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             avail_w = ix_max - ix_min
 
             if avail_d < 4.2 or (partition_style == 'TWO_ROOMS' and avail_d < 6.8):
-                # Single chamber behind landing
-                rm_role = 'MASTER_BED' if fl_idx <= 1 else 'BEDROOM'
-                rm_chamber = Room(
-                    id=f"fl{fl_idx}_chamber", floor_idx=fl_idx, role=rm_role,
-                    bounds=(ix_min, ix_max, _col_top, iy_max),
-                    doorways=[{'x': dw_x, 'y': _col_top, 'axis': 'X', 'w': dw_w_eff}],
-                    stair_hole=None,
-                    exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (_col_top, iy_max), 'RIGHT': (_col_top, iy_max)}
-                )
-                rooms = [rm_landing, rm_chamber]
+                if avail_w >= 6.4 and avail_w > avail_d * 1.35 and partition_style != 'ONE_ROOM':
+                    # Wide rear zone behind turned stair landing: split into two squareish
+                    # private bedrooms (West and East) instead of one giant wide corridor!
+                    split_x2 = (ix_min + ix_max) * 0.5
+                    split_x2 = _clear_doorway_span(split_x2, axis='X', lo=ix_min + 2.2, hi=ix_max - 2.2)
+                    dw_x_l = (ix_min + split_x2) * 0.5
+                    dw_x_l = _clear_doorway_span(dw_x_l, axis='X', lo=ix_min + 1.2, hi=split_x2 - 1.2)
+                    dw_x_r = (split_x2 + ix_max) * 0.5
+                    dw_x_r = _clear_doorway_span(dw_x_r, axis='X', lo=split_x2 + 1.2, hi=ix_max - 1.2)
+
+                    interior_walls.pop()  # remove single-door col_top wall
+                    interior_walls.append({
+                        'p1': (ix_min, _col_top), 'p2': (split_x2, _col_top),
+                        'axis': 'X', 'pos': _col_top, 'thickness': wall_t,
+                        'doorway': {'x': dw_x_l, 'y': _col_top, 'w': min(dw_w, 1.35), 'h': dw_h, 'axis': 'X'}
+                    })
+                    interior_walls.append({
+                        'p1': (split_x2, _col_top), 'p2': (ix_max, _col_top),
+                        'axis': 'X', 'pos': _col_top, 'thickness': wall_t,
+                        'doorway': {'x': dw_x_r, 'y': _col_top, 'w': min(dw_w, 1.35), 'h': dw_h, 'axis': 'X'}
+                    })
+                    interior_walls.append({
+                        'p1': (split_x2, _col_top), 'p2': (split_x2, iy_max),
+                        'axis': 'Y', 'pos': split_x2, 'thickness': wall_t,
+                    })
+
+                    rm_landing.doorways = [
+                        {'x': dw_x_l, 'y': _col_top, 'axis': 'X', 'w': min(dw_w, 1.35)},
+                        {'x': dw_x_r, 'y': _col_top, 'axis': 'X', 'w': min(dw_w, 1.35)},
+                    ]
+                    rm_bed_l = Room(
+                        id=f"fl{fl_idx}_bed_w", floor_idx=fl_idx, role='MASTER_BED' if fl_idx <= 1 else 'BEDROOM',
+                        bounds=(ix_min, split_x2, _col_top, iy_max),
+                        doorways=[{'x': dw_x_l, 'y': _col_top, 'axis': 'X', 'w': min(dw_w, 1.35)}],
+                        stair_hole=None,
+                        exterior_facades={'LEFT': (_col_top, iy_max), 'BACK': (ix_min, split_x2)}
+                    )
+                    rm_bed_r = Room(
+                        id=f"fl{fl_idx}_bed_e", floor_idx=fl_idx, role='BEDROOM' if fl_idx <= 1 else 'GUEST_ROOM',
+                        bounds=(split_x2, ix_max, _col_top, iy_max),
+                        doorways=[{'x': dw_x_r, 'y': _col_top, 'axis': 'X', 'w': min(dw_w, 1.35)}],
+                        stair_hole=None,
+                        exterior_facades={'RIGHT': (_col_top, iy_max), 'BACK': (split_x2, ix_max)}
+                    )
+                    rooms = [rm_landing, rm_bed_l, rm_bed_r]
+                else:
+                    # Single chamber behind landing
+                    rm_role = 'MASTER_BED' if fl_idx <= 1 else 'BEDROOM'
+                    rm_chamber = Room(
+                        id=f"fl{fl_idx}_chamber", floor_idx=fl_idx, role=rm_role,
+                        bounds=(ix_min, ix_max, _col_top, iy_max),
+                        doorways=[{'x': dw_x, 'y': _col_top, 'axis': 'X', 'w': dw_w_eff}],
+                        stair_hole=None,
+                        exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (_col_top, iy_max), 'RIGHT': (_col_top, iy_max)}
+                    )
+                    rooms = [rm_landing, rm_chamber]
             elif avail_d < 6.8 or avail_w < 6.8 or partition_style == 'TWO_ROOMS':
                 # Two chambers divided along Y (front-to-back): Middle Salon + Rear Bedroom
                 split_y2 = (_col_top + iy_max) * 0.5
@@ -3776,55 +3937,136 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     split_y = _hh0 if (split_y - _hh0) <= (_hh1 - split_y) else _hh1
                     split_y = min(max(split_y, iy_min + 2.3), iy_max - 1.8)
 
-            if stair_pos_info and (stair_hole is not None or getattr(props, 'has_stairs', False)):
-                if stair_safe_x < (ix_min + ix_max) * 0.5:
-                    dw_x = (stair_safe_x + ix_max) * 0.5
-                else:
-                    dw_x = (ix_min + stair_safe_x) * 0.5
+            d_front = split_y - iy_min
+            d_back = iy_max - split_y
+            ar_x = max(W / max(d_front, 0.5), W / max(d_back, 0.5), max(d_front, d_back) / max(W, 0.5))
+
+            # Evaluate whether splitting the other cardinal direction (Y - vertical wall)
+            # gives squarer rooms, avoiding two wide shallow corridor strips across the building width.
+            stair_on_right = bool(
+                (stair_pos_info and float(stair_pos_info.get('cx', ix_min)) > (ix_min + ix_max) * 0.5)
+                or getattr(props, 'stair_placement', 'LEFT') == 'RIGHT'
+            )
+            if stair_on_right:
+                stair_w = float((stair_pos_info or {}).get('w', 1.2) or 1.2)
+                stair_cx = float((stair_pos_info or {}).get('cx', ix_max - 1.4) or (ix_max - 1.4))
+                stair_safe_x_left = stair_cx - stair_w * 0.5 - 0.20
+                max_split_x = stair_safe_x_left - 0.60
+                cand_split_x = min(max_split_x, (ix_min + ix_max) * 0.50)
+                cand_split_x = max(ix_min + 2.3, cand_split_x)
+                can_split_y = (cand_split_x >= ix_min + 2.2 and ix_max - cand_split_x >= 2.2 and max_split_x >= ix_min + 2.2)
             else:
-                dw_x = (ix_min + ix_max) * 0.5
-            if door_cx is not None and abs(dw_x - door_cx) < 0.4:
-                dw_x += 0.85
-            dw_x = _clear_doorway_span(dw_x, axis='X', lo=ix_min + 1.2, hi=ix_max - 1.2)
+                min_split_x = stair_safe_x + 0.60
+                cand_split_x = max(min_split_x, (ix_min + ix_max) * 0.50)
+                cand_split_x = min(ix_max - 2.3, cand_split_x)
+                can_split_y = (cand_split_x <= ix_max - 2.2 and cand_split_x - ix_min >= 2.2 and min_split_x <= ix_max - 2.2)
 
-            interior_walls.append({
-                'p1': (ix_min, split_y), 'p2': (ix_max, split_y),
-                'axis': 'X', 'pos': split_y, 'thickness': wall_t,
-                'doorway': {'x': dw_x, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
-            })
-            # The stairs sit in whichever room the partition left them in.
-            front_role = ('STAIR_LANDING' if (has_stairs_landing and not stair_guards_north)
-                          else (roles[1] if has_stairs_landing else roles[0]))
-            back_role = ('STAIR_LANDING' if (has_stairs_landing and stair_guards_north)
-                         else (roles[0] if has_stairs_landing else roles[1]))
-            # Never leave the second band ALSO a bare landing — when the stair
-            # takes the front band, the band behind it must become a real room.
-            if back_role == 'STAIR_LANDING':
-                _pool2 = _resolve_room_roles(effective_archetype, fl_idx, 2, False,
-                                             total_floors, program=program)
-                _pick = next((r for r in reversed(_pool2) if r != 'STAIR_LANDING'), None)
-                back_role = _pick or 'BEDROOM'
-            # A turned staircase leaves only one room behind it here: make it a
-            # single combined living area (hearth, bed and kitchen corner).
-            # Upper floors only — the ground floor keeps its trade workshop.
-            if _turn_layout and fl_idx > 0 and _deep_target <= 2:
-                back_role = 'COTTAGE'
+            if can_split_y:
+                w_left = cand_split_x - ix_min
+                w_right = ix_max - cand_split_x
+                ar_y = max(D / max(w_left, 0.5), D / max(w_right, 0.5), max(w_left, w_right) / max(D, 0.5))
+            else:
+                ar_y = 999.0
 
-            rm0 = Room(
-                id=f"fl{fl_idx}_front", floor_idx=fl_idx, role=front_role,
-                bounds=(ix_min, ix_max, iy_min, split_y),
-                doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                stair_hole=_holds_stair((ix_min, ix_max, iy_min, split_y)),
-                exterior_facades={'FRONT': (ix_min, ix_max), 'LEFT': (iy_min, split_y), 'RIGHT': (iy_min, split_y)}
-            )
-            rm1 = Room(
-                id=f"fl{fl_idx}_back", floor_idx=fl_idx, role=back_role,
-                bounds=(ix_min, ix_max, split_y, iy_max),
-                doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
-                stair_hole=_holds_stair((ix_min, ix_max, split_y, iy_max)),
-                exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (split_y, iy_max), 'RIGHT': (split_y, iy_max)}
-            )
-            rooms = [rm0, rm1]
+            do_y_split = can_split_y and (ar_y < ar_x * 0.90 or (W >= D * 1.15 and ar_y <= 2.2))
+
+            if do_y_split:
+                split_x = _clear_doorway_span(cand_split_x, axis='X', lo=ix_min + 2.0, hi=ix_max - 2.0)
+                if has_stairs_landing and stair_pos_info:
+                    if stair_guards_north:
+                        dw_y = min(iy_max - 1.8, max(iy_min + 1.8, (stair_safe_y_top + iy_max) * 0.5))
+                    else:
+                        dw_y = min(iy_max - 1.8, max(iy_min + 1.8, (iy_min + stair_safe_y_bot) * 0.5))
+                else:
+                    dw_y = (iy_min + iy_max) * 0.5
+                dw_y = _clear_doorway_span(dw_y, axis='Y', lo=iy_min + 1.8, hi=iy_max - 1.8)
+                dw_y = _dodge_oven_band(dw_y, iy_min + 1.8, iy_max - 1.8)
+
+                interior_walls.append({
+                    'p1': (split_x, iy_min), 'p2': (split_x, iy_max),
+                    'axis': 'Y', 'pos': split_x, 'thickness': wall_t,
+                    'doorway': {'x': split_x, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
+                })
+
+                if stair_on_right:
+                    west_role = roles[1] if has_stairs_landing else roles[0]
+                    east_role = roles[0] if has_stairs_landing else roles[1]
+                else:
+                    west_role = roles[0] if has_stairs_landing else roles[0]
+                    east_role = roles[1] if has_stairs_landing else roles[1]
+
+                if east_role == 'STAIR_LANDING' and not stair_on_right:
+                    _pool2 = _resolve_room_roles(effective_archetype, fl_idx, 2, False, total_floors, program=program)
+                    east_role = next((r for r in reversed(_pool2) if r != 'STAIR_LANDING'), None) or 'BEDROOM'
+                if west_role == 'STAIR_LANDING' and stair_on_right:
+                    _pool2 = _resolve_room_roles(effective_archetype, fl_idx, 2, False, total_floors, program=program)
+                    west_role = next((r for r in reversed(_pool2) if r != 'STAIR_LANDING'), None) or 'BEDROOM'
+
+                rm0 = Room(
+                    id=f"fl{fl_idx}_west", floor_idx=fl_idx, role=west_role,
+                    bounds=(ix_min, split_x, iy_min, iy_max),
+                    doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                    stair_hole=_holds_stair((ix_min, split_x, iy_min, iy_max)),
+                    exterior_facades={'FRONT': (ix_min, split_x), 'BACK': (ix_min, split_x), 'LEFT': (iy_min, iy_max)}
+                )
+                rm1 = Room(
+                    id=f"fl{fl_idx}_east", floor_idx=fl_idx, role=east_role,
+                    bounds=(split_x, ix_max, iy_min, iy_max),
+                    doorways=[{'x': split_x, 'y': dw_y, 'axis': 'Y', 'w': dw_w}],
+                    stair_hole=_holds_stair((split_x, ix_max, iy_min, iy_max)),
+                    exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
+                )
+                rooms = [rm0, rm1]
+            else:
+                if stair_pos_info and (stair_hole is not None or getattr(props, 'has_stairs', False)):
+                    if stair_safe_x < (ix_min + ix_max) * 0.5:
+                        dw_x = (stair_safe_x + ix_max) * 0.5
+                    else:
+                        dw_x = (ix_min + stair_safe_x) * 0.5
+                else:
+                    dw_x = (ix_min + ix_max) * 0.5
+                if door_cx is not None and abs(dw_x - door_cx) < 0.4:
+                    dw_x += 0.85
+                dw_x = _clear_doorway_span(dw_x, axis='X', lo=ix_min + 1.2, hi=ix_max - 1.2)
+
+                interior_walls.append({
+                    'p1': (ix_min, split_y), 'p2': (ix_max, split_y),
+                    'axis': 'X', 'pos': split_y, 'thickness': wall_t,
+                    'doorway': {'x': dw_x, 'y': split_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
+                })
+                # The stairs sit in whichever room the partition left them in.
+                front_role = ('STAIR_LANDING' if (has_stairs_landing and not stair_guards_north)
+                              else (roles[1] if has_stairs_landing else roles[0]))
+                back_role = ('STAIR_LANDING' if (has_stairs_landing and stair_guards_north)
+                             else (roles[0] if has_stairs_landing else roles[1]))
+                # Never leave the second band ALSO a bare landing — when the stair
+                # takes the front band, the band behind it must become a real room.
+                if back_role == 'STAIR_LANDING':
+                    _pool2 = _resolve_room_roles(effective_archetype, fl_idx, 2, False,
+                                                 total_floors, program=program)
+                    _pick = next((r for r in reversed(_pool2) if r != 'STAIR_LANDING'), None)
+                    back_role = _pick or 'BEDROOM'
+                # A turned staircase leaves only one room behind it here: make it a
+                # single combined living area (hearth, bed and kitchen corner).
+                # Upper floors only — the ground floor keeps its trade workshop.
+                if _turn_layout and fl_idx > 0 and _deep_target <= 2:
+                    back_role = 'COTTAGE'
+
+                rm0 = Room(
+                    id=f"fl{fl_idx}_front", floor_idx=fl_idx, role=front_role,
+                    bounds=(ix_min, ix_max, iy_min, split_y),
+                    doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
+                    stair_hole=_holds_stair((ix_min, ix_max, iy_min, split_y)),
+                    exterior_facades={'FRONT': (ix_min, ix_max), 'LEFT': (iy_min, split_y), 'RIGHT': (iy_min, split_y)}
+                )
+                rm1 = Room(
+                    id=f"fl{fl_idx}_back", floor_idx=fl_idx, role=back_role,
+                    bounds=(ix_min, ix_max, split_y, iy_max),
+                    doorways=[{'x': dw_x, 'y': split_y, 'axis': 'X', 'w': dw_w}],
+                    stair_hole=_holds_stair((ix_min, ix_max, split_y, iy_max)),
+                    exterior_facades={'BACK': (ix_min, ix_max), 'LEFT': (split_y, iy_max), 'RIGHT': (split_y, iy_max)}
+                )
+                rooms = [rm0, rm1]
         else:
             _n = len(_deep_splits) + 1
             roles = _resolve_room_roles(effective_archetype, fl_idx, _n, has_stairs_landing, total_floors, program=program)
