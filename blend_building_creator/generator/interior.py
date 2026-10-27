@@ -1549,7 +1549,7 @@ _INTERIOR_PROGRAMS = {
     },
     'COMMERCIAL': {
         'ground': ('STORE', 'WORKSHOP', 'STORAGE', 'PANTRY'),
-        'upper': ('STAIR_LANDING', 'HOUSE_HALL', 'BEDROOM', 'KITCHEN'),
+        'upper': ('STAIR_LANDING', 'MASTER_BED', 'KITCHEN', 'HOUSE_HALL', 'BEDROOM'),
     },
     'INDUSTRIAL': {
         'ground': ('WORKSHOP', 'STORAGE', 'STORE', 'OFFICE'),
@@ -1678,17 +1678,15 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
                           'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER', 'HUNTER') or archetype.startswith('ARTISAN'):
             # Artisan live/work house: trade below, family home above. Upper
             # storeys are strictly residential (no offices, no studies).
-            # Floor 2 pairs the bedroom with an eat-in kitchen (no separate
-            # hall on these narrow floors, so the kitchen lays its full
-            # dining set) instead of a third narrow chamber.
+            # Highest priority: 1 bedroom then 1 kitchen.
             if fl_idx == 1:
                 if num_rooms == 1:
                     return ['COTTAGE']
-                pool = ['STAIR_LANDING', 'HOUSE_HALL', 'MASTER_BED', 'BEDROOM']
+                pool = ['STAIR_LANDING', 'MASTER_BED', 'KITCHEN', 'HOUSE_HALL', 'BEDROOM']
             else:
                 if num_rooms == 1:
                     return ['COTTAGE']
-                pool = ['STAIR_LANDING', 'MASTER_BED', 'BEDROOM', 'GUEST_ROOM']
+                pool = ['STAIR_LANDING', 'BEDROOM', 'GUEST_ROOM', 'STORAGE', 'BEDROOM']
             return pool[:num_rooms]
         elif archetype == 'ARMORY':
             pool = ['STAIR_LANDING', 'ARMORY', 'STORAGE', 'DRILL_HALL']
@@ -1740,6 +1738,18 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         return pool[:num_rooms]
 
     if archetype in _ARTISAN_GROUND or archetype.startswith('ARTISAN'):
+        if total_floors == 1:
+            if num_rooms == 1:
+                return ['COTTAGE']
+            elif num_rooms == 2:
+                shop_role = _ARTISAN_GROUND.get(archetype, ['STORE'])[0]
+                return [shop_role, 'COTTAGE']
+            elif num_rooms == 3:
+                shop_role = _ARTISAN_GROUND.get(archetype, ['STORE'])[0]
+                return [shop_role, 'MASTER_BED', 'KITCHEN']
+            else:
+                ground_roles = _ARTISAN_GROUND.get(archetype, ['STORE', 'WORKSHOP'])
+                return [ground_roles[0], ground_roles[1] if len(ground_roles) > 1 else 'WORKSHOP', 'MASTER_BED', 'KITCHEN'] + ground_roles[2:]
         pool = _ARTISAN_GROUND.get(archetype, ['STORE', 'WORKSHOP', 'STORAGE', 'PANTRY'])
         return pool[:num_rooms]
 
@@ -3798,8 +3808,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                         stair_hole=None,
                         exterior_facades={'LEFT': (_col_top, iy_max), 'BACK': (ix_min, split_x2)}
                     )
+                    _is_art = (effective_archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
+                                                      'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER',
+                                                      'FURNITURE_MAKER', 'HUNTER') or effective_archetype.startswith('ARTISAN'))
+                    _r_role = ('KITCHEN' if _is_art and fl_idx <= 1 else ('BEDROOM' if fl_idx <= 1 else 'GUEST_ROOM'))
                     rm_bed_r = Room(
-                        id=f"fl{fl_idx}_bed_e", floor_idx=fl_idx, role='BEDROOM' if fl_idx <= 1 else 'GUEST_ROOM',
+                        id=f"fl{fl_idx}_bed_e", floor_idx=fl_idx, role=_r_role,
                         bounds=(split_x2, ix_max, _col_top, iy_max),
                         doorways=[{'x': dw_x_r, 'y': _col_top, 'axis': 'X', 'w': min(dw_w, 1.35)}],
                         stair_hole=None,
@@ -3829,8 +3843,15 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     'axis': 'X', 'pos': split_y2, 'thickness': wall_t,
                     'doorway': {'x': dw_x2, 'y': split_y2, 'w': dw_w, 'h': dw_h, 'axis': 'X'}
                 })
-                role_mid = 'HOUSE_HALL' if fl_idx <= 1 else ('MASTER_BED' if total_floors > 2 else 'BEDROOM')
-                role_rear = 'MASTER_BED' if fl_idx <= 1 else 'BEDROOM'
+                _is_art = (effective_archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
+                                                  'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER',
+                                                  'FURNITURE_MAKER', 'HUNTER') or effective_archetype.startswith('ARTISAN'))
+                if _is_art and fl_idx <= 1:
+                    role_mid = 'KITCHEN'
+                    role_rear = 'MASTER_BED'
+                else:
+                    role_mid = 'HOUSE_HALL' if fl_idx <= 1 else ('MASTER_BED' if total_floors > 2 else 'BEDROOM')
+                    role_rear = 'MASTER_BED' if fl_idx <= 1 else 'BEDROOM'
                 rm_mid = Room(
                     id=f"fl{fl_idx}_salon", floor_idx=fl_idx, role=role_mid,
                     bounds=(ix_min, ix_max, _col_top, split_y2),
@@ -3879,9 +3900,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     'axis': 'Y', 'pos': split_x2, 'thickness': wall_t,
                 })
 
-                role_mid = 'HOUSE_HALL' if fl_idx <= 1 else ('MASTER_BED' if total_floors > 2 else 'BEDROOM')
-                role_l = 'MASTER_BED' if fl_idx <= 1 else 'BEDROOM'
-                role_r = 'BEDROOM' if fl_idx <= 1 else 'GUEST_ROOM'
+                _is_art = (effective_archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
+                                                  'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER',
+                                                  'FURNITURE_MAKER', 'HUNTER') or effective_archetype.startswith('ARTISAN'))
+                if _is_art and fl_idx <= 1:
+                    role_mid = 'HOUSE_HALL'
+                    role_l = 'MASTER_BED'
+                    role_r = 'KITCHEN'
+                else:
+                    role_mid = 'HOUSE_HALL' if fl_idx <= 1 else ('MASTER_BED' if total_floors > 2 else 'BEDROOM')
+                    role_l = 'MASTER_BED' if fl_idx <= 1 else 'BEDROOM'
+                    role_r = 'BEDROOM' if fl_idx <= 1 else 'GUEST_ROOM'
 
                 rm_salon = Room(
                     id=f"fl{fl_idx}_salon", floor_idx=fl_idx, role=role_mid,

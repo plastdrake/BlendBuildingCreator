@@ -382,7 +382,7 @@ def _place_nook_set(bm, tracker: RoomOccupancyTracker, cx: float, cy: float,
     tracker.occupy(cx - 0.70, cx + 0.70, cy - 0.70, cy + 0.70)
     build_prop(bm, 'ROUND_TABLE', cx, cy, z_floor, rng.uniform(0.0, 6.28),
                radius=radius)
-    build_prop(bm, 'SCATTER_TABLEWARE', cx, cy, z_floor + 0.99, 0.0)
+    build_prop(bm, 'SCATTER_TABLEWARE', cx, cy, z_floor + 0.992, 0.0)
     for sx, sy in ((cx - 0.90, cy), (cx + 0.90, cy)):
         if (not tracker.is_near_door(sx, sy, radius=1.35) and
                 tracker.is_free(sx - 0.28, sx + 0.28, sy - 0.28, sy + 0.28)):
@@ -1532,7 +1532,7 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
         r = 0.55
         if tracker.is_free(tx - 0.88, tx + 0.88, ty - 0.88, ty + 0.88):
             build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=r)
-            build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_floor + 0.99, 0.0)
+            build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_floor + 0.992, 0.0)
             if rng.random() < 0.35:
                 build_prop(bm, 'POTTED_PLANT_SMALL', tx + 0.25, ty + 0.10, z_floor + 0.99, rng.uniform(0.0, 6.28))
             else:
@@ -1618,7 +1618,7 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
     """
     sw, sd, sh = 0.95, 0.75, 1.05
     pw, pd = 1.15, 0.65
-    z_table = z_floor + 0.99
+    z_table = z_floor + 0.992
     rx0, rx1 = tracker.rx0, tracker.rx1
     ry0, ry1 = tracker.ry0, tracker.ry1
     rcx, rcy = (rx0 + rx1) * 0.5, (ry0 + ry1) * 0.5
@@ -1832,7 +1832,7 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
     area = rw * rd
-    z_table = z_floor + 0.99
+    z_table = z_floor + 0.992
 
     # 1. INTEGRATED COOKING WORKSTATION: Stove & Foodprep Table SIDE-BY-SIDE
     workstation = _try_place_kitchen_workstation(bm, tracker, z_floor, rng, chimney_pos=chimney_pos)
@@ -2075,7 +2075,7 @@ def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
         td = min(1.15, max(0.80, usable_d - 1.50))   # across the room
     dtx = rcx + _jit(rng, 0.22)
     dty = rcy + _jit(rng, 0.22)
-    z_table = z_floor + 0.97
+    z_table = z_floor + 0.992
     # Try the room centre first, then slide the set along the long axis so a
     # doorway corridor or a stair flight can never starve the room of its
     # dining set entirely.
@@ -2458,7 +2458,7 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
     ix_lo, ix_hi, iy_lo, iy_hi = rm.bounds
-    z_table = z_floor + 0.99
+    z_table = z_floor + 0.992
 
     # 1. Warm stone hearth if chimney exists
     _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
@@ -4208,8 +4208,8 @@ def _furnish_mess_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
                                ty - td * 0.5 - need, ty + td * 0.5 + need):
             continue
         build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, 0.0, length=tw, width=td)
-        build_prop(bm, 'SCATTER_TABLEWARE', tx - 0.45, ty, z_floor + 0.99, 0.0)
-        build_prop(bm, 'SCATTER_TABLEWARE', tx + 0.45, ty, z_floor + 0.99, 0.0)
+        build_prop(bm, 'SCATTER_TABLEWARE', tx - 0.45, ty, z_floor + 0.992, 0.0)
+        build_prop(bm, 'SCATTER_TABLEWARE', tx + 0.45, ty, z_floor + 0.992, 0.0)
         if is_main:
             # Chairs all around the big table, facing inward.
             for ci in range(6):
@@ -5004,6 +5004,38 @@ def furnish_building_interior(bm, props, ctx):
                 elif len(_f0_rms) >= 2:
                     _target = next((r for r in reversed(_f0_rms) if r.role != 'HOUSE_HALL'), _f0_rms[-1])
                     _target.role = 'MASTER_BED'
+
+        # Guarantee kitchen for artisans: 1 bedroom then 1 kitchen is highest priority!
+        _is_artisan = (_arch in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY', 'BUTCHER',
+                                 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER', 'HUNTER')
+                       or _arch.startswith('ARTISAN'))
+        if _is_artisan and _all_rooms:
+            _kitchen_roles = {'KITCHEN', 'COTTAGE', 'TENEMENT_KITCHEN'}
+            if not any(getattr(rm, 'role', '') in _kitchen_roles for rm in _all_rooms):
+                _upper_rms = [r for fl in range(1, ctx.num_floors) for r in floor_rooms_dict.get(fl, []) if r.role != 'STAIR_LANDING']
+                # Prefer hall/storage/parlor/guest on lowest upper floor first
+                _hall_cand = next((r for r in _upper_rms if r.role in ('HOUSE_HALL', 'STORAGE', 'PANTRY', 'GUEST_ROOM', 'STUDY', 'OFFICE', 'LIBRARY')), None)
+                if _hall_cand is not None:
+                    _hall_cand.role = 'KITCHEN'
+                else:
+                    _bed_cands = [r for r in _upper_rms if r.role in ('BEDROOM', 'MASTER_BED')]
+                    if len(_bed_cands) >= 2:
+                        # Keep the primary bedroom, assign kitchen to the other
+                        _bed_cands[-1].role = 'KITCHEN'
+                    elif len(_upper_rms) == 1:
+                        # Only 1 chamber upstairs: make it a combined living/kitchen/bedroom COTTAGE
+                        _upper_rms[0].role = 'COTTAGE'
+                    elif not _upper_rms:
+                        # Single-storey artisan: check ground floor rooms
+                        _f0_rms = floor_rooms_dict.get(0, [])
+                        if len(_f0_rms) == 1:
+                            _f0_rms[0].role = 'COTTAGE'
+                        elif len(_f0_rms) >= 2:
+                            _cand = next((r for r in _f0_rms[1:] if r.role in ('HOUSE_HALL', 'STORAGE', 'PANTRY', 'BEDROOM')), None)
+                            if _cand is not None:
+                                _cand.role = 'KITCHEN'
+                            else:
+                                _f0_rms[-1].role = 'COTTAGE'
 
     for fl in range(ctx.num_floors):
         # Match the lowered T1 ground slab (floors.py): quarry / lumbermill

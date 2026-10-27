@@ -1744,7 +1744,7 @@ def build_table_scatter(bm, x, y, z_ground=0.0, ang=0.0, clutter_type='AUTO', rn
     # 4. Chamber candlestick
     faces += build_candlestick(bm, 0.13, -0.09, 0.0, 0.0)
 
-    transform_faces(faces, _place(x, y, z_ground, ang))
+    transform_faces(faces, _place(x, y, z_ground + 0.002, ang))
     return faces
 
 
@@ -1791,7 +1791,7 @@ def build_bottle_cluster(bm, x, y, z_ground=0.0, ang=0.0):
     faces += build_bottle(bm, -0.05, 0.03, 0.0, -0.5, bottle_type='POTION')
     # 3. Flagon / smaller bottle
     faces += build_bottle(bm, 0.00, -0.05, 0.0, 1.1, bottle_type='WINE')
-    transform_faces(faces, _place(x, y, z_ground, ang))
+    transform_faces(faces, _place(x, y, z_ground + 0.002, ang))
     return faces
 
 
@@ -1936,7 +1936,7 @@ def build_potted_plant_small(bm, x, y, z_ground=0.0, ang=0.0):
     _leaf_fan(bm, faces, h_pot + 0.030, 0.008, 4, 0.055, 0.020, 0.95, 1.25,
               phase=1.40, curl=0.24, seed=3.0)
 
-    transform_faces(faces, _place(x, y, z_ground, ang))
+    transform_faces(faces, _place(x, y, z_ground + 0.002, ang))
     return faces
 
 
