@@ -112,16 +112,20 @@ def _side_plan(props, ctx):
     u_deck_out = clearance + GAL_D
     u_inner = u_deck_out + LANE_GAP + STAIR_W * 0.5
     u_outer = u_inner + STAIR_W + LANE_GAP
-    u_out_edge = u_outer + STAIR_W * 0.5 + 0.10
+    # For single-flight tenements (2 storeys), the landing only needs to cover the inner lane
+    if n_floors <= 2:
+        u_out_edge = u_inner + STAIR_W * 0.5 + 0.10
+    else:
+        u_out_edge = u_outer + STAIR_W * 0.5 + 0.10
 
     flights = []
     for i in range(1, n_floors):
         z0 = 0.0 if i == 1 else found_h + (i - 1) * floor_h
         z1 = found_h + i * floor_h
         odd = (i % 2 == 1)
-        lane_u = u_outer if odd else u_inner
+        lane_u = u_inner if odd else u_outer
         flights.append({
-            'floor': i, 'lane': 'OUTER' if odd else 'INNER',
+            'floor': i, 'lane': 'INNER' if odd else 'OUTER',
             'u': lane_u,
             'a0': stair_lo if odd else stair_hi,
             'a1': stair_hi if odd else stair_lo,
@@ -406,8 +410,8 @@ def _build_side_landing(bm, wall, a_lo, a_hi, z, u_deck_out, u_out_edge,
                   post_spacing=1.4, baluster_spacing=0.24, braces=False)
 
     # 3. Near end facing stairs:
-    # If this is the top floor, guard the inactive lane void so nobody falls off
-    if is_top and u_inner is not None and u_outer is not None:
+    # If this is the top floor of a multi-lane staircase, guard the inactive lane void so nobody falls off
+    if is_top and u_inner is not None and u_outer is not None and (u_out_edge > u_inner + stair_w * 0.5 + 0.20):
         near_a = (a_lo + 0.06) if facing_side == -1 else (a_hi - 0.06)
         if active_lane == 'OUTER':
             # Arrived via outer lane; guard inner lane edge
@@ -520,12 +524,12 @@ def _build_side_stairs(bm, props, ctx, plan):
             land_lo = stair_hi
             land_hi = walk_hi
             facing_side = -1  # flights connect at land_lo
-            active_lane = 'OUTER'
+            active_lane = 'INNER'
         else:
             land_lo = walk_lo
             land_hi = stair_lo
             facing_side = +1  # flights connect at land_hi
-            active_lane = 'INNER'
+            active_lane = 'OUTER'
 
         # End caps for the gallery deck at walk_lo and walk_hi:
         # Both end caps sit at walk_lo + 0.06 and walk_hi - 0.06.

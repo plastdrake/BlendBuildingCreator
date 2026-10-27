@@ -540,7 +540,7 @@ def build_military_props(bm, props, ctx):
         # Archery targets on the left wall, facing right into the courtyard.
         for i in range(n_targets):
             build_archery_target(bm, left_wall + stand, ys[min(i, len(ys) - 1)], 0.0,
-                                 ang=math.radians(-90.0))
+                                 ang=math.radians(90.0))
         # Training pells on the right wall, facing left into the courtyard.
         for i in range(n_dummies):
             build_training_dummy(bm, right_wall - stand, ys[min(i, len(ys) - 1)], 0.0,

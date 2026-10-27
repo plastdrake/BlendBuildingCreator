@@ -135,7 +135,7 @@ def build_tournament_yard(bm, props, ctx, tier):
 
     # 2. Archery targets on a parallel line, inboard of the dummies.
     for ty in _spread(2, y_lo + 1.2, y_hi - 1.2):
-        build_archery_target(bm, lane_x - side * 3.2, ty, 0.0, ang=facing)
+        build_archery_target(bm, lane_x - side * 3.2, ty, 0.0, ang=facing + math.pi)
 
     # NOTE: no weapon/spear racks in the training ground itself (they belong
     # in the armory indoors); the yard keeps dummies + targets only.

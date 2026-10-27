@@ -693,16 +693,18 @@ def _build_stable_yard(bm, t, barn_w, barn_d, tier):
     so horses and carts can be walked straight in through the gate.
     """
     barn_front = -barn_d * 0.5
-    pen_d = 6.0
-    pen_w = barn_w + 1.0
+    pen_d = 4.0 if barn_w <= 9.0 else 6.0
+    pen_w = barn_w + 0.8 if barn_w <= 9.0 else barn_w + 1.0
     x0, x1 = -pen_w * 0.5, pen_w * 0.5
     y0 = barn_front - 0.30            # barn side of the pen
     y1 = barn_front - pen_d           # courtyard side
 
     # Open stall row tucked along the left side of the pen, opening to the court.
-    stall_w = min(pen_w * 0.5, 4.2)
-    _build_stall_shelter(bm, t, x0 + 0.15, x0 + 0.15 + stall_w, y0 - 0.20, 3.0,
-                         tier=tier, stalls=3)
+    stall_w = min(pen_w * 0.45, 3.2 if barn_w <= 9.0 else 4.2)
+    stalls = 2 if barn_w <= 9.0 else 3
+    _build_stall_shelter(bm, t, x0 + 0.15, x0 + 0.15 + stall_w, y0 - 0.20,
+                         2.4 if barn_w <= 9.0 else 3.0,
+                         tier=tier, stalls=stalls)
     _build_pen_fence(bm, t, x0, x1, y0, y1)
 
 
@@ -1931,10 +1933,14 @@ def build_estate_outbuildings(bm, props, ctx, host_obj=None):
         main_x_max += overhang
 
         # Outbuilding lateral half-extents along X:
-        # Stable: barn depth/2 + roof eave (0.85m) + front paddock fence pen (~6.2m)
-        st_dims = _stable_dims(tier)
+        # Stable: barn depth/2 + roof eave (0.85m) + front paddock fence pen
+        is_knights = (getattr(ctx, 'effective_archetype', '') == 'KNIGHTS_MANOR'
+                      or getattr(props, 'building_family', '') == 'KNIGHTS_MANOR'
+                      or 'KNIGHTS_MANOR' in getattr(props, 'name', ''))
+        st_dims = (8.5, 5.5) if is_knights else _stable_dims(tier)
         _st_rot = (getattr(props, 'stable_rotate', False) or spread_x > 18.0)
-        st_half_x = (st_dims[1] * 0.5 + 6.2 + 0.85) if _st_rot else (st_dims[0] * 0.5 + 0.85)
+        paddock_pen_d = 4.2 if st_dims[0] <= 9.0 else 6.2
+        st_half_x = (st_dims[1] * 0.5 + paddock_pen_d + 0.85) if _st_rot else (st_dims[0] * 0.5 + 0.85)
 
         # Servant Quarters: depth/2 + roof eave + lean-to awning extension (~2.8m)
         sq_d_eff = 7.5 if tier == 'TIER_3' else 6.8
@@ -1943,9 +1949,42 @@ def build_estate_outbuildings(bm, props, ctx, host_obj=None):
         sq_half_x = (sq_d_eff * 0.5 + 2.8 + 0.85) if _sq_rot else (sq_w_eff * 0.5 + 0.85)
 
         walkway_clearance = 3.5
-        min_spread_left = abs(main_x_min) + st_half_x + walkway_clearance
-        min_spread_right = main_x_max + sq_half_x + walkway_clearance
-        spread_x = max(spread_x, min_spread_left, min_spread_right)
+
+        # Only enforce main hall wing clearance if the outbuilding shares the Y span with the hall/wings
+        manor_setback = float(getattr(props, 'plot_setback', 0.0))
+        wing_front_y = manor_setback - ctx.hy
+        if ctx.wings:
+            w_fronts = [manor_setback + (w['base'][2] if isinstance(w, dict) else w.base[2])
+                        for w in ctx.wings
+                        if (isinstance(w, dict) and w.get('wall') == 'FRONT') or getattr(w, 'wall', '') == 'FRONT']
+            if w_fronts:
+                wing_front_y = min(w_fronts)
+
+        outbuilding_depth = st_dims[0] if _st_rot else st_dims[1]
+        y_overlaps = (fore_y + outbuilding_depth * 0.5) >= (wing_front_y - 0.5)
+
+        if y_overlaps:
+            min_spread_left = abs(main_x_min) + st_half_x + walkway_clearance
+            min_spread_right = main_x_max + sq_half_x + walkway_clearance
+            spread_x = max(spread_x, min_spread_left, min_spread_right)
+
+        # Enforce that outbuildings stay strictly within perimeter enclosure fences (palisade or curtain wall)
+        has_enclosure = getattr(props, 'has_palisade', False) or getattr(props, 'has_curtain_wall', False)
+        if has_enclosure:
+            try:
+                from .palisade import compound_bounds, fortification_offset, fortification_depth_extra
+                fx0, fx1, _fy0, _fy1 = compound_bounds(
+                    ctx, fortification_offset(props),
+                    fortification_depth_extra(props) if getattr(props, 'has_curtain_wall', False) else 0.0)
+                st_outer = (st_dims[1] * 0.5 + 0.85) if _st_rot else (st_dims[0] * 0.5 + 0.85)
+                sq_outer = (sq_d_eff * 0.5 + 0.85) if _sq_rot else (sq_w_eff * 0.5 + 0.85)
+                max_left = abs(fx0) - st_outer - 1.2
+                max_right = fx1 - sq_outer - 1.2
+                max_allowed = min(max_left, max_right)
+                if max_allowed > 8.0:
+                    spread_x = min(spread_x, max_allowed)
+            except Exception:
+                pass
 
     # 2. Horse Stable & Carriage Barn
     if has_stable:
@@ -1954,8 +1993,8 @@ def build_estate_outbuildings(bm, props, ctx, host_obj=None):
         st_y = fore_y
         _rot_on = getattr(props, 'stable_rotate', False) or spread_x > 18.0
         st_rot = -math.pi * 0.5 * st_sgn if _rot_on else 0.0
-        st_w = 16.0 if is_grand_plot else None
-        st_d = 9.0 if is_grand_plot else None
+        st_w = 16.0 if is_grand_plot else (st_dims[0] if is_knights else None)
+        st_d = 9.0 if is_grand_plot else (st_dims[1] if is_knights else None)
         build_stable(bm, props, pos=(st_x, st_y, 0.0), rot_z=st_rot, tier=tier,
                      width=st_w, depth=st_d, host_obj=host_obj)
         stable_slot = (st_x, st_y, st_rot, st_w if st_w else _stable_dims(tier)[0])

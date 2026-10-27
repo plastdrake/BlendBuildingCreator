@@ -282,7 +282,7 @@ def test_tenement_layouts():
     assert row_stairs['u_outer'] > row_stairs['u_inner']
     assert all(f['lane'] in ('INNER', 'OUTER') for f in row_stairs['flights'])
     for i, f in enumerate(row_stairs['flights']):
-        assert (f['lane'] == 'OUTER') == (i % 2 == 0)
+        assert (f['lane'] == 'INNER') == (i % 2 == 0)
     for first, second in zip(row_stairs['flights'], row_stairs['flights'][1:]):
         assert abs(first['a1'] - second['a0']) < 0.01, (
             "consecutive flights must meet at their landing"

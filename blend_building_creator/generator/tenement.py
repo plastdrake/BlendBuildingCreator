@@ -25,9 +25,9 @@ import math
 # Exterior circulation proportions, shared by plan, geometry and exclusions.
 # These are bounded by the tightest preset plot (the 12 m-wide tenement rows):
 # a two-lane switchback plus gallery must stay inside the plot.
-GAL_D = 2.50      # clear walkway / courtyard-gallery depth (2.5m wide walkways)
-STAIR_W = 2.00    # single stair lane clear width (at least 2.0m wide stairs for walkability)
-LANE_GAP = 0.20   # air gap between the two switchback lanes
+GAL_D = 1.80      # clear walkway / courtyard-gallery depth (1.8m wide walkways)
+STAIR_W = 1.45    # single stair lane clear width
+LANE_GAP = 0.15   # air gap between the switchback lanes / walkway
 STEP_D = 0.28     # tread depth
 STEP_H = 0.19     # riser height cap
 
