@@ -69,6 +69,8 @@ class BuildingContext:
     top_hx: float = 0.0
     top_hy: float = 0.0
     chimney_pos: Any = None
+    chimney_positions: List[Any] = field(default_factory=list)
+    planned_chimneys: List[Any] = field(default_factory=list)
     floor_doorways: Dict[int, List[Dict[str, Any]]] = field(default_factory=dict)
     extra_doorways: List[Dict[str, Any]] = field(default_factory=list)
     extra_window_exclusions: List[Dict[str, Any]] = field(default_factory=list)

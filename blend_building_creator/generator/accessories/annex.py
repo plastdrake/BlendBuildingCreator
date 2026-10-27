@@ -82,10 +82,9 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
         win_w = 1.0
         win_h = min(1.25, floor_h * 0.46)
         sill = fz0 + floor_h * 0.30
-        # Interior plank floor. Its top sits flush with the main hall floor slab
-        # (z_floor + 0.05) so it stays clear of the foundation top (no coplanar
-        # z-fighting) and reads as the interior floor boards, not stone.
-        _fx_inner = inner_x - side_sgn * (wall_t * 0.5 + 0.02)
+        # Interior plank floor. Stops cleanly at the wall plane inner_x;
+        # the raised threshold board covers the door reveal transition cleanly.
+        _fx_inner = inner_x
         _fx_outer = outer_x - side_sgn * wall_t * 0.5
         _fx_min, _fx_max = min(_fx_inner, _fx_outer), max(_fx_inner, _fx_outer)
         create_beveled_box(
@@ -108,35 +107,43 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                 bm, center=(outer_x, cy, sill + win_h * 0.5), size=(win_w, win_h),
                 wall_thickness=wall_t, normal_axis=out_normal, has_shutters=True)
         else:
-            oriel_w = min(2.2, width * 0.55)
-            oriel_h = min(2.0, floor_h * 0.72)
+            # Upper floor walk-through portal into the oriel bay.
+            # Sized to match the annex entrance doorway in dimension (1.65m x 2.35m), profile, and material.
+            oriel_portal_w = 1.65
+            oriel_portal_h = min(2.35, floor_h * 0.78)
+            _lh = 0.16
+            _jw = 0.16
+            _jd = wall_t + 0.10
             uc = width * 0.5
-            _oz0 = fz0 + 0.10
-            _oz1 = fz0 + oriel_h - 0.05
-            outer_ops = [{'u_start': uc - oriel_w * 0.5 + 0.10, 'u_end': uc + oriel_w * 0.5 - 0.10,
+            _oz0 = fz0
+            _oz1 = fz0 + oriel_portal_h + _lh
+            outer_ops = [{'u_start': uc - oriel_portal_w * 0.5 - _jw * 0.5,
+                          'u_end': uc + oriel_portal_w * 0.5 + _jw * 0.5,
                           'z_start': _oz0, 'z_end': _oz1}]
             build_wall_with_opening(
                 bm, (outer_wall_x, y0), (outer_wall_x, y1), fz0, fz1, wall_t,
                 list(outer_ops),
                 mat_ext=f_mat, normal_vec=out_normal, tier=tier, physical_siding=True,
                 plank_direction=plank_direction, seed=42)
-            # Timber jambs + lintel so the bay portal gets the same framed look
-            # as the outcrop portals cut into the main hall walls. The liner is
-            # centred on the wall and just a hair deeper than it, so it lines the
-            # reveal top to bottom instead of poking out of the outer face.
-            _jw, _lh = 0.16, 0.18
-            _jd = wall_t + 0.02
+            # Timber jambs + lintel matching the annex doorway in dimensions & material
             _wc = outer_wall_x
-            _p_lo = y0 + uc - oriel_w * 0.5 + 0.10
-            _p_hi = y0 + uc + oriel_w * 0.5 - 0.10
-            for _py in (_p_lo - _jw * 0.5 + 0.05, _p_hi + _jw * 0.5 - 0.05):
-                create_beveled_box(bm, size=(_jd, _jw, _oz1 - _oz0),
-                                   location=(_wc, _py, (_oz0 + _oz1) * 0.5),
-                                   mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
-            create_beveled_box(bm,
-                               size=(_jd, (_p_hi - _p_lo) + _jw * 2.0 - 0.10, _lh),
-                               location=(_wc, (_p_lo + _p_hi) * 0.5, _oz1 + _lh * 0.5 - 0.02),
-                               mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+            for _s in (-1.0, 1.0):
+                create_beveled_box(
+                    bm, size=(_jd, _jw, oriel_portal_h),
+                    location=(_wc, cy + _s * (oriel_portal_w * 0.5 + _jw * 0.5),
+                              fz0 + oriel_portal_h * 0.5),
+                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+            create_beveled_box(
+                bm, size=(_jd + 0.02, oriel_portal_w + _jw * 2.0 + 0.04, _lh),
+                location=(_wc, cy, fz0 + oriel_portal_h + _lh * 0.5),
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+
+            # Matching raised wooden threshold board into the oriel bay
+            _th_h = 0.034
+            create_beveled_box(
+                bm, size=(_jd + 0.02, oriel_portal_w + _jw * 2.0 + 0.02, _th_h),
+                location=(_wc, cy, fz0 + 0.05 + _th_h * 0.5),
+                mat_index=MAT_INDEX_WOOD, bevel_amount=0.008)
         if timber_framing:
             build_facade_timber(bm, (outer_wall_x, y0), (outer_wall_x, y1), fz0, fz1, wall_t,
                                 out_normal, list(outer_ops), diagonals,
@@ -184,38 +191,45 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             _z_cl = fz0 + floor_h - 0.08
             # Back of the sofa against the annex's outer wall.
             _sofa_yaw = -math.pi / 2 if side_sgn > 0 else math.pi / 2
-            _chair_yaw = side_sgn * math.pi / 2
 
-            build_prop(bm, 'RUG_CRIMSON', _annex_cx, _annex_cy, _z_fl, 0.0,
-                       width=min(2.6, _annex_d * 0.72), length=min(3.4, _annex_w * 0.66))
-
-            # Place sofa offset from outer wall; limit length so it never
-            # reaches within 0.55m of front/back walls (walkway clearance).
+            # Place sofa offset from outer wall, sized comfortably to the room.
             _sx = outer_x - side_sgn * 0.54
-            _sofa_len = min(1.75, max(1.15, _annex_w * 0.5), _annex_w - 1.10)
+            _sofa_len = min(1.80, max(1.15, _annex_w * 0.48))
             build_prop(bm, 'SOFA', _sx, _annex_cy, _z_fl, _sofa_yaw,
                        length=_sofa_len, fabric_mat=_annex_leather)
 
-            # Doorway into annex is at inner_x; armchair must stay clear of
-            # the 1.2m zone in front of that opening. Place it only when
-            # the annex is deep enough to have clearance.
-            _portal_clearance = 1.20
-            _chair_x = inner_x + side_sgn * 0.78
-            _chair_clear = abs(_chair_x - inner_x) > _portal_clearance * 0.5
-            if _annex_d >= 2.8 and _chair_clear:
-                build_prop(bm, 'ARMCHAIR', _chair_x, _annex_cy, _z_fl, _chair_yaw,
-                           fabric_mat=_annex_leather)
-                build_prop(bm, 'ROUND_TABLE', (_sx + _chair_x) * 0.5, _annex_cy, _z_fl, 0.0,
-                           radius=0.32)
-                build_prop(bm, 'POTTED_PLANT_SMALL', (_sx + _chair_x) * 0.5, _annex_cy, _z_fl + 0.775, 0.0)
+            # Compact coffee table in front of the sofa, offset toward the outer
+            # wall so the doorway walking corridor (y = cy) remains completely open.
+            _table_x = _sx - side_sgn * 0.70
+            build_prop(bm, 'ROUND_TABLE', _table_x, _annex_cy, _z_fl, 0.0, radius=0.28)
+            build_prop(bm, 'POTTED_PLANT_SMALL', _table_x, _annex_cy, _z_fl + 0.775, 0.0)
 
-            if _annex_w >= 2.6:
-                _bk_y = y0 + wall_t + 0.30
-                build_prop(bm, 'BOOKSHELF', inner_x + side_sgn * 0.55, _bk_y, _z_fl, 0.0,
-                           width=min(1.1, _annex_w * 0.5), height=1.70)
+            # Crimson rug centered under the sofa / table grouping:
+            _rug_cx = (_sx + _table_x) * 0.5
+            build_prop(bm, 'RUG_CRIMSON', _rug_cx, _annex_cy, _z_fl, 0.0,
+                       width=min(1.8, _annex_d * 0.52), length=min(2.4, _annex_w * 0.58))
+
+            # Bookshelf placed against the side wall if space permits,
+            # clear of the door swing and walkway.
+            if _annex_w >= 3.2:
+                _bk_y = y0 + wall_t + 0.22
+                _bk_x = (_fx_min + _fx_max) * 0.5
+                build_prop(bm, 'BOOKSHELF', _bk_x, _bk_y, _z_fl, 0.0,
+                           width=min(1.2, _annex_d * 0.45), height=1.70)
 
             build_prop(bm, 'POTTED_PLANT_LARGE',
                        outer_x - side_sgn * 0.55, y1 - wall_t - 0.45, _z_fl, 0.0)
+
+            # Collar tie / ceiling timber beam across the annex room, so the lantern
+            # hangs realistically from a solid structural beam instead of floating in midair.
+            _beam_w = 0.16
+            _beam_h = 0.18
+            _beam_y_span = (y1 - wall_t) - (y0 + wall_t)
+            create_beveled_box(
+                bm, size=(_beam_w, _beam_y_span, _beam_h),
+                location=(_annex_cx, _annex_cy, _z_cl + _beam_h * 0.5),
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+
             build_prop(bm, 'CHAIN_LANTERN', _annex_cx, _annex_cy, _z_cl, 0.0)
         except Exception:
             pass
@@ -255,7 +269,7 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             bm, side=_ow_side, floor_mode='UPPER',
             wall_x_min=_ow_anchor_lo, wall_x_max=_ow_anchor_hi,
             wall_y_min=cy - 1.6, wall_y_max=cy + 1.6,
-            z_base=found_h + floor_h, width=min(2.2, width * 0.55), depth=0.9,
+            z_base=found_h + floor_h, width=max(2.40, min(2.80, width * 0.58)), depth=0.9,
             height=max(2.80, min(3.20, floor_h - 0.55)), roof_style='LEAN_TO',
             tier=tier, floor_h=floor_h,
             lower_bounds=(_ow_anchor_lo, _ow_anchor_hi, cy - 1.6, cy + 1.6),

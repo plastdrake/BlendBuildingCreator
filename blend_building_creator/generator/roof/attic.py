@@ -470,6 +470,14 @@ def build_roof_and_attic(bm, props, ctx):
                             if not (dp['pos'][1] > top_y_max - 1.20)
                         ]
 
+        # Drop dormers that would collide with planned chimneys
+        _p_chims = getattr(ctx, 'planned_chimneys', None) or getattr(ctx, 'chimney_positions', None) or []
+        if _p_chims:
+            dormer_placements = [
+                dp for dp in dormer_placements
+                if not any(abs(dp['pos'][0] - cx) < 1.15 and abs(dp['pos'][1] - cy) < 1.15 for (cx, cy) in _p_chims if (cx, cy) is not None)
+            ]
+
         # Build dormer apertures for all surviving dormers
         if dormer_placements:
             ap_half = max(0.24, main_dormer_w * 0.5 - 0.18)

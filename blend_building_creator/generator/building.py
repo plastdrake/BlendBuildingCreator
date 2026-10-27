@@ -393,6 +393,32 @@ def _create_building_context(props, extra_doorways=None, extra_window_exclusions
                          'max': -base_w * 0.5 + 2.00,
                          'floor_min': 0, 'floor_max': 0})
 
+    planned_chimneys = []
+    if getattr(props, 'has_chimney', False) and effective_archetype not in ('WATCHTOWER', 'BAKERY'):
+        from .roof.details import get_planned_chimney_positions
+        chim_specs = get_planned_chimney_positions(props, effective_archetype, top_w=_top_w, top_d=_top_d)
+        if chim_specs:
+            extra_we = list(extra_we)
+            chim_win_clr = 1.35  # clearance so windows are never placed behind or adjacent to fireplace/chimney
+            for cs in chim_specs:
+                planned_chimneys.append(cs['pos'])
+                if cs['axis'] == 'X':
+                    extra_we.append({
+                        'facade': cs['facade'],
+                        'min': cs['x'] - chim_win_clr,
+                        'max': cs['x'] + chim_win_clr,
+                        'floor_min': 0,
+                        'floor_max': 99
+                    })
+                else:
+                    extra_we.append({
+                        'facade': cs['facade'],
+                        'min': cs['y'] - chim_win_clr,
+                        'max': cs['y'] + chim_win_clr,
+                        'floor_min': 0,
+                        'floor_max': 99
+                    })
+
     return BuildingContext(
         num_floors=num_floors, floor_h=floor_h, found_h=found_h,
         floor_wall_bounds={}, hx=0.0, hy=0.0,
@@ -411,6 +437,9 @@ def _create_building_context(props, extra_doorways=None, extra_window_exclusions
         extra_doorways=list(extra_dw),
         extra_window_exclusions=list(extra_we),
         is_rotated_roof=is_rotated_roof,
+        chimney_pos=planned_chimneys[0] if planned_chimneys else None,
+        chimney_positions=list(planned_chimneys),
+        planned_chimneys=list(planned_chimneys),
     )
 
 

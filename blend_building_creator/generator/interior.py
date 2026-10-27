@@ -407,62 +407,32 @@ def build_stair_hole_trim(bm, hole, floor_z, thickness=0.12, mat_index=MAT_INDEX
 
 
 def build_stair_guardrail_3sided(bm, sh_x1, sh_x2, sh_y1, sh_y2, floor_z,
-                                 climb_side='NORTH', offset=0.18, rail_h=0.95,
+                                 climb_side='NORTH', offset=0.08, rail_h=0.95,
                                  bounds=None):
     """
     Builds a safety guardrail on the upper floor around the stairwell opening,
-    offset outward from the hole so it never overlaps the stair structure or posts.
-    The side we climb up from the stairs is kept open.
+    offset outward from the hole so it sits neatly on the floor along the opening rim.
+    The arrival side where you step onto the floor is kept open.
     Any side that is against an exterior or partition wall is skipped to prevent wall intersection.
     Corner posts are cleanly shared so there is zero overlap between adjacent railing segments.
     """
     slab_xmin, slab_xmax, slab_ymin, slab_ymax = bounds if bounds else (-999.0, 999.0, -999.0, 999.0)
-    has_west_wall = (sh_x1 - slab_xmin < 0.45)
-    has_east_wall = (slab_xmax - sh_x2 < 0.45)
-    has_south_wall = (sh_y1 - slab_ymin < 0.45)
-    has_north_wall = (slab_ymax - sh_y2 < 0.45)
+    skip = set()
+    if sh_x1 - slab_xmin < 0.45:
+        skip.add('W')
+    if slab_xmax - sh_x2 < 0.45:
+        skip.add('E')
+    if sh_y1 - slab_ymin < 0.45:
+        skip.add('S')
+    if slab_ymax - sh_y2 < 0.45:
+        skip.add('N')
 
-    x_left = max(slab_xmin + 0.08, sh_x1 - offset)
-    x_right = min(slab_xmax - 0.08, sh_x2 + offset)
-    
-    if climb_side == 'NORTH':
-        y_foot = max(slab_ymin + 0.08, sh_y1 - offset)
-        y_climb = min(slab_ymax - 0.08, sh_y2)
-        # Left long railing (only if not against wall)
-        if not has_west_wall:
-            build_railing(bm, (x_left, y_foot), (x_left, y_climb), floor_z, height=rail_h,
-                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                          post_at_start=True, post_at_end=True, end_overhang=0.0)
-        # Right long railing (only if not against wall)
-        if not has_east_wall:
-            build_railing(bm, (x_right, y_foot), (x_right, y_climb), floor_z, height=rail_h,
-                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                          post_at_start=True, post_at_end=True, end_overhang=0.0)
-        # Return short railing across closed foot end (offset 1.5mm to eliminate coplanar intersection at corner posts)
-        if not has_south_wall and (x_right - x_left > 0.3):
-            build_railing(bm, (x_left, y_foot), (x_right, y_foot), floor_z + 0.0015, height=rail_h - 0.003,
-                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                          post_at_start=has_west_wall, post_at_end=has_east_wall,
-                          end_overhang=0.0)
-    else:  # climb_side == 'SOUTH'
-        y_foot = min(slab_ymax - 0.08, sh_y2 + offset)
-        y_climb = max(slab_ymin + 0.08, sh_y1)
-        # Left long railing
-        if not has_west_wall:
-            build_railing(bm, (x_left, y_climb), (x_left, y_foot), floor_z, height=rail_h,
-                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                          post_at_start=True, post_at_end=True, end_overhang=0.0)
-        # Right long railing
-        if not has_east_wall:
-            build_railing(bm, (x_right, y_climb), (x_right, y_foot), floor_z, height=rail_h,
-                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                          post_at_start=True, post_at_end=True, end_overhang=0.0)
-        # Return short railing across closed foot end
-        if not has_north_wall and (x_right - x_left > 0.3):
-            build_railing(bm, (x_left, y_foot), (x_right, y_foot), floor_z + 0.0015, height=rail_h - 0.003,
-                          post_spacing=1.3, baluster_spacing=0.20, braces=False,
-                          post_at_start=has_west_wall, post_at_end=has_east_wall,
-                          end_overhang=0.0)
+    open_s = 'N' if str(climb_side).upper().startswith('N') else 'S'
+    build_stair_guardrail_one_open(
+        bm, (sh_x1, sh_x2, sh_y1, sh_y2), floor_z, open_side=open_s,
+        offset=offset, rail_h=rail_h, bounds=bounds, skip_sides=skip
+    )
+
 
 def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, return_y=None, x_start=None):
     """
@@ -471,12 +441,11 @@ def build_stair_guardrail(bm, rail_x, y_start, y_end, floor_z, rail_h=0.95, retu
     If return_y and x_start are given, also adds the short return rail along the open end.
     Uses the shared detailed railing builder with end_overhang=0.0 to prevent wall penetrations.
     """
-    if abs(y_end - y_start) < 0.3:
-        return
-    build_railing(bm, (rail_x, y_start), (rail_x, y_end), floor_z, height=rail_h, end_overhang=0.0)
+    if abs(y_end - y_start) >= 0.3:
+        build_railing(bm, (rail_x, y_start), (rail_x, y_end), floor_z, height=rail_h, end_overhang=0.0)
     if return_y is not None and x_start is not None and abs(rail_x - x_start) >= 0.3:
-        build_railing(bm, (x_start, return_y), (rail_x, return_y), floor_z,
-                      height=rail_h, braces=False, post_spacing=1.0,
+        build_railing(bm, (x_start, return_y), (rail_x, return_y), floor_z + 0.0015,
+                      height=rail_h - 0.003, braces=False, post_spacing=1.0,
                       post_at_start=False, post_at_end=False, end_overhang=0.0)
 
 
@@ -1070,11 +1039,14 @@ def build_stair_landing(bm, cx, cy, z_top, size=2.0):
 
 
 def build_stair_guardrail_one_open(bm, hole, floor_z, open_side,
-                                   offset=0.14, rail_h=0.95, bounds=None,
+                                   offset=0.08, rail_h=0.95, bounds=None,
                                    skip_sides=None):
     """Guard a rectangular stair opening on all sides EXCEPT ``open_side``
     ('N', 'S', 'E' or 'W') where you step onto/off the flight, and any side in
-    ``skip_sides`` (e.g. a side that sits against a wall)."""
+    ``skip_sides`` (e.g. a side that sits against a wall).
+    Corner posts are cleanly shared so there is zero duplicate post or coplanar overlap."""
+    if hole is None:
+        return
     x0, x1, y0, y1 = hole
     if bounds:
         sx0, sx1, sy0, sy1 = bounds
@@ -1084,18 +1056,68 @@ def build_stair_guardrail_one_open(bm, hole, floor_z, open_side,
     xr = min(sx1 - 0.06, x1 + offset)
     yl = max(sy0 + 0.06, y0 - offset)
     yr = min(sy1 - 0.06, y1 + offset)
-    _sides = {'W': (xl, yl, xl, yr), 'E': (xr, yl, xr, yr),
-              'S': (xl, yl, xr, yl), 'N': (xl, yr, xr, yr)}
-    for _s, (_ax, _ay, _bx, _by) in _sides.items():
-        if _s == open_side:
-            continue
-        if skip_sides and _s in skip_sides:
-            continue
-        if abs(_bx - _ax) < 0.3 and abs(_by - _ay) < 0.3:
-            continue
-        build_railing(bm, (_ax, _ay), (_bx, _by), floor_z, height=rail_h,
-                      post_spacing=1.25, baluster_spacing=0.20, braces=False,
-                      end_overhang=0.0)
+
+    skip = set(skip_sides or ())
+    open_s = str(open_side or '').upper()[:1]
+
+    # Side configurations with clean corner post sharing:
+    # Closed cross-railings are lifted 1.5mm to eliminate coplanar intersection at corner posts.
+    if open_s == 'N':
+        # Open on North (arrival end)
+        if 'W' not in skip and (yr - yl) >= 0.30:
+            build_railing(bm, (xl, yl), (xl, yr), floor_z, height=rail_h,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        if 'E' not in skip and (yr - yl) >= 0.30:
+            build_railing(bm, (xr, yl), (xr, yr), floor_z, height=rail_h,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        if 'S' not in skip and (xr - xl) >= 0.30:
+            build_railing(bm, (xl, yl), (xr, yl), floor_z + 0.0015, height=rail_h - 0.003,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=('W' in skip), post_at_end=('E' in skip), end_overhang=0.0)
+    elif open_s == 'S':
+        # Open on South (arrival end)
+        if 'W' not in skip and (yr - yl) >= 0.30:
+            build_railing(bm, (xl, yr), (xl, yl), floor_z, height=rail_h,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        if 'E' not in skip and (yr - yl) >= 0.30:
+            build_railing(bm, (xr, yr), (xr, yl), floor_z, height=rail_h,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        if 'N' not in skip and (xr - xl) >= 0.30:
+            build_railing(bm, (xl, yr), (xr, yr), floor_z + 0.0015, height=rail_h - 0.003,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=('W' in skip), post_at_end=('E' in skip), end_overhang=0.0)
+    elif open_s == 'E':
+        # Open on East (arrival end)
+        if 'S' not in skip and (xr - xl) >= 0.30:
+            build_railing(bm, (xl, yl), (xr, yl), floor_z, height=rail_h,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        if 'N' not in skip and (xr - xl) >= 0.30:
+            build_railing(bm, (xl, yr), (xr, yr), floor_z, height=rail_h,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        if 'W' not in skip and (yr - yl) >= 0.30:
+            build_railing(bm, (xl, yl), (xl, yr), floor_z + 0.0015, height=rail_h - 0.003,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=('S' in skip), post_at_end=('N' in skip), end_overhang=0.0)
+    else:  # 'W'
+        # Open on West (arrival end)
+        if 'S' not in skip and (xr - xl) >= 0.30:
+            build_railing(bm, (xr, yl), (xl, yl), floor_z, height=rail_h,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        if 'N' not in skip and (xr - xl) >= 0.30:
+            build_railing(bm, (xr, yr), (xl, yr), floor_z, height=rail_h,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=True, post_at_end=True, end_overhang=0.0)
+        if 'E' not in skip and (yr - yl) >= 0.30:
+            build_railing(bm, (xr, yl), (xr, yr), floor_z + 0.0015, height=rail_h - 0.003,
+                          post_spacing=1.25, baluster_spacing=0.20, braces=False,
+                          post_at_start=('S' in skip), post_at_end=('N' in skip), end_overhang=0.0)
 
 
 def build_spiral_staircase(bm, center_pos, target_z, radius=1.35, num_steps=18, start_ang_deg=-90.0, total_angle_deg=360.0):
@@ -1505,14 +1527,15 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
     head_y = y1 + uy * u_door_cx
     create_beveled_box(
         bm, size=(head_w, head_d, head_h),
-        location=(head_x, head_y, z_floor + door_h + head_h * 0.5 - 0.015),
+        location=(head_x, head_y, z_floor + door_h + head_h * 0.5),
         rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.012
     )
 
     # Beveled timber threshold board spanning the floor opening
+    _th_h = 0.028
     create_beveled_box(
-        bm, size=(door_w + jamb_w * 2.0 + 0.04, casing_d + 0.02, 0.028),
-        location=(head_x, head_y, z_floor + 0.014),
+        bm, size=(door_w + jamb_w * 2.0 + 0.04, casing_d + 0.02, _th_h),
+        location=(head_x, head_y, z_floor + 0.05 + _th_h * 0.5),
         rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.006
     )
 
@@ -1701,7 +1724,7 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             pool = ['STAIR_LANDING', 'BARRACKS_DORM', 'LODGE', 'BEDROOM']
             return pool[:num_rooms]
         elif archetype in ('CHAPEL', 'HEALERS_CHAPEL'):
-            pool = ['STAIR_LANDING', 'HEALER_QUARTERS', 'STUDY', 'BEDROOM']
+            pool = ['STAIR_LANDING', 'HEALER_QUARTERS', 'STUDY', 'VESTRY']
             return pool[:num_rooms]
         elif archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL'):
             pool = ['STAIR_LANDING', 'MAYOR_OFFICE', 'OFFICE', 'STUDY', 'ARCHIVE']
@@ -2382,8 +2405,15 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             if y_h is not None:
                 _hwall(cx0, cx1, y_h, (cx0 + cx1) * 0.5)
             if fl_idx == 0:
-                r_south = 'KITCHEN' if ci == 0 else 'HOUSE_HALL'
-                r_north = 'PANTRY' if ci == 0 else 'BANQUET_HALL'
+                if ci == 0:
+                    r_south = 'KITCHEN'
+                    r_north = 'PANTRY'
+                elif ci == 1:
+                    r_south = 'COUNCIL_CHAMBER'
+                    r_north = 'BANQUET_HALL'
+                else:
+                    r_south = 'OFFICE'
+                    r_north = 'BARRACKS_DORM'
             elif fl_idx == 1:
                 if ci == 0:
                     r_south = 'MASTER_BED'
@@ -2493,9 +2523,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             _p_rooms, _p_walls = _palace
             if fl_wings_bounds:
                 for wi, wb in enumerate(fl_wings_bounds):
-                    # The great banquet hall now lives in the archive wing, so
-                    # the keep's rear wing becomes the royal dining room.
-                    w_role = ('DINING' if wi == 0 else 'GUEST_ROOM') if fl_idx == 0 else (('MASTER_BED' if wi == 0 else 'BEDROOM') if fl_idx == 1 else ('GUEST_ROOM' if wi == 0 else 'BEDROOM'))
+                    if fl_idx == 0:
+                        w_role = 'BARRACKS_DORM' if wi == 0 else 'BANQUET_HALL'
+                    elif fl_idx == 1:
+                        w_role = 'ARMORY' if wi == 0 else 'LIBRARY'
+                    elif fl_idx == 2:
+                        w_role = 'BEDROOM' if wi == 0 else 'GUEST_ROOM'
+                    else:
+                        w_role = 'STUDY' if wi == 0 else 'GUEST_ROOM'
                     wing_dw = []
                     dw_wx = (wb[0] + wb[1]) * 0.5
                     dw_w_eff = dw_w
@@ -2542,8 +2577,10 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             if fl_wings_bounds:
                 for wi, wb in enumerate(fl_wings_bounds):
                     if fl_idx == 0:
-                        w_role = 'STORAGE' if wi == 0 else 'GUEST_ROOM'
-                    elif fl_idx == 3:
+                        w_role = 'BARRACKS_DORM' if wi == 0 else 'BANQUET_HALL'
+                    elif fl_idx == 1:
+                        w_role = 'ARMORY' if wi == 0 else 'LIBRARY'
+                    elif fl_idx == 2:
                         w_role = 'STUDY' if wi == 0 else 'GUEST_ROOM'
                     else:
                         w_role = 'BEDROOM' if wi == 0 else 'GUEST_ROOM'
@@ -3636,15 +3673,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     _hall.stair_hole = _holds_stair((_bay, _hx1, iy_min, iy_max))
                     _hall.doorways = list(_hall.doorways) + list(_bay_dw)
                     if fl_idx > 0:
-                        # The bay is the landing now, so the leftover hall
-                        # strip becomes the next unused chamber role instead
-                        # of a second landing.
-                        _pool = _resolve_room_roles(
-                            effective_archetype, fl_idx, len(rooms) + 1,
-                            has_stairs_landing, total_floors, program=program)
-                        while len(_pool) <= len(rooms):
-                            _pool.append(_pool[-1] if _pool else 'STORAGE')
-                        _hall.role = _pool[len(rooms)]
+                        _hw = _hx1 - _bay
+                        _hd = iy_max - iy_min
+                        if min(_hw, _hd) < 3.2 or len(_hall.doorways) >= 2:
+                            _hall.role = 'CORRIDOR'
+                        else:
+                            _pool = _resolve_room_roles(
+                                effective_archetype, fl_idx, len(rooms) + 1,
+                                has_stairs_landing, total_floors, program=program)
+                            while len(_pool) <= len(rooms):
+                                _pool.append(_pool[-1] if _pool else 'STORAGE')
+                            _hall.role = _pool[len(rooms)]
                     _fac = dict(_hall.exterior_facades)
                     _fac.pop('LEFT', None)
                     if 'FRONT' in _fac:

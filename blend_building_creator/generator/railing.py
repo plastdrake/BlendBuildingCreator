@@ -19,10 +19,11 @@ from .materials import (
     MAT_INDEX_RAILING,
 )
 
-# Cross sections (metres) - deliberately chunky so rails read as real joinery.
-SILL_W, SILL_T = 0.13, 0.11
-HANDRAIL_W, HANDRAIL_T = 0.16, 0.09
-RAIL_W, RAIL_T = 0.16, 0.09
+# Cross sections (metres) - rails are 1 cm thinner on each side than the posts
+# (0.14m vs 0.16m, so posts stand 1cm proud on both sides) to prevent coplanar z-fighting.
+SILL_W, SILL_T = 0.14, 0.11
+HANDRAIL_W, HANDRAIL_T = 0.14, 0.09
+RAIL_W, RAIL_T = 0.14, 0.09
 MID_W, MID_T = 0.10, 0.065
 LOW_W, LOW_T = 0.09, 0.055
 POST_W = 0.16

@@ -1956,7 +1956,7 @@ def create_stylized_target(name="M_Building_Target", color=(0.78, 0.72, 0.58, 1.
     return mat
 
 
-def create_stylized_hay(name="M_Building_Hay", color=(0.86, 0.65, 0.22, 1.0)):
+def create_stylized_hay(name="M_Building_Thatch", color=(0.86, 0.65, 0.22, 1.0)):
     """Handpainted golden straw / thatch material for hay bales, hay piles, and manger straw.
 
     Uses the packaged ``thatch_bundles_diffuse.png`` handpainted texture (golden
@@ -2811,8 +2811,8 @@ def setup_building_material_slots(obj, props):
     # 14. Archery Target / Pell (painted concentric scoring rings)
     mat_target = getattr(props, 'custom_target', None) or create_stylized_target("M_Building_Target")
 
-    # 15. Hay / Burlap (hay_diffuse.png) - padded training pell stuffing and sacks
-    mat_hay = getattr(props, 'custom_hay', None) or create_stylized_hay("M_Building_Hay")
+    # 15. Hay / Thatch Straw (thatch_bundles_diffuse.png) - hay bales, piles, and manger straw
+    mat_hay = getattr(props, 'custom_hay', None) or create_stylized_hay("M_Building_Thatch")
 
     # 16. Dirt / Soil (dirt_diffuse.jpg) - planter and flower-box fill
     mat_dirt = getattr(props, 'custom_dirt', None) or create_stylized_dirt("M_Building_Dirt")
@@ -3030,7 +3030,7 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Clock_Face",    # 12
     "M_Building_Banner",        # 13
     "M_Building_Target",        # 14
-    "M_Building_Hay",           # 15
+    "M_Building_Thatch",        # 15 (Hay / Golden Straw Thatch)
     "M_Building_Dirt",          # 16
     "M_Building_Sign",          # 17
     "M_Building_Rope",          # 18
@@ -3083,8 +3083,8 @@ def canonical_slot_index(name):
         base = "M_Building_" + base[len("M_Outbuilding_"):]
     if base == "M_Building_WattleDaub":
         return 1
-    if base == "M_Building_Thatch":
-        return 4
+    if base in ("M_Building_Thatch", "M_Building_Hay"):
+        return 15
     if base.startswith("M_Sign") or base.startswith("M_Building_Sign"):
         return 17
     try:

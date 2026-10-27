@@ -150,6 +150,7 @@ def _build_balconies(bm, props, ctx, tier):
                 door_angle_deg=_prop(props, 'door_angle', 0.0),
                 include_leaf=_prop(props, 'include_door_leaves', True),
                 along_wall_offset=offset,
+                wall_thickness=ctx.wall_t if hasattr(ctx, 'wall_t') else float(getattr(props, 'wall_thickness', 0.30)),
             )
 
 

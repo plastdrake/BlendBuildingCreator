@@ -208,11 +208,13 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
 
     frame_thick = 0.12
     is_arched = (door_shape == 'ARCHED') or (door_shape == 'AUTO' and ground_floor_stone and door_w < 1.6)
-    
     if is_arched:
-        # Full-depth stone casing spanning cleanly through the wall from exterior to interior
-        frame_depth = wall_thickness + 0.16
-        yf_stone = y_front + wall_thickness * 0.5
+        # Full-depth stone casing spanning cleanly through the wall from exterior to interior.
+        # Sits centered directly in the middle of the wall (yf_stone = y_front),
+        # with frame_depth = wall_thickness + 0.08 so it sits 4cm proud of both exterior
+        # and interior wall faces, eliminating all coplanar conflicts and wall gaps.
+        frame_depth = wall_thickness + 0.08
+        yf_stone = y_front
         R_in = door_w * 0.5
         R_out = R_in + 0.22
         z_spring = z_base + door_h - R_in
@@ -373,9 +375,12 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015
         )
     else:
-        # Full-depth square timber casing spanning through wall from exterior to interior
-        timber_frame_d = wall_thickness + 0.22
-        yf_timber = y_front + wall_thickness * 0.5 - 0.03
+        # Full-depth square timber casing spanning cleanly through the wall.
+        # Sits centered in the middle of the wall (yf_timber = y_front), a bit thicker
+        # than the wall (timber_frame_d = wall_thickness + 0.08) so it sits 4cm proud
+        # on both exterior and interior faces without excessively protruding into the room.
+        timber_frame_d = wall_thickness + 0.08
+        yf_timber = y_front
         create_beveled_box(
             bm,
             size=(frame_thick, timber_frame_d, door_h),
@@ -390,11 +395,11 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.015
         )
-        # Heavy timber lintel/header beam proud of wall (top reaching continuous lintel log at 2.16m)
+        # Heavy timber lintel/header beam proud of wall
         head_h = frame_thick + 0.04
         create_beveled_box(
             bm,
-            size=(door_w + frame_thick * 2.4, timber_frame_d + 0.04, head_h),
+            size=(door_w + frame_thick * 2.4, timber_frame_d + 0.02, head_h),
             location=(center_x, yf_timber, z_base + door_h + head_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
             bevel_amount=0.016
@@ -403,26 +408,27 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         sill_mat = MAT_INDEX_CUT_STONE if ground_floor_stone else MAT_INDEX_TIMBER
         create_beveled_box(
             bm,
-            size=(door_w + frame_thick * 2.0, timber_frame_d + 0.08, 0.08),
+            size=(door_w + frame_thick * 2.0, timber_frame_d + 0.04, 0.08),
             location=(center_x, yf_timber, z_base + 0.04),
             mat_index=sill_mat,
             bevel_amount=0.015
         )
-        # Interior casing frame flush along room wall
-        in_door_y = y_front + wall_thickness
+        # Interior casing architrave sitting flush on the interior wall face
+        in_door_y = y_front + wall_thickness * 0.5
+        casing_trim_d = 0.03
         create_beveled_box(
-            bm, size=(frame_thick * 0.85, 0.05, door_h + frame_thick),
-            location=(center_x - (door_w * 0.5 + frame_thick * 0.42), in_door_y, z_base + (door_h + frame_thick) * 0.5),
+            bm, size=(frame_thick * 0.85, casing_trim_d, door_h),
+            location=(center_x - (door_w * 0.5 + frame_thick * 0.42), in_door_y + casing_trim_d * 0.5, z_base + door_h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
         create_beveled_box(
-            bm, size=(frame_thick * 0.85, 0.05, door_h + frame_thick),
-            location=(center_x + (door_w * 0.5 + frame_thick * 0.42), in_door_y, z_base + (door_h + frame_thick) * 0.5),
+            bm, size=(frame_thick * 0.85, casing_trim_d, door_h),
+            location=(center_x + (door_w * 0.5 + frame_thick * 0.42), in_door_y + casing_trim_d * 0.5, z_base + door_h * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
         create_beveled_box(
-            bm, size=(door_w + frame_thick * 2.0, 0.05, frame_thick),
-            location=(center_x, in_door_y, z_base + door_h + frame_thick * 0.5),
+            bm, size=(door_w + frame_thick * 2.0, casing_trim_d, frame_thick),
+            location=(center_x, in_door_y + casing_trim_d * 0.5, z_base + door_h + frame_thick * 0.5),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
         )
     
@@ -431,7 +437,7 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
 
     leaf_t = 0.055
     arch_clear = 0.014
-    outer_face_y = (yf_stone - frame_depth * 0.5 + 0.04) if is_arched else (y_front - 0.12)
+    outer_face_y = (yf_stone - frame_depth * 0.5 + 0.04) if is_arched else (yf_timber - timber_frame_d * 0.5 + 0.04)
     hinge_y_out = outer_face_y + 0.033
 
     if door_w >= 1.6:
@@ -931,7 +937,7 @@ def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, st
         steps_bm.free()
         return
 
-    step_back_y = y_front - 0.22
+    step_back_y = y_front - 0.16
     for i in range(num_steps):
         cur_w = step_w + (num_steps - 1 - i) * 0.14
         cur_y = step_back_y - (i + 0.5) * step_d

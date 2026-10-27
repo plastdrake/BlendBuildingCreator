@@ -277,28 +277,39 @@ def _place_ceiling_light(bm, tracker: Optional[RoomOccupancyTracker], rcx: float
                          z_ceil: float, prop_name: str = 'CHAIN_LANTERN', **kwargs):
     """Places a ceiling-mounted light fixture safely clear of stairs.
     
-    Checks stair_hole, stair_box, floor_void, and stair approaches. If the requested (rcx, rcy)
-    falls within or dangerously close to stairs (where a player climbing stairs would bump their head),
-    it nudges the light into the clear walkable room area away from the staircase, or omits it if
-    the space is an open stair shaft without clearance.
+    Checks all stair holes across all floors, flight boxes, floor voids, and stair approaches.
+    If the requested (rcx, rcy) falls within or close to stairs (where a player climbing stairs
+    would bump their head), it nudges the light into the clear walkable room area away from the
+    staircase, or omits it if the space is an open stair shaft without clearance.
     """
     if tracker is None:
-        build_prop(bm, prop_name, rcx, rcy, z_ceil, 0.0, **kwargs)
         return
 
     lx, ly = rcx, rcy
 
-    def _conflicts_with_stairs(x, y, margin=0.65):
+    def _conflicts_with_stairs(x, y, margin=1.10):
+        all_holes = list(getattr(tracker, 'all_stair_holes', []) or [])
         sh = getattr(tracker, 'stair_hole', None) or getattr(tracker, 'stair_hole_rect', None)
-        if sh is not None:
-            sx0, sx1, sy0, sy1 = sh
+        if sh is not None and sh not in all_holes:
+            all_holes.append(sh)
+        sb = getattr(tracker, 'stair_box', None)
+        if sb is not None and sb not in all_holes:
+            all_holes.append(sb)
+
+        ctx = getattr(tracker, 'ctx', None)
+        if ctx is not None:
+            fsh = getattr(ctx, 'floor_stair_holes', {}) or {}
+            for h in fsh.values():
+                if h is not None and h not in all_holes:
+                    all_holes.append(h)
+            fsb = getattr(ctx, 'full_stair_box', None)
+            if fsb is not None and fsb not in all_holes:
+                all_holes.append(fsb)
+
+        for (sx0, sx1, sy0, sy1) in all_holes:
             if (sx0 - margin <= x <= sx1 + margin) and (sy0 - margin <= y <= sy1 + margin):
                 return True
-        sb = getattr(tracker, 'stair_box', None)
-        if sb is not None:
-            bx0, bx1, by0, by1 = sb
-            if (bx0 - margin <= x <= bx1 + margin) and (by0 - margin <= y <= by1 + margin):
-                return True
+
         fv = getattr(tracker, 'floor_void', None)
         if fv is not None:
             vx0, vx1, vy0, vy1 = fv
@@ -306,20 +317,20 @@ def _place_ceiling_light(bm, tracker: Optional[RoomOccupancyTracker], rcx: float
                 return True
         for ab in getattr(tracker, 'stair_approach', []):
             ax0, ax1, ay0, ay1 = ab
-            if (ax0 - 0.20 <= x <= ax1 + 0.20) and (ay0 - 0.20 <= y <= ay1 + 0.20):
+            if (ax0 - 0.40 <= x <= ax1 + 0.40) and (ay0 - 0.40 <= y <= ay1 + 0.40):
                 return True
         return False
 
-    if _conflicts_with_stairs(lx, ly):
+    if _conflicts_with_stairs(lx, ly, margin=1.10):
         rx0, rx1 = tracker.rx0 + 0.50, tracker.rx1 - 0.50
         ry0, ry1 = tracker.ry0 + 0.50, tracker.ry1 - 0.50
         candidates = []
-        step = 0.40
+        step = 0.30
         curr_y = ry0
         while curr_y <= ry1:
             curr_x = rx0
             while curr_x <= rx1:
-                if not _conflicts_with_stairs(curr_x, curr_y, margin=0.75):
+                if not _conflicts_with_stairs(curr_x, curr_y, margin=1.10):
                     d = math.hypot(curr_x - rcx, curr_y - rcy)
                     candidates.append((d, curr_x, curr_y))
                 curr_x += step
@@ -414,10 +425,10 @@ def _sofa_fabric(rng):
                              MAT_INDEX_FABRIC_STITCHED)
     return rng.choice([MAT_INDEX_LEATHER, MAT_INDEX_LEATHER_2, MAT_INDEX_FABRIC_STITCHED])
 
-
 def _try_place_hearth(bm, tracker: RoomOccupancyTracker, z_floor: float,
-                      chimney_pos: Optional[Any] = None) -> bool:
-    """Places a stone hearth/fireplace, prioritizing direct attachment to the chimney flue."""
+                      z_ceil: Optional[float] = None,
+                      chimney_pos: Optional[Any] = None) -> Optional[Tuple[float, float, float]]:
+    """Places a stone hearth/fireplace flush against the wall, extending a stone chimney breast up to ceiling."""
     width = 1.60
     depth = 0.55
     rx0, rx1 = tracker.rx0, tracker.rx1
@@ -425,56 +436,89 @@ def _try_place_hearth(bm, tracker: RoomOccupancyTracker, z_floor: float,
     rcx = (rx0 + rx1) * 0.5
     rcy = (ry0 + ry1) * 0.5
 
-    # 1. Try attaching directly to the stone chimney shaft if in/adjacent to room wall
+    rbx0, rbx1, rby0, rby1 = getattr(tracker, 'room_bounds', (rx0, rx1, ry0, ry1))
+
+    # 1. Try attaching directly to the stone chimney flue flush against the room wall
     if chimney_pos is not None:
         c_list = chimney_pos if isinstance(chimney_pos, list) else [chimney_pos]
         for c in c_list:
             if c is None:
                 continue
             cx, cy = c
-            near_wall = min(abs(cx - rx0), abs(cx - rx1), abs(cy - ry0), abs(cy - ry1)) <= 0.65
-            if near_wall and (rx0 - 0.5 <= cx <= rx1 + 0.5) and (ry0 - 0.5 <= cy <= ry1 + 0.5):
-                chim_half = 0.38
-                candidates = []
-                # South face of chimney (firebox faces -Y into room)
-                hy_s = cy - chim_half - depth * 0.5 + 0.02
-                cand_s = (cx, hy_s, 0.0,
-                          (cx - width * 0.5 - 0.15, cx + width * 0.5 + 0.15, hy_s - depth * 0.5 - 0.45, cy - chim_half))
-                candidates.append((abs(rcy - hy_s), cand_s))
+            d_north = abs(cy - rby1)
+            d_south = abs(cy - rby0)
+            d_west = abs(cx - rbx0)
+            d_east = abs(cx - rbx1)
+            min_d = min(d_north, d_south, d_west, d_east)
 
-                # North face of chimney (firebox faces +Y into room)
-                hy_n = cy + chim_half + depth * 0.5 - 0.02
-                cand_n = (cx, hy_n, math.pi,
-                          (cx - width * 0.5 - 0.15, cx + width * 0.5 + 0.15, cy + chim_half, hy_n + depth * 0.5 + 0.45))
-                candidates.append((abs(rcy - hy_n), cand_n))
+            if min_d <= 0.85 and (rbx0 - 0.7 <= cx <= rbx1 + 0.7) and (rby0 - 0.7 <= cy <= rby1 + 0.7):
+                breast_w = 1.20
+                breast_d = 0.42
 
-                # East face of chimney (firebox faces +X into room)
-                hx_e = cx + chim_half + depth * 0.5 - 0.02
-                cand_e = (hx_e, cy, math.pi / 2,
-                          (cx + chim_half, hx_e + depth * 0.5 + 0.45, cy - width * 0.5 - 0.15, cy + width * 0.5 + 0.15))
-                candidates.append((abs(rcx - hx_e), cand_e))
+                if min_d == d_north:
+                    # Flush against North (back) wall, firebox faces South (-Y into room)
+                    hx = max(rbx0 + width * 0.5 + 0.15, min(rbx1 - width * 0.5 - 0.15, cx))
+                    hy = rby1 - 0.32
+                    yaw = 0.0
+                    b = (hx - width * 0.5 - 0.12, hx + width * 0.5 + 0.12, hy - depth * 0.5 - 0.45, rby1)
+                    breast_pos = (hx, rby1 - breast_d * 0.5)
+                    breast_size = (breast_w, breast_d)
+                elif min_d == d_south:
+                    # Flush against South (front) wall, firebox faces North (+Y into room)
+                    hx = max(rbx0 + width * 0.5 + 0.15, min(rbx1 - width * 0.5 - 0.15, cx))
+                    hy = rby0 + 0.32
+                    yaw = math.pi
+                    b = (hx - width * 0.5 - 0.12, hx + width * 0.5 + 0.12, rby0, hy + depth * 0.5 + 0.45)
+                    breast_pos = (hx, rby0 + breast_d * 0.5)
+                    breast_size = (breast_w, breast_d)
+                elif min_d == d_west:
+                    # Flush against West wall, firebox faces East (+X into room)
+                    hx = rbx0 + 0.32
+                    hy = max(rby0 + width * 0.5 + 0.15, min(rby1 - width * 0.5 - 0.15, cy))
+                    yaw = math.pi / 2
+                    b = (rbx0, hx + depth * 0.5 + 0.45, hy - width * 0.5 - 0.12, hy + width * 0.5 + 0.12)
+                    breast_pos = (rbx0 + breast_d * 0.5, hy)
+                    breast_size = (breast_d, breast_w)
+                else:
+                    # Flush against East wall, firebox faces West (-X into room)
+                    hx = rbx1 - 0.32
+                    hy = max(rby0 + width * 0.5 + 0.15, min(rby1 - width * 0.5 - 0.15, cy))
+                    yaw = -math.pi / 2
+                    b = (hx - depth * 0.5 - 0.45, rbx1, hy - width * 0.5 - 0.12, hy + width * 0.5 + 0.12)
+                    breast_pos = (rbx1 - breast_d * 0.5, hy)
+                    breast_size = (breast_d, breast_w)
 
-                # West face of chimney (firebox faces -X into room)
-                hx_w = cx - chim_half - depth * 0.5 + 0.02
-                cand_w = (hx_w, cy, -math.pi / 2,
-                          (hx_w - depth * 0.5 - 0.45, cx - chim_half, cy - width * 0.5 - 0.15, cy + width * 0.5 + 0.15))
-                candidates.append((abs(rcx - hx_w), cand_w))
+                if tracker.is_free(b[0], b[1], b[2], b[3], ignore_chimney=True, check_windows=True):
+                    tracker.occupy(b[0], b[1], b[2], b[3])
+                    for cb in tracker.chimney_boxes:
+                        tracker.occupy(*cb)
+                    build_prop(bm, 'HEARTH', hx, hy, z_floor, yaw, width=width, height=1.50)
 
-                candidates.sort(key=lambda item: item[0])
-                for _, (hx, hy, yaw, b) in candidates:
-                    if tracker.is_free(b[0], b[1], b[2], b[3], ignore_chimney=True):
-                        tracker.occupy(b[0], b[1], b[2], b[3])
-                        for cb in tracker.chimney_boxes:
-                            tracker.occupy(*cb)
-                        build_prop(bm, 'HEARTH', hx, hy, z_floor, yaw, width=width, height=1.50)
-                        return (hx, hy, yaw)
+                    # Solid stone chimney breast extending from mantel up to ceiling
+                    from ..materials import MAT_INDEX_STONE
+                    from ..mesh_utils import create_beveled_box
+                    ceil_z = z_ceil if z_ceil is not None else (z_floor + 3.20)
+                    z_start = z_floor + 1.48
+                    z_end = ceil_z + 0.05
+                    breast_h = max(0.20, z_end - z_start)
+                    cb_x, cb_y = breast_pos
+                    cb_w, cb_d = breast_size
+                    create_beveled_box(
+                        bm,
+                        size=(cb_w, cb_d, breast_h),
+                        location=(cb_x, cb_y, z_start + breast_h * 0.5),
+                        mat_index=MAT_INDEX_STONE,
+                        bevel_amount=0.015
+                    )
+                    return (hx, hy, yaw)
 
     return None
 
 
 def _try_place_kitchen_stove(bm, tracker: RoomOccupancyTracker, z_floor: float,
-                            chimney_pos: Optional[Any] = None) -> bool:
-    """Places a cast-iron kitchen stove directly attached to the chimney flue or along outer wall."""
+                             z_ceil: Optional[float] = None,
+                             chimney_pos: Optional[Any] = None) -> Optional[Tuple[float, float, float]]:
+    """Places a cast-iron kitchen stove flush against the wall directly attached to the chimney flue."""
     width = 0.95
     depth = 0.75
     rx0, rx1 = tracker.rx0, tracker.rx1
@@ -482,48 +526,48 @@ def _try_place_kitchen_stove(bm, tracker: RoomOccupancyTracker, z_floor: float,
     rcx = (rx0 + rx1) * 0.5
     rcy = (ry0 + ry1) * 0.5
 
+    rbx0, rbx1, rby0, rby1 = getattr(tracker, 'room_bounds', (rx0, rx1, ry0, ry1))
+
     if chimney_pos is not None:
         c_list = chimney_pos if isinstance(chimney_pos, list) else [chimney_pos]
         for c in c_list:
             if c is None:
                 continue
             cx, cy = c
-            near_wall = min(abs(cx - rx0), abs(cx - rx1), abs(cy - ry0), abs(cy - ry1)) <= 0.65
-            if near_wall and (rx0 - 0.6 <= cx <= rx1 + 0.6) and (ry0 - 0.6 <= cy <= ry1 + 0.6):
-                chim_half = 0.40
-                candidates = []
-                # South face of chimney (faces -Y into room)
-                hy_s = cy - chim_half - depth * 0.5 + 0.02
-                cand_s = (cx, hy_s, 0.0,
-                          (cx - width * 0.5 - 0.10, cx + width * 0.5 + 0.10, hy_s - depth * 0.5 - 0.15, cy - chim_half))
-                candidates.append((abs(rcy - hy_s), cand_s))
+            d_north = abs(cy - rby1)
+            d_south = abs(cy - rby0)
+            d_west = abs(cx - rbx0)
+            d_east = abs(cx - rbx1)
+            min_d = min(d_north, d_south, d_west, d_east)
 
-                # North face of chimney (faces +Y into room)
-                hy_n = cy + chim_half + depth * 0.5 - 0.02
-                cand_n = (cx, hy_n, math.pi,
-                          (cx - width * 0.5 - 0.10, cx + width * 0.5 + 0.10, cy + chim_half, hy_n + depth * 0.5 + 0.15))
-                candidates.append((abs(rcy - hy_n), cand_n))
+            if min_d <= 0.85 and (rbx0 - 0.7 <= cx <= rbx1 + 0.7) and (rby0 - 0.7 <= cy <= rby1 + 0.7):
+                if min_d == d_north:
+                    hx = max(rbx0 + width * 0.5 + 0.15, min(rbx1 - width * 0.5 - 0.15, cx))
+                    hy = rby1 - depth * 0.5 - 0.02
+                    yaw = 0.0
+                    b = (hx - width * 0.5 - 0.10, hx + width * 0.5 + 0.10, hy - depth * 0.5 - 0.20, rby1)
+                elif min_d == d_south:
+                    hx = max(rbx0 + width * 0.5 + 0.15, min(rbx1 - width * 0.5 - 0.15, cx))
+                    hy = rby0 + depth * 0.5 + 0.02
+                    yaw = math.pi
+                    b = (hx - width * 0.5 - 0.10, hx + width * 0.5 + 0.10, rby0, hy + depth * 0.5 + 0.20)
+                elif min_d == d_west:
+                    hx = rbx0 + depth * 0.5 + 0.02
+                    hy = max(rby0 + width * 0.5 + 0.15, min(rby1 - width * 0.5 - 0.15, cy))
+                    yaw = math.pi / 2
+                    b = (rbx0, hx + depth * 0.5 + 0.20, hy - width * 0.5 - 0.10, hy + width * 0.5 + 0.10)
+                else:
+                    hx = rbx1 - depth * 0.5 - 0.02
+                    hy = max(rby0 + width * 0.5 + 0.15, min(rby1 - width * 0.5 - 0.15, cy))
+                    yaw = -math.pi / 2
+                    b = (hx - depth * 0.5 - 0.20, rbx1, hy - width * 0.5 - 0.10, hy + width * 0.5 + 0.10)
 
-                # East face of chimney (faces +X into room)
-                hx_e = cx + chim_half + depth * 0.5 - 0.02
-                cand_e = (hx_e, cy, math.pi / 2,
-                          (cx + chim_half, hx_e + depth * 0.5 + 0.15, cy - width * 0.5 - 0.10, cy + width * 0.5 + 0.10))
-                candidates.append((abs(rcx - hx_e), cand_e))
-
-                # West face of chimney (faces -X into room)
-                hx_w = cx - chim_half - depth * 0.5 + 0.02
-                cand_w = (hx_w, cy, -math.pi / 2,
-                          (hx_w - depth * 0.5 - 0.15, cx - chim_half, cy - width * 0.5 - 0.10, cy + width * 0.5 + 0.10))
-                candidates.append((abs(rcx - hx_w), cand_w))
-
-                candidates.sort(key=lambda item: item[0])
-                for _, (hx, hy, yaw, b) in candidates:
-                    if tracker.is_free(b[0], b[1], b[2], b[3], ignore_chimney=True):
-                        tracker.occupy(b[0], b[1], b[2], b[3])
-                        for cb in tracker.chimney_boxes:
-                            tracker.occupy(*cb)
-                        build_prop(bm, 'KITCHEN_STOVE', hx, hy, z_floor, yaw, width=width, depth=depth, height=1.05)
-                        return (hx, hy, yaw)
+                if tracker.is_free(b[0], b[1], b[2], b[3], ignore_chimney=True, check_windows=True):
+                    tracker.occupy(b[0], b[1], b[2], b[3])
+                    for cb in tracker.chimney_boxes:
+                        tracker.occupy(*cb)
+                    build_prop(bm, 'KITCHEN_STOVE', hx, hy, z_floor, yaw, width=width, depth=depth, height=1.05)
+                    return (hx, hy, yaw)
 
     # Fallback: place kitchen stove against an outer perimeter wall
     return _try_place_wall_prop(
@@ -846,6 +890,8 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
 
     y_span = ry1 - ry0
     x_span = rx1 - rx0
+    if min(x_span, y_span) < 2.5:
+        return None
 
     # Multi-tier candidate sizes and tolerances so small / cramped rooms
     # are guaranteed to fit a bed rather than abandoning it.
@@ -1234,7 +1280,15 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     rd = rm.bounds[3] - rm.bounds[2]
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
-    narrow_room = min(rw, rd) < 3.4  # too narrow for full bedroom set
+    min_dim = min(rw, rd)
+
+    # Hallways, circulation corridors, and narrow passages with multiple doors
+    # must NEVER be furnished as bedrooms — dress them cleanly as corridors!
+    if min_dim < 2.7 or (min_dim < 3.2 and len(rm.doorways) >= 3):
+        _furnish_corridor(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        return
+
+    narrow_room = min_dim < 3.4  # too narrow for full bedroom set
 
     # 1. Bed — scale down for small/narrow tenement rooms
     if narrow_room:
@@ -1511,7 +1565,7 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
             break
 
     # 2. Hearth fireplace directly attached to chimney flue or on clear wall
-    _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+    _try_place_hearth(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
 
     # 3. Dining / Drinking Tables with chairs (dynamic grid covering the entire taproom)
     area = rw * rd
@@ -1926,9 +1980,9 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     if workstation:
         placed_stove, prep_table_pos = workstation
     else:
-        placed_stove = _try_place_kitchen_stove(bm, tracker, z_floor, chimney_pos=chimney_pos)
+        placed_stove = _try_place_kitchen_stove(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
         if not placed_stove and rm.role != 'TENEMENT_KITCHEN':
-            placed_stove = _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+            placed_stove = _try_place_hearth(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
         prep_table_pos = None
 
     station_x = placed_stove[0] if placed_stove else (prep_table_pos[0] if prep_table_pos else rcx)
@@ -2144,7 +2198,7 @@ def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     z_table = z_floor + 0.99
 
     # 1. Warm stone hearth (attaches to chimney if present)
-    _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+    _try_place_hearth(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
 
     # 2. Central Dining Table with 4 Chairs and Table Clutter (jittered anchor).
     # The table is scaled to the room so a narrow chamber still gets a usable
@@ -2295,7 +2349,7 @@ def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
                      allow_overlap=False)
 
     # 6. Hanging Chandelier
-    build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.42)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil, prop_name='CHANDELIER', radius=0.42)
 
 
 def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -2307,7 +2361,7 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     rd = rm.bounds[3] - rm.bounds[2]
 
     # 1. Warm stone hearth if chimney exists
-    _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+    _try_place_hearth(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
 
     # 2. Grand Council Table with Magistrate Chairs (chairs keep clear of
     # stairs, doorways and other props).
@@ -2358,7 +2412,7 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
                      yaw_max=0.06, allow_overlap=False)
 
     # 6. Grand Chandelier
-    build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.52)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil, prop_name='CHANDELIER', radius=0.52)
 
 
 def _wall_clears_doorways(wall_axis, wall_pos, banner_pos, banner_w, doorways, min_margin=0.80):
@@ -2393,7 +2447,7 @@ def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
     rd = rm.bounds[3] - rm.bounds[2]
 
     # 1. Warm stone hearth on side wall if chimney exists
-    _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+    _try_place_hearth(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
 
     # 2. Place Royal Throne on elevated Dais at the head wall
     # The artist Throne.fbx has back/banners at Y = +0.8 to +1.0 and red carpet extending forward to Y = -7.4.
@@ -2548,7 +2602,7 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
     z_table = z_floor + 0.992
 
     # 1. Warm stone hearth if chimney exists
-    _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
+    _try_place_hearth(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
 
     # 2. Long feast table along the room's long axis with chairs around all sides.
     # The table is sized to the room (a narrow hall gets a shorter board) and
@@ -2700,7 +2754,7 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
     _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', tx, ty, z_floor, run_w, run_l, yaw_max=0.05)
 
     # 6. Grand chandelier over the table.
-    build_prop(bm, 'CHANDELIER', tx, ty, z_ceil, 0.0, radius=0.52)
+    _place_ceiling_light(bm, tracker, tx, ty, z_ceil, prop_name='CHANDELIER', radius=0.52)
 
 
 def _furnish_entrance_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3038,11 +3092,11 @@ def _furnish_stone_store(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
     # 6. Industrial chain lanterns suspended from rafters
     _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
     if rw >= 8.0:
-        build_prop(bm, 'CHAIN_LANTERN', rcx - rw * 0.28, rcy, z_ceil, 0.0)
-        build_prop(bm, 'CHAIN_LANTERN', rcx + rw * 0.28, rcy, z_ceil, 0.0)
+        _place_ceiling_light(bm, tracker, rcx - rw * 0.28, rcy, z_ceil)
+        _place_ceiling_light(bm, tracker, rcx + rw * 0.28, rcy, z_ceil)
     elif rd >= 8.0:
-        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy - rd * 0.28, z_ceil, 0.0)
-        build_prop(bm, 'CHAIN_LANTERN', rcx, rcy + rd * 0.28, z_ceil, 0.0)
+        _place_ceiling_light(bm, tracker, rcx, rcy - rd * 0.28, z_ceil)
+        _place_ceiling_light(bm, tracker, rcx, rcy + rd * 0.28, z_ceil)
 
 
 def _furnish_workshop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -3971,7 +4025,7 @@ def _furnish_chapel(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
                      side_w, side_l, yaw_max=0.06, allow_overlap=False)
 
     # 3. Chandelier
-    build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.48)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil, prop_name='CHANDELIER', radius=0.48)
 
 
 def _furnish_storage(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -4827,6 +4881,20 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             if tracker.stair_box is None:
                 tracker.stair_box = stair_keepout
     tracker.rng = rng
+    tracker.ctx = ctx
+    tracker.all_stair_holes = []
+    if ctx is not None:
+        fsh = getattr(ctx, 'floor_stair_holes', {}) or {}
+        for h in fsh.values():
+            if h is not None and h not in tracker.all_stair_holes:
+                tracker.all_stair_holes.append(h)
+        fsb = getattr(ctx, 'full_stair_box', None)
+        if fsb is not None and fsb not in tracker.all_stair_holes:
+            tracker.all_stair_holes.append(fsb)
+    if _stair_well is not None and _stair_well not in tracker.all_stair_holes:
+        tracker.all_stair_holes.append(_stair_well)
+    if tracker.stair_hole_rect is not None and tracker.stair_hole_rect not in tracker.all_stair_holes:
+        tracker.all_stair_holes.append(tracker.stair_hole_rect)
     props = getattr(ctx, 'props', None) if ctx is not None else None
     tracker.props = props
     tracker.archetype = getattr(ctx, 'effective_archetype', 'NONE') if ctx is not None else 'NONE'

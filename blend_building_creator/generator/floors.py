@@ -635,80 +635,31 @@ def build_floors(bm, props, ctx):
                                   mat_index=MAT_INDEX_TIMBER, open_side=_open_side,
                                   bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax))
 
-            rail_x = min(slab_xmax - 0.10, sh_x2 + 0.05)
+            # Guard the open sides of the stair opening consistently across all floors.
+            # Leaves the arrival/step-off end 100% open so players can freely walk onto the floor,
+            # while guarding all other open void edges against falling.
+            # Sides running along exterior walls or partitions are cleanly skipped.
+            _skip = set()
+            if sh_x1 - slab_xmin < 0.45:
+                _skip.add('W')
+            if slab_xmax - sh_x2 < 0.45:
+                _skip.add('E')
+            if sh_y1 - slab_ymin < 0.45:
+                _skip.add('S')
+            if slab_ymax - sh_y2 < 0.45:
+                _skip.add('N')
+
+            _guard_hole = cur_stair_hole
             if getattr(props, 'stair_style', 'STRAIGHT') == 'TURN':
                 _info = _turn_hole_info.get(fl_idx)
                 if _info is not None:
-                    _h, _open = _info
-                    # Skip guarding any side that runs along a wall (and the
-                    # arrival side is skipped as the open_side). The FOOT end
-                    # still gets a railing: on this floor it is a void edge.
-                    _skip = set()
-                    if _h[0] - slab_xmin < 0.55:
-                        _skip.add('W')
-                    if slab_xmax - _h[1] < 0.55:
-                        _skip.add('E')
-                    if _h[2] - slab_ymin < 0.55:
-                        _skip.add('S')
-                    if slab_ymax - _h[3] < 0.55:
-                        _skip.add('N')
-                    build_stair_guardrail_one_open(
-                        bm, _h, z_floor + 0.05, _open, offset=0.14, rail_h=0.95,
-                        bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
-                        skip_sides=_skip)
-            elif props.stair_style == 'SPIRAL':
-                build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
-                                      return_y=sh_y1, x_start=sh_x1 + 0.20)
-            elif is_tenement_stairs and D_interior >= 7.4:
-                # Single-wall tandem stairwell: guard the walking aisle edge (+X)
-                # and close off the foot end of the hole, keeping arrival end open
-                arr_cycle = (fl_idx - 1) % 4
-                ret_y = sh_y1 if arr_cycle in (0, 1) else sh_y2
-                build_stair_guardrail(bm, rail_x, sh_y1, sh_y2, z_floor + 0.05,
-                                      return_y=ret_y, x_start=sh_x1)
-            elif stair_switchback:
-                # Switchback stairwell guardrail:
-                # The flight climbing up from fl_below arrived at arrival_y on this floor.
-                # The foot of that flight was at foot_y (where the void drops down to the floor below).
-                # The foot end MUST be guarded with a cross-rail to protect against the drop.
-                # The arrival end MUST remain 100% open so players can freely step off onto the floor.
-                fl_below = fl_idx - 1
-                if fl_below % 2 == 0:
-                    foot_y = stair_y_foot
-                    arrival_y = stair_y_head
-                else:
-                    foot_y = stair_y_head
-                    arrival_y = stair_y_foot
+                    _guard_hole, _open_side = _info
 
-                if foot_y > arrival_y:
-                    guard_y = sh_y2 + 0.14
-                else:
-                    guard_y = sh_y1 - 0.14
-
-                build_stair_guardrail(bm, sh_x1, guard_y, guard_y, z_floor + 0.05,
-                                      return_y=guard_y, x_start=sh_x2)
-
-                # On the top floor (no ascending flight in the sibling lane), protect
-                # the open walking aisle edge (+X or -X) against the stair drop/slope,
-                # ending cleanly at arrival_y so it never wraps or blocks the exit.
-                if fl_idx == num_floors - 1:
-                    is_right = (stair_side_opt == 'RIGHT')
-                    aisle_x = (sh_x1 - 0.14) if is_right else (sh_x2 + 0.14)
-                    has_aisle = (sh_x1 - slab_xmin > 0.60) if is_right else (slab_xmax - sh_x2 > 0.60)
-                    if has_aisle:
-                        build_stair_guardrail(bm, aisle_x, min(foot_y, arrival_y), max(foot_y, arrival_y), z_floor + 0.05)
-            else:
-                # Straight stairs: guard the open stairwell on all 3 sides except the climb-up side,
-                # offset 18 cm outward from the hole so it sits cleanly on the floor without overlapping
-                # any stair stringers or pillars. The climb side comes from the flight's own
-                # direction, which is the SAME on every storey, so one hole always gets one railing.
-                dir_y = int(stair_ascend_sign)
-                climb_side = 'NORTH' if dir_y == 1 else 'SOUTH'
-                build_stair_guardrail_3sided(
-                    bm, sh_x1, sh_x2, sh_y1, sh_y2, z_floor + 0.05,
-                    climb_side=climb_side, offset=0.18, rail_h=0.95,
-                    bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
-                )
+            build_stair_guardrail_one_open(
+                bm, _guard_hole, z_floor + 0.05, _open_side, offset=0.08, rail_h=0.95,
+                bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax),
+                skip_sides=_skip
+            )
         
         # Wing floor slabs for compound shapes (never on open-air temporary
         # stockpiles: the yard stays bare dirt with pallets and awnings).
@@ -1024,7 +975,7 @@ def build_floors(bm, props, ctx):
             _th_h = 0.038
             create_beveled_box(
                 bm, size=(_pw + _jw * 2.0 + 0.04, _jd + 0.04, _th_h),
-                location=(_tcx, y_max, z_floor + _th_h * 0.5),
+                location=(_tcx, y_max, z_floor + 0.05 + _th_h * 0.5),
                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
             )
 
@@ -1270,7 +1221,7 @@ def build_floors(bm, props, ctx):
                 # Level floor threshold bridging nave floor to apse with no height gap
                 create_beveled_box(
                     bm, size=(p_w + 0.02, wall_t + 0.04, 0.03),
-                    location=(p_cx, fy, z_floor + 0.035),
+                    location=(p_cx, fy, z_floor + 0.05 + 0.015),
                     mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005)
 
             # 3. Side Door
@@ -1371,9 +1322,9 @@ def build_floors(bm, props, ctx):
         # (opposite the clock tower) on every floor the annex spans, so its upper
         # storey is reachable from inside the hall and no door leaf blocks it.
         if (fl_idx < _annex_floors and _annex_side is not None and not open_timber):
-            _ap_w = 1.30
-            _ap_h = min(2.30, floor_h * 0.78)
-            _ap_m = 0.12
+            _ap_w = 1.65
+            _ap_h = min(2.35, floor_h * 0.78)
+            _ap_m = 0.16
             _ap_top = z_floor + _ap_h + _ap_m
             _ap_cy = (y_min + y_max) * 0.5
             _jamb_w = 0.16
@@ -1381,27 +1332,37 @@ def build_floors(bm, props, ctx):
             _cut_sides = ['LEFT', 'RIGHT'] if _annex_side == 'BOTH' else [_annex_side]
             for _cs in _cut_sides:
                 if _cs == 'LEFT':
-                    left_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _ap_m) - y_min,
-                                          'u_end': (_ap_cy + _ap_w * 0.5 + _ap_m) - y_min,
+                    left_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _jamb_w * 0.5) - y_min,
+                                          'u_end': (_ap_cy + _ap_w * 0.5 + _jamb_w * 0.5) - y_min,
                                           'z_start': z_floor, 'z_end': _ap_top})
                     _ap_fx = x_min
                 else:
-                    right_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _ap_m) - y_min,
-                                           'u_end': (_ap_cy + _ap_w * 0.5 + _ap_m) - y_min,
+                    right_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _jamb_w * 0.5) - y_min,
+                                           'u_end': (_ap_cy + _ap_w * 0.5 + _jamb_w * 0.5) - y_min,
                                            'z_start': z_floor, 'z_end': _ap_top})
                     _ap_fx = x_max
                 ctx.floor_doorways.setdefault(fl_idx, []).append({'x': _ap_fx, 'y': _ap_cy, 'axis': 'Y', 'w': _ap_w})
                 # Timber jamb + lintel frame around the opening (no door leaf).
+                # Jambs stop cleanly at _ap_h and lintel caps on top with proud relief,
+                # eliminating any coplanar z-fighting between pillars and beam.
                 for _s in (-1.0, 1.0):
                     create_beveled_box(
-                        bm, size=(_jamb_d, _jamb_w, _ap_h + _ap_m),
+                        bm, size=(_jamb_d, _jamb_w, _ap_h),
                         location=(_ap_fx, _ap_cy + _s * (_ap_w * 0.5 + _jamb_w * 0.5),
-                                  z_floor + (_ap_h + _ap_m) * 0.5),
-                        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
+                                  z_floor + _ap_h * 0.5),
+                        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                 create_beveled_box(
-                    bm, size=(_jamb_d, _ap_w + _jamb_w * 2.0, _ap_m),
-                    location=(_ap_fx, _ap_cy, _ap_top - _ap_m * 0.5),
-                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.01)
+                    bm, size=(_jamb_d + 0.02, _ap_w + _jamb_w * 2.0 + 0.04, _ap_m),
+                    location=(_ap_fx, _ap_cy, z_floor + _ap_h + _ap_m * 0.5),
+                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+
+                # Raised beveled wooden threshold board spanning the floor opening:
+                _th_h = 0.034
+                create_beveled_box(
+                    bm, size=(_jamb_d + 0.02, _ap_w + _jamb_w * 2.0 + 0.02, _th_h),
+                    location=(_ap_fx, _ap_cy, z_floor + 0.05 + _th_h * 0.5),
+                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
+                )
 
         # Interior walk-through portals between main building and wings
         # Open-timber pavilions (Warehouse/Lumbermill T1) have no walls, so the
@@ -2007,6 +1968,11 @@ def build_floors(bm, props, ctx):
             for we in _extra_win_ex:
                 if we.get('facade') == 'BACK' and we.get('floor_min', 0) <= fl_idx <= we.get('floor_max', 99):
                     back_excludes.append((we['min'], we['max']))
+            for chim_xy in (getattr(ctx, 'chimney_positions', None) or getattr(ctx, 'planned_chimneys', None) or []):
+                if chim_xy is not None:
+                    cx, cy = chim_xy
+                    if abs(cy - y_max) < 1.4:
+                        back_excludes.append((cx - 1.35, cx + 1.35))
             for iw in fl_interior_walls:
                 if iw['axis'] == 'Y':
                     wx_p = iw['pos']
@@ -2085,6 +2051,11 @@ def build_floors(bm, props, ctx):
             for we in _extra_win_ex:
                 if we.get('facade') == 'LEFT' and we.get('floor_min', 0) <= fl_idx <= we.get('floor_max', 99):
                     left_excludes.append((we['min'], we['max']))
+            for chim_xy in (getattr(ctx, 'chimney_positions', None) or getattr(ctx, 'planned_chimneys', None) or []):
+                if chim_xy is not None:
+                    cx, cy = chim_xy
+                    if abs(cx - x_min) < 1.4:
+                        left_excludes.append((cy - 1.35, cy + 1.35))
             for iw in fl_interior_walls:
                 if iw['axis'] == 'X':
                     wy_p = iw['pos']
@@ -2193,6 +2164,11 @@ def build_floors(bm, props, ctx):
             for we in _extra_win_ex:
                 if we.get('facade') == 'RIGHT' and we.get('floor_min', 0) <= fl_idx <= we.get('floor_max', 99):
                     right_excludes.append((we['min'], we['max']))
+            for chim_xy in (getattr(ctx, 'chimney_positions', None) or getattr(ctx, 'planned_chimneys', None) or []):
+                if chim_xy is not None:
+                    cx, cy = chim_xy
+                    if abs(cx - x_max) < 1.4:
+                        right_excludes.append((cy - 1.35, cy + 1.35))
             for iw in fl_interior_walls:
                 if iw['axis'] == 'X':
                     wy_p = iw['pos']

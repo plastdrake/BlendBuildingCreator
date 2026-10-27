@@ -132,28 +132,39 @@ def build_roof_clock_spire_pass(bm, props, effective_archetype, roof_style,
                            tier=getattr(props, 'material_tier', 'TIER_3'))
 
 
-def build_roof_chimney(bm, props, effective_archetype,
-                       dormer_placements, wing_dormer_placements,
-                       top_cx, top_cy, top_hx, top_hy,
-                       top_x_min, top_x_max, top_y_min, top_y_max, total_height,
-                       annex_band=None, attic_z=None):
-    """Stylized crooked stone chimney that dodges pillared overhangs and dormers.
+def get_planned_chimney_positions(props, effective_archetype=None, top_w=None, top_d=None,
+                                  top_cx=0.0, top_cy=0.0):
+    """Computes the 2D layout and facade attachment of all chimneys for this building.
 
-    The shaft starts at the attic floor (``attic_z``) and rises through the roof,
-    so it never cuts through the furnished living storeys below. ``chimney_pos``
-    (the XY return) is still used to anchor hearths/stoves to that wall spot.
+    Returns a list of dicts:
+        [{'x': float, 'y': float, 'axis': 'X'|'Y', 'facade': 'BACK'|'FRONT'|'LEFT'|'RIGHT',
+          'pos': (float, float), 'width': float, 'depth': float}, ...]
     """
-    # Bakery builds its own dedicated bake-oven flue in the accessories phase, so
-    # it must not also receive this generic (unrelated) chimney.
-    if not (props.has_chimney and effective_archetype not in ('WATCHTOWER', 'BAKERY')):
-        return
+    if not (getattr(props, 'has_chimney', False) and effective_archetype not in ('WATCHTOWER', 'BAKERY')):
+        return []
+
     cpx = getattr(props, 'chimney_pos_x', 0.55)
     cpy = getattr(props, 'chimney_pos_y', 0.55)
     wall_t = float(getattr(props, 'wall_thickness', 0.28))
     chim_w = 0.80
     chim_d = 0.80
 
-    # Multi-chimney targets: tenements and multi-apartment buildings have dedicated flues
+    if top_w is None:
+        num_floors = max(1, getattr(props, 'num_floors', 1))
+        cant = getattr(props, 'cantilever_overhang', 0.0) if getattr(props, 'has_cantilever', False) else 0.0
+        top_w = getattr(props, 'width', 8.0) + (num_floors - 1) * cant * 2.0
+    if top_d is None:
+        num_floors = max(1, getattr(props, 'num_floors', 1))
+        cant = getattr(props, 'cantilever_overhang', 0.0) if getattr(props, 'has_cantilever', False) else 0.0
+        top_d = getattr(props, 'depth', 6.0) + (num_floors - 1) * cant * 2.0
+
+    top_hx = top_w * 0.5
+    top_hy = top_d * 0.5
+    top_x_min = top_cx - top_hx
+    top_x_max = top_cx + top_hx
+    top_y_min = top_cy - top_hy
+    top_y_max = top_cy + top_hy
+
     chim_count = max(1, int(getattr(props, 'chimney_count', 1)))
     b_shape = getattr(props, 'building_shape', 'RECTANGLE')
 
@@ -177,12 +188,8 @@ def build_roof_chimney(bm, props, effective_archetype,
     else:
         candidates = [(cpx, cpy)]
 
-    placed_chimneys = []
-    z_base = (attic_z - 0.15) if attic_z is not None else 0.0
-    chim_total_h = (total_height - z_base) + 0.85
-
+    res = []
     for cpx_i, cpy_i in candidates:
-        # If pillared overhang active, force chimney to opposite side
         if getattr(props, 'has_pillared_overhang', False):
             p_side = getattr(props, 'pillared_overhang_side', 'FRONT')
             if p_side == 'BACK':
@@ -192,6 +199,7 @@ def build_roof_chimney(bm, props, effective_archetype,
 
         if abs(cpx_i) > 0.70 and abs(cpy_i) < 0.40:
             along_axis = 'Y'
+            facade = 'RIGHT' if cpx_i > 0 else 'LEFT'
             if cpx_i > 0:
                 chim_x = top_x_max - wall_t * 0.45 - chim_w * 0.5
             else:
@@ -200,9 +208,55 @@ def build_roof_chimney(bm, props, effective_archetype,
             chim_y = max(top_y_min + 1.10, min(top_y_max - 1.10, chim_y))
         else:
             along_axis = 'X'
-            chim_y = top_y_max - wall_t * 0.45 - chim_d * 0.5
+            facade = 'BACK' if cpy_i >= 0.0 else 'FRONT'
+            chim_y = (top_y_max - wall_t * 0.45 - chim_d * 0.5) if facade == 'BACK' else (top_y_min + wall_t * 0.45 + chim_d * 0.5)
             chim_x = top_cx + cpx_i * (top_hx - 1.30)
             chim_x = max(top_x_min + 1.10, min(top_x_max - 1.10, chim_x))
+
+        res.append({
+            'x': chim_x,
+            'y': chim_y,
+            'axis': along_axis,
+            'facade': facade,
+            'pos': (chim_x, chim_y),
+            'width': chim_w,
+            'depth': chim_d,
+        })
+    return res
+
+
+def build_roof_chimney(bm, props, effective_archetype,
+                       dormer_placements, wing_dormer_placements,
+                       top_cx, top_cy, top_hx, top_hy,
+                       top_x_min, top_x_max, top_y_min, top_y_max, total_height,
+                       annex_band=None, attic_z=None):
+    """Stylized crooked stone chimney that dodges pillared overhangs and dormers.
+
+    The shaft starts at the attic floor (``attic_z``) and rises through the roof,
+    connecting to the interior fireplace chimney breast below.
+    """
+    # Bakery builds its own dedicated bake-oven flue in the accessories phase, so
+    # it must not also receive this generic (unrelated) chimney.
+    if not (props.has_chimney and effective_archetype not in ('WATCHTOWER', 'BAKERY')):
+        return
+
+    top_w = (top_x_max - top_x_min)
+    top_d = (top_y_max - top_y_min)
+    specs = get_planned_chimney_positions(props, effective_archetype, top_w=top_w, top_d=top_d,
+                                          top_cx=top_cx, top_cy=top_cy)
+    if not specs:
+        return
+
+    chim_w = 0.80
+    chim_d = 0.80
+    placed_chimneys = []
+    z_base = (attic_z - 0.15) if attic_z is not None else 0.0
+    chim_total_h = (total_height - z_base) + 0.85
+
+    for spec in specs:
+        along_axis = spec['axis']
+        chim_x = spec['x']
+        chim_y = spec['y']
 
         # Nudge away from dormer placements
         clearance = 1.05

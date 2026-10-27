@@ -421,7 +421,8 @@ PRESETS = {
             'color_shingles': (0.58, 0.24, 0.12, 1.0),
             'color_wall_ext': (0.88, 0.83, 0.73, 1.0),
             'color_timber': (0.23, 0.13, 0.07, 1.0),
-            'window_glow_strength': 2.5
+            'window_glow_strength': 2.5,
+            'mini_wing_count': 1,
         }
     },
     'TOWN_HALL_T3': {
@@ -528,7 +529,8 @@ PRESETS = {
             'color_shingles': (0.55, 0.22, 0.11, 1.0),
             'color_wall_ext': (0.90, 0.87, 0.80, 1.0),
             'color_timber': (0.20, 0.12, 0.07, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'mini_wing_count': 2,
         }
     },
 
@@ -580,7 +582,12 @@ PRESETS = {
             'color_shingles': (0.34, 0.22, 0.15, 1.0),
             'color_wall_ext': (0.35, 0.24, 0.15, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
-            'window_glow_strength': 1.0
+            'window_glow_strength': 1.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'WAREHOUSE_T2': {
@@ -637,7 +644,12 @@ PRESETS = {
             'color_shingles': (0.28, 0.32, 0.38, 1.0),
             'color_wall_ext': (0.84, 0.78, 0.68, 1.0),
             'color_timber': (0.25, 0.15, 0.09, 1.0),
-            'window_glow_strength': 1.5
+            'window_glow_strength': 1.5,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'WAREHOUSE_T3': {
@@ -695,7 +707,12 @@ PRESETS = {
             'color_shingles': (0.22, 0.24, 0.28, 1.0),
             'color_wall_ext': (0.88, 0.84, 0.76, 1.0),
             'color_timber': (0.20, 0.12, 0.07, 1.0),
-            'window_glow_strength': 2.0
+            'window_glow_strength': 2.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -745,7 +762,12 @@ PRESETS = {
             'color_shingles': (0.34, 0.22, 0.15, 1.0),
             'color_wall_ext': (0.35, 0.24, 0.15, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
-            'window_glow_strength': 1.0
+            'window_glow_strength': 1.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'LUMBERMILL_T2': {
@@ -791,7 +813,12 @@ PRESETS = {
             'color_shingles': (0.28, 0.32, 0.38, 1.0),
             'color_wall_ext': (0.84, 0.78, 0.68, 1.0),
             'color_timber': (0.26, 0.16, 0.09, 1.0),
-            'window_glow_strength': 1.0
+            'window_glow_strength': 1.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'LUMBERMILL_T3': {
@@ -841,7 +868,12 @@ PRESETS = {
             'color_shingles': (0.22, 0.24, 0.28, 1.0),
             'color_wall_ext': (0.88, 0.84, 0.76, 1.0),
             'color_timber': (0.20, 0.12, 0.07, 1.0),
-            'window_glow_strength': 1.0
+            'window_glow_strength': 1.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -890,7 +922,12 @@ PRESETS = {
             'color_wall_ext': (0.35, 0.24, 0.15, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
             'color_stone': (0.42, 0.40, 0.38, 1.0),
-            'window_glow_strength': 1.0
+            'window_glow_strength': 1.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'BUILDER_T2': {
@@ -947,7 +984,12 @@ PRESETS = {
             'color_wall_ext': (0.84, 0.78, 0.68, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
             'color_stone': (0.42, 0.40, 0.38, 1.0),
-            'window_glow_strength': 1.5
+            'window_glow_strength': 1.5,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'BUILDER_T3': {
@@ -1007,7 +1049,12 @@ PRESETS = {
             'color_wall_ext': (0.88, 0.84, 0.76, 1.0),
             'color_timber': (0.20, 0.12, 0.07, 1.0),
             'color_stone': (0.42, 0.40, 0.38, 1.0),
-            'window_glow_strength': 2.0
+            'window_glow_strength': 2.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -1256,7 +1303,12 @@ PRESETS = {
             'color_wall_ext': (0.34, 0.22, 0.14, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
             'color_stone': (0.40, 0.39, 0.37, 1.0),
-            'window_glow_strength': 1.5
+            'window_glow_strength': 1.5,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'INFANTRY_BARRACKS_T2': {
@@ -1358,7 +1410,12 @@ PRESETS = {
             'color_wall_ext': (0.84, 0.78, 0.68, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
             'color_stone': (0.42, 0.42, 0.40, 1.0),
-            'window_glow_strength': 2.0
+            'window_glow_strength': 2.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'INFANTRY_BARRACKS_T3': {
@@ -1475,7 +1532,12 @@ PRESETS = {
             'color_wall_ext': (0.80, 0.78, 0.72, 1.0),
             'color_timber': (0.20, 0.12, 0.07, 1.0),
             'color_stone': (0.44, 0.44, 0.42, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -1579,7 +1641,11 @@ PRESETS = {
             'color_shingles': (0.24, 0.32, 0.44, 1.0),
             'color_wall_ext': (0.87, 0.81, 0.72, 1.0),
             'color_timber': (0.25, 0.15, 0.09, 1.0),
-            'window_glow_strength': 2.5
+            'window_glow_strength': 2.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
         }
     },
     'HOUSE_1_SMALL_T3': {
@@ -1630,7 +1696,11 @@ PRESETS = {
             'color_shingles': (0.20, 0.26, 0.36, 1.0),
             'color_wall_ext': (0.90, 0.87, 0.80, 1.0),
             'color_timber': (0.22, 0.13, 0.08, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
         }
     },
 
@@ -1736,7 +1806,11 @@ PRESETS = {
             'color_shingles': (0.75, 0.38, 0.16, 1.0),
             'color_wall_ext': (0.88, 0.83, 0.73, 1.0),
             'color_timber': (0.28, 0.16, 0.09, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
         }
     },
     'HOUSE_2_SMALL_T3': {
@@ -1788,7 +1862,11 @@ PRESETS = {
             'color_shingles': (0.20, 0.38, 0.45, 1.0),
             'color_wall_ext': (0.92, 0.89, 0.82, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
         }
     },
 
@@ -1841,7 +1919,12 @@ PRESETS = {
             'color_shingles': (0.36, 0.22, 0.14, 1.0),
             'color_wall_ext': (0.34, 0.22, 0.14, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
-            'window_glow_strength': 2.0
+            'window_glow_strength': 2.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'HOUSE_1_MEDIUM_T2': {
@@ -1893,7 +1976,20 @@ PRESETS = {
             'color_shingles': (0.24, 0.32, 0.44, 1.0),
             'color_wall_ext': (0.87, 0.81, 0.72, 1.0),
             'color_timber': (0.26, 0.15, 0.09, 1.0),
-            'window_glow_strength': 2.5
+            'window_glow_strength': 2.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_balcony': True,
+            'balcony_width': 2.4,
+            'balcony_depth': 1.2,
+            'balcony_side': 'FRONT',
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'HOUSE_1_MEDIUM_T3': {
@@ -1944,7 +2040,20 @@ PRESETS = {
             'color_shingles': (0.20, 0.24, 0.34, 1.0),
             'color_wall_ext': (0.90, 0.87, 0.80, 1.0),
             'color_timber': (0.20, 0.12, 0.07, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_balcony': True,
+            'balcony_width': 2.8,
+            'balcony_depth': 1.3,
+            'balcony_side': 'FRONT',
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -1997,7 +2106,12 @@ PRESETS = {
             'color_shingles': (0.38, 0.24, 0.16, 1.0),
             'color_wall_ext': (0.34, 0.22, 0.14, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
-            'window_glow_strength': 2.0
+            'window_glow_strength': 2.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'HOUSE_2_MEDIUM_T2': {
@@ -2049,7 +2163,20 @@ PRESETS = {
             'color_shingles': (0.26, 0.34, 0.46, 1.0),
             'color_wall_ext': (0.86, 0.80, 0.72, 1.0),
             'color_timber': (0.26, 0.16, 0.09, 1.0),
-            'window_glow_strength': 2.5
+            'window_glow_strength': 2.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_balcony': True,
+            'balcony_width': 2.4,
+            'balcony_depth': 1.2,
+            'balcony_side': 'FRONT',
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'HOUSE_2_MEDIUM_T3': {
@@ -2100,7 +2227,20 @@ PRESETS = {
             'color_shingles': (0.22, 0.26, 0.32, 1.0),
             'color_wall_ext': (0.88, 0.85, 0.78, 1.0),
             'color_timber': (0.22, 0.13, 0.08, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_balcony': True,
+            'balcony_width': 2.8,
+            'balcony_depth': 1.3,
+            'balcony_side': 'FRONT',
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -2158,7 +2298,12 @@ PRESETS = {
             'color_shingles': (0.40, 0.24, 0.16, 1.0),
             'color_wall_ext': (0.34, 0.22, 0.14, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
-            'window_glow_strength': 2.0
+            'window_glow_strength': 2.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'HOUSE_3_MEDIUM_T2': {
@@ -2216,7 +2361,20 @@ PRESETS = {
             'color_shingles': (0.24, 0.34, 0.46, 1.0),
             'color_wall_ext': (0.86, 0.80, 0.72, 1.0),
             'color_timber': (0.26, 0.16, 0.09, 1.0),
-            'window_glow_strength': 2.5
+            'window_glow_strength': 2.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_balcony': True,
+            'balcony_width': 2.4,
+            'balcony_depth': 1.2,
+            'balcony_side': 'FRONT',
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'HOUSE_3_MEDIUM_T3': {
@@ -2272,7 +2430,20 @@ PRESETS = {
             'color_shingles': (0.18, 0.26, 0.38, 1.0),
             'color_wall_ext': (0.88, 0.84, 0.76, 1.0),
             'color_timber': (0.22, 0.13, 0.08, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_balcony': True,
+            'balcony_width': 2.8,
+            'balcony_depth': 1.3,
+            'balcony_side': 'FRONT',
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -2410,7 +2581,14 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.80, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.44, 0.42, 0.39, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'balcony_width': 2.4,
+            'balcony_depth': 1.2,
+            'balcony_side': 'FRONT',
         }
     },
     'TAVERN_T3': {
@@ -2477,7 +2655,14 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.80, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.44, 0.42, 0.39, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'balcony_width': 2.8,
+            'balcony_depth': 1.3,
+            'balcony_side': 'FRONT',
         }
     },
 
@@ -2613,7 +2798,15 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.80, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.44, 0.42, 0.39, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_balcony': True,
+            'balcony_width': 2.4,
+            'balcony_depth': 1.2,
+            'balcony_side': 'FRONT',
         }
     },
     'TAVERN_LONG_T3': {
@@ -2688,7 +2881,11 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.80, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.44, 0.42, 0.39, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
         }
     },
 
@@ -2771,7 +2968,11 @@ PRESETS = {
             'color_wall_ext': (0.91, 0.87, 0.79, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.44, 0.42, 0.39, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_balcony': True,
+            'balcony_width': 2.4,
+            'balcony_depth': 1.2,
+            'balcony_side': 'FRONT',
         }
     },
     'INN_T2': {
@@ -3019,6 +3220,15 @@ PRESETS = {
             'chimney_pos_x': 0.60,
             'chimney_pos_y': -0.30,
             'has_arched_porch': True,
+            'has_throne_room': True,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.4,
+            'mini_wing_depth': 1.2,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.6,
+            'annex_depth': 2.6,
             'has_stable': True,
             'stable_side': 'LEFT',
             'has_servant_quarters': True,
@@ -3109,6 +3319,15 @@ PRESETS = {
             'has_balcony': True,
             'balcony_width': 2.8,
             'balcony_depth': 1.4,
+            'has_throne_room': True,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
             'has_stable': True,
             'stable_side': 'LEFT',
             'has_servant_quarters': True,
@@ -3140,7 +3359,7 @@ PRESETS = {
         'tier': 3,
         'name': "Noble Manor (Tier 3)",
         'plot': "100m x 100m",
-        'description': "Palatial citadel & ducal palace estate (100m x 100m plot): monumental three-storey ashlar palace with grand wings, clock tower, central courtyard fountain, detached master equestrian stables & carriage house, detached two-storey retainer barracks / servant quarters, corner bastion towers, machicolated stone battlements and grand perimeter curtain walls.",
+        'description': "Palatial citadel & ducal palace estate (100m x 100m plot): monumental three-storey ashlar palace with grand wings, throne room, central courtyard fountain, detached master equestrian stables & carriage house, detached two-storey retainer barracks / servant quarters, corner bastion towers, machicolated stone battlements and grand perimeter curtain walls.",
         'settings': {
             'building_shape': 'U_SHAPE',
             'wing_placement': 'FRONT',
@@ -3197,13 +3416,20 @@ PRESETS = {
             'chimney_pos_y': -0.25,
             'has_corner_turrets': True,
             'corner_turret_size': 1.8,
-            'has_clock_tower': True,
-            'clock_tower_side': 'RIGHT',
-            'clock_tower_size': 3.8,
+            'has_clock_tower': False,
             'has_arched_porch': True,
             'has_balcony': True,
             'balcony_width': 3.2,
             'balcony_depth': 1.6,
+            'has_throne_room': True,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.8,
+            'mini_wing_depth': 1.4,
+            'has_side_annex': True,
+            'annex_type': 'GABLE',
+            'annex_width': 4.6,
+            'annex_depth': 3.2,
             'has_bastion_towers': True,
             'bastion_tower_count': 4,
             'bastion_tower_size': 3.8,
@@ -3665,7 +3891,12 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.78, 1.0),
             'color_timber': (0.24, 0.13, 0.08, 1.0),
             'color_stone': (0.45, 0.42, 0.38, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_BAKERY_T2': {
@@ -3730,7 +3961,20 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.80, 1.0),
             'color_timber': (0.22, 0.12, 0.07, 1.0),
             'color_stone': (0.44, 0.42, 0.39, 1.0),
-            'window_glow_strength': 3.2
+            'window_glow_strength': 3.2,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_balcony': True,
+            'balcony_width': 2.4,
+            'balcony_depth': 1.2,
+            'balcony_side': 'FRONT',
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_BAKERY_T3': {
@@ -3797,7 +4041,20 @@ PRESETS = {
             'color_wall_ext': (0.94, 0.90, 0.82, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.46, 0.44, 0.40, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_balcony': True,
+            'balcony_width': 2.8,
+            'balcony_depth': 1.3,
+            'balcony_side': 'FRONT',
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -3923,7 +4180,15 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.82, 1.0),
             'color_timber': (0.22, 0.12, 0.07, 1.0),
             'color_stone': (0.44, 0.42, 0.39, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_balcony': True,
+            'balcony_width': 2.4,
+            'balcony_depth': 1.2,
+            'balcony_side': 'FRONT',
         }
     },
     'ARTISAN_TAILOR_T3': {
@@ -3993,7 +4258,12 @@ PRESETS = {
             'color_wall_ext': (0.94, 0.90, 0.84, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.46, 0.44, 0.42, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'balcony_side': 'FRONT',
         }
     },
 
@@ -4061,7 +4331,12 @@ PRESETS = {
             'color_wall_ext': (0.84, 0.78, 0.70, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
             'color_stone': (0.45, 0.43, 0.40, 1.0),
-            'window_glow_strength': 2.8
+            'window_glow_strength': 2.8,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_TOOLSMITH_T2': {
@@ -4130,7 +4405,16 @@ PRESETS = {
             'color_wall_ext': (0.88, 0.84, 0.78, 1.0),
             'color_timber': (0.22, 0.12, 0.07, 1.0),
             'color_stone': (0.46, 0.44, 0.42, 1.0),
-            'window_glow_strength': 3.2
+            'window_glow_strength': 3.2,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_TOOLSMITH_T3': {
@@ -4200,7 +4484,16 @@ PRESETS = {
             'color_wall_ext': (0.90, 0.86, 0.80, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.48, 0.46, 0.44, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -4329,7 +4622,12 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.82, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.45, 0.43, 0.40, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'balcony_side': 'FRONT',
         }
     },
     'ARTISAN_JEWELER_T3': {
@@ -4402,7 +4700,12 @@ PRESETS = {
             'color_wall_ext': (0.94, 0.90, 0.85, 1.0),
             'color_timber': (0.18, 0.10, 0.05, 1.0),
             'color_stone': (0.48, 0.46, 0.44, 1.0),
-            'window_glow_strength': 3.8
+            'window_glow_strength': 3.8,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'balcony_side': 'FRONT',
         }
     },
 
@@ -4472,7 +4775,12 @@ PRESETS = {
             'color_wall_ext': (0.86, 0.80, 0.72, 1.0),
             'color_timber': (0.22, 0.12, 0.07, 1.0),
             'color_stone': (0.44, 0.42, 0.39, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_BREWERY_T2': {
@@ -4545,7 +4853,16 @@ PRESETS = {
             'color_wall_ext': (0.90, 0.86, 0.78, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.45, 0.43, 0.40, 1.0),
-            'window_glow_strength': 3.2
+            'window_glow_strength': 3.2,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_BREWERY_T3': {
@@ -4620,7 +4937,16 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.80, 1.0),
             'color_timber': (0.18, 0.10, 0.05, 1.0),
             'color_stone': (0.46, 0.44, 0.42, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -4682,7 +5008,12 @@ PRESETS = {
             'color_shingles': (0.34, 0.38, 0.30, 1.0),
             'color_wall_ext': (0.36, 0.26, 0.16, 1.0),
             'color_timber': (0.22, 0.14, 0.08, 1.0),
-            'window_glow_strength': 2.4
+            'window_glow_strength': 2.4,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_FISHER_T2': {
@@ -4745,7 +5076,16 @@ PRESETS = {
             'color_wall_ext': (0.86, 0.82, 0.74, 1.0),
             'color_timber': (0.20, 0.12, 0.07, 1.0),
             'color_stone': (0.44, 0.42, 0.40, 1.0),
-            'window_glow_strength': 2.8
+            'window_glow_strength': 2.8,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_FISHER_T3': {
@@ -4815,7 +5155,16 @@ PRESETS = {
             'color_wall_ext': (0.90, 0.86, 0.80, 1.0),
             'color_timber': (0.18, 0.10, 0.06, 1.0),
             'color_stone': (0.46, 0.44, 0.42, 1.0),
-            'window_glow_strength': 3.2
+            'window_glow_strength': 3.2,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -4874,7 +5223,12 @@ PRESETS = {
             'color_shingles': (0.42, 0.28, 0.18, 1.0),
             'color_wall_ext': (0.34, 0.22, 0.14, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
-            'window_glow_strength': 2.4
+            'window_glow_strength': 2.4,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_FURNITURE_MAKER_T2': {
@@ -4938,7 +5292,16 @@ PRESETS = {
             'color_wall_ext': (0.88, 0.84, 0.76, 1.0),
             'color_timber': (0.22, 0.12, 0.07, 1.0),
             'color_stone': (0.45, 0.43, 0.40, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_FURNITURE_MAKER_T3': {
@@ -5005,7 +5368,16 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.82, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.46, 0.44, 0.42, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -5068,7 +5440,12 @@ PRESETS = {
             'color_wall_ext': (0.86, 0.80, 0.72, 1.0),
             'color_timber': (0.24, 0.14, 0.08, 1.0),
             'color_stone': (0.45, 0.43, 0.40, 1.0),
-            'window_glow_strength': 2.8
+            'window_glow_strength': 2.8,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_BUTCHER_T2': {
@@ -5133,7 +5510,16 @@ PRESETS = {
             'color_wall_ext': (0.90, 0.86, 0.78, 1.0),
             'color_timber': (0.22, 0.12, 0.07, 1.0),
             'color_stone': (0.45, 0.43, 0.40, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_BUTCHER_T3': {
@@ -5201,7 +5587,16 @@ PRESETS = {
             'color_wall_ext': (0.92, 0.88, 0.80, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.46, 0.44, 0.42, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -5270,7 +5665,12 @@ PRESETS = {
             'color_wall_ext': (0.84, 0.78, 0.68, 1.0),
             'color_timber': (0.22, 0.13, 0.07, 1.0),
             'color_stone': (0.42, 0.40, 0.38, 1.0),
-            'window_glow_strength': 2.8
+            'window_glow_strength': 2.8,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.4,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_HUNTER_T2': {
@@ -5339,7 +5739,16 @@ PRESETS = {
             'color_wall_ext': (0.86, 0.80, 0.72, 1.0),
             'color_timber': (0.20, 0.11, 0.06, 1.0),
             'color_stone': (0.45, 0.43, 0.40, 1.0),
-            'window_glow_strength': 3.0
+            'window_glow_strength': 3.0,
+            'has_mini_wing': True,
+            'mini_wing_count': 1,
+            'mini_wing_width': 2.2,
+            'mini_wing_depth': 1.1,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 3.8,
+            'annex_depth': 2.4,
+            'annex_side': 'LEFT',
         }
     },
     'ARTISAN_HUNTER_T3': {
@@ -5413,7 +5822,16 @@ PRESETS = {
             'color_wall_ext': (0.90, 0.84, 0.76, 1.0),
             'color_timber': (0.18, 0.10, 0.05, 1.0),
             'color_stone': (0.46, 0.44, 0.42, 1.0),
-            'window_glow_strength': 3.5
+            'window_glow_strength': 3.5,
+            'has_mini_wing': True,
+            'mini_wing_count': 2,
+            'mini_wing_width': 2.6,
+            'mini_wing_depth': 1.3,
+            'has_side_annex': True,
+            'annex_type': 'LEAN_TO',
+            'annex_width': 4.2,
+            'annex_depth': 2.8,
+            'annex_side': 'LEFT',
         }
     },
 
@@ -6666,7 +7084,7 @@ BUILDING_FAMILIES = [
         'tiers': [
             ('T1', 'NOBLE_MANOR_T1', "Tier 1: Feudal Hunting Lodge + Palisade & Well"),
             ('T2', 'NOBLE_MANOR_T2', "Tier 2: Country Châtelet + Curtain Wall & Turrets"),
-            ('T3', 'NOBLE_MANOR_T3', "Tier 3: Lordly Citadel Manor + Bastions & Clock Tower"),
+            ('T3', 'NOBLE_MANOR_T3', "Tier 3: Lordly Citadel Manor + Bastions & Great Hall"),
         ]
     },
     {

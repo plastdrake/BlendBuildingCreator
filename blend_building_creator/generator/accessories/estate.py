@@ -1599,7 +1599,7 @@ def _place_estate_awnings(bm, props, tier, spread_x, fore_y, stable=None, servan
             ox, oy, rot, olen = slot
             outward = 1.0 if (math.cos(rot) * ox + math.sin(rot) * oy) >= 0.0 else -1.0
             nx, ny = math.cos(rot) * outward, math.sin(rot) * outward
-            off = olen * 0.5 + depth * 0.5 + 0.28
+            off = olen * 0.5 + depth * 0.5 + 0.45
             cx, cy = ox + nx * off, oy + ny * off
             aw_rot = rot + outward * math.pi * 0.5
         else:
@@ -2011,11 +2011,14 @@ def build_estate_outbuildings(bm, props, ctx, host_obj=None):
         st_y = fore_y
         _rot_on = getattr(props, 'stable_rotate', False) or spread_x > 18.0
         st_rot = -math.pi * 0.5 * st_sgn if _rot_on else 0.0
-        st_w = 16.0 if is_grand_plot else (st_dims[0] if is_knights else None)
-        st_d = 9.0 if is_grand_plot else (st_dims[1] if is_knights else None)
+        _def_w, _def_d = _stable_dims(tier)
+        st_w = 16.0 if is_grand_plot else (st_dims[0] if is_knights else _def_w)
+        st_d = 9.0 if is_grand_plot else (st_dims[1] if is_knights else _def_d)
         build_stable(bm, props, pos=(st_x, st_y, 0.0), rot_z=st_rot, tier=tier,
-                     width=st_w, depth=st_d, host_obj=host_obj)
-        stable_slot = (st_x, st_y, st_rot, st_w if st_w else _stable_dims(tier)[0])
+                     width=st_w, depth=st_d,
+                     extra_overrides={'window_left': False, 'window_right': False},
+                     host_obj=host_obj)
+        stable_slot = (st_x, st_y, st_rot, st_w)
 
     # 3. Servant Quarters / Steward Lodge
     if has_servants:

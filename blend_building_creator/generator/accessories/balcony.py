@@ -25,7 +25,7 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
                   lower_wall_x_min=None, lower_wall_x_max=None,
                   lower_wall_y_min=None, lower_wall_y_max=None,
                   door_angle_deg=0.0, include_leaf=True,
-                  along_wall_offset=0.0):
+                  along_wall_offset=0.0, wall_thickness=0.30):
     wx, wy, ox, oy, tx, ty, rot_z = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
     if along_wall_offset != 0.0:
         wx += tx * along_wall_offset
@@ -99,20 +99,24 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
     door_w = 0.92
     door_h = 2.02
     door_thick = 0.05
-    loc_dl = Vector((0.02, 0.0, z_floor + door_h + 0.06))
+    # The doorframe must span the entire wall thickness (plus 0.02 proud on inside and outside)
+    # to completely line the opening and avoid raw cut wall edges.
+    frame_depth = max(0.32, float(wall_thickness) + 0.04)
+    fx_center = -float(wall_thickness) * 0.5
+    loc_dl = Vector((fx_center, 0.0, z_floor + door_h + 0.06))
     world_dl = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_dl.to_4d()).to_3d()
     create_beveled_box(
-        bm, size=(0.14, door_w + 0.20, 0.12),
+        bm, size=(frame_depth, door_w + 0.20, 0.12),
         location=world_dl,
         rotation=(0.0, 0.0, rot_z),
         mat_index=MAT_INDEX_TIMBER_FRAME,
         bevel_amount=0.010
     )
     for d_sign in [-1, 1]:
-        loc_dj = Vector((0.02, (door_w * 0.5 + 0.06) * d_sign, z_floor + door_h * 0.5))
+        loc_dj = Vector((fx_center, (door_w * 0.5 + 0.06) * d_sign, z_floor + door_h * 0.5))
         world_dj = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_dj.to_4d()).to_3d()
         create_beveled_box(
-            bm, size=(0.14, 0.12, door_h),
+            bm, size=(frame_depth, 0.12, door_h),
             location=world_dj,
             rotation=(0.0, 0.0, rot_z),
             mat_index=MAT_INDEX_TIMBER_FRAME,
