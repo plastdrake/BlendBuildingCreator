@@ -1513,51 +1513,134 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
     # 2. Hearth fireplace directly attached to chimney flue or on clear wall
     _try_place_hearth(bm, tracker, z_floor, chimney_pos=chimney_pos)
 
-    # 3. Dining / Drinking Tables with tableware scatter and 4 chairs per table (placed further back in the room)
-    target_tables = 2 if (rw >= 4.2 and rd >= 4.0) else 1
-    table_candidates = [
-        (-0.15, 0.22),
-        (0.15, 0.22),
-        (0.0, 0.25),
-        (-0.20, 0.10),
-        (0.15, 0.05),
-    ]
+    # 3. Dining / Drinking Tables with chairs (dynamic grid covering the entire taproom)
+    area = rw * rd
+    target_tables = max(2, min(9, int(area / 11.0) + 1))
+
+    margin_x = 1.25
+    margin_y = 1.25
+    ux0 = tracker.rx0 + margin_x
+    ux1 = tracker.rx1 - margin_x
+    uy0 = tracker.ry0 + margin_y
+    uy1 = tracker.ry1 - margin_y
+    span_x = max(1.0, ux1 - ux0)
+    span_y = max(1.0, uy1 - uy0)
+
+    # Grid columns and rows based on usable floor span
+    n_cols = max(2, min(4, int(span_x / 2.3) + 1))
+    n_rows = max(2, min(4, int(span_y / 2.3) + 1))
+
+    # Generate grid coordinates across the entire taproom floor
+    grid_cands = []
+    for c in range(n_cols):
+        cx = ux0 + (c + 0.5) * (span_x / n_cols)
+        for r in range(n_rows):
+            cy = uy0 + (r + 0.5) * (span_y / n_rows)
+            grid_cands.append((cx, cy, c, r))
+
+    # Prioritize central / wide spots first, then outward
+    grid_cands.sort(key=lambda item: abs(item[0] - rcx) + abs(item[1] - rcy))
+
     placed_tables = 0
     first_table_pos = None
-    for tox, toy in table_candidates:
+    z_tab = z_floor + 0.992
+
+    for cx, cy, col, row in grid_cands:
         if placed_tables >= target_tables:
             break
-        tx = rcx + tox * (rw * 0.45) + _jit(rng, 0.22)
-        ty = rcy + toy * (rd * 0.45) + _jit(rng, 0.22)
-        r = 0.55
-        if tracker.is_free(tx - 0.88, tx + 0.88, ty - 0.88, ty + 0.88):
-            build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=r)
-            build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_floor + 0.992, 0.0)
-            if rng.random() < 0.35:
-                build_prop(bm, 'POTTED_PLANT_SMALL', tx + 0.25, ty + 0.10, z_floor + 0.99, rng.uniform(0.0, 6.28))
-            else:
-                build_prop(bm, 'BOTTLE_CLUSTER', tx + 0.25, ty + 0.10, z_floor + 0.99, 0.0)
+        tx = cx + _jit(rng, 0.18)
+        ty = cy + _jit(rng, 0.18)
+
+        # Do not block doorways
+        if tracker.is_near_door(tx, ty, radius=1.35):
+            continue
+
+        # Alternate between rectangular communal tables and round drinking tables
+        use_rect = ((col + row) % 2 == 0) and (span_x >= 4.0 or span_y >= 4.0)
+        placed_this = False
+
+        if use_rect:
+            # Try rectangular indoor table (communal drinking table)
+            tw = min(2.10, max(1.50, span_x / n_cols - 0.50))
+            td = 0.90
+            yaw = 0.0 if (span_x >= span_y) else (math.pi * 0.5)
+            if yaw != 0.0:
+                tw, td = td, tw
+            hw = tw * 0.5 + 0.40
+            hd = td * 0.5 + 0.40
+            if tracker.is_free(tx - hw, tx + hw, ty - hd, ty + hd):
+                build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, yaw, length=max(tw, td), width=min(tw, td))
+                build_prop(bm, 'SCATTER_TABLEWARE', tx - 0.35, ty, z_tab, yaw)
+                build_prop(bm, 'BOTTLE_CLUSTER', tx + 0.35, ty, z_tab, yaw)
+                if rng.random() < 0.40:
+                    build_prop(bm, 'PEWTER_TANKARD', tx, ty, z_tab, 0.0)
+
+                # Chairs along both sides plus ends
+                if yaw == 0.0:
+                    chair_spots = [
+                        (tx - 0.45, ty - (td * 0.5 + 0.35), math.pi),
+                        (tx + 0.45, ty - (td * 0.5 + 0.35), math.pi),
+                        (tx - 0.45, ty + (td * 0.5 + 0.35), 0.0),
+                        (tx + 0.45, ty + (td * 0.5 + 0.35), 0.0),
+                        (tx - (tw * 0.5 + 0.35), ty, math.pi * 0.5),
+                        (tx + (tw * 0.5 + 0.35), ty, -math.pi * 0.5),
+                    ]
+                else:
+                    chair_spots = [
+                        (tx - (tw * 0.5 + 0.35), ty - 0.45, math.pi * 0.5),
+                        (tx - (tw * 0.5 + 0.35), ty + 0.45, math.pi * 0.5),
+                        (tx + (tw * 0.5 + 0.35), ty - 0.45, -math.pi * 0.5),
+                        (tx + (tw * 0.5 + 0.35), ty + 0.45, -math.pi * 0.5),
+                        (tx, ty - (td * 0.5 + 0.35), math.pi),
+                        (tx, ty + (td * 0.5 + 0.35), 0.0),
+                    ]
+                for chx, chy, chang in chair_spots:
+                    _try_place_chair(bm, tracker, chx, chy, chang, z_floor)
+
+                tracker.occupy(tx - hw, tx + hw, ty - hd, ty + hd)
+                placed_this = True
+
+        if not placed_this:
+            # Try round drinking table
+            r = 0.55
+            req_r = 0.88
+            if tracker.is_free(tx - req_r, tx + req_r, ty - req_r, ty + req_r):
+                build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=r)
+                build_prop(bm, 'SCATTER_TABLEWARE', tx, ty, z_tab, 0.0)
+                if rng.random() < 0.45:
+                    build_prop(bm, 'POTTED_PLANT_SMALL', tx + 0.22, ty + 0.10, z_tab, rng.uniform(0.0, 6.28))
+                else:
+                    build_prop(bm, 'BOTTLE_CLUSTER', tx + 0.22, ty + 0.10, z_tab, 0.0)
+
+                # 4 wooden chairs around table facing table center (backrests outward)
+                for ci in range(4):
+                    ca = ci * (math.pi * 0.5)
+                    chx = tx + 0.70 * math.cos(ca)
+                    chy = ty + 0.70 * math.sin(ca)
+                    _try_place_chair(bm, tracker, chx, chy, ca - math.pi * 0.5, z_floor)
+
+                tracker.occupy(tx - 0.90, tx + 0.90, ty - 0.90, ty + 0.90)
+                placed_this = True
+
+        if placed_this:
             if first_table_pos is None:
                 first_table_pos = (tx, ty)
             placed_tables += 1
-            # Add 4 wooden chairs around table facing table center (backrests outward)
-            num_chairs = 4
-            for ci in range(num_chairs):
-                ca = ci * (math.pi * 0.5)
-                chx = tx + 0.70 * math.cos(ca)
-                chy = ty + 0.70 * math.sin(ca)
-                # Chair faces inward towards table center (local chair front is -Y)
-                _try_place_chair(bm, tracker, chx, chy, ca - math.pi * 0.5, z_floor)
-            tracker.occupy(tx - 0.92, tx + 0.92, ty - 0.92, ty + 0.92)
 
-    # 4. Ale barrel / crate corner clutter
-    if density >= 0.5:
-        for cx in (rm.bounds[0] + 0.45, rm.bounds[1] - 0.45):
-            for cy in (rm.bounds[2] + 0.45, rm.bounds[3] - 0.45):
-                if tracker.is_free(cx - 0.3, cx + 0.3, cy - 0.3, cy + 0.3):
-                    tracker.occupy(cx - 0.3, cx + 0.3, cy - 0.3, cy + 0.3)
-                    build_prop(bm, 'BARREL', cx, cy, z_floor, 0.0)
-                    break
+    # 4. Ale barrel / crate corner clutter and perimeter seating
+    placed_barrels = 0
+    for cx in (rm.bounds[0] + 0.45, rm.bounds[1] - 0.45):
+        for cy in (rm.bounds[2] + 0.45, rm.bounds[3] - 0.45):
+            if placed_barrels >= 3:
+                break
+            if tracker.is_free(cx - 0.35, cx + 0.35, cy - 0.35, cy + 0.35):
+                tracker.occupy(cx - 0.35, cx + 0.35, cy - 0.35, cy + 0.35)
+                build_prop(bm, 'BARREL', cx, cy, z_floor, rng.uniform(0.0, 6.28))
+                placed_barrels += 1
+
+    # Wall bench along a clear wall
+    _try_place_wall_prop(bm, 'BENCH', 1.60, 0.55, tracker, z_floor,
+                         candidate_walls=('SOUTH', 'EAST', 'WEST'), length=1.60)
 
     # 5. Taproom woven rugs framed with dining lounge area (oversized)
     rug_choice = rng.choice(['RUG_SAPPHIRE', 'RUG_FOREST', 'RUG_CRIMSON'])
@@ -1580,8 +1663,12 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
         _lay_rug(bm, tracker, rm, rng, third, rcx, rcy + rd * 0.26, z_floor,
                  min(2.60, rw * 0.40), min(3.20, rd * 0.40), allow_overlap=False)
 
-    # 6. Hanging Chandelier at room center
-    build_prop(bm, 'CHANDELIER', rcx, rcy, z_ceil, 0.0, radius=0.46)
+    # 6. Hanging Chandeliers: 2 chandeliers in wide taprooms, 1 central chandelier otherwise
+    if rw >= 8.5:
+        _place_ceiling_light(bm, tracker, rcx - rw * 0.22, rcy, z_ceil, 'CHANDELIER', radius=0.46)
+        _place_ceiling_light(bm, tracker, rcx + rw * 0.22, rcy, z_ceil, 'CHANDELIER', radius=0.46)
+    else:
+        _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil, 'CHANDELIER', radius=0.46)
 
 
 def _table_offset(tx: float, ty: float, off_x: float, off_y: float, yaw: float) -> Tuple[float, float]:
