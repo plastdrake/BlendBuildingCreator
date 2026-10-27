@@ -4483,6 +4483,7 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     # 3. Display shelves on perimeter walls (the fishmonger swaps these for
     #    the trade display case; the butcher swaps them for meat racks).
     _arch0 = getattr(tracker, 'archetype', 'NONE')
+    props = getattr(tracker, 'props', None)
     if _arch0 == 'BUTCHER':
         _try_place_wall_prop(bm, 'MEAT_RACK', 1.40, 0.40, tracker, z_floor,
                              candidate_walls=('EAST', 'WEST', 'NORTH'))
@@ -4739,6 +4740,8 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             if tracker.stair_box is None:
                 tracker.stair_box = stair_keepout
     tracker.rng = rng
+    props = getattr(ctx, 'props', None) if ctx is not None else None
+    tracker.props = props
     tracker.archetype = getattr(ctx, 'effective_archetype', 'NONE') if ctx is not None else 'NONE'
     _is_bakery_oven = (tracker.archetype == 'BAKERY'
                        or bool(getattr(props, 'kit_bakery', False)))

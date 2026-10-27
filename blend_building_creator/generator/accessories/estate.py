@@ -509,8 +509,10 @@ def build_stable_yard_for_building(bm, props, ctx):
     yard as the estate stable, keeping the two paths identical.
     """
     tier = getattr(props, 'material_tier', 'TIER_1')
-    bw, bd = _stable_dims(tier)
-    _build_stable_yard(bm, Matrix.Identity(4), bw, bd, tier)
+    bw = float(getattr(props, 'width', 0.0) or getattr(ctx, 'base_w', 0.0) or _stable_dims(tier)[0])
+    bd = float(getattr(props, 'depth', 0.0) or getattr(ctx, 'base_d', 0.0) or _stable_dims(tier)[1])
+    door_w = float(getattr(props, 'door_width', 4.8))
+    _build_stable_yard(bm, Matrix.Identity(4), bw, bd, tier, door_w=door_w)
 
 
 def _local_box(bm, t, size, loc, mat=MAT_INDEX_TIMBER, bevel=0.01, rot=(0.0, 0.0, 0.0)):
@@ -586,9 +588,8 @@ def _build_stall_shelter(bm, t, x0, x1, y_back, depth, tier='TIER_1', stalls=3,
                          back_h=2.15, front_h=2.15):
     """Open-front timber stall row with a framed lean-to roof, opening toward -Y.
 
-    Matches the main stable building roof material (shingles/thatch). The shelter
-    is a flat-roofed run-in shed, so the back wall, stall dividers and both end walls
-    all share one height; only the open front is framed by posts.
+    Matches the main stable building roof material (shingles/thatch). Sits flush
+    against the barn's outer wall without penetrating into the interior rooms.
     """
     w = x1 - x0
     cx = (x0 + x1) * 0.5
@@ -600,55 +601,54 @@ def _build_stall_shelter(bm, t, x0, x1, y_back, depth, tier='TIER_1', stalls=3,
     roof_mid_z = (back_h + front_h) * 0.5
     wall_h = min(back_h, front_h) - 0.05
 
-    # Plank back wall.
+    # Plank back wall lining sitting flush against the barn wall
     plank_h = 0.24
     for i in range(int(wall_h / plank_h)):
-        _local_box(bm, t, (w, 0.10, min(plank_h * 0.94, wall_h - i * plank_h)),
-                   (cx, y_back, plank_h * (i + 0.5)), mat=MAT_INDEX_WOOD, bevel=0.008)
+        _local_box(bm, t, (w, 0.04, min(plank_h * 0.94, wall_h - i * plank_h)),
+                   (cx, y_back - 0.02, plank_h * (i + 0.5)), mat=MAT_INDEX_WOOD, bevel=0.006)
     # Front posts.
     for i in range(stalls + 1):
         px = x0 + w * i / stalls
         _timber_box(bm, t, (0.16, 0.16, front_h), (px, y_front, front_h * 0.5),
                     mat=MAT_INDEX_TIMBER, bevel=0.012)
-    # Solid divider walls between stalls, at the same height as the back wall.
+    # Solid divider walls between stalls, matching the stall height.
     for i in range(1, stalls):
         px = x0 + w * i / stalls
-        _local_box(bm, t, (0.10, depth, wall_h),
-                   (px, y_back - depth * 0.5, wall_h * 0.5), mat=MAT_INDEX_WOOD, bevel=0.008)
-    # Solid end walls close both flanks, matching the back wall height.
+        _local_box(bm, t, (0.08, depth - 0.08, wall_h),
+                   (px, y_back - (depth - 0.08) * 0.5 - 0.04, wall_h * 0.5), mat=MAT_INDEX_WOOD, bevel=0.008)
+    # Solid end walls close both flanks, matching the wall height.
     for sx in (x0, x1):
-        _local_box(bm, t, (0.10, depth, wall_h), (sx, y_back - depth * 0.5, wall_h * 0.5),
-                   mat=MAT_INDEX_WOOD, bevel=0.008)
+        _local_box(bm, t, (0.08, depth - 0.08, wall_h),
+                   (sx, y_back - (depth - 0.08) * 0.5 - 0.04, wall_h * 0.5), mat=MAT_INDEX_WOOD, bevel=0.008)
 
-    # Rafter frame: front header on the posts and a back plate sitting on the wall.
-    _timber_box(bm, t, (w + 0.20, 0.14, 0.16), (cx, y_front, front_h + 0.02),
+    # Rafter frame: front header on the posts and a back plate sitting on the wall face.
+    _timber_box(bm, t, (w + 0.16, 0.12, 0.14), (cx, y_front, front_h + 0.02),
                 mat=MAT_INDEX_TIMBER, bevel=0.008)
-    _timber_box(bm, t, (w + 0.20, 0.14, 0.16), (cx, y_back, wall_h + 0.08),
+    _timber_box(bm, t, (w + 0.16, 0.10, 0.14), (cx, y_back - 0.05, wall_h + 0.07),
                 mat=MAT_INDEX_TIMBER, bevel=0.008)
     for i in range(stalls + 1):
         rx = x0 + w * i / stalls
-        _timber_box(bm, t, (0.09, rl + 0.10, 0.09), (rx, mid_y, roof_mid_z + 0.10),
+        _timber_box(bm, t, (0.09, rl + 0.06, 0.09), (rx, mid_y, roof_mid_z + 0.10),
                     rot=(ang, 0.0, 0.0), mat=MAT_INDEX_TIMBER, bevel=0.006)
 
     # Roof slab, framed by bargeboards (sides) and a fascia board (front eave).
     # Always match the stable building's roof material (thatch in T1, shingles in T2/T3).
     roof_mat = MAT_INDEX_SHINGLES
     roof_faces = _local_box(
-        bm, t, (w + 0.34, rl + 0.30, 0.055),
+        bm, t, (w + 0.28, rl + 0.16, 0.055),
         (cx, mid_y, roof_mid_z + 0.17), rot=(ang, 0.0, 0.0),
         mat=roof_mat, bevel=0.006)
-    half_rl = rl * 0.5 + 0.15
+    half_rl = (rl + 0.16) * 0.5
     front_y = mid_y - half_rl * math.cos(ang)
     front_z = roof_mid_z + 0.17 - half_rl * math.sin(ang)
-    _timber_box(bm, t, (w + 0.40, 0.11, 0.16), (cx, front_y, front_z),
+    _timber_box(bm, t, (w + 0.32, 0.10, 0.14), (cx, front_y, front_z),
                 rot=(ang, 0.0, 0.0), mat=MAT_INDEX_TIMBER, bevel=0.008)
     for s in (-1.0, 1.0):
-        _timber_box(bm, t, (0.12, rl + 0.30, 0.16),
-                    (cx + s * (w * 0.5 + 0.17), mid_y, roof_mid_z + 0.16),
+        _timber_box(bm, t, (0.10, rl + 0.16, 0.14),
+                    (cx + s * (w * 0.5 + 0.14), mid_y, roof_mid_z + 0.16),
                     rot=(ang, 0.0, 0.0), mat=MAT_INDEX_TIMBER, bevel=0.008)
 
-    # Match the main-roof shingle UVs (correct axis + 0.32 tiles/m) instead of the
-    # default box mapping that leaves the tiles rotated and mis-scaled.
+    # Match the main-roof shingle UVs (correct axis + 0.32 tiles/m).
     from ..roof.shingles import map_lean_to_shingle_uvs
     loc_world = t @ Vector((cx, mid_y, roof_mid_z + 0.17))
     rot_world = (t.to_3x3() @ Euler((ang, 0.0, 0.0), 'XYZ').to_matrix()).to_euler()
@@ -656,27 +656,36 @@ def _build_stall_shelter(bm, t, x0, x1, y_back, depth, tier='TIER_1', stalls=3,
                             u_scale=0.32, v_scale=0.32)
 
 
-def _build_pen_fence(bm, t, x0, x1, y0, y1, gate_w=1.7, post_h=1.25):
+def _build_pen_fence(bm, t, x0, x1, y0, y1, gate_w=1.7, post_h=1.25, stall_front_y=None):
     """A rail-and-post paddock fence around the pen, with a gate gap on the -Y side.
     Built with timber material and longitudinal unwrapped grain along posts and rails."""
-    def run(ax, ay, bx, by):
+    def run(ax, ay, bx, by, skip_start_post=False):
         length = math.hypot(bx - ax, by - ay)
+        if length < 0.2:
+            return
         n = max(1, int(round(length / 1.6)))
         ang = math.atan2(by - ay, bx - ax)
-        for i in range(n + 1):
+        start_idx = 1 if skip_start_post else 0
+        for i in range(start_idx, n + 1):
             fx = ax + (bx - ax) * i / n
             fy = ay + (by - ay) * i / n
             _timber_box(bm, t, (0.14, 0.14, post_h), (fx, fy, post_h * 0.5),
                         mat=MAT_INDEX_TIMBER, bevel=0.010)
         for rz in (0.50, 1.00):
-            _timber_box(bm, t, (length + 0.08, 0.08, 0.10),
+            _timber_box(bm, t, (length + 0.06, 0.08, 0.10),
                         ((ax + bx) * 0.5, (ay + by) * 0.5, rz),
                         rot=(0.0, 0.0, ang), mat=MAT_INDEX_TIMBER, bevel=0.006)
 
-    run(x0, y0, x0, y1)                 # left flank
-    run(x1, y0, x1, y1)                 # right flank
-    # NOTE: no rail across the barn facade — it would block the carriage door.
-    # Courtyard side split by a gate opening aligned with the barn door.
+    # Left flank: connects from the front-left post of the stall shelter to the front fence corner (y1)
+    if stall_front_y is not None:
+        run(x0, stall_front_y, x0, y1, skip_start_post=True)
+    else:
+        run(x0, y0, x0, y1)
+
+    # Right flank: connects from barn facade to the front fence corner (y1)
+    run(x1, y0, x1, y1)
+
+    # Courtyard front side split by a gate opening aligned with the carriage door
     gate_lo = -gate_w * 0.5
     gate_hi = gate_w * 0.5
     run(x0, y1, gate_lo, y1)
@@ -686,26 +695,35 @@ def _build_pen_fence(bm, t, x0, x1, y0, y1, gate_w=1.7, post_h=1.25):
                     mat=MAT_INDEX_TIMBER, bevel=0.014)
 
 
-def _build_stable_yard(bm, t, barn_w, barn_d, tier):
+def _build_stable_yard(bm, t, barn_w, barn_d, tier, door_w=4.8):
     """Compose the stable yard: fenced paddock plus a roofed open stall row.
 
-    The pen is open along the barn facade (no rail in front of the carriage door)
-    so horses and carts can be walked straight in through the gate.
+    The stall row sits flush against the barn front wall to the left of the carriage door.
+    The paddock fence encloses the courtyard in front of the door and stalls,
+    attaching cleanly without clipping into the barn or obstructing stalls.
     """
-    barn_front = -barn_d * 0.5
-    pen_d = 4.0 if barn_w <= 9.0 else 6.0
-    pen_w = barn_w + 0.8 if barn_w <= 9.0 else barn_w + 1.0
-    x0, x1 = -pen_w * 0.5, pen_w * 0.5
-    y0 = barn_front - 0.30            # barn side of the pen
-    y1 = barn_front - pen_d           # courtyard side
+    wall_front = -barn_d * 0.5 - 0.16
+    pen_d = 2.8 if barn_w <= 11.0 else 4.6
+    x_left = -barn_w * 0.5 + 0.45
+    x_right = min(-door_w * 0.5 - 0.35, x_left + 4.2)
+    stall_w = x_right - x_left
+    if stall_w < 2.0:
+        x_right = -door_w * 0.5 - 0.20
+        stall_w = x_right - x_left
+    stalls = 2 if stall_w < 3.8 else 3
+    stall_d = 2.0 if barn_w <= 11.0 else 2.6
+    y_stall_front = wall_front - stall_d
+    y1 = wall_front - pen_d
 
-    # Open stall row tucked along the left side of the pen, opening to the court.
-    stall_w = min(pen_w * 0.45, 3.2 if barn_w <= 9.0 else 4.2)
-    stalls = 2 if barn_w <= 9.0 else 3
-    _build_stall_shelter(bm, t, x0 + 0.15, x0 + 0.15 + stall_w, y0 - 0.20,
-                         2.4 if barn_w <= 9.0 else 3.0,
+    # Stall shelter sits flush against the front wall to the left of the carriage door
+    _build_stall_shelter(bm, t, x_left, x_right, wall_front, stall_d,
                          tier=tier, stalls=stalls)
-    _build_pen_fence(bm, t, x0, x1, y0, y1)
+
+    # Fence runs around the paddock pen:
+    # Right flank from barn facade to y1; front with gate; left flank from y1 to stall front post.
+    x_fence_right = barn_w * 0.5 - 0.40
+    _build_pen_fence(bm, t, x_left, x_fence_right, wall_front, y1,
+                     gate_w=min(2.0, max(1.6, door_w * 0.45)), stall_front_y=y_stall_front)
 
 
 def build_servant_quarters(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_1',
@@ -1581,7 +1599,7 @@ def _place_estate_awnings(bm, props, tier, spread_x, fore_y, stable=None, servan
             ox, oy, rot, olen = slot
             outward = 1.0 if (math.cos(rot) * ox + math.sin(rot) * oy) >= 0.0 else -1.0
             nx, ny = math.cos(rot) * outward, math.sin(rot) * outward
-            off = olen * 0.5 + depth * 0.5 + 0.05
+            off = olen * 0.5 + depth * 0.5 + 0.28
             cx, cy = ox + nx * off, oy + ny * off
             aw_rot = rot + outward * math.pi * 0.5
         else:
@@ -1937,9 +1955,9 @@ def build_estate_outbuildings(bm, props, ctx, host_obj=None):
         is_knights = (getattr(ctx, 'effective_archetype', '') == 'KNIGHTS_MANOR'
                       or getattr(props, 'building_family', '') == 'KNIGHTS_MANOR'
                       or 'KNIGHTS_MANOR' in getattr(props, 'name', ''))
-        st_dims = (8.5, 5.5) if is_knights else _stable_dims(tier)
+        st_dims = (10.5, 6.4) if is_knights else _stable_dims(tier)
         _st_rot = (getattr(props, 'stable_rotate', False) or spread_x > 18.0)
-        paddock_pen_d = 4.2 if st_dims[0] <= 9.0 else 6.2
+        paddock_pen_d = 3.2 if st_dims[0] <= 11.0 else 4.6
         st_half_x = (st_dims[1] * 0.5 + paddock_pen_d + 0.85) if _st_rot else (st_dims[0] * 0.5 + 0.85)
 
         # Servant Quarters: depth/2 + roof eave + lean-to awning extension (~2.8m)
