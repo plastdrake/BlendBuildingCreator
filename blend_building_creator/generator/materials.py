@@ -2027,36 +2027,36 @@ def create_stylized_dirt(name="M_Building_Dirt", color=(0.33, 0.23, 0.15, 1.0)):
     return mat
 
 
-def create_stylized_sign(name="M_Sign", icon_filename="tavern_sign.png"):
+def create_stylized_sign(name="MI_Sign", icon_filename="tavern_sign.png"):
     """Hanging trade sign face: a handpainted icon decal for a light plank board.
 
     The supplied icons are dark line-art on a fully transparent background, so
     the icon's own alpha channel is the cut-out mask and the board shows through
     everywhere else.
     """
-    if name in ("M_Sign", "M_Building_Sign"):
+    if name in ("MI_Sign", "M_Sign", "M_Building_Sign"):
         _sign_name_map = {
-            'bakery_sign.png': 'M_Sign_Bakery',
-            'tailor_sign.png': 'M_Sign_Tailor',
-            'toolsmith_sign.png': 'M_Sign_Toolsmith',
-            'jeweler_sign.png': 'M_Sign_Jeweler',
-            'brewery_sign.png': 'M_Sign_Brewery',
-            'fisher_sign.png': 'M_Sign_Fisher',
-            'furniture_maker_sign.png': 'M_Sign_FurnitureMaker',
-            'butcher_sign.png': 'M_Sign_Butcher',
-            'tavern_sign.png': 'M_Sign_Tavern',
-            'inn_sign.png': 'M_Sign_Inn',
-            'mill_sign.png': 'M_Sign_Mill',
-            'armorsmith_sign.png': 'M_Sign_Armorsmith',
-            'weaponsmith_sign.png': 'M_Sign_Weaponsmith',
-            'weaver_sign.png': 'M_Sign_Weaver',
-            'tannery_sign.png': 'M_Sign_Tannery',
-            'general_store_sign.png': 'M_Sign_GeneralStore',
-            'market_sign.png': 'M_Sign_Market',
-            'hunter_sign.png': 'M_Sign_Hunter',
+            'bakery_sign.png': 'MI_Sign_Bakery',
+            'tailor_sign.png': 'MI_Sign_Tailor',
+            'toolsmith_sign.png': 'MI_Sign_Toolsmith',
+            'jeweler_sign.png': 'MI_Sign_Jeweler',
+            'brewery_sign.png': 'MI_Sign_Brewery',
+            'fisher_sign.png': 'MI_Sign_Fisher',
+            'furniture_maker_sign.png': 'MI_Sign_FurnitureMaker',
+            'butcher_sign.png': 'MI_Sign_Butcher',
+            'tavern_sign.png': 'MI_Sign_Tavern',
+            'inn_sign.png': 'MI_Sign_Inn',
+            'mill_sign.png': 'MI_Sign_Mill',
+            'armorsmith_sign.png': 'MI_Sign_Armorsmith',
+            'weaponsmith_sign.png': 'MI_Sign_Weaponsmith',
+            'weaver_sign.png': 'MI_Sign_Weaver',
+            'tannery_sign.png': 'MI_Sign_Tannery',
+            'general_store_sign.png': 'MI_Sign_GeneralStore',
+            'market_sign.png': 'MI_Sign_Market',
+            'hunter_sign.png': 'MI_Sign_Hunter',
         }
         _clean_key = icon_filename.replace('_sign.png', '').replace('.png', '')
-        _default_name = "M_Sign_" + ''.join(part.capitalize() for part in _clean_key.split('_'))
+        _default_name = "MI_Sign_" + ''.join(part.capitalize() for part in _clean_key.split('_'))
         name = _sign_name_map.get(icon_filename, _default_name)
 
     mat, tree = _new_mat(name)
@@ -2842,27 +2842,27 @@ def setup_building_material_slots(obj, props):
         _sign_icon = _arch_to_sign.get(_arch, 'tavern_sign.png')
 
     _sign_name_map = {
-        'bakery_sign.png': 'M_Sign_Bakery',
-        'tailor_sign.png': 'M_Sign_Tailor',
-        'toolsmith_sign.png': 'M_Sign_Toolsmith',
-        'jeweler_sign.png': 'M_Sign_Jeweler',
-        'brewery_sign.png': 'M_Sign_Brewery',
-        'fisher_sign.png': 'M_Sign_Fisher',
-        'furniture_maker_sign.png': 'M_Sign_FurnitureMaker',
-        'butcher_sign.png': 'M_Sign_Butcher',
-        'tavern_sign.png': 'M_Sign_Tavern',
-        'inn_sign.png': 'M_Sign_Inn',
-        'mill_sign.png': 'M_Sign_Mill',
-        'armorsmith_sign.png': 'M_Sign_Armorsmith',
-        'weaponsmith_sign.png': 'M_Sign_Weaponsmith',
-        'weaver_sign.png': 'M_Sign_Weaver',
-        'tannery_sign.png': 'M_Sign_Tannery',
-        'general_store_sign.png': 'M_Sign_GeneralStore',
-        'market_sign.png': 'M_Sign_Market',
-        'hunter_sign.png': 'M_Sign_Hunter',
+        'bakery_sign.png': 'MI_Sign_Bakery',
+        'tailor_sign.png': 'MI_Sign_Tailor',
+        'toolsmith_sign.png': 'MI_Sign_Toolsmith',
+        'jeweler_sign.png': 'MI_Sign_Jeweler',
+        'brewery_sign.png': 'MI_Sign_Brewery',
+        'fisher_sign.png': 'MI_Sign_Fisher',
+        'furniture_maker_sign.png': 'MI_Sign_FurnitureMaker',
+        'butcher_sign.png': 'MI_Sign_Butcher',
+        'tavern_sign.png': 'MI_Sign_Tavern',
+        'inn_sign.png': 'MI_Sign_Inn',
+        'mill_sign.png': 'MI_Sign_Mill',
+        'armorsmith_sign.png': 'MI_Sign_Armorsmith',
+        'weaponsmith_sign.png': 'MI_Sign_Weaponsmith',
+        'weaver_sign.png': 'MI_Sign_Weaver',
+        'tannery_sign.png': 'MI_Sign_Tannery',
+        'general_store_sign.png': 'MI_Sign_GeneralStore',
+        'market_sign.png': 'MI_Sign_Market',
+        'hunter_sign.png': 'MI_Sign_Hunter',
     }
     _clean_key = _sign_icon.replace('_sign.png', '').replace('.png', '')
-    _default_sign_name = "M_Sign_" + ''.join(part.capitalize() for part in _clean_key.split('_'))
+    _default_sign_name = "MI_Sign_" + ''.join(part.capitalize() for part in _clean_key.split('_'))
     sign_mat_name = _sign_name_map.get(_sign_icon, _default_sign_name)
     mat_sign = getattr(props, 'custom_sign', None) or create_stylized_sign(
         sign_mat_name, icon_filename=_sign_icon)
