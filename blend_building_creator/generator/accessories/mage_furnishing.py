@@ -330,8 +330,13 @@ def _furnish_ground_floor(bm, z_floor, r_in, level_h, stair_configs, outcrops,
     for bx, by, bang in _wall_spots(r_in, 0.55, FL, SH, stair_configs, outcrops,
                                     occ, level_h, case_h, bc_w * 0.5,
                                     has_front_door):
-        build_grand_bookcase(bm, x=bx, y=by, z_ground=z_floor, ang=bang,
-                             width=bc_w, height=case_h)
+        try:
+            build_grand_bookcase(bm, x=bx, y=by, z_ground=z_floor, ang=bang,
+                                 width=bc_w, height=case_h)
+        except Exception:
+            # A single bookcase must never abort the rest of the tower's
+            # furnishing; continue with the remaining wall bays and props.
+            continue
         _claim(occ, bx, by, bc_w * 0.5)
 
     # 3. Alchemy bench, shelf-side to the wall, work side facing the room.

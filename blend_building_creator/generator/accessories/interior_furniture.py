@@ -754,8 +754,17 @@ def build_desk(bm, x, y, z_ground=0.0, ang=0.0, width=1.85):
     return faces
 
 
-def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.8):
-    """Tavern bar counter with plank front and top slab."""
+def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.8, return_length=0.0,
+                  return_side=-1.0, back_bar_offset=None):
+    """Tavern bar counter with plank front, top slab and a back bar.
+
+    ``return_length`` adds an L-shaped return arm running along one end
+    (``return_side`` -1 = local -X end, +1 = +X end), hanging toward the
+    customers just like a real pub bar.  Bottles, tankards and glasses are
+    stacked on the return and on the back-bar shelf, so the counter never
+    reads as an empty plinth.
+    """
+    from ..materials import MAT_INDEX_BOTTLE_GLASS, MAT_INDEX_IRON
     faces = []
     h, d = 1.18, 0.78
     faces += create_beveled_box(bm, size=(length, d, h),
@@ -771,6 +780,61 @@ def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.8):
         faces += create_beveled_box(bm, size=(0.025, 0.02, h - 0.14),
                                     location=(px, -d / 2 - 0.005, h / 2),
                                     mat_index=MAT_INDEX_TIMBER, bevel_amount=0.002)
+    top_z = h + 0.02
+
+    # L-shaped return arm along one end of the counter.
+    if return_length > 0.30:
+        arm_len = return_length
+        ax = return_side * (length * 0.5 - d * 0.5)
+        ay = -d * 0.5 - arm_len * 0.5 + 0.01
+        faces += create_beveled_box(
+            bm, size=(d, arm_len, h),
+            location=(ax, ay, h / 2),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
+        faces += create_beveled_box(
+            bm, size=(d + 0.14, arm_len + 0.06, 0.07),
+            location=(ax, ay - 0.03, top_z - 0.015),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+        # Bottles + tankards on the return so the L reads as a working bar.
+        for _i in range(max(2, int(arm_len / 0.42))):
+            _ty = ay - arm_len * 0.5 + 0.26 + _i * 0.42
+            if _ty > ay + arm_len * 0.5 - 0.16:
+                break
+            faces += create_cylinder(
+                bm, radius=0.038, height=0.24, segments=10,
+                location=(ax + (0.12 if _i % 2 == 0 else -0.12), _ty, top_z + 0.12),
+                mat_index=MAT_INDEX_BOTTLE_GLASS, smooth=True)
+            faces += create_cylinder(
+                bm, radius=0.042, height=0.05, segments=10,
+                location=(ax + (0.12 if _i % 2 == 0 else -0.12), _ty, top_z + 0.265),
+                mat_index=MAT_INDEX_WOOD, smooth=True)
+
+    # Back bar: wall-mounted shelves behind the counter (no solid cabinet box,
+    # so a server has room to stand between the bar and the wall). Stocked with
+    # the detailed bottle props used elsewhere, plus a few iron tankards.
+    # ``back_bar_offset`` is the counter-centre distance to the wall; when set,
+    # the shelves are pulled back to hang on the wall independently of the
+    # counter's standing gap.
+    _bb_y = (d * 0.5 if back_bar_offset is None else float(back_bar_offset)) - 0.23
+    for _shelf_z in (1.25, 1.70, 2.15):
+        faces += create_beveled_box(
+            bm, size=(length + 0.16, 0.42, 0.05),
+            location=(0.0, _bb_y - 0.05, _shelf_z),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+        _nb = max(3, int(length / 0.34))
+        for _k in range(_nb):
+            _bx = -length * 0.5 + 0.16 + _k * (length - 0.32) / max(1, _nb - 1)
+            if _k % 4 == 2:
+                # Tankard on the shelf.
+                faces += create_cylinder(
+                    bm, radius=0.043, height=0.13, segments=10,
+                    location=(_bx, _bb_y - 0.06, _shelf_z + 0.09),
+                    mat_index=MAT_INDEX_IRON, smooth=True)
+            else:
+                faces += build_bottle(
+                    bm, _bx, _bb_y - 0.06, _shelf_z + 0.028,
+                    ang=((_k * 1.7) % 6.2831853),
+                    bottle_type=('POTION' if _k % 5 == 3 else 'WINE'))
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
@@ -1101,6 +1165,11 @@ def _bookshelf_frame(bm, width, height, depth=0.32):
         faces += create_beveled_box(bm, size=(side_t, depth, height),
                                     location=(sx, 0.0, height / 2),
                                     mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    # BACK panel: sits at local +Y/2 so the open shelves face -Y; against a
+    # wall the shelf is yaw=pi, so the back hugs the plaster.
+    faces += create_beveled_box(bm, size=(width, 0.024, height),
+                                location=(0.0, depth / 2, height / 2),
+                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
     faces += create_beveled_box(bm, size=(width + 0.06, depth + 0.04, 0.07),
                                 location=(0.0, 0.0, height - 0.02 + 0.035),
                                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
@@ -2052,40 +2121,13 @@ def build_foodprep_clutter(bm, x, y, z_ground=0.0, ang=0.0):
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.005
     )
 
-    # 2. Authentic kitchen chef's knife resting on the cutting board
-    # Blade: forged steel, curved belly, sharp point at tip
-    blade_len = 0.15
-    blade_h = 0.032
-    blade_t = 0.003
+    # Use the artist's Cleaver.fbx mesh for every kitchen prep surface.
+    from .artisan_props import build_cleaver
     knife_yaw = 0.24
-    kx, ky = -0.03, 0.05
-    # Steel blade with tapered cutting edge
-    faces += create_beveled_box(
-        bm, size=(blade_len, blade_h, blade_t),
-        location=(kx, ky, board_t + blade_t * 0.5),
-        rotation=(0.0, 0.0, knife_yaw),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.001
-    )
-    # Polished brass bolster collar
-    cos_ky, sin_ky = math.cos(knife_yaw), math.sin(knife_yaw)
-    bolster_x = kx - (blade_len * 0.5 + 0.005) * cos_ky
-    bolster_y = ky - (blade_len * 0.5 + 0.005) * sin_ky
-    faces += create_beveled_box(
-        bm, size=(0.010, 0.020, 0.012),
-        location=(bolster_x, bolster_y, board_t + 0.006),
-        rotation=(0.0, 0.0, knife_yaw),
-        mat_index=MAT_INDEX_WAX, bevel_amount=0.001
-    )
-    # Ergonomic wooden handle scales
-    handle_len = 0.095
-    handle_x = bolster_x - (handle_len * 0.5 + 0.005) * cos_ky
-    handle_y = bolster_y - (handle_len * 0.5 + 0.005) * sin_ky
-    faces += create_beveled_box(
-        bm, size=(handle_len, 0.018, 0.014),
-        location=(handle_x, handle_y, board_t + 0.007),
-        rotation=(0.0, 0.0, knife_yaw),
-        mat_index=MAT_INDEX_WOOD, bevel_amount=0.003
-    )
+    kx, ky = -0.045, 0.03
+    knife_len = 0.25
+    faces += build_cleaver(bm, kx, ky, z_ground=board_t + 0.008,
+                           ang=knife_yaw, length=knife_len)
 
     # 3. Creamy cheese wedge resting on the board
     faces += create_cone(

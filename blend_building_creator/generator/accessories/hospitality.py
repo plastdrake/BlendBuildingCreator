@@ -71,8 +71,7 @@ def build_hospitality_scene(bm, props, ctx, tier):
         # Mount the sign on the ground-storey facade near the entrance (a bit
         # above the door), clear of windows and the porch roof. Only fall back
         # to the high roof-gable sign when no facade spot is free.
-        if not _build_trade_sign(bm, props, ctx, porch_info):
-            _build_gable_signs(bm, props, ctx, tier)
+        _build_trade_sign(bm, props, ctx, porch_info=porch_info)
 
     if _prop(props, 'has_flower_boxes', False):
         _build_window_flower_boxes(bm, props, ctx, tier)
@@ -80,11 +79,7 @@ def build_hospitality_scene(bm, props, ctx, tier):
     if _prop(props, 'has_outdoor_decor', False) or is_hospitality:
         _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info)
 
-    # No wells in artisan yards (they read as cluttered next to the workshops).
-    _ARTISAN_ARCH = {'BAKERY', 'TAILOR', 'BLACKSMITH', 'JEWELER', 'BREWERY',
-                     'FISHERMAN', 'BUTCHER', 'FURNITURE_MAKER', 'HUNTER'}
-    if _prop(props, 'has_well', False) and ctx.effective_archetype not in _ARTISAN_ARCH:
-        _build_well(bm, props, ctx)
+    # Removed: courtyard wells clutter the yard and are no longer generated.
 
 
 def _build_trade_sign(bm, props, ctx, porch_info=None):
@@ -552,16 +547,7 @@ def _build_yard_decor(bm, props, ctx, tier, is_inn, porch_info=None):
     if is_point_outside_building(bench_x, bench_y, 0.40, ctx, margin=0.05):
         build_bench(bm, bench_x, bench_y, ang=0.0, length=1.50, with_back=True)
 
-    # 5. Notice board: strictly for Inns / Taverns. Never on artisan workshops.
-    if is_inn or ctx.effective_archetype in ('TAVERN', 'INN'):
-        # Place with generous clearance away from entrance and barrels
-        nb_side = -side_sign
-        nb_x = door_x + nb_side * (porch_w * 0.5 + 2.50)
-        min_y = min(b[2] for b in get_building_footprint_boxes(ctx))
-        nb_y = min_y - 0.90
-        nb_ang = -math.radians(45.0) if ctx.shape == 'L_SHAPE' else 0.0
-        if is_point_outside_building(nb_x, nb_y, 0.50, ctx, margin=0.15):
-            build_notice_board(bm, nb_x, nb_y, ang=nb_ang, width=1.10, post_h=1.70)
+    # 5. Notice board removed: no freestanding signs in front of buildings.
 
 
 def _build_well(bm, props, ctx):

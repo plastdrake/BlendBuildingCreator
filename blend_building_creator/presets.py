@@ -7629,8 +7629,17 @@ def apply_preset(props, preset_key):
     if 'has_interior_furnishing' not in data and hasattr(props, 'has_interior_furnishing'):
         props.has_interior_furnishing = True
     preset_cat = PRESETS[preset_key].get('category')
-    if preset_cat == 'ARTISAN' and 'open_ground_floor' not in data and hasattr(props, 'open_ground_floor'):
-        props.open_ground_floor = True
+    if preset_cat == 'ARTISAN':
+        # Artisan houses keep their annexes / oriels / balconies when they fit
+        # the plot (the annex layout fits them in), but their ground floor must
+        # stay a real STORE + WORKSHOP rather than one open hall.
+        if hasattr(props, 'open_ground_floor'):
+            props.open_ground_floor = False
+        # The fishery sits on a tight 12x12 dock; the deep lean-to annex does
+        # not fit, so it is omitted (oriels/balconies still apply).
+        if str(getattr(props, 'building_archetype', '') or '').upper() == 'FISHERMAN':
+            if hasattr(props, 'has_side_annex'):
+                props.has_side_annex = False
 
     # Structural rules applied to every preset:
     #  * Tier 1 log walls never carry a jettying overhang (the log crowns and

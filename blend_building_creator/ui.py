@@ -574,14 +574,10 @@ class VIEW3D_PT_fantasy_building_hospitality(bpy.types.Panel):
         row_v = layout.row()
         row_v.enabled = not props.has_arched_porch
         row_v.prop(props, "has_veranda")
-        layout.prop(props, "has_trade_sign")
-        if props.has_trade_sign:
-            layout.prop(props, "sign_icon", text="Emblem")
         layout.prop(props, "has_flower_boxes")
         layout.prop(props, "has_outdoor_decor")
         if props.has_outdoor_decor:
             layout.prop(props, "lantern_style")
-        layout.prop(props, "has_well")
 
 
 # ---------------------------------------------------------------------------

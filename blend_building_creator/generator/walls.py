@@ -957,16 +957,19 @@ def build_cantilever_corbels(bm, x_min_upper, x_max_upper, y_min_upper, y_max_up
                                 width=corbel_w, depth=corner_d + embed, height=corbel_h)
 
 def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thick=0.10, front_exclude_x=None,
+                            back_exclude_x=None, left_exclude_y=None, right_exclude_y=None,
                             include_front=True, include_back=True, include_left=True, include_right=True):
     """
     Builds solid wooden soffit plates sealing the underside of the overhanging upper floor.
     lower_bounds: (lx_min, lx_max, ly_min, ly_max)
     upper_bounds: (ux_min, ux_max, uy_min, uy_max)
+    Exclude_* args break the soffit band around a wing/annex junction so the
+    board never runs through the attached volume's room.
     """
     lx_min, lx_max, ly_min, ly_max = lower_bounds
     ux_min, ux_max, uy_min, uy_max = upper_bounds
     cz = z_level - soffit_thick * 0.5
-    
+
     # Front soffit (from uy_min to ly_min)
     if include_front and uy_min < ly_min:
         d = ly_min - uy_min + 0.05
@@ -985,30 +988,63 @@ def build_cantilever_soffit(bm, lower_bounds, upper_bounds, z_level, soffit_thic
             w = ux_max - ux_min + 0.05
             cx = (ux_min + ux_max) * 0.5
             create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-        
+
     # Back soffit (from ly_max to uy_max)
     if include_back and uy_max > ly_max:
         d = uy_max - ly_max + 0.05
-        w = ux_max - ux_min + 0.05
         cy = (uy_max + ly_max) * 0.5
-        cx = (ux_min + ux_max) * 0.5
-        create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-        
+        if back_exclude_x:
+            ex1, ex2 = back_exclude_x
+            if ex1 > ux_min:
+                w1 = ex1 - ux_min + 0.05
+                cx1 = (ux_min + ex1) * 0.5
+                create_beveled_box(bm, size=(w1, d, soffit_thick), location=(cx1, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+            if ex2 < ux_max:
+                w2 = ux_max - ex2 + 0.05
+                cx2 = (ex2 + ux_max) * 0.5
+                create_beveled_box(bm, size=(w2, d, soffit_thick), location=(cx2, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        else:
+            w = ux_max - ux_min + 0.05
+            cx = (ux_min + ux_max) * 0.5
+            create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+
     # Left soffit (from ux_min to lx_min)
     if include_left and ux_min < lx_min:
         w = lx_min - ux_min + 0.05
-        d = ly_max - ly_min + 0.05
         cx = (ux_min + lx_min) * 0.5
-        cy = (ly_min + ly_max) * 0.5
-        create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-        
+        if left_exclude_y:
+            ex1, ex2 = left_exclude_y
+            if ex1 > ly_min:
+                d1 = ex1 - ly_min + 0.05
+                cy1 = (ly_min + ex1) * 0.5
+                create_beveled_box(bm, size=(w, d1, soffit_thick), location=(cx, cy1, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+            if ex2 < ly_max:
+                d2 = ly_max - ex2 + 0.05
+                cy2 = (ex2 + ly_max) * 0.5
+                create_beveled_box(bm, size=(w, d2, soffit_thick), location=(cx, cy2, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        else:
+            d = ly_max - ly_min + 0.05
+            cy = (ly_min + ly_max) * 0.5
+            create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+
     # Right soffit (from lx_max to ux_max)
     if include_right and ux_max > lx_max:
         w = ux_max - lx_max + 0.05
-        d = ly_max - ly_min + 0.05
         cx = (lx_max + ux_max) * 0.5
-        cy = (ly_min + ly_max) * 0.5
-        create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        if right_exclude_y:
+            ex1, ex2 = right_exclude_y
+            if ex1 > ly_min:
+                d1 = ex1 - ly_min + 0.05
+                cy1 = (ly_min + ex1) * 0.5
+                create_beveled_box(bm, size=(w, d1, soffit_thick), location=(cx, cy1, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+            if ex2 < ly_max:
+                d2 = ly_max - ex2 + 0.05
+                cy2 = (ex2 + ly_max) * 0.5
+                create_beveled_box(bm, size=(w, d2, soffit_thick), location=(cx, cy2, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        else:
+            d = ly_max - ly_min + 0.05
+            cy = (ly_min + ly_max) * 0.5
+            create_beveled_box(bm, size=(w, d, soffit_thick), location=(cx, cy, cz), mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
 
 
 def build_open_timber_arcade(bm, p_start, p_end, z_floor, z_top, wall_t=0.28,

@@ -23,7 +23,8 @@ from .interior import (
     build_floor_slab, build_ceiling_beams, build_interior_trims, build_straight_staircase,
     build_turned_flight, build_stair_landing, build_stair_guardrail_one_open,
     build_spiral_staircase, build_stair_guardrail, build_stair_guardrail_3sided,
-    build_stair_hole_trim, plan_floor_rooms, build_floor_interior_walls
+    build_stair_hole_trim, plan_floor_rooms, build_floor_interior_walls,
+    stair_circulation_zone
 )
 from .openings import build_door_assembly, build_front_steps, build_window_assembly
 from .accessories.cargo_port import build_cargo_port_frame
@@ -201,6 +202,11 @@ def build_floors(bm, props, ctx):
     # below unwalkable).  Tenements keep their own single-wall tandem scheme.
     lane_gap = 0.20
     stair_side_opt = getattr(props, 'stair_placement', 'LEFT')
+    # The annex layout may have had to move the straight stair to the other
+    # wall so the side annex keeps a walkable doorway.
+    _forced_stair_side = getattr(ctx, 'annex_stair_side', None)
+    if _forced_stair_side in ('LEFT', 'RIGHT'):
+        stair_side_opt = _forced_stair_side
     stair_switchback = (
         not is_tenement_stairs
         and getattr(props, 'stair_style', 'STRAIGHT') != 'SPIRAL'
@@ -258,6 +264,13 @@ def build_floors(bm, props, ctx):
         else:
             stair_len = max(2.0, min(2.6, D_interior * 0.45))
             landing_depth = (D_interior - stair_len) * 0.5
+
+        # Never let a flight run straight into a wall: keep a real walking
+        # landing at both the foot and the head (min ~1.15 m clear).
+        _min_land_clear = 1.15
+        if D_interior - stair_len < 2.0 * _min_land_clear:
+            stair_len = max(1.80, D_interior - 2.0 * _min_land_clear)
+        landing_depth = max(_min_land_clear, (D_interior - stair_len) * 0.5)
 
         stair_y_head = fl0_iy_min + landing_depth
         stair_ascend_sign = -1.0
@@ -318,31 +331,14 @@ def build_floors(bm, props, ctx):
     # for its whole height. Windows on the main wall behind it are interior and
     # must be suppressed, and its portal opens on every floor it spans so the
     # upper storey is reachable from inside the hall.
-    _is_hall_annex = (getattr(props, 'town_hall_composer', False) and shape == 'T_SHAPE')
-    _is_generic_annex = (not getattr(props, 'town_hall_composer', False))
-    _has_tower_annex = bool(getattr(props, 'has_tower_annex', False))
-    _annex_on = (bool(getattr(props, 'has_side_annex', False)) and (_is_hall_annex or _is_generic_annex)) or _has_tower_annex
-    _annex_floors = 0
-    _annex_side = None
+    _annex_on = bool(ctx.annex_kind)
+    _annex_floors = ctx.annex_floors
+    _annex_side = ctx.annex_side
     _annex_y_span = None
     if _annex_on:
-        if _has_tower_annex:
-            _annex_floors = num_floors
-            _raw_side = getattr(props, 'annex_side', 'LEFT')
-            _annex_side = _raw_side if _raw_side in ('LEFT', 'RIGHT', 'BOTH') else 'LEFT'
-            _a_w = 12.0
-            _annex_y_span = (-_a_w * 0.5 - 0.1, _a_w * 0.5 + 0.1)
-        else:
-            _annex_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
-            if _is_hall_annex:
-                _annex_side = 'LEFT' if getattr(props, 'clock_tower_side', 'RIGHT') == 'RIGHT' else 'RIGHT'
-                _a_w = 5.2 if getattr(props, 'material_tier', 'TIER_3') != 'TIER_1' else 4.4
-                _annex_y_span = (-_a_w * 0.5 - 0.5, _a_w * 0.5 + 0.5)
-            else:
-                _raw_side = getattr(props, 'annex_side', 'LEFT')
-                _annex_side = _raw_side if _raw_side in ('LEFT', 'RIGHT', 'BOTH') else 'LEFT'
-                _a_w = min(6.0, max(3.6, base_d * 0.72))
-                _annex_y_span = (-_a_w * 0.5 - 0.1, _a_w * 0.5 + 0.1)
+        _a_w = ctx.annex_width
+        # Y span for window suppression: centre +/- half width +/- small buffer
+        _annex_y_span = (ctx.annex_cy - _a_w * 0.5 - 0.1, ctx.annex_cy + _a_w * 0.5 + 0.1)
 
     # Square corner turrets bolt onto the outside of the BACK wall, so each one
     # connects through a doorway cut in the back wall (clear of the stairs).
@@ -477,8 +473,28 @@ def build_floors(bm, props, ctx):
         # Corbels and solid wooden soffit underneath upper floor overhang
         if fl_idx > 0 and fl_overhang > prev_fl_overhang:
             overhang_step = fl_overhang - prev_fl_overhang
-            # Exclude interior wing junction from exterior cantilever corbels/soffits
-            front_ex = (wx_min - 0.05, wx_max + 0.05) if fl_has_wing else None
+            # Exclude interior wing junction from exterior cantilever corbels/soffits.
+            # A wing attaches on ONE facade; corbels along that facade at the wing's
+            # span would stand inside the wing room, so exclude only there - not on
+            # every facade (front_ex used to be applied to the front run even when
+            # the wing hangs on LEFT/RIGHT).
+            front_ex = back_ex = left_ex = right_ex = None
+            if fl_has_wing:
+                for w_elem in wings:
+                    wb = w_elem.get('bounds_fl', {}).get(fl_idx)
+                    if wb is None:
+                        wb = compute_fl_wing_bounds(w_elem, fl_idx, fl_overhang,
+                                                    x_min, x_max, y_min, y_max)
+                    wwx1, wwx2, wwy1, wwy2 = wb
+                    ww = w_elem.get('wall', 'FRONT')
+                    if ww == 'FRONT':
+                        front_ex = (wwx1 - 0.05, wwx2 + 0.05)
+                    elif ww == 'BACK':
+                        back_ex = (wwx1 - 0.05, wwx2 + 0.05)
+                    elif ww == 'LEFT':
+                        left_ex = (wwy1 - 0.05, wwy2 + 0.05)
+                    elif ww == 'RIGHT':
+                        right_ex = (wwy1 - 0.05, wwy2 + 0.05)
             has_po = getattr(props, 'has_pillared_overhang', False)
             po_s = getattr(props, 'pillared_overhang_side', 'FRONT')
             # The pillared overhang supplies its own pillars/soffit on its facade,
@@ -505,12 +521,24 @@ def build_floors(bm, props, ctx):
             if front_ex:
                 corbel_ex_f.append(front_ex)
             corbel_ex_f.extend(door_ex_f)
+            corbel_ex_b = []
+            if back_ex:
+                corbel_ex_b.append(back_ex)
+            corbel_ex_b.extend(door_ex_b)
+            corbel_ex_l = []
+            if left_ex:
+                corbel_ex_l.append(left_ex)
+            corbel_ex_l.extend(door_ex_l)
+            corbel_ex_r = []
+            if right_ex:
+                corbel_ex_r.append(right_ex)
+            corbel_ex_r.extend(door_ex_r)
             build_cantilever_corbels(bm, x_min, x_max, y_min, y_max, z_floor,
                                     overhang_dist=overhang_step,
                                     front_exclude_x=corbel_ex_f if corbel_ex_f else None,
-                                    back_exclude_x=door_ex_b if door_ex_b else None,
-                                    left_exclude_y=door_ex_l if door_ex_l else None,
-                                    right_exclude_y=door_ex_r if door_ex_r else None,
+                                    back_exclude_x=corbel_ex_b if corbel_ex_b else None,
+                                    left_exclude_y=corbel_ex_l if corbel_ex_l else None,
+                                    right_exclude_y=corbel_ex_r if corbel_ex_r else None,
                                     include_front=inc_f, include_back=inc_b,
                                     include_left=cor_l, include_right=cor_r)
             build_cantilever_soffit(
@@ -519,6 +547,9 @@ def build_floors(bm, props, ctx):
                 (x_min, x_max, y_min, y_max),
                 z_floor,
                 front_exclude_x=front_ex,
+                back_exclude_x=back_ex,
+                left_exclude_y=left_ex,
+                right_exclude_y=right_ex,
                 include_front=inc_f,
                 include_back=inc_b,
                 include_left=inc_l,
@@ -922,6 +953,10 @@ def build_floors(bm, props, ctx):
         w_front_openings = []
         w_left_openings = []
         w_right_openings = []
+        # Annex door casings are built after every opening on the side wall is
+        # known, so the frame can cover the full union of the wall cut (an
+        # opening added later could otherwise leave a void above the casing).
+        _pending_annex_frames = []
 
         # Corner turret doorways: a walk-through portal in the back wall so each
         # tower room opens straight into the hall (annex-style connection).
@@ -1326,11 +1361,13 @@ def build_floors(bm, props, ctx):
             _ap_h = min(2.35, floor_h * 0.78)
             _ap_m = 0.16
             _ap_top = z_floor + _ap_h + _ap_m
-            _ap_cy = (y_min + y_max) * 0.5
+            _ap_cy = ctx.annex_portal_cy
             _jamb_w = 0.16
             _jamb_d = wall_t + 0.10
             _cut_sides = ['LEFT', 'RIGHT'] if _annex_side == 'BOTH' else [_annex_side]
             for _cs in _cut_sides:
+                _side_layout = ctx.annex_by_side.get(_cs, {})
+                _ap_cy = _side_layout.get('portal_cy', ctx.annex_portal_cy)
                 if _cs == 'LEFT':
                     left_openings.append({'u_start': (_ap_cy - _ap_w * 0.5 - _jamb_w * 0.5) - y_min,
                                           'u_end': (_ap_cy + _ap_w * 0.5 + _jamb_w * 0.5) - y_min,
@@ -1342,27 +1379,20 @@ def build_floors(bm, props, ctx):
                                            'z_start': z_floor, 'z_end': _ap_top})
                     _ap_fx = x_max
                 ctx.floor_doorways.setdefault(fl_idx, []).append({'x': _ap_fx, 'y': _ap_cy, 'axis': 'Y', 'w': _ap_w})
+                # Remember the shared annex junction: the main side wall already
+                # provides the partition and opening, so no second room divider
+                # should be built along this same facade.
+                ctx.annex_shared_walls = getattr(ctx, 'annex_shared_walls', {}) or {}
+                ctx.annex_shared_walls.setdefault(fl_idx, set()).add(_cs)
                 # Timber jamb + lintel frame around the opening (no door leaf).
-                # Jambs stop cleanly at _ap_h and lintel caps on top with proud relief,
-                # eliminating any coplanar z-fighting between pillars and beam.
-                for _s in (-1.0, 1.0):
-                    create_beveled_box(
-                        bm, size=(_jamb_d, _jamb_w, _ap_h),
-                        location=(_ap_fx, _ap_cy + _s * (_ap_w * 0.5 + _jamb_w * 0.5),
-                                  z_floor + _ap_h * 0.5),
-                        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
-                create_beveled_box(
-                    bm, size=(_jamb_d + 0.02, _ap_w + _jamb_w * 2.0 + 0.04, _ap_m),
-                    location=(_ap_fx, _ap_cy, z_floor + _ap_h + _ap_m * 0.5),
-                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
-
-                # Raised beveled wooden threshold board spanning the floor opening:
-                _th_h = 0.034
-                create_beveled_box(
-                    bm, size=(_jamb_d + 0.02, _ap_w + _jamb_w * 2.0 + 0.02, _th_h),
-                    location=(_ap_fx, _ap_cy, z_floor + 0.05 + _th_h * 0.5),
-                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.008
-                )
+                # Deferred to just before the wall build so it can cover the
+                # union of every wall cut at this location (a later opening may
+                # be taller than the annex portal and would show as a void).
+                _pending_annex_frames.append({
+                    'side': _cs, 'fx': _ap_fx, 'cy': _ap_cy, 'w': _ap_w,
+                    'z0': z_floor, 'zend': _ap_top,
+                    'jamb_d': _jamb_d, 'jamb_w': _jamb_w,
+                })
 
         # Interior walk-through portals between main building and wings
         # Open-timber pavilions (Warehouse/Lumbermill T1) have no walls, so the
@@ -1410,18 +1440,18 @@ def build_floors(bm, props, ctx):
 
                     create_beveled_box(bm, size=(jamb_w, jamb_d, portal_h),
                                        location=(p_cx - p_w * 0.5 - jamb_w * 0.5, f_yf, z_floor + portal_h * 0.5 - lower * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014, bevel_segments=2)
                     create_beveled_box(bm, size=(jamb_w, jamb_d, portal_h),
                                        location=(p_cx + p_w * 0.5 + jamb_w * 0.5, f_yf, z_floor + portal_h * 0.5 - lower * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014, bevel_segments=2)
                     lintel_w = p_w + jamb_w * 2.0 + 0.06
                     create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
                                        location=(p_cx, f_yf, z_floor + portal_h + lintel_h * 0.5 - lower),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014, bevel_segments=2)
                     # Beveled Wooden Floor Threshold Board bridging the floor opening
                     create_beveled_box(bm, size=(p_w + jamb_w * 2.0 + 0.06, wall_t + 0.16, 0.038),
                                        location=(p_cx, f_yf, z_floor + 0.05 + 0.019),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008, bevel_segments=2)
                     # Interior liner: the shared party wall within flat_ranges is directly
                     # constructed as finished MAT_INDEX_WOOD on both faces by build_wall_with_opening,
                     # eliminating coplanar liner z-fighting.
@@ -1447,18 +1477,18 @@ def build_floors(bm, props, ctx):
 
                     create_beveled_box(bm, size=(jamb_d, jamb_w, portal_h),
                                        location=(f_xf, p_cy - p_w * 0.5 - jamb_w * 0.5, z_floor + portal_h * 0.5 - lower * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014, bevel_segments=2)
                     create_beveled_box(bm, size=(jamb_d, jamb_w, portal_h),
                                        location=(f_xf, p_cy + p_w * 0.5 + jamb_w * 0.5, z_floor + portal_h * 0.5 - lower * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014, bevel_segments=2)
                     lintel_w = p_w + jamb_w * 2.0 + 0.06
                     create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
                                        location=(f_xf, p_cy, z_floor + portal_h + lintel_h * 0.5 - lower),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.014, bevel_segments=2)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014, bevel_segments=2)
                     # Beveled Wooden Floor Threshold Board bridging the floor opening
                     create_beveled_box(bm, size=(wall_t + 0.16, p_w + jamb_w * 2.0 + 0.06, 0.038),
                                        location=(f_xf, p_cy, z_floor + 0.05 + 0.019),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, bevel_segments=2)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008, bevel_segments=2)
                     # Interior liner: the shared party wall within flat_ranges is directly
                     # constructed as finished MAT_INDEX_WOOD on both faces by build_wall_with_opening,
                     # eliminating coplanar liner z-fighting.
@@ -1518,52 +1548,70 @@ def build_floors(bm, props, ctx):
                     ctx.floor_doorways.setdefault(fl_idx, []).append({'x': p_cx, 'y': y_min, 'axis': 'X', 'w': mw_portal_w, 'is_portal': True})
                     create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
                                        location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, _wc_y, z_floor + mw_portal_h * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
                                        location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, _wc_y, z_floor + mw_portal_h * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                     create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
                                        location=(p_cx, _wc_y, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                 elif mw_side_i == 'BACK':
                     back_openings.append(mw_op)
                     p_cx = (x_min + x_max) * 0.5 + _off
                     ctx.floor_doorways.setdefault(fl_idx, []).append({'x': p_cx, 'y': y_max, 'axis': 'X', 'w': mw_portal_w, 'is_portal': True})
                     create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
                                        location=(p_cx - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, _wc_y, z_floor + mw_portal_h * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_w, jamb_d, mw_portal_h),
                                        location=(p_cx + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, _wc_y, z_floor + mw_portal_h * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                     create_beveled_box(bm, size=(lintel_w, jamb_d, lintel_h),
                                        location=(p_cx, _wc_y, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                 elif mw_side_i == 'LEFT':
                     left_openings.append(mw_op)
                     p_cy = (y_min + y_max) * 0.5 + _off
                     ctx.floor_doorways.setdefault(fl_idx, []).append({'x': x_min, 'y': p_cy, 'axis': 'Y', 'w': mw_portal_w, 'is_portal': True})
                     create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
                                        location=(_wc_x, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
                                        location=(_wc_x, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
                                        location=(_wc_x, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                 elif mw_side_i == 'RIGHT':
                     right_openings.append(mw_op)
                     p_cy = (y_min + y_max) * 0.5 + _off
                     ctx.floor_doorways.setdefault(fl_idx, []).append({'x': x_max, 'y': p_cy, 'axis': 'Y', 'w': mw_portal_w, 'is_portal': True})
                     create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
                                        location=(_wc_x, p_cy - mw_portal_w * 0.5 - jamb_w * 0.5 + shift_in, z_floor + mw_portal_h * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_d, jamb_w, mw_portal_h),
                                        location=(_wc_x, p_cy + mw_portal_w * 0.5 + jamb_w * 0.5 - shift_in, z_floor + mw_portal_h * 0.5),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
                     create_beveled_box(bm, size=(jamb_d, lintel_w, lintel_h),
                                        location=(_wc_x, p_cy, z_floor + mw_portal_h + lintel_h * 0.5 - shift_down),
-                                       mat_index=MAT_INDEX_WOOD, bevel_amount=0.012)
+                                       mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+
+                # Threshold board across the full wall reveal so no floor/wall
+                # gap shows at the bottom corners of the outcrop doorway.
+                _th_w = mw_portal_w + jamb_w * 2.0 + 0.10
+                _th_d = wall_t + 0.20
+                _th_h = 0.04
+                if mw_side_i in ('FRONT', 'BACK'):
+                    _ty = y_min if mw_side_i == 'FRONT' else y_max
+                    create_beveled_box(
+                        bm, size=(_th_w, _th_d, _th_h),
+                        location=(p_cx, _ty, z_floor + 0.05 + _th_h * 0.5),
+                        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.006)
+                else:
+                    _tx = x_min if mw_side_i == 'LEFT' else x_max
+                    create_beveled_box(
+                        bm, size=(_th_d, _th_w, _th_h),
+                        location=(_tx, p_cy, z_floor + 0.05 + _th_h * 0.5),
+                        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.006)
 
         # Balcony Doorway Cutouts
         balconies_on_fl = getattr(ctx, 'floor_balconies', {}).get(fl_idx, [])
@@ -1812,6 +1860,54 @@ def build_floors(bm, props, ctx):
                 else:
                     yf = iy_max if ed.get('facade') == 'BACK' else iy_min
                     _plan_doorways.append({'x': ed.get('pos', 0.0), 'y': yf, 'axis': 'X', 'w': ed.get('w', 1.8), 'is_portal': ed.get('is_portal', True)})
+        # Every keep-out that must stay physically empty on this storey: the
+        # full stair lane with step-on/off landings, and the hall-side apron of
+        # each annex walk-through. The planner keeps partitions out of these,
+        # and the furnishing pass keeps props out of them too.
+        _zone_rects = []
+        _cur_hole = cur_stair_hole or next_stair_hole
+        if _cur_hole is not None:
+            _zone_rects.append(tuple(_cur_hole))
+            _stair_zone = stair_circulation_zone(
+                _cur_hole,
+                {
+                    'cx': (_turn_col_x0 + _turn_col_w * 0.5) if _turn_style else stair_cx,
+                    'w': _turn_col_w if _turn_style else (
+                        (stair_w * 2.0 + lane_gap) if stair_switchback else stair_w),
+                    'y_bot': _turn_col_y0 if _turn_style else stair_y_bot,
+                    'y_top': (_turn_col_y0 + _turn_col_d) if _turn_style else stair_y_top,
+                },
+                bounds=(ix_min, ix_max, iy_min, iy_max),
+            )
+            if _stair_zone is not None:
+                _zone_rects.append(_stair_zone)
+        if ctx.floor_clear_zones is None:
+            ctx.floor_clear_zones = {}
+        _prev_zones = ctx.floor_clear_zones.setdefault(fl_idx, [])
+        for _rec in (getattr(ctx, 'annex_clear_rects', None) or []):
+            if fl_idx in (_rec.get('floor_idx') or []):
+                _rz = tuple(_rec['rect'])
+                _zone_rects.append(_rz)
+                if _rz not in _prev_zones:
+                    _prev_zones.append(_rz)
+        # Keep every doorway (wing portal, annex portal, exterior door) clear:
+        # a room re-cut or partition must never run a wall through an opening.
+        # (Tenements use their own demising/apartment planner, which already
+        # places its doors; leave that untouched.)
+        if effective_archetype != 'TENEMENT':
+            for _pdw in _plan_doorways:
+                _ddx = float(_pdw.get('x', 0.0)); _ddy = float(_pdw.get('y', 0.0))
+                _ddw = float(_pdw.get('w', 1.0) or 1.0)
+                if _pdw.get('axis', 'X') == 'X':
+                    _rz = (_ddx - _ddw * 0.5, _ddx + _ddw * 0.5, _ddy - 0.30, _ddy + 0.30)
+                else:
+                    _rz = (_ddx - 0.30, _ddx + 0.30, _ddy - _ddw * 0.5, _ddy + _ddw * 0.5)
+                _zone_rects.append(_rz)
+                if _rz not in _prev_zones:
+                    _prev_zones.append(_rz)
+        for _zr in _zone_rects:
+            if _zr not in _prev_zones:
+                _prev_zones.append(_zr)
         for _pdw in _plan_doorways:
             if _pdw not in ctx.floor_doorways.setdefault(fl_idx, []):
                 ctx.floor_doorways[fl_idx].append(_pdw)
@@ -1844,6 +1940,7 @@ def build_floors(bm, props, ctx):
                          and getattr(props, 'exterior_stairs_side', 'LEFT') in ('LEFT', 'RIGHT'))
             ) else None,
             fl_wings_bounds=fl_wings_bounds if fl_has_wing else None,
+            clear_zone_rects=_zone_rects,
             effective_archetype=effective_archetype,
             props=props,
             seed=seed + fl_idx * 17,
@@ -1917,7 +2014,7 @@ def build_floors(bm, props, ctx):
             for b_ent in balconies_on_fl:
                 if b_ent.get('side') == 'FRONT':
                     b_cx = (x_min + x_max) * 0.5 + b_ent.get('offset', 0.0)
-                    front_excludes.append((b_cx - (b_width * 0.5 + 0.85), b_cx + (b_width * 0.5 + 0.85)))
+                    front_excludes.append((b_cx - (b_width * 0.5 + 0.55), b_cx + (b_width * 0.5 + 0.55)))
             if b_side_next == 'FRONT':
                 b_cx = (x_min + x_max) * 0.5 + getattr(ctx, 'floor_balc_offset', {}).get(fl_idx + 1, 0.0)
                 front_excludes.append((b_cx - (b_width * 0.5 + 0.45), b_cx + (b_width * 0.5 + 0.45)))
@@ -2007,7 +2104,7 @@ def build_floors(bm, props, ctx):
             for b_ent in balconies_on_fl:
                 if b_ent.get('side') == 'BACK':
                     b_cx = (x_min + x_max) * 0.5 + b_ent.get('offset', 0.0)
-                    back_excludes.append((b_cx - (b_width * 0.5 + 0.85), b_cx + (b_width * 0.5 + 0.85)))
+                    back_excludes.append((b_cx - (b_width * 0.5 + 0.55), b_cx + (b_width * 0.5 + 0.55)))
 
             back_win_xs = []
             back_rooms = [rm for rm in fl_rooms if 'BACK' in rm.exterior_facades
@@ -2095,7 +2192,7 @@ def build_floors(bm, props, ctx):
             for b_ent in balconies_on_fl:
                 if b_ent.get('side') == 'LEFT':
                     b_cy = (y_min + y_max) * 0.5 + b_ent.get('offset', 0.0)
-                    left_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
+                    left_excludes.append((b_cy - (b_width * 0.5 + 0.55), b_cy + (b_width * 0.5 + 0.55)))
 
             # Rectangular main building cargo dock / freight opening (Left)
             if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not is_temporary_stockpile and not fl_has_wing and rec_cargo_side == 'LEFT':
@@ -2212,7 +2309,7 @@ def build_floors(bm, props, ctx):
             for b_ent in balconies_on_fl:
                 if b_ent.get('side') == 'RIGHT':
                     b_cy = (y_min + y_max) * 0.5 + b_ent.get('offset', 0.0)
-                    right_excludes.append((b_cy - (b_width * 0.5 + 0.85), b_cy + (b_width * 0.5 + 0.85)))
+                    right_excludes.append((b_cy - (b_width * 0.5 + 0.55), b_cy + (b_width * 0.5 + 0.55)))
 
             # Rectangular main building cargo dock / freight opening (Right)
             if fl_idx == 0 and effective_archetype in ('LUMBERMILL', 'WAREHOUSE') and not is_temporary_stockpile and not fl_has_wing and rec_cargo_side == 'RIGHT':
@@ -2638,15 +2735,53 @@ def build_floors(bm, props, ctx):
 
         # Interior joinery
         if not open_timber and not is_temporary_stockpile:
+            # Trims run on EVERY interior wall, top and bottom. Where a wing or
+            # outcrop portal pierces the wall the run is cut around the opening
+            # (it is registered in the *_openings lists), so nothing crosses a
+            # doorway but the wall either side still gets its timber trim.
+            _trim_ops = {
+                'front': list(front_openings),
+                'back': list(back_openings),
+                'left': list(left_openings),
+                'right': list(right_openings),
+            }
+            # Sides that carry a walkthrough portal are dressed by the portal's
+            # own cased jambs (build_portal_joinery), which already run a base
+            # and a head right across the wall.  Skipping the trim there avoids
+            # doubled baseboards / cornices inside the opening.
+            _portal_trim_skip = set()
+            if fl_has_wing:
+                # Cut the trim run around each wing portal instead of dropping
+                # the whole wall: the doorway stays clear and the rest of the
+                # wall still gets its baseboard and crown.
+                for w_elem in wings:
+                    ww = str(w_elem.get('wall', '') or '').upper()
+                    _side_key = {'FRONT': 'front', 'BACK': 'back',
+                                 'LEFT': 'left', 'RIGHT': 'right'}.get(ww)
+                    if _side_key is None:
+                        continue
+                    wb = ((w_elem.get('bounds_fl') or {}).get(fl_idx)
+                          or w_elem.get('base') or w_elem.get('bounds'))
+                    if not wb:
+                        continue
+
+                    if ww in ('FRONT', 'BACK'):
+                        u0, u1 = wb[0] - ix_min, wb[1] - ix_min
+                        if ww == 'BACK':
+                            u0, u1 = ix_max - wb[1], ix_max - wb[0]
+                    else:
+                        u0, u1 = wb[2] - iy_min, wb[3] - iy_min
+                        if ww == 'LEFT':
+                            u0, u1 = iy_max - wb[3], iy_max - wb[2]
+                    _trim_ops[_side_key].append({
+                        'u_start': u0, 'u_end': u1,
+                        'z_start': z_floor, 'z_end': z_ceil,
+                    })
+                    _portal_trim_skip.add(_side_key)
             build_interior_trims(
                 bm, ix_min, ix_max, iy_min, iy_max, z_floor, z_ceil,
                 wall_thickness=wall_t, stair_hole=cur_stair_hole,
-                wall_openings={
-                    'front': front_openings,
-                    'back': back_openings,
-                    'left': left_openings,
-                    'right': right_openings,
-                },
+                wall_openings=_trim_ops, skip_sides=_portal_trim_skip,
             )
             if fl_interior_walls:
                 build_floor_interior_walls(
@@ -2739,6 +2874,40 @@ def build_floors(bm, props, ctx):
             fr_right = [(wy1 - y_min, wy2 - y_min) for w_elem, (wx1, wx2, wy1, wy2) in zip(wings, fl_wings_bounds) if w_elem['wall'] == 'RIGHT'] if fl_has_wing else None
 
             _wall_splits = getattr(props, 'wall_splits', None) or (props.get('wall_splits', None) if hasattr(props, 'get') else None) or getattr(ctx, 'wall_splits', None) or {}
+
+            # Annex door casings, sized to cover the full union of wall cuts at
+            # the opening (including any later-added opening above/beside it).
+            for _pf in _pending_annex_frames:
+                _ops = left_openings if _pf['side'] == 'LEFT' else right_openings
+                _z0 = _pf['z0']
+                _zend = _pf['zend']
+                _u0 = (_pf['cy'] - _pf['w'] * 0.5) - y_min
+                _u1 = (_pf['cy'] + _pf['w'] * 0.5) - y_min
+                for _op in _ops:
+                    if (_op.get('u_end', 0.0) > _u0 - 0.10
+                            and _op.get('u_start', 0.0) < _u1 + 0.10):
+                        _zend = max(_zend, _op.get('z_end', _zend))
+                _jw = 0.24
+                _jov = 0.12
+                _jh = (_zend - _z0) + 0.06
+                for _s in (-1.0, 1.0):
+                    create_beveled_box(
+                        bm, size=(_pf['jamb_d'], _jw, _jh),
+                        location=(_pf['fx'],
+                                  _pf['cy'] + _s * (_pf['w'] * 0.5 + _pf['jamb_w'] * 0.5),
+                                  _z0 + _jh * 0.5 - 0.02),
+                        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+                create_beveled_box(
+                    bm, size=(_pf['jamb_d'] + 0.02,
+                              _pf['w'] + _jw * 2.0 + _jov * 2.0 + 0.08, 0.22),
+                    location=(_pf['fx'], _pf['cy'], _zend),
+                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
+                _th_h = 0.034
+                create_beveled_box(
+                    bm, size=(_pf['jamb_d'] + 0.02,
+                              _pf['w'] + _jw * 2.0 + _jov * 2.0 + 0.08, _th_h),
+                    location=(_pf['fx'], _pf['cy'], _z0 + 0.05 + _th_h * 0.5),
+                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008)
 
             build_wall_with_opening(
                 bm, (x_min, y_min), (x_max, y_min), z_floor, wall_top_z, wall_t, front_openings,
@@ -3022,6 +3191,8 @@ def build_floors(bm, props, ctx):
 
     ctx.floor_wall_bounds = floor_wall_bounds
     ctx.floor_stair_holes = floor_stair_holes
+    # Populate per-floor furniture keep-out rects (stair well + annex apron).
+    ctx.floor_clear_zones = getattr(ctx, 'floor_clear_zones', None) or {}
     # The corner-loop turned stair reserves each flight individually (hole +
     # stair box + approaches + foot landing), so the legacy single-column
     # full-stair keepout must NOT apply — it would reserve a phantom strip

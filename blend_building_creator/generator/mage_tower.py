@@ -1294,6 +1294,21 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
             _beam(bm, p_in, p_out, z_floor + zo, z_floor + zo, cw, ch_, m, bevel=0.010)
         _guard_post(r_rail * math.cos(th_s), r_rail * math.sin(th_s), th_s)
 
+        # Outer edge of the stair opening: when the belvedere floor continues
+        # beyond the shaft, that side of the well was left unguarded. Add a
+        # matching rail along the outer arc (ending at the top-step walk-off).
+        if has_outer_ring:
+            r_out_rail = r_cut_out + 0.03
+            for (cw, ch_, zo, m) in ((0.12, 0.09, 0.05, MAT_INDEX_TIMBER),
+                                     (0.07, 0.05, 0.52, MAT_INDEX_TIMBER),
+                                     (0.13, 0.09, h - 0.06, MAT_INDEX_TIMBER),
+                                     (0.19, 0.045, h + 0.015, MAT_INDEX_WOOD)):
+                _sweep_helical_beam(bm, r_helix=r_out_rail, theta_start=th_s, theta_end=th_e,
+                                    z_start=z_floor, z_end=z_floor, cross_w=cw, cross_h=ch_,
+                                    z_offset=zo, mat_index=m, segments=n_seg, cx=cx, cy=cy)
+            for ta in (th_s, th_e):
+                _guard_post(r_out_rail * math.cos(ta), r_out_rail * math.sin(ta), ta)
+
 
 # =============================================================================
 # MAIN MAGE TOWER GENERATOR
@@ -2026,8 +2041,9 @@ def build_mage_tower(bm, props, seed):
     # High-poly smooth corner tourelles / pinnacles around the eaves.
     _corner_tourelles(bm, 0.0, 0.0, roof_z + 0.16, bel_r, height=2.0 + bel_r * 0.15)
 
-    # Floating orbiting arcane crystal shards (matching Images 4 & 5)
-    _floating_arcane_shards(bm, 0.0, 0.0, roof_z, bel_r)
+    # Floating orbiting arcane crystal shards ABOVE the roof apex (not inside
+    # the spire): anchor their orbit to the top of the witch-hat roof.
+    _floating_arcane_shards(bm, 0.0, 0.0, roof_z + roof_h + 0.6, bel_r * 0.85)
 
     # -------------------------------------------------------------------------
     # 5. Open Arcane Interior Furnishings (Bookcases & Magical Props)

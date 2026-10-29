@@ -189,7 +189,9 @@ def test_mage_tower():
 def test_room_zoning_and_furnishing():
     """Verifies intelligent room layouts, artisan store/living separation, and stair landing protection."""
     print("\n--- [TEST] Room Layouts & Furnishing Zoning ---")
-    from blend_building_creator.generator.interior import _resolve_room_roles
+    from blend_building_creator.generator.interior import (
+        _resolve_room_roles, plan_floor_rooms, stair_circulation_zone,
+    )
 
     # 1. Inn: taproom on ground floor, guest rooms on upper floor, protected stair landing
     ground_inn = _resolve_room_roles('INN', fl_idx=0, num_rooms=3, has_stairs_landing=False)
@@ -214,7 +216,7 @@ def test_room_zoning_and_furnishing():
         assert t2_floors >= min_t2, f"{fam}_T2 has only {t2_floors} floors (expected >= {min_t2})"
 
     ground_artisan = _resolve_room_roles('BAKERY', fl_idx=0, num_rooms=2, has_stairs_landing=False)
-    assert 'STORE' in ground_artisan or 'WORKSHOP' in ground_artisan
+    assert any(role in ground_artisan for role in ('STORE', 'WORKSHOP', 'BAKEHOUSE')), ground_artisan
     print("  [PASS] All 9 Artisan families verified (Hunter rustic cabin in T1, storefronts downstairs).")
 
     # 3. Small houses: split into bedroom + kitchen
@@ -227,6 +229,36 @@ def test_room_zoning_and_furnishing():
         assert t_key in PRESETS, f"Missing tenement preset: {t_key}"
         assert PRESETS[t_key]['settings']['num_floors'] >= 2
     print("  [PASS] Tenement Row and Tenement Complex presets verified.")
+
+    # 5. Multi-room upper floors reserve the actual stair lane and both landing
+    # ends for circulation; private rooms may not become route-through space.
+    circulation_props = SimpleNamespace(
+        has_interior_walls=True, interior_partition_style='AUTO',
+        interior_wall_thickness=0.16, floor_height=3.2, num_floors=2,
+        building_shape='RECTANGLE', interior_program='AUTO', has_stairs=True,
+        stair_placement='LEFT', stair_style='STRAIGHT',
+    )
+    circulation_bounds = (-5.0, 5.0, -6.0, 6.0)
+    circulation_hole = (-4.5, -3.0, -1.0, 3.0)
+    circulation_info = {'cx': -3.75, 'w': 1.5, 'y_bot': -1.0, 'y_top': 3.0, 'y_ascend': 1.0}
+    circulation_rooms, _ = plan_floor_rooms(
+        1, circulation_bounds, stair_hole=circulation_hole,
+        stair_pos_info=circulation_info, effective_archetype='HOUSE',
+        props=circulation_props, clear_zone_rects=[circulation_hole], doorways=[])
+    circulation_zone = stair_circulation_zone(circulation_hole, circulation_info, circulation_bounds)
+    assert len(circulation_rooms) > 1
+    for room in circulation_rooms:
+        overlap_x = max(0.0, min(room.bounds[1], circulation_zone[1]) - max(room.bounds[0], circulation_zone[0]))
+        overlap_y = max(0.0, min(room.bounds[3], circulation_zone[3]) - max(room.bounds[2], circulation_zone[2]))
+        if overlap_x * overlap_y > 0.08:
+            assert room.role in ('STAIR_LANDING', 'CORRIDOR', 'ENTRANCE_HALL'), (
+                f"stair circulation landed in private room {room.id}/{room.role}")
+        if room.role in ('BEDROOM', 'MASTER_BED', 'GUEST_ROOM', 'TENEMENT_BEDROOM'):
+            internal = [d for d in room.doorways
+                        if circulation_bounds[0] + 0.10 < d.get('x', 0.0) < circulation_bounds[1] - 0.10
+                        and circulation_bounds[2] + 0.10 < d.get('y', 0.0) < circulation_bounds[3] - 0.10]
+            assert len(internal) < 2, f"bedroom {room.id} is a route-through room"
+    print("  [PASS] Multi-room upper floors keep stair landings and through-routes out of bedrooms.")
 
 
 def test_tenement_layouts():

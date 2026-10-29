@@ -282,6 +282,7 @@ def _build_civic_landmarks(bm, props, ctx, tier):
                          z_floor=ctx.found_h, width=1.6, side_offset=2.2,
                          towers=_tw)
     # Town Hall composer: annex volume + forecourt ramparts (tower arch above)
+    # Pass each resolved side's portal point through to the matching annex volume.
     if _prop(props, 'town_hall_composer', False) and ctx.shape == 'T_SHAPE':
         build_town_hall_composer(bm, props, {
             'tier': tier, 'base_hx': base_hx, 'base_d': ctx.base_d,
@@ -289,11 +290,21 @@ def _build_civic_landmarks(bm, props, ctx, tier):
             'wing_front': wing_front, 'door_x': ctx.main_door_cx,
             'seed': ctx.seed, 'fl1_bounds': ctx.floor_wall_bounds.get(1, None),
             'floor_wall_bounds': ctx.floor_wall_bounds, 'wall_t': ctx.wall_t,
+            'annex_side': ctx.annex_side, 'annex_floors': ctx.annex_floors,
+            'annex_width': ctx.annex_width, 'annex_cy': ctx.annex_cy,
+            'annex_by_side': ctx.annex_by_side,
+            'effective_wall_material': get_effective_wall_material(props),
+            'effective_roof_material': get_effective_roof_material(props),
         })
-    # Generic reusable side annex for any other building/preset.
-    elif _prop(props, 'has_side_annex', False):
+    # Generic reusable side annex for any other building/preset. Respect the
+    # resolved layout: if there is no room on the plot (annex_kind empty /
+    # floors 0) do not build one.
+    elif (_prop(props, 'has_side_annex', False)
+          and getattr(ctx, 'annex_kind', '') == 'side'
+          and int(getattr(ctx, 'annex_floors', 0) or 0) > 0):
         _build_generic_annex(bm, props, ctx, tier)
-    elif _prop(props, 'has_tower_annex', False):
+    elif (_prop(props, 'has_tower_annex', False)
+          and getattr(ctx, 'annex_kind', '') == 'tower'):
         _build_massive_tower_annex(bm, props, ctx, tier)
     # Rampart walk for any other footprint (the T-shaped composer owns its own).
     elif _prop(props, 'has_side_rampart', False):
@@ -304,41 +315,49 @@ def _build_civic_landmarks(bm, props, ctx, tier):
 def _build_massive_tower_annex(bm, props, ctx, tier):
     """Attach massive stone tower annex to the building."""
     from .annex import build_tower_annex
-    a_side = _prop(props, 'annex_side', 'LEFT')
+    a_side = ctx.annex_side
     side_sgns = [-1.0, 1.0] if a_side == 'BOTH' else ([1.0] if a_side == 'RIGHT' else [-1.0])
-    a_floors = ctx.num_floors
+    a_floors = ctx.annex_floors if ctx.annex_floors > 0 else ctx.num_floors
     base_hx = ctx.base_w * 0.5
     base_hy = ctx.base_d * 0.5
     a_w = 12.0
     a_d = 8.0
+    _main_roof_mat = get_effective_roof_material(props)
     for side_sgn in side_sgns:
         build_tower_annex(
             bm, side_sgn=side_sgn, main_hx=base_hx,
             main_cy0=-base_hy, main_cy1=base_hy,
             z_ground=0.0, found_h=ctx.found_h, floors=a_floors, floor_h=ctx.floor_h,
             tier=tier, width=a_w, depth=a_d,
-            main_bounds_by_floor=ctx.floor_wall_bounds
+            main_bounds_by_floor=ctx.floor_wall_bounds,
+            props=props, main_roof_mat=_main_roof_mat,
         )
 
 
 def _build_generic_annex(bm, props, ctx, tier):
     """Attach the reusable half-timbered side annex to any footprint."""
-    a_side = _prop(props, 'annex_side', 'LEFT')
+    a_side = ctx.annex_side
     side_sgns = [-1.0, 1.0] if a_side == 'BOTH' else ([1.0] if a_side == 'RIGHT' else [-1.0])
-    a_floors = max(1, min(2, _prop(props, 'annex_floors', 2)))
+    a_floors = ctx.annex_floors
     base_hx = ctx.base_w * 0.5
     base_hy = ctx.base_d * 0.5
-    _eff_wall = get_effective_wall_material(props)
-    annex_tier = 'TIER_1' if _eff_wall == 'LOGS' else tier
-    a_w = min(6.0, max(3.6, ctx.base_d * 0.72))
+    _eff_roof = get_effective_roof_material(props)
+    _is_wattle_annex = (get_effective_wall_material(props) == 'WATTLE_DAUB')
+    # Tier-1 host walls use the Tier-1 course builder for either logs or wattle.
+    annex_tier = 'TIER_1' if tier == 'TIER_1' else tier
+    a_w = ctx.annex_width
     a_d = 3.6 if annex_tier == 'TIER_1' else 4.0
     a_roof = 3.0 if annex_tier == 'TIER_3' else 2.6
     for side_sgn in side_sgns:
+        _side_layout = ctx.annex_by_side.get('RIGHT' if side_sgn > 0 else 'LEFT', {})
+        annex_cy = _side_layout.get('cy', ctx.annex_cy)
+        # The layout grows the body when the stairs shift the doorway off-centre.
+        side_w = _side_layout.get('width', a_w)
         build_side_annex(
             bm, side_sgn=side_sgn, main_hx=base_hx,
-            main_cy0=-base_hy, main_cy1=base_hy,
+            main_cy0=annex_cy - side_w * 0.5, main_cy1=annex_cy + side_w * 0.5,
             z_ground=0.0, found_h=ctx.found_h, floors=a_floors, floor_h=ctx.floor_h,
-            tier=annex_tier, width=a_w, depth=a_d, roof_h=a_roof,
+            tier=annex_tier, width=side_w, depth=a_d, roof_h=a_roof,
             plank_direction=ctx.plank_dir,
             main_bounds_by_floor=ctx.floor_wall_bounds,
             main_roof={
@@ -351,10 +370,14 @@ def _build_generic_annex(bm, props, ctx, tier):
                 'sway': _prop(props, 'roof_sway', 0.30),
                 'style': _prop(props, 'roof_style', 'SWAY'),
                 'ov': _prop(props, 'roof_overhang', 0.70),
+                'roof_mat': _eff_roof,
             },
-            # Log buildings get a plain log annex, never half-timbering.
-            timber_framing=bool(_prop(props, 'has_timber_framing', True)) and annex_tier != 'TIER_1',
-            diagonals=bool(_prop(props, 'timber_diagonals', True)),
+            # Keep the annex wall construction in the same visual family as its host.
+            timber_framing=bool(_prop(props, 'has_timber_framing', True)) and _is_wattle_annex,
+            diagonals=bool(_prop(props, 'timber_diagonals', True)) and _is_wattle_annex,
+            props=props, portal_cy=_side_layout.get('portal_cy', annex_cy),
+            is_wattle=_is_wattle_annex,
+            shared_walls_by_floor=getattr(ctx, 'annex_shared_walls', None),
         )
 
 
@@ -908,12 +931,10 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
         except Exception:
             pass
 
-    # Hunter yard / porch: game curing rails with hanging meat cuts (meat.fbx, meat1.fbx)
-    # and outdoor game chopping stump with buried Cleaver.fbx.
+    # Hunter yard / porch: outdoor game curing rails with hanging meat cuts.
     if getattr(ctx, 'effective_archetype', '') == 'HUNTER':
         try:
-            from .artisan_props import build_sausage_string, build_butcher_block
-            from .hospitality import is_point_outside_building
+            from .artisan_props import build_sausage_string
             _door_x = ctx.main_door_cx
             _n_want = 1 if tier == 'TIER_1' else (2 if tier == 'TIER_2' else 3)
             _ry = -hy - 0.75
@@ -938,19 +959,15 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
                     build_sausage_string(bm, _px, _ry, 0.0, 0.0, width=1.15)
                     ctx.hunter_rails.append((_px - 0.65, _px + 0.65, _ry - 0.45, _ry + 0.45))
                     _n += 1
-            # Outdoor game cleaning & chopping stump with artist cleaver and cuts
-            _bx = _door_x + (1.95 if tier == 'TIER_1' else -2.25)
-            _by = -hy - 0.65
-            if is_point_outside_building(_bx, _by, 0.42, ctx, margin=0.08):
-                build_butcher_block(bm, _bx, _by, 0.0, ang=0.25)
+            # The hunting cabin's cutting block belongs in its interior workroom;
+            # keep only curing rails in the outdoor yard.
         except Exception:
             pass
 
-    # Butcher yard: meat hanging rails and butcher block with proper artist cleaver.
+    # Butcher yard keeps its hanging meat rails outside; the chopping station is indoors.
     if getattr(ctx, 'effective_archetype', '') == 'BUTCHER':
         try:
-            from .artisan_props import build_sausage_string, build_butcher_block
-            from .hospitality import is_point_outside_building
+            from .artisan_props import build_sausage_string
             _door_x = ctx.main_door_cx
             _offs = [2.20, -2.20, 3.80, -3.80]
             _ry = -hy - 0.75
@@ -963,10 +980,7 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
                 if is_point_outside_building(_px, _ry, 0.50, ctx, margin=0.10):
                     build_sausage_string(bm, _px, _ry, 0.0, 0.0, width=1.15)
                     break
-            _bx = _door_x - 2.10
-            _by = -hy - 0.65
-            if is_point_outside_building(_bx, _by, 0.42, ctx, margin=0.08):
-                build_butcher_block(bm, _bx, _by, 0.0, ang=-0.20)
+            # The butcher block is furnished inside the butchery room, not outdoors.
         except Exception:
             pass
 

@@ -78,6 +78,7 @@ def generate_building(obj, props, extra_doorways=None, extra_window_exclusions=N
     # Tall doors must fit inside the ground storey: grow short floors
     # slightly rather than clipping the portal through the slab above.
     _ensure_door_floor_clearance(props)
+    _original_stair_side = getattr(props, 'stair_placement', None)
     from . import mesh_utils
     mesh_utils.ENABLE_BEVELS = bool(getattr(props, 'enable_bevels', False))
     bm = bmesh.new()
@@ -85,10 +86,14 @@ def generate_building(obj, props, extra_doorways=None, extra_window_exclusions=N
     if (getattr(props, 'has_construction', False)
             and getattr(props, 'construction_mode', 'WRAP_BUILDING') == 'EMPTY_SITE'):
         _build_empty_construction_site(obj, bm, props)
+        if _original_stair_side is not None:
+            props.stair_placement = _original_stair_side
         return
 
     if getattr(props, 'building_shape', 'RECTANGLE') == 'ROUND_TOWER':
         _build_round_tower_building(obj, bm, props)
+        if _original_stair_side is not None:
+            props.stair_placement = _original_stair_side
         return
 
     if getattr(props, 'has_castle_citadel', False):
@@ -419,6 +424,30 @@ def _create_building_context(props, extra_doorways=None, extra_window_exclusions
                         'floor_max': 99
                     })
 
+    # Resolve the annex layout once, up front, so the floors phase (portal cut
+    # + window suppression), the accessory dispatch (annex volume / roof band)
+    # and the attic phase (loft-hatch avoidance) all read the SAME side, width
+    # and portal position instead of re-deriving them.
+    from .annex_layout import resolve_annex_layout
+    annex = resolve_annex_layout(props, base_w, base_d, wall_t, num_floors,
+                                 wings=wings, shape=shape)
+
+    # Annex doorways must also steer the ROOM PLAN: the grand-manor planner
+    # otherwise drops a full-height partition straight across the walk-through,
+    # giving the annex a wall instead of a door. Registering them as side
+    # portals makes the planner reserve that exact span.
+    if annex.get('by_side'):
+        extra_dw = list(extra_dw)
+        for _side, _lay in sorted(annex['by_side'].items()):
+            _pc = _lay.get('portal_cy', 0.0)
+            _face_x = (base_w * 0.5 - wall_t * 0.5) * (1.0 if _side == 'RIGHT' else -1.0)
+            for _fl in range(int(annex.get('floors', 0) or 0)):
+                extra_dw.append({
+                    'x': _face_x,
+                    'y': _pc, 'axis': 'Y', 'w': 1.65,
+                    'floor_idx': _fl, 'is_portal': True, 'facade': _side,
+                })
+
     return BuildingContext(
         num_floors=num_floors, floor_h=floor_h, found_h=found_h,
         floor_wall_bounds={}, hx=0.0, hy=0.0,
@@ -440,6 +469,15 @@ def _create_building_context(props, extra_doorways=None, extra_window_exclusions
         chimney_pos=planned_chimneys[0] if planned_chimneys else None,
         chimney_positions=list(planned_chimneys),
         planned_chimneys=list(planned_chimneys),
+        annex_kind=annex['kind'],
+        annex_side=annex['side'],
+        annex_width=annex['width'],
+        annex_floors=annex['floors'],
+        annex_cy=annex.get('cy', 0.0),
+        annex_portal_cy=annex.get('portal_cy', 0.0),
+        annex_by_side=annex['by_side'],
+        annex_stair_side=annex.get('stair_side'),
+        annex_clear_rects=list(annex.get('clear_rects') or []),
     )
 
 

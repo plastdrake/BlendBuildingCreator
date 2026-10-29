@@ -239,7 +239,8 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                     z_base, width=2.2, depth=1.6, height=2.6, roof_style='LEAN_TO', tier='TIER_3',
                     floor_h=2.8, lower_bounds=None,
                     win_w=None, win_h=None, shingle_scale=0.32, shingle_rot=0,
-                    off_along=0.0, frame=None, peak_h=None, wall_mat=None, has_bench=True):
+                    off_along=0.0, frame=None, peak_h=None, wall_mat=None, has_bench=True,
+                    is_wattle=False):
     """
     Builds a small outcrop bay room / annex projection:
     - GROUND: rests on grounded stone foundation plinth.
@@ -286,7 +287,8 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             size=(found_depth, found_width, found_h),
             location=frame.to_world(Vector((depth * 0.5 + 0.05, 0.0, found_h * 0.5))),
             rotation=(0.0, 0.0, frame.rot_z),
-            mat_index=MAT_INDEX_WOOD if tier == 'TIER_1' else MAT_INDEX_STONE,
+            mat_index=(MAT_INDEX_WOOD if tier == 'TIER_1' and not is_wattle
+                       else MAT_INDEX_STONE),
             bevel_amount=0.02
         )
     else:  # UPPER floor oriel bay
@@ -541,6 +543,7 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             wall_thickness=wall_thick,
             normal_axis=(normal.x, normal.y),
             has_shutters=True,
+            exterior_projection=0.06,
         )
 
     # 5. Dedicated shingled roof (shared outcrop roof builder)

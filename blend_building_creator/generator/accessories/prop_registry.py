@@ -282,7 +282,7 @@ for _s in (
           'artisan_props', 'build_meat', 0.25, length=0.34, variant=0),
     _spec('MEAT_SMALL', "Meat Cut (Small)", 'KITCHEN', "Artist small butcher cut",
           'artisan_props', 'build_meat', 0.20, length=0.20, variant=1),
-    _spec('CLEAVER', "Meat Cleaver", 'WORK', "Artist forged cleaver with wooden haft and heavy steel blade",
+    _spec('CLEAVER', "Meat Cleaver", 'WORK', "Artist Cleaver.fbx mesh with wooden haft and steel blade",
           'artisan_props', 'build_cleaver', 0.40, length=0.36),
     _spec('WINE_RACK', "Wine Rack", 'WORK', "Cellar rack of lying wine bottles",
           'artisan_props', 'build_wine_rack', 0.80, width=1.10),
@@ -330,6 +330,10 @@ def build_prop(bm, key: str, x: float = 0.0, y: float = 0.0,
     fn = _resolve(spec)
     kwargs = dict(spec.defaults)
     kwargs.update(params or {})
+    if key == 'CLEAVER':
+        from .artisan_meshdata import PROP_MESHES
+        if 'cleaver' not in PROP_MESHES:
+            return []
     if key == 'CHAIN_LANTERN':
         kwargs.pop('ang', None)
         return fn(bm, x, y, z_ceiling=z, **kwargs)

@@ -16,19 +16,28 @@ from ..walls import build_facade_timber, build_wall_with_opening
 from ..openings import build_window_assembly
 from ..roof.gable_roof import build_gable_roof
 from ..roof.valley import build_valley_rafters, deck_top_z
-from ..style import tier_wall_mat
+from ..interior import build_interior_trims
+from ..style import tier_wall_mat, get_effective_wall_material, get_effective_roof_material
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_FLOOR,
-    MAT_INDEX_PLASTER_EXT,
+    MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER,
 )
 from .mini_wing import build_mini_wing
+
+
+GABLE_WINDOW_INSET = 0.15
+
+
+def _clamp(v, lo, hi):
+    return max(lo, min(hi, v))
 
 
 def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                      found_h=0.6, floors=2, floor_h=3.0, tier='TIER_3',
                      width=5.2, depth=4.0, roof_h=3.0, plank_direction='VERTICAL',
                      main_bounds_by_floor=None, timber_framing=True, diagonals=True,
-                     main_roof=None):
+                      main_roof=None, props=None, portal_cy=None, is_wattle=None,
+                      shared_walls_by_floor=None):
     """Half-timbered side volume embedded into the main side wall.
 
     side_sgn: +1 attaches on +X, -1 on -X. width runs along Y, depth along X.
@@ -38,13 +47,43 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
     Returns the outer face X for forecourt layout.
     """
     overlap = 0.6
-    wmat_upper = tier_wall_mat(tier)
+    wmat_upper = tier_wall_mat(tier, props=props)
+    eff_wall = get_effective_wall_material(props) if props is not None else ''
+    _wall_tier = 'TIER_1' if tier == 'TIER_1' else tier
+    from ..style import is_tier1_wattle_daub
+    if props is not None:
+        # The host's resolved construction is authoritative (also for manually
+        # chosen tier styles); a side annex must never infer a different finish.
+        _host_wall = get_effective_wall_material(props)
+        if _host_wall == 'WATTLE_DAUB':
+            is_wattle = True
+            _wall_tier = 'TIER_1'
+        elif _host_wall == 'LOGS':
+            is_wattle = False
+            _wall_tier = 'TIER_1'
+        else:
+            is_wattle = False
+    elif is_wattle is None:
+        is_wattle = tier == 'TIER_1' and is_tier1_wattle_daub(props)
+    else:
+        is_wattle = bool(is_wattle)
+    if is_wattle and _wall_tier != 'TIER_1':
+        # Round log courses are gated on TIER_1; never let a wattle annex
+        # reach the log-wall branch through a tier mismatch.
+        _wall_tier = 'TIER_1'
+    physical_siding = False if is_wattle else eff_wall in ('LOGS', 'WOOD_PLANKS')
+    timber_framing = bool(timber_framing and is_wattle)
+    _plaster_cells = is_wattle
     wall_h = floors * floor_h
     top_z = found_h + wall_h
     wall_t = 0.28
+    # The outer wall is the cross-gable face. Recess its fixture far enough that
+    # the exterior casing straddles the cut wall edges instead of floating proud
+    # of the opening (matching the inset finish of the other annex windows).
 
     outer_x = side_sgn * (main_hx + depth - overlap)
     cy = (main_cy0 + main_cy1) * 0.5
+    portal_cy = cy if portal_cy is None else float(portal_cy)
     y0, y1 = cy - width * 0.5, cy + width * 0.5
 
     def _floor_inner(f):
@@ -67,13 +106,13 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                        location=(g_cx + side_sgn * 0.08, cy, z_ground + found_h * 0.5),
                        mat_index=MAT_INDEX_STONE, bevel_amount=0.025)
 
-    # Walls built by the engine wall builder so the siding (logs / planks / stone)
-    # and the window cut-outs + casings match every other wall on the hall.
+    # Exterior wall cladding/construction is resolved from the host building's
+    # effective wall style, including the Tier-1 logs vs. framed wattle-daub choice.
     out_normal = (1.0, 0.0) if side_sgn > 0 else (-1.0, 0.0)
     for f in range(floors):
         fz0 = found_h + f * floor_h
         fz1 = fz0 + floor_h
-        f_mat = MAT_INDEX_STONE if f == 0 else wmat_upper
+        f_mat = MAT_INDEX_PLASTER_EXT if _plaster_cells else wmat_upper
         inner_x = floor_inner[f]
         cxf = (inner_x + outer_x) * 0.5
         outer_wall_x = outer_x - side_sgn * wall_t * 0.5
@@ -101,10 +140,10 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             build_wall_with_opening(
                 bm, (outer_wall_x, y0), (outer_wall_x, y1), fz0, fz1, wall_t,
                 list(outer_ops),
-                mat_ext=f_mat, normal_vec=out_normal, tier=tier, physical_siding=True,
+                mat_ext=f_mat, normal_vec=out_normal, tier=_wall_tier, physical_siding=physical_siding,
                 plank_direction=plank_direction, seed=42)
             build_window_assembly(
-                bm, center=(outer_x, cy, sill + win_h * 0.5), size=(win_w, win_h),
+                bm, center=(outer_x - side_sgn * GABLE_WINDOW_INSET, cy, sill + win_h * 0.5), size=(win_w, win_h),
                 wall_thickness=wall_t, normal_axis=out_normal, has_shutters=True)
         else:
             # Upper floor walk-through portal into the oriel bay.
@@ -114,6 +153,7 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             _lh = 0.16
             _jw = 0.16
             _jd = wall_t + 0.10
+            cy = portal_cy
             uc = width * 0.5
             _oz0 = fz0
             _oz1 = fz0 + oriel_portal_h + _lh
@@ -123,7 +163,7 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             build_wall_with_opening(
                 bm, (outer_wall_x, y0), (outer_wall_x, y1), fz0, fz1, wall_t,
                 list(outer_ops),
-                mat_ext=f_mat, normal_vec=out_normal, tier=tier, physical_siding=True,
+                mat_ext=f_mat, normal_vec=out_normal, tier=_wall_tier, physical_siding=physical_siding,
                 plank_direction=plank_direction, seed=42)
             # Timber jambs + lintel matching the annex doorway in dimensions & material
             _wc = outer_wall_x
@@ -138,13 +178,13 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                 location=(_wc, cy, fz0 + oriel_portal_h + _lh * 0.5),
                 mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
 
-            # Matching raised wooden threshold board into the oriel bay
+            # Matching raised timber threshold board into the oriel bay
             _th_h = 0.034
             create_beveled_box(
                 bm, size=(_jd + 0.02, oriel_portal_w + _jw * 2.0 + 0.02, _th_h),
                 location=(_wc, cy, fz0 + 0.05 + _th_h * 0.5),
-                mat_index=MAT_INDEX_WOOD, bevel_amount=0.008)
-        if timber_framing:
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008)
+        if timber_framing and not physical_siding:
             build_facade_timber(bm, (outer_wall_x, y0), (outer_wall_x, y1), fz0, fz1, wall_t,
                                 out_normal, list(outer_ops), diagonals,
                                 is_top_floor=(f == floors - 1))
@@ -157,25 +197,70 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             build_wall_with_opening(
                 bm, (inner_x, wy), (outer_x, wy), fz0, fz1, wall_t,
                 list(_fb_ops),
-                mat_ext=f_mat, normal_vec=nvec, tier=tier, physical_siding=True,
+                mat_ext=f_mat, normal_vec=nvec, tier=_wall_tier, physical_siding=physical_siding,
                 plank_direction=plank_direction, seed=42,
                 # Inner end dies into the main hall wall, so logs must not saddle
                 # over-run into the interior; the outer end does turn a corner.
                 # A log eave side also drops its top log - it rides into the roof.
                 is_corner_start=False, is_corner_end=True,
-                omit_top_log_row=(tier == 'TIER_1'),
-                force_omit_top_log_row=(tier == 'TIER_1'))
+                omit_top_log_row=(_wall_tier == 'TIER_1'),
+                force_omit_top_log_row=(_wall_tier == 'TIER_1'))
             build_window_assembly(
                 bm, center=(cxf, wy, sill + win_h * 0.5), size=(win_w, win_h),
                 wall_thickness=wall_t, normal_axis=nvec, has_shutters=shutters)
-            if timber_framing:
+            if timber_framing and not physical_siding:
                 build_facade_timber(bm, (inner_x, wy), (outer_x, wy), fz0, fz1, wall_t,
                                     nvec, list(_fb_ops), diagonals,
                                     is_top_floor=(f == floors - 1))
 
-        # Furnish annex interior space on each floor: a sitting / reading room
-        # (never a bedroom). Sofa against the outer wall, an armchair facing it,
-        # a small table, a bookcase and a plant.
+        # Interior joinery: timber baseboards and crown mouldings around the
+        # annex room on every wall and every tier. The runs are cut around the
+        # walk-through and the oriel doorway, so no trim crosses an opening.
+        _shared_face = 'left' if side_sgn > 0 else 'right'
+        _outer_face = 'right' if side_sgn > 0 else 'left'
+        _annex_door_u = max(1.65 * 0.5, min(width - 1.65 * 0.5, portal_cy - cy + width * 0.5))
+        _annex_ops = {
+            _shared_face: [{
+                'u_start': _annex_door_u - 1.65 * 0.5,
+                'u_end': _annex_door_u + 1.65 * 0.5,
+                'z_start': fz0, 'z_end': fz0 + 2.35
+            }],
+        }
+        if floors >= 2 and f == floors - 1:
+            _annex_ops[_outer_face] = [{
+                'u_start': width * 0.5 - 1.65 * 0.5,
+                'u_end': width * 0.5 + 1.65 * 0.5,
+                'z_start': fz0, 'z_end': fz0 + 2.35
+            }]
+        build_interior_trims(
+            bm, _fx_min, _fx_max, y0 + wall_t, y1 - wall_t, fz0 + 0.05, fz0 + floor_h - 0.08,
+            wall_thickness=wall_t,
+            wall_openings=_annex_ops,
+            skip_sides=(_shared_face,),
+        )
+        # The main facade wall already supplies the annex portal cut and its
+        # casing. Building another full-length wall on this shared face creates
+        # coincident double/triple partitions (and can wall the doorway back up).
+        # Only add a divider when this annex builder is used without the host wall
+        # portal pass recording a junction for the floor.
+        _shared_walls_by_floor = shared_walls_by_floor or {}
+        _shared_sides = _shared_walls_by_floor.get(f, set()) if _shared_walls_by_floor else set()
+        if ('LEFT' if side_sgn < 0 else 'RIGHT') not in _shared_sides:
+            from ..interior import build_interior_wall
+            _shared_is_left = _shared_face == 'left'
+            _sx = inner_x
+            _sy0, _sy1 = (y0 + wall_t * 0.5, y1 - wall_t * 0.5) if _shared_is_left \
+                else (y1 - wall_t * 0.5, y0 + wall_t * 0.5)
+            _door_h = min(2.35, floor_h - 0.35)
+            build_interior_wall(
+                bm, (_sx, _sy0), (_sx, _sy1), fz0, fz0 + floor_h, thickness=wall_t,
+                doorway={'cx': _sx, 'cy': portal_cy, 'w': 1.65, 'h': _door_h},
+                mat_index=MAT_INDEX_WOOD, casing_mat=MAT_INDEX_TIMBER,
+                plank_direction=plank_direction,
+            )
+
+        # Furnish the annex as a small separate sitting room: the seating reads
+        # from the doorway, so its back never faces the person walking in.
         try:
             from .prop_registry import build_prop
             from ..materials import MAT_INDEX_LEATHER, MAT_INDEX_LEATHER_2, MAT_INDEX_FABRIC_STITCHED
@@ -183,61 +268,147 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             _leather_opts = [MAT_INDEX_LEATHER, MAT_INDEX_LEATHER_2, MAT_INDEX_FABRIC_STITCHED]
             _rng = _rnd.Random(int(abs(outer_x * 97 + cy * 131)) + f)
             _annex_leather = _rng.choice(_leather_opts)
-            _annex_w = max(0.1, (y1 - wall_t) - (y0 + wall_t))
-            _annex_d = max(0.1, _fx_max - _fx_min)
-            _annex_cx = (_fx_min + _fx_max) * 0.5
+            # Usable room rectangle between the *finished* wall faces.  _fx_max
+            # is the outer edge of the outer wall, so the inner face is half a
+            # wall thickness further in; ignoring that buried the sofa.
+            # The slab starts/ends at the inside wall plane and the front/back
+            # wall centerlines are offset by half a wall. Use the actual finished
+            # faces, not a full extra wall thickness, when furnishing footprints.
+            _room_x_lo = min(_fx_min, _fx_max) + wall_t * 0.5 + 0.10
+            _room_x_hi = max(_fx_min, _fx_max) - wall_t * 0.5 - 0.10
+            _room_y_lo = y0 + wall_t * 0.5 + 0.10
+            _room_y_hi = y1 - wall_t * 0.5 - 0.10
+            _room_w = max(0.2, _room_y_hi - _room_y_lo)
+            _room_d = max(0.2, _room_x_hi - _room_x_lo)
+            _annex_cx = (_room_x_lo + _room_x_hi) * 0.5
             _annex_cy = cy
             _z_fl = fz0 + 0.05
             _z_cl = fz0 + floor_h - 0.08
-            # Back of the sofa against the annex's outer wall.
+            # Everything in a bay must stay this clear of the doorway opening.
+            _door_clear = 1.65 * 0.5 + 0.34
+
+            def _clamp_x(v, half):
+                lo, hi = _room_x_lo + half, _room_x_hi - half
+                return _clamp(v, lo, hi) if lo <= hi else _annex_cx
+
+            def _free_bay(lo, hi, width_needed):
+                """Absolute Y centre for a `width_needed` wide piece.
+
+                Try in front of the door first, then behind it, then the amplest
+                edge - but always with its footprint out of the doorway band.
+                """
+                half = width_needed * 0.5 + _door_clear
+                cands = [_clamp(portal_cy + half, lo, hi),
+                         _clamp(portal_cy - half, lo, hi),
+                         hi if abs(hi - portal_cy) >= abs(lo - portal_cy) else lo]
+                for c in cands:
+                    if abs(c - portal_cy) >= half - 1e-6:
+                        return c
+                # Room too short to clear the doorway band at all: report it
+                # so callers can drop the piece instead of blocking the walkway.
+                return None
+
+            # Sofa against the OUTER wall, back to it, facing the doorway wall.
+            # Yaw of -pi/2 turns local +Y into -X, so on the +X side the sofa
+            # faces the main hall; mirrored on the -X side.
+            _sofa_len = min(1.70, max(0.95, _room_w * 0.42))
+            _sofa_depth = 0.86 + 0.06
             _sofa_yaw = -math.pi / 2 if side_sgn > 0 else math.pi / 2
+            _sofa_y = _free_bay(_room_y_lo + _sofa_len * 0.5,
+                                _room_y_hi - _sofa_len * 0.5, _sofa_len)
+            _sofa_x = _room_x_hi - _sofa_depth * 0.5 - 0.04
+            _seating_y = _sofa_y
+            _sofa_half_x = _sofa_depth * 0.5
+            _sofa_half_y = _sofa_len * 0.5
+            if (_sofa_y is not None and _room_x_lo <= _sofa_x - _sofa_half_x
+                    and _sofa_x + _sofa_half_x <= _room_x_hi
+                    and _room_y_lo <= _sofa_y - _sofa_half_y
+                    and _sofa_y + _sofa_half_y <= _room_y_hi):
+                build_prop(bm, 'SOFA', _sofa_x, _sofa_y, _z_fl, _sofa_yaw,
+                           length=_sofa_len, fabric_mat=_annex_leather)
+            else:
+                # Do not force furniture into the doorway or through a finished wall.
+                _sofa_y = None
+                _seating_y = None
 
-            # Place sofa offset from outer wall, sized comfortably to the room.
-            _sx = outer_x - side_sgn * 0.54
-            _sofa_len = min(1.80, max(1.15, _annex_w * 0.48))
-            build_prop(bm, 'SOFA', _sx, _annex_cy, _z_fl, _sofa_yaw,
-                       length=_sofa_len, fabric_mat=_annex_leather)
+            # Potted plant tucked into the corner diagonally opposite the sofa.
+            _anchor_y = _sofa_y if _sofa_y is not None else _annex_cy
+            _pl_y = _room_y_lo + 0.42 if abs(_anchor_y - _room_y_hi) < abs(_anchor_y - _room_y_lo) \
+                else _room_y_hi - 0.42
+            if (_room_x_hi - _room_x_lo >= 0.90 and _room_y_hi - _room_y_lo >= 0.90
+                    and abs(_pl_y - portal_cy) >= 0.80):
+                build_prop(bm, 'POTTED_PLANT_LARGE', _room_x_lo + 0.42, _pl_y, _z_fl, 0.0)
 
-            # Compact coffee table in front of the sofa, offset toward the outer
-            # wall so the doorway walking corridor (y = cy) remains completely open.
-            _table_x = _sx - side_sgn * 0.70
-            build_prop(bm, 'ROUND_TABLE', _table_x, _annex_cy, _z_fl, 0.0, radius=0.28)
-            build_prop(bm, 'POTTED_PLANT_SMALL', _table_x, _annex_cy, _z_fl + 0.775, 0.0)
+            if _sofa_y is not None:
+                # Table and rug fit within the room and stay away from portal axis.
+                _table_x = _clamp_x(_sofa_x - side_sgn * (_sofa_depth * 0.5 + 0.52), 0.30)
+                _table_y = _sofa_y
+                _table_r = 0.26
+                if (_room_x_lo + _table_r <= _table_x <= _room_x_hi - _table_r
+                        and _room_y_lo + _table_r <= _table_y <= _room_y_hi - _table_r
+                        and abs(_table_y - portal_cy) >= _table_r + 0.25):
+                    build_prop(bm, 'ROUND_TABLE', _table_x, _table_y, _z_fl, 0.0, radius=_table_r)
+                    _rug_w = min(1.30, max(0.0, _room_d * 0.56))
+                    _rug_l = min(1.80, max(0.0, _room_w * 0.52))
+                    if (_rug_w >= 0.60 and _rug_l >= 0.80
+                            and abs(_table_y - portal_cy) >= _rug_l * 0.5 + 0.20):
+                        build_prop(bm, 'RUG_CRIMSON', (_sofa_x + _table_x) * 0.5, _table_y, _z_fl, 0.0,
+                                   width=_rug_w, length=_rug_l)
 
-            # Crimson rug centered under the sofa / table grouping:
-            _rug_cx = (_sx + _table_x) * 0.5
-            build_prop(bm, 'RUG_CRIMSON', _rug_cx, _annex_cy, _z_fl, 0.0,
-                       width=min(1.8, _annex_d * 0.52), length=min(2.4, _annex_w * 0.58))
+            # Bookshelf flat against the FRONT/back side wall, back to the plaster.
+            # Shelf faces -Y locally; yaw=pi flips it against the +Y wall, yaw=0
+            # against the -Y wall, standing back-panel-to-plaster, spines outward.
+            _bk_w = min(1.10, max(0.50, _room_d * 0.52))
+            _bk_d = 0.32
+            _bk_half = _bk_w * 0.5 + 0.10
+            _bk_room_top = (floor_h - 0.20) if (floors >= 2 and f == floors - 1) else floor_h
+            _bk_h = max(0.95, min(1.75, _bk_room_top - 0.45))
+            _bk_y_front = _room_y_lo + _bk_d * 0.5 + 0.01
+            _bk_y_back = _room_y_hi - _bk_d * 0.5 - 0.01
+            _d_front_ok = (abs(_bk_y_front - portal_cy) >= _bk_half
+                           and _room_y_lo <= _bk_y_front - _bk_d * 0.5
+                           and _bk_y_front + _bk_d * 0.5 <= _room_y_hi)
+            _d_back_ok = (abs(_bk_y_back - portal_cy) >= _bk_half
+                          and _room_y_lo <= _bk_y_back - _bk_d * 0.5
+                          and _bk_y_back + _bk_d * 0.5 <= _room_y_hi)
+            _bk_y = None
+            if _room_w >= _bk_w + 0.20:
+                if _d_front_ok and (not _d_back_ok or _room_w >= 2.2):
+                    _bk_y, _bk_yaw = _bk_y_front, math.pi
+                elif _d_back_ok:
+                    _bk_y, _bk_yaw = _bk_y_back, 0.0
+            if _bk_y is not None:
+                build_prop(bm, 'BOOKSHELF', _annex_cx, _bk_y, _z_fl, _bk_yaw,
+                           width=_bk_w, height=_bk_h)
 
-            # Bookshelf placed against the side wall if space permits,
-            # clear of the door swing and walkway.
-            if _annex_w >= 3.2:
-                _bk_y = y0 + wall_t + 0.22
-                _bk_x = (_fx_min + _fx_max) * 0.5
-                build_prop(bm, 'BOOKSHELF', _bk_x, _bk_y, _z_fl, 0.0,
-                           width=min(1.2, _annex_d * 0.45), height=1.70)
+            # Chair only when the sofa exists and a real floor footprint fits.
+            _chair_x = _clamp_x(_sofa_x - side_sgn * 1.55, 0.60)
+            _chair_half_x, _chair_half_y = 0.42, 0.42
+            if (_sofa_y is not None and _room_x_lo <= _chair_x - _chair_half_x
+                    and _chair_x + _chair_half_x <= _room_x_hi
+                    and _room_y_lo <= _sofa_y - _chair_half_y
+                    and _sofa_y + _chair_half_y <= _room_y_hi
+                    and abs(_sofa_y - portal_cy) >= _chair_half_y + 0.25):
+                build_prop(bm, 'ARMCHAIR', _chair_x, _sofa_y, _z_fl, _sofa_yaw + math.pi)
 
-            build_prop(bm, 'POTTED_PLANT_LARGE',
-                       outer_x - side_sgn * 0.55, y1 - wall_t - 0.45, _z_fl, 0.0)
-
-            # Collar tie / ceiling timber beam across the annex room, so the lantern
-            # hangs realistically from a solid structural beam instead of floating in midair.
+            # Collar tie / ceiling timber beam across the annex room, hung below
+            # the ceiling plane so it never penetrates the floor of the room above.
             _beam_w = 0.16
             _beam_h = 0.18
             _beam_y_span = (y1 - wall_t) - (y0 + wall_t)
             create_beveled_box(
                 bm, size=(_beam_w, _beam_y_span, _beam_h),
-                location=(_annex_cx, _annex_cy, _z_cl + _beam_h * 0.5),
+                location=(_annex_cx, _annex_cy, _z_cl - _beam_h * 0.5),
                 mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
 
-            build_prop(bm, 'CHAIN_LANTERN', _annex_cx, _annex_cy, _z_cl, 0.0)
+            build_prop(bm, 'CHAIN_LANTERN', _annex_cx, _annex_cy, _z_cl - _beam_h, 0.0)
         except Exception:
             pass
     top_inner = floor_inner[floors - 1]
     # Timber belt course between ground and upper lifts, built as a ring of
     # boards rather than one solid slab: it dresses the outside without filling
     # the annex room (the storey above already gives it a floor/ceiling).
-    if floors >= 2 and tier != 'TIER_1':
+    if floors >= 2 and not physical_siding:
         b_span = abs(outer_x - jetted_inner)
         b_cx = (jetted_inner + outer_x) * 0.5
         _bz = found_h + floor_h - 0.20
@@ -252,7 +423,7 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                            location=(outer_x + side_sgn * (_bt * 0.5 - 0.06), cy, _bz),
                            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
     # Corner boards on the outer corners (plain log annexes keep their log ends).
-    if tier != 'TIER_1':
+    if not physical_siding:
         for sy in (y0 + 0.08, y1 - 0.08):
             create_beveled_box(bm, size=(0.28, 0.28, wall_h),
                                location=(outer_x, sy, found_h + wall_h * 0.5),
@@ -271,7 +442,7 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
             wall_y_min=cy - 1.6, wall_y_max=cy + 1.6,
             z_base=found_h + floor_h, width=max(2.40, min(2.80, width * 0.58)), depth=0.9,
             height=max(2.80, min(3.20, floor_h - 0.55)), roof_style='LEAN_TO',
-            tier=tier, floor_h=floor_h,
+            tier=tier, floor_h=floor_h, wall_mat=f_mat, is_wattle=is_wattle,
             lower_bounds=(_ow_anchor_lo, _ow_anchor_hi, cy - 1.6, cy + 1.6),
         )
 
@@ -335,25 +506,110 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                    'overlap': 0.02, 'side': 'BOTH'}
         _seg_y = 10
         _valley = {'main_fn': _main_fn, 'eave_x': _eave_x, 'apex_x': _apex_x}
-    build_gable_roof(
-        annex_roof_bm,
-        x_min=-width * 0.5,
-        x_max=width * 0.5,
-        y_min=_r_y_min,
-        y_max=_r_y_max,
-        z_base=top_z,
-        roof_height=roof_h,
-        overhang=0.20,
-        wall_thickness=0.18,
-        gable_ends=_gable_ends,
-        abut_front=_abut_front,
-        abut_back=_abut_back,
-        segments_y=_seg_y,
-        tier=tier,
-        plank_direction='VERTICAL',
-        roof_flare=0.35,
-        valley_notch=_vnotch,
-    )
+    _main_style = main_roof.get('style', 'SWAY') if main_roof else 'SWAY'
+    _r_flare = main_roof.get('flare', 0.35) if main_roof else 0.35
+    _r_sway = main_roof.get('sway', 0.25) if main_roof else 0.25
+    _r_mat = main_roof.get('roof_mat', None) if main_roof else None
+    if not _r_mat and props is not None:
+        _r_mat = get_effective_roof_material(props)
+    if _main_style == 'MAKESHIFT' and _r_mat in ('THATCH', 'WOOD_SHINGLES'):
+        _main_style = 'SWAY'
+
+    if _main_style == 'NONE':
+        # Flat roof deck on top of the annex: solid timber floor slab + perimeter parapet curb
+        _deck_t = 0.14
+        create_beveled_box(
+            bm, size=(_annex_depth + 0.30, width + 0.30, _deck_t),
+            location=(_roof_cx, cy, top_z + _deck_t * 0.5),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.012
+        )
+        _curb_h = 0.22
+        _curb_w = 0.16
+        create_beveled_box(
+            bm, size=(_curb_w, width + 0.30, _curb_h),
+            location=(outer_x + side_sgn * 0.08, cy, top_z + _deck_t + _curb_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+        )
+        for _py in (y0 - 0.08, y1 + 0.08):
+            create_beveled_box(
+                bm, size=(_annex_depth + 0.30, _curb_w, _curb_h),
+                location=(_roof_cx, _py, top_z + _deck_t + _curb_h * 0.5),
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+            )
+        annex_roof_bm.free()
+        return outer_x
+    elif _main_style == 'MAKESHIFT':
+        # Low-tier annex under a makeshift main roof: the same draped-canvas
+        # rafters over the annex volume, in the annex's own footprint.
+        from ..roof.makeshift_roof import build_makeshift_roof
+        build_makeshift_roof(
+            bm,
+            min(top_inner, outer_x), max(top_inner, outer_x),
+            y0, y1,
+            z_base=top_z,
+            effective_archetype='NONE',
+            seed=42,
+        )
+        annex_roof_bm.free()
+        return outer_x
+    elif _main_style == 'TURRET':
+        # A conical turret cap over the annex, echoing the main roof style.
+        from ..roof.turret_roof import build_conical_turret_roof
+        _t_rad = max(width * 0.62, 1.4)
+        build_conical_turret_roof(
+            bm,
+            center_pos=(_roof_cx, cy, top_z),
+            radius=_t_rad,
+            height=max(1.8, roof_h * 1.15),
+        )
+        annex_roof_bm.free()
+        return outer_x
+    elif _main_style == 'SWAY':
+        from ..roof.sway_roof import build_sway_roof
+        build_sway_roof(
+            annex_roof_bm,
+            x_min=-width * 0.5,
+            x_max=width * 0.5,
+            y_min=_r_y_min,
+            y_max=_r_y_max,
+            z_base=top_z,
+            roof_height=roof_h,
+            overhang=0.20,
+            sway_amount=_r_sway,
+            segments_y=max(6, _seg_y),
+            wall_thickness=0.18,
+            gable_ends=_gable_ends,
+            abut_front=_abut_front,
+            abut_back=_abut_back,
+            tier=tier,
+            plank_direction='VERTICAL',
+            roof_flare=_r_flare,
+            valley_notch=_vnotch,
+            roof_mat=_r_mat,
+            is_wattle=is_wattle,
+        )
+    else:
+        build_gable_roof(
+            annex_roof_bm,
+            x_min=-width * 0.5,
+            x_max=width * 0.5,
+            y_min=_r_y_min,
+            y_max=_r_y_max,
+            z_base=top_z,
+            roof_height=roof_h,
+            overhang=0.20,
+            wall_thickness=0.18,
+            gable_ends=_gable_ends,
+            abut_front=_abut_front,
+            abut_back=_abut_back,
+            segments_y=_seg_y,
+            tier=tier,
+            plank_direction='VERTICAL',
+            roof_flare=_r_flare,
+            valley_notch=_vnotch,
+            roof_mat=_r_mat,
+            is_wattle=is_wattle,
+        )
     bmesh.ops.transform(
         annex_roof_bm,
         matrix=Matrix.Rotation(math.radians(90.0), 4, 'Z'),
@@ -410,9 +666,14 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
 
 def build_tower_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                       found_h=0.6, floors=3, floor_h=4.0, tier='TIER_3',
-                      width=10.0, depth=8.0, main_bounds_by_floor=None):
-    """Massive stone tower annex with flat battlements."""
+                      width=10.0, depth=8.0, main_bounds_by_floor=None,
+                      props=None, main_roof_mat=None):
+    """Tower annex; the finish follows the host building's effective materials."""
     overlap = 1.0
+    eff_wall = get_effective_wall_material(props) if props is not None else 'STONE'
+    wall_mat = tier_wall_mat(tier, props=props) if props is not None else MAT_INDEX_STONE
+    wall_tier = 'TIER_1' if tier == 'TIER_1' else tier
+    physical_siding = eff_wall in ('LOGS', 'WOOD_PLANKS')
     wall_h = floors * floor_h
     top_z = found_h + wall_h
     wall_t = 0.65
@@ -465,13 +726,13 @@ def build_tower_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
         
         build_wall_with_opening(
             bm, (outer_wall_x, y0), (outer_wall_x, y1), fz0, fz1, wall_t,
-            list(outer_ops), mat_ext=MAT_INDEX_STONE, normal_vec=out_normal, tier=tier, physical_siding=False,
+            list(outer_ops), mat_ext=wall_mat, normal_vec=out_normal, tier=wall_tier, physical_siding=physical_siding,
             plank_direction='HORIZONTAL', seed=42)
         
         if f > 0:
             build_window_assembly(bm, (outer_wall_x, cy), sill, win_w, win_h, wall_t,
                                   normal_axis=out_normal, shape='ARCHED', has_shutters=False,
-                                  tier=tier, depth_offset=0.06)
+                                  tier=wall_tier, depth_offset=0.06)
 
         ucx = abs(outer_x - inner_x) * 0.5
         for wy, nvec in ((front_wall_y, (0.0, -1.0)), (back_wall_y, (0.0, 1.0))):
@@ -479,13 +740,13 @@ def build_tower_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                         'z_start': sill, 'z_end': sill + win_h}] if f > 0 else []
             build_wall_with_opening(
                 bm, (inner_x, wy), (outer_x, wy), fz0, fz1, wall_t,
-                list(_fb_ops), mat_ext=MAT_INDEX_STONE, normal_vec=nvec, tier=tier, physical_siding=False,
+                list(_fb_ops), mat_ext=wall_mat, normal_vec=nvec, tier=wall_tier, physical_siding=physical_siding,
                 is_corner_start=False, is_corner_end=True, plank_direction='HORIZONTAL', seed=42)
             if f > 0:
                 wx = (inner_x + outer_x) * 0.5
                 build_window_assembly(bm, (wx, wy), sill, win_w, win_h, wall_t,
                                       normal_axis=nvec, shape='ARCHED', has_shutters=False,
-                                      tier=tier, depth_offset=0.06)
+                                      tier=wall_tier, depth_offset=0.06)
                                       
         # Internal staircase (straight)
         if f < floors - 1:
@@ -502,7 +763,8 @@ def build_tower_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                                   target_z=top_z + 0.35, width=1.4, length=4.5,
                                   direction=Vector((0, 1, 0)), has_railings=True)
                                   
-    # Flat Roof Battlements
+    # Roof deck and battlements preserve the main building's roof finish language.
+    roof_material = main_roof_mat or (get_effective_roof_material(props) if props is not None else 'SLATE')
     roof_z = top_z
     _ix = _floor_inner(floors - 1)
     _ox = outer_x
@@ -510,9 +772,10 @@ def build_tower_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
     _deck_w = abs(_ox - _ix)
     
     # Roof slab
+    _roof_deck_mat = MAT_INDEX_WOOD if roof_material in ('THATCH', 'WOOD_SHINGLES') else MAT_INDEX_CUT_STONE
     create_beveled_box(bm, size=(_deck_w, width, 0.3),
                        location=(_deck_cx, cy, roof_z + 0.15),
-                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                       mat_index=_roof_deck_mat, bevel_amount=0.015)
                        
     # Stair bulkhead on roof
     create_beveled_box(bm, size=(2.0, 5.0, 2.8),

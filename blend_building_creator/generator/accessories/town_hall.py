@@ -99,23 +99,35 @@ def build_town_hall_composer(bm, props, ctx):
 
     annex_outer = None
     if getattr(props, 'has_side_annex', False):
-        a_side = -1.0 if tower_side == 'RIGHT' else 1.0
-        a_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
-        a_w = 5.2 if tier != 'TIER_1' else 4.4
+        # Use the layout resolved in BuildingContext
+        from .annex import build_side_annex
+        # The town hall composer usually handles the annex via a specialized path,
+        # but we now have a resolved context.
+        # Note: Town Hall annex is specifically placed opposite the clock tower.
+        # We use the resolved properties from the context.
+        _layout_side = ctx.get('annex_side', 'LEFT')
+        _side_layout = ctx.get('annex_by_side', {}).get(_layout_side, {})
+        a_side_sgn = -1.0 if _layout_side == 'LEFT' else 1.0
+        a_floors = ctx.get('annex_floors', 2)
+        a_w = ctx.get('annex_width', 5.2)
         a_d = 4.0 if tier != 'TIER_1' else 3.4
         a_roof = 3.0 if tier == 'TIER_3' else 2.6
-        # Annex centered on the side wall so its walk-in portal lines up with
-        # the doorway cut into the main hall wall (y = 0).
-        cy0 = -a_w * 0.5
-        cy1 = a_w * 0.5
+        from ..style import get_effective_wall_material
+        _is_wattle_annex = get_effective_wall_material(props) == 'WATTLE_DAUB'
+        a_cy = _side_layout.get('cy', ctx.get('annex_cy', 0.0))
+
         annex_outer = build_side_annex(
-            bm, side_sgn=a_side, main_hx=base_hx, main_cy0=cy0, main_cy1=cy1,
+            bm, side_sgn=a_side_sgn, main_hx=base_hx,
+            main_cy0=a_cy - a_w * 0.5, main_cy1=a_cy + a_w * 0.5,
             z_ground=0.0, found_h=found_h, floors=a_floors, floor_h=floor_h,
             tier=tier, width=a_w, depth=a_d, roof_h=a_roof,
             plank_direction=getattr(props, 'plank_direction', 'VERTICAL'),
             main_bounds_by_floor=ctx.get('floor_wall_bounds', None),
-            timber_framing=bool(getattr(props, 'has_timber_framing', True)),
-            diagonals=bool(getattr(props, 'timber_diagonals', True)),
+            timber_framing=bool(getattr(props, 'has_timber_framing', True)) and _is_wattle_annex,
+            diagonals=bool(getattr(props, 'timber_diagonals', True)) and _is_wattle_annex,
+            props=props, portal_cy=_side_layout.get('portal_cy', a_cy),
+            is_wattle=_is_wattle_annex,
+            shared_walls_by_floor=getattr(ctx, 'annex_shared_walls', None),
         )
 
     # Forecourt wall stitched between tower and annex (or main corners as fallback)

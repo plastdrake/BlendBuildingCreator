@@ -203,23 +203,49 @@ def build_roof_and_attic(bm, props, ctx):
             def _gable_penalty(side):
                 p = 0.0
                 if side in _wing_walls:
-                    p += 10.0
+                    p += 50.0
                 if side in _mini_sides:
-                    p += 10.0
+                    p += 30.0
                 if _balc_side == side:
-                    p += 6.0
-                if getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == side:
-                    p += 3.0
-                if getattr(props, 'has_side_rampart', False) and getattr(props, 'rampart_side', 'RIGHT') == side:
-                    p += 12.0
+                    p += 40.0
+                if (getattr(props, 'has_side_annex', False) or getattr(props, 'has_tower_annex', False)):
+                    # Use the RESOLVED annex side from the layout phase (it may
+                    # have flipped away from the requested side to clear the
+                    # stair run), falling back to the raw prop for tests.
+                    ann_side = getattr(ctx, 'annex_side', None)
+                    if not ann_side:
+                        ann_side = getattr(props, 'annex_side', 'LEFT')
+                    _ann_floors = getattr(ctx, 'annex_floors', None)
+                    if _ann_floors is None or _ann_floors <= 0:
+                        _ann_floors = max(1, min(2, getattr(props, 'annex_floors', 2)))
+                    if ann_side == 'BOTH' or ann_side == side:
+                        p += 50.0
+                if getattr(props, 'has_side_rampart', False):
+                    ramp_side = getattr(props, 'rampart_side', 'RIGHT')
+                    if ramp_side == side or ramp_side == 'BOTH':
+                        p += 50.0
                 if getattr(props, 'has_clock_tower', False) and getattr(props, 'clock_tower_side', 'RIGHT') == side:
-                    p += 8.0
+                    p += 50.0
+                if getattr(props, 'has_water_wheel', False) and getattr(props, 'mill_side', 'LEFT') == side:
+                    p += 50.0
+                if getattr(props, 'has_exterior_stairs', False) and getattr(props, 'exterior_stairs_side', 'LEFT') == side:
+                    p += 50.0
+                if getattr(props, 'has_upper_cargo_crane', False) and getattr(props, 'cargo_dock_facade', 'FRONT') == side:
+                    p += 30.0
+                if getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == side:
+                    p += 20.0
                 if getattr(props, 'has_corner_turrets', False) and side == 'BACK':
-                    p += 8.0
-                if getattr(props, 'has_arched_porch', False) and side == 'FRONT':
-                    p += 4.0
+                    p += 15.0
+                if (getattr(props, 'has_arched_porch', False) or getattr(props, 'has_veranda', False)) and side == 'FRONT':
+                    p += 40.0
                 if getattr(props, 'has_front_door', False) and side == 'FRONT':
-                    p += 3.0
+                    p += 15.0
+                # A balcony active at the TOP storey mounts on one facade; the
+                # ladder would climb straight through it. floor_balc_side is the
+                # per-floor resolved side (it can differ from props.balcony_side).
+                _top_balc = getattr(ctx, 'floor_balc_side', {}).get(num_floors - 1)
+                if _top_balc == side:
+                    p += 40.0
                 return p
 
             if not is_rotated_roof:
@@ -273,6 +299,22 @@ def build_roof_and_attic(bm, props, ctx):
                         _wing_loft = {'idx': _widx, 'arg': _warg}
                         _loft_spec = _wspec
                         _loft_arg = None
+
+            # If all available gables (main and wing) are heavily obstructed by an annex,
+            # rampart, tower, or wing, suppress the hatch & ladder so it never overlaps them.
+            # Never let a ladder cross an annex / balcony / rampart / tower: those
+            # blockers all carry >= 30 in _gable_penalty, so any side that a chosen
+            # loft sits on with such a penalty is rejected outright.
+            def _blocked(pen):
+                return pen >= 30.0
+            if _wing_loft is not None:
+                if _blocked(_wpen):
+                    _wing_loft = None
+                    _loft_spec = None
+                    _loft_arg = None
+            elif _loft_spec is not None and _blocked(_gable_penalty(_lside)):
+                _loft_spec = None
+                _loft_arg = None
 
         # Pre-compute dormer apertures to open attic holes in the roof deck and shingles
         dormer_apertures = []

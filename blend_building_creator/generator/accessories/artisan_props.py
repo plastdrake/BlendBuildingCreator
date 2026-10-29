@@ -254,22 +254,29 @@ def build_mash_tun(bm, x, y, z_ground=0.0, ang=0.0, radius=0.55, height=1.00):
 def build_keg_rack(bm, x, y, z_ground=0.0, ang=0.0, length=1.30):
     """Low rack with two tapped-ready lying kegs."""
     faces = []
-    # Stand rails.
-    for ry in (-0.24, 0.24):
-        faces += create_beveled_box(
-            bm, size=(length, 0.09, 0.12),
-            location=(0.0, ry, 0.10),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
-        )
+    # Stand skids resting on the floor. Sized slightly proud in Y so ends don't
+    # fight rail faces; bottom lifted 2mm off z=0 so skid bottoms never sit
+    # coplanar with floor planks / counter tops (classic z-fight source).
     for rx in (-length * 0.5 + 0.10, length * 0.5 - 0.10):
         faces += create_beveled_box(
-            bm, size=(0.10, 0.57, 0.08),
-            location=(rx, 0.0, 0.04),
+            bm, size=(0.10, 0.64, 0.06),
+            location=(rx, 0.0, 0.032),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010
         )
-    # Two lying kegs side by side on the rails.
+    # Stand rails resting ON TOP of the cross skids with a 2mm relief gap:
+    # rail bottoms (z=0.062) sit above skid tops (z=0.062 - overlap) instead of
+    # sharing one plane, so no rail/skid face pair is ever coincident.
+    for ry in (-0.24, 0.24):
+        faces += create_beveled_box(
+            bm, size=(length, 0.09, 0.10),
+            location=(0.0, ry, 0.112),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012
+        )
+    # Two lying kegs side by side on the rails. Keg cradle centre sits 2mm ABOVE
+    # the rail top plane (0.162 + 0.27 = 0.432 keg axis) so the keg shell only
+    # grazes the rails on its curve — never shares a tangent plane with them.
     for kx in (-length * 0.25, length * 0.25):
-        faces += build_barrel(bm, kx, 0.0, 0.16, 0.0,
+        faces += build_barrel(bm, kx, 0.0, 0.162 + 0.002, 0.0,
                               radius=0.27, height=0.58, lying=True)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -298,26 +305,32 @@ def build_bottle_crate(bm, x, y, z_ground=0.0, ang=0.0):
     """Open slatted crate with six bottled brews, for shop counters."""
     faces = []
     w, d, wall_h, wall_t = 0.52, 0.36, 0.22, 0.035
+    # Base plate lifted 2mm off the placement plane: its underside never shares
+    # a plane with counters / floor planks, killing the corner z-fight flicker.
     faces += create_beveled_box(
         bm, size=(w, d, 0.04),
-        location=(0.0, 0.0, 0.02),
+        location=(0.0, 0.0, 0.022),
         mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
     )
+    # Slatted walls rise from the base TOP (+0.042, i.e. 2mm proud of the base
+    # plate's top face at z=0.042) so no wall bottom is coplanar with the base.
     for sy in (-d * 0.5 + wall_t * 0.5, d * 0.5 - wall_t * 0.5):
         faces += create_beveled_box(
             bm, size=(w, wall_t, wall_h),
-            location=(0.0, sy, wall_h * 0.5 + 0.04),
+            location=(0.0, sy, wall_h * 0.5 + 0.042),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
         )
     for sx in (-w * 0.5 + wall_t * 0.5, w * 0.5 - wall_t * 0.5):
         faces += create_beveled_box(
-            bm, size=(wall_t, d, wall_h),
-            location=(sx, 0.0, wall_h * 0.5 + 0.04),
+            bm, size=(wall_t, d - wall_t * 2.0, wall_h),
+            location=(sx, 0.0, wall_h * 0.5 + 0.042),
             mat_index=MAT_INDEX_WOOD, bevel_amount=0.006
         )
+    # Bottles rest on the base top with a 2mm relief so glass bottoms never
+    # share the base plate's top plane.
     for ix, bx in enumerate((-0.13, 0.0, 0.13)):
         for by in (-0.085, 0.085):
-            _bottle(bm, faces, bx + (0.01 if ix % 2 else -0.01), by, 0.04)
+            _bottle(bm, faces, bx + (0.01 if ix % 2 else -0.01), by, 0.042)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 
@@ -1743,7 +1756,7 @@ def build_cleaver(bm, x, y, z_ground=0.0, ang=0.0, length=0.36, stuck=False, bur
     When stuck=True: cutting edge chops down into a chopping block / stump with
     the handle angled up.
     When stuck=False: rests flat on its side on z_ground.
-    Falls back to a procedural cleaver if unbaked.
+    Requires the baked Cleaver.fbx artist mesh; no procedural substitute is built.
     """
     from mathutils import Matrix as _M, Vector as _V, Euler as _E
     from .artisan_meshdata import PROP_MESHES
@@ -1799,38 +1812,8 @@ def build_cleaver(bm, x, y, z_ground=0.0, ang=0.0, length=0.36, stuck=False, bur
             faces.append(f)
         return faces
 
-    return _procedural_cleaver(bm, x, y, z_ground, ang, length=length, stuck=stuck)
-
-
-def _procedural_cleaver(bm, x, y, z_ground=0.0, ang=0.0, length=0.36, stuck=False):
-    """Fallback stylized cleaver with beveled blade and cylindrical wooden haft."""
-    faces = []
-    scale = length / 0.36
-    if stuck:
-        faces += create_beveled_box(
-            bm, size=(0.18 * scale, 0.02 * scale, 0.12 * scale),
-            location=(0.02, 0.06, z_ground + 0.07 * scale),
-            rotation=(0.30, 0.0, -0.15),
-            mat_index=MAT_INDEX_IRON, bevel_amount=0.004 * scale
-        )
-        faces += create_cylinder(
-            bm, radius=0.016 * scale, height=0.12 * scale, segments=8,
-            location=(0.02, 0.06, z_ground + 0.17 * scale),
-            rotation=(0.30, 0.0, 0.0), mat_index=MAT_INDEX_WOOD
-        )
-    else:
-        faces += create_beveled_box(
-            bm, size=(0.18 * scale, 0.12 * scale, 0.016 * scale),
-            location=(0.05 * scale, 0.0, z_ground + 0.008 * scale),
-            mat_index=MAT_INDEX_IRON, bevel_amount=0.003 * scale
-        )
-        faces += create_cylinder(
-            bm, radius=0.014 * scale, height=0.12 * scale, segments=8,
-            location=(-0.08 * scale, 0.02 * scale, z_ground + 0.014 * scale),
-            rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_WOOD
-        )
-    transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
+    # Cleaver.fbx is the only supported source. If its baked mesh is missing, omit it.
+    return []
 
 
 def build_wine_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.10):

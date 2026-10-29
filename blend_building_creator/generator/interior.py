@@ -235,20 +235,28 @@ def build_ceiling_beams(bm, x_min, x_max, y_min, y_max, z_ceil, spacing=1.2, bea
 
 
 def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
-                         wall_thickness=0.28, stair_hole=None, wall_openings=None):
+                         wall_thickness=0.28, stair_hole=None, wall_openings=None,
+                         skip_sides=None):
     """Build interior baseboards and crown moulding flush to the *inside* wall faces.
 
     ``wall_openings`` uses the same local-U opening dictionaries as the wall builder.
     Baseboards are split around ground-reaching openings (doors and portals), rather
     than running across the walk-through.  The small inward offset prevents trims
     from poking through the exterior side of a double wall.
+
+    ``skip_sides`` names sides ('front' | 'right' | 'back' | 'left') that must carry
+    NO trim at all — use them for walls that open into a wing or an annex, where
+    the portal jambs already dress the junction and a baseboard/crown would either
+    cross the walk-through or z-fight with the wing's own joinery.
     """
     import math
 
     trim_h_floor = 0.11
     trim_d = 0.028
+    trim_h_ceil = 0.09
     reveal = 0.035
     wall_openings = wall_openings or {}
+    skip = set(skip_sides or ())
 
     # Ordered clockwise so the supplied inward vectors always point into the room.
     sides = (
@@ -267,11 +275,13 @@ def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
         cy = (y1 + y2) * 0.5 + inward[1] * (depth * 0.5 + 0.002)
         create_beveled_box(
             bm, size=(length, depth, height), location=(cx, cy, z_center),
-            rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_WOOD,
+            rotation=(0.0, 0.0, angle), mat_index=MAT_INDEX_TIMBER,
             bevel_amount=bevel
         )
 
     for side, x1, y1, x2, y2, inward in sides:
+        if side in skip:
+            continue
         dx, dy = x2 - x1, y2 - y1
         length = math.hypot(dx, dy)
         ux, uy = dx / length, dy / length
@@ -282,24 +292,34 @@ def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
         # (otherwise every cut is half a wall thickness off and the baseboard
         # crosses the doorway).
         cuts = []
+        ceil_cuts = []
         reversed_from_wall_builder = side in {'back', 'left'}
         shift = wall_thickness * 0.5
         for opening in wall_openings.get(side, []):
-            if opening.get('z_start', z_floor + 1.0) <= z_floor + trim_h_floor:
-                clr = opening.get('trim_clearance', reveal)
-                u0 = opening.get('u_start', 0.0)
-                u1 = opening.get('u_end', 0.0)
-                if reversed_from_wall_builder:
-                    a = length - (u1 - shift) - clr
-                    b = length - (u0 - shift) + clr
-                else:
-                    a = (u0 - shift) - clr
-                    b = (u1 - shift) + clr
-                a = max(0.0, a)
-                b = min(length, b)
-                if b > a:
-                    cuts.append((a, b))
+            clr = opening.get('trim_clearance', reveal)
+            u0 = opening.get('u_start', 0.0)
+            u1 = opening.get('u_end', 0.0)
+            if reversed_from_wall_builder:
+                a = length - (u1 - shift) - clr
+                b = length - (u0 - shift) + clr
+            else:
+                a = (u0 - shift) - clr
+                b = (u1 - shift) + clr
+            a = max(0.0, a)
+            b = min(length, b)
+            if b <= a:
+                continue
+            z0 = opening.get('z_start', z_floor + 1.0)
+            z1 = opening.get('z_end', z0 + 2.0)
+            if z0 <= z_floor + trim_h_floor:
+                cuts.append((a, b))
+            # Only a genuinely full-height opening (reaching the ceiling) may
+            # break the crown; a normal window or door lintel below leaves the
+            # ceiling trim continuous, so the wall is dressed top AND bottom.
+            if z1 >= z_ceil - trim_h_ceil - 0.10:
+                ceil_cuts.append((a, b))
         cuts.sort()
+        ceil_cuts.sort()
 
         cursor = 0.0
         for a, b in cuts:
@@ -312,10 +332,24 @@ def build_interior_trims(bm, x_min, x_max, y_min, y_max, z_floor, z_ceil,
             add_trim_segment(x1 + ux * cursor, y1 + uy * cursor, x2, y2, inward,
                              z_floor + trim_h_floor * 0.5, trim_d, trim_h_floor, 0.009)
 
-        # Crown trims sit clear of ordinary doors and remain continuous by design.
+        # Crown moulding: continuous along the whole wall unless a full-height
+        # opening (a walk-through portal reaching the ceiling) interrupts it.
         trim_h_ceil = 0.09
-        add_trim_segment(x1, y1, x2, y2, inward,
-                         z_ceil - trim_h_ceil * 0.5 - 0.008, 0.026, trim_h_ceil, 0.008)
+        z_crown = z_ceil - trim_h_ceil * 0.5 - 0.008
+        if ceil_cuts:
+            crown_cursor = 0.0
+            for a, b in ceil_cuts:
+                if a > crown_cursor:
+                    add_trim_segment(x1 + ux * crown_cursor, y1 + uy * crown_cursor,
+                                     x1 + ux * a, y1 + uy * a, inward,
+                                     z_crown, 0.026, trim_h_ceil, 0.008)
+                crown_cursor = max(crown_cursor, b)
+            if crown_cursor < length:
+                add_trim_segment(x1 + ux * crown_cursor, y1 + uy * crown_cursor, x2, y2, inward,
+                                 z_crown, 0.026, trim_h_ceil, 0.008)
+        else:
+            add_trim_segment(x1, y1, x2, y2, inward,
+                             z_crown, 0.026, trim_h_ceil, 0.008)
 
 def build_stair_hole_trim(bm, hole, floor_z, thickness=0.12, mat_index=MAT_INDEX_TIMBER,
                           open_side=None, curb_w=0.06, bounds=None, wall_sides=None):
@@ -1319,6 +1353,8 @@ class Room:
     stair_hole: Optional[Tuple[float, float, float, float]] = None
     exterior_facades: Dict[str, Tuple[float, float]] = field(default_factory=dict)
     floor_void: Optional[Tuple[float, float, float, float]] = None
+    # Functional layouts such as throne and banquet halls are intentionally large.
+    allow_large: bool = False
 
 
 def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
@@ -1349,6 +1385,8 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
     trim_d = 0.028
     trim_h_ceil = 0.09
     trim_ceil_d = 0.026
+    # Every piece of interior joinery is timber, whatever the wall finish is.
+    trim_mat = MAT_INDEX_TIMBER
 
     _uvl = bm.loops.layers.uv.verify()
 
@@ -1417,13 +1455,13 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
             create_beveled_box(
                 bm, size=(length, trim_d, trim_h_floor),
                 location=(cx + nx * off, cy + ny * off, z_floor + trim_h_floor * 0.5),
-                rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.008
+                rotation=(0.0, 0.0, ang), mat_index=trim_mat, bevel_amount=0.008
             )
             off_c = sgn * (thickness * 0.5 + trim_ceil_d * 0.5)
             create_beveled_box(
                 bm, size=(length, trim_ceil_d, trim_h_ceil),
                 location=(cx + nx * off_c, cy + ny * off_c, z_ceil - trim_h_ceil * 0.5 - 0.008),
-                rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.008
+                rotation=(0.0, 0.0, ang), mat_index=trim_mat, bevel_amount=0.008
             )
         return
 
@@ -1438,6 +1476,21 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
     rough_start = u_start - overlap
     rough_end = u_end + overlap
     casing_d = thickness + 0.065  # Proud of plaster by ~3.2cm on both sides
+
+    def _crown(u0, u1):
+        """Crown moulding strip on both faces, spanning u0..u1 along the wall."""
+        seg = u1 - u0
+        if seg < 0.05:
+            return
+        sc = (u0 + u1) * 0.5
+        for sgn in (-1.0, 1.0):
+            off_c = sgn * (thickness * 0.5 + trim_ceil_d * 0.5)
+            create_beveled_box(
+                bm, size=(seg, trim_ceil_d, trim_h_ceil),
+                location=(x1 + ux * sc + nx * off_c, y1 + uy * sc + ny * off_c,
+                          z_ceil - trim_h_ceil * 0.5 - 0.008),
+                rotation=(0.0, 0.0, ang), mat_index=trim_mat, bevel_amount=0.008
+            )
 
     # 1. Left segment
     len1 = rough_start
@@ -1457,9 +1510,8 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
             create_beveled_box(
                 bm, size=(t_len, trim_d, trim_h_floor),
                 location=(x1 + ux * t_c + nx * off, y1 + uy * t_c + ny * off, z_floor + trim_h_floor * 0.5),
-                rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.008
+                rotation=(0.0, 0.0, ang), mat_index=trim_mat, bevel_amount=0.008
             )
-
     # 2. Header segment above doorway (raised slightly so lintel caps it from below)
     top_pad = 0.03
     top_h = H - (door_h + top_pad)
@@ -1492,17 +1544,12 @@ def build_interior_wall(bm, p1, p2, z_floor, z_ceil, thickness=0.16,
             create_beveled_box(
                 bm, size=(t_len, trim_d, trim_h_floor),
                 location=(x1 + ux * t_c + nx * off, y1 + uy * t_c + ny * off, z_floor + trim_h_floor * 0.5),
-                rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.008
+                rotation=(0.0, 0.0, ang), mat_index=trim_mat, bevel_amount=0.008
             )
-
-    # 4. Continuous crown moulding at ceiling
-    for sgn in (-1.0, 1.0):
-        off_c = sgn * (thickness * 0.5 + trim_ceil_d * 0.5)
-        create_beveled_box(
-            bm, size=(length, trim_ceil_d, trim_h_ceil),
-            location=((x1 + x2) * 0.5 + nx * off_c, (y1 + y2) * 0.5 + ny * off_c, z_ceil - trim_h_ceil * 0.5 - 0.008),
-            rotation=(0.0, 0.0, ang), mat_index=casing_mat, bevel_amount=0.008
-        )
+    # 4. Continuous crown moulding at ceiling.  A doorway leaves a header wall
+    # right below the ceiling, so the crown can run the full length of the wall
+    # without ever crossing the opening.
+    _crown(0.0, length)
 
     # 5. Cased Doorway Frame (walkthrough opening without door blade)
     # Jambs centered over the rough plaster boundary so they swallow the rough edge and form smooth reveals
@@ -1649,17 +1696,121 @@ def _program_roles(program, fl_idx, num_rooms, has_stairs_landing):
 # Dedicated craft workshops per artisan trade: the street-facing shop plus
 # the trade's own production rooms (never generic offices or studies).
 _ARTISAN_GROUND = {
-    'BAKERY': ['STORE', 'BAKEHOUSE', 'BAKEHOUSE', 'STORAGE'],
-    'BREWERY': ['STORE', 'BREWHOUSE', 'BREWHOUSE', 'STORAGE'],
-    'BUTCHER': ['STORE', 'BUTCHERY', 'BUTCHERY', 'STORAGE'],
-    'TAILOR': ['STORE', 'TAILOR_ATELIER', 'TAILOR_ATELIER', 'STORAGE'],
-    'JEWELER': ['STORE', 'GOLDSMITH', 'GOLDSMITH', 'STORAGE'],
-    'BLACKSMITH': ['STORE', 'SMITHY', 'SMITHY', 'STORAGE'],
-    'TOOLSMITH': ['STORE', 'SMITHY', 'SMITHY', 'STORAGE'],
-    'FURNITURE_MAKER': ['STORE', 'JOINERY', 'JOINERY', 'STORAGE'],
-    'FISHERMAN': ['STORE', 'FISHERY', 'FISHERY', 'STORAGE'],
-    'HUNTER': ['STORE', 'FLETCHER_WORKSHOP', 'LODGE', 'STORAGE'],
+    'BAKERY': ['BAKEHOUSE', 'STORE', 'STORAGE'],
+    'BREWERY': ['BREWHOUSE', 'STORE', 'STORAGE'],
+    'BUTCHER': ['BUTCHERY', 'STORE', 'STORAGE'],
+    'TAILOR': ['TAILOR_ATELIER', 'STORE', 'STORAGE'],
+    'JEWELER': ['GOLDSMITH', 'STORE', 'STORAGE'],
+    'BLACKSMITH': ['SMITHY', 'STORE', 'STORAGE'],
+    'TOOLSMITH': ['SMITHY', 'STORE', 'STORAGE'],
+    'FURNITURE_MAKER': ['JOINERY', 'STORE', 'STORAGE'],
+    'FISHERMAN': ['FISHERY', 'STORE', 'STORAGE'],
+    'HUNTER': ['FLETCHER_WORKSHOP', 'LODGE', 'STORAGE'],
 }
+
+# Rooms that must simply be walked through. The smart planner carves these
+# out as ribbons along whatever wall has room, so the rooms they serve keep
+# compact, squarish proportions instead of becoming long strips themselves.
+THROUGH_ROLES = ('CORRIDOR', 'STAIR_LANDING', 'ENTRANCE_HALL')
+PRIVATE_ROOM_ROLES = {
+    'BEDROOM', 'MASTER_BED', 'GUEST_ROOM', 'TENEMENT_BEDROOM',
+    'OFFICER_QUARTERS', 'ROYAL_CHAMBER', 'HEALER_QUARTERS',
+}
+
+# Archetypes whose upper storeys are a hall/corridor serving many rooms.  They
+# use the hallway planner so bedrooms/offices open off circulation instead of
+# being walked through, and rooms stay functionally sized.
+_HALL_ARCHETYPES = {
+    'HOUSE', 'NONE', 'AUTO', 'CIVIC', 'TOWN_HALL', 'GUILDHALL',
+    'BARRACKS', 'INFANTRY_BARRACKS', 'KNIGHTS_MANOR', 'ARMORY',
+    'CHAPEL', 'HEALERS_CHAPEL', 'ARCHERY', 'ARCHERY_RANGE',
+    'BLACKSMITH', 'BAKERY', 'BREWERY', 'BUTCHER', 'TAILOR', 'TOOLSMITH',
+    'JEWELER', 'FURNITURE_MAKER', 'HUNTER', 'FISHERMAN', 'INN', 'TAVERN',
+}
+
+
+def stair_circulation_zone(stair_hole, stair_pos_info=None, bounds=None,
+                           landing_depth=1.25, side_clearance=0.30):
+    """Return the usable stair flight plus its step-on/off landing envelope."""
+    if stair_hole is None:
+        return None
+    x0, x1, y0, y1 = map(float, stair_hole)
+    if stair_pos_info:
+        cx = float(stair_pos_info.get('cx', (x0 + x1) * 0.5))
+        width = max(0.80, float(stair_pos_info.get('w', x1 - x0) or (x1 - x0)))
+        x0 = min(x0, cx - width * 0.5)
+        x1 = max(x1, cx + width * 0.5)
+        y_bot = stair_pos_info.get('y_bot')
+        y_top = stair_pos_info.get('y_top')
+        if y_bot is not None and y_top is not None:
+            y0 = min(y0, float(y_bot), float(y_top))
+            y1 = max(y1, float(y_bot), float(y_top))
+    x0 -= side_clearance
+    x1 += side_clearance
+    y0 -= landing_depth
+    y1 += landing_depth
+    if bounds is not None:
+        bx0, bx1, by0, by1 = bounds
+        x0, x1 = max(bx0, x0), min(bx1, x1)
+        y0, y1 = max(by0, y0), min(by1, y1)
+    return (x0, x1, y0, y1)
+
+
+def _rect_overlap_area(a, b):
+    return max(0.0, min(a[1], b[1]) - max(a[0], b[0])) * max(0.0, min(a[3], b[3]) - max(a[2], b[2]))
+
+
+def _normalize_stair_circulation_rooms(rooms, stair_hole, stair_pos_info, bounds):
+    """Keep multi-room stair landings and through-routes out of private rooms.
+
+    A large public room (taproom, great hall, workshop, ...) may legitimately
+    contain the staircase - the furnishing pass still keeps the flight and its
+    landings clear - so those rooms are never renamed into landings.
+    """
+    if not rooms or stair_hole is None or len(rooms) <= 1:
+        return rooms
+    circulation = stair_circulation_zone(stair_hole, stair_pos_info, bounds)
+    if circulation is None:
+        return rooms
+    _STAIR_TOLERANT = {
+        'TAVERN_TAPROOM', 'GREAT_HALL', 'BANQUET_HALL', 'HOUSE_HALL',
+        'COUNCIL_CHAMBER', 'MESS_HALL', 'THRONE_ROOM', 'CHAPEL_HALL',
+        'WORKSHOP', 'STONE_STORE', 'STABLE_HALL', 'LODGE', 'RANGE',
+        'DINING', 'COMMON_ROOM', 'ENTRANCE_HALL',
+        'BAKEHOUSE', 'JOINERY', 'TAILOR_ATELIER', 'BREWHOUSE', 'BUTCHERY',
+        'GOLDSMITH', 'FISHERY', 'SMITHY', 'FLETCHER_WORKSHOP', 'STORE',
+    }
+    holders = [room for room in rooms if _rect_overlap_area(room.bounds, circulation) > 0.08]
+    hole_holders = [room for room in rooms if _rect_overlap_area(room.bounds, stair_hole) > 0.08]
+    for room in holders:
+        # Public/common rooms keep their role; the stair is just part of the room.
+        if room.role in _STAIR_TOLERANT:
+            if room in hole_holders:
+                room.stair_hole = stair_hole
+            continue
+        # A chamber touched by the flight, landing, or required egress apron is
+        # part of the route. Never leave a private furnished room across that
+        # route merely because the slab opening itself is in its neighbour.
+        room.role = 'STAIR_LANDING' if room in hole_holders else 'CORRIDOR'
+        room.stair_hole = stair_hole if room in hole_holders else None
+    for room in rooms:
+        if room.role not in PRIVATE_ROOM_ROLES:
+            continue
+        internal_doors = [door for door in (room.doorways or [])
+                          if bounds[0] + 0.10 < door.get('x', 0.0) < bounds[1] - 0.10
+                          and bounds[2] + 0.10 < door.get('y', 0.0) < bounds[3] - 0.10]
+        if len(internal_doors) >= 2:
+            room.role = 'CORRIDOR'
+    return rooms
+
+
+def _looks_like_corridor(b, min_side=2.2, max_aspect=2.25):
+    """True when a room rectangle is a long thin strip rather than a room."""
+    x0, x1, y0, y1 = b
+    w, d = x1 - x0, y1 - y0
+    if w <= 0.01 or d <= 0.01:
+        return True
+    return min(w, d) < min_side or max(w, d) / min(w, d) > max_aspect
 
 
 def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, total_floors=1,
@@ -1691,7 +1842,16 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         # On upper floors with stairs, Room 0 (around stair hole) is the protected landing/corridor.
         # Bedrooms and private suites are strictly placed in the separate partitioned chambers.
         if archetype in ('TAVERN', 'INN'):
-            pool = ['STAIR_LANDING', 'GUEST_ROOM', 'GUEST_ROOM', 'GUEST_ROOM', 'MASTER_BED', 'STUDY']
+            # Upper storeys of an inn are lodgings: a cheap shared common room
+            # with bunk beds plus progressively nicer private rooms. The first
+            # room is always the stair landing so guests never arrive directly
+            # into a sleeping chamber or furnished common room.
+            if num_rooms == 1:
+                return ['GUEST_ROOM']
+            if num_rooms == 2:
+                return ['STAIR_LANDING', 'GUEST_ROOM']
+            pool = ['STAIR_LANDING', 'COMMON_ROOM', 'GUEST_ROOM', 'MASTER_BED',
+                    'GUEST_ROOM', 'GUEST_ROOM', 'STUDY', 'GUEST_ROOM']
             return pool[:num_rooms]
         elif archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY', 'BUILDER'):
             # Industrial upper floors are work/storage, never bedrooms or kitchens.
@@ -1745,6 +1905,21 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             return pool[:num_rooms]
 
     # Ground floor (or single floor without stair landing)
+    if archetype in ('TAVERN', 'INN'):
+        # The taproom only exists downstairs. Upper storeys are guest rooms,
+        # never a second taproom / kitchen / cellar.
+        if fl_idx > 0:
+            if num_rooms == 1:
+                return ['GUEST_ROOM']
+            if num_rooms == 2:
+                return ['COMMON_ROOM', 'MASTER_BED']
+            return ['COMMON_ROOM', 'GUEST_ROOM', 'MASTER_BED', 'GUEST_ROOM',
+                    'GUEST_ROOM', 'STUDY'][:num_rooms]
+        if num_rooms == 1:
+            return ['TAVERN_TAPROOM']
+        pool = ['TAVERN_TAPROOM', 'KITCHEN', 'PANTRY', 'CELLAR']
+        return pool[:num_rooms]
+
     if archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL'):
         pool = ['GREAT_HALL', 'COUNCIL_CHAMBER', 'ARCHIVE', 'STUDY']
         return pool[:num_rooms]
@@ -1841,6 +2016,9 @@ def _wing_portals(wb, doorways):
             if wy1 - 0.4 <= dw.get('y', 0.0) <= wy2 + 0.4 and \
                (abs(dw.get('x', 0.0) - wx1) < 0.7 or abs(dw.get('x', 0.0) - wx2) < 0.7):
                 out.append(dw)
+    return out
+
+
 def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
                               has_stairs_landing, stair_pos_info=None,
                               extra_doorways=None, props=None):
@@ -2478,10 +2656,332 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
     return rooms, walls
 
 
+def _secondary_role(primary, index):
+    """Sensible companion role for a room carved out of a long strip."""
+    table = {
+        'MASTER_BED': ['BEDROOM', 'STUDY'],
+        'BEDROOM': ['GUEST_ROOM', 'STUDY'],
+        'GUEST_ROOM': ['BEDROOM', 'STORAGE'],
+        'KITCHEN': ['PANTRY', 'STORAGE'],
+        'HOUSE_HALL': ['KITCHEN', 'STUDY'],
+        'GREAT_HALL': ['STUDY', 'STORAGE'],
+        'BANQUET_HALL': ['PANTRY', 'STUDY'],
+        'LIBRARY': ['STUDY', 'STORAGE'],
+    }
+    opts = table.get(primary, ['STORAGE', 'STUDY'])
+    return opts[min(max(index - 1, 0), len(opts) - 1)]
+
+
+def _split_room_out_of_zones(rooms, interior_walls, zones, wall_t, dw_w, dw_h):
+    """Carve any room that crosses a keep-out into rooms that leave it empty.
+
+    A keep-out (stair well, annex doorway apron) must be physically clear, so a
+    room whose rectangle overlaps one is split along the short axis just outside
+    the keep-out edge: the larger piece stays the room, the leftover strip
+    becomes a CORRIDOR (walkable space is allowed there), and the splitting wall
+    gets a door so the corridor leads into it.
+    """
+    if not rooms or not zones:
+        return rooms
+    out = []
+    for room in rooms:
+        b = list(room.bounds)
+        _split = False
+        for (zx0, zx1, zy0, zy1) in zones:
+            # Overlap with a little slack: a wall kissing the keep-out is fine.
+            if (b[1] <= zx0 + 0.02 or b[0] >= zx1 - 0.02
+                    or b[3] <= zy0 + 0.02 or b[2] >= zy1 - 0.02):
+                continue
+            # Split on the axis that leaves the bigger usable room.
+            w = b[1] - b[0]
+            d = b[3] - b[2]
+            left = zx0 - b[0]
+            right = b[1] - zx1
+            front = zy0 - b[2]
+            back = b[3] - zy1
+            cands = []
+            if left >= 1.2:
+                cands.append((left, 'X', b[0], zx0))
+            if right >= 1.2:
+                cands.append((right, 'X', zx1, b[1]))
+            if front >= 1.2:
+                cands.append((front, 'Y', b[2], zy0))
+            if back >= 1.2:
+                cands.append((back, 'Y', zy1, b[3]))
+            if not cands:
+                continue
+            _len, _axis, _a, _c = max(cands)
+            if _axis == 'X':
+                keep = (_a, _c, b[2], b[3])
+                rest = (b[0], b[1], b[2], b[3])
+                cut = _a if _a > b[0] + 0.01 else _c
+                rest = ((cut, b[1], b[2], b[3]) if cut == _a
+                        else (b[0], cut, b[2], b[3]))
+                dy = (b[2] + b[3]) * 0.5
+                interior_walls.append({
+                    'p1': (cut, b[2]), 'p2': (cut, b[3]),
+                    'axis': 'Y', 'pos': cut, 'thickness': wall_t,
+                    'doorway': {'x': cut, 'y': dy, 'w': dw_w, 'h': dw_h, 'axis': 'Y'},
+                })
+                _door = {'x': cut, 'y': dy, 'axis': 'Y', 'w': dw_w}
+            else:
+                keep = (b[0], b[1], _a, _c)
+                cut = _a if _a > b[2] + 0.01 else _c
+                rest = ((b[0], b[1], cut, b[3]) if cut == _a
+                        else (b[0], b[1], b[2], cut))
+                dx = (b[0] + b[1]) * 0.5
+                interior_walls.append({
+                    'p1': (b[0], cut), 'p2': (b[1], cut),
+                    'axis': 'X', 'pos': cut, 'thickness': wall_t,
+                    'doorway': {'x': dx, 'y': cut, 'w': dw_w, 'h': dw_h, 'axis': 'X'},
+                })
+                _door = {'x': dx, 'y': cut, 'axis': 'X', 'w': dw_w}
+            room.bounds = keep
+            room.stair_hole = None
+            room.doorways = list(room.doorways) + [_door]
+            out.append(room)
+            _rw = rest[1] - rest[0]
+            _rd = rest[3] - rest[2]
+            if min(_rw, _rd) >= 0.9:
+                out.append(Room(
+                    id=f"{room.id}_corr", floor_idx=room.floor_idx, role='CORRIDOR',
+                    bounds=rest, doorways=[_door], stair_hole=None,
+                    is_wing=False, wing_id=room.wing_id,
+                    exterior_facades=dict(room.exterior_facades)))
+            _split = True
+            break
+        if not _split:
+            out.append(room)
+    return out
+
+
+def _recut_oversized_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
+                           archetype, fl_idx, has_stairs_landing, total_floors, program,
+                           clear_zone_rects=None):
+    """Give every room room-like proportions.
+
+    * Thin strips (aspect >= 2.0) become CORRIDOR when they already serve as
+      circulation, otherwise they are split into squarish rooms.
+    * Oversized private-purpose rooms are split across the short axis into
+      proportioned chambers; named social/ceremonial rooms keep their intended scale.
+    """
+    if not rooms:
+        return rooms
+    ix_min, ix_max, iy_min, iy_max = bounds
+    out = []
+    for room in rooms:
+        b = room.bounds
+        w, d = b[1] - b[0], b[3] - b[2]
+        if room.role in THROUGH_ROLES or w <= 0.01 or d <= 0.01:
+            out.append(room)
+            continue
+        # Rooms explicitly protected from re-cutting (hallway-planned rooms with
+        # their own corridor doors) must never be split here: splitting would
+        # drop their circulation doorway and make them unreachable.
+        if bool(getattr(room, 'allow_large', False)):
+            out.append(room)
+            continue
+        aspect = max(w, d) / min(w, d)
+        long_side = max(w, d)
+
+        # Named ceremonial/social spaces may be large; private-purpose rooms may not.
+        # Artisan trade halls and their shop/store are single purposeful rooms:
+        # keep them whole and keep their role (never re-cut into storerooms).
+        _large_intended = (room.role in {
+            'THRONE_ROOM', 'BANQUET_HALL', 'TAVERN_TAPROOM', 'GREAT_HALL',
+            'MEZZANINE_GALLERY', 'MESS_HALL', 'COUNCIL_CHAMBER', 'CHAPEL_HALL',
+            'STABLE_HALL', 'WORKSHOP', 'STONE_STORE', 'LODGE', 'RANGE',
+            'BAKEHOUSE', 'JOINERY', 'TAILOR_ATELIER', 'BREWHOUSE', 'BUTCHERY',
+            'GOLDSMITH', 'FISHERY', 'SMITHY', 'FLETCHER_WORKSHOP', 'STORE',
+        }) or bool(getattr(room, 'allow_large', False))
+        if _large_intended and aspect < 2.5:
+            out.append(room)
+            continue
+        # A thin strip that is already a passage: name it one.
+        if aspect >= 2.0 and room.role in ('ENTRANCE_HALL', 'STORAGE') and long_side >= 6.0:
+            room.role = 'CORRIDOR'
+            out.append(room)
+            continue
+
+        _big = (not _large_intended and w * d > 52.0 and min(w, d) > 4.2)
+        _strip = aspect >= (2.0 if _large_intended else 1.65) and long_side >= 5.5 and min(w, d) <= 4.5
+        if not (_big or _strip):
+            out.append(room)
+            continue
+
+        n_axis = 'X' if w >= d else 'Y'
+        span = w if n_axis == 'X' else d
+        n = max(2, min(3, int(round(span / max(5.0, (span * span) / (w * d) / 1.4)))))
+        step = span / n
+        if step < 3.0:
+            n = max(1, int(span // 3.6))
+            step = span / max(n, 1)
+        if n < 2 or step < 3.0:
+            out.append(room)
+            continue
+
+        # Avoid adding full-height walls that cross stairs or annex doorway aprons.
+        _split_coords = ([b[0] + i * step for i in range(1, n)] if n_axis == 'X'
+                         else [b[2] + i * step for i in range(1, n)])
+        _crosses_clear_zone = False
+        for _p in _split_coords:
+            for _z in (clear_zone_rects or []):
+                if n_axis == 'X':
+                    _hit = (_z[0] - 0.05 <= _p <= _z[1] + 0.05
+                            and not (b[3] <= _z[2] or b[2] >= _z[3]))
+                else:
+                    _hit = (_z[2] - 0.05 <= _p <= _z[3] + 0.05
+                            and not (b[1] <= _z[0] or b[0] >= _z[1]))
+                if _hit:
+                    _crosses_clear_zone = True
+                    break
+            if _crosses_clear_zone:
+                break
+        if _crosses_clear_zone:
+            out.append(room)
+            continue
+        # Companion roles keep the floor legible (shop -> store, bed -> study).
+        _extra = _resolve_room_roles(archetype, fl_idx, len(rooms) + n - 1,
+                                     has_stairs_landing, total_floors, program=program)
+        for i in range(n):
+            if n_axis == 'X':
+                x0, x1 = b[0] + i * step, b[0] + (i + 1) * step
+                nb = (x0, x1, b[2], b[3])
+                if i < n - 1:
+                    px = x1
+                    interior_walls.append({
+                        'p1': (px, b[2]), 'p2': (px, b[3]),
+                        'axis': 'Y', 'pos': px, 'thickness': wall_t,
+                        'doorway': {'x': px, 'y': (b[2] + b[3]) * 0.5,
+                                    'w': dw_w, 'h': dw_h, 'axis': 'Y'},
+                    })
+                    doors = [{'x': px, 'y': (b[2] + b[3]) * 0.5, 'axis': 'Y', 'w': dw_w}]
+                else:
+                    doors = [{'x': x0, 'y': (b[2] + b[3]) * 0.5, 'axis': 'Y', 'w': dw_w}]
+            else:
+                y0, y1 = b[2] + i * step, b[2] + (i + 1) * step
+                nb = (b[0], b[1], y0, y1)
+                if i < n - 1:
+                    py = y1
+                    interior_walls.append({
+                        'p1': (b[0], py), 'p2': (b[1], py),
+                        'axis': 'X', 'pos': py, 'thickness': wall_t,
+                        'doorway': {'x': (b[0] + b[1]) * 0.5, 'y': py,
+                                    'w': dw_w, 'h': dw_h, 'axis': 'X'},
+                    })
+                    doors = [{'x': (b[0] + b[1]) * 0.5, 'y': py, 'axis': 'X', 'w': dw_w}]
+                else:
+                    doors = [{'x': (b[0] + b[1]) * 0.5, 'y': y0, 'axis': 'X', 'w': dw_w}]
+            _role = room.role if i == 0 else _secondary_role(room.role, i)
+            if i > 0 and _extra and i < len(_extra) and _extra[i] != room.role:
+                _role = _extra[i]
+            out.append(Room(
+                id=f"{room.id}_{i + 1}", floor_idx=room.floor_idx, role=_role,
+                bounds=nb, doorways=doors, stair_hole=room.stair_hole,
+                is_wing=False, wing_id=room.wing_id,
+                exterior_facades=dict(room.exterior_facades),
+                allow_large=_large_intended))
+    return out
+
+
+def _carve_corridor_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h):
+    """Re-cut any corridor-thin room into chunky rooms joined by a corridor.
+
+    Called after a floor has been partitioned. A room whose rectangle is a long
+    strip (very wide and shallow, or tall and thin) is split across its short
+    axis into 2+ squarish rooms, each reachable through a real doorway. Rooms
+    stay compact; corridors are what get to be long.
+
+    Returns the new room list; ``interior_walls`` is extended in place.
+    """
+    if not rooms:
+        return rooms
+    out = []
+    for room in rooms:
+        b = room.bounds
+        w, d = b[1] - b[0], b[3] - b[2]
+        if room.role in THROUGH_ROLES or w <= 0.01 or d <= 0.01:
+            out.append(room)
+            continue
+
+        aspect = max(w, d) / min(w, d)
+        _large_intended = bool(getattr(room, 'allow_large', False)) or room.role in {
+            'THRONE_ROOM', 'BANQUET_HALL', 'TAVERN_TAPROOM', 'GREAT_HALL',
+            'MEZZANINE_GALLERY', 'MESS_HALL', 'COUNCIL_CHAMBER', 'CHAPEL_HALL',
+            'STABLE_HALL', 'WORKSHOP', 'STONE_STORE', 'LODGE', 'RANGE',
+        }
+        # Rescue elongated rooms, while allowing genuinely large social spaces.
+        if aspect < (1.75 if _large_intended else 1.55) or max(w, d) < 5.5:
+            out.append(room)
+            continue
+        if w >= d:
+            # Long along X: split into near-square pieces (n ~ aspect).
+            n = max(2, min(4, int(round(aspect))))
+            step = w / n
+            if step < 2.6 or step > 4.6:
+                n = max(2, min(4, int(round(w / 4.0))))
+                step = w / n
+            if step < 2.6:
+                out.append(room)
+                continue
+            for i in range(1, n):
+                px = b[0] + i * step
+                dy = (b[2] + b[3]) * 0.5
+                interior_walls.append({
+                    'p1': (px, b[2]), 'p2': (px, b[3]),
+                    'axis': 'Y', 'pos': px, 'thickness': wall_t,
+                    'doorway': {'x': px, 'y': dy, 'w': dw_w, 'h': dw_h, 'axis': 'Y'},
+                })
+            for i in range(n):
+                x0, x1 = b[0] + i * step, b[0] + (i + 1) * step
+                door_px = b[0] + (i + 1) * step if i < n - 1 else b[0] + i * step
+                out.append(Room(
+                    id=f"{room.id}_{i + 1}", floor_idx=room.floor_idx,
+                    role=(room.role if i == 0 else _secondary_role(room.role, i)),
+                    bounds=(x0, x1, b[2], b[3]),
+                    doorways=[{'x': door_px, 'y': (b[2] + b[3]) * 0.5,
+                               'axis': 'Y', 'w': dw_w}],
+                    stair_hole=room.stair_hole,
+                    is_wing=room.is_wing, wing_id=room.wing_id,
+                    exterior_facades=dict(room.exterior_facades),
+                    allow_large=_large_intended))
+        else:
+            n = max(2, min(4, int(round(aspect))))
+            step = d / n
+            if step < 2.6 or step > 4.6:
+                n = max(2, min(4, int(round(d / 4.0))))
+                step = d / n
+            if step < 2.6:
+                out.append(room)
+                continue
+            for i in range(1, n):
+                py = b[2] + i * step
+                dx = (b[0] + b[1]) * 0.5
+                interior_walls.append({
+                    'p1': (b[0], py), 'p2': (b[1], py),
+                    'axis': 'X', 'pos': py, 'thickness': wall_t,
+                    'doorway': {'x': dx, 'y': py, 'w': dw_w, 'h': dw_h, 'axis': 'X'},
+                })
+            for i in range(n):
+                y0, y1 = b[2] + i * step, b[2] + (i + 1) * step
+                door_py = b[2] + (i + 1) * step if i < n - 1 else b[2] + i * step
+                out.append(Room(
+                    id=f"{room.id}_{i + 1}", floor_idx=room.floor_idx,
+                    role=(room.role if i == 0 else _secondary_role(room.role, i)),
+                    bounds=(b[0], b[1], y0, y1),
+                    doorways=[{'x': (b[0] + b[1]) * 0.5, 'y': door_py,
+                               'axis': 'X', 'w': dw_w}],
+                    stair_hole=room.stair_hole,
+                    is_wing=room.is_wing, wing_id=room.wing_id,
+                    exterior_facades=dict(room.exterior_facades),
+                    allow_large=_large_intended))
+    return out
+
+
 def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                      front_door_info=None, fl_wings_bounds=None,
                      effective_archetype='NONE', props=None, seed=0,
-                     doorways=None):
+                     doorways=None, clear_zone_rects=None):
     """
     Intelligently partitions a floor storey into rooms with open cased doorways.
     Returns:
@@ -2500,6 +3000,11 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     shape = getattr(props, 'building_shape', 'RECTANGLE')
     program = getattr(props, 'interior_program', 'AUTO')
     has_stairs_landing = (fl_idx > 0 and stair_hole is not None)
+    stair_zone = stair_circulation_zone(stair_hole, stair_pos_info, bounds)
+    if stair_zone is not None:
+        clear_zone_rects = list(clear_zone_rects or [])
+        if stair_zone not in clear_zone_rects:
+            clear_zone_rects.append(stair_zone)
 
     dw_w = 1.75
     dw_h = min(2.95, floor_h - 0.25)
@@ -2524,7 +3029,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             if fl_wings_bounds:
                 for wi, wb in enumerate(fl_wings_bounds):
                     if fl_idx == 0:
-                        w_role = 'BARRACKS_DORM' if wi == 0 else 'BANQUET_HALL'
+                        w_role = 'ENTRANCE_HALL' if wi == 0 else 'BANQUET_HALL'
                     elif fl_idx == 1:
                         w_role = 'ARMORY' if wi == 0 else 'LIBRARY'
                     elif fl_idx == 2:
@@ -2554,6 +3059,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                         id=f"fl{fl_idx}_wing{wi}", floor_idx=fl_idx,
                         role=w_role, bounds=wb, is_wing=True, wing_id=wi,
                         doorways=wing_dw, stair_hole=_w_sh, exterior_facades={}))
+            _p_rooms = _recut_oversized_rooms(
+                _p_rooms, _p_walls, bounds, wall_t, dw_w, dw_h,
+                effective_archetype, fl_idx, has_stairs_landing, total_floors, program,
+                clear_zone_rects=clear_zone_rects)
+            _p_rooms = _normalize_stair_circulation_rooms(
+                _p_rooms, stair_hole, stair_pos_info, bounds)
             return _p_rooms, _p_walls
 
     is_wide_mansion = (W >= 15.0 and D >= 6.0
@@ -2577,7 +3088,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             if fl_wings_bounds:
                 for wi, wb in enumerate(fl_wings_bounds):
                     if fl_idx == 0:
-                        w_role = 'BARRACKS_DORM' if wi == 0 else 'BANQUET_HALL'
+                        w_role = 'ENTRANCE_HALL' if wi == 0 else 'BANQUET_HALL'
                     elif fl_idx == 1:
                         w_role = 'ARMORY' if wi == 0 else 'LIBRARY'
                     elif fl_idx == 2:
@@ -2594,6 +3105,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                         id=f"fl{fl_idx}_wing{wi}", floor_idx=fl_idx,
                         role=w_role, bounds=wb, is_wing=True, wing_id=wi,
                         doorways=wing_dw, stair_hole=None, exterior_facades={}))
+            _manor_rooms = _recut_oversized_rooms(
+                _manor_rooms, _manor_walls, bounds, wall_t, dw_w, dw_h,
+                effective_archetype, fl_idx, has_stairs_landing, total_floors, program,
+                clear_zone_rects=clear_zone_rects)
+            _manor_rooms = _normalize_stair_circulation_rooms(
+                _manor_rooms, stair_hole, stair_pos_info, bounds)
             return _manor_rooms, _manor_walls
 
     # Single open room fallback (only when explicitly requested, plot is tiny
@@ -2652,8 +3169,18 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         if fl_wings_bounds:
             for wi, wb in enumerate(fl_wings_bounds):
                 if effective_archetype in ('TAVERN', 'INN'):
-                    w_role = 'DINING'
-                    w_doorways = []
+                    # The kitchen lives in the ground-floor wing, leaving the
+                    # whole main block free for one big taproom.  Upstairs the
+                    # wing becomes guest lodging instead of another dining room.
+                    _inn_roles = _resolve_room_roles(
+                        effective_archetype, fl_idx, 2, fl_idx > 0, total_floors,
+                        program=program)
+                    # _inn_roles[1] is KITCHEN on the ground floor (service wing)
+                    # and GUEST_ROOM above; _inn_roles[0] is TAPROOM/stair-landing
+                    # which belongs in the main block, not the wing.
+                    w_role = _inn_roles[1] if len(_inn_roles) > 1 else (
+                        'GUEST_ROOM' if fl_idx > 0 else 'KITCHEN')
+                    w_doorways = _wing_portals(wb, doorways)
                 elif effective_archetype == 'TENEMENT':
                     # In U-shape tenements, each wing is an independent apartment with its own entrance.
                     # In other shapes, it is an extra bedroom connected via portal.
@@ -2668,14 +3195,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                         w_doorways = _wing_portals(wb, doorways)
                 elif effective_archetype == 'MANOR':
                     w_role = 'STUDY' if (fl_idx == 0 and wi == 0) else ('GUEST_ROOM' if fl_idx == 0 else ('BEDROOM' if wi == 0 else 'GUEST_ROOM'))
-                    w_doorways = []
+                    w_doorways = _wing_portals(wb, doorways)
                 elif effective_archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL'):
                     w_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'MAYOR_OFFICE'
-                    w_doorways = []
-                elif effective_archetype in ('BARRACKS', 'INFANTRY_BARRACKS', 'KNIGHTS_MANOR',
+                    w_doorways = _wing_portals(wb, doorways)
+                elif effective_archetype in ('KNIGHTS_MANOR',):
+                    w_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'BARRACKS_DORM'
+                    w_doorways = _wing_portals(wb, doorways)
+                elif effective_archetype in ('BARRACKS', 'INFANTRY_BARRACKS',
                                              'ARCHERY', 'ARCHERY_RANGE'):
-                    w_role = 'BARRACKS_DORM'
-                    w_doorways = []
+                    w_role = 'ENTRANCE_HALL' if (fl_idx == 0 and wi == 0 and getattr(props, 'wing_placement', '') == 'FRONT') else 'BARRACKS_DORM'
+                    w_doorways = _wing_portals(wb, doorways)
                 else:
                     # Artisan courtyard wings are working trade space on the
                     # ground floor (forge wing, brew wing, ...), bedrooms above.
@@ -2689,7 +3219,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     else:
                         w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
                                            ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH', 'BUILDER')) else 'GUEST_ROOM'
-                    w_doorways = []
+                    w_doorways = _wing_portals(wb, doorways)
                 w_rm = Room(
                     id=f"fl{fl_idx}_wing{wi}",
                     floor_idx=fl_idx,
@@ -2702,6 +3232,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     exterior_facades={}
                 )
                 rooms.append(w_rm)
+        rooms = _normalize_stair_circulation_rooms(rooms, stair_hole, stair_pos_info, bounds)
         return rooms, []
 
     # Safe boundaries around stairs (left side)
@@ -2777,7 +3308,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     rooms = []
     interior_walls = []
 
-    def _clear_doorway_span(pos, axis='X', margin=0.65, lo=None, hi=None):
+    def _clear_doorway_span_base(pos, axis='X', margin=0.65, lo=None, hi=None):
         """Move partition coordinate `pos` off any doorway/wing-portal opening
         it would otherwise cross (a partition must never land in the middle of
         a doorway). The result stays within [lo, hi]; iterate to fixpoint so
@@ -2785,15 +3316,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         if axis == 'X':
             lo = ix_min + 1.8 if lo is None else lo
             hi = ix_max - 1.8 if hi is None else hi
-            door_items = [(dw.get('x', 0.0), dw.get('w', 1.2))
+            door_items = [(dw.get('x', 0.0), dw.get('w', 1.2),
+                           0.30 if dw.get('is_balcony') else margin)
                           for dw in (doorways or []) if dw.get('axis', 'X') == 'X']
         else:
             lo = iy_min + 1.8 if lo is None else lo
             hi = iy_max - 1.8 if hi is None else hi
-            door_items = [(dw.get('y', 0.0), dw.get('w', 1.2))
+            door_items = [(dw.get('y', 0.0), dw.get('w', 1.2),
+                           0.30 if dw.get('is_balcony') else margin)
                           for dw in (doorways or []) if dw.get('axis', 'X') == 'Y']
-        spans = [(dc - dw * 0.5 - margin, dc + dw * 0.5 + margin, dc, dw)
-                 for dc, dw in door_items]
+        spans = [(dc - dw * 0.5 - m, dc + dw * 0.5 + m, dc, dw)
+                 for dc, dw, m in door_items]
         if hi < lo:
             hi = lo
         pos = min(hi, max(lo, pos))
@@ -2819,11 +3352,207 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 break
         return min(hi, max(lo, pos))
 
-    if fl_idx == 0 and effective_archetype in ('INN', 'TAVERN'):
-        # Ground floor of Inn/Tavern: Fewer, bigger rooms!
-        # Either 1 grand open taproom (for small footprints or open_ground_floor)
-        # or 2 spacious rooms: a massive Great Taproom (~70% of floor space)
-        # plus a service Kitchen (~30% of space) for food/drink prep.
+    # Keep-outs that must stay physically empty: the stair well and the apron in
+    # front of each annex walk-through.  Partitions are trimmed back to the edge
+    # of any keep-out they would otherwise cross, so a staircase or a furniture
+    # run never ends up standing in the way into a side annex.
+    _clear_zones = [tuple(z) for z in (clear_zone_rects or []) if z is not None]
+    # Zone-aware doorway dodging lives in `_clear_doorway_span` below.
+    _ZONE_DEPTH = 0.35
+
+    def _clear_doorway_span(pos, axis='X', margin=0.65, lo=None, hi=None):
+        pos = _clear_doorway_span_base(pos, axis=axis, margin=margin, lo=lo, hi=hi)
+        a0, a1 = (ix_min, ix_max) if axis == 'X' else (iy_min, iy_max)
+        lo_ = lo if lo is not None else a0
+        hi_ = hi if hi is not None else a1
+        # Slide the coordinate out of any keep-out zone on this line.
+        for zx0, zx1, zy0, zy1 in _clear_zones:
+            z0, z1 = (zy0, zy1) if axis == 'X' else (zx0, zx1)
+            if not (z0 - 1e-6 <= pos <= z1 + 1e-6):
+                continue
+            cands = [c for c in (z0 - margin - _ZONE_DEPTH, z1 + margin + _ZONE_DEPTH)
+                     if lo_ <= c <= hi_]
+            if cands:
+                pos = min(cands, key=lambda c: abs(c - pos))
+        return pos
+        if (_n0, _n1) == (a0, a1):
+            return pos
+        # Coordinate sits inside a keep-out: slide to the nearer keep-out edge.
+        for zx0, zx1, zy0, zy1 in _clear_zones:
+            if axis == 'X' and not (zx0 - 1e-6 <= pos <= zx1 + 1e-6):
+                continue
+            if axis == 'Y' and not (zy0 - 1e-6 <= pos <= zy1 + 1e-6):
+                continue
+            z0, z1 = (zy0, zy1) if axis == 'X' else (zx0, zx1)
+            lo_ = lo if lo is not None else a0
+            hi_ = hi if hi is not None else a1
+            cands = [c for c in (z0 - margin - 0.05, z1 + margin + 0.05) if lo_ <= c <= hi_]
+            if cands:
+                return min(cands, key=lambda c: abs(c - pos))
+        return pos
+
+    def _clip_to_zones(axis, pos, a0, a1):
+        """Trim a partition's span (a0..a1 along `axis`) back out of every zone."""
+        for _ in range(3):
+            changed = False
+            for zx0, zx1, zy0, zy1 in _clear_zones:
+                if axis == 'X':
+                    if not (zx0 - 1e-6 <= pos <= zx1 + 1e-6):
+                        continue
+                    z0, z1 = zy0, zy1
+                else:
+                    if not (zy0 - 1e-6 <= pos <= zy1 + 1e-6):
+                        continue
+                    z0, z1 = zx0, zx1
+                if a1 <= z0 + 1e-6 or a0 >= z1 - 1e-6:
+                    continue
+                # A keep-out that reaches either end of the wall (for example a
+                # facade-door keep-out where a perpendicular partition meets the
+                # exterior wall) must not trim that junction - trimming it left a
+                # visible slit between two rooms. Only interior openings clip.
+                if z0 <= a0 + 1e-6 or z1 >= a1 - 1e-6:
+                    continue
+                # Keep the longer of the two remaining pieces.
+                if (a1 - a0) <= 0.0:
+                    break
+                if (z0 - a0) >= (a1 - z1):
+                    a1 = z0
+                else:
+                    a0 = z1
+                changed = True
+            if not changed:
+                break
+        return a0, a1
+
+    def _blocked_by_zone(x, y, zx0z=None, zx1z=None, zy0z=None, zy1z=None):
+        """True when the point, or an optional rect, overlaps any keep-out."""
+        for zx0, zx1, zy0, zy1 in _clear_zones:
+            if zx0z is None:
+                if zx0 - 0.05 <= x <= zx1 + 0.05 and zy0 - 0.05 <= y <= zy1 + 0.05:
+                    return True
+            else:
+                if not (zx1z + 0.05 <= zx0 or zx0z - 0.05 >= zx1
+                        or zy1z + 0.05 <= zy0 or zy0z - 0.05 >= zy1):
+                    return True
+        return False
+
+    def _push_split_out(axis, pos, lo, hi, x_min_, x_max_, y_min_, y_max_):
+        """Slide a partition coordinate so its whole wall line stays out of zones.
+
+        Returns the moved coordinate (or `pos`) and the x-range / y-range the
+        partition may actually occupy.  Only partitions whose line genuinely
+        crosses a keep-out are trimmed; clear partitions keep full span.
+        """
+        a0, a1 = (x_min_, x_max_) if axis == 'X' else (y_min_, y_max_)
+        b0, b1 = _clip_to_zones(axis, pos, a0, a1)
+        if (b0, b1) == (a0, a1):
+            return pos, a0, a1
+        # The line crosses a keep-out: step it to whichever side leaves the
+        # longer usable wall, staying inside the requested [lo, hi] window.
+        cands = []
+        for zx0, zx1, zy0, zy1 in _clear_zones:
+            if axis == 'X' and zx0 - 1e-6 <= pos <= zx1 + 1e-6:
+                cands.extend((zy0 - 0.02, zy1 + 0.02))
+            elif axis == 'Y' and zy0 - 1e-6 <= pos <= zy1 + 1e-6:
+                cands.extend((zx0 - 0.02, zx1 + 0.02))
+        cands = [c for c in cands if lo <= c <= hi]
+        if not cands:
+            return b0 if (b0 - a0) >= (a1 - b1) else b1, a0, a1
+        pos = min(cands, key=lambda c: abs(c - pos))
+        return pos, a0, a1
+
+    if fl_idx == 0 and (effective_archetype in _ARTISAN_GROUND
+                        or effective_archetype.startswith('ARTISAN')):
+        # Artisan shop-house: one BIG trade room on the ground floor (the
+        # workshop, with the shop kept inside it) plus an optional side store.
+        # Two big squarish rooms read as a proper workshop; a stack of strips
+        # read as a corridor with doors.
+        _ground = _ARTISAN_GROUND.get(effective_archetype, ['WORKSHOP', 'STORE', 'STORAGE'])
+        _shop, _store = _ground[0], (_ground[1] if len(_ground) > 1 else 'STORE')
+        _split_like = None
+        # Cut so each half stays chunky: the workshop keeps the long dimension
+        # (and the larger share), the store takes the street end.
+        if W >= D and W >= 9.0:
+            _sx = ix_min + W * 0.58
+            _sx = _clear_doorway_span(_sx, axis='X', lo=ix_min + 3.6, hi=ix_max - 3.6)
+            if _sx > ix_min + 3.4 and ix_max - _sx > 3.4:
+                _split_like = ('Y', _sx)
+        elif D >= 9.0:
+            _sy = iy_min + D * 0.58
+            _sy = _clear_doorway_span(_sy, axis='Y', lo=iy_min + 3.6, hi=iy_max - 3.6)
+            _sy = _dodge_oven_band(_sy, iy_min + 3.6, iy_max - 3.6)
+            if _sy > iy_min + 3.4 and iy_max - _sy > 3.4:
+                _split_like = ('X', _sy)
+        if _split_like is not None:
+            _axis, _pos = _split_like
+            if _axis == 'X':
+                _dw_c = (ix_min + ix_max) * 0.5
+                _dw_c = _clear_doorway_span(_dw_c, axis='X', lo=ix_min + 1.8, hi=ix_max - 1.8)
+                interior_walls.append({
+                    'p1': (ix_min, _pos), 'p2': (ix_max, _pos),
+                    'axis': 'X', 'pos': _pos, 'thickness': wall_t,
+                    'doorway': {'x': _dw_c, 'y': _pos, 'w': dw_w, 'h': dw_h, 'axis': 'X'},
+                })
+                _a = (ix_min, ix_max, iy_min, _pos)
+                _b = (ix_min, ix_max, _pos, iy_max)
+                _fa = {'FRONT': (ix_min, ix_max), 'LEFT': (iy_min, _pos), 'RIGHT': (iy_min, _pos)}
+                _fb = {'BACK': (ix_min, ix_max), 'LEFT': (_pos, iy_max), 'RIGHT': (_pos, iy_max)}
+                _doors = [{'x': _dw_c, 'y': _pos, 'axis': 'X', 'w': dw_w}]
+            else:
+                _dw_c = (iy_min + iy_max) * 0.5
+                _dw_c = _clear_doorway_span(_dw_c, axis='Y', lo=iy_min + 1.8, hi=iy_max - 1.8)
+                interior_walls.append({
+                    'p1': (_pos, iy_min), 'p2': (_pos, iy_max),
+                    'axis': 'Y', 'pos': _pos, 'thickness': wall_t,
+                    'doorway': {'x': _pos, 'y': _dw_c, 'w': dw_w, 'h': dw_h, 'axis': 'Y'},
+                })
+                _a = (ix_min, _pos, iy_min, iy_max)
+                _b = (_pos, ix_max, iy_min, iy_max)
+                _fa = {'LEFT': (iy_min, iy_max), 'FRONT': (ix_min, _pos), 'BACK': (ix_min, _pos)}
+                _fb = {'RIGHT': (iy_min, iy_max), 'FRONT': (_pos, ix_max), 'BACK': (_pos, ix_max)}
+                _doors = [{'x': _pos, 'y': _dw_c, 'axis': 'Y', 'w': dw_w}]
+            _a_area = (_a[1] - _a[0]) * (_a[3] - _a[2])
+            _b_area = (_b[1] - _b[0]) * (_b[3] - _b[2])
+            if _a_area >= _b_area:
+                _big, _big_fac, _small, _small_fac = _a, _fa, _b, _fb
+            else:
+                _big, _big_fac, _small, _small_fac = _b, _fb, _a, _fa
+            rooms = [
+                Room(id=f"fl{fl_idx}_workshop", floor_idx=fl_idx, role=_shop,
+                     bounds=_big, doorways=list(_doors),
+                     stair_hole=_holds_stair(_big), exterior_facades=_big_fac),
+                Room(id=f"fl{fl_idx}_store", floor_idx=fl_idx, role=_store,
+                     bounds=_small, doorways=list(_doors),
+                     stair_hole=_holds_stair(_small), exterior_facades=_small_fac),
+            ]
+        else:
+            # Small/odd footprint: one generous trade hall, no slivers.
+            rooms = [Room(id=f"fl{fl_idx}_workshop", floor_idx=fl_idx, role=_shop,
+                          bounds=(ix_min, ix_max, iy_min, iy_max), doorways=[],
+                          stair_hole=stair_hole,
+                          exterior_facades={'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
+                                            'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)})]
+
+    elif fl_idx == 0 and effective_archetype in ('INN', 'TAVERN') and fl_wings_bounds:
+        # Inn with a service wing: the whole main block is ONE grand taproom
+        # (long bar down one side, tables everywhere else) and the kitchen
+        # moves out into the wing.  Peak nights need the floor, not a corridor
+        # to a second dining room.
+        rm0 = Room(
+            id=f"fl{fl_idx}_taproom", floor_idx=fl_idx, role='TAVERN_TAPROOM',
+            bounds=(ix_min, ix_max, iy_min, iy_max),
+            doorways=[], stair_hole=stair_hole,
+            exterior_facades={'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
+                              'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)}
+        )
+        rooms = [rm0]
+        # NOTE: wing rooms are added by the single common wing pass below
+        # (~line 4953) so no duplicate taproom/kitchen wing can ever be created.
+
+    elif fl_idx == 0 and effective_archetype in ('INN', 'TAVERN'):
+        # Ground floor of Inn/Tavern without a wing: either one grand open
+        # taproom (small footprints / open ground floor) or two spacious
+        # rooms, a great taproom plus a service kitchen.
         if (W < 9.0 and D < 9.0) or bool(getattr(props, 'open_ground_floor', False)):
             rm0 = Room(
                 id=f"fl{fl_idx}_taproom", floor_idx=fl_idx, role='TAVERN_TAPROOM',
@@ -2885,8 +3614,9 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     max_split_x = min(max_split_x, stair_hole[0] - 0.50)
                 if door_cx is not None:
                     max_split_x = min(max_split_x, door_cx - 0.95)
-                split_x = min(max_split_x, ix_max - W * 0.70)
-                split_x = max(ix_min + 2.5, split_x)
+                # Taproom ~64%, but the kitchen never a corridor (min 3.9 m).
+                split_x = min(max_split_x, ix_max - max(W * 0.64, 3.9))
+                split_x = max(ix_min + 4.0, split_x)
                 split_x = _clear_doorway_span(split_x, axis='X', lo=ix_min + 2.2, hi=min(ix_max - 3.0, max_split_x))
                 dw_y = (iy_min + iy_max) * 0.5
                 dw_y = _clear_doorway_span(dw_y, axis='Y', lo=iy_min + 1.8, hi=iy_max - 1.8)
@@ -2916,8 +3646,9 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     min_split_x = max(min_split_x, stair_hole[1] + 0.50)
                 if door_cx is not None:
                     min_split_x = max(min_split_x, door_cx + 0.95)
-                split_x = max(min_split_x, ix_min + W * 0.70)
-                split_x = min(ix_max - 2.5, split_x)
+                # Taproom ~64%, but the kitchen never a corridor (min 3.9 m).
+                split_x = max(min_split_x, ix_min + max(W * 0.64, 3.9))
+                split_x = min(ix_max - 4.0, split_x)
                 split_x = _clear_doorway_span(split_x, axis='X', lo=max(ix_min + 3.0, min_split_x), hi=ix_max - 2.2)
                 dw_y = (iy_min + iy_max) * 0.5
                 dw_y = _clear_doorway_span(dw_y, axis='Y', lo=iy_min + 1.8, hi=iy_max - 1.8)
@@ -2941,6 +3672,167 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     exterior_facades={'FRONT': (split_x, ix_max), 'BACK': (split_x, ix_max), 'RIGHT': (iy_min, iy_max)}
                 )
                 rooms = [rm0, rm1]
+                # A deep, narrow service wing would read as a corridor: split it
+                # into a kitchen plus a pantry/scullery instead.
+                _kw = ix_max - split_x
+                _kd = iy_max - iy_min
+                if _kd / max(_kw, 0.1) > 2.0 and _kw >= 3.4 and _kd >= 7.0:
+                    _py = iy_min + _kd * 0.55
+                    _py = _clear_doorway_span(_py, axis='Y', lo=iy_min + 3.0, hi=iy_max - 3.0)
+                    interior_walls.append({
+                        'p1': (split_x, _py), 'p2': (ix_max, _py),
+                        'axis': 'X', 'pos': _py, 'thickness': wall_t,
+                        'doorway': {'x': (split_x + ix_max) * 0.5, 'y': _py,
+                                    'w': dw_w, 'h': dw_h, 'axis': 'X'},
+                    })
+                    _pdx = (split_x + ix_max) * 0.5
+                    rm1.bounds = (split_x, ix_max, iy_min, _py)
+                    rm1.stair_hole = _holds_stair(rm1.bounds)
+                    rm1.doorways = list(rm1.doorways) + [
+                        {'x': _pdx, 'y': _py, 'axis': 'X', 'w': dw_w}]
+                    rm1.exterior_facades = {'RIGHT': (iy_min, _py),
+                                            'FRONT': (split_x, ix_max)}
+                    rooms = [rm0, rm1, Room(
+                        id=f"fl{fl_idx}_pantry", floor_idx=fl_idx, role='PANTRY',
+                        bounds=(split_x, ix_max, _py, iy_max),
+                        doorways=[{'x': _pdx, 'y': _py, 'axis': 'X', 'w': dw_w}],
+                        stair_hole=_holds_stair((split_x, ix_max, _py, iy_max)),
+                        exterior_facades={'RIGHT': (_py, iy_max),
+                                          'BACK': (split_x, ix_max)})]
+
+    elif ((fl_idx > 0 and (effective_archetype in _HALL_ARCHETYPES
+                           or effective_archetype.startswith('ARTISAN')))
+          and has_interior_walls and partition_style in ('AUTO', 'HALL_CHAMBERS')
+          and getattr(props, 'has_stairs', False)
+          and W >= 10.0 and D >= 7.0):
+        # Guest floor of an inn/tavern: a stair landing strip along the stair
+        # wall, a central corridor, and sensibly sized guest rooms that all open
+        # off that corridor. No huge empty landing and no route through a
+        # bedroom to reach another room.
+        _stair_right = bool(
+            (stair_pos_info and float(stair_pos_info.get('cx', ix_min)) > (ix_min + ix_max) * 0.5)
+            or getattr(props, 'stair_placement', 'LEFT') == 'RIGHT')
+        _sw = float((stair_pos_info or {}).get('w', 1.8) or 1.8)
+        if stair_pos_info and stair_pos_info.get('cx') is not None:
+            _scx = float(stair_pos_info.get('cx'))
+        else:
+            _scx = (ix_max - 0.08 - _sw * 0.5) if _stair_right else (ix_min + 0.08 + _sw * 0.5)
+        _corr_half = 1.0   # corridor is always at least 2.0 m wide
+        _mid_y = (iy_min + iy_max) * 0.5
+        if _stair_right:
+            _stair_edge = _scx - _sw * 0.5 - 1.20
+            _land_edge = max(ix_min + 2.0, _stair_edge)
+            _land_lo, _land_hi = _land_edge, ix_max
+            _rest_lo, _rest_hi = ix_min, _land_edge
+        else:
+            _stair_edge = _scx + _sw * 0.5 + 1.20
+            _land_edge = min(ix_max - 2.0, _stair_edge)
+            _land_lo, _land_hi = ix_min, _land_edge
+            _rest_lo, _rest_hi = _land_edge, ix_max
+
+        # Never run the landing wall through a front/back doorway - notably the
+        # wing portal.  Expand the stair hall to swallow any such opening on the
+        # stair side so the wing opens into circulation instead of a wall.
+        for _d in (doorways or []):
+            if _d.get('axis') != 'X':
+                continue
+            _dx = float(_d.get('x', 0.0))
+            _dwid = float(_d.get('w', 1.0) or 1.0)
+            if _stair_right:
+                if (_dx + _dwid * 0.5 >= _land_edge
+                        and _dx - _dwid * 0.5 <= ix_max):
+                    _cand = _dx - _dwid * 0.5 - 0.35
+                    if _cand - ix_min >= 6.0:
+                        _land_edge = min(_land_edge, _cand)
+            else:
+                if (_dx - _dwid * 0.5 <= _land_edge
+                        and _dx + _dwid * 0.5 >= ix_min):
+                    _cand = _dx + _dwid * 0.5 + 0.35
+                    if ix_max - _cand >= 6.0:
+                        _land_edge = max(_land_edge, _cand)
+        if _stair_right:
+            _land_lo, _land_hi = _land_edge, ix_max
+            _rest_lo, _rest_hi = ix_min, _land_edge
+        else:
+            _land_lo, _land_hi = ix_min, _land_edge
+            _rest_lo, _rest_hi = _land_edge, ix_max
+
+        _land_fac = {'FRONT': (_land_lo, _land_hi), 'BACK': (_land_lo, _land_hi)}
+        _land_fac['LEFT' if not _stair_right else 'RIGHT'] = (iy_min, iy_max)
+        landing_rm = Room(
+            id=f"fl{fl_idx}_stair_landing", floor_idx=fl_idx, role='STAIR_LANDING',
+            bounds=(_land_lo, _land_hi, iy_min, iy_max),
+            doorways=[{'x': _land_edge, 'y': _mid_y, 'axis': 'Y', 'w': dw_w}],
+            stair_hole=stair_hole, exterior_facades=_land_fac)
+        interior_walls.append({
+            'p1': (_land_edge, iy_min), 'p2': (_land_edge, iy_max),
+            'axis': 'Y', 'pos': _land_edge, 'thickness': wall_t,
+            'doorway': {'x': _land_edge, 'y': _mid_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'},
+        })
+        corridor_rm = Room(
+            id=f"fl{fl_idx}_corridor", floor_idx=fl_idx, role='CORRIDOR',
+            bounds=(_rest_lo, _rest_hi, _mid_y - _corr_half, _mid_y + _corr_half),
+            doorways=[{'x': _land_edge, 'y': _mid_y, 'axis': 'Y', 'w': dw_w}],
+            stair_hole=None, exterior_facades={})
+        rooms = [landing_rm, corridor_rm]
+
+        _rest_w = _rest_hi - _rest_lo
+        _n_cols = (4 if _rest_w >= 18.0 else 3 if _rest_w >= 12.0
+                   else 2 if _rest_w >= 7.0 else 1)
+        _col = _rest_w / _n_cols
+        _wing_cy = None
+        if fl_wings_bounds:
+            _wing_cy = (fl_wings_bounds[0][0] + fl_wings_bounds[0][1]) * 0.5
+        _gi = [0]
+        _room_role_pool = [
+            r for r in (_resolve_room_roles(
+                effective_archetype, fl_idx, max(4, _n_cols * 2), True,
+                total_floors, program=program) or [])
+            if r not in ('STAIR_LANDING', 'CORRIDOR', 'ENTRANCE_HALL')
+        ] or ['BEDROOM']
+
+        def _add_guest_zone(zy0, zy1, north):
+            for _ci in range(_n_cols):
+                x0 = _rest_lo + _ci * _col
+                x1 = _rest_hi if _ci == _n_cols - 1 else _rest_lo + (_ci + 1) * _col
+                cxz = (x0 + x1) * 0.5
+                is_common = ((not north) and _wing_cy is not None
+                             and (x0 - 0.30 <= _wing_cy <= x1 + 0.30)
+                             and effective_archetype in ('INN', 'TAVERN'))
+                if is_common:
+                    role = 'COMMON_ROOM'
+                else:
+                    role = _room_role_pool[_gi[0] % len(_room_role_pool)]
+                    _gi[0] += 1
+                door_y = zy0 if north else zy1
+                _fac = {}
+                if north and abs(zy1 - iy_max) < 0.01:
+                    _fac['BACK'] = (x0, x1)
+                if (not north) and abs(zy0 - iy_min) < 0.01:
+                    _fac['FRONT'] = (x0, x1)
+                if abs(x1 - _rest_hi) < 0.01:
+                    _fac['RIGHT'] = (zy0, zy1)
+                if abs(x0 - _rest_lo) < 0.01:
+                    _fac['LEFT'] = (zy0, zy1)
+                rooms.append(Room(
+                    id=f"fl{fl_idx}_{'n' if north else 's'}{_ci}", floor_idx=fl_idx,
+                    role=role, bounds=(x0, x1, zy0, zy1),
+                    doorways=[{'x': cxz, 'y': door_y, 'axis': 'X', 'w': dw_w}],
+                    stair_hole=None, exterior_facades=_fac, allow_large=True))
+                interior_walls.append({
+                    'p1': (x0, door_y), 'p2': (x1, door_y),
+                    'axis': 'X', 'pos': door_y, 'thickness': wall_t,
+                    'doorway': {'x': cxz, 'y': door_y, 'w': dw_w, 'h': dw_h, 'axis': 'X'},
+                })
+                if _ci > 0:
+                    interior_walls.append({
+                        'p1': (x0, zy0), 'p2': (x0, zy1),
+                        'axis': 'Y', 'pos': x0, 'thickness': wall_t,
+                        'doorway': None,
+                    })
+
+        _add_guest_zone(_mid_y + _corr_half, iy_max, True)
+        _add_guest_zone(iy_min, _mid_y - _corr_half, False)
 
     elif not is_deep:
         # Partition along Y (vertical wall at X = split_x, running from iy_min to iy_max)
@@ -3693,18 +4585,25 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     _hall.exterior_facades = _fac
                     rooms = [_bay_room, _hall] + list(rooms[1:])
 
+
+
     else:
         # Deep building: split the depth into bands so long houses get
         # proper apartments instead of one giant front/back pair. Artisan
-        # ground floors stay at 2 big rooms (shop + workshop); upper floors
-        # get at most 3 spacious multi-use bands. Falls back to the legacy
-        # 2-room split when the stairwell leaves no room for more bands.
-        if fl_idx == 0 and (effective_archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
-                                                 'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER',
-                                                 'FURNITURE_MAKER', 'HUNTER') or effective_archetype.startswith('ARTISAN')):
-            _deep_target = 2
-        else:
-            _deep_target = 4 if D >= 16.8 else (3 if D >= 10.5 else 2)
+        # ground floor is a single big workshop (planned above); upper floors
+        # get at most 3 spacious multi-use bands.
+        # Prefer bands whose rooms stay at or below ~2:1, so a deep floor never
+        # becomes one wide hall with a sliver behind it.
+        # Take the SMALLEST number of bands that already yields rooms no more
+        # than ~2:1 (a deep hall should become 2 proper rooms, not 1 hall plus
+        # leftovers). Only fall back to more bands when 2 would still be strips.
+        _deep_target = 2
+        for _cand_n in (2, 3, 4):
+            if W / max(D / _cand_n, 0.1) <= 2.0 and (D / _cand_n) >= 2.4:
+                _deep_target = _cand_n
+                break
+        if D >= 16.8 and W / max(D / 4.0, 0.1) <= 2.0:
+            _deep_target = 4
         _deep_splits = None
         if not _turn_layout and _deep_target >= 3:
             for _try_n in range(_deep_target, 2, -1):
@@ -3750,7 +4649,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     continue
                 _b_spans = [(iy_min, _fixed[0])] + [(_fixed[i], _fixed[i + 1]) for i in range(len(_fixed) - 1)] + [(_fixed[-1], iy_max)]
                 _min_d = min(_b1 - _b0 for _b0, _b1 in _b_spans)
-                if not (_min_d >= 2.75 and (W / _min_d) <= 2.85):
+                _max_d = max(_b1 - _b0 for _b0, _b1 in _b_spans)
+                if not (_min_d >= 2.75 and (W / _min_d) <= 2.85 and (W / _max_d) <= 2.6):
+                    # Also reject plans whose deepest band would leave a room
+                    # twice as long as it is wide (reads as a corridor).
+                    continue
+                # Equal bands: every room gets a comparable share instead of one
+                # great hall and a sliver behind it.
+                if _max_d - _min_d > max(1.2, 0.22 * _max_d):
                     continue
                 _deep_splits = _fixed
                 _deep_target = _try_n
@@ -3767,7 +4673,13 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     exterior_facades={'FRONT': (ix_min, ix_max), 'BACK': (ix_min, ix_max),
                                       'LEFT': (iy_min, iy_max), 'RIGHT': (iy_min, iy_max)}
                 )
-                return [rm_living], []
+                _living_rooms = _recut_oversized_rooms(
+                    [rm_living], [], bounds, wall_t, dw_w, dw_h,
+                    effective_archetype, fl_idx, has_stairs_landing, total_floors, program,
+                    clear_zone_rects=clear_zone_rects)
+                _living_rooms = _normalize_stair_circulation_rooms(
+                    _living_rooms, stair_hole, stair_pos_info, bounds)
+                return _living_rooms, []
 
             # Turned-stair floors: the stair column occupies the front zone (from iy_min to _col_top).
             # It is isolated into a dedicated STAIR_LANDING corridor room with real partition walls,
@@ -4198,18 +5110,6 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     stair_hole=_holds_stair((ix_min, ix_max, _b0, _b1)),
                     exterior_facades=_fac
                 ))
-        if has_stairs_landing and stair_hole is not None:
-            # Whoever holds the stairwell serves as the landing, so arrivals
-            # never step off into a bedroom (also repairs the legacy heuristic
-            # when the flight geometry disagrees with it).
-            _holders = [r for r in rooms
-                        if r.bounds[0] - 0.3 <= stair_hole[0] and stair_hole[1] <= r.bounds[1] + 0.3
-                        and r.bounds[2] - 0.3 <= stair_hole[2] and stair_hole[3] <= r.bounds[3] + 0.3]
-            if len(_holders) == 1 and _holders[0].role != 'STAIR_LANDING':
-                for r in rooms:
-                    if r is not _holders[0] and r.role == 'STAIR_LANDING':
-                        r.role, _holders[0].role = _holders[0].role, r.role
-                        break
         _force_bakehouse_chamber(rooms)
 
     # Add any wing rooms (the exterior-entrance tenement layout above already
@@ -4217,9 +5117,44 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     if fl_wings_bounds and not (effective_archetype == 'TENEMENT'
                                 and getattr(props, 'has_exterior_stairs', False)):
         for wi, wb in enumerate(fl_wings_bounds):
+            # Never duplicate a wing room that a specialised branch already made
+            # (Inn/Tavern only; tenements keep their own wing apartments).
+            if (effective_archetype in ('TAVERN', 'INN')
+                    and any(getattr(r, 'is_wing', False) and getattr(r, 'wing_id', None) == wi
+                            for r in rooms)):
+                continue
             if effective_archetype in ('TAVERN', 'INN'):
-                w_role = 'DINING'
-                w_doorways = []
+                # Ground-floor wing = service KITCHEN; upstairs = guest lodging.
+                # _inn_roles[1] is KITCHEN on the ground floor and GUEST_ROOM
+                # above; [0] is the taproom/stair-landing that belongs in the
+                # main block, never in the wing.
+                _inn_roles = _resolve_room_roles(
+                    effective_archetype, fl_idx, 2, fl_idx > 0, total_floors,
+                    program=program)
+                w_role = (_inn_roles[1] if len(_inn_roles) > 1
+                          else ('GUEST_ROOM' if fl_idx > 0 else 'KITCHEN'))
+                # A real doorway in the shared facade wall, recorded on both the
+                # wing and the main room so the kitchen/lodging is reachable.
+                wx1, wx2, wy1, wy2 = wb
+                _main_rm = max(
+                    (r for r in rooms if not getattr(r, 'is_wing', False)),
+                    key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]),
+                    default=None)
+                _dw = None
+                if _main_rm is not None:
+                    mb = _main_rm.bounds
+                    if wy2 <= mb[2] + 0.35 or wy1 >= mb[3] - 0.35:
+                        _dw = {'x': (wx1 + wx2) * 0.5,
+                               'y': mb[2] if wy2 <= mb[2] + 0.35 else mb[3],
+                               'axis': 'X', 'w': min(dw_w, max(1.2, wx2 - wx1 - 1.2))}
+                    elif wx2 <= mb[0] + 0.35 or wx1 >= mb[1] - 0.35:
+                        _dw = {'x': mb[0] if wx2 <= mb[0] + 0.35 else mb[1],
+                               'y': (wy1 + wy2) * 0.5, 'axis': 'Y',
+                               'w': min(dw_w, max(1.2, wy2 - wy1 - 1.2))}
+                    if _dw is not None:
+                        if _dw not in _main_rm.doorways:
+                            _main_rm.doorways.append(_dw)
+                w_doorways = [_dw] if _dw is not None else []
             elif effective_archetype == 'TENEMENT' and shape == 'U_SHAPE':
                 # Independent apartment suite in the wing with its own exterior entrance
                 wx1, wx2, wy1, wy2 = wb
@@ -4265,18 +5200,21 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     w_role = 'STUDY' if wi == 0 else 'GUEST_ROOM'
                 else:
                     w_role = 'BEDROOM' if wi == 0 else 'GUEST_ROOM'
-                w_doorways = []
+                w_doorways = _wing_portals(wb, doorways)
             elif effective_archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL'):
                 w_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'MAYOR_OFFICE'
-                w_doorways = []
-            elif effective_archetype in ('BARRACKS', 'INFANTRY_BARRACKS', 'KNIGHTS_MANOR',
+                w_doorways = _wing_portals(wb, doorways)
+            elif effective_archetype in ('KNIGHTS_MANOR',):
+                w_role = 'ENTRANCE_HALL' if fl_idx == 0 else 'BARRACKS_DORM'
+                w_doorways = _wing_portals(wb, doorways)
+            elif effective_archetype in ('BARRACKS', 'INFANTRY_BARRACKS',
                                          'ARCHERY', 'ARCHERY_RANGE'):
-                w_role = 'BARRACKS_DORM'
-                w_doorways = []
+                w_role = 'ENTRANCE_HALL' if (fl_idx == 0 and wi == 0 and getattr(props, 'wing_placement', '') == 'FRONT') else 'BARRACKS_DORM'
+                w_doorways = _wing_portals(wb, doorways)
             else:
                 w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
                                        ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH')) else 'GUEST_ROOM'
-                w_doorways = []
+                w_doorways = _wing_portals(wb, doorways)
             w_rm = Room(
                 id=f"fl{fl_idx}_wing{wi}",
                 floor_idx=fl_idx,
@@ -4292,6 +5230,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
     if doorways:
         for rm in rooms:
+            if rm.doorways is None:
+                rm.doorways = []
             rx0, rx1, ry0, ry1 = rm.bounds
             for d in doorways:
                 dx, dy = d.get('x', 0.0), d.get('y', 0.0)
@@ -4320,11 +5260,11 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 hall_rm.floor_void = v_rect
                 hall_rm.role = 'MEZZANINE_GALLERY'
 
-    # Artisan ground floor: ONE big open shop room (no side chambers or corridor slivers)
-    # so the trade has plenty of space for the store-desk, displays, customer browsing,
-    # and trade showpieces, while living quarters are on upper floors.
+    # Explicit open-ground-floor halls (a deliberate single trade hall) keep
+    # one open room.  Ordinary artisan houses are NOT collapsed here: their
+    # ground floor must keep the real lower-floor STORE + WORKSHOP split.
     _is_artisan = (effective_archetype in _ARTISAN_GROUND or effective_archetype.startswith('ARTISAN'))
-    if fl_idx == 0 and (_is_artisan or effective_archetype == 'FISHERMAN' or bool(getattr(props, 'open_ground_floor', False))):
+    if fl_idx == 0 and bool(getattr(props, 'open_ground_floor', False)) and not _is_artisan:
         _wings = [r for r in rooms if getattr(r, 'is_wing', False)]
         _cand = []
         for _r in rooms:
@@ -4356,6 +5296,53 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         rooms = [_main_room] + _wings
         interior_walls = []
 
+    # Final safety pass: keep partitions and their door openings clear of
+    # stair wells and annex portal aprons, even for specialized floor plans.
+    if _clear_zones and interior_walls:
+        _kept = []
+        for _w in interior_walls:
+            _p1, _p2 = _w['p1'], _w['p2']
+            _ax = 'X' if abs(_p1[1] - _p2[1]) < 1e-6 else 'Y'
+            _pos = _p1[1] if _ax == 'X' else _p1[0]
+            _a0, _a1 = (_p1[0], _p2[0]) if _ax == 'X' else (_p1[1], _p2[1])
+            _lo, _hi = min(_a0, _a1), max(_a0, _a1)
+            _n0, _n1 = _clip_to_zones(_ax, _pos, _lo, _hi)
+            if _n1 - _n0 < 1.0:
+                continue
+            if (_n0, _n1) != (_lo, _hi):
+                _w = dict(_w)
+                if _ax == 'X':
+                    _w['p1'] = (_n0, _p1[1])
+                    _w['p2'] = (_n1, _p2[1])
+                else:
+                    _w['p1'] = (_p1[0], _n0)
+                    _w['p2'] = (_p2[0], _n1)
+                _dw = _w.get('doorway')
+                if _dw:
+                    _du = _dw.get('x') if _ax == 'X' else _dw.get('y')
+                    _dh = (_dw.get('w', 1.0) or 1.0) * 0.5
+                    if _du is None or not (_n0 + _dh <= _du <= _n1 - _dh):
+                        _nu = (_n0 + _n1) * 0.5
+                        if _ax == 'X':
+                            _dw['x'] = _nu
+                        else:
+                            _dw['y'] = _nu
+            _kept.append(_w)
+        interior_walls = _kept
+    # Late proportion pass covers specialized layouts as well. Leave explicitly
+    # ceremonial/social rooms expansive, while splitting oversized private rooms
+    # and long narrow rooms into useful, reachable spaces.  Tenements are already
+    # composed of self-contained apartments (own entrance + kitchen + bedroom),
+    # so they must never be subdivided by this generic pass.
+    if effective_archetype != 'TENEMENT':
+        rooms = _recut_oversized_rooms(
+            rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
+            effective_archetype, fl_idx, has_stairs_landing, total_floors, program,
+            clear_zone_rects=clear_zone_rects)
+    # All layout branches converge here. A room holding the stair landing, or
+    # serving as a two-door route between rooms, is circulation—not a bedroom.
+    # One-room small floors remain the intentional combined-cottage exception.
+    rooms = _normalize_stair_circulation_rooms(rooms, stair_hole, stair_pos_info, bounds)
     return rooms, interior_walls
 
 

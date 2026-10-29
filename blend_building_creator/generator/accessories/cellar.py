@@ -16,7 +16,7 @@ from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_WOOD, MAT_INDEX_TIMBER,
     MAT_INDEX_BOTTLE_GLASS, MAT_INDEX_WAX, MAT_INDEX_LOG, MAT_INDEX_WATER,
 )
-from .artisan_props import build_wine_rack
+from .artisan_props import build_wine_rack, build_mash_tun, build_keg_rack
 from .furniture import build_barrel, build_crate
 
 
@@ -101,23 +101,53 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
         direction_y=-1
     )
 
-    # 4. Wine racks along the far walls (clear of the stair shaft).
+    # 4. Wine racks along the walls. The rack's back rail is its local +Y, so
+    #    the yaw is chosen to put that back against the wall and the bottle
+    #    necks/corks facing into the room (not into the plaster).
     rack_z = z_floor + 0.02
-    build_wine_rack(bm, bcx, by1 - wall_t - 0.26, rack_z, math.pi, width=min(bw - 0.7, 1.10))
+    build_wine_rack(bm, bcx, by1 - wall_t - 0.26, rack_z, 0.0, width=min(bw - 0.7, 1.10))
     build_wine_rack(bm, bx1 - wall_t - 0.26, bcy, rack_z, -math.pi * 0.5, width=min(bd - 0.7, 1.10))
     if tier != 'TIER_1':
         build_wine_rack(bm, bx0 + wall_t + 0.26, bcy, rack_z, math.pi * 0.5, width=min(bd - 0.7, 1.10))
     if tier == 'TIER_3':
-        build_wine_rack(bm, bcx - bw * 0.25, by0 + wall_t + 0.26, rack_z, 0.0, width=min(bw * 0.4, 1.10))
+        build_wine_rack(bm, bcx - bw * 0.25, by0 + wall_t + 0.26, rack_z, math.pi,
+                        width=min(bw * 0.4, 1.10))
+    if bw >= 5.2:
+        build_wine_rack(bm, bcx + bw * 0.28, by1 - wall_t - 0.26, rack_z, 0.0,
+                        width=min(bw * 0.30, 1.10))
 
-    # 5. Barrels, crates and a tasting ledge.
-    build_barrel(bm, bx1 - wall_t - 0.75, by0 + wall_t + 0.7, z_floor,
+    # 5. Upright bottle shelves above the back racks (corks up, labels out).
+    from .interior_furniture import build_bottle
+    _shelf_w = min(bw * 0.55, 2.0)
+    _shelf_y = by1 - wall_t - 0.18
+    for _sz in (z_floor + 1.55, z_floor + 2.00):
+        faces += create_beveled_box(
+            bm, size=(_shelf_w, 0.30, 0.05),
+            location=(bcx, _shelf_y, _sz),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.006)
+        _n = 6
+        for _i in range(_n):
+            _bx = bcx - _shelf_w * 0.5 + 0.18 + _i * ((_shelf_w - 0.36) / max(1, _n - 1))
+            faces += build_bottle(
+                bm, _bx, _shelf_y + 0.02, _sz + 0.025, ang=0.0,
+                bottle_type=('POTION' if _i % 3 == 1 else 'WINE'))
+
+    # 6. Extra barrels, lying keg racks and a crate.
+    for _i in range(3):
+        build_barrel(bm, bx0 + wall_t + 1.35, by1 - wall_t - 1.15 - _i * 0.72, z_floor,
+                     radius=0.30, height=0.70)
+    build_barrel(bm, bx1 - wall_t - 0.75, by0 + wall_t + 2.4, z_floor,
                  radius=0.30, height=0.70, lying=(tier != 'TIER_1'))
-    build_barrel(bm, bx1 - wall_t - 0.75, by0 + wall_t + 1.6, z_floor,
-                 radius=0.30, height=0.70)
-    build_crate(bm, bx0 + wall_t + 0.7, by0 + wall_t + 0.7, z_floor, size=0.52)
-    if tier != 'TIER_1':
-        build_crate(bm, bx0 + wall_t + 1.4, by0 + wall_t + 0.7, z_floor, size=0.52)
+    build_keg_rack(bm, bx0 + wall_t + 1.5, by0 + wall_t + 0.55, z_floor, 0.0, length=1.30)
+    if bw >= 4.2:
+        build_keg_rack(bm, bx0 + wall_t + 3.0, by0 + wall_t + 0.55, z_floor, 0.0, length=1.30)
+    build_crate(bm, bx0 + wall_t + 0.7, by0 + wall_t + 1.6, z_floor, size=0.52)
+
+    # 7. Stirring vat / mash tun with its paddle, clear of the stair shaft.
+    build_mash_tun(bm, bx1 - wall_t - 1.15, by0 + wall_t + 1.5, z_floor,
+                   radius=min(0.55, max(0.38, bw * 0.09)), height=0.95)
+
+    # 8. Tasting ledge + wash basin (Tier 3 only).
     if tier == 'TIER_3':
         # Tasting ledge against the far wall.
         faces += create_beveled_box(
@@ -132,11 +162,7 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
                 mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
             )
         for i, bx in enumerate((-0.45, 0.0, 0.45)):
-            faces += create_cylinder(
-                bm, radius=0.038, height=0.28, segments=10,
-                location=(bcx + bx, by1 - wall_t - 0.65, z_floor + 1.17),
-                mat_index=MAT_INDEX_BOTTLE_GLASS, smooth=True
-            )
+            faces += build_bottle(bm, bcx + bx, by1 - wall_t - 0.65, z_floor + 0.99, 0.0)
         # Little stone water basin for washing casks.
         faces += create_beveled_box(
             bm, size=(1.0, 0.7, 0.5),

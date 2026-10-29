@@ -982,7 +982,7 @@ def build_front_steps(bm, center_x, y_front, z_base, num_steps=3, step_w=1.6, st
 
 def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thickness=0.25,
                           normal_axis='-Y', has_shutters=True, center_pos=None,
-                          shutters_closed=False):
+                          shutters_closed=False, exterior_projection=None):
     """
     Builds a complete fantasy window opening fixture:
     full wall-depth jamb liner sleeve, exterior casing & stone sill,
@@ -1018,6 +1018,11 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
         w_rot = (rot_mat_4x4 @ Euler(rot, 'XYZ').to_matrix().to_4x4()).to_euler('XYZ')
         return w_loc, (w_rot.x, w_rot.y, w_rot.z)
 
+    # Clamp optional trim projection so the detail can adapt to shallow oriel
+    # walls without changing the standard main-facade window finish.
+    if exterior_projection is not None:
+        exterior_projection = max(0.04, float(exterior_projection))
+
     # 1. Thin reveal lining sleeve sitting flush inside the cutout hole (watertight, zero gaps)
     lining_depth = wall_thickness
     liner_t = 0.020
@@ -1037,13 +1042,19 @@ def build_window_assembly(bm, center=(0.0, 0.0, 0.0), size=(0.9, 1.2), wall_thic
     # 2. Exterior Heavy Timber Sill (proud of log wall, covers cutout gap completely)
     casing_w = 0.12
     # In Tier 1 logs bulge out to ~0.28m, so casing depth must span from wall core past log crest
-    casing_t = 0.18
-    casing_y = -wall_thickness * 0.5 - casing_t * 0.5 + 0.03
-
+    casing_t = 0.18 if exterior_projection is None else max(0.05, float(exterior_projection))
+    if exterior_projection is None:
+        casing_y = -wall_thickness * 0.5 - casing_t * 0.5 + 0.03
+    else:
+        casing_y = -wall_thickness * 0.5 - casing_t * 0.5 + 0.005
+    
     sill_w = win_w + casing_w * 2.0 + 0.14
     sill_thick = 0.13
-    sill_d = wall_thickness * 0.5 + 0.26
-    sill_y = -wall_thickness * 0.5 - sill_d * 0.5 + 0.06
+    sill_d = (wall_thickness * 0.5 + 0.26 if exterior_projection is None
+              else wall_thickness * 0.5 + casing_t * 0.30)
+    sill_y = (-wall_thickness * 0.5 - sill_d * 0.5 + 0.06
+              if exterior_projection is None
+              else -wall_thickness * 0.5 - sill_d * 0.5 + 0.01)
     sill_loc, sill_rot = to_world((0.0, sill_y, -win_h * 0.5 - sill_thick * 0.5 + 0.02))
     create_beveled_box(bm, size=(sill_w, sill_d, sill_thick), location=sill_loc, rotation=sill_rot, mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015)
     

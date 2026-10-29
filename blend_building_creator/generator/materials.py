@@ -2924,15 +2924,11 @@ def setup_building_material_slots(obj, props):
                      or create_stylized_open_book("M_Building_Open_Book"))
     mat_water = getattr(props, 'custom_water', None) or create_stylized_water("M_Water")
     mat_cliffs = create_stylized_cliffs("M_Building_Cliffs")
-    mat_dg_wall = create_dungeon_material(
-        "M_Building_Dungeon_Wall", ("dungeon_wall_diffuse.jpg", "stone_wall_diffuse.jpg"),
-        (0.42, 0.42, 0.46, 1.0), (1.0, 1.0, 1.0))
-    mat_dg_floor = create_dungeon_material(
-        "M_Building_Dungeon_Floor", ("dungeon_floor_diffuse.jpg", "cut_stone_diffuse.jpg"),
-        (0.34, 0.34, 0.36, 1.0), (1.0, 1.0, 1.0), roughness=0.8)
-    mat_dg_beam = create_dungeon_material(
-        "M_Building_Dungeon_Beam", ("dungeon_beam_diffuse.jpg", "timber_beam_diffuse.jpg"),
-        (0.42, 0.30, 0.22, 1.0), (1.0, 1.0, 1.0), roughness=0.85, bump=0.3)
+    # One material per look: the dungeon reuses the canonical Stone / Cut Stone
+    # / Timber materials instead of creating extra "M_Building_Dungeon_*" names.
+    mat_dg_wall = mat_stone
+    mat_dg_floor = mat_cut_stone
+    mat_dg_beam = mat_timber
     mat_canvas = (getattr(props, 'custom_canvas', None)
                   or create_stylized_canvas("M_Building_Canvas"))
     mat_fish = (getattr(props, 'custom_fish', None)
@@ -3058,9 +3054,9 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Open_Book",     # 40
     "M_Water",                  # 41
     "M_Building_Cliffs",        # 42
-    "M_Building_Dungeon_Wall",  # 43
-    "M_Building_Dungeon_Floor",  # 44
-    "M_Building_Dungeon_Beam",  # 45
+    "M_Building_Stone",         # 43 (dungeon wall reuses canonical stone)
+    "M_Building_Cut_Stone",     # 44 (dungeon floor reuses canonical cut stone)
+    "M_Building_Timber",        # 45 (dungeon beam reuses canonical timber)
     "M_Building_Canvas",        # 46
     "M_Building_Fish",          # 47
     "M_Building_Meat",          # 48
@@ -3083,6 +3079,12 @@ def canonical_slot_index(name):
         base = "M_Building_" + base[len("M_Outbuilding_"):]
     if base == "M_Building_WattleDaub":
         return 1
+    if base == "M_Building_Dungeon_Wall":
+        return 0
+    if base == "M_Building_Dungeon_Floor":
+        return 8
+    if base == "M_Building_Dungeon_Beam":
+        return 2
     if base in ("M_Building_Thatch", "M_Building_Hay"):
         return 15
     if base.startswith("M_Sign") or base.startswith("M_Building_Sign"):

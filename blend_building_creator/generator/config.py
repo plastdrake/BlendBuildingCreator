@@ -75,6 +75,24 @@ class BuildingContext:
     extra_doorways: List[Dict[str, Any]] = field(default_factory=list)
     extra_window_exclusions: List[Dict[str, Any]] = field(default_factory=list)
     is_rotated_roof: bool = False
+    # Resolved Annex layout from annex_layout.py
+    annex_kind: str = ''
+    annex_side: str = ''
+    annex_width: float = 0.0
+    annex_floors: int = 0
+    annex_cy: float = 0.0
+    annex_portal_cy: float = 0.0
+    annex_by_side: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    # Side a straight stair must be built on so it does not block an annex
+    # doorway (None keeps the requested stair_placement).
+    annex_stair_side: Any = None
+    # Aprons in front of each annex walk-through (hall side) that must stay
+    # empty on every storey: [{'rect': (x0, x1, y0, y1), 'floor_idx': [...]}].
+    annex_clear_rects: List[Dict[str, Any]] = field(default_factory=list)
+    # Per-floor keep-outs (stair well + annex apron) the room planner and the
+    # furnishing pass must leave physically empty.
+    floor_clear_zones: Dict[int, List[Tuple[float, float, float, float]]] = field(
+        default_factory=dict)
 
     def bounds_for(self, floor_idx: int) -> Bounds:
         """Wall bounds for a floor, falling back to the base footprint."""
