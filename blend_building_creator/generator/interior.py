@@ -1606,7 +1606,7 @@ _INTERIOR_PROGRAMS = {
         'upper': ('STAIR_LANDING', 'MAYOR_OFFICE', 'OFFICE', 'STUDY', 'ARCHIVE'),
     },
     'MILITARY': {
-        'ground': ('DRILL_HALL', 'MESS_HALL', 'ARMORY', 'STORAGE'),
+        'ground': ('KITCHEN', 'MESS_HALL', 'DRILL_HALL', 'ARMORY', 'STORAGE'),
         'upper': ('STAIR_LANDING', 'BARRACKS_DORM', 'BARRACKS_DORM', 'OFFICER_QUARTERS'),
     },
     'PALACE': {
@@ -1960,11 +1960,13 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         return pool[:num_rooms]
 
     if archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):
-        pool = ['ARMORY', 'STORAGE', 'DRILL_HALL', 'MESS_HALL']
+        # A garrison needs a working kitchen and a dining/mess hall first;
+        # armory, drill space and stores follow.
+        pool = ['KITCHEN', 'MESS_HALL', 'ARMORY', 'DRILL_HALL', 'STORAGE']
         return pool[:num_rooms]
 
     if archetype in ('KNIGHTS_MANOR',):
-        pool = ['GREAT_HALL', 'MESS_HALL', 'ARMORY', 'STORAGE']
+        pool = ['KITCHEN', 'MESS_HALL', 'GREAT_HALL', 'ARMORY', 'STORAGE']
         return pool[:num_rooms]
 
     if archetype in ('ARCHERY', 'ARCHERY_RANGE'):
@@ -3410,8 +3412,10 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     if effective_archetype == 'BAKERY' and has_interior_walls \
             and partition_style in ('AUTO', 'HALL_CHAMBERS') and D >= 7.0:
         from .accessories.bakery import OVEN_WALL_CLEAR
-        _ocy = (iy_min + iy_max) * 0.5
-        oven_band = (_ocy - OVEN_WALL_CLEAR, _ocy + OVEN_WALL_CLEAR)
+        # The bake-oven lives in the rear bakehouse, not at the mid-depth stair
+        # (where the flue/footprint used to collide with the flight).
+        _oven_y = iy_min + D * 0.72
+        oven_band = (_oven_y - OVEN_WALL_CLEAR, _oven_y + OVEN_WALL_CLEAR)
 
     def _dodge_oven_band(pos, lo, hi):
         if oven_band is None:
@@ -3632,14 +3636,22 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         _ground = _ARTISAN_GROUND.get(effective_archetype, ['WORKSHOP', 'STORE', 'STORAGE'])
         _shop, _store = _ground[0], (_ground[1] if len(_ground) > 1 else 'STORE')
         _split_like = None
+        # The bakery must read as a real shop-house: the STORE/sales room at
+        # the street entrance, the BAKEHOUSE (oven + stair) behind it.
+        if effective_archetype == 'BAKERY' and D >= 9.0:
+            _sy = iy_min + D * 0.30
+            _sy = _clear_doorway_span(_sy, axis='Y', lo=iy_min + 3.4, hi=iy_max - 3.4)
+            _sy = _dodge_oven_band(_sy, iy_min + 3.4, iy_max - 3.4)
+            if _sy > iy_min + 3.4 and iy_max - _sy > 3.4:
+                _split_like = ('X', _sy)
         # Cut so each half stays chunky: the workshop keeps the long dimension
         # (and the larger share), the store takes the street end.
-        if W >= D and W >= 9.0:
+        if _split_like is None and W >= D and W >= 9.0:
             _sx = ix_min + W * 0.58
             _sx = _clear_doorway_span(_sx, axis='X', lo=ix_min + 3.6, hi=ix_max - 3.6)
             if _sx > ix_min + 3.4 and ix_max - _sx > 3.4:
                 _split_like = ('Y', _sx)
-        elif D >= 9.0:
+        elif _split_like is None and D >= 9.0:
             _sy = iy_min + D * 0.58
             _sy = _clear_doorway_span(_sy, axis='Y', lo=iy_min + 3.6, hi=iy_max - 3.6)
             _sy = _dodge_oven_band(_sy, iy_min + 3.6, iy_max - 3.6)
@@ -3711,10 +3723,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             rooms = [
                 Room(id=f"fl{fl_idx}_workshop", floor_idx=fl_idx, role=_shop,
                      bounds=_shop_b, doorways=list(_doors),
-                     stair_hole=_holds_stair(_shop_b), exterior_facades=_shop_fac),
+                     stair_hole=_holds_stair(_shop_b), exterior_facades=_shop_fac,
+                     allow_large=True),
                 Room(id=f"fl{fl_idx}_store", floor_idx=fl_idx, role=_store,
                      bounds=_store_b, doorways=list(_doors),
-                     stair_hole=_holds_stair(_store_b), exterior_facades=_store_fac),
+                     stair_hole=_holds_stair(_store_b), exterior_facades=_store_fac,
+                     allow_large=True),
             ]
         else:
             # Small/odd footprint: one generous trade hall, no slivers.
@@ -5583,7 +5597,173 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     # All layout branches converge here. A room holding the stair landing, or
     # serving as a two-door route between rooms, is circulation—not a bedroom.
     # One-room small floors remain the intentional combined-cottage exception.
+    # Wing portals are wide openings in the main facade.  A perpendicular
+    # partition that ends on that facade inside the wing's span splits the
+    # entrance in half (Knights Manor T-wing).  Pull such wall ends 1.8 m into
+    # the room so the opening reads as one clear vestibule.
+    if fl_wings_bounds:
+        _drop_walls = []
+        for w in interior_walls:
+            _p1, _p2 = w.get('p1'), w.get('p2')
+            if not _p1 or not _p2:
+                continue
+            _ax = w.get('axis')
+            _pos = w.get('pos', 0.0)
+            for wb in fl_wings_bounds:
+                try:
+                    wx0, wx1, wy0, wy1 = (float(wb[0]), float(wb[1]),
+                                          float(wb[2]), float(wb[3]))
+                except Exception:
+                    continue
+                _trim = 1.80
+                _changed = False
+                if wy1 <= iy_min + 0.35 and _ax == 'Y' and wx0 - 0.05 <= _pos <= wx1 + 0.05:
+                    for _k in (0, 1):
+                        _pt = _p1 if _k == 0 else _p2
+                        if abs(_pt[1] - iy_min) < 0.25:
+                            _new = (_pt[0], iy_min + _trim)
+                            if _k == 0:
+                                _p1 = _new
+                            else:
+                                _p2 = _new
+                            _changed = True
+                elif wy0 >= iy_max - 0.35 and _ax == 'Y' and wx0 - 0.05 <= _pos <= wx1 + 0.05:
+                    for _k in (0, 1):
+                        _pt = _p1 if _k == 0 else _p2
+                        if abs(_pt[1] - iy_max) < 0.25:
+                            _new = (_pt[0], iy_max - _trim)
+                            if _k == 0:
+                                _p1 = _new
+                            else:
+                                _p2 = _new
+                            _changed = True
+                elif wx1 <= ix_min + 0.35 and _ax == 'X' and wy0 - 0.05 <= _pos <= wy1 + 0.05:
+                    for _k in (0, 1):
+                        _pt = _p1 if _k == 0 else _p2
+                        if abs(_pt[0] - ix_min) < 0.25:
+                            _new = (ix_min + _trim, _pt[1])
+                            if _k == 0:
+                                _p1 = _new
+                            else:
+                                _p2 = _new
+                            _changed = True
+                elif wx0 >= ix_max - 0.35 and _ax == 'X' and wy0 - 0.05 <= _pos <= wy1 + 0.05:
+                    for _k in (0, 1):
+                        _pt = _p1 if _k == 0 else _p2
+                        if abs(_pt[0] - ix_max) < 0.25:
+                            _new = (ix_max - _trim, _pt[1])
+                            if _k == 0:
+                                _p1 = _new
+                            else:
+                                _p2 = _new
+                            _changed = True
+                if _changed:
+                    _len = math.hypot(_p2[0] - _p1[0], _p2[1] - _p1[1])
+                    if _len < 0.8:
+                        _drop_walls.append(w)
+                    else:
+                        w['p1'], w['p2'] = _p1, _p2
+                        _dw = w.get('doorway')
+                        if _dw:
+                            _coord = _dw.get('y', 0.0) if _dw.get('axis') == 'Y' else _dw.get('x', 0.0)
+                            _lo = min(_p1[1], _p2[1]) if _dw.get('axis') == 'Y' else min(_p1[0], _p2[0])
+                            _hi = max(_p1[1], _p2[1]) if _dw.get('axis') == 'Y' else max(_p1[0], _p2[0])
+                            if not (_lo - 0.05 <= _coord <= _hi + 0.05):
+                                if _dw.get('axis') == 'Y':
+                                    _dw['y'] = (_lo + _hi) * 0.5
+                                else:
+                                    _dw['x'] = (_lo + _hi) * 0.5
+                    break
+        if _drop_walls:
+            interior_walls[:] = [w for w in interior_walls if w not in _drop_walls]
+
+    # Same issue at ordinary exterior entrances: a partition that ends on the
+    # facade inside the front/back/side door span visually splits the doorway.
+    if doorways:
+        _facade_spans = {'FRONT': [], 'BACK': [], 'LEFT': [], 'RIGHT': []}
+        for _d in (doorways or []):
+            _dax = _d.get('axis', 'X')
+            _dc = _d.get('x', 0.0) if _dax == 'X' else _d.get('y', 0.0)
+            _dw = float(_d.get('w', 1.5) or 1.5)
+            if _dax == 'X':
+                if abs(_d.get('y', 0.0) - iy_min) < 0.45:
+                    _facade_spans['FRONT'].append((_dc - _dw * 0.5, _dc + _dw * 0.5))
+                elif abs(_d.get('y', 0.0) - iy_max) < 0.45:
+                    _facade_spans['BACK'].append((_dc - _dw * 0.5, _dc + _dw * 0.5))
+            else:
+                if abs(_d.get('x', 0.0) - ix_min) < 0.45:
+                    _facade_spans['LEFT'].append((_dc - _dw * 0.5, _dc + _dw * 0.5))
+                elif abs(_d.get('x', 0.0) - ix_max) < 0.45:
+                    _facade_spans['RIGHT'].append((_dc - _dw * 0.5, _dc + _dw * 0.5))
+        _drop_doors = []
+        for w in interior_walls:
+            _p1, _p2 = w.get('p1'), w.get('p2')
+            if not _p1 or not _p2:
+                continue
+            _ax = w.get('axis')
+            _pos = w.get('pos', 0.0)
+            _trim = 1.80
+            _changed = False
+            if _ax == 'Y' and any(_s0 - 0.35 <= _pos <= _s1 + 0.35
+                                  for _s0, _s1 in _facade_spans['FRONT']):
+                if abs(_p1[1] - iy_min) < 0.25:
+                    _p1 = (_p1[0], iy_min + _trim); _changed = True
+                elif abs(_p2[1] - iy_min) < 0.25:
+                    _p2 = (_p2[0], iy_min + _trim); _changed = True
+            elif _ax == 'Y' and any(_s0 - 0.35 <= _pos <= _s1 + 0.35
+                                    for _s0, _s1 in _facade_spans['BACK']):
+                if abs(_p1[1] - iy_max) < 0.25:
+                    _p1 = (_p1[0], iy_max - _trim); _changed = True
+                elif abs(_p2[1] - iy_max) < 0.25:
+                    _p2 = (_p2[0], iy_max - _trim); _changed = True
+            elif _ax == 'X' and any(_s0 - 0.35 <= _pos <= _s1 + 0.35
+                                    for _s0, _s1 in _facade_spans['LEFT']):
+                if abs(_p1[0] - ix_min) < 0.25:
+                    _p1 = (ix_min + _trim, _p1[1]); _changed = True
+                elif abs(_p2[0] - ix_min) < 0.25:
+                    _p2 = (ix_min + _trim, _p2[1]); _changed = True
+            elif _ax == 'X' and any(_s0 - 0.35 <= _pos <= _s1 + 0.35
+                                    for _s0, _s1 in _facade_spans['RIGHT']):
+                if abs(_p1[0] - ix_max) < 0.25:
+                    _p1 = (ix_max - _trim, _p1[1]); _changed = True
+                elif abs(_p2[0] - ix_max) < 0.25:
+                    _p2 = (ix_max - _trim, _p2[1]); _changed = True
+            if _changed:
+                _len = math.hypot(_p2[0] - _p1[0], _p2[1] - _p1[1])
+                if _len < 0.8:
+                    _drop_doors.append(w)
+                else:
+                    w['p1'], w['p2'] = _p1, _p2
+        if _drop_doors:
+            interior_walls[:] = [w for w in interior_walls if w not in _drop_doors]
+
     rooms = _normalize_stair_circulation_rooms(rooms, stair_hole, stair_pos_info, bounds)
+
+    # Every military building needs a working kitchen and a dining/mess area.
+    # Guarantee both after stair normalization (which may turn the old kitchen
+    # room into the protected stair landing).
+    _military_layout = (
+        effective_archetype in ('BARRACKS', 'INFANTRY_BARRACKS', 'KNIGHTS_MANOR',
+                                'ARMORY', 'ARCHERY', 'ARCHERY_RANGE')
+        or bool(getattr(props, 'kit_tournament', False))
+        or bool(getattr(props, 'kit_archery', False))
+        or any(getattr(r, 'role', '') in
+               ('MESS_HALL', 'ARMORY', 'BARRACKS_DORM', 'DRILL_HALL',
+                'OFFICER_QUARTERS') for r in rooms))
+    if _military_layout and fl_idx == 0 and rooms:
+        if not any(getattr(r, 'role', '') == 'KITCHEN' for r in rooms):
+            _cand = next((r for r in rooms if getattr(r, 'role', '') in
+                          ('STORAGE', 'OFFICE', 'ARMORY', 'PANTRY', 'GUEST_ROOM',
+                           'BEDROOM', 'GREAT_HALL')), None)
+            if _cand is not None:
+                _cand.role = 'KITCHEN'
+        if not any(getattr(r, 'role', '') == 'MESS_HALL' for r in rooms):
+            _cand = next((r for r in rooms if getattr(r, 'role', '') in
+                          ('STORAGE', 'OFFICE', 'ARMORY', 'PANTRY', 'GUEST_ROOM',
+                           'BEDROOM', 'GREAT_HALL')), None)
+            if _cand is not None:
+                _cand.role = 'MESS_HALL'
+
     return rooms, interior_walls
 
 

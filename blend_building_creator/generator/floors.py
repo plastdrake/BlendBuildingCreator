@@ -1270,8 +1270,27 @@ def build_floors(bm, props, ctx):
             # 3. Side Door
             if getattr(props, 'has_side_door', False) and not open_timber:
                 s_facade = getattr(props, 'side_door_facade', 'LEFT')
+                # Keep the side entrance clear of the stair flight.  The old
+                # RIGHT-side door sat exactly on the wall centre, with the
+                # staircase rising immediately behind it.
+                _sd_clear = float(dw) * 0.5 + 0.85
+                _sd_front = y_min + _sd_clear
+                _sd_back = y_max - _sd_clear
+                _sd_cands = [(y_min + y_max) * 0.5, _sd_front, _sd_back]
+                if getattr(props, 'has_stairs', False):
+                    _slo, _shi = sorted((stair_y_bot, stair_y_top))
+                    _slo -= 1.0
+                    _shi += 1.0
+
+                    def _sd_dist(c):
+                        return 0.0 if _slo <= c <= _shi else min(abs(c - _slo), abs(c - _shi))
+
+                    _outside = [c for c in _sd_cands if c < _slo or c > _shi]
+                    s_cy = max(_outside, key=_sd_dist) if _outside else max(_sd_cands, key=_sd_dist)
+                else:
+                    s_cy = _sd_cands[0]
+                s_cy = min(_sd_back, max(_sd_front, s_cy))
                 if s_facade == 'LEFT':
-                    s_cy = (y_min + stair_y_bot) * 0.5 if (props.has_stairs and (stair_y_bot - y_min) > 2.0) else (y_min + y_max) * 0.5
                     s_xf = x_min
                     s_u1 = (s_cy - dw * 0.5 - frame_margin) - y_min
                     s_u2 = (s_cy + dw * 0.5 + frame_margin) - y_min
@@ -1286,7 +1305,6 @@ def build_floors(bm, props, ctx):
                     if props.has_front_steps and props.has_foundation:
                         build_front_steps(bm, center_x=s_xf, y_front=s_cy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='-X', mat_index=steps_mat)
                 else: # RIGHT
-                    s_cy = (y_min + y_max) * 0.5
                     s_xf = x_max
                     s_u1 = (s_cy - dw * 0.5 - frame_margin) - y_min
                     s_u2 = (s_cy + dw * 0.5 + frame_margin) - y_min
@@ -1655,6 +1673,7 @@ def build_floors(bm, props, ctx):
             return not (ox > 0.02 and oy > 0.02)
 
         _balc_kept = []
+        _balc_pending = []
         for b_entry in balconies_on_fl:
             bs = b_entry.get('side')
             if bs is None:
@@ -1704,19 +1723,16 @@ def build_floors(bm, props, ctx):
                 'z_start': z_floor,
                 'z_end': z_floor + balc_door_h
             }
-            if bs == 'FRONT':
-                front_openings.append(b_op)
-            elif bs == 'BACK':
-                back_openings.append(b_op)
-            elif bs == 'LEFT':
-                left_openings.append(b_op)
-            elif bs == 'RIGHT':
-                right_openings.append(b_op)
-
-            # Register balcony doorway in ctx so room planning partitions & furnishings avoid it
-            ctx.floor_doorways.setdefault(fl_idx, []).append({
-                'x': b_cx, 'y': b_cy, 'axis': b_axis, 'w': balc_door_w, 'is_balcony': True
-            })
+            # Register the doorway now so the room planner can dodge it, but
+            # do NOT cut the wall yet.  The opening is only cut after the
+            # floor plan is known: if a partition blocks the door, the balcony
+            # is dropped and the wall stays solid (no hole in the facade).
+            _balc_door = {'x': b_cx, 'y': b_cy, 'axis': b_axis,
+                          'w': balc_door_w, 'is_balcony': True}
+            ctx.floor_doorways.setdefault(fl_idx, []).append(_balc_door)
+            _balc_pending.append({'entry': b_entry, 'side': bs,
+                                  'opening': b_op, 'door': _balc_door,
+                                  'cx': b_cx, 'cy': b_cy})
         balconies_on_fl[:] = _balc_kept
         if getattr(ctx, 'floor_balconies', None) is not None:
             ctx.floor_balconies[fl_idx] = list(_balc_kept)
@@ -2010,6 +2026,76 @@ def build_floors(bm, props, ctx):
         )
         floor_rooms[fl_idx] = fl_rooms
         floor_interior_walls[fl_idx] = fl_interior_walls
+
+        # Validate the deferred balcony doors against the finished room plan.
+        # Only now is the wall opening cut; a blocked door simply means the
+        # balcony is removed and the facade stays solid (no unglazed hole).
+        if _balc_pending:
+            def _seg_hits_rect(p1, p2, rect):
+                x0, x1, y0, y1 = rect
+                ax, ay = p1
+                bx, by = p2
+                if max(ax, bx) < x0 - 0.02 or min(ax, bx) > x1 + 0.02:
+                    return False
+                if max(ay, by) < y0 - 0.02 or min(ay, by) > y1 + 0.02:
+                    return False
+                for _i in range(17):
+                    _t = _i / 16.0
+                    _px = ax + (bx - ax) * _t
+                    _py = ay + (by - ay) * _t
+                    if x0 - 0.02 <= _px <= x1 + 0.02 and y0 - 0.02 <= _py <= y1 + 0.02:
+                        return True
+                return False
+
+            _b_depth = float(getattr(props, 'balcony_depth', 1.3))
+            _kept_entries = []
+            _kept_pending = []
+            for _p in _balc_pending:
+                _bs = _p['side']
+                _bcx, _bcy = _p['cx'], _p['cy']
+                if _bs in ('FRONT', 'BACK'):
+                    if _bs == 'FRONT':
+                        _deck = (_bcx - b_width * 0.5, _bcx + b_width * 0.5,
+                                 y_min - _b_depth - 0.10, y_min + 0.05)
+                        _dr = (_bcx - 0.62, _bcx + 0.62, y_min, y_min + 0.95)
+                    else:
+                        _deck = (_bcx - b_width * 0.5, _bcx + b_width * 0.5,
+                                 y_max - 0.05, y_max + _b_depth + 0.10)
+                        _dr = (_bcx - 0.62, _bcx + 0.62, y_max - 0.95, y_max)
+                else:
+                    if _bs == 'LEFT':
+                        _deck = (x_min - _b_depth - 0.10, x_min + 0.05,
+                                 _bcy - b_width * 0.5, _bcy + b_width * 0.5)
+                        _dr = (x_min, x_min + 0.95, _bcy - 0.62, _bcy + 0.62)
+                    else:
+                        _deck = (x_max - 0.05, x_max + _b_depth + 0.10,
+                                 _bcy - b_width * 0.5, _bcy + b_width * 0.5)
+                        _dr = (x_max - 0.95, x_max, _bcy - 0.62, _bcy + 0.62)
+                _blocked = any(
+                    _seg_hits_rect(w.get('p1', (0.0, 0.0)),
+                                   w.get('p2', (0.0, 0.0)), _deck)
+                    or _seg_hits_rect(w.get('p1', (0.0, 0.0)),
+                                      w.get('p2', (0.0, 0.0)), _dr)
+                    for w in (fl_interior_walls or []))
+                if _blocked:
+                    _doors = ctx.floor_doorways.get(fl_idx, [])
+                    if _p['door'] in _doors:
+                        _doors.remove(_p['door'])
+                    continue
+                _kept_entries.append(_p['entry'])
+                _kept_pending.append(_p)
+                _op = _p['opening']
+                if _bs == 'FRONT':
+                    front_openings.append(_op)
+                elif _bs == 'BACK':
+                    back_openings.append(_op)
+                elif _bs == 'LEFT':
+                    left_openings.append(_op)
+                elif _bs == 'RIGHT':
+                    right_openings.append(_op)
+            balconies_on_fl[:] = _kept_entries
+            if getattr(ctx, 'floor_balconies', None) is not None:
+                ctx.floor_balconies[fl_idx] = list(_kept_entries)
 
         # Exterior apartment-stair doors are placed AFTER room planning so
         # they can dodge the interior partition walls (a partition running

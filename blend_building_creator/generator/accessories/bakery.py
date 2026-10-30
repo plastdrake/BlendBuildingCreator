@@ -74,20 +74,22 @@ def _pick_oven_y(ctx, hy, wall_t, half_w):
     if hi < lo or ctx is None:
         return 0.0
     ys = _right_window_ys(ctx)
+    # Prefer the rear bakehouse half, not the mid-depth stair landing.
+    target = min(hi, max(lo, hy * 0.55))
     if not ys:
-        return 0.0
+        return target
 
     def clear(v):
         return all(abs(v - wy) > half_w + 0.5 for wy in ys)
 
-    if clear(0.0):
-        return 0.0
-    best, best_d = 0.0, 1e9
+    if clear(target):
+        return target
+    best, best_d = target, 1e9
     steps = max(1, int((hi - lo) / 0.2))
     for i in range(steps + 1):
         v = lo + (hi - lo) * i / steps
-        if clear(v) and abs(v) < best_d:
-            best, best_d = v, abs(v)
+        if clear(v) and abs(v - target) < best_d:
+            best, best_d = v, abs(v - target)
     return best
 
 

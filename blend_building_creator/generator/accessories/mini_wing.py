@@ -428,6 +428,26 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
             mat_index=MAT_INDEX_TIMBER_FRAME,
             bevel_amount=0.010
         )
+        # Mid rail and vertical studs on the exposed side face, matching the
+        # main building's timber framing.  They also cover the wall junction
+        # seams at the corners (no bare coplanar boards).
+        timber_box(
+            bm,
+            size=(depth + 0.02, 0.055, 0.10),
+            location=frame.to_world(Vector((depth * 0.50, (half_w + 0.035) * s_sign, z_base + height * 0.56))),
+            rotation=(0.0, 0.0, frame.rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME,
+            bevel_amount=0.008
+        )
+        for _sx in (depth * 0.27, depth * 0.73):
+            timber_box(
+                bm,
+                size=(0.075, 0.055, height * 0.92),
+                location=frame.to_world(Vector((_sx, (half_w + 0.033) * s_sign, z_base + height * 0.50))),
+                rotation=(0.0, 0.0, frame.rot_z),
+                mat_index=MAT_INDEX_TIMBER_FRAME,
+                bevel_amount=0.008
+            )
 
     # 3b. Outer Front Wall with one or more window bays.
     # Cap the oriel glazing to the hall's own window size so the outcrop never
@@ -528,6 +548,18 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         mat_index=MAT_INDEX_TIMBER_FRAME,
         bevel_amount=0.012
     )
+    # Mid rail above the window bay: the outcrop now reads as timber-framed
+    # like the main hall instead of a bare plank box.
+    _front_rail_z = min(z_base + height - 0.22, win_top_z + 0.18)
+    if _front_rail_z > z_base + 0.30:
+        timber_box(
+            bm,
+            size=(0.055, max(0.4, width - 0.24), 0.10),
+            location=frame.to_world(Vector((depth + 0.035, 0.0, _front_rail_z))),
+            rotation=(0.0, 0.0, frame.rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME,
+            bevel_amount=0.008
+        )
 
     # 4. Window assemblies - reuse the main building's window construction
     # (reveal lining, exterior casing & stone sill, interior casing, glass panes)

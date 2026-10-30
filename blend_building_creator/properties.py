@@ -2585,6 +2585,14 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_property_updated
     )
 
+    noble_manor_layout: BoolProperty(
+        name="Noble Manor Corridor Layout",
+        description="Use the corridor-based Noble Manor plan: throne room, one banquet hall, side corridors, private chambers and a service barracks",
+        default=False,
+        options={'HIDDEN'},
+        update=on_property_updated
+    )
+
     has_royal_kitchen: BoolProperty(
         name="Royal Kitchen",
         description="Carve a service kitchen (hearth, cauldron, prep table, stores) out of the ground floor of a castle keep next to the service wing",

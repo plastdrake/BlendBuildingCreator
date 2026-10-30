@@ -3123,7 +3123,10 @@ def prune_material_slots_for_bmesh(obj, bm):
     remap = {}
     for old_idx in used:
         m = obj.data.materials[old_idx]
-        mat_key = m.name if m else None
+        # Deduplicate by material identity, never merely by display name:
+        # two distinct textures can legitimately share a name (and merging
+        # them once assigned the bakery sign texture to clay pots).
+        mat_key = m.as_pointer() if m else None
         if mat_key in mat_to_new_idx:
             remap[old_idx] = mat_to_new_idx[mat_key]
         else:
