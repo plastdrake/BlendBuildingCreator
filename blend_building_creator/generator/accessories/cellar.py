@@ -134,7 +134,7 @@ def build_inn_cellar(bm, props, ctx, tier='TIER_2'):
     # Wine bins on the front wall and the left wall, kept clear of the stair.
     build_wine_rack(bm, bcx, by0 + wall_t + 0.24, z_floor + 0.02, 0.0,
                     width=min(bw - 2.2, 1.50))
-    build_wine_rack(bm, bx0 + wall_t + 0.24, by0 + 0.95, z_floor + 0.02,
+    build_wine_rack(bm, bx0 + wall_t + 0.24, by0 + 1.85, z_floor + 0.02,
                     math.pi * 0.5, width=1.20)
     # Big casks along the right wall, lids facing into the room.
     for _i, _yy in enumerate((by0 + 2.5, by0 + 5.3, by0 + 8.1)):
@@ -269,7 +269,10 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
     build_wine_rack(bm, bcx, by1 - wall_t - 0.24, rack_z, 0.0,
                     width=min(bw - 1.8, 1.20))
     if tier != 'TIER_1':
-        build_wine_rack(bm, bx0 + wall_t + 0.24, bcy, rack_z, math.pi * 0.5,
+        # Tuck the left-wall rack under the higher half of the flight, one
+        # metre back from the stair's low end, so its top shelf clears the
+        # stair underside instead of poking through the steps.
+        build_wine_rack(bm, bx0 + wall_t + 0.24, bcy - 1.05, rack_z, math.pi * 0.5,
                         width=min(bd - 2.2, 1.20))
 
     # 5. Upright bottle shelves on the RIGHT wall, above the casks and well
