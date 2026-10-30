@@ -3367,7 +3367,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         hi_ = hi if hi is not None else a1
         # Slide the coordinate out of any keep-out zone on this line.
         for zx0, zx1, zy0, zy1 in _clear_zones:
-            z0, z1 = (zy0, zy1) if axis == 'X' else (zx0, zx1)
+            z0, z1 = (zx0, zx1) if axis == 'X' else (zy0, zy1)
             if not (z0 - 1e-6 <= pos <= z1 + 1e-6):
                 continue
             cands = [c for c in (z0 - margin - _ZONE_DEPTH, z1 + margin + _ZONE_DEPTH)
@@ -3391,25 +3391,32 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 return min(cands, key=lambda c: abs(c - pos))
         return pos
 
-    def _clip_to_zones(axis, pos, a0, a1):
-        """Trim a partition's span (a0..a1 along `axis`) back out of every zone."""
+    def _clip_to_zones(axis, pos, a0, a1, zones=None):
+        """Trim a partition's span (a0..a1 along `axis`) back out of every zone.
+
+        A zone only clips when it actually straddles the wall line (the wall
+        passes through its interior). Zones that merely touch the wall line or
+        its ends are ignored, so a partition is never shortened where it meets
+        another wall or its own doorway - that used to leave dangling wall ends.
+        """
+        _zlist = _clear_zones if zones is None else zones
         for _ in range(3):
             changed = False
-            for zx0, zx1, zy0, zy1 in _clear_zones:
+            for zx0, zx1, zy0, zy1 in _zlist:
                 if axis == 'X':
-                    if not (zx0 - 1e-6 <= pos <= zx1 + 1e-6):
-                        continue
-                    z0, z1 = zy0, zy1
-                else:
-                    if not (zy0 - 1e-6 <= pos <= zy1 + 1e-6):
+                    # Horizontal wall at y = pos: the zone must straddle that y.
+                    if not (zy0 + 0.02 < pos < zy1 - 0.02):
                         continue
                     z0, z1 = zx0, zx1
+                else:
+                    # Vertical wall at x = pos: the zone must straddle that x.
+                    if not (zx0 + 0.02 < pos < zx1 - 0.02):
+                        continue
+                    z0, z1 = zy0, zy1
                 if a1 <= z0 + 1e-6 or a0 >= z1 - 1e-6:
                     continue
-                # A keep-out that reaches either end of the wall (for example a
-                # facade-door keep-out where a perpendicular partition meets the
-                # exterior wall) must not trim that junction - trimming it left a
-                # visible slit between two rooms. Only interior openings clip.
+                # A keep-out that reaches either end of the wall must not trim
+                # that junction. Only interior openings clip.
                 if z0 <= a0 + 1e-6 or z1 >= a1 - 1e-6:
                     continue
                 # Keep the longer of the two remaining pieces.
@@ -3483,6 +3490,31 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             _sy = _dodge_oven_band(_sy, iy_min + 3.6, iy_max - 3.6)
             if _sy > iy_min + 3.4 and iy_max - _sy > 3.4:
                 _split_like = ('X', _sy)
+        # Keep the artisan split wall out of the wing portal band so it never
+        # bisects the doorway into the wing (a wall through the door frame).
+        if _split_like is not None and fl_wings_bounds:
+            _axis, _pos = _split_like
+            for wb in fl_wings_bounds:
+                _wx1, _wx2, _wy1, _wy2 = wb
+                if _axis == 'Y':
+                    _pw = min(2.2, max(1.2, (_wx2 - _wx1) - 1.2))
+                    _p_lo = (_wx1 + _wx2) * 0.5 - _pw * 0.5 - 0.6
+                    _p_hi = (_wx1 + _wx2) * 0.5 + _pw * 0.5 + 0.6
+                    if _p_lo <= _pos <= _p_hi:
+                        if _wx1 - 1.0 > ix_min + 2.0:
+                            _pos = _wx1 - 1.0
+                        elif _wx2 + 1.0 < ix_max - 2.0:
+                            _pos = _wx2 + 1.0
+                else:
+                    _pw = min(2.2, max(1.2, (_wy2 - _wy1) - 1.2))
+                    _p_lo = (_wy1 + _wy2) * 0.5 - _pw * 0.5 - 0.6
+                    _p_hi = (_wy1 + _wy2) * 0.5 + _pw * 0.5 + 0.6
+                    if _p_lo <= _pos <= _p_hi:
+                        if _wy1 - 1.0 > iy_min + 2.0:
+                            _pos = _wy1 - 1.0
+                        elif _wy2 + 1.0 < iy_max - 2.0:
+                            _pos = _wy2 + 1.0
+            _split_like = (_axis, _pos)
         if _split_like is not None:
             _axis, _pos = _split_like
             if _axis == 'X':
@@ -3513,17 +3545,21 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 _doors = [{'x': _pos, 'y': _dw_c, 'axis': 'Y', 'w': dw_w}]
             _a_area = (_a[1] - _a[0]) * (_a[3] - _a[2])
             _b_area = (_b[1] - _b[0]) * (_b[3] - _b[2])
-            if _a_area >= _b_area:
-                _big, _big_fac, _small, _small_fac = _a, _fa, _b, _fb
+            if _axis == 'X':
+                # Front/back split: the shop (STORE) always faces the street;
+                # the workshop takes the rear room.
+                _store_b, _store_fac, _shop_b, _shop_fac = _a, _fa, _b, _fb
+            elif _a_area >= _b_area:
+                _shop_b, _shop_fac, _store_b, _store_fac = _a, _fa, _b, _fb
             else:
-                _big, _big_fac, _small, _small_fac = _b, _fb, _a, _fa
+                _shop_b, _shop_fac, _store_b, _store_fac = _b, _fb, _a, _fa
             rooms = [
                 Room(id=f"fl{fl_idx}_workshop", floor_idx=fl_idx, role=_shop,
-                     bounds=_big, doorways=list(_doors),
-                     stair_hole=_holds_stair(_big), exterior_facades=_big_fac),
+                     bounds=_shop_b, doorways=list(_doors),
+                     stair_hole=_holds_stair(_shop_b), exterior_facades=_shop_fac),
                 Room(id=f"fl{fl_idx}_store", floor_idx=fl_idx, role=_store,
-                     bounds=_small, doorways=list(_doors),
-                     stair_hole=_holds_stair(_small), exterior_facades=_small_fac),
+                     bounds=_store_b, doorways=list(_doors),
+                     stair_hole=_holds_stair(_store_b), exterior_facades=_store_fac),
             ]
         else:
             # Small/odd footprint: one generous trade hall, no slivers.
@@ -3569,7 +3605,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             if stair_guards_north:
                 min_split_y = max(min_split_y, stair_safe_y_top + 0.65)
             if stair_hole is not None:
-                min_split_y = max(min_split_y, stair_hole[3] + 0.50)
+                min_split_y = max(min_split_y, stair_hole[3] + 1.00)
             split_y = max(min_split_y, split_y)
             split_y = min(iy_max - 2.5, max(iy_min + 3.5, split_y))
             split_y = _clear_doorway_span(split_y, axis='Y', lo=iy_min + 3.0, hi=iy_max - 2.2)
@@ -3609,7 +3645,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 stair_w = float((stair_pos_info or {}).get('w', 1.2) or 1.2)
                 stair_cx = float((stair_pos_info or {}).get('cx', ix_max - 1.4) or (ix_max - 1.4))
                 stair_safe_x_left = stair_cx - stair_w * 0.5 - 0.20
-                max_split_x = stair_safe_x_left - 0.60
+                max_split_x = stair_safe_x_left - 1.00
                 if stair_hole is not None:
                     max_split_x = min(max_split_x, stair_hole[0] - 0.50)
                 if door_cx is not None:
@@ -3641,9 +3677,9 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 )
                 rooms = [rm0, rm1]
             else:
-                min_split_x = stair_safe_x + 0.60
+                min_split_x = stair_safe_x + 1.00
                 if stair_hole is not None:
-                    min_split_x = max(min_split_x, stair_hole[1] + 0.50)
+                    min_split_x = max(min_split_x, stair_hole[1] + 1.00)
                 if door_cx is not None:
                     min_split_x = max(min_split_x, door_cx + 0.95)
                 # Taproom ~64%, but the kitchen never a corridor (min 3.9 m).
@@ -3720,12 +3756,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         _corr_half = 1.0   # corridor is always at least 2.0 m wide
         _mid_y = (iy_min + iy_max) * 0.5
         if _stair_right:
-            _stair_edge = _scx - _sw * 0.5 - 1.20
+            _stair_edge = _scx - _sw * 0.5 - 1.70
             _land_edge = max(ix_min + 2.0, _stair_edge)
             _land_lo, _land_hi = _land_edge, ix_max
             _rest_lo, _rest_hi = ix_min, _land_edge
         else:
-            _stair_edge = _scx + _sw * 0.5 + 1.20
+            _stair_edge = _scx + _sw * 0.5 + 1.70
             _land_edge = min(ix_max - 2.0, _stair_edge)
             _land_lo, _land_hi = ix_min, _land_edge
             _rest_lo, _rest_hi = _land_edge, ix_max
@@ -3844,13 +3880,13 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             stair_w = float((stair_pos_info or {}).get('w', 1.2) or 1.2)
             stair_cx = float((stair_pos_info or {}).get('cx', ix_max - 1.4) or (ix_max - 1.4))
             stair_safe_x_left = stair_cx - stair_w * 0.5 - 0.20
-            max_split_x = stair_safe_x_left - 0.60
+            max_split_x = stair_safe_x_left - 1.00
             split_x = max(ix_min + 2.2, min(max_split_x, ix_max - W * 0.38))
             split_x = _clear_doorway_span(split_x, axis='X',
                                           lo=ix_min + 1.8,
                                           hi=min(ix_max - 1.8, max_split_x))
         else:
-            min_split_x = stair_safe_x + 0.60
+            min_split_x = stair_safe_x + 1.00
             if door_cx is not None:
                 min_split_x = max(min_split_x, door_cx + 0.95)
             if bool(getattr(props, 'has_throne_room', False)):
@@ -4931,12 +4967,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 stair_w = float((stair_pos_info or {}).get('w', 1.2) or 1.2)
                 stair_cx = float((stair_pos_info or {}).get('cx', ix_max - 1.4) or (ix_max - 1.4))
                 stair_safe_x_left = stair_cx - stair_w * 0.5 - 0.20
-                max_split_x = stair_safe_x_left - 0.60
+                max_split_x = stair_safe_x_left - 1.00
                 cand_split_x = min(max_split_x, (ix_min + ix_max) * 0.50)
                 cand_split_x = max(ix_min + 2.3, cand_split_x)
                 can_split_y = (cand_split_x >= ix_min + 2.2 and ix_max - cand_split_x >= 2.2 and max_split_x >= ix_min + 2.2)
             else:
-                min_split_x = stair_safe_x + 0.60
+                min_split_x = stair_safe_x + 1.00
                 cand_split_x = max(min_split_x, (ix_min + ix_max) * 0.50)
                 cand_split_x = min(ix_max - 2.3, cand_split_x)
                 can_split_y = (cand_split_x <= ix_max - 2.2 and cand_split_x - ix_min >= 2.2 and min_split_x <= ix_max - 2.2)

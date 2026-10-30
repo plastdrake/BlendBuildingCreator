@@ -755,7 +755,7 @@ def build_desk(bm, x, y, z_ground=0.0, ang=0.0, width=1.85):
 
 
 def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.8, return_length=0.0,
-                  return_side=-1.0, back_bar_offset=None):
+                  return_side=-1.0, back_bar_offset=None, back_bar=True):
     """Tavern bar counter with plank front, top slab and a back bar.
 
     ``return_length`` adds an L-shaped return arm running along one end
@@ -815,26 +815,27 @@ def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.8, return_length=0.0
     # ``back_bar_offset`` is the counter-centre distance to the wall; when set,
     # the shelves are pulled back to hang on the wall independently of the
     # counter's standing gap.
-    _bb_y = (d * 0.5 if back_bar_offset is None else float(back_bar_offset)) - 0.23
-    for _shelf_z in (1.25, 1.70, 2.15):
-        faces += create_beveled_box(
-            bm, size=(length + 0.16, 0.42, 0.05),
-            location=(0.0, _bb_y - 0.05, _shelf_z),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
-        _nb = max(3, int(length / 0.34))
-        for _k in range(_nb):
-            _bx = -length * 0.5 + 0.16 + _k * (length - 0.32) / max(1, _nb - 1)
-            if _k % 4 == 2:
-                # Tankard on the shelf.
-                faces += create_cylinder(
-                    bm, radius=0.043, height=0.13, segments=10,
-                    location=(_bx, _bb_y - 0.06, _shelf_z + 0.09),
-                    mat_index=MAT_INDEX_IRON, smooth=True)
-            else:
-                faces += build_bottle(
-                    bm, _bx, _bb_y - 0.06, _shelf_z + 0.028,
-                    ang=((_k * 1.7) % 6.2831853),
-                    bottle_type=('POTION' if _k % 5 == 3 else 'WINE'))
+    _bb_y = (d * 0.5 if back_bar_offset is None else float(back_bar_offset)) - 0.18
+    if back_bar:
+        for _shelf_z in (1.25, 1.70, 2.15):
+            faces += create_beveled_box(
+                bm, size=(length + 0.16, 0.42, 0.05),
+                location=(0.0, _bb_y - 0.05, _shelf_z),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+            _nb = max(3, int(length / 0.34))
+            for _k in range(_nb):
+                _bx = -length * 0.5 + 0.16 + _k * (length - 0.32) / max(1, _nb - 1)
+                if _k % 4 == 2:
+                    # Tankard on the shelf.
+                    faces += create_cylinder(
+                        bm, radius=0.043, height=0.13, segments=10,
+                        location=(_bx, _bb_y - 0.06, _shelf_z + 0.09),
+                        mat_index=MAT_INDEX_IRON, smooth=True)
+                else:
+                    faces += build_bottle(
+                        bm, _bx, _bb_y - 0.06, _shelf_z + 0.028,
+                        ang=((_k * 1.7) % 6.2831853),
+                        bottle_type=('POTION' if _k % 5 == 3 else 'WINE'))
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
 

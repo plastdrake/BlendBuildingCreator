@@ -60,33 +60,24 @@ class RoomOccupancyTracker:
         if stair_hole is not None:
             sx0, sx1, sy0, sy1 = stair_hole
             self.stair_hole_rect = (sx0, sx1, sy0, sy1)
-            dx = sx1 - sx0
-            dy = sy1 - sy0
-            pad_land = 2.10  # Minimum 2.0+ meters walkable landing clearance
-            pad_side = 0.80  # Clear side clearance
-            if dy >= dx:
-                self.stair_box = (sx0 - pad_side, sx1 + pad_side, sy0 - pad_land, sy1 + pad_land)
-            else:
-                self.stair_box = (sx0 - pad_land, sx1 + pad_land, sy0 - pad_side, sy1 + pad_side)
+            # Snug reservation: the flight opening plus a small working margin.
+            # Oversized pads used to swallow whole small rooms (e.g. the 7.5 m
+            # fishery cottage), leaving no floor for a bed or kitchen.
+            pad_land = 0.45
+            pad_side = 0.35
+            self.stair_box = (sx0 - pad_side, sx1 + pad_side,
+                              sy0 - pad_land, sy1 + pad_land)
             self.occupied_boxes.append(self.stair_box)
 
-            # Keep a clear 2x2 m approach at BOTH ends of the stair (the foot
-            # downstairs and the landing upstairs) so nothing blocks stepping
-            # on/off the stairs. Carpets ignore this (rugs don't use
-            # occupied_boxes), so a rug may still cover the approach.
+            # Stairs in this generator run along Y, so the step-on/off approach
+            # belongs at the two Y ends (2x2 m), never on the sides. Picking the
+            # sides for a wide switchback well starved the rest of the room.
             self.stair_approach = []
             _axc = (sx0 + sx1) * 0.5
-            _ayc = (sy0 + sy1) * 0.5
-            if dy >= dx:
-                for _aye in (sy0 - 0.95, sy1 + 0.95):
-                    _ab = (_axc - 1.0, _axc + 1.0, _aye - 1.0, _aye + 1.0)
-                    self.stair_approach.append(_ab)
-                    self.occupied_boxes.append(_ab)
-            else:
-                for _axe in (sx0 - 0.95, sx1 + 0.95):
-                    _ab = (_axe - 1.0, _axe + 1.0, _ayc - 1.0, _ayc + 1.0)
-                    self.stair_approach.append(_ab)
-                    self.occupied_boxes.append(_ab)
+            for _aye in (sy0 - 0.95, sy1 + 0.95):
+                _ab = (_axc - 1.0, _axc + 1.0, _aye - 1.0, _aye + 1.0)
+                self.stair_approach.append(_ab)
+                self.occupied_boxes.append(_ab)
 
         # 2. Reserve walking corridors around all doorways (interior, front, wing, annex).
         # A stair-landing foot is NOT a doorway corridor: it reserves exactly
@@ -883,7 +874,8 @@ def _dress_desk(bm, tracker: RoomOccupancyTracker, cx: float, cy: float, yaw: fl
 
 
 def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
-                   length: float = 2.45, width: float = 1.55) -> Optional[Tuple[float, float, float]]:
+                   length: float = 2.45, width: float = 1.55,
+                   ignore_west: bool = False) -> Optional[Tuple[float, float, float]]:
     """Places a timber bed with headboard against a wall, facing into the room."""
     rx0, rx1 = tracker.rx0, tracker.rx1
     ry0, ry1 = tracker.ry0, tracker.ry1
@@ -926,6 +918,8 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
 
         # 1. Try West wall (headboard at -X, bed extends +X into room)
         for dx in (0.0, 0.25, 0.50):
+            if ignore_west:
+                break
             cx = _wx0 + cand_l * 0.5 + 0.01 + dx
             if cx + cand_l * 0.5 > _wx1 - 0.10:
                 break
@@ -1586,8 +1580,20 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
                 tracker.occupy(b[0] - _ad, b[1], b[2] - _ap, b[3] + _ap)
             else:
                 tracker.occupy(b[0], b[1] + _ad, b[2] - _ap, b[3] + _ap)
+            # The tracker region is inset from the real wall face; the wall
+            # shelves must reach the plaster, so add that inset to the shelf
+            # anchor (the counter itself stays where it is).
+            if wall == 'N':
+                _wall_inset = rm.bounds[3] - _ry1
+            elif wall == 'S':
+                _wall_inset = _ry0 - rm.bounds[2]
+            elif wall == 'E':
+                _wall_inset = rm.bounds[1] - _rx1
+            else:  # W
+                _wall_inset = _rx0 - rm.bounds[0]
+            _bb_off = _bar_off + max(0.0, _wall_inset)
             build_prop(bm, 'COUNTER', cx, cy, z_floor, yaw, length=cl,
-                       return_length=0.0, back_bar_offset=_bar_off)
+                       return_length=0.0, back_bar_offset=_bb_off)
             # Stools along the whole customer side of the counter.
             step_st = cl / max(2, _n_stools - 1) * 0.82
             for i in range(_n_stools):
@@ -3681,7 +3687,6 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                          candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'))
     _try_place_wall_prop(bm, 'FISH_RAIL', 1.10, 0.35, tracker, z_floor,
                          candidate_walls=('WEST', 'SOUTH', 'EAST', 'NORTH'))
-    _place_floor_prop(bm, tracker, z_floor, rng, 'ROPE_COIL', 0.28, 0.28)
     # Curing stringers hung from the beams (three when there is room).
     for _si in range(3):
         _spot = _freest_spot(tracker, rng)
@@ -3697,6 +3702,57 @@ def _furnish_fishery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                          candidate_walls=('EAST', 'NORTH', 'WEST'))  # tackle
     if rng.random() < density:
         _place_goods_row(bm, tracker, z_floor, rng, 'CLAY_POT', count=2, box=0.30)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
+
+
+def _furnish_fisher_cottage(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
+                            z_ceil: float, rng, density: float,
+                            chimney_pos=None):
+    """Fisherman's combined living floor: bed on the RIGHT, kitchen on the LEFT,
+    with no wardrobe/bookcase so the small room stays open."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+
+    # 1. Bed against the east (right-hand) wall.
+    _try_place_bed(bm, tracker, z_floor,
+                   length=min(2.30, max(1.90, rd * 0.48)),
+                   width=1.25, ignore_west=True)
+
+    # 2. Kitchen along the west (left-hand) wall.
+    _try_place_wall_prop(bm, 'KITCHEN_STOVE', 0.95, 0.75, tracker, z_floor,
+                         candidate_walls=('WEST', 'NORTH', 'SOUTH'),
+                         height=1.05, check_windows=False)
+    _try_place_wall_prop(bm, 'SHELF', 1.20, 0.40, tracker, z_floor,
+                         candidate_walls=('WEST', 'NORTH', 'SOUTH'),
+                         check_windows=False)
+    _try_place_wall_prop(bm, 'CAULDRON', 0.40, 0.40, tracker, z_floor,
+                         candidate_walls=('WEST', 'SOUTH', 'NORTH'),
+                         check_windows=False)
+    _t = _place_craft_table(bm, tracker, z_floor, rng, length=1.00, width=0.60)
+    if _t is not None:
+        _dress_craft_table(bm, _t[0], _t[1], _t[2], z_floor + 0.99, rng,
+                           ['FOODPREP_CLUTTER'], span=0.80)
+
+    # 3. Small dining/sitting table with two stools at the clear centre.
+    for _tx, _ty in ((rcx + rw * 0.12, rcy + rd * 0.20),
+                     (rcx - rw * 0.12, rcy - rd * 0.20),
+                     (rcx, rcy)):
+        if tracker.is_free(_tx - 0.62, _tx + 0.62, _ty - 0.62, _ty + 0.62):
+            tracker.occupy(_tx - 0.62, _tx + 0.62, _ty - 0.62, _ty + 0.62)
+            build_prop(bm, 'ROUND_TABLE', _tx, _ty, z_floor, 0.0, radius=0.50)
+            for _k in (0, 1):
+                _sx = _tx + (0.92 if _k == 0 else -0.92)
+                if tracker.is_free(_sx - 0.22, _sx + 0.22, _ty - 0.22, _ty + 0.22):
+                    tracker.occupy(_sx - 0.22, _sx + 0.22, _ty - 0.22, _ty + 0.22)
+                    build_prop(bm, 'STOOL', _sx, _ty, z_floor, 0.0)
+            break
+
+    _rug = rng.choice(['RUG_CRIMSON', 'RUG_SAPPHIRE', 'RUG_FOREST'])
+    _lay_rug(bm, tracker, rm, rng, _rug, rcx, rcy, z_floor,
+             min(3.40, max(2.20, rw * 0.55)),
+             min(4.20, max(2.80, rd * 0.55)))
     _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
@@ -3916,22 +3972,34 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
         _nb = _ry1 - hd - 0.10
         _nl = _rx0 + hw + 0.10
         _nr = _rx1 - hw - 0.10
-        _spots += [(_nl, _nf), (_nr, _nf), (_nl, _nb), (_nr, _nb)]
-        for _f in (0.30, 0.70):
+        # Prefer a clear, centred spot on the wall that carries the annex (there
+        # is usually free floor there), then the other wall midpoints, then the
+        # corners. This keeps the display off a random corner.
+        _annex_side = None
+        try:
+            _by = getattr(getattr(tracker, 'ctx', None), 'annex_by_side', None) or {}
+            if _by:
+                _annex_side = next(iter(_by))
+        except Exception:
+            _annex_side = None
+        _mids = []
+        if _annex_side == 'LEFT':
+            _mids += [(_nl, _ry0 + (_ry1 - _ry0) * _f) for _f in (0.50, 0.36, 0.64)]
+        elif _annex_side == 'RIGHT':
+            _mids += [(_nr, _ry0 + (_ry1 - _ry0) * _f) for _f in (0.50, 0.36, 0.64)]
+        elif _annex_side == 'FRONT':
+            _mids += [(_rx0 + (_rx1 - _rx0) * _f, _nf) for _f in (0.50, 0.36, 0.64)]
+        elif _annex_side == 'BACK':
+            _mids += [(_rx0 + (_rx1 - _rx0) * _f, _nb) for _f in (0.50, 0.36, 0.64)]
+        for _f in (0.50, 0.32, 0.68):
             _py = _ry0 + (_ry1 - _ry0) * _f
             _px = _rx0 + (_rx1 - _rx0) * _f
-            _spots += [(_nl, _py), (_nr, _py), (_px, _nf), (_px, _nb)]
-        # Order the wall nooks. Normally the stairwell-nearest nook wins (the
-        # display tucks under the stairs); in a cramped shop where the stair
-        # reserve is ignored, prefer the corner with the MOST clearance from
-        # the staircase so it never clips a step.
-        _sw = getattr(tracker, 'stair_hole', None)
-        if _sw is not None:
-            _sxc = (_sw[0] + _sw[1]) * 0.5
-            _syc = (_sw[2] + _sw[3]) * 0.5
-            _dist = -1.0 if _ig else 1.0
-            _spots.sort(key=lambda p: (_check(p, hw, hd),
-                                       _dist * math.hypot(p[0] - _sxc, p[1] - _syc)))
+            _mids += [(_nl, _py), (_nr, _py), (_px, _nf), (_px, _nb)]
+        _spots += _mids
+        _spots += [(_nl, _nf), (_nr, _nf), (_nl, _nb), (_nr, _nb)]
+        # Stable sort: free spots first, preserving the annex-wall / midpoint
+        # priority order above (no more stair-corner bias).
+        _spots.sort(key=lambda p: _check(p, hw, hd))
         for _sx, _sy in _spots:
             _sx += _jit(rng, 0.06)
             _sy += _jit(rng, 0.06)
@@ -4059,10 +4127,10 @@ def _furnish_chapel(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
 
     # 1. Altar Counter along the East wall (falls back to West)
     placed_altar = _try_place_wall_prop(bm, 'COUNTER', 1.80, 0.60, tracker, z_floor,
-                                        candidate_walls=('EAST',), length=1.80)
+                                        candidate_walls=('EAST',), length=1.80, back_bar=False)
     if not placed_altar:
         _try_place_wall_prop(bm, 'COUNTER', 1.80, 0.60, tracker, z_floor,
-                             candidate_walls=('WEST',), length=1.80)
+                             candidate_walls=('WEST',), length=1.80, back_bar=False)
 
     # 2. Columns of benches west of the aisle facing east (+X, backrest west).
     for bx in [rcx - rw * 0.05, rcx - rw * 0.30]:
@@ -4576,7 +4644,8 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
                                        ignore_stair=_ig):
                     continue
                 tracker.occupy(_ccx - _hw, _ccx + _hw, _ccy - _hd, _ccy + _hd)
-                build_prop(bm, 'COUNTER', _ccx, _ccy, z_floor, _yaw, length=_clen)
+                build_prop(bm, 'COUNTER', _ccx, _ccy, z_floor, _yaw, length=_clen,
+                           back_bar=False)
                 tracker.occupy(_stx - 0.26, _stx + 0.26, _sty - 0.26, _sty + 0.26)
                 build_prop(bm, 'STOOL', _stx, _sty, z_floor,
                            math.atan2(-_mdx, -_mdy))
@@ -4593,7 +4662,7 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
         for _cl in (_counter_len, 1.20, 1.00):
             _d_counter = _try_place_wall_prop(
                 bm, 'COUNTER', _cl, 0.60, tracker, z_floor,
-                candidate_walls=_cand_walls, length=_cl, ignore_stair=False)
+                candidate_walls=_cand_walls, length=_cl, back_bar=False, ignore_stair=False)
             if _d_counter:
                 _placed_counter = {'cx': _d_counter[0], 'cy': _d_counter[1],
                                    'yaw': _d_counter[2], 'wall': None,
@@ -4608,7 +4677,8 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
             _chw, _chd = min(0.62, _sp[2]), min(0.45, _sp[2])
             if tracker.is_free(_sp[0] - _chw, _sp[0] + _chw, _sp[1] - _chd, _sp[1] + _chd, ignore_stair=False):
                 tracker.occupy(_sp[0] - _chw, _sp[0] + _chw, _sp[1] - _chd, _sp[1] + _chd)
-                build_prop(bm, 'COUNTER', _sp[0], _sp[1], z_floor, 0.0, length=1.20)
+                build_prop(bm, 'COUNTER', _sp[0], _sp[1], z_floor, 0.0, length=1.20,
+                           back_bar=False)
                 _placed_counter = {'cx': _sp[0], 'cy': _sp[1], 'yaw': 0.0,
                                    'wall': None, 'freestanding': True, 'mdx': 0.0,
                                    'mdy': 0.0, 'length': 1.20, 'top_z': z_floor + 1.235}
@@ -4916,19 +4986,23 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     if ctx is not None:
         _own_hole = (getattr(ctx, 'floor_stair_holes', None) or {}).get(rm.floor_idx)
     tracker.stair_is_ceiling = bool(_stair_well is not None and _own_hole is None and rm.floor_idx > 0)
-    # Reserve the full staircase footprint on all floors so props and counters
-    # never clip or crowd the staircase or its landings.
+    # Reserve the full staircase footprint only on storeys with real floor to
+    # spare. A switchback well is two lanes wide, but only the arriving lane is
+    # actually open in this floor's slab - reserving the whole well on small
+    # storeys swallowed the room (the 7.5 m fishery cottage got no furniture).
     _full_stair = getattr(ctx, 'full_stair_box', None)
     if _full_stair is not None:
         fs_x0, fs_x1, fs_y0, fs_y1 = _full_stair
-        # If this room overlaps the staircase footprint, reserve the full well + landings
         if not (rx1 < fs_x0 or rx0 > fs_x1 or ry1 < fs_y0 or ry0 > fs_y1):
-            pad_land = 2.20
-            pad_side = 0.80
-            stair_keepout = (fs_x0 - pad_side, fs_x1 + pad_side, fs_y0 - pad_land, fs_y1 + pad_land)
-            tracker.occupy(*stair_keepout)
-            if tracker.stair_box is None:
-                tracker.stair_box = stair_keepout
+            _room_area = max((rx1 - rx0) * (ry1 - ry0), 1e-3)
+            if _room_area >= 55.0:
+                pad_land = 0.35
+                pad_side = 0.25
+                stair_keepout = (fs_x0 - pad_side, fs_x1 + pad_side,
+                                 fs_y0 - pad_land, fs_y1 + pad_land)
+                tracker.occupy(*stair_keepout)
+                if tracker.stair_box is None:
+                    tracker.stair_box = stair_keepout
     tracker.rng = rng
     tracker.ctx = ctx
     tracker.all_stair_holes = []
@@ -5094,18 +5168,22 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             # room is big and the recipes anchor to different walls/zones.
             _d = min(1.0, density * 0.8)
             _prev_nr = getattr(tracker, 'no_rugs', False)
-            _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, _d,
-                             is_master=True)
-            tracker.no_rugs = True
-            if getattr(rm, 'floor_idx', 1) <= 1:
-                # The hall below owns the single dining set, so the kitchen
-                # stays a kitchen (stove + shelf + produce) instead of adding
-                # a second table that clumps against it.
-                _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, _d,
-                                 chimney_pos=chimney_positions,
-                                 floor_has_dining=True)
-            _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, _d,
-                                chimney_pos=chimney_positions)
+            if getattr(tracker, 'archetype', '') == 'FISHERMAN':
+                _furnish_fisher_cottage(bm, rm, tracker, z_floor, z_ceil, rng, _d,
+                                        chimney_pos=chimney_positions)
+            else:
+                _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, _d,
+                                 is_master=True)
+                tracker.no_rugs = True
+                if getattr(rm, 'floor_idx', 1) <= 1:
+                    # The hall below owns the single dining set, so the kitchen
+                    # stays a kitchen (stove + shelf + produce) instead of adding
+                    # a second table that clumps against it.
+                    _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, _d,
+                                     chimney_pos=chimney_positions,
+                                     floor_has_dining=True)
+                _furnish_house_hall(bm, rm, tracker, z_floor, z_ceil, rng, _d,
+                                    chimney_pos=chimney_positions)
             tracker.no_rugs = _prev_nr
         elif role in ('STABLE_HALL',):
             _furnish_stable_hall(bm, rm, tracker, z_floor, z_ceil, rng, density)

@@ -7640,6 +7640,10 @@ def apply_preset(props, preset_key):
         if str(getattr(props, 'building_archetype', '') or '').upper() == 'FISHERMAN':
             if hasattr(props, 'has_side_annex'):
                 props.has_side_annex = False
+            # A turned stair fills the small fishery room and leaves no space
+            # for furniture; a straight run keeps the store/workshop usable.
+            if hasattr(props, 'stair_style'):
+                props.stair_style = 'STRAIGHT'
 
     # Structural rules applied to every preset:
     #  * Tier 1 log walls never carry a jettying overhang (the log crowns and

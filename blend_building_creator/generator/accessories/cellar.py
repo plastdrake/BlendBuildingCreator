@@ -132,9 +132,10 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
                 bm, _bx, _shelf_y + 0.02, _sz + 0.025, ang=0.0,
                 bottle_type=('POTION' if _i % 3 == 1 else 'WINE'))
 
-    # 6. Extra barrels, lying keg racks and a crate.
+    # 6. Extra barrels (kept along the right wall, clear of the stair foot),
+    #    lying keg racks and a crate.
     for _i in range(3):
-        build_barrel(bm, bx0 + wall_t + 1.35, by1 - wall_t - 1.15 - _i * 0.72, z_floor,
+        build_barrel(bm, bx1 - wall_t - 1.05, by1 - wall_t - 1.15 - _i * 0.72, z_floor,
                      radius=0.30, height=0.70)
     build_barrel(bm, bx1 - wall_t - 0.75, by0 + wall_t + 2.4, z_floor,
                  radius=0.30, height=0.70, lying=(tier != 'TIER_1'))
