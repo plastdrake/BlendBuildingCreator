@@ -140,26 +140,30 @@ def cozy_apartment(bounds, entry, *, role_kitchen='TENEMENT_KITCHEN',
             children[par] = children.get(par, 0) + 1
 
     walls = []
-    for c, par in parent.items():
-        if par is None:
-            continue
-        ci, cj = c
-        pi, pj = par
-        if ci == pi:  # horizontal wall between rows
-            wy = ys[max(cj, pj)]
+    _tree_edges = {frozenset((c, par)) for c, par in parent.items() if par is not None}
+    # A room grid needs a wall on EVERY shared cell boundary.  The previous
+    # pass only built the tree edges, so adjacent rooms that were not directly
+    # connected became one huge open room (bed + parlour + living all merged).
+    # Tree edges get a doorway; every other shared boundary stays solid.
+    for i in range(nx):
+        for j in range(ny - 1):
+            _shared = frozenset(((i, j), (i, j + 1))) in _tree_edges
+            wy = ys[j + 1]
             walls.append({
-                'p1': (xs[ci], wy), 'p2': (xs[ci + 1], wy),
+                'p1': (xs[i], wy), 'p2': (xs[i + 1], wy),
                 'axis': 'X', 'pos': wy,
-                'doorway': {'x': (xs[ci] + xs[ci + 1]) * 0.5, 'y': wy,
-                            'axis': 'X', 'w': DWI},
+                'doorway': ({'x': (xs[i] + xs[i + 1]) * 0.5, 'y': wy,
+                             'axis': 'X', 'w': DWI} if _shared else None),
             })
-        else:  # vertical wall between columns
-            wx = xs[max(ci, pi)]
+    for i in range(nx - 1):
+        for j in range(ny):
+            _shared = frozenset(((i, j), (i + 1, j))) in _tree_edges
+            wx = xs[i + 1]
             walls.append({
-                'p1': (wx, ys[cj]), 'p2': (wx, ys[cj + 1]),
+                'p1': (wx, ys[j]), 'p2': (wx, ys[j + 1]),
                 'axis': 'Y', 'pos': wx,
-                'doorway': {'x': wx, 'y': (ys[cj] + ys[cj + 1]) * 0.5,
-                            'axis': 'Y', 'w': DWI},
+                'doorway': ({'x': wx, 'y': (ys[j] + ys[j + 1]) * 0.5,
+                             'axis': 'Y', 'w': DWI} if _shared else None),
             })
 
     # Depth-first order from the kitchen so bedrooms are leaves only.
