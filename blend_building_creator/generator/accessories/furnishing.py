@@ -1822,6 +1822,35 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
     rcx, rcy = (rx0 + rx1) * 0.5, (ry0 + ry1) * 0.5
     rw, rd = rx1 - rx0, ry1 - ry0
 
+    # A real gap between stove and prep table so the table can never sit in
+    # front of the stove door/oven.  The old 6 cm gap plus a perpendicular
+    # corner placement made the table overlap the stove's working aisle.
+    PREP_GAP = 0.22
+
+    def _stove_front_rect(sx, sy, syaw):
+        """AABB of the clear aisle directly in front of the stove."""
+        fx, fy = math.sin(syaw), -math.cos(syaw)   # stove front direction
+        ux, uy = math.cos(syaw), math.sin(syaw)    # along the stove width
+        hw = sw * 0.5 + 0.14
+        pts = []
+        for a in (-hw, hw):
+            for d in (sd * 0.5, sd * 0.5 + 0.70):
+                pts.append((sx + ux * a + fx * d, sy + uy * a + fy * d))
+        return (min(p[0] for p in pts), max(p[0] for p in pts),
+                min(p[1] for p in pts), max(p[1] for p in pts))
+
+    def _prep_clear(sx, sy, syaw, tb):
+        """True when a prep-table footprint leaves the stove's aisle free."""
+        fr = _stove_front_rect(sx, sy, syaw)
+        if not (tb[1] <= fr[0] - 0.04 or tb[0] >= fr[1] + 0.04
+                or tb[3] <= fr[2] - 0.04 or tb[2] >= fr[3] + 0.04):
+            return False
+        # ... and keep a small side gap from the stove body as well.
+        hx = sw * 0.5 * abs(math.cos(syaw)) + sd * 0.5 * abs(math.sin(syaw)) + 0.06
+        hy = sw * 0.5 * abs(math.sin(syaw)) + sd * 0.5 * abs(math.cos(syaw)) + 0.06
+        return (tb[1] <= sx - hx or tb[0] >= sx + hx
+                or tb[3] <= sy - hy or tb[2] >= sy + hy)
+
     # 1. Check Chimney flue in or adjacent to the room:
     if chimney_pos is not None:
         c_list = chimney_pos if isinstance(chimney_pos, list) else [chimney_pos]
@@ -1890,6 +1919,8 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
                             tb = (cpx - ctw * 0.5 - 0.04, cpx + ctw * 0.5 + 0.04,
                                   cpy - ctd * 0.5 - 0.04, cpy + ctd * 0.5 + 0.04)
                             if tracker.is_free(tb[0], tb[1], tb[2], tb[3], check_windows=True):
+                                if not _prep_clear(hx, hy, yaw, tb):
+                                    continue
                                 if not any(math.hypot(cpx - d.get('x', rcx), cpy - d.get('y', rcy)) < 1.20 for d in tracker.doorways):
                                     chosen_prep = (cpx, cpy, cpyaw, tb)
                                     break
@@ -1918,7 +1949,7 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
         return cnt
 
     wall_order = sorted(['EAST', 'NORTH', 'SOUTH', 'WEST'], key=_wall_door_count)
-    tot_len = sw + pw + 0.06
+    tot_len = sw + pw + PREP_GAP
 
     for wall in wall_order:
         if wall in ('EAST', 'WEST'):
@@ -1930,8 +1961,8 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
             y_shifts = [rcy, rcy + (rd - tot_len) * 0.22, rcy - (rd - tot_len) * 0.22]
             for cy_cand in y_shifts:
                 for swap in (False, True):
-                    s_y = cy_cand - (pw + 0.06) * 0.5 if not swap else cy_cand + (pw + 0.06) * 0.5
-                    p_y = cy_cand + (sw + 0.06) * 0.5 if not swap else cy_cand - (sw + 0.06) * 0.5
+                    s_y = cy_cand - (pw + PREP_GAP) * 0.5 if not swap else cy_cand + (pw + PREP_GAP) * 0.5
+                    p_y = cy_cand + (sw + PREP_GAP) * 0.5 if not swap else cy_cand - (sw + PREP_GAP) * 0.5
                     sb = (min(wall_x_stove - sd*0.5, wall_x_stove + sd*0.5) - 0.05,
                           max(wall_x_stove - sd*0.5, wall_x_stove + sd*0.5) + 0.05,
                           s_y - sw * 0.5 - 0.04, s_y + sw * 0.5 + 0.04)
@@ -1939,7 +1970,8 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
                           max(wall_x_table - pd*0.5, wall_x_table + pd*0.5) + 0.05,
                           p_y - pw * 0.5 - 0.04, p_y + pw * 0.5 + 0.04)
                     if tracker.is_free(sb[0], sb[1], sb[2], sb[3], check_windows=True) and \
-                       tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True):
+                       tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True) and \
+                       _prep_clear(wall_x_stove, s_y, yaw, pb):
                         if tracker.is_near_door(wall_x_stove, s_y) or tracker.is_near_door(wall_x_table, p_y):
                             continue
                         tracker.occupy(sb[0], sb[1], sb[2], sb[3])
@@ -1958,8 +1990,8 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
             x_shifts = [rcx, rcx + (rw - tot_len) * 0.22, rcx - (rw - tot_len) * 0.22]
             for cx_cand in x_shifts:
                 for swap in (False, True):
-                    s_x = cx_cand - (pw + 0.06) * 0.5 if not swap else cx_cand + (pw + 0.06) * 0.5
-                    p_x = cx_cand + (sw + 0.06) * 0.5 if not swap else cx_cand - (sw + 0.06) * 0.5
+                    s_x = cx_cand - (pw + PREP_GAP) * 0.5 if not swap else cx_cand + (pw + PREP_GAP) * 0.5
+                    p_x = cx_cand + (sw + PREP_GAP) * 0.5 if not swap else cx_cand - (sw + PREP_GAP) * 0.5
                     sb = (s_x - sw * 0.5 - 0.04, s_x + sw * 0.5 + 0.04,
                           min(wall_y_stove - sd*0.5, wall_y_stove + sd*0.5) - 0.05,
                           max(wall_y_stove - sd*0.5, wall_y_stove + sd*0.5) + 0.05)
@@ -1967,7 +1999,8 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
                           min(wall_y_table - pd*0.5, wall_y_table + pd*0.5) - 0.05,
                           max(wall_y_table - pd*0.5, wall_y_table + pd*0.5) + 0.05)
                     if tracker.is_free(sb[0], sb[1], sb[2], sb[3], check_windows=True) and \
-                       tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True):
+                       tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True) and \
+                       _prep_clear(s_x, wall_y_stove, yaw, pb):
                         if tracker.is_near_door(s_x, wall_y_stove) or tracker.is_near_door(p_x, wall_y_table):
                             continue
                         tracker.occupy(sb[0], sb[1], sb[2], sb[3])
@@ -1992,7 +2025,8 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
         sb = (sx - sd*0.5 - 0.04, sx + sd*0.5 + 0.04, sy - sw*0.5 - 0.04, sy + sw*0.5 + 0.04)
         pb = (px - pw*0.5 - 0.04, px + pw*0.5 + 0.04, py - pd*0.5 - 0.04, py + pd*0.5 + 0.04)
         if tracker.is_free(sb[0], sb[1], sb[2], sb[3], check_windows=True) and \
-           tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True):
+           tracker.is_free(pb[0], pb[1], pb[2], pb[3], check_windows=True) and \
+           _prep_clear(sx, sy, syaw, pb):
             if tracker.is_near_door(sx, sy) or tracker.is_near_door(px, py):
                 continue
             tracker.occupy(sb[0], sb[1], sb[2], sb[3])
@@ -2002,15 +2036,23 @@ def _try_place_kitchen_workstation(bm, tracker: RoomOccupancyTracker, z_floor: f
             _place_prep_clutter(bm, px, py, z_table, pyaw, rng)
             return ((sx, sy, syaw), (px, py, pyaw))
 
-    # 4. Fallback: Place stove on any available wall, prep table in room
+    # 4. Fallback: Place stove on any available wall, prep table beside it
     placed_stove = _try_place_kitchen_stove(bm, tracker, z_floor, chimney_pos=chimney_pos)
     if placed_stove:
         sx, sy, syaw = placed_stove
-        for ang in (0.0, math.pi * 0.5, math.pi, -math.pi * 0.5):
-            px = sx + 1.25 * math.cos(ang)
-            py = sy + 1.25 * math.sin(ang)
-            pb = (px - pw*0.5, px + pw*0.5, py - pd*0.5, py + pd*0.5)
-            if tracker.is_free(pb[0], pb[1], pb[2], pb[3]):
+        ux, uy = math.cos(syaw), math.sin(syaw)   # along the stove's wall
+        dist = sw * 0.5 + pw * 0.5 + PREP_GAP
+        # Prefer the side that reads as "left of the stove", then the other
+        # side; never the space directly in front of the oven door.
+        for sign in (-1.0, 1.0):
+            px = sx + sign * dist * ux
+            py = sy + sign * dist * uy
+            ctw = pd if (0.5 < abs(syaw) < 2.5) else pw
+            ctd = pw if (0.5 < abs(syaw) < 2.5) else pd
+            pb = (px - ctw * 0.5, px + ctw * 0.5,
+                  py - ctd * 0.5, py + ctd * 0.5)
+            if tracker.is_free(pb[0], pb[1], pb[2], pb[3]) and \
+               _prep_clear(sx, sy, syaw, pb):
                 tracker.occupy(pb[0], pb[1], pb[2], pb[3])
                 build_prop(bm, 'INDOOR_TABLE', px, py, z_floor, syaw, length=pw, width=pd)
                 _place_prep_clutter(bm, px, py, z_table, syaw, rng)
@@ -3720,20 +3762,19 @@ def _furnish_fisher_cottage(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
                    length=min(2.30, max(1.90, rd * 0.48)),
                    width=1.25, ignore_west=True)
 
-    # 2. Kitchen along the west (left-hand) wall.
-    _try_place_wall_prop(bm, 'KITCHEN_STOVE', 0.95, 0.75, tracker, z_floor,
-                         candidate_walls=('WEST', 'NORTH', 'SOUTH'),
-                         height=1.05, check_windows=False)
-    _try_place_wall_prop(bm, 'SHELF', 1.20, 0.40, tracker, z_floor,
-                         candidate_walls=('WEST', 'NORTH', 'SOUTH'),
-                         check_windows=False)
-    _try_place_wall_prop(bm, 'CAULDRON', 0.40, 0.40, tracker, z_floor,
-                         candidate_walls=('WEST', 'SOUTH', 'NORTH'),
-                         check_windows=False)
-    _t = _place_craft_table(bm, tracker, z_floor, rng, length=1.00, width=0.60)
-    if _t is not None:
-        _dress_craft_table(bm, _t[0], _t[1], _t[2], z_floor + 0.99, rng,
-                           ['FOODPREP_CLUTTER'], span=0.80)
+    # 2. Kitchen along the west (left-hand) wall - one per household, so only
+    # on the first upper storey (the ground floor is the fishery workroom).
+    if getattr(rm, 'floor_idx', 1) <= 1:
+        _try_place_wall_prop(bm, 'KITCHEN_STOVE', 0.95, 0.75, tracker, z_floor,
+                             candidate_walls=('WEST', 'NORTH', 'SOUTH'),
+                             height=1.05, check_windows=False)
+        _try_place_wall_prop(bm, 'SHELF', 1.20, 0.40, tracker, z_floor,
+                             candidate_walls=('WEST', 'NORTH', 'SOUTH'),
+                             check_windows=False)
+        _t = _place_craft_table(bm, tracker, z_floor, rng, length=1.00, width=0.60)
+        if _t is not None:
+            _dress_craft_table(bm, _t[0], _t[1], _t[2], z_floor + 0.99, rng,
+                               ['FOODPREP_CLUTTER'], span=0.80)
 
     # 3. Small dining/sitting table with two stools at the clear centre.
     for _tx, _ty in ((rcx + rw * 0.12, rcy + rd * 0.20),

@@ -61,6 +61,171 @@ def _facades(x0, x1, y0, y1, bounds):
     return out
 
 
+def cozy_apartment(bounds, entry, *, role_kitchen='TENEMENT_KITCHEN',
+                   role_living='TENEMENT_LIVING',
+                   role_bed='TENEMENT_BEDROOM', max_rooms=9):
+    """Divide one tenement flat into a small grid of realistically sized rooms.
+
+    The entry cell is the kitchen.  Rooms are joined by a shortest-path tree
+    from that cell, so every room opens directly off another room exactly once;
+    bedrooms are placed on the leaves so no bedroom is ever a route into
+    another part of the flat.  Split lines are nudged off the entry door so a
+    partition can never bisect a doorway.
+
+    Returns ``(rooms, walls)`` in the same shape used by the apartment layouts.
+    """
+    x0, x1, y0, y1 = map(float, bounds)
+    W, D = x1 - x0, y1 - y0
+    area = W * D
+    if W <= 0.5 or D <= 0.5:
+        return [], []
+    n_target = max(4, min(max_rooms, int(round(area / 28.0))))
+
+    # Pick the grid whose room proportions are the most natural.
+    best = None
+    for nx in range(1, 5):
+        for ny in range(1, 6):
+            if nx * ny < n_target or nx * ny > max_rooms + 2:
+                continue
+            if W / nx < 2.20 or D / ny < 2.10:
+                continue
+            rw, rd = W / nx, D / ny
+            score = (abs(nx * ny - n_target)
+                     + abs(max(rw, rd) / max(min(rw, rd), 0.5) - 1.0) * 1.2
+                     + max(0.0, 2.7 - min(rw, rd)) * 1.5)
+            if best is None or score < best[0]:
+                best = (score, nx, ny)
+    if best is None:
+        nx = max(1, min(4, int(round(math.sqrt(n_target * W / max(D, 1e-6))))))
+        ny = max(1, min(5, int(math.ceil(n_target / nx))))
+    else:
+        _, nx, ny = best
+
+    xs = [x0 + W * i / nx for i in range(nx + 1)]
+    ys = [y0 + D * i / ny for i in range(ny + 1)]
+    ex, ey = float(entry.get('x', (x0 + x1) * 0.5)), float(entry.get('y', (y0 + y1) * 0.5))
+    # A grid line exactly on the doorway leaves the door straddling two rooms.
+    if entry.get('axis') == 'X':
+        for i in range(1, nx):
+            if abs(xs[i] - ex) < 0.85:
+                xs[i] = min(x1 - 2.20, max(x0 + 2.20, ex + (0.90 if ex <= (x0 + x1) * 0.5 else -0.90)))
+    else:
+        for i in range(1, ny):
+            if abs(ys[i] - ey) < 0.85:
+                ys[i] = min(y1 - 2.10, max(y0 + 2.10, ey + (0.90 if ey <= (y0 + y1) * 0.5 else -0.90)))
+
+    def _cell(v, coords):
+        for i in range(len(coords) - 1):
+            if coords[i] - 1e-6 <= v <= coords[i + 1] + 1e-6:
+                return i
+        return 0 if v < coords[0] else len(coords) - 2
+
+    root = (_cell(ex, xs), _cell(ey, ys))
+    from collections import deque
+    parent = {root: None}
+    order = [root]
+    q = deque([root])
+    while q:
+        ci, cj = q.popleft()
+        for ni, nj in ((ci + 1, cj), (ci - 1, cj), (ci, cj + 1), (ci, cj - 1)):
+            if 0 <= ni < nx and 0 <= nj < ny and (ni, nj) not in parent:
+                parent[(ni, nj)] = (ci, cj)
+                order.append((ni, nj))
+                q.append((ni, nj))
+
+    children = {c: 0 for c in parent}
+    for c, par in parent.items():
+        if par is not None:
+            children[par] = children.get(par, 0) + 1
+
+    walls = []
+    for c, par in parent.items():
+        if par is None:
+            continue
+        ci, cj = c
+        pi, pj = par
+        if ci == pi:  # horizontal wall between rows
+            wy = ys[max(cj, pj)]
+            walls.append({
+                'p1': (xs[ci], wy), 'p2': (xs[ci + 1], wy),
+                'axis': 'X', 'pos': wy,
+                'doorway': {'x': (xs[ci] + xs[ci + 1]) * 0.5, 'y': wy,
+                            'axis': 'X', 'w': DWI},
+            })
+        else:  # vertical wall between columns
+            wx = xs[max(ci, pi)]
+            walls.append({
+                'p1': (wx, ys[cj]), 'p2': (wx, ys[cj + 1]),
+                'axis': 'Y', 'pos': wx,
+                'doorway': {'x': wx, 'y': (ys[cj] + ys[cj + 1]) * 0.5,
+                            'axis': 'Y', 'w': DWI},
+            })
+
+    # Depth-first order from the kitchen so bedrooms are leaves only.
+    depth = {}
+    q = deque([root])
+    depth[root] = 0
+    while q:
+        c = q.popleft()
+        for nc in parent:
+            if parent.get(nc) == c and nc not in depth:
+                depth[nc] = depth[c] + 1
+                q.append(nc)
+
+    rooms = []
+    for c in order:
+        ci, cj = c
+        rb = (xs[ci], xs[ci + 1], ys[cj], ys[cj + 1])
+        if c == root:
+            role = role_kitchen
+        elif children.get(c, 0) > 0:
+            role = role_living
+        else:
+            role = role_bed
+        rooms.append({'role': role, 'bounds': rb, 'facades': {}})
+
+    # Guarantee at least one bedroom: the deepest leaf becomes one.
+    leaves = [c for c in parent if children.get(c, 0) == 0 and c != root]
+    if not any(r['role'] == role_bed for r in rooms) and leaves and len(rooms) > 1:
+        c = max(leaves, key=lambda cc: depth.get(cc, 0))
+        ci, cj = c
+        for r in rooms:
+            if r['bounds'] == (xs[ci], xs[ci + 1], ys[cj], ys[cj + 1]):
+                r['role'] = role_bed
+                break
+    return rooms, walls
+
+
+def rectangle_layout(bounds, side):
+    """A row of small gallery flats stacked along the building depth.
+
+    Each flat now gets a several-room plan instead of two giant halves, and the
+    row yields multiple flats per storey (one per ~6 m depth band).
+    """
+    ix_min, ix_max, iy_min, iy_max = bounds
+    W = ix_max - ix_min
+    D = iy_max - iy_min
+    n_flats = int(max(2, min(4, round(D / 6.0))))
+    apts = []
+    for k in range(n_flats):
+        ay0 = iy_min + D * k / n_flats
+        ay1 = iy_min + D * (k + 1) / n_flats
+        ex = ix_max if side == 'RIGHT' else ix_min
+        # Keep the gallery door off the mid-line of the grid (see below).
+        ey = ay0 + (ay1 - ay0) * 0.38
+        entry = {'x': ex, 'y': ey, 'axis': 'Y', 'w': DW}
+        _rooms, _walls = cozy_apartment((ix_min, ix_max, ay0, ay1), entry)
+        for _r in _rooms:
+            _r['facades'] = _facades(*_r['bounds'], bounds)
+        apts.append({
+            'id': f'flat{k + 1}',
+            'rooms': _rooms,
+            'entry': entry,
+            'walls': _walls,
+        })
+    return apts
+
+
 def stair_geometry(props, ctx):
     """Shared external-stair metrics (clearance, wall span, per-floor climb)."""
     wall_t = float(getattr(props, 'wall_thickness', 0.28))
@@ -80,58 +245,6 @@ def flight_steps(climb):
 # ---------------------------------------------------------------------------
 # Apartment layouts
 # ---------------------------------------------------------------------------
-
-def rectangle_layout(bounds, side):
-    """Two small flats stacked along the depth of a side-walkway tenement.
-
-    ``side`` is the exterior walkway wall (``LEFT``/``RIGHT``); every flat's one
-    entrance sits on that wall.
-    """
-    ix_min, ix_max, iy_min, iy_max = bounds
-    W = ix_max - ix_min
-    D = iy_max - iy_min
-    apts = []
-    for k in range(2):
-        ay0 = iy_min + D * k / 2.0
-        ay1 = iy_min + D * (k + 1) / 2.0
-        if W >= 8.5:
-            # Wide enough to split across the width: kitchen on the walkway
-            # side, private bedroom away from the street.
-            ax = _clear((ix_min + ix_max) * 0.5, ix_min, ix_max, 2.6)
-            if side == 'RIGHT':
-                k_b = (ax, ix_max, ay0, ay1)
-                b_b = (ix_min, ax, ay0, ay1)
-            else:
-                k_b = (ix_min, ax, ay0, ay1)
-                b_b = (ax, ix_max, ay0, ay1)
-            entry_y = (ay0 + ay1) * 0.5
-            walls = [{'p1': (ax, ay0), 'p2': (ax, ay1), 'axis': 'Y', 'pos': ax,
-                      'doorway': {'x': ax, 'y': entry_y, 'axis': 'Y', 'w': DWI}}]
-        else:
-            # Narrow deep plot: split along the depth so neither room becomes a
-            # corridor sliver.  Kitchen/living at the front, bedroom behind.
-            my = ay0 + (ay1 - ay0) * 0.56
-            k_b = (ix_min, ix_max, ay0, my)
-            b_b = (ix_min, ix_max, my, ay1)
-            entry_y = ay0 + (ay1 - ay0) * 0.30
-            walls = [{'p1': (ix_min, my), 'p2': (ix_max, my), 'axis': 'X', 'pos': my,
-                      'doorway': {'x': (ix_min + ix_max) * 0.5, 'y': my,
-                                  'axis': 'X', 'w': DWI}}]
-        ex = ix_max if side == 'RIGHT' else ix_min
-        rooms = [
-            {'role': 'TENEMENT_KITCHEN', 'bounds': k_b,
-             'facades': _facades(*k_b, bounds)},
-            {'role': 'TENEMENT_BEDROOM', 'bounds': b_b,
-             'facades': _facades(*b_b, bounds)},
-        ]
-        apts.append({
-            'id': f'flat{k + 1}',
-            'rooms': rooms,
-            'entry': {'x': ex, 'y': entry_y, 'axis': 'Y', 'w': DW},
-            'walls': walls,
-        })
-    return apts
-
 
 def _wing_coords(w):
     if isinstance(w, dict):
@@ -160,7 +273,12 @@ def courtyard_cut_x(ix_min, ix_max, wings):
 
 
 def courtyard_layout(bounds, wings, wall_t=0.30, fl_idx=None):
-    """Small courtyard flats plus one two-room flat per projecting wing."""
+    """Small courtyard flats plus one multi-room flat per projecting wing.
+
+    Every flat is now planned as a cluster of realistically sized rooms
+    (kitchen + living + bedrooms) instead of a kitchen/bedroom pair that could
+    each swallow an entire 18x24 m corner of the block.
+    """
     ix_min, ix_max, iy_min, iy_max = bounds
     D = iy_max - iy_min
     gap0, gap1, gap_w = courtyard_gap(wings)
@@ -173,55 +291,47 @@ def courtyard_layout(bounds, wings, wall_t=0.30, fl_idx=None):
         e_lo = max(cx0, gap0)
         e_hi = min(cx1, gap1)
         ex = _clear((e_lo + e_hi) * 0.5, cx0, cx1, 0.9)
-        my = iy_min + D * 0.54
-        k_b = (cx0, cx1, iy_min, my)
-        b_b = (cx0, cx1, my, iy_max)
-        k_facades = _facades(*k_b, bounds)
-        if e_hi > e_lo + 0.3:
-            k_facades['FRONT'] = (e_lo, e_hi)
-        else:
-            k_facades.pop('FRONT', None)
-        b_facades = _facades(*b_b, bounds)
+        entry = {'x': ex, 'y': iy_min, 'axis': 'X', 'w': DW}
+        _rooms, _walls = cozy_apartment((cx0, cx1, iy_min, iy_max), entry,
+                                        max_rooms=6)
+        # Only the courtyard-facing stretch of the front wall may take windows;
+        # the rest of the frontage hides behind a projecting wing.
+        _vis_lo, _vis_hi = e_lo, e_hi
+        for _r in _rooms:
+            _r['facades'] = _facades(*_r['bounds'], bounds)
+            if 'FRONT' in _r['facades']:
+                _fx0, _fx1 = _r['facades']['FRONT']
+                _fx0, _fx1 = max(_fx0, _vis_lo), min(_fx1, _vis_hi)
+                if _fx1 - _fx0 >= 0.60:
+                    _r['facades']['FRONT'] = (_fx0, _fx1)
+                else:
+                    _r['facades'].pop('FRONT', None)
         apts.append({
             'id': f'main{k + 1}',
-            'rooms': [
-                {'role': 'TENEMENT_KITCHEN', 'bounds': k_b,
-                 'facades': k_facades},
-                {'role': 'TENEMENT_BEDROOM', 'bounds': b_b,
-                 'facades': b_facades},
-            ],
-            'entry': {'x': ex, 'y': iy_min, 'axis': 'X', 'w': DW},
-            'walls': [{'p1': (cx0, my), 'p2': (cx1, my), 'axis': 'X', 'pos': my,
-                       'doorway': {'x': (cx0 + cx1) * 0.5, 'y': my,
-                                   'axis': 'X', 'w': DWI}}],
+            'rooms': _rooms,
+            'entry': entry,
+            'walls': _walls,
         })
 
     for wi, w in enumerate(wings):
         wx0, wx1, wy0, wy1 = _wing_coords(w)
         wx = (wx0 + wx1) * 0.5
         inner_x = wx1 if wi == 0 else wx0
-        wdepth = wy1 - wy0
-        my = wy0 + wdepth * 0.54
-        entry_y = (wy0 + my) * 0.5
-        k_b = (wx0, wx1, wy0, my)
-        b_b = (wx0, wx1, my, wy1)
+        entry_y = (wy0 + wy1) * 0.5
         if wi == 0 and fl_idx == 0:
             # On the ground floor of the left wing, the entrance is placed on
             # the wing front gable end (wy0) to avoid being blocked by the courtyard stairs.
             w_entry = {'x': wx, 'y': wy0, 'axis': 'X', 'w': DW}
         else:
             w_entry = {'x': inner_x, 'y': entry_y, 'axis': 'Y', 'w': DW}
+        _wrooms, _wwalls = cozy_apartment((wx0, wx1, wy0, wy1), w_entry, max_rooms=4)
+        for _r in _wrooms:
+            _r['facades'] = {}
         apts.append({
             'id': f'wing{wi + 1}',
-            'rooms': [
-                {'role': 'TENEMENT_KITCHEN', 'bounds': k_b,
-                 'facades': {}},
-                {'role': 'TENEMENT_BEDROOM', 'bounds': b_b,
-                 'facades': {}},
-            ],
+            'rooms': _wrooms,
             'entry': w_entry,
-            'walls': [{'p1': (wx0, my), 'p2': (wx1, my), 'axis': 'X', 'pos': my,
-                       'doorway': {'x': wx, 'y': my, 'axis': 'X', 'w': DWI}}],
+            'walls': _wwalls,
         })
     return apts
 

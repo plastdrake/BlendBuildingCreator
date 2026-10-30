@@ -230,15 +230,19 @@ def build_door_assembly(bm, center_x, y_front, z_base, wall_thickness=0.3, door_
         jamb_h = max(0.4, z_spring - (z_base + 0.09))
         num_blocks = max(3, int(round(jamb_h / 0.32)))
         block_step = jamb_h / num_blocks
-        
+        # One continuous stone width for every jamb block.  Alternating block
+        # widths (0.20/0.16) used to leave a staggered strip of bare wall behind
+        # the jamb, and the 8 mm vertical gaps let the wall show through the
+        # mortar joints.  Both are now solid: uniform width and a small overlap
+        # between courses so the portal is watertight against the wall.
+        jamb_w = 0.22
         for side_sign in [-1, 1]:
             for b in range(num_blocks):
                 bz = z_base + 0.09 + (b + 0.5) * block_step
-                bw = 0.20 if (b % 2 == 0) else 0.16
-                bx = center_x + side_sign * (R_in + bw * 0.5)
+                bx = center_x + side_sign * (R_in - 0.004 + jamb_w * 0.5)
                 create_beveled_box(
                     bm,
-                    size=(bw, frame_depth + 0.02, block_step - 0.008),
+                    size=(jamb_w, frame_depth + 0.02, block_step + 0.006),
                     location=(bx, yf_stone, bz),
                     mat_index=MAT_INDEX_CUT_STONE,
                     bevel_amount=0.015

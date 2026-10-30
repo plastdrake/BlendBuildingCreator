@@ -99,10 +99,17 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
     door_w = 0.92
     door_h = 2.02
     door_thick = 0.05
-    # The doorframe must span the entire wall thickness (plus 0.02 proud on inside and outside)
-    # to completely line the opening and avoid raw cut wall edges.
-    frame_depth = max(0.32, float(wall_thickness) + 0.04)
-    fx_center = -float(wall_thickness) * 0.5
+    # Nudge the whole balcony doorframe (and its leaf/hardware) outward toward
+    # the balcony so the casing does not sit recessed into the room.
+    frame_out = 0.17
+    # The jamb is deliberately deep enough to bury its inner face 2.5 cm into
+    # the room while its outer face stays at the outward nudge.  The old frame
+    # stopped inside the wall and left a visible reveal between wall and jamb
+    # (plus a coplanar face).  With this depth the frame contacts the wall
+    # solidly on both sides and only intrudes 2-3 cm into the room.
+    frame_proud_in = 0.025
+    frame_depth = max(0.32, float(wall_thickness) + frame_out + frame_proud_in)
+    fx_center = (frame_out - frame_proud_in - float(wall_thickness)) * 0.5
     loc_dl = Vector((fx_center, 0.0, z_floor + door_h + 0.06))
     world_dl = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_dl.to_4d()).to_3d()
     create_beveled_box(
@@ -133,7 +140,7 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
     pw = (door_leaf_w - (num_planks - 1) * plank_gap) / num_planks
     # Balcony door leaf swing follows the main Door Open Angle (0 = shut).
     ajar_ang = -math.radians(max(0.0, min(110.0, door_angle_deg)))
-    hinge_facade_pos = Vector((0.03, -door_w * 0.5 + 0.03, z_floor + 0.03))
+    hinge_facade_pos = Vector((0.03 + frame_out, -door_w * 0.5 + 0.03, z_floor + 0.03))
     door_leaf_mat = (
         Matrix.Translation(Vector((wx, wy, 0.0))) @
         facade_rot_mat @
@@ -145,7 +152,7 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
 
     for h_rel in [0.20, 0.52, 0.82]:
         hz = z_floor + 0.03 + door_leaf_h * h_rel
-        loc_plate = Vector((0.088, -door_w * 0.5 - 0.035, hz))
+        loc_plate = Vector((0.088 + frame_out, -door_w * 0.5 - 0.035, hz))
         world_plate = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_plate.to_4d()).to_3d()
         create_beveled_box(
             bm, size=(0.014, 0.07, 0.065),
@@ -164,7 +171,7 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
                 rotation=(0.0, 1.5707963, rot_z),
                 mat_index=MAT_INDEX_IRON
             )
-        loc_arm = Vector((0.055, -door_w * 0.5 + 0.005, hz))
+        loc_arm = Vector((0.055 + frame_out, -door_w * 0.5 + 0.005, hz))
         world_arm = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_arm.to_4d()).to_3d()
         create_beveled_box(
             bm, size=(0.07, 0.024, 0.038),
@@ -174,7 +181,7 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
             bevel_amount=0.003,
             bevel_segments=2
         )
-        loc_pin = Vector((0.03, -door_w * 0.5 + 0.03, hz))
+        loc_pin = Vector((0.03 + frame_out, -door_w * 0.5 + 0.03, hz))
         world_pin = Vector((wx, wy, 0.0)) + (facade_rot_mat @ loc_pin.to_4d()).to_3d()
         create_cylinder(
             bm, radius=0.018, height=0.14, segments=10,

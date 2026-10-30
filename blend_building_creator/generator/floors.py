@@ -1623,11 +1623,62 @@ def build_floors(bm, props, ctx):
 
         balc_door_w = 0.95
         balc_door_h = min(2.15, floor_h * 0.76)
+
+        def _balc_landing_clear(bs, off, hole):
+            """True when the inside apron of a balcony door is solid floor."""
+            pad = 0.28   # includes the stair trim/guard rail thickness
+            if bs in ('FRONT', 'BACK'):
+                cx = (x_min + x_max) * 0.5 + off
+                ax0, ax1 = cx - 0.90, cx + 0.90
+                if bs == 'FRONT':
+                    ay0, ay1 = y_min, y_min + 1.30
+                else:
+                    ay0, ay1 = y_max - 1.30, y_max
+            else:
+                cy = (y_min + y_max) * 0.5 + off
+                ay0, ay1 = cy - 0.90, cy + 0.90
+                if bs == 'LEFT':
+                    ax0, ax1 = x_min, x_min + 1.30
+                else:
+                    ax0, ax1 = x_max - 1.30, x_max
+            hx0, hx1, hy0, hy1 = hole
+            ox = min(ax1, hx1 + pad) - max(ax0, hx0 - pad)
+            oy = min(ay1, hy1 + pad) - max(ay0, hy0 - pad)
+            return not (ox > 0.02 and oy > 0.02)
+
+        _balc_kept = []
         for b_entry in balconies_on_fl:
             bs = b_entry.get('side')
             if bs is None:
                 continue
-            b_off = b_entry.get('offset', 0.0)
+            b_off = float(b_entry.get('offset', 0.0))
+            _holes = []
+            if cur_stair_hole is not None:
+                _holes.append(cur_stair_hole)
+            _fv = (getattr(props, 'floor_voids', None)
+                   or getattr(ctx, 'floor_voids', None) or {}).get(fl_idx)
+            if _fv is not None:
+                _holes.append(_fv)
+            if _holes:
+                # Walk outward from the requested centre until the whole inside
+                # apron is solid floor.  A balcony door that opens straight
+                # over the stairwell hole is unreachable, so move it (or drop
+                # the balcony when the facade has no clear stretch).
+                _span = ((x_max - x_min) * 0.5 if bs in ('FRONT', 'BACK')
+                         else (y_max - y_min) * 0.5) - b_width * 0.5 - 0.35
+                _cands = [b_off]
+                _d = 0.45
+                while _d <= max(0.0, _span) + 1e-6:
+                    _cands.extend((b_off - _d, b_off + _d))
+                    _d += 0.45
+                _ok = next((c for c in _cands
+                            if abs(c) <= _span + 1e-6
+                            and all(_balc_landing_clear(bs, c, h) for h in _holes)), None)
+                if _ok is None:
+                    continue
+                b_off = _ok
+                b_entry['offset'] = b_off
+            _balc_kept.append(b_entry)
             if bs in ('FRONT', 'BACK'):
                 b_cx = (x_min + x_max) * 0.5 + b_off
                 b_cy = y_min if bs == 'FRONT' else y_max
@@ -1658,6 +1709,9 @@ def build_floors(bm, props, ctx):
             ctx.floor_doorways.setdefault(fl_idx, []).append({
                 'x': b_cx, 'y': b_cy, 'axis': b_axis, 'w': balc_door_w, 'is_balcony': True
             })
+        balconies_on_fl[:] = _balc_kept
+        if getattr(ctx, 'floor_balconies', None) is not None:
+            ctx.floor_balconies[fl_idx] = list(_balc_kept)
 
         # Dynamic Windows - Facade Openings & Shutters
         # Dynamic Windows - Facade Openings & Shutters

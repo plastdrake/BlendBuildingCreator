@@ -2755,6 +2755,100 @@ def _split_room_out_of_zones(rooms, interior_walls, zones, wall_t, dw_w, dw_h):
     return out
 
 
+def _merge_sliver_rooms(rooms, interior_walls, min_side=1.30, max_passes=4):
+    """Merge unusable thin rooms (e.g. a 0.7 m strip carved in front of a wing
+    door) into their neighbour and remove the partition that separated them.
+
+    Slivers read as a broken wall ending in the middle of a room and can also
+    wall off a doorway, so they are folded back into a real room.
+    """
+    if not rooms:
+        return rooms
+    for _ in range(max_passes):
+        changed = False
+        for sliver in list(rooms):
+            if sliver.stair_hole is not None:
+                continue
+            b = sliver.bounds
+            w, d = b[1] - b[0], b[3] - b[2]
+            if min(w, d) >= min_side or w <= 0.01 or d <= 0.01:
+                continue
+            best = None
+            for other in rooms:
+                if other is sliver:
+                    continue
+                ob = other.bounds
+                # Shared vertical edge (left/right neighbours) -> merge along X.
+                if abs(b[0] - ob[1]) < 0.35 or abs(b[1] - ob[0]) < 0.35:
+                    ov = min(b[3], ob[3]) - max(b[2], ob[2])
+                    if ov > 0.30 and (best is None or ov > best[0]):
+                        best = (ov, other)
+                # Shared horizontal edge (front/back neighbours) -> merge along Y.
+                if abs(b[2] - ob[3]) < 0.35 or abs(b[3] - ob[2]) < 0.35:
+                    ov = min(b[1], ob[1]) - max(b[0], ob[0])
+                    if ov > 0.30 and (best is None or ov > best[0]):
+                        best = (ov, other)
+            if best is None:
+                continue
+            other = best[1]
+            nb = (min(b[0], other.bounds[0]), max(b[1], other.bounds[1]),
+                  min(b[2], other.bounds[2]), max(b[3], other.bounds[3]))
+            other.bounds = nb
+            other.doorways = list(other.doorways or [])
+            for _dw in (sliver.doorways or []):
+                if _dw not in other.doorways:
+                    other.doorways.append(_dw)
+            rooms.remove(sliver)
+            # Drop partitions that now sit strictly inside the merged room.
+            for _wl in list(interior_walls):
+                p1, p2 = _wl.get('p1'), _wl.get('p2')
+                if p1 is None or p2 is None:
+                    continue
+                if abs(p1[1] - p2[1]) < 1e-6:      # horizontal wall at y
+                    _y = p1[1]
+                    _x0, _x1 = min(p1[0], p2[0]), max(p1[0], p2[0])
+                    if (nb[2] + 0.20 < _y < nb[3] - 0.20
+                            and _x0 >= nb[0] - 0.20 and _x1 <= nb[1] + 0.20):
+                        interior_walls.remove(_wl)
+                elif abs(p1[0] - p2[0]) < 1e-6:    # vertical wall at x
+                    _x = p1[0]
+                    _y0, _y1 = min(p1[1], p2[1]), max(p1[1], p2[1])
+                    if (nb[0] + 0.20 < _x < nb[1] - 0.20
+                            and _y0 >= nb[2] - 0.20 and _y1 <= nb[3] + 0.20):
+                        interior_walls.remove(_wl)
+            changed = True
+            break
+        if not changed:
+            break
+    return rooms
+
+
+def _extend_wall_ends_to_bounds(interior_walls, bounds, snap=1.10):
+    """Snap near-bound partition ends onto the wall line.
+
+    A partition that stops a few decimetres short of an exterior wall reads as
+    a wall ending abruptly and leaves a gap; pull such ends flush.
+    """
+    x0, x1, y0, y1 = bounds
+    for w in interior_walls:
+        p1, p2 = list(w.get('p1', (0.0, 0.0))), list(w.get('p2', (0.0, 0.0)))
+        if abs(p1[0] - p2[0]) < 1e-6:          # vertical wall at x
+            if x0 + 0.05 < p1[0] < x1 - 0.05:
+                for pt in (p1, p2):
+                    if 0.05 < pt[1] - y0 <= snap:
+                        pt[1] = y0
+                    elif 0.05 < y1 - pt[1] <= snap:
+                        pt[1] = y1
+        elif abs(p1[1] - p2[1]) < 1e-6:        # horizontal wall at y
+            if y0 + 0.05 < p1[1] < y1 - 0.05:
+                for pt in (p1, p2):
+                    if 0.05 < pt[0] - x0 <= snap:
+                        pt[0] = x0
+                    elif 0.05 < x1 - pt[0] <= snap:
+                        pt[0] = x1
+        w['p1'], w['p2'] = tuple(p1), tuple(p2)
+
+
 def _recut_oversized_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
                            archetype, fl_idx, has_stairs_landing, total_floors, program,
                            clear_zone_rects=None):
@@ -2773,6 +2867,12 @@ def _recut_oversized_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
         b = room.bounds
         w, d = b[1] - b[0], b[3] - b[2]
         if room.role in THROUGH_ROLES or w <= 0.01 or d <= 0.01:
+            out.append(room)
+            continue
+        # A warehouse/lumber-yard wing is already one purpose-built storage bay.
+        # Re-cutting its 4.2 x 8.5 m footprint produced two narrow rooms and a
+        # partition right beside the cargo-port portal; keep it whole.
+        if getattr(room, 'is_wing', False) and archetype in ('WAREHOUSE', 'LUMBERMILL', 'BUILDER'):
             out.append(room)
             continue
         # Rooms explicitly protected from re-cutting (hallway-planned rooms with
@@ -2840,45 +2940,95 @@ def _recut_oversized_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
         if _crosses_clear_zone:
             out.append(room)
             continue
+
+        # Never let a new partition bisect an existing doorway or portal (wing
+        # and annex portals included).  Shift the split off the opening while
+        # keeping both neighbouring rooms at least 2.4 m wide, so the piece
+        # walls still meet the corridor/exterior walls instead of stopping in
+        # the middle of a doorway.
+        _door_axis = 'X' if n_axis == 'X' else 'Y'
+        _door_spans = []
+        for _d in (room.doorways or []):
+            if _d.get('axis') == _door_axis:
+                _dc = float(_d.get('x', 0.0)) if _door_axis == 'X' else float(_d.get('y', 0.0))
+                _dw = float(_d.get('w', 1.2) or 1.2)
+                _door_spans.append((_dc - _dw * 0.5 - 0.35, _dc + _dw * 0.5 + 0.35))
+        if _door_spans and _split_coords:
+            _lo_b = b[0] if n_axis == 'X' else b[2]
+            _hi_b = b[1] if n_axis == 'X' else b[3]
+            _fixed_coords = []
+            _prev = _lo_b
+            for _p in _split_coords:
+                for _s0, _s1 in _door_spans:
+                    if _s0 - 1e-6 <= _p <= _s1 + 1e-6:
+                        _cands = [c for c in (_s0, _s1)
+                                  if c - _prev >= 2.4 and _hi_b - c >= 2.4]
+                        if _cands:
+                            _p = min(_cands, key=lambda c: abs(c - _p))
+                        break
+                _fixed_coords.append(_p)
+                _prev = _p
+            _split_coords = _fixed_coords
+
+        _edges = ([b[0]] + list(_split_coords) + [b[1]] if n_axis == 'X'
+                  else [b[2]] + list(_split_coords) + [b[3]])
+
         # Companion roles keep the floor legible (shop -> store, bed -> study).
         _extra = _resolve_room_roles(archetype, fl_idx, len(rooms) + n - 1,
                                      has_stairs_landing, total_floors, program=program)
+        _internal = []
+        for i in range(n - 1):
+            if n_axis == 'X':
+                px = _edges[i + 1]
+                _dd = {'x': px, 'y': (b[2] + b[3]) * 0.5, 'axis': 'Y', 'w': dw_w}
+                interior_walls.append({
+                    'p1': (px, b[2]), 'p2': (px, b[3]),
+                    'axis': 'Y', 'pos': px, 'thickness': wall_t,
+                    'doorway': dict(_dd, h=dw_h),
+                })
+            else:
+                py = _edges[i + 1]
+                _dd = {'x': (b[0] + b[1]) * 0.5, 'y': py, 'axis': 'X', 'w': dw_w}
+                interior_walls.append({
+                    'p1': (b[0], py), 'p2': (b[1], py),
+                    'axis': 'X', 'pos': py, 'thickness': wall_t,
+                    'doorway': dict(_dd, h=dw_h),
+                })
+            _internal.append((i, i + 1, _dd))
+
         for i in range(n):
             if n_axis == 'X':
-                x0, x1 = b[0] + i * step, b[0] + (i + 1) * step
-                nb = (x0, x1, b[2], b[3])
-                if i < n - 1:
-                    px = x1
-                    interior_walls.append({
-                        'p1': (px, b[2]), 'p2': (px, b[3]),
-                        'axis': 'Y', 'pos': px, 'thickness': wall_t,
-                        'doorway': {'x': px, 'y': (b[2] + b[3]) * 0.5,
-                                    'w': dw_w, 'h': dw_h, 'axis': 'Y'},
-                    })
-                    doors = [{'x': px, 'y': (b[2] + b[3]) * 0.5, 'axis': 'Y', 'w': dw_w}]
-                else:
-                    doors = [{'x': x0, 'y': (b[2] + b[3]) * 0.5, 'axis': 'Y', 'w': dw_w}]
+                nb = (_edges[i], _edges[i + 1], b[2], b[3])
             else:
-                y0, y1 = b[2] + i * step, b[2] + (i + 1) * step
-                nb = (b[0], b[1], y0, y1)
-                if i < n - 1:
-                    py = y1
-                    interior_walls.append({
-                        'p1': (b[0], py), 'p2': (b[1], py),
-                        'axis': 'X', 'pos': py, 'thickness': wall_t,
-                        'doorway': {'x': (b[0] + b[1]) * 0.5, 'y': py,
-                                    'w': dw_w, 'h': dw_h, 'axis': 'X'},
-                    })
-                    doors = [{'x': (b[0] + b[1]) * 0.5, 'y': py, 'axis': 'X', 'w': dw_w}]
-                else:
-                    doors = [{'x': (b[0] + b[1]) * 0.5, 'y': y0, 'axis': 'X', 'w': dw_w}]
+                nb = (b[0], b[1], _edges[i], _edges[i + 1])
             _role = room.role if i == 0 else _secondary_role(room.role, i)
             if i > 0 and _extra and i < len(_extra) and _extra[i] != room.role:
                 _role = _extra[i]
+            # Keep every entrance/portal that lies on this piece's boundary.
+            _piece_doors = []
+            for _ii, _jj, _dd in _internal:
+                if _ii == i or _jj == i:
+                    _piece_doors.append(dict(_dd))
+            for _d in (room.doorways or []):
+                _dx = float(_d.get('x', 1e9))
+                _dy = float(_d.get('y', 1e9))
+                if not (nb[0] - 0.30 <= _dx <= nb[1] + 0.30
+                        and nb[2] - 0.30 <= _dy <= nb[3] + 0.30):
+                    continue
+                _on_edge = (abs(_dx - nb[0]) < 0.35 or abs(_dx - nb[1]) < 0.35
+                            or abs(_dy - nb[2]) < 0.35 or abs(_dy - nb[3]) < 0.35)
+                if not _on_edge:
+                    continue
+                if any(abs(_pd.get('x', -1e9) - _dx) < 0.01
+                       and abs(_pd.get('y', -1e9) - _dy) < 0.01
+                       and _pd.get('axis') == _d.get('axis') for _pd in _piece_doors):
+                    continue
+                _piece_doors.append(dict(_d))
             out.append(Room(
                 id=f"{room.id}_{i + 1}", floor_idx=room.floor_idx, role=_role,
-                bounds=nb, doorways=doors, stair_hole=room.stair_hole,
-                is_wing=False, wing_id=room.wing_id,
+                bounds=nb, doorways=_piece_doors, stair_hole=room.stair_hole,
+                is_wing=bool(getattr(room, 'is_wing', False)),
+                wing_id=room.wing_id,
                 exterior_facades=dict(room.exterior_facades),
                 allow_large=_large_intended))
     return out
@@ -4055,56 +4205,44 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
 
                 apt_w = ix_max - hall_x
                 if apt_w >= 7.5:
-                    apt_split_x = _clear_doorway_span(
-                        hall_x + apt_w * 0.48, axis='X',
-                        lo=hall_x + 2.5, hi=ix_max - 2.5)
-                    # Internal doors inside apartments connecting kitchen/living to bedroom
-                    interior_walls.append({
-                        'p1': (apt_split_x, iy_min), 'p2': (apt_split_x, split_y),
-                        'axis': 'Y', 'pos': apt_split_x, 'thickness': wall_t,
-                        'doorway': {'x': apt_split_x, 'y': dw_y_s, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
-                    })
-                    interior_walls.append({
-                        'p1': (apt_split_x, split_y), 'p2': (apt_split_x, iy_max),
-                        'axis': 'Y', 'pos': apt_split_x, 'thickness': wall_t,
-                        'doorway': {'x': apt_split_x, 'y': dw_y_n, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}
-                    })
+                    # Plan each side flat as a cluster of cozy rooms around its
+                    # hall door, instead of two 100 m² half-apartments.
+                    from .tenement import cozy_apartment
 
-                    rm_s_k = Room(
-                        id=f"fl{fl_idx}_apt_south_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                        bounds=(hall_x, apt_split_x, iy_min, split_y),
-                        doorways=[
-                            {'x': hall_x, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
-                            {'x': apt_split_x, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
-                        ],
-                        stair_hole=None,
-                        exterior_facades={'FRONT': (hall_x, apt_split_x)}
-                    )
-                    rm_s_b = Room(
-                        id=f"fl{fl_idx}_apt_south_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                        bounds=(apt_split_x, ix_max, iy_min, split_y),
-                        doorways=[{'x': apt_split_x, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w}],
-                        stair_hole=None,
-                        exterior_facades={'FRONT': (apt_split_x, ix_max), 'RIGHT': (iy_min, split_y)}
-                    )
-                    rm_n_k = Room(
-                        id=f"fl{fl_idx}_apt_north_kitchen", floor_idx=fl_idx, role='TENEMENT_KITCHEN',
-                        bounds=(hall_x, apt_split_x, split_y, iy_max),
-                        doorways=[
-                            {'x': hall_x, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
-                            {'x': apt_split_x, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
-                        ],
-                        stair_hole=None,
-                        exterior_facades={'BACK': (hall_x, apt_split_x)}
-                    )
-                    rm_n_b = Room(
-                        id=f"fl{fl_idx}_apt_north_bed", floor_idx=fl_idx, role='TENEMENT_BEDROOM',
-                        bounds=(apt_split_x, ix_max, split_y, iy_max),
-                        doorways=[{'x': apt_split_x, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w}],
-                        stair_hole=None,
-                        exterior_facades={'BACK': (apt_split_x, ix_max), 'RIGHT': (split_y, iy_max)}
-                    )
-                    rooms.extend([rm_s_k, rm_s_b, rm_n_k, rm_n_b])
+                    def _apt_touches(b, d):
+                        return (b[0] - 0.15 <= d.get('x', 0.0) <= b[1] + 0.15
+                                and b[2] - 0.15 <= d.get('y', 0.0) <= b[3] + 0.15)
+
+                    for _tag, _y0, _y1, _ey in (
+                            ('south', iy_min, split_y, dw_y_s),
+                            ('north', split_y, iy_max, dw_y_n)):
+                        _rect = (hall_x, ix_max, _y0, _y1)
+                        _aentry = {'x': hall_x, 'y': _ey, 'axis': 'Y', 'w': dw_w}
+                        _arms, _arws = cozy_apartment(_rect, _aentry, max_rooms=8)
+                        _adoors = ([w['doorway'] for w in _arws if w.get('doorway')]
+                                   + [_aentry])
+                        for _aw in _arws:
+                            interior_walls.append({
+                                'p1': _aw['p1'], 'p2': _aw['p2'],
+                                'axis': _aw['axis'], 'pos': _aw['pos'],
+                                'thickness': wall_t, 'doorway': _aw.get('doorway'),
+                            })
+                        for _ai, _ar in enumerate(_arms):
+                            _ab = _ar['bounds']
+                            _adws = [dict(d) for d in _adoors
+                                     if d and _apt_touches(_ab, d)]
+                            _afac = {}
+                            if abs(_ab[2] - iy_min) < 0.02:
+                                _afac['FRONT'] = (_ab[0], _ab[1])
+                            if abs(_ab[3] - iy_max) < 0.02:
+                                _afac['BACK'] = (_ab[0], _ab[1])
+                            if abs(_ab[1] - ix_max) < 0.02:
+                                _afac['RIGHT'] = (_ab[2], _ab[3])
+                            rooms.append(Room(
+                                id=f"fl{fl_idx}_apt_{_tag}_r{_ai}",
+                                floor_idx=fl_idx, role=_ar['role'],
+                                bounds=_ab, doorways=_adws, stair_hole=None,
+                                exterior_facades=_afac))
                 else:
                     # Narrow plot: single-room studio apartments
                     rm_s = Room(
@@ -4143,14 +4281,19 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     return (_x0 - 0.15 <= d.get('x', 0.0) <= _x1 + 0.15
                             and _y0 - 0.15 <= d.get('y', 0.0) <= _y1 + 0.15)
 
+                # Collect every doorway on the floor once: a door in a shared
+                # wall belongs to both rooms, and a flat's rooms may be served
+                # by a portal registered on a neighbouring apartment.
+                _all_doors = []
                 for _apt in _apts:
-                    _doors = [w['doorway'] for w in _apt['walls'] if w.get('doorway')]
-                    _doors.append(_apt['entry'])
+                    _all_doors.extend(w['doorway'] for w in _apt['walls'] if w.get('doorway'))
+                    _all_doors.append(_apt['entry'])
+                for _apt in _apts:
                     _is_w = _apt['id'].startswith('wing')
                     _w_id = (int(_apt['id'].replace('wing', '')) - 1) if _is_w else None
                     for _ri, _rd in enumerate(_apt['rooms']):
                         _b = _rd['bounds']
-                        _rdws = [dict(d) for d in _doors if d and _touches(_b, d)]
+                        _rdws = [dict(d) for d in _all_doors if d and _touches(_b, d)]
                         rooms.append(Room(
                             id=f"fl{fl_idx}_{_apt['id']}_r{_ri}",
                             floor_idx=fl_idx, role=_rd['role'], bounds=_b,
@@ -5172,20 +5315,52 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 # A real doorway in the shared facade wall, recorded on both the
                 # wing and the main room so the kitchen/lodging is reachable.
                 wx1, wx2, wy1, wy2 = wb
-                _main_rm = max(
-                    (r for r in rooms if not getattr(r, 'is_wing', False)),
-                    key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]),
-                    default=None)
+                _px = (wx1 + wx2) * 0.5
+                _py = (wy1 + wy2) * 0.5
+                _axis = None
+                _wall_y = _wall_x = None
+                if wy2 <= iy_min + 0.35:
+                    _axis, _wall_y = 'X', iy_min
+                elif wy1 >= iy_max - 0.35:
+                    _axis, _wall_y = 'X', iy_max
+                elif wx2 <= ix_min + 0.35:
+                    _axis, _wall_x = 'Y', ix_min
+                elif wx1 >= ix_max - 0.35:
+                    _axis, _wall_x = 'Y', ix_max
+                # Pick the main room that actually fronts this wing portal, not
+                # the largest room on the floor (the stair landing used to
+                # swallow the wing door, leaving the wing cut off at a wall).
+                _main_rm = None
+                if _axis == 'X' and _wall_y is not None:
+                    _cand = [r for r in rooms
+                             if not getattr(r, 'is_wing', False)
+                             and min(abs(r.bounds[2] - _wall_y),
+                                     abs(r.bounds[3] - _wall_y)) <= 0.40]
+                    _main_rm = next(
+                        (r for r in _cand if r.bounds[0] - 0.05 <= _px <= r.bounds[1] + 0.05),
+                        min(_cand, key=lambda r: abs((r.bounds[0] + r.bounds[1]) * 0.5 - _px),
+                            default=None) if _cand else None)
+                elif _axis == 'Y' and _wall_x is not None:
+                    _cand = [r for r in rooms
+                             if not getattr(r, 'is_wing', False)
+                             and min(abs(r.bounds[0] - _wall_x),
+                                     abs(r.bounds[1] - _wall_x)) <= 0.40]
+                    _main_rm = next(
+                        (r for r in _cand if r.bounds[2] - 0.05 <= _py <= r.bounds[3] + 0.05),
+                        min(_cand, key=lambda r: abs((r.bounds[2] + r.bounds[3]) * 0.5 - _py),
+                            default=None) if _cand else None)
                 _dw = None
                 if _main_rm is not None:
-                    mb = _main_rm.bounds
-                    if wy2 <= mb[2] + 0.35 or wy1 >= mb[3] - 0.35:
-                        _dw = {'x': (wx1 + wx2) * 0.5,
-                               'y': mb[2] if wy2 <= mb[2] + 0.35 else mb[3],
-                               'axis': 'X', 'w': min(dw_w, max(1.2, wx2 - wx1 - 1.2))}
-                    elif wx2 <= mb[0] + 0.35 or wx1 >= mb[1] - 0.35:
-                        _dw = {'x': mb[0] if wx2 <= mb[0] + 0.35 else mb[1],
-                               'y': (wy1 + wy2) * 0.5, 'axis': 'Y',
+                    if _axis == 'X':
+                        _dw = {'x': min(max(_px, _main_rm.bounds[0] + 0.85),
+                                        _main_rm.bounds[1] - 0.85),
+                               'y': _wall_y, 'axis': 'X',
+                               'w': min(dw_w, max(1.2, wx2 - wx1 - 1.2))}
+                    else:
+                        _dw = {'x': _wall_x,
+                               'y': min(max(_py, _main_rm.bounds[2] + 0.85),
+                                        _main_rm.bounds[3] - 0.85),
+                               'axis': 'Y',
                                'w': min(dw_w, max(1.2, wy2 - wy1 - 1.2))}
                     if _dw is not None:
                         if _dw not in _main_rm.doorways:
@@ -5250,7 +5425,22 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             else:
                 w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
                                        ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH')) else 'GUEST_ROOM'
-                w_doorways = _wing_portals(wb, doorways)
+                w_doorways = list(_wing_portals(wb, doorways))
+                # The warehouse cargo port is cut into the wing's courtyard-side
+                # wall on the ground floor.  Register it as a doorway for the
+                # room so no shelf/pile can be pushed into the portal opening.
+                if (fl_idx == 0 and effective_archetype == 'WAREHOUSE'
+                        and not getattr(props, 'open_timber_frame', False)
+                        and not (getattr(props, 'material_tier', '') == 'TIER_1'
+                                 and getattr(props, 'roof_style', '') == 'NONE')
+                        and (wb[3] <= iy_min + 0.35 or wb[2] >= iy_max - 0.35)):
+                    wx1, wx2, wy1, wy2 = wb
+                    inner_x = wx1 if ((wx1 + wx2) * 0.5) > 0.0 else wx2
+                    cp_y = wy1 + (wy2 - wy1) * 0.38
+                    w_doorways.append({
+                        'x': inner_x, 'y': cp_y, 'axis': 'Y',
+                        'w': 2.30, 'is_cargo_port': True,
+                    })
             w_rm = Room(
                 id=f"fl{fl_idx}_wing{wi}",
                 floor_idx=fl_idx,
@@ -5375,6 +5565,10 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
             effective_archetype, fl_idx, has_stairs_landing, total_floors, program,
             clear_zone_rects=clear_zone_rects)
+    # Fold unusable thin strips back into a real room (and remove the partition
+    # that made them) so walls never end abruptly or block a wing doorway.
+    rooms = _merge_sliver_rooms(rooms, interior_walls)
+    _extend_wall_ends_to_bounds(interior_walls, (ix_min, ix_max, iy_min, iy_max))
     # All layout branches converge here. A room holding the stair landing, or
     # serving as a two-door route between rooms, is circulation—not a bedroom.
     # One-room small floors remain the intentional combined-cottage exception.
