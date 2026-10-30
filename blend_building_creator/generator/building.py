@@ -353,9 +353,18 @@ def _create_building_context(props, extra_doorways=None, extra_window_exclusions
                 ix_min = -base_w * 0.5 + wall_t * 0.5
                 ix_max = base_w * 0.5 - wall_t * 0.5
                 cuts = courtyard_cut_x(ix_min, ix_max, wings)
+                _bw = float(getattr(props, 'balcony_width', 2.4))
                 b_entries = []
                 for k in range(len(cuts) - 1):
                     cx_mid = (cuts[k] + cuts[k + 1]) * 0.5
+                    # The apartment planner puts a partition through the middle
+                    # of each back-block flat.  Centre the balcony there and the
+                    # room wall bisects the balcony door, so nudge it into the
+                    # clear half of the flat.
+                    _half_flat = (cuts[k + 1] - cuts[k]) * 0.5
+                    _shift = min(1.15, max(0.0, _half_flat - _bw * 0.5 - 0.55))
+                    if _shift > 0.05:
+                        cx_mid += _shift if (k % 2 == 0) else -_shift
                     b_entries.append({'side': 'BACK', 'offset': cx_mid})
                 floor_balconies[_bf] = b_entries
             elif is_estate_or_manor and base_w >= 36.0 and _bf == 1:

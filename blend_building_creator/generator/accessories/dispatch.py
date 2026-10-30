@@ -139,6 +139,27 @@ def _build_balconies(bm, props, ctx, tier):
             if any(_seg_hits_rect(w.get('p1', (0.0, 0.0)), w.get('p2', (0.0, 0.0)), _rect)
                    for w in _walls_by_fl.get(fl_idx, [])):
                 continue
+            # The outside check above misses a partition that ends at the
+            # facade and bisects the door from inside.  Check the door's inner
+            # landing too; if a wall blocks it, omit the balcony rather than
+            # leave a balcony in the middle of an interior wall.
+            if side in ('FRONT', 'BACK'):
+                if side == 'FRONT':
+                    _door_rect = (_bcx - 0.62, _bcx + 0.62,
+                                  bounds[2], bounds[2] + 0.95)
+                else:
+                    _door_rect = (_bcx - 0.62, _bcx + 0.62,
+                                  bounds[3] - 0.95, bounds[3])
+            else:
+                if side == 'LEFT':
+                    _door_rect = (bounds[0], bounds[0] + 0.95,
+                                  _bcy - 0.62, _bcy + 0.62)
+                else:
+                    _door_rect = (bounds[1] - 0.95, bounds[1],
+                                  _bcy - 0.62, _bcy + 0.62)
+            if any(_seg_hits_rect(w.get('p1', (0.0, 0.0)), w.get('p2', (0.0, 0.0)), _door_rect)
+                   for w in _walls_by_fl.get(fl_idx, [])):
+                continue
             build_balcony(
                 bm, side=side,
                 wall_x_min=bounds[0], wall_x_max=bounds[1],
