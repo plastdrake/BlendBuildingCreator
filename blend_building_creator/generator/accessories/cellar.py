@@ -134,7 +134,7 @@ def build_inn_cellar(bm, props, ctx, tier='TIER_2'):
     # Wine bins on the front wall and the left wall, kept clear of the stair.
     build_wine_rack(bm, bcx, by0 + wall_t + 0.24, z_floor + 0.02, 0.0,
                     width=min(bw - 2.2, 1.50))
-    build_wine_rack(bm, bx0 + wall_t + 0.24, by0 + 1.85, z_floor + 0.02,
+    build_wine_rack(bm, bx0 + wall_t + 0.24, by0 + 0.95, z_floor + 0.02,
                     math.pi * 0.5, width=1.20)
     # Big casks along the right wall, lids facing into the room.
     for _i, _yy in enumerate((by0 + 2.5, by0 + 5.3, by0 + 8.1)):
@@ -179,16 +179,6 @@ def build_inn_cellar(bm, props, ctx, tier='TIER_2'):
             faces += build_bottle(
                 bm, _shelf_x + 0.02, _by, _sz + 0.025, 0.0,
                 bottle_type=('POTION' if _i % 3 == 1 else 'WINE'))
-    # Well in the store, with a stone drum and water.
-    _wx, _wy = bcx - 2.25, by1 - 2.60
-    faces += create_cylinder(
-        bm, radius=0.85, height=0.62, segments=16,
-        location=(_wx, _wy, z_floor + 0.31),
-        mat_index=MAT_INDEX_CUT_STONE)
-    faces += create_cylinder(
-        bm, radius=0.66, height=0.03, segments=16,
-        location=(_wx, _wy, z_floor + 0.635),
-        mat_index=MAT_INDEX_WATER)
     # Strongbox + provisioning crates in the back corners.
     from .prop_registry import build_prop
     build_prop(bm, 'CHEST', bcx + 2.35, by1 - 0.85, z_floor, math.pi * 0.5)
