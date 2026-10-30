@@ -889,6 +889,15 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
             build_brewery_cellar(bm, props, ctx, tier)
         except Exception:
             pass
+    # Inn undercroft: a generous two-chamber cellar under the guest wing and
+    # the main block, entered by the wing's basement stair.
+    if (getattr(ctx, 'effective_archetype', '') == 'INN'
+            and getattr(props, 'has_basement_stair', False)):
+        try:
+            from .cellar import build_inn_cellar
+            build_inn_cellar(bm, props, ctx, tier)
+        except Exception:
+            pass
     # Fishmonger yard: fish rails hug the front wall, flanking the entrance
     # with the door path kept clear. Higher tiers work more rails (bigger
     # catch). Footprints are published so the supply nook never lands on one.

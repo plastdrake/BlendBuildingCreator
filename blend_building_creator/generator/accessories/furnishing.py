@@ -2287,6 +2287,54 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
+def _furnish_tenement_parlour(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
+                              z_ceil: float, rng, density: float,
+                              chimney_pos: Optional[Any] = None):
+    """A light sitting room for the extra walk-through rooms of a big flat.
+
+    Deliberately has no dining table, bookshelf or four-chair set: the flat's
+    one living/dining room owns those.  A sofa, coffee table, rug and a corner
+    plant keep the room cosy without duplicating the main room's furniture.
+    """
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    if rw < 1.2 or rd < 1.2:
+        return
+    # Soft rug under the seating group, not a second dining set.
+    _lay_rug(bm, tracker, rm, rng, rng.choice(['RUG_FOREST', 'RUG_SAPPHIRE']),
+             rcx, rcy, z_floor, min(2.60, max(1.30, rw * 0.52)),
+             min(2.10, max(1.20, rd * 0.52)), yaw_max=0.04)
+    seat = _try_place_wall_prop(
+        bm, 'SOFA', 1.90, 0.92, tracker, z_floor,
+        candidate_walls=('NORTH', 'SOUTH', 'EAST', 'WEST'),
+        length=1.72, check_windows=False)
+    if seat is None:
+        seat = _try_place_wall_prop(
+            bm, 'ARMCHAIR', 0.95, 0.90, tracker, z_floor,
+            candidate_walls=('NORTH', 'SOUTH', 'EAST', 'WEST'),
+            check_windows=False)
+    if seat is not None:
+        sx, sy, syaw = seat
+        fx, fy = rcx - sx, rcy - sy
+        fl = math.hypot(fx, fy) or 1.0
+        fx, fy = fx / fl, fy / fl
+        tx, ty = sx + fx * 1.15, sy + fy * 1.15
+        if (ty - tracker.ry0 > 0.45 and ty < tracker.ry1 - 0.45
+                and tx - tracker.rx0 > 0.45 and tx < tracker.rx1 - 0.45
+                and not tracker.is_near_door(tx, ty, radius=1.05)
+                and tracker.is_free(tx - 0.45, tx + 0.45, ty - 0.45, ty + 0.45, margin=0.08)):
+            tracker.occupy(tx - 0.40, tx + 0.40, ty - 0.40, ty + 0.40)
+            build_prop(bm, 'ROUND_TABLE', tx, ty, z_floor, 0.0, radius=0.38)
+            build_prop(bm, 'POTTED_PLANT_SMALL', tx, ty, z_floor + 0.99,
+                       rng.uniform(0.0, math.pi * 2.0))
+    # One corner plant only, never a free-standing planter in the middle.
+    _try_place_plant(bm, tracker, z_floor, rng, large=True)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil,
+                         prop_name='CHANDELIER', radius=0.34)
+
+
 def _furnish_house_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                         rng, density: float, chimney_pos: Optional[Any] = None):
     """Furnishes a cozy living / dining hall with dining table, plush sofa/armchairs, bookshelves, and plants."""
@@ -5153,9 +5201,13 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_entrance_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('MAYOR_OFFICE', 'OFFICE'):
             _furnish_office(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('TENEMENT_PARLOUR', 'PARLOUR'):
+            _furnish_tenement_parlour(bm, rm, tracker, z_floor, z_ceil, rng, density,
+                                      chimney_pos=chimney_positions)
         elif role in ('KITCHEN', 'TENEMENT_KITCHEN'):
             _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, density,
-                             chimney_pos=chimney_positions, floor_has_dining=floor_has_dining)
+                             chimney_pos=chimney_positions,
+                             floor_has_dining=(floor_has_dining or role == 'TENEMENT_KITCHEN'))
         elif role in ('MASTER_BED', 'OFFICER_QUARTERS', 'ROYAL_CHAMBER'):
             _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, density, is_master=True)
         elif role in ('MESS_HALL',):

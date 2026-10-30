@@ -63,6 +63,7 @@ def _facades(x0, x1, y0, y1, bounds):
 
 def cozy_apartment(bounds, entry, *, role_kitchen='TENEMENT_KITCHEN',
                    role_living='TENEMENT_LIVING',
+                   role_parlour='TENEMENT_PARLOUR',
                    role_bed='TENEMENT_BEDROOM', max_rooms=9):
     """Divide one tenement flat into a small grid of realistically sized rooms.
 
@@ -173,13 +174,15 @@ def cozy_apartment(bounds, entry, *, role_kitchen='TENEMENT_KITCHEN',
                 q.append(nc)
 
     rooms = []
+    _living_cell = next((c for c in order
+                         if c != root and children.get(c, 0) > 0), None)
     for c in order:
         ci, cj = c
         rb = (xs[ci], xs[ci + 1], ys[cj], ys[cj + 1])
         if c == root:
             role = role_kitchen
         elif children.get(c, 0) > 0:
-            role = role_living
+            role = role_living if c == _living_cell else role_parlour
         else:
             role = role_bed
         rooms.append({'role': role, 'bounds': rb, 'facades': {}})

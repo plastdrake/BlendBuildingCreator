@@ -3555,12 +3555,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             for zx0, zx1, zy0, zy1 in _zlist:
                 if axis == 'X':
                     # Horizontal wall at y = pos: the zone must straddle that y.
-                    if not (zy0 + 0.02 < pos < zy1 - 0.02):
+                    # Ignore walls that run along the zone edge (room/corridor
+                    # boundaries): only a wall through the middle of the walkway
+                    # actually blocks it.  The old 2 cm threshold clipped the
+                    # corridor walls beside an annex door, leaving the room open
+                    # at the corner.
+                    if not (zy0 + 0.55 < pos < zy1 - 0.55):
                         continue
                     z0, z1 = zx0, zx1
                 else:
-                    # Vertical wall at x = pos: the zone must straddle that x.
-                    if not (zx0 + 0.02 < pos < zx1 - 0.02):
+                    # Vertical wall at x = pos: same rule along X.
+                    if not (zx0 + 0.55 < pos < zx1 - 0.55):
                         continue
                     z0, z1 = zy0, zy1
                 if a1 <= z0 + 1e-6 or a0 >= z1 - 1e-6:
@@ -5441,6 +5446,12 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                         'x': inner_x, 'y': cp_y, 'axis': 'Y',
                         'w': 2.30, 'is_cargo_port': True,
                     })
+            _w_sh = None
+            if stair_hole is not None:
+                _shx0, _shx1, _shy0, _shy1 = stair_hole
+                if not (_shx1 < wb[0] or _shx0 > wb[1]
+                        or _shy1 < wb[2] or _shy0 > wb[3]):
+                    _w_sh = stair_hole
             w_rm = Room(
                 id=f"fl{fl_idx}_wing{wi}",
                 floor_idx=fl_idx,
@@ -5449,7 +5460,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 is_wing=True,
                 wing_id=wi,
                 doorways=w_doorways,
-                stair_hole=None,
+                stair_hole=_w_sh,
                 exterior_facades={}
             )
             rooms.append(w_rm)

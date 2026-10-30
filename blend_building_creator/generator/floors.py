@@ -1049,6 +1049,12 @@ def build_floors(bm, props, ctx):
                 door_top_z = z_floor + dh + frame_margin
             door_cx = 0.0
             extra_front_doors = []
+            # Tenement apartment entrances share one size on every storey and
+            # wing.  Keep the building's grand front door for other archetypes.
+            _ten_apt = (effective_archetype == 'TENEMENT')
+            _apt_dw = 1.65 if _ten_apt else dw
+            _apt_dh = 2.95 if _ten_apt else dh
+            _apt_top_z = z_floor + _apt_dh + frame_margin
 
             # 1. Front Entrance
             side_entry_tenement = (
@@ -1128,9 +1134,10 @@ def build_floors(bm, props, ctx):
                     else:
                         door_cx = 0.0 + door_offset
                     door_yf = y_min
-                    door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
-                    door_u2 = (door_cx + dw * 0.5 + frame_margin) - x_min
-                    front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': door_top_z})
+                    door_u1 = (door_cx - _apt_dw * 0.5 - frame_margin) - x_min
+                    door_u2 = (door_cx + _apt_dw * 0.5 + frame_margin) - x_min
+                    front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor,
+                                           'z_end': _apt_top_z if _ten_apt else door_top_z})
                 elif shape == 'L_SHAPE':
                     if wing_placement == 'FRONT':
                         door_cx = (x_min + wings[0]['base'][0]) * 0.5 if wing_side == 'RIGHT' else (wings[0]['base'][1] + x_max) * 0.5
@@ -1157,9 +1164,10 @@ def build_floors(bm, props, ctx):
                             door_cx = 0.0
                     else:
                         door_cx = 0.0  # Center of front courtyard
-                    door_u1 = (door_cx - dw * 0.5 - frame_margin) - x_min
-                    door_u2 = (door_cx + dw * 0.5 + frame_margin) - x_min
-                    front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor, 'z_end': door_top_z})
+                    door_u1 = (door_cx - _apt_dw * 0.5 - frame_margin) - x_min
+                    door_u2 = (door_cx + _apt_dw * 0.5 + frame_margin) - x_min
+                    front_openings.append({'u_start': door_u1, 'u_end': door_u2, 'z_start': z_floor,
+                                           'z_end': _apt_top_z if _ten_apt else door_top_z})
                 else: # T_SHAPE
                     if wing_placement == 'FRONT':
                         door_cx = (wings[0]['base'][0] + wings[0]['base'][1]) * 0.5
@@ -1176,14 +1184,14 @@ def build_floors(bm, props, ctx):
 
                 main_door_cx = door_cx
                 main_door_yf = door_yf
-                ctx.floor_doorways.setdefault(0, []).append({'x': door_cx, 'y': door_yf, 'axis': 'X', 'w': dw})
+                ctx.floor_doorways.setdefault(0, []).append({'x': door_cx, 'y': door_yf, 'axis': 'X', 'w': _apt_dw})
 
                 door_gf_stone = props.ground_floor_stone and tier_val != 'TIER_1'
                 steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') == 'WOOD') else MAT_INDEX_CUT_STONE
 
                 build_door_assembly(
                     bm, center_x=door_cx, y_front=door_yf, z_base=z_floor,
-                    wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
+                    wall_thickness=wall_t, door_w=_apt_dw, door_h=_apt_dh, door_angle_deg=props.door_angle,
                     door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=door_gf_stone,
                     normal_axis='-Y', include_leaf=getattr(props, 'include_door_leaves', True)
                 )
@@ -1194,14 +1202,14 @@ def build_floors(bm, props, ctx):
                 # ground-floor apartment). Each needs its own opening cut in
                 # the wall, not just a door assembly.
                 for _edx in extra_front_doors:
-                    _eu1 = (_edx - dw * 0.5 - frame_margin) - x_min
-                    _eu2 = (_edx + dw * 0.5 + frame_margin) - x_min
+                    _eu1 = (_edx - _apt_dw * 0.5 - frame_margin) - x_min
+                    _eu2 = (_edx + _apt_dw * 0.5 + frame_margin) - x_min
                     front_openings.append({'u_start': _eu1, 'u_end': _eu2,
-                                           'z_start': z_floor, 'z_end': door_top_z})
-                    ctx.floor_doorways.setdefault(0, []).append({'x': _edx, 'y': y_min, 'axis': 'X', 'w': dw})
+                                           'z_start': z_floor, 'z_end': _apt_top_z if _ten_apt else door_top_z})
+                    ctx.floor_doorways.setdefault(0, []).append({'x': _edx, 'y': y_min, 'axis': 'X', 'w': _apt_dw})
                     build_door_assembly(
                         bm, center_x=_edx, y_front=y_min, z_base=z_floor,
-                        wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
+                        wall_thickness=wall_t, door_w=_apt_dw, door_h=_apt_dh, door_angle_deg=props.door_angle,
                         door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=door_gf_stone,
                         normal_axis='-Y', include_leaf=getattr(props, 'include_door_leaves', True)
                     )
@@ -2484,18 +2492,19 @@ def build_floors(bm, props, ctx):
                     if _is_u_tenement and _w_id == 0 and fl_idx == 0:
                         _cx_gable = (wx1 + wx2) * 0.5
                         _u_cg = _cx_gable - wx1
+                        _apt_dw, _apt_dh = 1.65, 2.95
                         door_gf_stone = props.ground_floor_stone and tier_val != 'TIER_1'
                         steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') == 'WOOD') else MAT_INDEX_CUT_STONE
-                        w_ops_1.append({'u_start': _u_cg - dw * 0.5 - frame_margin, 'u_end': _u_cg + dw * 0.5 + frame_margin,
-                                        'z_start': z_floor, 'z_end': door_top_z})
+                        w_ops_1.append({'u_start': _u_cg - _apt_dw * 0.5 - frame_margin, 'u_end': _u_cg + _apt_dw * 0.5 + frame_margin,
+                                        'z_start': z_floor, 'z_end': z_floor + _apt_dh + frame_margin})
                         build_door_assembly(bm, center_x=_cx_gable, y_front=wy1, z_base=z_floor,
-                                            wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
+                                            wall_thickness=wall_t, door_w=_apt_dw, door_h=_apt_dh, door_angle_deg=props.door_angle,
                                             door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=door_gf_stone,
                                             normal_axis='-Y', include_leaf=getattr(props, 'include_door_leaves', True))
                         if props.has_front_steps and props.has_foundation:
                             build_front_steps(bm, center_x=_cx_gable, y_front=wy1, z_base=z_floor,
                                               num_steps=max(2, int(found_h / 0.18)), normal_axis='-Y', mat_index=steps_mat)
-                        ctx.floor_doorways.setdefault(0, []).append({'x': _cx_gable, 'y': wy1, 'axis': 'X', 'w': dw})
+                        ctx.floor_doorways.setdefault(0, []).append({'x': _cx_gable, 'y': wy1, 'axis': 'X', 'w': _apt_dw})
 
                     # Face 2: Left (wx1, wy1) -> (wx1, wy2) normal (-1, 0)
                     # Buffered inside corner at wy2 (main building junction) by 1.25m
@@ -2542,6 +2551,7 @@ def build_floors(bm, props, ctx):
                     # Courtyard apartment entrance doors for U-shaped tenements:
                     # Left wing ground door is on Face 1 (front gable). Right wing ground door is on Face 2 (-X).
                     if _is_u_tenement:
+                        _apt_dw, _apt_dh = 1.65, 2.95
                         door_gf_stone = props.ground_floor_stone and tier_val != 'TIER_1'
                         steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') == 'WOOD') else MAT_INDEX_CUT_STONE
                         if fl_idx == 0:
@@ -2549,18 +2559,18 @@ def build_floors(bm, props, ctx):
                             _u_c = _dy - wy1
                             # Note: Left Wing (_w_id == 0) ground door is on Face 1 (front gable) above!
                             if _w_id == 1:  # Right Wing courtyard door (Face 2)
-                                w_ops_2.append({'u_start': _u_c - dw * 0.5 - frame_margin, 'u_end': _u_c + dw * 0.5 + frame_margin,
-                                                'z_start': z_floor, 'z_end': door_top_z})
+                                w_ops_2.append({'u_start': _u_c - _apt_dw * 0.5 - frame_margin, 'u_end': _u_c + _apt_dw * 0.5 + frame_margin,
+                                                'z_start': z_floor, 'z_end': z_floor + _apt_dh + frame_margin})
                                 build_door_assembly(bm, center_x=wx1, y_front=_dy, z_base=z_floor,
-                                                    wall_thickness=wall_t, door_w=dw, door_h=dh, door_angle_deg=props.door_angle,
+                                                    wall_thickness=wall_t, door_w=_apt_dw, door_h=_apt_dh, door_angle_deg=props.door_angle,
                                                     door_shape=getattr(props, 'door_shape', 'AUTO'), ground_floor_stone=door_gf_stone,
                                                     normal_axis='-X', include_leaf=getattr(props, 'include_door_leaves', True))
                                 if props.has_front_steps and props.has_foundation:
                                     build_front_steps(bm, center_x=wx1, y_front=_dy, z_base=z_floor, num_steps=max(2, int(found_h / 0.18)), normal_axis='-X', mat_index=steps_mat)
-                                ctx.floor_doorways.setdefault(0, []).append({'x': wx1, 'y': _dy, 'axis': 'Y', 'w': dw})
+                                ctx.floor_doorways.setdefault(0, []).append({'x': wx1, 'y': _dy, 'axis': 'Y', 'w': _apt_dw})
                         elif fl_idx >= 1 and props.has_exterior_stairs:
-                            dw_apt = min(1.10, float(getattr(props, 'door_width', 1.10)))
-                            dh_apt = min(2.20, float(getattr(props, 'door_height', 2.20)))
+                            dw_apt = _apt_dw
+                            dh_apt = _apt_dh
                             _dy_up = wy1 + max(1.3, (wy2 - wy1) * 0.26)
                             _u_cup = _dy_up - wy1
                             if _w_id == 0:  # Left Wing upper gallery door (Face 3)
@@ -3320,8 +3330,11 @@ def _place_exterior_stair_doors(bm, props, ctx, fl_idx, z_floor,
         side = plan['wall']['name']
         xf = x_min if side == 'LEFT' else x_max
         ops = left_openings if side == 'LEFT' else right_openings
-        edw = min(1.20, float(getattr(props, 'door_width', 1.20)))
-        edh = min(2.40, float(getattr(props, 'door_height', 2.40)))
+        # Apartment entrances must be the same size on the ground floor as on
+        # the upper gallery floors (the old 1.20 x 2.40 ground door looked like
+        # a serving hatch next to the 1.65 x 2.95 flats above).
+        edw = 1.65
+        edh = 2.95
         margin = 0.12
         for spot in (_ext_stair_door_spots(props, ctx) or {}).get(0, []):
             along = spot['y'] if side in ('LEFT', 'RIGHT') else spot['x']
