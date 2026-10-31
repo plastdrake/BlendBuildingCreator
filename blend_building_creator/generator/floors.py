@@ -2161,6 +2161,13 @@ def build_floors(bm, props, ctx):
         if props.has_windows and getattr(props, 'window_front', True) and not open_timber:
             front_excludes = list(get_facade_wing_exclusions('FRONT')) + get_turret_exclusions('FRONT')
             front_excludes += ext_stair_excl.get('FRONT', [])
+            # Keep the first-floor frontage clear where the hanging artisan
+            # sign projects; windows are re-spaced to either side instead of
+            # sitting behind the board.
+            if (fl_idx == 1 and getattr(props, 'has_trade_sign', False)
+                    and (getattr(props, 'has_veranda', False)
+                         or getattr(props, 'has_arched_porch', False))):
+                front_excludes.append((door_cx - 1.10, door_cx + 1.10))
             for we in _extra_win_ex:
                 if we.get('facade') == 'FRONT' and we.get('floor_min', 0) <= fl_idx <= we.get('floor_max', 99):
                     front_excludes.append((we['min'], we['max']))

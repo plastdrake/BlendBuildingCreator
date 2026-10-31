@@ -108,10 +108,18 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
         _mid_z = float(porch_info.get('awning_mid_z',
                                       ctx.found_h + porch_info.get('porch_h', 3.5)))
         _wall_top = _mid_z + max(0.0, _pface - _mid_y) * _pitch + 0.10
-        _z_max_top = ctx.found_h + ctx.floor_h - 0.20
-        _bw = 1.08
-        _bh = min(0.88, max(0.45, _z_max_top - _wall_top - 0.34 - 0.06))
+        # Hang the full-size board high on the first upper-storey wall, not
+        # squeezed under the porch roof.  The facade pass keeps windows out of
+        # this central band.
+        _storey_top = (ctx.found_h + ctx.floor_h
+                       if ctx.num_floors <= 1
+                       else ctx.found_h + 2.0 * ctx.floor_h) - 0.25
+        _bw = 1.18
+        _bh = min(1.10, max(0.82, _storey_top - _wall_top - 0.34 - 0.06))
         _z_top = _wall_top + 0.34 + _bh + 0.06
+        if _z_top > _storey_top:
+            _z_top = _storey_top
+            _bh = max(0.55, _z_top - _wall_top - 0.34 - 0.04)
         build_hanging_sign(
             bm, _px, _pface - 0.03, _z_top,
             run_ang=-math.pi * 0.5, bracket_len=_bw + 0.46,

@@ -103,6 +103,30 @@ def _pick_oven_y(ctx, hy, wall_t, half_w):
     return best
 
 
+def _build_brick_flue(bm, points, half_w, mat_index):
+    """One continuous swept brick prism along a polyline."""
+    import bmesh
+    rings = []
+    corners = ((-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0))
+    for (x, y, z) in points:
+        rings.append([bm.verts.new((x + cx * half_w, y + cy * half_w, z))
+                      for cx, cy in corners])
+    new_faces = []
+    for i in range(len(rings) - 1):
+        a, b = rings[i], rings[i + 1]
+        for k in range(4):
+            f = bm.faces.new((a[k], a[(k + 1) % 4], b[(k + 1) % 4], b[k]))
+            f.material_index = mat_index
+            new_faces.append(f)
+    for ring, reverse in ((rings[0], True), (rings[-1], False)):
+        verts = list(reversed(ring)) if reverse else ring
+        f = bm.faces.new(verts)
+        f.material_index = mat_index
+        new_faces.append(f)
+    bmesh.ops.recalc_face_normals(bm, faces=new_faces)
+    return new_faces
+
+
 def build_bakery_oven(bm, *args, **kwargs):
     """Builds the authentic indoor master baker's hearth oven and artisanal props.
 
@@ -258,44 +282,39 @@ def build_bakery_oven(bm, *args, **kwargs):
     transform_faces(faces, oven_mat)
 
     # -------------------------------------------------------------------------
-    # 5. Fantasy wonky flue: short rise from the oven crown, then a diagonal
-    #    run out through the side wall, and a short vertical stack outside.
-    #    Keeping the flue outside the upper storeys stops it growing through
-    #    beds and furniture on the floors above.
+    # 5. One continuous clay-brick flue: a short vertical rise from the oven,
+    #    a longer diagonal jog out through the wall (clear of the roof
+    #    overhang), then a short vertical stack outside.  The swept prism is a
+    #    single connected mesh in terracotta brick rather than stacked stone
+    #    boxes, so there are no gaps or intersecting block ends.
     # -------------------------------------------------------------------------
-    _inner_wall = _side * (hx - wall_t)
-    _outer_x = _side * (hx + 0.42)
+    _roof_ov = float(getattr(props, 'roof_overhang', 0.72) or 0.72)
+    _out_off = max(0.82, _roof_ov + 0.20)
+    _outer_x = _side * (hx + _out_off)
     _z0 = z_floor + hearth_h + dome_h + 0.08
-    _z1 = min(z_floor + 2.70, _z0 + 1.35)
-    if _z1 < _z0 + 0.25:
-        _z1 = _z0 + 0.25
-    _dx = _outer_x - base_x
-    _dz = _z1 - _z0
-    _seg_len = math.hypot(_dx, _dz)
-    _seg_ang = -math.atan2(_dz, _dx)
+    _z1 = _z0 + 0.78
+    _z2 = _z1 + 0.52
+    _z3 = _z2 + 1.18
+    _flue_pts = [
+        (base_x, base_y, _z0),
+        (base_x, base_y, _z1),
+        (_outer_x, base_y, _z2),
+        (_outer_x, base_y, _z3),
+    ]
+    _build_brick_flue(bm, _flue_pts, 0.36, MAT_INDEX_PLASTER_BRICK)
+    # A chunky brick cap makes the top read as a finished chimney, not a pipe.
     create_beveled_box(
-        bm, size=(_seg_len + 0.18, 0.68, 0.68),
-        location=((base_x + _outer_x) * 0.5, base_y, (_z0 + _z1) * 0.5),
-        rotation=(0.0, _seg_ang, 0.0),
-        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
-    # Masonry collar where the diagonal pierces the wall.
+        bm, size=(0.98, 0.98, 0.16),
+        location=(_outer_x, base_y, _z3 + 0.08),
+        mat_index=MAT_INDEX_PLASTER_BRICK, bevel_amount=0.012)
     create_beveled_box(
-        bm, size=(0.30, 1.02, 1.02),
-        location=(_inner_wall + _side * 0.04, base_y, _z1 - 0.05),
-        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.020)
-    # Short free-standing stack outside, clear of every upper floor.
-    _stack_top = _z1 + 1.05
+        bm, size=(0.78, 0.78, 0.10),
+        location=(_outer_x, base_y, _z3 + 0.21),
+        mat_index=MAT_INDEX_PLASTER_BRICK, bevel_amount=0.008)
+    # Dark soot throat inside the crown.
     create_beveled_box(
-        bm, size=(0.74, 0.74, _stack_top - _z1),
-        location=(_outer_x, base_y, (_z1 + _stack_top) * 0.5),
-        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
-    create_beveled_box(
-        bm, size=(0.92, 0.92, 0.16),
-        location=(_outer_x, base_y, _stack_top + 0.08),
-        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
-    create_beveled_box(
-        bm, size=(0.56, 0.56, 0.06),
-        location=(_outer_x, base_y, _stack_top + 0.19),
-        mat_index=MAT_INDEX_STONE, bevel_amount=0.008)
+        bm, size=(0.42, 0.42, 0.055),
+        location=(_outer_x, base_y, _z3 + 0.27),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
 
     return faces
