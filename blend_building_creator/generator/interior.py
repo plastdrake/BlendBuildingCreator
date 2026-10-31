@@ -3788,6 +3788,91 @@ def _rebalance_room_boundaries(rooms, walls, min_side=3.15, max_passes=3):
     return rooms
 
 
+def _consolidate_outbuilding_rooms(rooms, walls, max_habitable=3):
+    """Merge small adjacent outbuilding rooms into a few usable chambers."""
+    if not rooms:
+        return rooms
+    _through = {'CORRIDOR', 'STAIR_LANDING', 'ENTRANCE_HALL'}
+    _protected = {'THRONE_ROOM', 'BANQUET_HALL', 'CHAPEL_HALL',
+                  'MEZZANINE_GALLERY', 'GREAT_HALL'}
+
+    def _habitable():
+        return [r for r in rooms if getattr(r, 'role', '') not in _through]
+
+    for _ in range(8):
+        hab = _habitable()
+        if len(hab) <= max_habitable:
+            break
+        best = None
+        for i in range(len(rooms)):
+            a = rooms[i]
+            if getattr(a, 'role', '') in _protected:
+                continue
+            ax0, ax1, ay0, ay1 = a.bounds
+            for j in range(i + 1, len(rooms)):
+                b = rooms[j]
+                if getattr(b, 'role', '') in _protected:
+                    continue
+                bx0, bx1, by0, by1 = b.bounds
+                shared = 0.0
+                vertical = None
+                if abs(ax1 - bx0) < 0.14 or abs(bx1 - ax0) < 0.14:
+                    shared = min(ay1, by1) - max(ay0, by0)
+                    vertical = True
+                elif abs(ay1 - by0) < 0.14 or abs(by1 - ay0) < 0.14:
+                    shared = min(ax1, bx1) - max(ax0, bx0)
+                    vertical = False
+                if shared < 1.0:
+                    continue
+                score = (a.bounds[1] - a.bounds[0]) * (a.bounds[3] - a.bounds[2]) + \
+                        (b.bounds[1] - b.bounds[0]) * (b.bounds[3] - b.bounds[2])
+                if best is None or score < best[0]:
+                    best = (score, i, j, vertical)
+        if best is None:
+            break
+        _, i, j, vertical = best
+        a, b = rooms[i], rooms[j]
+        ax0, ax1, ay0, ay1 = a.bounds
+        bx0, bx1, by0, by1 = b.bounds
+        # Remove the shared wall.
+        if vertical:
+            bx = ax1 if abs(ax1 - bx0) < 0.14 else ax0
+            ylo, yhi = max(ay0, by0), min(ay1, by1)
+            new_walls = []
+            for w in walls:
+                if w.get('axis') == 'Y' and abs(w.get('pos', w['p1'][0]) - bx) < 0.16:
+                    lo = min(w['p1'][1], w['p2'][1]); hi = max(w['p1'][1], w['p2'][1])
+                    if hi > ylo + 0.1 and lo < yhi - 0.1:
+                        continue
+                new_walls.append(w)
+            walls[:] = new_walls
+        else:
+            by = ay1 if abs(ay1 - by0) < 0.14 else ay0
+            xlo, xhi = max(ax0, bx0), min(ax1, bx1)
+            new_walls = []
+            for w in walls:
+                if w.get('axis') == 'X' and abs(w.get('pos', w['p1'][1]) - by) < 0.16:
+                    lo = min(w['p1'][0], w['p2'][0]); hi = max(w['p1'][0], w['p2'][0])
+                    if hi > xlo + 0.1 and lo < xhi - 0.1:
+                        continue
+                new_walls.append(w)
+            walls[:] = new_walls
+        # Keep the larger room's role, union the footprints and doors.
+        if (a.bounds[1] - a.bounds[0]) * (a.bounds[3] - a.bounds[2]) < \
+                (b.bounds[1] - b.bounds[0]) * (b.bounds[3] - b.bounds[2]):
+            a, b = b, a
+        a.bounds = (min(ax0, bx0), max(ax1, bx1), min(ay0, by0), max(ay1, by1))
+        a.doorways = list(a.doorways or [])
+        for d in (b.doorways or []):
+            if d not in a.doorways:
+                a.doorways.append(d)
+        if a.stair_hole is None:
+            a.stair_hole = b.stair_hole
+        a.allow_large = True
+        rooms.remove(b)
+    return rooms
+
+
 def _extend_wall_ends_to_bounds(interior_walls, bounds, snap=1.10):
     """Snap near-bound partition ends onto the wall line.
 
@@ -6755,6 +6840,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     if fl_wings_bounds:
         interior_walls = _open_wing_entrance_walls(
             interior_walls, fl_wings_bounds, (ix_min, ix_max, iy_min, iy_max))
+    _is_estate_out = False
+    try:
+        _is_estate_out = bool(props.get('is_estate_outbuilding', False))
+    except Exception:
+        _is_estate_out = bool(getattr(props, 'is_estate_outbuilding', False))
+    if _is_estate_out:
+        rooms = _consolidate_outbuilding_rooms(
+            rooms, interior_walls, max_habitable=(4 if fl_idx == 0 else 3))
     rooms = _merge_open_rooms(rooms, interior_walls)
     rooms = _rebalance_room_boundaries(rooms, interior_walls)
 
