@@ -617,6 +617,12 @@ def plan_outcrop_spread(props, base_w, base_d, num_floors, wings, has_wing,
     _gear_ground = effective_archetype in ('WAREHOUSE', 'LUMBERMILL',
                                            'BLACKSMITH', 'TAVERN',
                                            'FISHERMAN', 'BAKERY')
+    # A tavern/inn veranda roof rises past the first upper storey.  An oriel
+    # centred above the entrance used to collide with that roof; keep the front
+    # clear on the ground and first upper floor, and let outcrops use the sides.
+    _porch_front = (effective_archetype in ('TAVERN', 'INN')
+                    or bool(getattr(props, 'has_veranda', False))
+                    or bool(getattr(props, 'has_arched_porch', False)))
     _gear_top = effective_archetype == 'WINDMILL'
     _pil_side = (getattr(props, 'pillared_overhang_side', 'FRONT')
                  if getattr(props, 'has_pillared_overhang', False) else None)
@@ -654,6 +660,8 @@ def plan_outcrop_spread(props, base_w, base_d, num_floors, wings, has_wing,
             # outcrop would swallow the pillars).
             _blocked.add(_pil_side)
         if (_gear_ground and _f == 0) or (_gear_top and _f == num_floors - 1):
+            _blocked.add('FRONT')
+        if _porch_front and _f <= 1:
             _blocked.add('FRONT')
         _b_side = floor_balc_side.get(_f)
         if _b_side:

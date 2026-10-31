@@ -362,8 +362,15 @@ def demising_walls(bounds, shape, wings, props):
         for x in cut_x[1:-1]:
             walls.append({'p1': (x, iy_min), 'p2': (x, iy_max), 'axis': 'Y', 'pos': x})
     else:
-        mid = (iy_min + iy_max) * 0.5
-        walls.append({'p1': (ix_min, mid), 'p2': (ix_max, mid), 'axis': 'X', 'pos': mid})
+        # Row tenements are a stack of flats along the depth; every flat
+        # boundary needs a solid party wall (the old code only walled the
+        # middle of the building, leaving adjacent flats open to each other).
+        D = iy_max - iy_min
+        n_flats = int(max(2, min(4, round(D / 6.0))))
+        for k in range(1, n_flats):
+            y = iy_min + D * k / n_flats
+            walls.append({'p1': (ix_min, y), 'p2': (ix_max, y),
+                          'axis': 'X', 'pos': y})
     return walls
 
 

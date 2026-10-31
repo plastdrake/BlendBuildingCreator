@@ -1620,12 +1620,20 @@ def _furnish_tavern_taproom(bm, rm, tracker: RoomOccupancyTracker, z_floor: floa
     # 2. Hearth fireplace directly attached to chimney flue or on clear wall
     _try_place_hearth(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
 
-    # 3. Dining / Drinking Tables with chairs (dynamic grid covering the entire taproom)
+    # 3. Dining / Drinking Tables with chairs.  A narrow taproom should stay
+    # pleasantly busy, not become an obstacle course: fewer tables with wider
+    # walking lanes between the door, bar and stairs.
     area = rw * rd
-    target_tables = max(2, min(9, int(area / 11.0) + 1))
-
-    margin_x = 1.25
-    margin_y = 1.25
+    _narrow_tap = (min(rw, rd) < 7.0
+                   or max(rw, rd) / max(min(rw, rd), 1.0) > 2.0)
+    if _narrow_tap:
+        target_tables = max(3, min(6, int(area / 15.0) + 1))
+        margin_x = 1.45
+        margin_y = 1.45
+    else:
+        target_tables = max(2, min(8, int(area / 12.0) + 1))
+        margin_x = 1.25
+        margin_y = 1.25
     ux0 = tracker.rx0 + margin_x
     ux1 = tracker.rx1 - margin_x
     uy0 = tracker.ry0 + margin_y

@@ -96,6 +96,20 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
     b = ctx.bounds_for(0)
     face_y = b[2] - outer
 
+    # A veranda/porch is the most visible place for the trade sign: hang it on
+    # the front eave, centred over the entrance, instead of hiding it beside
+    # the porch on the recessed wall.
+    if porch_info is not None:
+        _px = float(porch_info.get('door_x', door_x))
+        _py = float(porch_info.get('porch_front_y', face_y - 1.5)) - 0.10
+        _pz = float(porch_info.get('porch_h', 3.5)) + 0.12
+        _bw, _bh = 1.15, 1.10
+        build_hanging_sign(
+            bm, _px, _py, _pz,
+            run_ang=-math.pi * 0.5, bracket_len=_bw + 0.46,
+            board_w=_bw, board_h=_bh, light_board=True)
+        return True
+
     # Compact board so it fits between windows; the arm must be longer than the
     # board so the hanging board clears the wall mounting plate.
     board_w, board_h = 1.32, 1.58

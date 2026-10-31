@@ -19,7 +19,7 @@ from ..materials import (
 def build_cargo_port_frame(bm, face_coord, outward_sgn, portal_center, portal_w, portal_h, z_floor, wall_t,
                            dock_y1=None, dock_y2=None, dock_span1=None, dock_span2=None,
                            axis='X', deck_depth=1.6, is_upper_tier=False, lower_z_floor=None,
-                           has_upper_crane=False):
+                           has_upper_crane=False, skip_lintel=False, extra_posts=0):
     """
     Builds an open freight portal frame and loading dock.
     
@@ -76,8 +76,18 @@ def build_cargo_port_frame(bm, face_coord, outward_sgn, portal_center, portal_w,
     lintel_h = 0.30
     lintel_len = portal_w + jamb_w * 2.0 + 0.12
     lintel_z = z_floor + portal_h + 0.11
-    _box(jamb_d, lintel_len, lintel_h, norm_jamb, portal_center, lintel_z,
-         MAT_INDEX_TIMBER_FRAME, bevel=0.014, segments=2)
+    if not skip_lintel:
+        _box(jamb_d, lintel_len, lintel_h, norm_jamb, portal_center, lintel_z,
+             MAT_INDEX_TIMBER_FRAME, bevel=0.014, segments=2)
+
+    # Open mill bay: plain intermediate pillars instead of a decorative header.
+    # They carry the storey above and visually break up the very wide opening.
+    if extra_posts > 0:
+        for _i in range(1, int(extra_posts) + 1):
+            _u = portal_center - portal_w * 0.5 + portal_w * (_i / (extra_posts + 1.0))
+            _box(jamb_d, 0.18, portal_h + 0.04, norm_jamb, _u,
+                 z_floor + (portal_h + 0.04) * 0.5,
+                 MAT_INDEX_TIMBER_FRAME, bevel=0.012, segments=2)
 
     # 3. Wooden threshold bridging the wall gap
     # Sized portal_w - 0.02 so it does NOT cut into wall panels, and 7mm proud with bevel to stop coplanar fighting
@@ -144,9 +154,10 @@ def build_cargo_port_frame(bm, face_coord, outward_sgn, portal_center, portal_w,
 
     else:
         # Upper Tier Platform (e.g. 2nd floor loft cargo deck)
-        # Sized to cover portal and crane area
-        upper_len = min(deck_len, 4.4)
-        upper_shift = 0.35 if (axis == 'Y' and outward_sgn < 0) else 0.0
+        # Match the ground dock width so the upper deck reads as a full cargo
+        # floor, not a narrow balcony.
+        upper_len = deck_len
+        upper_shift = 0.0 if upper_len >= deck_len - 0.01 else (0.35 if (axis == 'Y' and outward_sgn < 0) else 0.0)
         upper_uc = portal_center + upper_shift
         upper_u1 = upper_uc - upper_len * 0.5
         upper_u2 = upper_uc + upper_len * 0.5

@@ -217,12 +217,17 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
     z_floor = -depth
     z_ceil = z_ground + 0.03  # meet the ground-floor slab, no gap at the top
 
-    # Basement room = wing footprint inset a little.
-    bx0, bx1 = wx1 + 0.25, wx2 - 0.25
-    by0 = wy1 + 0.25
+    # Basement room = wing footprint inset a little; deeper tiers also grow
+    # a little further under the main block so each upgrade feels more spacious.
+    _tier_inset = {'TIER_1': 0.25, 'TIER_2': 0.16, 'TIER_3': 0.08}.get(tier, 0.25)
+    _tier_ext = {'TIER_1': 1.40, 'TIER_2': 2.70, 'TIER_3': 4.00}.get(tier, 1.40)
+    _main_hy = (float(getattr(ctx, 'base_d', getattr(props, 'depth', 10.0))) * 0.5
+                - float(getattr(ctx, 'wall_t', 0.30)) * 0.5 - 0.30)
+    bx0, bx1 = wx1 + _tier_inset, wx2 - _tier_inset
+    by0 = wy1 + _tier_inset
     # Extend the cellar past the wing's +Y wall (under the main block) so the
     # stair, which descends toward +Y, has clear landing room at its foot.
-    by1 = wy2 + 1.40
+    by1 = min(_main_hy, wy2 + _tier_ext)
     bcx, bcy = (bx0 + bx1) * 0.5, (by0 + by1) * 0.5
     bw, bd = bx1 - bx0, by1 - by0
 

@@ -660,7 +660,15 @@ def build_floors(bm, props, ctx):
                 if _info is not None:
                     _open_side = _info[1]
             else:
-                dir_y = int(stair_ascend_sign) if ((fl_idx - 1) % 2 == 0) else int(-stair_ascend_sign)
+                if is_tenement_stairs and D_interior >= 7.4:
+                    # Tenement tandem flights climb north for two storeys,
+                    # then south for two.  The old alternating-by-floor rule
+                    # put the stair-hole railing on the arrival side of the
+                    # upper flights, blocking the step-off.
+                    _cycle = (fl_idx - 1) % 4
+                    dir_y = 1 if _cycle in (0, 1) else -1
+                else:
+                    dir_y = int(stair_ascend_sign) if ((fl_idx - 1) % 2 == 0) else int(-stair_ascend_sign)
                 _open_side = 'N' if dir_y == 1 else 'S'
             build_stair_hole_trim(bm, cur_stair_hole, slab_z, thickness=0.12,
                                   mat_index=MAT_INDEX_TIMBER, open_side=_open_side,
@@ -1896,7 +1904,9 @@ def build_floors(bm, props, ctx):
                     bm, face_coord=y_min, outward_sgn=-1.0, portal_center=_cp_cx,
                     portal_w=_cp_w, portal_h=_cp_h, z_floor=z_floor, wall_t=wall_t,
                     dock_span1=_dock_x1, dock_span2=_dock_x2,
-                    axis='Y', deck_depth=_dock_depth
+                    axis='Y', deck_depth=_dock_depth,
+                    skip_lintel=_is_mill,
+                    extra_posts=(2 if _is_mill else 0)
                 )
             elif fl_idx == 1 and getattr(props, 'has_upper_cargo_crane', False):
                 front_openings.append({

@@ -1705,7 +1705,7 @@ _ARTISAN_GROUND = {
     'TOOLSMITH': ['SMITHY', 'STORE', 'STORAGE'],
     'FURNITURE_MAKER': ['JOINERY', 'STORE', 'STORAGE'],
     'FISHERMAN': ['FISHERY', 'STORE', 'STORAGE'],
-    'HUNTER': ['FLETCHER_WORKSHOP', 'LODGE', 'STORAGE'],
+    'HUNTER': ['FLETCHER_WORKSHOP', 'STORE', 'STORAGE'],
 }
 
 # Rooms that must simply be walked through. The smart planner carves these
@@ -3219,7 +3219,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 _p_rooms, stair_hole, stair_pos_info, bounds)
             return _p_rooms, _p_walls
 
-    is_wide_mansion = (W >= 15.0 and D >= 6.0
+    is_wide_mansion = (W >= 22.0 and D >= 7.0
                        and effective_archetype in ('NONE', 'HOUSE', 'AUTO', 'MANOR')
                        and not getattr(props, 'has_throne_room', False)
                        and not getattr(props, 'has_double_height', False))
@@ -3716,10 +3716,23 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 # Front/back split: the shop (STORE) always faces the street;
                 # the workshop takes the rear room.
                 _store_b, _store_fac, _shop_b, _shop_fac = _a, _fa, _b, _fb
-            elif _a_area >= _b_area:
-                _shop_b, _shop_fac, _store_b, _store_fac = _a, _fa, _b, _fb
             else:
-                _shop_b, _shop_fac, _store_b, _store_fac = _b, _fb, _a, _fa
+                # Side-by-side split: the room that actually contains the
+                # street entrance is the shop; the other half is the workshop.
+                _entry_x = None
+                for _d in (doorways or []):
+                    if (_d.get('axis') == 'X'
+                            and abs(float(_d.get('y', 0.0)) - iy_min) < 0.60):
+                        _entry_x = float(_d.get('x', 0.0))
+                        break
+                if _entry_x is not None and _a[0] <= _entry_x <= _a[1]:
+                    _store_b, _store_fac, _shop_b, _shop_fac = _a, _fa, _b, _fb
+                elif _entry_x is not None and _b[0] <= _entry_x <= _b[1]:
+                    _store_b, _store_fac, _shop_b, _shop_fac = _b, _fb, _a, _fa
+                elif _a_area >= _b_area:
+                    _shop_b, _shop_fac, _store_b, _store_fac = _a, _fa, _b, _fb
+                else:
+                    _shop_b, _shop_fac, _store_b, _store_fac = _b, _fb, _a, _fa
             rooms = [
                 Room(id=f"fl{fl_idx}_workshop", floor_idx=fl_idx, role=_shop,
                      bounds=_shop_b, doorways=list(_doors),
@@ -5763,6 +5776,24 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                            'BEDROOM', 'GREAT_HALL')), None)
             if _cand is not None:
                 _cand.role = 'MESS_HALL'
+
+    # A house is one household: never leave duplicate kitchens on a floor.
+    # (Upper-storey kitchens likewise collapse into a living room when the
+    # ground floor already feeds the home.)
+    if effective_archetype in ('HOUSE', 'COTTAGE', 'MANOR', 'NONE', 'AUTO'):
+        if fl_idx > 0:
+            for _r in rooms:
+                if getattr(_r, 'role', '') == 'KITCHEN':
+                    _r.role = 'HOUSE_HALL'
+        else:
+            _kits = [r for r in rooms if getattr(r, 'role', '') == 'KITCHEN']
+            for _extra in _kits[1:]:
+                if not any(getattr(r, 'role', '') == 'DINING' for r in rooms):
+                    _extra.role = 'DINING'
+                elif not any(getattr(r, 'role', '') == 'PANTRY' for r in rooms):
+                    _extra.role = 'PANTRY'
+                else:
+                    _extra.role = 'STORAGE'
 
     return rooms, interior_walls
 

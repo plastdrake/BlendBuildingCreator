@@ -330,6 +330,17 @@ def resolve_annex_layout(props, base_w, base_d, wall_t, num_floors, wings=None, 
     if not kind:
         return {'kind': '', 'side': '', 'width': 0.0, 'floors': 0, 'by_side': {}}
 
+    # The annex must never rise above the main building.  Vary it between the
+    # full main height and one storey lower for a more natural estate mix
+    # (deterministic for a given preset/seed, so rebuilding is stable).
+    _nf = max(1, int(num_floors))
+    if _nf <= 1:
+        floors = 1
+    else:
+        _v = int(abs(float(base_w) * 7.0 + float(base_d) * 13.0
+                     + _nf * 3.0 + int(getattr(props, 'seed', 0) or 0))) % 2
+        floors = _nf if _v == 0 else max(1, _nf - 1)
+
     # Hall-side apron of every annex walk-through, kept free of stairs/furniture
     # on every storey the annex spans (see annex_portal_keepout).
     layout = _resolve_layout(kind, requested, width, floors, props, base_w, base_d,
