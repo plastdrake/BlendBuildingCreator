@@ -3686,6 +3686,108 @@ def _merge_open_rooms(rooms, walls, min_overlap=1.0, max_passes=4):
     return rooms
 
 
+def _rebalance_room_boundaries(rooms, walls, min_side=3.15, max_passes=3):
+    """Give cramped rooms a usable width by shifting the shared wall.
+
+    The Nasher halls sometimes end up with a 1.8 m sleeping strip beside an
+    oversized landing.  Rather than merging the whole floor, slide the common
+    partition a little so both sides remain real, furnishable rooms.
+    """
+    if not rooms or not walls:
+        return rooms
+    _protected = {'THRONE_ROOM', 'BANQUET_HALL', 'CHAPEL_HALL',
+                  'MEZZANINE_GALLERY', 'GREAT_HALL'}
+    for _ in range(max_passes):
+        changed = False
+        for i in range(len(rooms)):
+            a = rooms[i]
+            for j in range(i + 1, len(rooms)):
+                b = rooms[j]
+                if getattr(a, 'role', '') in _protected or getattr(b, 'role', '') in _protected:
+                    continue
+                ax0, ax1, ay0, ay1 = a.bounds
+                bx0, bx1, by0, by1 = b.bounds
+                # Vertical shared wall
+                if abs(ax1 - bx0) < 0.12 or abs(bx1 - ax0) < 0.12:
+                    if min(ay1, by1) - max(ay0, by0) < 1.5:
+                        continue
+                    if ax1 <= bx0:
+                        l, r, old = a, b, ax1
+                    else:
+                        l, r, old = b, a, ax1
+                    lw = l.bounds[1] - l.bounds[0]
+                    rw = r.bounds[1] - r.bounds[0]
+                    if lw < min_side and rw > min_side + 1.0:
+                        new = old + (min_side - lw)
+                    elif rw < min_side and lw > min_side + 1.0:
+                        new = old - (min_side - rw)
+                    else:
+                        continue
+                    l.bounds = (l.bounds[0], new, l.bounds[2], l.bounds[3])
+                    r.bounds = (new, r.bounds[1], r.bounds[2], r.bounds[3])
+                    for w in walls:
+                        if w.get('axis') != 'Y':
+                            continue
+                        if abs(w.get('pos', w['p1'][0]) - old) > 0.16:
+                            continue
+                        lo = min(w['p1'][1], w['p2'][1]); hi = max(w['p1'][1], w['p2'][1])
+                        if hi < max(ay0, by0) + 0.2 or lo > min(ay1, by1) - 0.2:
+                            continue
+                        w['p1'] = (new, w['p1'][1]); w['p2'] = (new, w['p2'][1])
+                        w['pos'] = new
+                        dw = w.get('doorway')
+                        if dw and dw.get('axis') == 'Y':
+                            dw['x'] = new
+                    for rm in (l, r):
+                        for d in (rm.doorways or []):
+                            if d.get('axis') == 'Y' and abs(d.get('x', 0.0) - old) < 0.2:
+                                d['x'] = new
+                    changed = True
+                # Horizontal shared wall
+                elif abs(ay1 - by0) < 0.12 or abs(by1 - ay0) < 0.12:
+                    if min(ax1, bx1) - max(ax0, bx0) < 1.5:
+                        continue
+                    if ay1 <= by0:
+                        s, n, old = a, b, ay1
+                    else:
+                        s, n, old = b, a, ay1
+                    sd = s.bounds[3] - s.bounds[2]
+                    nd = n.bounds[3] - n.bounds[2]
+                    if sd < min_side and nd > min_side + 1.0:
+                        new = old + (min_side - sd)
+                    elif nd < min_side and sd > min_side + 1.0:
+                        new = old - (min_side - nd)
+                    else:
+                        continue
+                    s.bounds = (s.bounds[0], s.bounds[1], s.bounds[2], new)
+                    n.bounds = (n.bounds[0], n.bounds[1], new, n.bounds[3])
+                    for w in walls:
+                        if w.get('axis') != 'X':
+                            continue
+                        if abs(w.get('pos', w['p1'][1]) - old) > 0.16:
+                            continue
+                        lo = min(w['p1'][0], w['p2'][0]); hi = max(w['p1'][0], w['p2'][0])
+                        if hi < max(ax0, bx0) + 0.2 or lo > min(ax1, bx1) - 0.2:
+                            continue
+                        w['p1'] = (w['p1'][0], new); w['p2'] = (w['p2'][0], new)
+                        w['pos'] = new
+                        dw = w.get('doorway')
+                        if dw and dw.get('axis') == 'X':
+                            dw['y'] = new
+                    for rm in (s, n):
+                        for d in (rm.doorways or []):
+                            if d.get('axis') == 'X' and abs(d.get('y', 0.0) - old) < 0.2:
+                                d['y'] = new
+                    changed = True
+                if changed:
+                    break
+            if changed:
+                break
+        if not changed:
+            break
+    return rooms
+
+
 def _extend_wall_ends_to_bounds(interior_walls, bounds, snap=1.10):
     """Snap near-bound partition ends onto the wall line.
 
@@ -6654,6 +6756,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         interior_walls = _open_wing_entrance_walls(
             interior_walls, fl_wings_bounds, (ix_min, ix_max, iy_min, iy_max))
     rooms = _merge_open_rooms(rooms, interior_walls)
+    rooms = _rebalance_room_boundaries(rooms, interior_walls)
 
     if (effective_archetype in ('ARCHERY', 'ARCHERY_RANGE') and fl_idx == 0
             and rooms):

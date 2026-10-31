@@ -124,6 +124,22 @@ def _build_brick_flue(bm, points, half_w, mat_index):
         f.material_index = mat_index
         new_faces.append(f)
     bmesh.ops.recalc_face_normals(bm, faces=new_faces)
+    # Give the swept faces real box-projected UVs so the terracotta brick
+    # texture repeats along the flue instead of rendering as one flat colour.
+    uv_layer = bm.loops.layers.uv.verify()
+    uv_scale = 0.72
+    for f in new_faces:
+        f.normal_update()
+        n = f.normal
+        for loop in f.loops:
+            p = loop.vert.co
+            if abs(n.x) >= abs(n.y) and abs(n.x) >= abs(n.z):
+                u, v = p.y, p.z
+            elif abs(n.y) >= abs(n.z):
+                u, v = p.x, p.z
+            else:
+                u, v = p.x, p.y
+            loop[uv_layer].uv = (u * uv_scale, v * uv_scale)
     return new_faces
 
 
@@ -277,14 +293,14 @@ def build_bakery_oven(bm, *args, **kwargs):
         (_outer_x, base_y, _z2),
         (_outer_x, base_y, _z3),
     ]
-    _build_brick_flue(bm, _flue_pts, 0.48, MAT_INDEX_TERRACOTTA)
+    _build_brick_flue(bm, _flue_pts, 0.55, MAT_INDEX_TERRACOTTA)
     # A chunky brick cap makes the top read as a finished chimney, not a pipe.
     create_beveled_box(
-        bm, size=(1.12, 1.12, 0.17),
+        bm, size=(1.26, 1.26, 0.17),
         location=(_outer_x, base_y, _z3 + 0.085),
         mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.012)
     create_beveled_box(
-        bm, size=(0.90, 0.90, 0.11),
+        bm, size=(1.02, 1.02, 0.11),
         location=(_outer_x, base_y, _z3 + 0.225),
         mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.008)
     # Dark soot throat inside the crown.
