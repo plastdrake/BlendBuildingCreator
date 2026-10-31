@@ -21,7 +21,7 @@ _FLOOR_H = 3.7
 
 # id, first_tier, x, y, pad_z, width, depth, floors, rot_deg, shape, wing_facade, wing_w, wing_d, roof_h
 _HALLS = (
-    ("keep", 1, 0.0, 40.0, 14.0, 24.0, 16.0, 4, 0.0, 'T_SHAPE', 'BACK', 9.0, 5.0, 10.5),
+    ("keep", 1, 0.0, 40.0, 14.0, 24.0, 16.0, 4, 0.0, 'T_SHAPE', 'BACK', 12.0, 7.0, 10.5),
     ("great_hall", 1, -15.0, 0.0, 8.0, 22.0, 10.0, 5, 0.0, 'T_SHAPE', 'FRONT', 8.0, 5.0, 7.5),
     ("east_hall", 2, 15.0, 0.0, 8.0, 22.0, 10.0, 5, 0.0, 'T_SHAPE', 'FRONT', 8.0, 5.0, 7.0),
     ("barracks", 2, -20.0, -28.5, 3.0, 14.0, 9.0, 2, 5.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 5.5),
@@ -149,6 +149,12 @@ def _build_halls(bm, props, tier):
                 extra_win_excl.append({'facade': 'BACK', 'min': -3.6, 'max': 6.6, 'floor_min': 0, 'floor_max': 4})
         elif hid == "keep":
             ov['has_basement_stair'] = True
+            # The stair outcrop must be wide enough to roof the whole
+            # basement opening; the old 2.4m mini-wing left the shaft edge
+            # and the floor behind the stair exposed.
+            ov['mini_wing_width'] = max(5.6, float(getattr(props, 'mini_wing_width', 0.0)))
+            ov['mini_wing_depth'] = max(2.8, float(getattr(props, 'mini_wing_depth', 0.0)))
+            ov['mini_wing_random_size'] = False
             ov['window_left'] = False
             ov['has_throne_room'] = True
             ov['has_double_height'] = True
