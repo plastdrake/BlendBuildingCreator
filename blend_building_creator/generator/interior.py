@@ -1884,7 +1884,8 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             pool = ['STAIR_LANDING', 'BARRACKS_DORM', 'LODGE', 'BEDROOM']
             return pool[:num_rooms]
         elif archetype in ('CHAPEL', 'HEALERS_CHAPEL'):
-            pool = ['STAIR_LANDING', 'HEALER_QUARTERS', 'STUDY', 'VESTRY']
+            pool = ['STAIR_LANDING', 'HEALER_QUARTERS', 'INFIRMARY',
+                    'APOTHECARY', 'STUDY', 'VESTRY']
             return pool[:num_rooms]
         elif archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL'):
             pool = ['STAIR_LANDING', 'MAYOR_OFFICE', 'OFFICE', 'STUDY', 'ARCHIVE']
@@ -1974,7 +1975,13 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         return pool[:num_rooms]
 
     if archetype in ('CHAPEL', 'HEALERS_CHAPEL'):
-        pool = ['CHAPEL_HALL', 'INFIRMARY', 'APOTHECARY', 'STUDY']
+        if int(total_floors) <= 1:
+            # Single-storey chapel: the healing beds have to share the ground.
+            pool = ['CHAPEL_HALL', 'INFIRMARY', 'APOTHECARY', 'STUDY']
+        else:
+            # Multi-storey: the ground is the grand chapel; all beds and
+            # healer lodgings live on the upper floors.
+            pool = ['CHAPEL_HALL', 'VESTRY', 'STUDY', 'STORAGE']
         return pool[:num_rooms]
 
     if archetype in ('TENEMENT',):

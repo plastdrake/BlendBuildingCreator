@@ -1251,17 +1251,23 @@ def build_floors(bm, props, ctx):
                 p_cx = 0.0
                 p_yf = y_max
                 p_w = max(dw, 1.7)
-                p_top = z_floor + dh + frame_margin
-                p_u1 = (p_cx - p_w * 0.5 - frame_margin) - x_min
-                p_u2 = (p_cx + p_w * 0.5 + frame_margin) - x_min
-                back_openings.append({'u_start': p_u1, 'u_end': p_u2,
-                                      'z_start': z_floor, 'z_end': p_top})
-                ctx.floor_doorways.setdefault(0, []).append({'x': p_cx, 'y': p_yf, 'axis': 'X', 'w': p_w})
                 jamb = 0.16
+                # Clear opening is exactly the door-sized portal; the wall cut
+                # is slightly larger so the jambs and lintel cover every raw
+                # cut edge (the old cut used the full frame margin, leaving a
+                # strip of wall visible around a too-narrow frame).
+                p_top = z_floor + dh
+                cut_half_w = p_w * 0.5 + jamb * 0.5
+                cut_top = p_top + jamb
+                p_u1 = (p_cx - cut_half_w) - x_min
+                p_u2 = (p_cx + cut_half_w) - x_min
+                back_openings.append({'u_start': p_u1, 'u_end': p_u2,
+                                      'z_start': z_floor, 'z_end': cut_top})
+                ctx.floor_doorways.setdefault(0, []).append({'x': p_cx, 'y': p_yf, 'axis': 'X', 'w': p_w})
                 fy = p_yf  # Exactly centered on the rear wall line
                 for jx in (-1.0, 1.0):
                     create_beveled_box(
-                        bm, size=(jamb, wall_t + 0.04, p_top - z_floor),
+                        bm, size=(jamb, wall_t + 0.04, p_top - z_floor + 0.02),
                         location=(p_cx + jx * (p_w * 0.5 + jamb * 0.5), fy,
                                   (z_floor + p_top) * 0.5),
                         mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
@@ -1271,7 +1277,7 @@ def build_floors(bm, props, ctx):
                     mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010)
                 # Level floor threshold bridging nave floor to apse with no height gap
                 create_beveled_box(
-                    bm, size=(p_w + 0.02, wall_t + 0.04, 0.03),
+                    bm, size=(p_w + jamb + 0.04, wall_t + 0.04, 0.03),
                     location=(p_cx, fy, z_floor + 0.05 + 0.015),
                     mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005)
 

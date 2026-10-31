@@ -25,7 +25,7 @@ from ..mesh_utils import (
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_TIMBER,
     MAT_INDEX_TIMBER_FRAME, MAT_INDEX_IRON, MAT_INDEX_GLASS,
-    MAT_INDEX_FLOOR, MAT_INDEX_SHINGLES,
+    MAT_INDEX_FLOOR, MAT_INDEX_SHINGLES, MAT_INDEX_WAX,
 )
 from ..poly import segment_frame, wall_ring
 from ..openings import build_door_assembly, build_window_assembly
@@ -53,7 +53,9 @@ def build_chapel_apse(bm, cx, cy, z_ground, z_top, radius, wall_t, tier, seed, f
     ccx, ccy = cx, cy
 
     # Half-disc floor level with the nave floor (found_h + 0.05) - zero height difference!
-    z_floor = (found_h + 0.05) if found_h > 0.05 else (z_ground + 0.06)
+    # Sit it 1.5 cm below the main slab so the chord seam cannot z-fight; the
+    # threshold board in floors.py bridges the tiny step.
+    z_floor = (found_h + 0.035) if found_h > 0.05 else (z_ground + 0.045)
     center_v = bm.verts.new((ccx, ccy, z_floor))
     floor_faces = []
     for k in indices:
@@ -106,10 +108,43 @@ def build_chapel_apse(bm, cx, cy, z_ground, z_top, radius, wall_t, tier, seed, f
     wall_ring(bm, radius, stone_top, z_top, wall_t, segments, offset,
               openings, wall_mat, tier=tier, seed=seed + 7, indices=indices,
               center=(ccx, ccy))
+    # Continuous timber belt over the stone/wood material change.  Without this
+    # the ~0.9 m switch between the stone plinth and plank upper wall read as a
+    # coplanar colour seam across the curved wall.
+    if stone_top - wall_base_z > 0.20:
+        wall_ring(bm, radius + 0.015, stone_top - 0.065, stone_top + 0.065, 0.10,
+                  segments, offset, {}, MAT_INDEX_TIMBER_FRAME,
+                  tier=tier, seed=seed + 13, indices=indices,
+                  center=(ccx, ccy))
     for center, nv in win_specs:
         build_window_assembly(bm, center=center, size=(win_w, win_h),
                               wall_thickness=wall_t, normal_axis=nv,
                               has_shutters=False)
+
+    # Altar on a low stone dais in the apse, with candles.
+    _altar_y = ccy + radius * 0.42
+    faces = []
+    faces += create_beveled_box(
+        bm, size=(1.70, 0.65, 0.90),
+        location=(ccx, _altar_y, z_floor + 0.45),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
+    faces += create_beveled_box(
+        bm, size=(1.85, 0.72, 0.09),
+        location=(ccx, _altar_y, z_floor + 0.925),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+    faces += create_beveled_box(
+        bm, size=(2.10, 0.55, 0.16),
+        location=(ccx, _altar_y - 0.58, z_floor + 0.08),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+    for _cx in (-0.58, 0.58):
+        faces += create_cylinder(
+            bm, radius=0.045, height=0.38, segments=10,
+            location=(ccx + _cx, _altar_y, z_floor + 1.16),
+            mat_index=MAT_INDEX_WAX)
+        faces += create_cylinder(
+            bm, radius=0.075, height=0.05, segments=10,
+            location=(ccx + _cx, _altar_y, z_floor + 0.99),
+            mat_index=MAT_INDEX_IRON)
 
     # 3. Vertical timber seam pillars between wall segments (Warcraft style)
     h_apse = z_top - z_ground
@@ -369,6 +404,37 @@ def build_chapel_kit(bm, props, ctx, tier):
     apse_r = max(1.8, min(3.2, ctx.base_w * 0.32))
     build_chapel_apse(bm, 0.0, base_hy, 0.0, eave_z, apse_r, wall_t, tier,
                       ctx.seed, found_h=ctx.found_h)
+
+    # Grand chancel: paired columns and a heavy arch beam framing the apse
+    # portal, so the ground-floor chapel reads as a sacred hall rather than an
+    # empty room with a small back door.
+    _ceil_z = ctx.found_h + ctx.floor_h
+    _col_x = max(1.85, min(2.35, apse_r * 0.66))
+    _col_y = base_hy - 0.55
+    _col_h = max(2.6, _ceil_z - ctx.found_h - 0.30)
+    for _sx in (-1.0, 1.0):
+        _cx = _sx * _col_x
+        # stone base
+        create_beveled_box(
+            bm, size=(0.46, 0.46, 0.36),
+            location=(_cx, _col_y, ctx.found_h + 0.18),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.018)
+        # timber shaft
+        create_beveled_box(
+            bm, size=(0.30, 0.30, _col_h),
+            location=(_cx, _col_y, ctx.found_h + 0.36 + _col_h * 0.5),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
+        # capital
+        create_beveled_box(
+            bm, size=(0.48, 0.48, 0.24),
+            location=(_cx, _col_y, ctx.found_h + 0.36 + _col_h + 0.12),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014)
+    # Heavy arch/beam spanning the chancel columns.
+    _beam_z = ctx.found_h + 0.36 + _col_h + 0.30
+    create_beveled_box(
+        bm, size=(_col_x * 2.0 + 0.55, 0.38, 0.30),
+        location=(0.0, _col_y, _beam_z),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.018)
 
     # 2. Rooftop bell tower perched astride the main building roof ridge towards the back.
     t_size = max(1.8, min(2.2, ctx.base_w * 0.18))
