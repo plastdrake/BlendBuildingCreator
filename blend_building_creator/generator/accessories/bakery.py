@@ -284,23 +284,38 @@ def build_bakery_oven(bm, *args, **kwargs):
     _out_off = max(0.82, _roof_ov + 0.20)
     _outer_x = _side * (hx + _out_off)
     _z0 = z_floor + hearth_h + dome_h + 0.08
-    _z1 = _z0 + 0.78
-    _z2 = _z1 + 0.52
-    _z3 = _z2 + 1.18
-    _flue_pts = [
-        (base_x, base_y, _z0),
-        (base_x, base_y, _z1),
-        (_outer_x, base_y, _z2),
-        (_outer_x, base_y, _z3),
-    ]
-    _build_brick_flue(bm, _flue_pts, 0.55, MAT_INDEX_TERRACOTTA)
+    _z1 = _z0 + 1.00
+    _z2 = _z1 + 0.78
+    _z3 = _z2 + 1.05
+    _body = 1.12
+    _ov = 0.22
+    # Three overlapping terracotta blocks.  Each is a normal beveled box with
+    # correct UVs, so the diagonal has a full-width textured top face instead
+    # of the old thin sheared ring face.
+    create_beveled_box(
+        bm, size=(_body, _body, (_z1 - _z0) + _ov * 2.0),
+        location=(base_x, base_y, (_z0 + _z1) * 0.5),
+        mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.012)
+    _dx = _outer_x - base_x
+    _dz = _z2 - _z1
+    _diag_len = math.hypot(_dx, _dz) + _ov * 2.0
+    _diag_ang = -math.atan2(_dz, _dx)
+    create_beveled_box(
+        bm, size=(_diag_len, _body, _body),
+        location=((base_x + _outer_x) * 0.5, base_y, (_z1 + _z2) * 0.5),
+        rotation=(0.0, _diag_ang, 0.0),
+        mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.012)
+    create_beveled_box(
+        bm, size=(_body, _body, (_z3 - _z2) + _ov * 2.0),
+        location=(_outer_x, base_y, (_z2 + _z3) * 0.5),
+        mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.012)
     # A chunky brick cap makes the top read as a finished chimney, not a pipe.
     create_beveled_box(
-        bm, size=(1.26, 1.26, 0.17),
+        bm, size=(1.30, 1.30, 0.17),
         location=(_outer_x, base_y, _z3 + 0.085),
         mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.012)
     create_beveled_box(
-        bm, size=(1.02, 1.02, 0.11),
+        bm, size=(1.04, 1.04, 0.11),
         location=(_outer_x, base_y, _z3 + 0.225),
         mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.008)
     # Dark soot throat inside the crown.
