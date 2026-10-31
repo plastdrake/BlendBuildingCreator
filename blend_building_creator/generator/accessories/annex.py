@@ -200,13 +200,18 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                 list(_fb_ops),
                 mat_ext=f_mat, normal_vec=nvec, tier=_wall_tier, physical_siding=physical_siding,
                 plank_direction=plank_direction, seed=42,
-                # Round-log annexes need their corner notch at the main wall
-                # too, otherwise a course is left short and a gap/coplanar
-                # strip shows at the junction.  Plank/wattle walls keep the
-                # clean butt joint.
-                is_corner_start=_is_log_wall, is_corner_end=True,
+                # Keep the annex logs on their own side of the main wall.  The
+                # old inner saddle overrun pushed round log ends through the
+                # hall's interior wall.  A vertical closure post covers the
+                # butt joint instead, so there is no gap and no intrusion.
+                is_corner_start=False, is_corner_end=True,
                 omit_top_log_row=False,
                 force_omit_top_log_row=False)
+            if _is_log_wall:
+                create_beveled_box(
+                    bm, size=(0.24, 0.24, fz1 - fz0),
+                    location=(inner_x + side_sgn * 0.05, wy, (fz0 + fz1) * 0.5),
+                    mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012)
             build_window_assembly(
                 bm, center=(cxf, wy, sill + win_h * 0.5), size=(win_w, win_h),
                 wall_thickness=wall_t, normal_axis=nvec, has_shutters=shutters)

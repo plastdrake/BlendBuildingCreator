@@ -10,7 +10,7 @@ reusable prop modules it imports.
 import math
 
 from .tavern import build_tavern_porch
-from .signage import build_hanging_sign, build_notice_board, build_awning
+from .signage import build_hanging_sign, build_notice_board, build_awning, build_wall_sign
 from .furniture import (
     build_barrel, build_crate, build_clay_pot, build_bench,
     build_picnic_table,
@@ -96,17 +96,29 @@ def _build_trade_sign(bm, props, ctx, porch_info=None):
     b = ctx.bounds_for(0)
     face_y = b[2] - outer
 
-    # A veranda/porch is the most visible place for the trade sign: hang it on
-    # the front eave, centred over the entrance, instead of hiding it beside
-    # the porch on the recessed wall.
+    # A veranda/porch is the most visible place for the trade sign, but a
+    # bracket sign hung off the porch eave blocks the walkway and reads as a
+    # clumsy iron clump.  Mount a flat board high on the wall directly above
+    # the porch roof instead.
     if porch_info is not None:
         _px = float(porch_info.get('door_x', door_x))
-        _py = float(porch_info.get('porch_front_y', face_y - 1.5)) - 0.10
-        _pz = float(porch_info.get('porch_h', 3.5)) + 0.12
-        _bw, _bh = 1.15, 1.10
-        build_hanging_sign(
-            bm, _px, _py, _pz,
-            run_ang=-math.pi * 0.5, bracket_len=_bw + 0.46,
+        _pface = float(porch_info.get('front_y', face_y))
+        _pitch = float(porch_info.get('awning_pitch', 0.35) or 0.35)
+        _mid_y = float(porch_info.get('awning_mid_y', _pface - 1.0))
+        _mid_z = float(porch_info.get('awning_mid_z',
+                                      ctx.found_h + porch_info.get('porch_h', 3.5)))
+        _wall_top = _mid_z + max(0.0, _pface - _mid_y) * _pitch + 0.10
+        _bw = min(1.55, max(1.05, float(porch_info.get('porch_w', 3.0)) * 0.60))
+        _bh = min(1.05, max(0.78, _bw * 0.64))
+        _z_max_top = ctx.found_h + ctx.floor_h - 0.28
+        _z_center = _wall_top + 0.20 + _bh * 0.5
+        if _z_center + _bh * 0.5 > _z_max_top:
+            _z_center = _z_max_top - _bh * 0.5
+        if _z_center - _bh * 0.5 < _wall_top + 0.06:
+            _bh = max(0.55, 2.0 * max(0.10, _z_max_top - _wall_top - 0.12))
+            _z_center = _wall_top + 0.12 + _bh * 0.5
+        build_wall_sign(
+            bm, _px, _pface, _z_center,
             board_w=_bw, board_h=_bh, light_board=True)
         return True
 

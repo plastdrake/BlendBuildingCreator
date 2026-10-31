@@ -24,6 +24,16 @@ from ..materials import (
 )
 
 
+def bakery_oven_wall_side(props, ctx=None):
+    """-1 for the left wall, +1 for the right wall: opposite the stair."""
+    side = None
+    if ctx is not None:
+        side = getattr(ctx, 'annex_stair_side', None)
+    if not side:
+        side = getattr(props, 'stair_placement', 'LEFT')
+    return -1.0 if str(side).upper() == 'RIGHT' else 1.0
+
+
 def bakery_oven_slot(hx, hy, wall_t):
     """Shared bake-oven footprint (relative to the building centre).
 
@@ -133,9 +143,12 @@ def build_bakery_oven(bm, *args, **kwargs):
     hearth_h = 0.70
     hearth_z = z_floor + hearth_h * 0.5
 
-    # World placement: back flush against the +X interior wall, mouth facing in.
-    base_x = (hx - wall_t) - hearth_d * 0.5
+    # World placement: back flush against the interior wall opposite the
+    # stair, mouth facing into the bakehouse.
+    _side = bakery_oven_wall_side(props, ctx)
+    base_x = _side * ((hx - wall_t) - hearth_d * 0.5)
     base_y = _pick_oven_y(ctx, hy, wall_t, hearth_w * 0.5 + 0.1)
+    oven_rot = -math.pi * 0.5 if _side > 0 else math.pi * 0.5
 
     faces += create_beveled_box(
         bm, size=(hearth_w, hearth_d, hearth_h),

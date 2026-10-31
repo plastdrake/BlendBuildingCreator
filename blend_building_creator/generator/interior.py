@@ -1962,8 +1962,10 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
 
     if archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):
         # A garrison needs a working kitchen and a dining/mess hall first;
-        # armory, drill space and stores follow.
-        pool = ['KITCHEN', 'MESS_HALL', 'ARMORY', 'DRILL_HALL', 'STORAGE']
+        # kitchen and mess hall first; pantry/stores support them.  Armoury
+        # and drill spaces live upstairs so the ground floor never becomes a
+        # row of huge empty military prop rooms.
+        pool = ['KITCHEN', 'MESS_HALL', 'PANTRY', 'STORAGE', 'DRILL_HALL']
         return pool[:num_rooms]
 
     if archetype in ('KNIGHTS_MANOR',):
@@ -2668,7 +2670,7 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
 def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
                             has_stairs_landing, stair_pos_info=None,
                             extra_doorways=None, props=None,
-                            fl_wings_bounds=None):
+                            fl_wings_bounds=None, noble_void=None):
     """Corridor-based Noble Manor plan.
 
     The old throne-palace planner made a huge central hall, duplicated the
@@ -2876,6 +2878,17 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         throne_role = 'HOUSE_HALL'
     rooms.append(_room(throne_bounds, throne_role, [throne_door],
                        {'FRONT': (throne_bounds[0], throne_bounds[1])}))
+    if fl_idx == 1 and bool(getattr(props, 'noble_manor_layout', False)):
+        _central = rooms[-1]
+        _central.role = 'MEZZANINE_GALLERY'
+        if noble_void is not None:
+            _central.floor_void = noble_void
+        else:
+            _rim = 1.45
+            _v = (throne_bounds[0] + _rim, throne_bounds[1] - _rim,
+                  throne_bounds[2] + _rim, throne_bounds[3] - _rim)
+            if _v[1] - _v[0] >= 2.2 and _v[3] - _v[2] >= 2.2:
+                _central.floor_void = _v
     gallery.doorways.append(throne_door)
 
     # Back row (off the rear service corridor): compact chambers, never
@@ -3151,6 +3164,372 @@ def _merge_sliver_rooms(rooms, interior_walls, min_side=1.30, max_passes=4):
         if not changed:
             break
     return rooms
+
+
+def _wall_endpoint_connected(pt, walls, bounds, skip=None, tol=0.22):
+    x, y = pt
+    x0, x1, y0, y1 = bounds
+    if min(abs(x - x0), abs(x - x1), abs(y - y0), abs(y - y1)) <= tol:
+        return True
+    for other in walls:
+        if other is skip:
+            continue
+        p1, p2 = other.get('p1'), other.get('p2')
+        if not p1 or not p2:
+            continue
+        ax = other.get('axis')
+        if ax == 'Y':
+            # Vertical wall: endpoint on its line and within its span.
+            if abs(p1[0] - x) <= tol:
+                lo, hi = min(p1[1], p2[1]), max(p1[1], p2[1])
+                if lo - tol <= y <= hi + tol:
+                    # Do not count a point sitting inside this wall's doorway.
+                    dw = other.get('doorway')
+                    if dw and abs(dw.get('y', 1e9) - y) < float(dw.get('w', 1.0)) * 0.5 + 0.05:
+                        continue
+                    return True
+        elif ax == 'X':
+            if abs(p1[1] - y) <= tol:
+                lo, hi = min(p1[0], p2[0]), max(p1[0], p2[0])
+                if lo - tol <= x <= hi + tol:
+                    dw = other.get('doorway')
+                    if dw and abs(dw.get('x', 1e9) - x) < float(dw.get('w', 1.0)) * 0.5 + 0.05:
+                        continue
+                    return True
+    return False
+
+
+def _repair_dangling_walls(interior_walls, bounds, tol=0.22, max_extension=4.0):
+    """Never leave a partition ending in mid-air.
+
+    A wall end must meet the exterior shell or another partition.  If a split
+    was blocked by a door/annex keep-out, the old planner simply cut the wall
+    short; extend it to the nearest legal perpendicular wall or shell instead.
+    If no legal target exists, drop the stub so the rooms read as one planned
+    space rather than a broken wall.
+    """
+    if not interior_walls:
+        return interior_walls
+    x0, x1, y0, y1 = bounds
+    drop = set()
+    for _ in range(3):
+        changed = False
+        live = [w for w in interior_walls if id(w) not in drop]
+        for w in live:
+            p1, p2 = w.get('p1'), w.get('p2')
+            if not p1 or not p2:
+                continue
+            ax = w.get('axis')
+            for which in (0, 1):
+                pt = p1 if which == 0 else p2
+                if _wall_endpoint_connected(pt, live, bounds, skip=w, tol=tol):
+                    continue
+                px, py = pt
+                best = None
+                if ax == 'Y':
+                    direction = 1.0 if which == 0 else -1.0
+                    # Midpoint of this wall tells us which way the free end
+                    # points when p1/p2 order is ambiguous.
+                    mid_y = (p1[1] + p2[1]) * 0.5
+                    direction = 1.0 if py >= mid_y else -1.0
+                    for other in live:
+                        if other is w or other.get('axis') != 'X':
+                            continue
+                        op1, op2 = other.get('p1'), other.get('p2')
+                        if not op1 or not op2:
+                            continue
+                        olo, ohi = min(op1[0], op2[0]), max(op1[0], op2[0])
+                        if not (olo - tol <= px <= ohi + tol):
+                            continue
+                        oy = op1[1]
+                        dy = oy - py
+                        if (dy > tol or dy < -tol) and dy * direction > 0:
+                            dw = other.get('doorway')
+                            if dw and abs(dw.get('x', 1e9) - px) < float(dw.get('w', 1.0)) * 0.5 + 0.10:
+                                continue
+                            dist = abs(dy)
+                            if dist <= max_extension and (best is None or dist < best[0]):
+                                best = (dist, oy)
+                    if best is None:
+                        shell = y1 if direction > 0 else y0
+                        if abs(shell - py) <= max_extension:
+                            best = (abs(shell - py), shell)
+                    if best is not None:
+                        newpt = (px, best[1])
+                    else:
+                        drop.add(id(w))
+                        changed = True
+                        break
+                elif ax == 'X':
+                    mid_x = (p1[0] + p2[0]) * 0.5
+                    direction = 1.0 if px >= mid_x else -1.0
+                    for other in live:
+                        if other is w or other.get('axis') != 'Y':
+                            continue
+                        op1, op2 = other.get('p1'), other.get('p2')
+                        if not op1 or not op2:
+                            continue
+                        olo, ohi = min(op1[1], op2[1]), max(op1[1], op2[1])
+                        if not (olo - tol <= py <= ohi + tol):
+                            continue
+                        ox = op1[0]
+                        dx = ox - px
+                        if (dx > tol or dx < -tol) and dx * direction > 0:
+                            dw = other.get('doorway')
+                            if dw and abs(dw.get('y', 1e9) - py) < float(dw.get('w', 1.0)) * 0.5 + 0.10:
+                                continue
+                            dist = abs(dx)
+                            if dist <= max_extension and (best is None or dist < best[0]):
+                                best = (dist, ox)
+                    if best is None:
+                        shell = x1 if direction > 0 else x0
+                        if abs(shell - px) <= max_extension:
+                            best = (abs(shell - px), shell)
+                    if best is not None:
+                        newpt = (best[1], py)
+                    else:
+                        drop.add(id(w))
+                        changed = True
+                        break
+                else:
+                    continue
+                if which == 0:
+                    w['p1'] = newpt
+                else:
+                    w['p2'] = newpt
+                changed = True
+        if not changed:
+            break
+    return [w for w in interior_walls if id(w) not in drop]
+
+
+def _replan_knights_manor_ground(rooms, walls, bounds, stair_hole, props, doorways,
+                                 wall_t=0.16, dw_w=1.75, dw_h=2.95):
+    """Rebuild the Knights Manor ground floor around a real banquet/kitchen.
+
+    The generic military split left a huge stair-landing strip and chopped the
+    remaining wing into narrow north/south slivers (tiny mess/armoury strips).
+    This plan keeps the stair hall, puts one generous banquet hall beside it,
+    then a full-depth kitchen/pantry pair.  No tiny rooms are left over.
+    """
+    ix_min, ix_max, iy_min, iy_max = bounds
+    W = ix_max - ix_min
+    D = iy_max - iy_min
+    if W < 14.0 or D < 8.0 or not rooms:
+        return rooms, walls
+    wings = [r for r in rooms if getattr(r, 'is_wing', False)]
+    stair_rm = next((r for r in rooms
+                     if not getattr(r, 'is_wing', False)
+                     and (r.role == 'STAIR_LANDING' or
+                          (stair_hole is not None and r.stair_hole is not None))), None)
+    if stair_rm is None:
+        stair_rm = next((r for r in rooms
+                         if not getattr(r, 'is_wing', False)
+                         and r.role in ('ENTRANCE_HALL', 'CORRIDOR')), None)
+    if stair_rm is None:
+        return rooms, walls
+    sr_x0, sr_x1, _, _ = stair_rm.bounds
+    stair_on_right = (sr_x0 + sr_x1) * 0.5 > (ix_min + ix_max) * 0.5
+
+    stair_w = 5.25
+    if stair_hole is not None:
+        stair_w = max(stair_w, (stair_hole[1] - ix_min) + 0.75) if not stair_on_right \
+            else max(stair_w, (ix_max - stair_hole[0]) + 0.75)
+    stair_w = min(max(stair_w, 4.8), W * 0.34)
+    if stair_on_right:
+        stair_x0, stair_x1 = ix_max - stair_w, ix_max
+        rest_x0, rest_x1 = ix_min, stair_x0
+    else:
+        stair_x0, stair_x1 = ix_min, ix_min + stair_w
+        rest_x0, rest_x1 = stair_x1, ix_max
+    rest_w = rest_x1 - rest_x0
+    if rest_w < 7.0:
+        return rooms, walls
+
+    mid_y = (iy_min + iy_max) * 0.5
+    mid_s = (iy_min + mid_y) * 0.5
+    mid_n = (mid_y + iy_max) * 0.5
+    banquet_w = rest_w * (0.56 if rest_w >= 9.0 else 0.62)
+    if stair_on_right:
+        banquet_x0, banquet_x1 = rest_x1 - banquet_w, rest_x1
+        kitchen_x0, kitchen_x1 = rest_x0, banquet_x0
+    else:
+        banquet_x0, banquet_x1 = rest_x0, rest_x0 + banquet_w
+        kitchen_x0, kitchen_x1 = banquet_x1, rest_x1
+    inner_x = stair_x1 if not stair_on_right else stair_x0
+    banquet_stair_x = inner_x
+    kitchen_boundary = banquet_x0 if stair_on_right else banquet_x1
+
+    new_rooms = []
+    stair_old = stair_rm
+    stair_doors = [{'x': inner_x, 'y': mid_y, 'axis': 'Y', 'w': dw_w}]
+    stair_fac = {'FRONT': (stair_x0, stair_x1), 'BACK': (stair_x0, stair_x1)}
+    stair_fac['RIGHT' if stair_on_right else 'LEFT'] = (iy_min, iy_max)
+    new_rooms.append(Room(
+        id=f"fl0_knights_stair", floor_idx=0,
+        role='STAIR_LANDING',
+        bounds=(stair_x0, stair_x1, iy_min, iy_max),
+        doorways=stair_doors, stair_hole=getattr(stair_old, 'stair_hole', None),
+        exterior_facades=stair_fac, allow_large=True))
+
+    banquet_doors = [
+        {'x': banquet_stair_x, 'y': mid_y, 'axis': 'Y', 'w': dw_w},
+        {'x': kitchen_boundary, 'y': mid_s, 'axis': 'Y', 'w': dw_w},
+        {'x': kitchen_boundary, 'y': mid_n, 'axis': 'Y', 'w': dw_w},
+    ]
+    new_rooms.append(Room(
+        id="fl0_knights_banquet", floor_idx=0, role='BANQUET_HALL',
+        bounds=(banquet_x0, banquet_x1, iy_min, iy_max),
+        doorways=banquet_doors, stair_hole=None,
+        exterior_facades={'FRONT': (banquet_x0, banquet_x1),
+                          'BACK': (banquet_x0, banquet_x1)},
+        allow_large=True))
+    new_rooms.append(Room(
+        id="fl0_knights_kitchen", floor_idx=0, role='KITCHEN',
+        bounds=(kitchen_x0, kitchen_x1, iy_min, mid_y),
+        doorways=[{'x': kitchen_boundary, 'y': mid_s, 'axis': 'Y', 'w': dw_w}],
+        stair_hole=None,
+        exterior_facades={'FRONT': (kitchen_x0, kitchen_x1),
+                          ('RIGHT' if kitchen_x1 >= ix_max - 0.1 else 'LEFT'):
+                              (iy_min, mid_y)},
+        allow_large=True))
+    new_rooms.append(Room(
+        id="fl0_knights_pantry", floor_idx=0, role='PANTRY',
+        bounds=(kitchen_x0, kitchen_x1, mid_y, iy_max),
+        doorways=[{'x': kitchen_boundary, 'y': mid_n, 'axis': 'Y', 'w': dw_w}],
+        stair_hole=None,
+        exterior_facades={'BACK': (kitchen_x0, kitchen_x1),
+                          ('RIGHT' if kitchen_x1 >= ix_max - 0.1 else 'LEFT'):
+                              (mid_y, iy_max)},
+        allow_large=True))
+
+    # Register front/back/side portals with the room that owns the facade span.
+    all_new = new_rooms + wings
+    for r in all_new:
+        rx0, rx1, ry0, ry1 = r.bounds
+        for d in (doorways or []):
+            ax = d.get('axis', 'X')
+            dx = float(d.get('x', 0.0)); dy = float(d.get('y', 0.0))
+            w = float(d.get('w', 2.4))
+            hit = False
+            if ax == 'X':
+                if (rx0 - 0.45 <= dx <= rx1 + 0.45
+                        and (abs(dy - ry0) < 0.45 or abs(dy - ry1) < 0.45)):
+                    hit = True
+            else:
+                if (ry0 - 0.45 <= dy <= ry1 + 0.45
+                        and (abs(dx - rx0) < 0.45 or abs(dx - rx1) < 0.45)):
+                    hit = True
+            if hit and not any(abs(e.get('x', 0) - dx) < 0.2
+                               and abs(e.get('y', 0) - dy) < 0.2
+                               for e in r.doorways):
+                r.doorways.append({'x': dx, 'y': dy, 'axis': ax, 'w': w,
+                                   'is_portal': bool(d.get('is_portal'))})
+
+    new_walls = [
+        {'p1': (inner_x, iy_min), 'p2': (inner_x, iy_max),
+         'axis': 'Y', 'pos': inner_x, 'thickness': wall_t,
+         'doorway': {'x': inner_x, 'y': mid_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'}},
+        {'p1': (kitchen_boundary, iy_min), 'p2': (kitchen_boundary, mid_y),
+         'axis': 'Y', 'pos': kitchen_boundary, 'thickness': wall_t,
+         'doorway': {'x': kitchen_boundary, 'y': mid_s, 'w': dw_w,
+                     'h': dw_h, 'axis': 'Y'}},
+        {'p1': (kitchen_boundary, mid_y), 'p2': (kitchen_boundary, iy_max),
+         'axis': 'Y', 'pos': kitchen_boundary, 'thickness': wall_t,
+         'doorway': {'x': kitchen_boundary, 'y': mid_n, 'w': dw_w,
+                     'h': dw_h, 'axis': 'Y'}},
+        {'p1': (kitchen_x0, mid_y), 'p2': (kitchen_x1, mid_y),
+         'axis': 'X', 'pos': mid_y, 'thickness': wall_t, 'doorway': None},
+    ]
+    return new_rooms, new_walls
+
+
+def _replan_archery_lodge_ground(rooms, walls, bounds, stair_hole, props, doorways,
+                                 wall_t=0.16, dw_w=1.75, dw_h=2.95):
+    """Ground floor of an archery lodge: mess hall, kitchen and pantry.
+
+    The shooting butts are outdoors; the indoor hall should not be a second
+    empty range.  Give the archers a proper refectory with a working kitchen
+    and pantry instead.
+    """
+    ix_min, ix_max, iy_min, iy_max = bounds
+    W = ix_max - ix_min
+    D = iy_max - iy_min
+    if W < 8.0 or D < 7.0 or not rooms:
+        return rooms, walls
+    wings = [r for r in rooms if getattr(r, 'is_wing', False)]
+    mid_y = (iy_min + iy_max) * 0.5
+    mid_s = (iy_min + mid_y) * 0.5
+    mid_n = (mid_y + iy_max) * 0.5
+    mess_w = W * (0.62 if W >= 11.0 else 0.58)
+    mess_x1 = ix_min + mess_w
+    if ix_max - mess_x1 < 3.6:
+        mess_x1 = ix_max - 3.6
+
+    new_rooms = []
+    mess = Room(
+        id="fl0_archery_mess", floor_idx=0, role='MESS_HALL',
+        bounds=(ix_min, mess_x1, iy_min, iy_max),
+        doorways=[{'x': mess_x1, 'y': mid_s, 'axis': 'Y', 'w': dw_w},
+                  {'x': mess_x1, 'y': mid_n, 'axis': 'Y', 'w': dw_w}],
+        stair_hole=stair_hole if stair_hole is not None else None,
+        exterior_facades={'FRONT': (ix_min, mess_x1),
+                          'BACK': (ix_min, mess_x1),
+                          'LEFT': (iy_min, iy_max)},
+        allow_large=True)
+    new_rooms.append(mess)
+    new_rooms.append(Room(
+        id="fl0_archery_kitchen", floor_idx=0, role='KITCHEN',
+        bounds=(mess_x1, ix_max, iy_min, mid_y),
+        doorways=[{'x': mess_x1, 'y': mid_s, 'axis': 'Y', 'w': dw_w}],
+        stair_hole=None,
+        exterior_facades={'FRONT': (mess_x1, ix_max),
+                          'RIGHT': (iy_min, mid_y)},
+        allow_large=True))
+    new_rooms.append(Room(
+        id="fl0_archery_pantry", floor_idx=0, role='PANTRY',
+        bounds=(mess_x1, ix_max, mid_y, iy_max),
+        doorways=[{'x': mess_x1, 'y': mid_n, 'axis': 'Y', 'w': dw_w}],
+        stair_hole=None,
+        exterior_facades={'BACK': (mess_x1, ix_max),
+                          'RIGHT': (mid_y, iy_max)},
+        allow_large=True))
+    new_rooms += wings
+
+    for r in new_rooms:
+        rx0, rx1, ry0, ry1 = r.bounds
+        for d in (doorways or []):
+            ax = d.get('axis', 'X')
+            dx = float(d.get('x', 0.0)); dy = float(d.get('y', 0.0))
+            w = float(d.get('w', 2.4))
+            hit = False
+            if ax == 'X':
+                if (rx0 - 0.45 <= dx <= rx1 + 0.45
+                        and (abs(dy - ry0) < 0.45 or abs(dy - ry1) < 0.45)):
+                    hit = True
+            else:
+                if (ry0 - 0.45 <= dy <= ry1 + 0.45
+                        and (abs(dx - rx0) < 0.45 or abs(dx - rx1) < 0.45)):
+                    hit = True
+            if hit and not any(abs(e.get('x', 0) - dx) < 0.2
+                               and abs(e.get('y', 0) - dy) < 0.2
+                               for e in r.doorways):
+                r.doorways.append({'x': dx, 'y': dy, 'axis': ax, 'w': w,
+                                   'is_portal': bool(d.get('is_portal'))})
+
+    new_walls = [
+        {'p1': (mess_x1, iy_min), 'p2': (mess_x1, mid_y),
+         'axis': 'Y', 'pos': mess_x1, 'thickness': wall_t,
+         'doorway': {'x': mess_x1, 'y': mid_s, 'w': dw_w,
+                     'h': dw_h, 'axis': 'Y'}},
+        {'p1': (mess_x1, mid_y), 'p2': (mess_x1, iy_max),
+         'axis': 'Y', 'pos': mess_x1, 'thickness': wall_t,
+         'doorway': {'x': mess_x1, 'y': mid_n, 'w': dw_w,
+                     'h': dw_h, 'axis': 'Y'}},
+        {'p1': (mess_x1, mid_y), 'p2': (ix_max, mid_y),
+         'axis': 'X', 'pos': mid_y, 'thickness': wall_t, 'doorway': None},
+    ]
+    return new_rooms, new_walls
 
 
 def _extend_wall_ends_to_bounds(interior_walls, bounds, snap=1.10):
@@ -3461,7 +3840,7 @@ def _carve_corridor_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h):
 def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                      front_door_info=None, fl_wings_bounds=None,
                      effective_archetype='NONE', props=None, seed=0,
-                     doorways=None, clear_zone_rects=None):
+                     doorways=None, clear_zone_rects=None, noble_void=None):
     """
     Intelligently partitions a floor storey into rooms with open cased doorways.
     Returns:
@@ -3504,7 +3883,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             has_stairs_landing, stair_pos_info=stair_pos_info,
             extra_doorways=doorways, props=props,
-            fl_wings_bounds=fl_wings_bounds)
+            fl_wings_bounds=fl_wings_bounds, noble_void=noble_void)
         if _noble is not None:
             _n_rooms, _n_walls = _noble
             _n_rooms = _recut_oversized_rooms(
@@ -3780,14 +4159,17 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             # the masonry keep-out still protects props either way.
             return
         oy = (oven_band[0] + oven_band[1]) * 0.5
-        ox0, ox1 = ix_max - 1.50, ix_max - 0.05
         holder = None
-        for r in room_list:
-            if getattr(r, 'is_wing', False):
-                continue
-            x0, x1, y0, y1 = r.bounds
-            if x0 <= ox0 and ox1 <= x1 and y0 <= oy <= y1:
-                holder = r
+        for ox0, ox1 in ((ix_max - 1.50, ix_max - 0.05),
+                         (ix_min + 0.05, ix_min + 1.50)):
+            for r in room_list:
+                if getattr(r, 'is_wing', False):
+                    continue
+                x0, x1, y0, y1 = r.bounds
+                if x0 <= ox0 and ox1 <= x1 and y0 <= oy <= y1:
+                    holder = r
+                    break
+            if holder is not None:
                 break
         if holder is None or holder.role == 'BAKEHOUSE':
             return
@@ -5978,7 +6360,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     # partition that ends on that facade inside the wing's span splits the
     # entrance in half (Knights Manor T-wing).  Pull such wall ends 1.8 m into
     # the room so the opening reads as one clear vestibule.
-    if fl_wings_bounds:
+    if fl_wings_bounds and effective_archetype == 'KNIGHTS_MANOR':
         _drop_walls = []
         for w in interior_walls:
             _p1, _p2 = w.get('p1'), w.get('p2')
@@ -5992,9 +6374,9 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                                           float(wb[2]), float(wb[3]))
                 except Exception:
                     continue
-                _trim = 1.80
+                _trim = 0.12
                 _changed = False
-                if wy1 <= iy_min + 0.35 and _ax == 'Y' and wx0 - 0.05 <= _pos <= wx1 + 0.05:
+                if wy1 <= iy_min + 0.35 and _ax == 'Y' and wx0 + 0.20 < _pos < wx1 - 0.20:
                     for _k in (0, 1):
                         _pt = _p1 if _k == 0 else _p2
                         if abs(_pt[1] - iy_min) < 0.25:
@@ -6004,7 +6386,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                             else:
                                 _p2 = _new
                             _changed = True
-                elif wy0 >= iy_max - 0.35 and _ax == 'Y' and wx0 - 0.05 <= _pos <= wx1 + 0.05:
+                elif wy0 >= iy_max - 0.35 and _ax == 'Y' and wx0 + 0.20 < _pos < wx1 - 0.20:
                     for _k in (0, 1):
                         _pt = _p1 if _k == 0 else _p2
                         if abs(_pt[1] - iy_max) < 0.25:
@@ -6014,7 +6396,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                             else:
                                 _p2 = _new
                             _changed = True
-                elif wx1 <= ix_min + 0.35 and _ax == 'X' and wy0 - 0.05 <= _pos <= wy1 + 0.05:
+                elif wx1 <= ix_min + 0.35 and _ax == 'X' and wy0 + 0.20 < _pos < wy1 - 0.20:
                     for _k in (0, 1):
                         _pt = _p1 if _k == 0 else _p2
                         if abs(_pt[0] - ix_min) < 0.25:
@@ -6024,7 +6406,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                             else:
                                 _p2 = _new
                             _changed = True
-                elif wx0 >= ix_max - 0.35 and _ax == 'X' and wy0 - 0.05 <= _pos <= wy1 + 0.05:
+                elif wx0 >= ix_max - 0.35 and _ax == 'X' and wy0 + 0.20 < _pos < wy1 - 0.20:
                     for _k in (0, 1):
                         _pt = _p1 if _k == 0 else _p2
                         if abs(_pt[0] - ix_max) < 0.25:
@@ -6079,7 +6461,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 continue
             _ax = w.get('axis')
             _pos = w.get('pos', 0.0)
-            _trim = 1.80
+            _trim = 0.12
             _changed = False
             if _ax == 'Y' and any(_s0 - 0.35 <= _pos <= _s1 + 0.35
                                   for _s0, _s1 in _facade_spans['FRONT']):
@@ -6114,13 +6496,51 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         if _drop_doors:
             interior_walls[:] = [w for w in interior_walls if w not in _drop_doors]
 
+    if (effective_archetype in ('ARCHERY', 'ARCHERY_RANGE') and fl_idx == 0
+            and rooms):
+        rooms, interior_walls = _replan_archery_lodge_ground(
+            rooms, interior_walls, bounds, stair_hole, props, doorways,
+            wall_t=wall_t, dw_w=dw_w, dw_h=dw_h)
+
+    if (effective_archetype in ('CHAPEL', 'HEALERS_CHAPEL') and fl_idx == 0
+            and rooms):
+        # A chapel ground floor is one preaching nave, not a maze of vestries
+        # and store rooms.  Keep any wings, remove every internal partition,
+        # and let the apse/altar read as the single focal piece.
+        _wings = [r for r in rooms if getattr(r, 'is_wing', False)]
+        _hall_doors = []
+        for _d in (doorways or []):
+            _dx = float(_d.get('x', 0.0)); _dy = float(_d.get('y', 0.0))
+            _dax = _d.get('axis', 'X')
+            if _dax == 'X' and (abs(_dy - iy_min) < 0.5 or abs(_dy - iy_max) < 0.5):
+                _hall_doors.append(dict(_d))
+            elif _dax == 'Y' and (abs(_dx - ix_min) < 0.5 or abs(_dx - ix_max) < 0.5):
+                _hall_doors.append(dict(_d))
+        _hall = Room(
+            id="fl0_chapel_nave", floor_idx=0, role='CHAPEL_HALL',
+            bounds=(ix_min, ix_max, iy_min, iy_max),
+            doorways=_hall_doors,
+            stair_hole=stair_hole,
+            exterior_facades={'FRONT': (ix_min, ix_max),
+                              'BACK': (ix_min, ix_max),
+                              'LEFT': (iy_min, iy_max),
+                              'RIGHT': (iy_min, iy_max)},
+            allow_large=True)
+        rooms = [_hall] + _wings
+        interior_walls = []
+
+    if (effective_archetype == 'KNIGHTS_MANOR' and fl_idx == 0 and rooms):
+        rooms, interior_walls = _replan_knights_manor_ground(
+            rooms, interior_walls, bounds, stair_hole, props, doorways,
+            wall_t=wall_t, dw_w=dw_w, dw_h=dw_h)
+
     rooms = _normalize_stair_circulation_rooms(rooms, stair_hole, stair_pos_info, bounds)
 
     # Every military building needs a working kitchen and a dining/mess area.
     # Guarantee both after stair normalization (which may turn the old kitchen
     # room into the protected stair landing).
     _military_layout = (
-        effective_archetype in ('BARRACKS', 'INFANTRY_BARRACKS', 'KNIGHTS_MANOR',
+        effective_archetype in ('BARRACKS', 'INFANTRY_BARRACKS',
                                 'ARMORY', 'ARCHERY', 'ARCHERY_RANGE')
         or bool(getattr(props, 'kit_tournament', False))
         or bool(getattr(props, 'kit_archery', False))

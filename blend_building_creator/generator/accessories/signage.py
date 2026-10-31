@@ -160,6 +160,54 @@ def build_hanging_sign(bm, x, y, z_top, run_ang=0.0, bracket_len=2.20,
     return faces
 
 
+def build_wall_sign(bm, x, y, z_center, ang=0.0, board_w=1.45, board_h=1.00,
+                    light_board=True):
+    """A flat trade sign mounted directly on a wall.
+
+    Local frame: the wall is the XZ plane at the supplied ``y`` and the board
+    projects only a few centimetres into the street.  Unlike the hanging sign
+    there is no long bracket arm to catch shoulders or clutter the walkway.
+    """
+    rng = _rng(x, y, 33)
+    faces = []
+    board_thick = 0.13
+    board_y = -(board_thick * 0.5 + 0.012)
+    board_mat = MAT_INDEX_WOOD if light_board else MAT_INDEX_TIMBER
+    gap = 0.010
+    plank_w = (board_w - gap * 2.0) / 3.0
+    for k in range(3):
+        px = -board_w * 0.5 + plank_w * 0.5 + k * (plank_w + gap)
+        faces += create_beveled_box(
+            bm, size=(plank_w, board_thick, board_h),
+            location=(px, board_y, (rng.random() - 0.5) * 0.012),
+            rotation=(0.0, 0.0, (rng.random() - 0.5) * 0.02),
+            mat_index=board_mat, bevel_amount=0.018, bevel_segments=2)
+    # Top and bottom cross battens.
+    for bz in (-board_h * 0.42, board_h * 0.42):
+        faces += create_beveled_box(
+            bm, size=(board_w + 0.035, board_thick + 0.022, 0.13),
+            location=(0.0, board_y, bz),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+    # Slim forged iron edge straps and four corner bolts, flush with the board.
+    for sx in (-board_w * 0.47, board_w * 0.47):
+        faces += create_beveled_box(
+            bm, size=(0.055, 0.025, board_h + 0.02),
+            location=(sx, board_y - board_thick * 0.5 - 0.008, 0.0),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
+        for bz in (-board_h * 0.38, board_h * 0.38):
+            faces += create_cylinder(
+                bm, radius=0.022, height=0.018, segments=8,
+                location=(sx, board_y - board_thick * 0.5 - 0.022, bz),
+                rotation=(math.pi * 0.5, 0.0, 0.0),
+                mat_index=MAT_INDEX_IRON)
+    # Painted icon on the street-facing side only.
+    faces += _create_sign_decal_quad(
+        bm, 0.0, board_y - board_thick * 0.5 - 0.006, 0.0,
+        board_w * 0.84, board_h * 0.78, is_back=True)
+    transform_faces(faces, _place(x, y, z_center, ang))
+    return faces
+
+
 def build_notice_board(bm, x, y, z_ground=0.0, ang=0.0, width=1.10,
                        height=0.82, post_h=1.70):
     """A chunky roofed timber notice board with pinned bounty/notice parchment."""

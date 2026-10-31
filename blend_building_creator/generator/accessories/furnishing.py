@@ -4510,11 +4510,19 @@ def _furnish_mess_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
 
-    # 1. Big central refectory table with chairs around it (plus a second
-    # table with benches in wide halls).
+    # 1. Refectory tables with seating around them.  Large military mess
+    # halls get a proper grid of long tables instead of one lonely centre
+    # table, so the room actually reads as a dining hall.
     table_spots = [(rcx, rcy, True)]
-    if rw >= 5.0:
-        table_spots.append((rcx + rw * 0.24 if rw >= 6.5 else rcx - rw * 0.24, rcy, False))
+    if rw >= 6.0 or rd >= 7.0:
+        _tx = [rcx] if rw < 8.0 else [rcx - rw * 0.24, rcx + rw * 0.24]
+        _ty = [rcy] if rd < 7.0 else [rcy - rd * 0.24, rcy + rd * 0.24]
+        for _ix, _x in enumerate(_tx):
+            for _iy, _y in enumerate(_ty):
+                if abs(_x - rcx) < 0.1 and abs(_y - rcy) < 0.1:
+                    continue
+                table_spots.append((_x, _y, False))
+    table_spots = table_spots[:5]
     for tx, ty, is_main in table_spots:
         if is_main:
             tw, td = 2.60, 1.15

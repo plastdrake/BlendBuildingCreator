@@ -715,15 +715,15 @@ def _build_stable_yard(bm, t, barn_w, barn_d, tier, door_w=4.8):
     y_stall_front = wall_front - stall_d
     y1 = wall_front - pen_d
 
-    # Stall shelter sits flush against the front wall to the left of the carriage door
-    _build_stall_shelter(bm, t, x_left, x_right, wall_front, stall_d,
-                         tier=tier, stalls=stalls)
+    # The indoor stable hall already has its stall row.  Do not add a second
+    # tiny open-front stall shelter outdoors; keep only the paddock fence.
+    y_stall_front = None
 
-    # Fence runs around the paddock pen:
-    # Right flank from barn facade to y1; front with gate; left flank from y1 to stall front post.
+    # Fence runs around the paddock pen.
     x_fence_right = barn_w * 0.5 - 0.40
     _build_pen_fence(bm, t, x_left, x_fence_right, wall_front, y1,
-                     gate_w=min(2.0, max(1.6, door_w * 0.45)), stall_front_y=y_stall_front)
+                     gate_w=min(2.0, max(1.6, door_w * 0.45)),
+                     stall_front_y=y_stall_front)
 
 
 def build_servant_quarters(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='TIER_1',

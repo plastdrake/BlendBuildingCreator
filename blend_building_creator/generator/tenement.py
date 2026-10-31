@@ -81,6 +81,17 @@ def cozy_apartment(bounds, entry, *, role_kitchen='TENEMENT_KITCHEN',
     if W <= 0.5 or D <= 0.5:
         return [], []
     n_target = max(4, min(max_rooms, int(round(area / 28.0))))
+    # Tiny flats cannot fit four furnished rooms.  Scale the target down so
+    # each room keeps enough floor area for a bed/table/stove.
+    if area < 38.0:
+        n_target = 2
+    elif area < 55.0:
+        n_target = 3
+    elif area < 70.0:
+        n_target = 3
+    elif area < 95.0:
+        n_target = 4
+    n_target = min(n_target, max_rooms)
 
     # Pick the grid whose room proportions are the most natural.
     best = None

@@ -1930,7 +1930,8 @@ def build_floors(bm, props, ctx):
                     dock_span1=_dock_x1, dock_span2=_dock_x2,
                     axis='Y', deck_depth=_dock_depth,
                     is_upper_tier=True, lower_z_floor=found_h,
-                    has_upper_crane=True
+                    has_upper_crane=True,
+                    extra_posts=(2 if _is_mill else 0)
                 )
 
         # Plan discrete rooms and interior walls for this floor
@@ -2041,10 +2042,29 @@ def build_floors(bm, props, ctx):
             effective_archetype=effective_archetype,
             props=props,
             seed=seed + fl_idx * 17,
-            doorways=_plan_doorways
+            doorways=_plan_doorways,
+            noble_void=(getattr(ctx, 'floor_voids', None) or {}).get(1)
         )
         floor_rooms[fl_idx] = fl_rooms
         floor_interior_walls[fl_idx] = fl_interior_walls
+
+        # Noble Manor: the throne room is double-height.  Derive the opening
+        # from the actual throne bounds (not the old generic -6..6 guess), so
+        # it is centred on the dais and never slices neighbouring rooms.
+        if (fl_idx == 0 and bool(getattr(props, 'noble_manor_layout', False))
+                and getattr(props, 'has_throne_room', False)):
+            _throne = next((r for r in fl_rooms if getattr(r, 'role', '') == 'THRONE_ROOM'), None)
+            if _throne is not None:
+                _tx0, _tx1, _ty0, _ty1 = _throne.bounds
+                _rim = 1.45
+                _vx0 = _tx0 + _rim
+                _vx1 = _tx1 - _rim
+                _vy0 = _ty0 + _rim
+                _vy1 = _ty1 - _rim
+                if _vx1 - _vx0 >= 2.2 and _vy1 - _vy0 >= 2.2:
+                    if not hasattr(ctx, 'floor_voids') or ctx.floor_voids is None:
+                        ctx.floor_voids = {}
+                    ctx.floor_voids[1] = (_vx0, _vx1, _vy0, _vy1)
 
         # Validate the deferred balcony doors against the finished room plan.
         # Only now is the wall opening cut; a blocked door simply means the
@@ -2442,9 +2462,11 @@ def build_floors(bm, props, ctx):
             # Keep glazing clear of it so the room planner can reserve one
             # uncut bakehouse chamber (oven body + work apron) around it.
             if fl_idx == 0 and effective_archetype == 'BAKERY':
-                from .accessories.bakery import OVEN_WIN_CLEAR
+                from .accessories.bakery import OVEN_WIN_CLEAR, bakery_oven_wall_side
                 _ocy = (y_min + y_max) * 0.5
-                right_excludes.append((_ocy - OVEN_WIN_CLEAR, _ocy + OVEN_WIN_CLEAR))
+                _oex = (right_excludes if bakery_oven_wall_side(props, ctx) > 0
+                        else left_excludes)
+                _oex.append((_ocy - OVEN_WIN_CLEAR, _ocy + OVEN_WIN_CLEAR))
 
             if fl_idx == 0 and getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT':
                 sd_clr = (props.door_width + win_w) * 0.5 + (0.50 if props.has_shutters else 0.28)

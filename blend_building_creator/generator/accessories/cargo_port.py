@@ -76,9 +76,10 @@ def build_cargo_port_frame(bm, face_coord, outward_sgn, portal_center, portal_w,
     lintel_h = 0.30
     lintel_len = portal_w + jamb_w * 2.0 + 0.12
     lintel_z = z_floor + portal_h + 0.11
-    if not skip_lintel:
-        _box(jamb_d, lintel_len, lintel_h, norm_jamb, portal_center, lintel_z,
-             MAT_INDEX_TIMBER_FRAME, bevel=0.014, segments=2)
+    # Even the wide mill/dock bays get a proper long header beam.  The old
+    # 'skip_lintel' case left the lower opening looking unfinished.
+    _box(jamb_d, lintel_len, lintel_h, norm_jamb, portal_center, lintel_z,
+         MAT_INDEX_TIMBER_FRAME, bevel=0.014, segments=2)
 
     # Open mill bay: plain intermediate pillars instead of a decorative header.
     # They carry the storey above and visually break up the very wide opening.
@@ -211,11 +212,6 @@ def build_cargo_port_frame(bm, face_coord, outward_sgn, portal_center, portal_w,
                     # Iron capital strap at top
                     _box(0.24, 0.24, 0.08, pillar_norm, pu, pillar_top - 0.04,
                          MAT_INDEX_IRON, bevel=0.005)
-                    # Diagonal knee brace connecting pillar to outer bearer
-                    brace_h = min(0.65, pillar_h * 0.4)
-                    brace_s = -1.0 if pu > upper_uc else 1.0
-                    _box(0.14, 0.14, brace_h, pillar_norm, pu + brace_s * 0.22, pillar_top - brace_h * 0.5,
-                         MAT_INDEX_TIMBER, bevel=0.01)
 
         # Real swivel crane mounted on the 2nd floor platform
         if has_upper_crane:
