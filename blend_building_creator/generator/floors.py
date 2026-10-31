@@ -1996,10 +1996,14 @@ def build_floors(bm, props, ctx):
             for _pdw in _plan_doorways:
                 _ddx = float(_pdw.get('x', 0.0)); _ddy = float(_pdw.get('y', 0.0))
                 _ddw = float(_pdw.get('w', 1.0) or 1.0)
+                _portal = bool(_pdw.get('is_portal'))
+                _depth = 1.80 if _portal else 0.30
                 if _pdw.get('axis', 'X') == 'X':
-                    _rz = (_ddx - _ddw * 0.5, _ddx + _ddw * 0.5, _ddy - 0.30, _ddy + 0.30)
+                    _rz = (_ddx - _ddw * 0.5, _ddx + _ddw * 0.5,
+                           _ddy - _depth, _ddy + _depth)
                 else:
-                    _rz = (_ddx - 0.30, _ddx + 0.30, _ddy - _ddw * 0.5, _ddy + _ddw * 0.5)
+                    _rz = (_ddx - _depth, _ddx + _depth,
+                           _ddy - _ddw * 0.5, _ddy + _ddw * 0.5)
                 _zone_rects.append(_rz)
                 if _rz not in _prev_zones:
                     _prev_zones.append(_rz)

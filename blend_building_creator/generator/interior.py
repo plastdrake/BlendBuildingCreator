@@ -3532,6 +3532,51 @@ def _replan_archery_lodge_ground(rooms, walls, bounds, stair_hole, props, doorwa
     return new_rooms, new_walls
 
 
+def _clamp_tenement_walls(interior_walls, rooms, tol=0.24):
+    """Keep tenement partitions inside the flat/room bounds they divide.
+
+    Apartment grids are planned per flat; a wall from one flat must never run
+    on into the neighbouring apartment.  Clip each wall to the extents of the
+    rooms that actually share its line.
+    """
+    if not interior_walls or not rooms:
+        return interior_walls
+    for w in interior_walls:
+        p1, p2 = w.get('p1'), w.get('p2')
+        if not p1 or not p2:
+            continue
+        ax = w.get('axis')
+        if ax == 'Y':
+            pos = p1[0]
+            lo, hi = min(p1[1], p2[1]), max(p1[1], p2[1])
+            spans = []
+            for r in rooms:
+                x0, x1, y0, y1 = r.bounds
+                if abs(x0 - pos) <= tol or abs(x1 - pos) <= tol:
+                    spans.append((min(y0, y1), max(y0, y1)))
+            if spans:
+                nlo = max(lo, min(s[0] for s in spans if s[1] >= lo - tol))
+                nhi = min(hi, max(s[1] for s in spans if s[0] <= hi + tol))
+                if nhi - nlo >= 0.6:
+                    w['p1'] = (pos, nlo)
+                    w['p2'] = (pos, nhi)
+        elif ax == 'X':
+            pos = p1[1]
+            lo, hi = min(p1[0], p2[0]), max(p1[0], p2[0])
+            spans = []
+            for r in rooms:
+                x0, x1, y0, y1 = r.bounds
+                if abs(y0 - pos) <= tol or abs(y1 - pos) <= tol:
+                    spans.append((min(x0, x1), max(x0, x1)))
+            if spans:
+                nlo = max(lo, min(s[0] for s in spans if s[1] >= lo - tol))
+                nhi = min(hi, max(s[1] for s in spans if s[0] <= hi + tol))
+                if nhi - nlo >= 0.6:
+                    w['p1'] = (nlo, pos)
+                    w['p2'] = (nhi, pos)
+    return interior_walls
+
+
 def _extend_wall_ends_to_bounds(interior_walls, bounds, snap=1.10):
     """Snap near-bound partition ends onto the wall line.
 
@@ -6533,6 +6578,9 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         rooms, interior_walls = _replan_knights_manor_ground(
             rooms, interior_walls, bounds, stair_hole, props, doorways,
             wall_t=wall_t, dw_w=dw_w, dw_h=dw_h)
+
+    if effective_archetype == 'TENEMENT':
+        interior_walls = _clamp_tenement_walls(interior_walls, rooms)
 
     rooms = _normalize_stair_circulation_rooms(rooms, stair_hole, stair_pos_info, bounds)
 

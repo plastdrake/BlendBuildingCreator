@@ -164,6 +164,12 @@ def purge_props_in_volume(bm, x_span, y_span, z_span, max_prop_area=2.5):
         sx = max(v.co.x for v in verts) - min(v.co.x for v in verts)
         sy = max(v.co.y for v in verts) - min(v.co.y for v in verts)
 
+        # Never mutilate a ceiling-hung lantern/chandelier whose lower cups
+        # enter the doorway keep-out: removing one disconnected arm leaves a
+        # half-built lamp.  Floor furniture and beds still get purged.
+        if min(v.co.z for v in verts) > z0 + 1.55:
+            continue
+
         # Pillars, wall studs, framing, or siding wall runs are tall or broad
         if sz >= 2.90 or sx >= 3.80 or sy >= 3.80:
             continue

@@ -4214,48 +4214,43 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
 
 def _furnish_chapel(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                     rng, density: float):
-    """Furnishes a chapel hall laid out right-to-left: altar counter on the
-    EAST wall, congregation benches facing east, and the ceremonial aisle
-    runner leading along X up to the altar."""
+    """Furnish the nave as a church: rows of pews facing the apse altar.
+
+    The Healers' Chapel apse sits on the +Y end, so the congregation faces +Y
+    with a clear central aisle running from the entrance to the chancel.
+    """
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
 
-    # 1. Altar Counter along the East wall (falls back to West)
-    placed_altar = _try_place_wall_prop(bm, 'COUNTER', 1.80, 0.60, tracker, z_floor,
-                                        candidate_walls=('EAST',), length=1.80, back_bar=False)
-    if not placed_altar:
-        _try_place_wall_prop(bm, 'COUNTER', 1.80, 0.60, tracker, z_floor,
-                             candidate_walls=('WEST',), length=1.80, back_bar=False)
+    aisle_w = min(2.30, max(1.45, rw * 0.17))
+    bench_len = min(4.20, max(1.20, (rw - aisle_w - 1.10) * 0.50))
+    row_gap = 1.02
+    y = rm.bounds[2] + 0.95
+    # Leave clear space at the chancel end for the apse threshold/altar.
+    y_stop = rm.bounds[3] - 1.55
+    while y <= y_stop:
+        for side in (-1.0, 1.0):
+            bx = rcx + side * (aisle_w * 0.5 + 0.22 + bench_len * 0.5)
+            if tracker.is_free(bx - bench_len * 0.5 - 0.12,
+                               bx + bench_len * 0.5 + 0.12,
+                               y - 0.42, y + 0.42):
+                tracker.occupy(bx - bench_len * 0.5 - 0.12,
+                               bx + bench_len * 0.5 + 0.12,
+                               y - 0.42, y + 0.42)
+                # Local bench faces -Y; rotate 180 degrees to face the +Y altar.
+                build_prop(bm, 'BENCH', bx, y, z_floor, math.pi, length=bench_len)
+        y += row_gap
 
-    # 2. Columns of benches west of the aisle facing east (+X, backrest west).
-    for bx in [rcx - rw * 0.05, rcx - rw * 0.30]:
-        for sgn in (-1.0, 1.0):
-            blen = min(2.2, rd * 0.36)
-            by = rcy + sgn * (blen * 0.5 + 0.35)
-            if tracker.is_free(bx - 0.25, bx + 0.25, by - blen * 0.5, by + blen * 0.5):
-                tracker.occupy(bx - 0.25, bx + 0.25, by - blen * 0.5, by + blen * 0.5)
-                build_prop(bm, 'BENCH', bx, by, z_floor, math.pi / 2, length=blen)
+    # Ceremonial runner straight down the aisle to the chancel.
+    runner_l = max(2.8, rd * 0.84)
+    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor,
+             aisle_w * 0.90, runner_l, yaw_max=0.03, allow_overlap=False)
 
-    # 2b. Ceremonial aisle runner leading along X up to the altar
-    runner_l = min(12.00, max(4.60, rw * 0.86))
-    runner_w = min(2.80, max(1.70, rd * 0.42))
-    runner_l = min(runner_l, max(2.2, rw - 0.35))
-    runner_w = min(runner_w, max(1.2, rd - 0.35))
-    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor, runner_w, runner_l,
-             yaw_max=0.06)
-
-    # 2c. Side chapel rugs flanking the aisle to the north and south
-    if rd >= 4.5 and density >= 0.4:
-        side_l = min(2.20, max(1.30, rd * 0.28))
-        side_w = min(5.00, max(2.60, rw * 0.55))
-        for sgn in (-1.0, 1.0):
-            _lay_rug(bm, tracker, rm, rng, 'RUG_SAPPHIRE', rcx, rcy + sgn * rd * 0.27, z_floor,
-                     side_w, side_l, yaw_max=0.06, allow_overlap=False)
-
-    # 3. Chandelier
-    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil, prop_name='CHANDELIER', radius=0.48)
+    # Soft chancel light above the aisle.
+    _place_ceiling_light(bm, tracker, rcx, rcy + rd * 0.08, z_ceil,
+                         prop_name='CHANDELIER', radius=0.48)
 
 
 def _furnish_storage(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
