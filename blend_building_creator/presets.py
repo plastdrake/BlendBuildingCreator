@@ -7528,7 +7528,7 @@ _ALL_OPTIONAL_FEATURE_KEYS = (
     'has_castle_citadel', 'castle_tier', 'has_dungeon', 'has_basement_stair',
     'has_stable', 'stable_side', 'stable_rotate', 'has_servant_quarters', 'servant_quarters_side',
     'has_estate_guardhouse', 'has_estate_forge', 'has_estate_granary', 'has_estate_chapel',
-    'has_estate_training_grounds', 'has_throne_room',
+    'has_estate_training_grounds', 'has_throne_room', 'noble_manor_layout',
     'has_estate_fountain', 'outbuilding_offset_x', 'outbuilding_offset_y',
     'plot_setback', 'plot_offset_x', 'estate_awnings',
 
