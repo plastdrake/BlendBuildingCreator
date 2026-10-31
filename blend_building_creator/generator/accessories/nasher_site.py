@@ -290,24 +290,28 @@ def _cut_citadel_shaft(bm, cut_box=(-8.6, -5.4, 21.4, 30.0)):
         bmesh.ops.delete(bm, geom=to_del, context='FACES')
 
 
-def build_citadel_mount(bm):
+def build_citadel_mount(bm, tier=None):
     """The rocky mount (identical in every tier) plus boulders strewn round its feet."""
     from ..uv_utils import map_planar_faces
     faces = []
     for spec in MOUNT:
         faces += _build_rock(bm, spec)
     n = 0
-    for spec in (FORECOURT, TERRACE, CITADEL, EAST_BLUFF):
-        count = int(spec[3] * 0.25)
-        for i in range(count):
-            a = 2.0 * math.pi * (i + 0.37 * (spec[6] % 5)) / count
-            n += 1
-            rr = _outline(spec, a) * (0.97 + 0.07 * math.sin(n * 7.1))
-            x = spec[1] + spec[3] * rr * math.cos(a)
-            y = spec[2] + spec[4] * rr * math.sin(a)
-            if abs(x) < 10.0 or (-19.0 <= x <= -10.0 and 4.0 <= y <= 35.0) or (12.0 <= x <= 21.0 and 4.0 <= y <= 37.0) or (-14.0 < x < 0.0 and 17.0 < y < 35.0):
-                continue
-            faces += _boulder(bm, x, y, 0.9 + 1.6 * (0.5 + 0.5 * math.sin(n * 3.3)), n)
+    # Tier 3 adds more outbuildings on the upper plateaus; scattered boulders
+    # then end up inside their floors.  Keep the clean rock mass and omit the
+    # loose boulders there.
+    if tier != 3:
+        for spec in (FORECOURT, TERRACE, CITADEL, EAST_BLUFF):
+            count = int(spec[3] * 0.25)
+            for i in range(count):
+                a = 2.0 * math.pi * (i + 0.37 * (spec[6] % 5)) / count
+                n += 1
+                rr = _outline(spec, a) * (0.97 + 0.07 * math.sin(n * 7.1))
+                x = spec[1] + spec[3] * rr * math.cos(a)
+                y = spec[2] + spec[4] * rr * math.sin(a)
+                if abs(x) < 10.0 or (-19.0 <= x <= -10.0 and 4.0 <= y <= 35.0) or (12.0 <= x <= 21.0 and 4.0 <= y <= 37.0) or (-14.0 < x < 0.0 and 17.0 < y < 35.0):
+                    continue
+                faces += _boulder(bm, x, y, 0.9 + 1.6 * (0.5 + 0.5 * math.sin(n * 3.3)), n)
     cliff_faces = [f for f in bm.faces if f.is_valid and f.material_index == MAT_INDEX_CLIFFS]
     for f in cliff_faces:
         f.smooth = True

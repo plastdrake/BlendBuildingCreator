@@ -3617,6 +3617,75 @@ def _open_wing_entrance_walls(interior_walls, wings, bounds, tol=0.35):
     return [w for w in interior_walls if id(w) not in drop]
 
 
+def _merge_open_rooms(rooms, walls, min_overlap=1.0, max_passes=4):
+    """Merge adjacent rooms that have no wall between them.
+
+    When a partition is removed to open a wing doorway, leaving the old room
+    rectangles split makes the furnisher place chests against an invisible
+    wall.  If no wall actually exists on the shared boundary, make it one room.
+    """
+    if not rooms:
+        return rooms
+    for _ in range(max_passes):
+        merged = False
+        for i in range(len(rooms)):
+            if merged:
+                break
+            a = rooms[i]
+            ax0, ax1, ay0, ay1 = a.bounds
+            for j in range(i + 1, len(rooms)):
+                b = rooms[j]
+                bx0, bx1, by0, by1 = b.bounds
+                shared = False
+                vertical = False
+                if abs(ax1 - bx0) < 0.12 or abs(bx1 - ax0) < 0.12:
+                    shared = min(ay1, by1) - max(ay0, by0) >= min_overlap
+                    vertical = True
+                elif abs(ay1 - by0) < 0.12 or abs(by1 - ay0) < 0.12:
+                    shared = min(ax1, bx1) - max(ax0, bx0) >= min_overlap
+                if not shared:
+                    continue
+                # Check for any surviving wall on this boundary.
+                has_wall = False
+                for w in walls:
+                    p1, p2 = w.get('p1'), w.get('p2')
+                    if not p1 or not p2:
+                        continue
+                    if vertical and w.get('axis') == 'Y':
+                        if abs(p1[0] - ax1) < 0.15 or abs(p1[0] - bx0) < 0.15 \
+                                or abs(p1[0] - ax0) < 0.15 or abs(p1[0] - bx1) < 0.15:
+                            lo = min(p1[1], p2[1]); hi = max(p1[1], p2[1])
+                            if hi > max(ay0, by0) + 0.2 and lo < min(ay1, by1) - 0.2:
+                                has_wall = True
+                                break
+                    elif not vertical and w.get('axis') == 'X':
+                        if abs(p1[1] - ay1) < 0.15 or abs(p1[1] - by0) < 0.15 \
+                                or abs(p1[1] - ay0) < 0.15 or abs(p1[1] - by1) < 0.15:
+                            lo = min(p1[0], p2[0]); hi = max(p1[0], p2[0])
+                            if hi > max(ax0, bx0) + 0.2 and lo < min(ax1, bx1) - 0.2:
+                                has_wall = True
+                                break
+                if has_wall:
+                    continue
+                nb = (min(ax0, bx0), max(ax1, bx1), min(ay0, by0), max(ay1, by1))
+                a.bounds = nb
+                a.doorways = list(a.doorways or [])
+                for d in (b.doorways or []):
+                    if d not in a.doorways:
+                        a.doorways.append(d)
+                if a.stair_hole is None:
+                    a.stair_hole = b.stair_hole
+                if getattr(a, 'floor_void', None) is None:
+                    a.floor_void = getattr(b, 'floor_void', None)
+                a.allow_large = True
+                rooms.pop(j)
+                merged = True
+                break
+        if not merged:
+            break
+    return rooms
+
+
 def _extend_wall_ends_to_bounds(interior_walls, bounds, snap=1.10):
     """Snap near-bound partition ends onto the wall line.
 
@@ -6584,6 +6653,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     if fl_wings_bounds:
         interior_walls = _open_wing_entrance_walls(
             interior_walls, fl_wings_bounds, (ix_min, ix_max, iy_min, iy_max))
+    rooms = _merge_open_rooms(rooms, interior_walls)
 
     if (effective_archetype in ('ARCHERY', 'ARCHERY_RANGE') and fl_idx == 0
             and rooms):
@@ -6670,6 +6740,50 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     _extra.role = 'PANTRY'
                 else:
                     _extra.role = 'STORAGE'
+
+    # Nasher keep: the basement stair hall is a working store, not a parlour.
+    if (fl_idx == 0 and getattr(props, 'has_basement_stair', False)
+            and stair_hole is not None):
+        _sx = (stair_hole[0] + stair_hole[1]) * 0.5
+        _sy = (stair_hole[2] + stair_hole[3]) * 0.5
+        _holder = None
+        for _r in rooms:
+            x0, x1, y0, y1 = _r.bounds
+            if x0 <= _sx <= x1 and y0 <= _sy <= y1:
+                _holder = _r
+                break
+        if _holder is not None and getattr(_holder, 'role', '') in (
+                'ENTRANCE_HALL', 'HOUSE_HALL', 'STUDY', 'CORRIDOR',
+                'STAIR_LANDING'):
+            _holder.role = 'STORAGE'
+
+    # Upper storeys of living outbuildings must expose real beds, even when a
+    # simplified T-wing plan would otherwise fill the floor with salons.
+    if fl_idx > 0 and rooms:
+        _bed_roles = {'BEDROOM', 'MASTER_BED', 'GUEST_ROOM',
+                      'BARRACKS_DORM', 'OFFICER_QUARTERS', 'HEALER_QUARTERS'}
+        if not any(getattr(r, 'role', '') in _bed_roles for r in rooms):
+            _cand = None
+            for _r in rooms:
+                if getattr(_r, 'is_wing', False):
+                    continue
+                if getattr(_r, 'role', '') in (
+                        'CORRIDOR', 'STAIR_LANDING', 'ENTRANCE_HALL',
+                        'KITCHEN', 'PANTRY', 'BATH'):
+                    continue
+                if _cand is None:
+                    _cand = _r
+                    continue
+                if (_r.bounds[1] - _r.bounds[0]) * (_r.bounds[3] - _r.bounds[2]) > \
+                        (_cand.bounds[1] - _cand.bounds[0]) * (_cand.bounds[3] - _cand.bounds[2]):
+                    _cand = _r
+            if _cand is not None:
+                _cand.role = ('BARRACKS_DORM'
+                              if (program in ('GARRISON', 'MILITARY')
+                                  or effective_archetype in
+                                  ('BARRACKS', 'INFANTRY_BARRACKS', 'ARMORY',
+                                   'KNIGHTS_MANOR'))
+                              else 'BEDROOM')
 
     return rooms, interior_walls
 

@@ -20,7 +20,7 @@ from ..mesh_utils import (
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
     MAT_INDEX_WOOD, MAT_INDEX_CUT_STONE, MAT_INDEX_PLASTER_BRICK,
-    MAT_INDEX_LANTERN, MAT_INDEX_CLAY,
+    MAT_INDEX_LANTERN, MAT_INDEX_CLAY, MAT_INDEX_TERRACOTTA,
 )
 
 
@@ -180,13 +180,6 @@ def build_bakery_oven(bm, *args, **kwargs):
         mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.03
     )
 
-    # Decorative stone landing shelf in front of the oven mouth
-    faces += create_beveled_box(
-        bm, size=(hearth_w + 0.06, 0.24, 0.08),
-        location=(oven_x, oven_y - hearth_d * 0.5 - 0.06, z_floor + hearth_h - 0.04),
-        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015
-    )
-
     # -------------------------------------------------------------------------
     # 2. Recessed Firewood Storage Cavity Under Hearth
     # -------------------------------------------------------------------------
@@ -199,16 +192,6 @@ def build_bakery_oven(bm, *args, **kwargs):
         location=(oven_x, oven_y - hearth_d * 0.5 + arch_d + 0.02, z_floor + arch_h * 0.5 + 0.04),
         mat_index=MAT_INDEX_STONE, bevel_amount=0.01
     )
-    # Stack of split firewood logs in the alcove
-    for row in range(2):
-        lz = z_floor + 0.10 + row * 0.14
-        for col in range(3):
-            lx = oven_x - 0.26 + col * 0.26
-            faces += create_horizontal_cylinder(
-                bm, radius_y=0.06, radius_z=0.06, length=0.55, segments=8,
-                location=(lx, oven_y - hearth_d * 0.5 + 0.32, lz),
-                mat_index=MAT_INDEX_WOOD
-            )
 
     # -------------------------------------------------------------------------
     # 3. Terracotta Brick Baking Chamber Dome
@@ -268,13 +251,6 @@ def build_bakery_oven(bm, *args, **kwargs):
         mat_index=MAT_INDEX_IRON, bevel_amount=0.004
     )
 
-    # Inner glowing firebox embers behind hearth opening
-    faces += create_beveled_box(
-        bm, size=(0.50, 0.12, 0.16),
-        location=(oven_x, door_y + 0.10, z_floor + hearth_h + 0.10),
-        mat_index=MAT_INDEX_LANTERN, bevel_amount=0.02
-    )
-
     # Rotate the whole oven so its back is flush to the +X wall and the mouth
     # faces into the room.
     oven_mat = (Matrix.Translation(Vector((base_x, base_y, 0.0)))
@@ -301,16 +277,16 @@ def build_bakery_oven(bm, *args, **kwargs):
         (_outer_x, base_y, _z2),
         (_outer_x, base_y, _z3),
     ]
-    _build_brick_flue(bm, _flue_pts, 0.36, MAT_INDEX_PLASTER_BRICK)
+    _build_brick_flue(bm, _flue_pts, 0.48, MAT_INDEX_TERRACOTTA)
     # A chunky brick cap makes the top read as a finished chimney, not a pipe.
     create_beveled_box(
-        bm, size=(0.98, 0.98, 0.16),
-        location=(_outer_x, base_y, _z3 + 0.08),
-        mat_index=MAT_INDEX_PLASTER_BRICK, bevel_amount=0.012)
+        bm, size=(1.12, 1.12, 0.17),
+        location=(_outer_x, base_y, _z3 + 0.085),
+        mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.012)
     create_beveled_box(
-        bm, size=(0.78, 0.78, 0.10),
-        location=(_outer_x, base_y, _z3 + 0.21),
-        mat_index=MAT_INDEX_PLASTER_BRICK, bevel_amount=0.008)
+        bm, size=(0.90, 0.90, 0.11),
+        location=(_outer_x, base_y, _z3 + 0.225),
+        mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.008)
     # Dark soot throat inside the crown.
     create_beveled_box(
         bm, size=(0.42, 0.42, 0.055),

@@ -149,7 +149,7 @@ def _stair(bm, x_top, x_bot, z_top, z_bot, y0=None, y1=None):
         axis='X',
         direction_x=dir_x,
         has_rail_left=True,
-        has_rail_right=False,
+        has_rail_right=True,
     )
 
 
@@ -377,6 +377,10 @@ def build_nasher_dungeon(bm, tier):
     # 6. Straight stair flight along X in the Keep Back Wing: top step starts at bs_x0,
     # descending eastward down to Level 0 floor at z = 9.50.
     _stair(bm, bs_x0, bs_x1 - 0.20, z_keep_floor, LEVEL_Z[0], y0=bs_y0 + 0.05, y1=bs_y1 - 0.05)
+    # Solid floor beneath the stair flight: the old carve left a dark open
+    # hole under the treads down into the lower level.
+    _box(bm, bs_x0 - 0.06, bs_x1 + 0.06, bs_y0 - 0.06, bs_y1 + 0.06,
+         LEVEL_Z[0] - 0.10, LEVEL_Z[0], FLOOR)
 
     # 7. Timber guard railing around the Keep floor stairwell opening:
     # North side has solid masonry wall; East end and South side face the room floor and require guardrail.
