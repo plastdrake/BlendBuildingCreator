@@ -258,18 +258,44 @@ def build_bakery_oven(bm, *args, **kwargs):
     transform_faces(faces, oven_mat)
 
     # -------------------------------------------------------------------------
-    # 5. Dedicated masonry bake-oven flue, rising straight out of the oven crown
-    #    through the roof. This is the bakery's only chimney.
+    # 5. Fantasy wonky flue: short rise from the oven crown, then a diagonal
+    #    run out through the side wall, and a short vertical stack outside.
+    #    Keeping the flue outside the upper storeys stops it growing through
+    #    beds and furniture on the floors above.
     # -------------------------------------------------------------------------
-    from ..roof.features import build_fantasy_chimney
-    if ctx is not None:
-        top_z = (z_floor + ctx.num_floors * ctx.floor_h
-                 + getattr(props, 'roof_height', 3.0) + 1.0)
-    else:
-        top_z = z_floor + 2.8 + 3.0 + 1.0
-    build_fantasy_chimney(
-        bm, pos_xy=(base_x, base_y), z_start=0.0, total_height=top_z,
-        width=0.90, depth=0.90, crooked_angle=-0.02,
-    )
+    _inner_wall = _side * (hx - wall_t)
+    _outer_x = _side * (hx + 0.42)
+    _z0 = z_floor + hearth_h + dome_h + 0.08
+    _z1 = min(z_floor + 2.70, _z0 + 1.35)
+    if _z1 < _z0 + 0.25:
+        _z1 = _z0 + 0.25
+    _dx = _outer_x - base_x
+    _dz = _z1 - _z0
+    _seg_len = math.hypot(_dx, _dz)
+    _seg_ang = -math.atan2(_dz, _dx)
+    create_beveled_box(
+        bm, size=(_seg_len + 0.18, 0.68, 0.68),
+        location=((base_x + _outer_x) * 0.5, base_y, (_z0 + _z1) * 0.5),
+        rotation=(0.0, _seg_ang, 0.0),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
+    # Masonry collar where the diagonal pierces the wall.
+    create_beveled_box(
+        bm, size=(0.30, 1.02, 1.02),
+        location=(_inner_wall + _side * 0.04, base_y, _z1 - 0.05),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.020)
+    # Short free-standing stack outside, clear of every upper floor.
+    _stack_top = _z1 + 1.05
+    create_beveled_box(
+        bm, size=(0.74, 0.74, _stack_top - _z1),
+        location=(_outer_x, base_y, (_z1 + _stack_top) * 0.5),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
+    create_beveled_box(
+        bm, size=(0.92, 0.92, 0.16),
+        location=(_outer_x, base_y, _stack_top + 0.08),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+    create_beveled_box(
+        bm, size=(0.56, 0.56, 0.06),
+        location=(_outer_x, base_y, _stack_top + 0.19),
+        mat_index=MAT_INDEX_STONE, bevel_amount=0.008)
 
     return faces

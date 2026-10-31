@@ -443,11 +443,15 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
         _ow_side = 'LEFT' if side_sgn < 0 else 'RIGHT'
         _ow_anchor_lo = outer_x if side_sgn < 0 else top_inner
         _ow_anchor_hi = top_inner if side_sgn < 0 else outer_x
+        # The walk-through portal is cut on the annex's TOP storey.  A
+        # three/four-storey annex used to put the oriel on floor 1 only,
+        # leaving the top-floor portal opening straight into the sky.
+        _ow_z = found_h + max(1, floors - 1) * floor_h
         build_mini_wing(
             bm, side=_ow_side, floor_mode='UPPER',
             wall_x_min=_ow_anchor_lo, wall_x_max=_ow_anchor_hi,
             wall_y_min=cy - 1.6, wall_y_max=cy + 1.6,
-            z_base=found_h + floor_h, width=max(2.40, min(2.80, width * 0.58)), depth=0.9,
+            z_base=_ow_z, width=max(2.40, min(2.80, width * 0.58)), depth=0.9,
             height=max(2.80, min(3.20, floor_h - 0.55)), roof_style='LEAN_TO',
             tier=tier, floor_h=floor_h, wall_mat=f_mat, is_wattle=is_wattle,
             lower_bounds=(_ow_anchor_lo, _ow_anchor_hi, cy - 1.6, cy + 1.6),
