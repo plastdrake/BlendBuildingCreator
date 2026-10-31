@@ -293,9 +293,12 @@ def build_floors(bm, props, ctx):
     # Track stair holes, rooms, interior walls and wall bounds per floor
     floor_stair_holes = {}
     if getattr(props, 'has_basement_stair', False):
-        if shape == 'L_SHAPE' and wings:
-            # Cellar stairwell: a shaft in the L-wing so the cellar can sit
-            # directly UNDER the wing. Hugs the outer (-X) side of the wing.
+        if (shape == 'L_SHAPE'
+                or (shape == 'U_SHAPE' and getattr(props, 'noble_manor_layout', False))) and wings:
+            # Cellar stairwell: a shaft in the first wing so the cellar can
+            # sit directly UNDER the wing.  U-shaped Noble Manors use the
+            # same arrangement as an L-wing (under the forecourt wing); other
+            # U-shaped keeps retain their rear-wing throne stair.
             wx1, wx2, wy1, wy2 = (float(wings[0]['base'][0]),
                                   float(wings[0]['base'][1]),
                                   float(wings[0]['base'][2]),

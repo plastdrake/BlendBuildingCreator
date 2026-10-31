@@ -108,12 +108,12 @@ def cozy_apartment(bounds, entry, *, role_kitchen='TENEMENT_KITCHEN',
     # A grid line exactly on the doorway leaves the door straddling two rooms.
     if entry.get('axis') == 'X':
         for i in range(1, nx):
-            if abs(xs[i] - ex) < 0.85:
-                xs[i] = min(x1 - 2.20, max(x0 + 2.20, ex + (0.90 if ex <= (x0 + x1) * 0.5 else -0.90)))
+            if abs(xs[i] - ex) < 1.10:
+                xs[i] = min(x1 - 2.20, max(x0 + 2.20, ex + (1.10 if ex <= (x0 + x1) * 0.5 else -1.10)))
     else:
         for i in range(1, ny):
-            if abs(ys[i] - ey) < 0.85:
-                ys[i] = min(y1 - 2.10, max(y0 + 2.10, ey + (0.90 if ey <= (y0 + y1) * 0.5 else -0.90)))
+            if abs(ys[i] - ey) < 1.10:
+                ys[i] = min(y1 - 2.10, max(y0 + 2.10, ey + (1.10 if ey <= (y0 + y1) * 0.5 else -1.10)))
 
     def _cell(v, coords):
         for i in range(len(coords) - 1):

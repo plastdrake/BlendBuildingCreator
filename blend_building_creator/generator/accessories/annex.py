@@ -194,17 +194,19 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
                                    (back_wall_y, (0.0, 1.0), False)):
             _fb_ops = [{'u_start': ucx - win_w * 0.5 - 0.12, 'u_end': ucx + win_w * 0.5 + 0.12,
                         'z_start': sill, 'z_end': sill + win_h}]
+            _is_log_wall = (not is_wattle and eff_wall == 'LOGS')
             build_wall_with_opening(
                 bm, (inner_x, wy), (outer_x, wy), fz0, fz1, wall_t,
                 list(_fb_ops),
                 mat_ext=f_mat, normal_vec=nvec, tier=_wall_tier, physical_siding=physical_siding,
                 plank_direction=plank_direction, seed=42,
-                # Inner end dies into the main hall wall, so logs must not saddle
-                # over-run into the interior; the outer end does turn a corner.
-                # A log eave side also drops its top log - it rides into the roof.
-                is_corner_start=False, is_corner_end=True,
-                omit_top_log_row=(_wall_tier == 'TIER_1'),
-                force_omit_top_log_row=(_wall_tier == 'TIER_1'))
+                # Round-log annexes need their corner notch at the main wall
+                # too, otherwise a course is left short and a gap/coplanar
+                # strip shows at the junction.  Plank/wattle walls keep the
+                # clean butt joint.
+                is_corner_start=_is_log_wall, is_corner_end=True,
+                omit_top_log_row=False,
+                force_omit_top_log_row=False)
             build_window_assembly(
                 bm, center=(cxf, wy, sill + win_h * 0.5), size=(win_w, win_h),
                 wall_thickness=wall_t, normal_axis=nvec, has_shutters=shutters)

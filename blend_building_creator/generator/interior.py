@@ -2665,6 +2665,327 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
     return rooms, walls
 
 
+def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
+                            has_stairs_landing, stair_pos_info=None,
+                            extra_doorways=None, props=None,
+                            fl_wings_bounds=None):
+    """Corridor-based Noble Manor plan.
+
+    The old throne-palace planner made a huge central hall, duplicated the
+    banquet hall in a wing and left the upper floor as a chain of walk-through
+    rooms.  This plan keeps the throne room but puts it on axis behind the
+    entrance, then serves two rows of compact chambers from a front reception
+    gallery and a rear service corridor.  The staircase sits in a dedicated
+    open stair hall at one end, so it is never cut off by a partition.
+    """
+    ix_min, ix_max, iy_min, iy_max = bounds
+    W = ix_max - ix_min
+    D = iy_max - iy_min
+    if W < 22.0 or D < 12.0:
+        return None
+
+    stair_on_right = bool(
+        (stair_pos_info and float(stair_pos_info.get('cx', ix_min)) > (ix_min + ix_max) * 0.5)
+        or (stair_hole is not None and (stair_hole[0] + stair_hole[1]) * 0.5 > (ix_min + ix_max) * 0.5)
+        or getattr(props, 'stair_placement', 'LEFT') == 'RIGHT'
+    )
+
+    stair_w = 4.8
+    if stair_pos_info:
+        stair_w = max(stair_w, float(stair_pos_info.get('w', 1.5)) + 2.4)
+    stair_w = min(max(stair_w, 4.0), W * 0.24)
+    if stair_on_right:
+        stair_x0, stair_x1 = ix_max - stair_w, ix_max
+        rooms_x0, rooms_x1 = ix_min, stair_x0
+    else:
+        stair_x0, stair_x1 = ix_min, ix_min + stair_w
+        rooms_x0, rooms_x1 = stair_x1, ix_max
+    rooms_w = rooms_x1 - rooms_x0
+
+    front_d = 2.15
+    back_d = 2.15
+    front_y1 = iy_min + front_d
+    back_y0 = iy_max - back_d
+    mid_y = (front_y1 + back_y0) * 0.5
+    if back_y0 - front_y1 < 5.2:
+        return None
+
+    # A narrow cross-passage at the far end from the stair links the reception
+    # gallery to the rear service corridor, so servants never have to cross the
+    # whole manor to reach the back rooms.  It also prevents the two corridors
+    # from becoming dead ends.
+    cross_w = 2.20
+    if stair_on_right:
+        cross_x0, cross_x1 = rooms_x0, rooms_x0 + cross_w
+        bay_x0, bay_x1 = cross_x1, rooms_x1
+    else:
+        cross_x0, cross_x1 = rooms_x1 - cross_w, rooms_x1
+        bay_x0, bay_x1 = rooms_x0, cross_x0
+    rooms_w = bay_x1 - bay_x0
+
+    n_bays = max(3, min(9, int(round(rooms_w / 6.2))))
+    x_edges = [bay_x0 + rooms_w * i / n_bays for i in range(n_bays + 1)]
+
+    # The throne room spans the middle pair of front bays.  It opens straight
+    # off the entrance gallery, on the same axis as the front door.
+    throne_a = max(0, n_bays // 2 - 1)
+    throne_b = min(n_bays - 1, throne_a + 1)
+    if throne_b == throne_a and throne_a > 0:
+        throne_a -= 1
+
+    def _is_throne_bay(i):
+        return throne_a <= i <= throne_b
+
+    def _bay_doors(i):
+        return {'x': (x_edges[i] + x_edges[i + 1]) * 0.5,
+                'y': front_y1, 'axis': 'X', 'w': dw_w}
+
+    walls = []
+    rooms = []
+
+    def _room(b, role, doors, facades, allow_large=True):
+        return Room(
+            id=f"fl{fl_idx}_{role.lower()}_{len(rooms)}", floor_idx=fl_idx,
+            role=role, bounds=b, doorways=list(doors), stair_hole=None,
+            exterior_facades=facades, allow_large=allow_large)
+
+    def _holds_stair(rb):
+        if stair_hole is None:
+            return None
+        pad = 0.25
+        if rb[1] < stair_hole[0] - pad or rb[0] > stair_hole[1] + pad \
+                or rb[3] < stair_hole[2] - pad or rb[2] > stair_hole[3] + pad:
+            return None
+        return stair_hole
+
+    # Ground-floor programme: service rooms and the ceremonial axis.  There is
+    # deliberately NO banquet hall here; the only one is in the right wing.
+    ground_south = ['PANTRY', 'DINING', 'GUARD_ROOM', 'STUDY', 'LIBRARY',
+                    'COUNCIL_CHAMBER', 'STORAGE', 'OFFICE', 'STUDY']
+    ground_north = ['ARMORY', 'GUARD_ROOM', 'TREASURY', 'STUDY', 'LIBRARY',
+                    'COUNCIL_CHAMBER', 'STORAGE', 'OFFICE', 'HOUSE_HALL']
+    upper_south = ['BEDROOM', 'GUEST_ROOM', 'BEDROOM', 'GUEST_ROOM', 'STUDY',
+                   'BEDROOM', 'GUEST_ROOM', 'BEDROOM', 'STUDY']
+    upper_north = ['BEDROOM', 'GUEST_ROOM', 'STUDY', 'BEDROOM', 'GUEST_ROOM',
+                   'LIBRARY', 'BEDROOM', 'GUEST_ROOM', 'STUDY']
+    if fl_idx == 0:
+        south_roles, north_roles = ground_south, ground_north
+    else:
+        south_roles, north_roles = list(upper_south), list(upper_north)
+        if not fl_wings_bounds and fl_idx == 1:
+            # T1 has no upper wing: the service barracks lives in the manor.
+            north_roles[0] = 'BARRACKS_DORM'
+            north_roles[1] = 'OFFICER_QUARTERS'
+
+    # Front reception gallery: connects the main entrance, both wing portals
+    # and the stair hall.
+    gallery_doors = []
+    for ed in (extra_doorways or []):
+        if ed.get('floor_idx', fl_idx) != fl_idx:
+            continue
+        ax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
+        if ax == 'X':
+            ey = float(ed.get('y', ed.get('pos', iy_min)))
+            if abs(ey - iy_min) < 0.6:
+                gallery_doors.append({'x': float(ed.get('x', 0.0)),
+                                      'y': iy_min, 'axis': 'X',
+                                      'w': float(ed.get('w', 2.4)),
+                                      'is_portal': bool(ed.get('is_portal'))})
+    gallery = Room(
+        id=f"fl{fl_idx}_reception_gallery", floor_idx=fl_idx, role='CORRIDOR',
+        bounds=(rooms_x0, rooms_x1, iy_min, front_y1),
+        doorways=gallery_doors, stair_hole=None,
+        exterior_facades={'FRONT': (rooms_x0, rooms_x1)}, allow_large=True)
+    rooms.append(gallery)
+
+    # Rear service corridor.
+    rear_doors = []
+    for ed in (extra_doorways or []):
+        if ed.get('floor_idx', fl_idx) != fl_idx:
+            continue
+        ax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
+        if ax == 'X':
+            ey = float(ed.get('y', ed.get('pos', iy_max)))
+            if abs(ey - iy_max) < 0.6:
+                rear_doors.append({'x': float(ed.get('x', 0.0)),
+                                   'y': iy_max, 'axis': 'X',
+                                   'w': float(ed.get('w', 2.4)),
+                                   'is_portal': bool(ed.get('is_portal'))})
+    rear = Room(
+        id=f"fl{fl_idx}_rear_corridor", floor_idx=fl_idx, role='CORRIDOR',
+        bounds=(rooms_x0, rooms_x1, back_y0, iy_max),
+        doorways=rear_doors, stair_hole=None,
+        exterior_facades={'BACK': (rooms_x0, rooms_x1)}, allow_large=True)
+    rooms.append(rear)
+
+    # Short cross-passage from the front gallery to the rear corridor at the
+    # end opposite the stair.
+    cross_facades = {}
+    if stair_on_right:
+        cross_facades['LEFT'] = (front_y1, back_y0)
+    else:
+        cross_facades['RIGHT'] = (front_y1, back_y0)
+    cross = Room(
+        id=f"fl{fl_idx}_cross_passage", floor_idx=fl_idx, role='CORRIDOR',
+        bounds=(cross_x0, cross_x1, front_y1, back_y0),
+        doorways=[], stair_hole=None,
+        exterior_facades=cross_facades, allow_large=True)
+    rooms.append(cross)
+
+    # Stair hall: full depth and open to both corridors.  No partition ever
+    # crosses the flight or the step-off landings.
+    stair_facades = {}
+    if stair_on_right:
+        stair_facades['RIGHT'] = (iy_min, iy_max)
+    else:
+        stair_facades['LEFT'] = (iy_min, iy_max)
+    stair_facades['FRONT'] = (stair_x0, stair_x1)
+    stair_facades['BACK'] = (stair_x0, stair_x1)
+    stair_room = Room(
+        id=f"fl{fl_idx}_stair_hall", floor_idx=fl_idx,
+        role='ENTRANCE_HALL' if fl_idx == 0 else 'STAIR_LANDING',
+        bounds=(stair_x0, stair_x1, iy_min, iy_max),
+        doorways=[], stair_hole=_holds_stair((stair_x0, stair_x1, iy_min, iy_max)),
+        exterior_facades=stair_facades, allow_large=True)
+    rooms.append(stair_room)
+
+    # Front row (off the reception gallery).  The central span is the throne.
+    throne_bounds = (x_edges[throne_a], x_edges[throne_b + 1], front_y1, mid_y)
+    for i in range(n_bays):
+        if _is_throne_bay(i):
+            continue
+        role = south_roles[min(i, len(south_roles) - 1)]
+        door = _bay_doors(i)
+        facades = {'FRONT': (x_edges[i], x_edges[i + 1])}
+        if i == 0:
+            facades['LEFT'] = (front_y1, mid_y)
+        if i == n_bays - 1:
+            facades['RIGHT'] = (front_y1, mid_y)
+        rooms.append(_room((x_edges[i], x_edges[i + 1], front_y1, mid_y),
+                           role, [door], facades))
+        gallery.doorways.append(door)
+
+    throne_door = {'x': (throne_bounds[0] + throne_bounds[1]) * 0.5,
+                   'y': front_y1, 'axis': 'X',
+                   'w': min(2.60, dw_w + 0.55) if fl_idx == 0 else dw_w}
+    if fl_idx == 0:
+        throne_role = 'THRONE_ROOM'
+    elif fl_idx == int(getattr(props, 'num_floors', 1)) - 1:
+        throne_role = 'MASTER_BED'
+    else:
+        throne_role = 'HOUSE_HALL'
+    rooms.append(_room(throne_bounds, throne_role, [throne_door],
+                       {'FRONT': (throne_bounds[0], throne_bounds[1])}))
+    gallery.doorways.append(throne_door)
+
+    # Back row (off the rear service corridor): compact chambers, never
+    # walk-through rooms.
+    for i in range(n_bays):
+        role = north_roles[min(i, len(north_roles) - 1)]
+        door = {'x': (x_edges[i] + x_edges[i + 1]) * 0.5,
+                'y': back_y0, 'axis': 'X', 'w': dw_w}
+        facades = {'BACK': (x_edges[i], x_edges[i + 1])}
+        if i == 0:
+            facades['LEFT'] = (mid_y, back_y0)
+        if i == n_bays - 1:
+            facades['RIGHT'] = (mid_y, back_y0)
+        rooms.append(_room((x_edges[i], x_edges[i + 1], mid_y, back_y0),
+                           role, [door], facades))
+        rear.doorways.append(door)
+
+    # --- Partition walls -------------------------------------------------
+    # Corridor walls: one segment per room, each with its own door.  The
+    # throne bay uses one wide segment instead of two narrow ones.
+    for i in range(n_bays):
+        if _is_throne_bay(i):
+            continue
+        dw_x = (x_edges[i] + x_edges[i + 1]) * 0.5
+        walls.append({'p1': (x_edges[i], front_y1),
+                      'p2': (x_edges[i + 1], front_y1),
+                      'axis': 'X', 'pos': front_y1, 'thickness': wall_t,
+                      'doorway': {'x': dw_x, 'y': front_y1, 'w': dw_w,
+                                  'h': dw_h, 'axis': 'X'}})
+        dw_x = (x_edges[i] + x_edges[i + 1]) * 0.5
+        walls.append({'p1': (x_edges[i], back_y0),
+                      'p2': (x_edges[i + 1], back_y0),
+                      'axis': 'X', 'pos': back_y0, 'thickness': wall_t,
+                      'doorway': {'x': dw_x, 'y': back_y0, 'w': dw_w,
+                                  'h': dw_h, 'axis': 'X'}})
+    walls.append({'p1': (throne_bounds[0], front_y1),
+                  'p2': (throne_bounds[1], front_y1),
+                  'axis': 'X', 'pos': front_y1, 'thickness': wall_t,
+                  'doorway': {'x': throne_door['x'], 'y': front_y1,
+                              'w': throne_door['w'], 'h': dw_h, 'axis': 'X'}})
+    # The central spine wall between the two chamber rows.
+    walls.append({'p1': (bay_x0, mid_y), 'p2': (bay_x1, mid_y),
+                  'axis': 'X', 'pos': mid_y, 'thickness': wall_t,
+                  'doorway': None})
+    # Wall between the cross-passage and the first real room bay.
+    walls.append({'p1': (bay_x0, front_y1), 'p2': (bay_x0, mid_y),
+                  'axis': 'Y', 'pos': bay_x0, 'thickness': wall_t,
+                  'doorway': None})
+    walls.append({'p1': (bay_x0, mid_y), 'p2': (bay_x0, back_y0),
+                  'axis': 'Y', 'pos': bay_x0, 'thickness': wall_t,
+                  'doorway': None})
+    # Bay partitions: south half always, north half except inside the throne
+    # span (where the two central front bays are one room).
+    for i in range(1, n_bays):
+        px = x_edges[i]
+        if not (_is_throne_bay(i - 1) and _is_throne_bay(i)):
+            walls.append({'p1': (px, front_y1), 'p2': (px, mid_y),
+                          'axis': 'Y', 'pos': px, 'thickness': wall_t,
+                          'doorway': None})
+        walls.append({'p1': (px, mid_y), 'p2': (px, back_y0),
+                      'axis': 'Y', 'pos': px, 'thickness': wall_t,
+                      'doorway': None})
+
+    # Register side doors on the outer walls with the room that owns them.
+    for ed in (extra_doorways or []):
+        if ed.get('floor_idx', fl_idx) != fl_idx:
+            continue
+        ax = ed.get('axis', 'Y' if ed.get('facade') in ('LEFT', 'RIGHT') else 'X')
+        if ax != 'Y':
+            continue
+        ex = ix_max if ed.get('facade') == 'RIGHT' else ix_min
+        ey = float(ed.get('y', ed.get('pos', 0.0)))
+        for room in rooms:
+            rx0, rx1, ry0, ry1 = room.bounds
+            if abs(ex - rx0) < 0.5 or abs(ex - rx1) < 0.5:
+                if ry0 - 0.45 <= ey <= ry1 + 0.45:
+                    entry = {'x': ex, 'y': ey, 'axis': 'Y',
+                             'w': float(ed.get('w', 2.4)),
+                             'is_portal': bool(ed.get('is_portal'))}
+                    if not any(abs(d.get('x', 0) - ex) < 0.2
+                               and abs(d.get('y', 0) - ey) < 0.2
+                               for d in room.doorways):
+                        room.doorways.append(entry)
+
+    # --- Wings ------------------------------------------------------------
+    for wi, wb in enumerate(fl_wings_bounds or []):
+        wx1, wx2, wy1, wy2 = wb
+        if fl_idx == 0:
+            role = 'KITCHEN' if wi == 0 else 'BANQUET_HALL'
+        else:
+            role = 'BARRACKS_DORM' if wi == 0 else 'GUEST_ROOM'
+        wing_doors = []
+        wing_x = (wx1 + wx2) * 0.5
+        if abs(wy1 - iy_min) < 0.5:
+            wing_doors.append({'x': wing_x, 'y': wy1, 'axis': 'X', 'w': dw_w})
+        elif abs(wy2 - iy_min) < 0.5:
+            wing_doors.append({'x': wing_x, 'y': wy2, 'axis': 'X', 'w': dw_w})
+        w_sh = None
+        if stair_hole is not None:
+            if not (stair_hole[1] < wx1 or stair_hole[0] > wx2
+                    or stair_hole[3] < wy1 or stair_hole[2] > wy2):
+                w_sh = stair_hole
+        rooms.append(Room(
+            id=f"fl{fl_idx}_noble_wing{wi}", floor_idx=fl_idx, role=role,
+            bounds=wb, is_wing=True, wing_id=wi, doorways=wing_doors,
+            stair_hole=w_sh, exterior_facades={}, allow_large=True))
+
+    return rooms, walls
+
+
 def _secondary_role(primary, index):
     """Sensible companion role for a room carved out of a long strip."""
     table = {
@@ -3176,6 +3497,26 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 or rb[3] < stair_hole[2] - pad or rb[2] > stair_hole[3] + pad:
             return None
         return stair_hole
+
+    if bool(getattr(props, 'noble_manor_layout', False)) and has_interior_walls \
+            and W >= 22.0 and D >= 12.0:
+        _noble = _plan_noble_manor_rooms(
+            fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
+            has_stairs_landing, stair_pos_info=stair_pos_info,
+            extra_doorways=doorways, props=props,
+            fl_wings_bounds=fl_wings_bounds)
+        if _noble is not None:
+            _n_rooms, _n_walls = _noble
+            _n_rooms = _recut_oversized_rooms(
+                _n_rooms, _n_walls, bounds, wall_t, dw_w, dw_h,
+                effective_archetype, fl_idx, has_stairs_landing, total_floors,
+                program, clear_zone_rects=clear_zone_rects)
+            # The corridor plan already isolates the stair hall; the generic
+            # "rename rooms touched by the stair keep-out" pass mis-reads the
+            # wing cellar shaft as a floor-wide keep-out and turns every
+            # service/chamber room into a corridor, so it is deliberately
+            # skipped here.
+            return _n_rooms, _n_walls
 
     if bool(getattr(props, 'has_throne_room', False)) and has_interior_walls and W >= 13.0 and D >= 5.5:
         _palace = _plan_throne_palace_rooms(
@@ -5508,14 +5849,30 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 dx, dy = d.get('x', 0.0), d.get('y', 0.0)
                 dw = d.get('w', 0.95)
                 axis = d.get('axis', 'X')
+                touches = False
                 if axis == 'X':
-                    if (dx + dw * 0.5 >= rx0 - 0.20 and dx - dw * 0.5 <= rx1 + 0.20) and (ry0 - 0.55 <= dy <= ry1 + 0.55):
-                        if d not in rm.doorways:
-                            rm.doorways.append(d)
+                    touches = ((dx + dw * 0.5 >= rx0 - 0.20 and dx - dw * 0.5 <= rx1 + 0.20)
+                               and (ry0 - 0.55 <= dy <= ry1 + 0.55))
                 else:
-                    if (dy + dw * 0.5 >= ry0 - 0.20 and dy - dw * 0.5 <= ry1 + 0.20) and (rx0 - 0.55 <= dx <= rx1 + 0.55):
-                        if d not in rm.doorways:
-                            rm.doorways.append(d)
+                    touches = ((dy + dw * 0.5 >= ry0 - 0.20 and dy - dw * 0.5 <= ry1 + 0.20)
+                               and (rx0 - 0.55 <= dx <= rx1 + 0.55))
+                if not touches:
+                    continue
+                if effective_archetype == 'TENEMENT':
+                    # The apartment planner puts its entry on the room-side
+                    # face of the wall, while floors.py cuts the real door on
+                    # the exterior wall line.  Snapping the two copies onto
+                    # the exterior door prevents a doubled frame and keeps the
+                    # room's circulation door aligned with the cut.
+                    _near = next((_e for _e in rm.doorways
+                                  if _e.get('axis', 'X') == axis
+                                  and abs(_e.get('x', 0.0) - dx) < 0.55
+                                  and abs(_e.get('y', 0.0) - dy) < 0.55), None)
+                    if _near is not None:
+                        _near.update(d)
+                        continue
+                if d not in rm.doorways:
+                    rm.doorways.append(d)
 
     # Check if this floor has a mezzanine gallery void (double-height grand hall)
     if fl_idx == 1 and bool(getattr(props, 'has_throne_room', False) or getattr(props, 'has_double_height', False)):
@@ -5774,13 +6131,13 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         if not any(getattr(r, 'role', '') == 'KITCHEN' for r in rooms):
             _cand = next((r for r in rooms if getattr(r, 'role', '') in
                           ('STORAGE', 'OFFICE', 'ARMORY', 'PANTRY', 'GUEST_ROOM',
-                           'BEDROOM', 'GREAT_HALL')), None)
+                           'BEDROOM', 'GREAT_HALL', 'LODGE')), None)
             if _cand is not None:
                 _cand.role = 'KITCHEN'
         if not any(getattr(r, 'role', '') == 'MESS_HALL' for r in rooms):
             _cand = next((r for r in rooms if getattr(r, 'role', '') in
                           ('STORAGE', 'OFFICE', 'ARMORY', 'PANTRY', 'GUEST_ROOM',
-                           'BEDROOM', 'GREAT_HALL')), None)
+                           'BEDROOM', 'GREAT_HALL', 'LODGE')), None)
             if _cand is not None:
                 _cand.role = 'MESS_HALL'
 

@@ -919,6 +919,15 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
             build_inn_cellar(bm, props, ctx, tier)
         except Exception:
             pass
+    # Noble Manor undercroft: same wing-held stair and two-chamber cellar,
+    # but under the forecourt wing of the U-shaped manor.
+    if (getattr(props, 'noble_manor_layout', False)
+            and getattr(props, 'has_basement_stair', False)):
+        try:
+            from .cellar import build_inn_cellar
+            build_inn_cellar(bm, props, ctx, tier)
+        except Exception:
+            pass
     # Fishmonger yard: fish rails hug the front wall, flanking the entrance
     # with the door path kept clear. Higher tiers work more rails (bigger
     # catch). Footprints are published so the supply nook never lands on one.
