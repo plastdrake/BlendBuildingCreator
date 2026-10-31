@@ -3577,6 +3577,46 @@ def _clamp_tenement_walls(interior_walls, rooms, tol=0.24):
     return interior_walls
 
 
+def _open_wing_entrance_walls(interior_walls, wings, bounds, tol=0.35):
+    """Drop partitions that run into a wing entrance opening.
+
+    Some T-wing outbuildings placed a perpendicular main-block partition right
+    inside the wide wing doorway.  A cut-down wall end still reads as a wall
+    in the opening, so remove the offending segment entirely and let the
+    entrance read as one vestibule.
+    """
+    if not interior_walls or not wings:
+        return interior_walls
+    ix_min, ix_max, iy_min, iy_max = bounds
+    drop = set()
+    for w in interior_walls:
+        if w.get('axis') != 'Y':
+            continue
+        p1, p2 = w.get('p1'), w.get('p2')
+        if not p1 or not p2:
+            continue
+        px = p1[0]
+        for wb in wings:
+            try:
+                wx0, wx1, wy0, wy1 = (float(wb[0]), float(wb[1]),
+                                      float(wb[2]), float(wb[3]))
+            except Exception:
+                continue
+            if not (wx0 + 0.25 <= px <= wx1 - 0.25):
+                continue
+            # A wing attached to the front/back facade: any vertical wall end
+            # at that facade inside the wing width is in the doorway.
+            if wy1 <= iy_min + 0.45 and (abs(p1[1] - iy_min) < tol
+                                         or abs(p2[1] - iy_min) < tol):
+                drop.add(id(w))
+                break
+            if wy0 >= iy_max - 0.45 and (abs(p1[1] - iy_max) < tol
+                                         or abs(p2[1] - iy_max) < tol):
+                drop.add(id(w))
+                break
+    return [w for w in interior_walls if id(w) not in drop]
+
+
 def _extend_wall_ends_to_bounds(interior_walls, bounds, snap=1.10):
     """Snap near-bound partition ends onto the wall line.
 
@@ -6540,6 +6580,10 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     w['p1'], w['p2'] = _p1, _p2
         if _drop_doors:
             interior_walls[:] = [w for w in interior_walls if w not in _drop_doors]
+
+    if fl_wings_bounds:
+        interior_walls = _open_wing_entrance_walls(
+            interior_walls, fl_wings_bounds, (ix_min, ix_max, iy_min, iy_max))
 
     if (effective_archetype in ('ARCHERY', 'ARCHERY_RANGE') and fl_idx == 0
             and rooms):
