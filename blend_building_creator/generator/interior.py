@@ -1776,7 +1776,7 @@ def _normalize_stair_circulation_rooms(rooms, stair_hole, stair_pos_info, bounds
         'TAVERN_TAPROOM', 'GREAT_HALL', 'BANQUET_HALL', 'HOUSE_HALL',
         'COUNCIL_CHAMBER', 'MESS_HALL', 'THRONE_ROOM', 'CHAPEL_HALL',
         'WORKSHOP', 'STONE_STORE', 'STABLE_HALL', 'LODGE', 'RANGE',
-        'DINING', 'COMMON_ROOM', 'ENTRANCE_HALL',
+        'DINING', 'COMMON_ROOM', 'ENTRANCE_HALL', 'COMMUNAL_DINING',
         'BAKEHOUSE', 'JOINERY', 'TAILOR_ATELIER', 'BREWHOUSE', 'BUTCHERY',
         'GOLDSMITH', 'FISHERY', 'SMITHY', 'FLETCHER_WORKSHOP', 'STORE',
     }
@@ -1796,11 +1796,40 @@ def _normalize_stair_circulation_rooms(rooms, stair_hole, stair_pos_info, bounds
     for room in rooms:
         if room.role not in PRIVATE_ROOM_ROLES:
             continue
+        if getattr(room, 'allow_large', False):
+            continue
         internal_doors = [door for door in (room.doorways or [])
                           if bounds[0] + 0.10 < door.get('x', 0.0) < bounds[1] - 0.10
                           and bounds[2] + 0.10 < door.get('y', 0.0) < bounds[3] - 0.10]
         if len(internal_doors) >= 2:
             room.role = 'CORRIDOR'
+    return rooms
+
+
+def _apply_basement_store_role(rooms, props, fl_idx, stair_hole):
+    """Make the room that holds a cellar stair a working store.
+
+    Called from every planner exit (palace / noble / manor wings return before
+    the generic tail), so the keep's rear stair hall never turns into an
+    armchair-and-rug parlour.
+    """
+    if (fl_idx != 0 or stair_hole is None or not rooms
+            or not getattr(props, 'has_basement_stair', False)):
+        return rooms
+    sx = (stair_hole[0] + stair_hole[1]) * 0.5
+    sy = (stair_hole[2] + stair_hole[3]) * 0.5
+    holder = None
+    for r in rooms:
+        x0, x1, y0, y1 = r.bounds
+        if x0 <= sx <= x1 and y0 <= sy <= y1:
+            holder = r
+            break
+    protected = {
+        'THRONE_ROOM', 'GREAT_HALL', 'BANQUET_HALL', 'CHAPEL_HALL',
+        'MEZZANINE_GALLERY',
+    }
+    if holder is not None and getattr(holder, 'role', '') not in protected:
+        holder.role = 'STORAGE'
     return rooms
 
 
@@ -2105,14 +2134,14 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         walls.append({
             'p1': (px, y0), 'p2': (px, y1),
             'axis': 'Y', 'pos': px, 'thickness': wall_t,
-            'doorway': {'x': px, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'},
+            'doorway': {'x': px, 'y': dw_y, 'w': dw_w, 'h': dw_h, 'axis': 'Y'} if dw_y is not None else None,
         })
 
     def _hwall(x0, x1, y, dw_x):
         walls.append({
             'p1': (x0, y), 'p2': (x1, y),
             'axis': 'X', 'pos': y, 'thickness': wall_t,
-            'doorway': {'x': dw_x, 'y': y, 'w': dw_w, 'h': dw_h, 'axis': 'X'},
+            'doorway': {'x': dw_x, 'y': y, 'w': dw_w, 'h': dw_h, 'axis': 'X'} if dw_x is not None else None,
         })
 
     def _holds_stair(rb):
@@ -2228,7 +2257,7 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'FRONT': (b_east, ix_max), 'RIGHT': (iy_min, split_y_east)}
         )
         rm_east_n = Room(
-            id=f"fl{fl_idx}_master_bed", floor_idx=fl_idx, role='MASTER_BED',
+            id=f"fl{fl_idx}_library", floor_idx=fl_idx, role='LIBRARY',
             bounds=(b_east, ix_max, split_y_east, iy_max),
             doorways=[
                 {'x': b_east, 'y': y_mid, 'axis': 'Y', 'w': dw_w},
@@ -2237,41 +2266,101 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             stair_hole=None,
             exterior_facades={'BACK': (b_east, ix_max), 'RIGHT': (split_y_east, iy_max)}
         )
+        for _r in (rm_west, rm_center, rm_east_s, rm_east_n):
+            _r.allow_large = True
         rooms = [rm_west, rm_center, rm_east_s, rm_east_n]
 
     else:
         dw_y_s = (iy_min + y_mid) * 0.5
-        dw_y_n = (y_mid + iy_max) * 0.5
         dw_x_center = (b_west + b_east) * 0.5
         dw_x_east = (b_east + ix_max) * 0.5
 
-        # West dividing walls between stair landing and central salons
+        # West dividing walls between stair landing and central suite:
+        # ONLY ONE door from stair landing into the suite salon at dw_y_s.
+        # The north wall is solid (None) to ensure the master bedchamber is private and secluded!
         _vwall(b_west, iy_min, y_mid, dw_y_s)
-        _vwall(b_west, y_mid, iy_max, dw_y_n)
+        _vwall(b_west, y_mid, iy_max, None)
 
-        # East dividing walls between central salons and library/treasury
+        # East dividing walls between central salon and east wing:
+        # Doorway from south salon into east wing south at dw_y_s.
+        # Wall between north bedchamber and east wing north is solid (None) - no cross circulation!
         _vwall(b_east, iy_min, y_mid, dw_y_s)
-        _vwall(b_east, y_mid, iy_max, dw_y_n)
+        _vwall(b_east, y_mid, iy_max, None)
 
-        # Horizontal partition dividing central salon into south and north rooms
+        # Horizontal partition dividing central salon (south) from bedchamber (north):
+        # Dedicated private entrance door at dw_x_center
         _hwall(b_west, b_east, y_mid, dw_x_center)
 
-        # Horizontal partition dividing east wing into south and north rooms
+        # Horizontal partition dividing east wing into south and north rooms:
+        # En-suite access door at dw_x_east
         _hwall(b_east, ix_max, y_mid, dw_x_east)
+
+        # Dedicated private floor-suites for the 4 grown children and the High Lord:
+        # Each suite occupies its entire floor. The stair landing enters the suite's private
+        # salon; from the salon, private doors open to the grand bedchamber and the themed
+        # wing rooms. Nobody ever walks through anyone else's room.
+        has_dh = bool(getattr(props, 'has_throne_room', False) or getattr(props, 'has_double_height', False))
+        base_suite_fl = 2 if has_dh else 1
+        suite_idx = max(0, min(4, fl_idx - base_suite_fl))
+
+        if suite_idx == 0:
+            # Eldest Child: Knight Marshal / Champion
+            salon_role = 'GREAT_HALL'
+            salon_id = f"fl{fl_idx}_marshal_salon"
+            bed_id = f"fl{fl_idx}_champion_bedchamber"
+            east_s_id = f"fl{fl_idx}_war_planning_salon"
+            east_s_role = 'ARMORY'
+            east_n_id = f"fl{fl_idx}_campaign_map_room"
+            east_n_role = 'STUDY'
+        elif suite_idx == 1:
+            # Second Child: Royal High Scholar / Arcane Diplomat
+            salon_role = 'HOUSE_HALL'
+            salon_id = f"fl{fl_idx}_scholarly_salon"
+            bed_id = f"fl{fl_idx}_scholar_bedchamber"
+            east_s_id = f"fl{fl_idx}_grand_athenaeum"
+            east_s_role = 'LIBRARY'
+            east_n_id = f"fl{fl_idx}_arcane_sanctorum"
+            east_n_role = 'STUDY'
+        elif suite_idx == 2:
+            # Third Child: High Chancellor / Imperial Treasurer
+            salon_role = 'HOUSE_HALL'
+            salon_id = f"fl{fl_idx}_chancellery_salon"
+            bed_id = f"fl{fl_idx}_chancellor_bedchamber"
+            east_s_id = f"fl{fl_idx}_strongroom_vault"
+            east_s_role = 'TREASURY'
+            east_n_id = f"fl{fl_idx}_chancellery_bureau"
+            east_n_role = 'OFFICE'
+        elif suite_idx == 3:
+            # Fourth Child: Master Navigator / Grand Explorer / Courtier
+            salon_role = 'HOUSE_HALL'
+            salon_id = f"fl{fl_idx}_curiosity_salon"
+            bed_id = f"fl{fl_idx}_explorer_bedchamber"
+            east_s_id = f"fl{fl_idx}_cartography_cabinet"
+            east_s_role = 'STUDY'
+            east_n_id = f"fl{fl_idx}_conservatory_parlour"
+            east_n_role = 'HOUSE_HALL'
+        else:
+            # Suite 4: The High Lord's Imperial Penthouse Suite
+            salon_role = 'GREAT_HALL'
+            salon_id = f"fl{fl_idx}_lord_throne_solar"
+            bed_id = f"fl{fl_idx}_lord_imperial_bedchamber"
+            east_s_id = f"fl{fl_idx}_lord_regalia_vault"
+            east_s_role = 'COUNCIL_CHAMBER'
+            east_n_id = f"fl{fl_idx}_lord_master_sanctorum"
+            east_n_role = 'LIBRARY'
 
         rm_west = Room(
             id=f"fl{fl_idx}_stair_landing", floor_idx=fl_idx, role='STAIR_LANDING',
             bounds=(ix_min, b_west, iy_min, iy_max),
             doorways=[
                 {'x': b_west, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
-                {'x': b_west, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
             ],
             stair_hole=_holds_stair((ix_min, b_west, iy_min, iy_max)),
             exterior_facades={'FRONT': (ix_min, b_west), 'BACK': (ix_min, b_west), 'LEFT': (iy_min, iy_max)}
         )
         rm_center_s = Room(
-            id=f"fl{fl_idx}_royal_salon", floor_idx=fl_idx,
-            role='GREAT_HALL' if fl_idx == 2 else 'HOUSE_HALL',
+            id=salon_id, floor_idx=fl_idx,
+            role=salon_role,
             bounds=(b_west, b_east, iy_min, y_mid),
             doorways=[
                 {'x': b_west, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
@@ -2282,19 +2371,17 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'FRONT': (b_west, b_east)}
         )
         rm_center_n = Room(
-            id=f"fl{fl_idx}_royal_bed", floor_idx=fl_idx,
-            role='MASTER_BED' if fl_idx == 2 else 'BEDROOM',
+            id=bed_id, floor_idx=fl_idx,
+            role='ROYAL_CHAMBER',
             bounds=(b_west, b_east, y_mid, iy_max),
             doorways=[
-                {'x': b_west, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
                 {'x': dw_x_center, 'y': y_mid, 'axis': 'X', 'w': dw_w},
-                {'x': b_east, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
             ],
             stair_hole=None,
             exterior_facades={'BACK': (b_west, b_east)}
         )
         rm_east_s = Room(
-            id=f"fl{fl_idx}_bedchamber", floor_idx=fl_idx, role='BEDROOM',
+            id=east_s_id, floor_idx=fl_idx, role=east_s_role,
             bounds=(b_east, ix_max, iy_min, y_mid),
             doorways=[
                 {'x': b_east, 'y': dw_y_s, 'axis': 'Y', 'w': dw_w},
@@ -2304,15 +2391,16 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             exterior_facades={'FRONT': (b_east, ix_max), 'RIGHT': (iy_min, y_mid)}
         )
         rm_east_n = Room(
-            id=f"fl{fl_idx}_guest_room", floor_idx=fl_idx, role='GUEST_ROOM',
+            id=east_n_id, floor_idx=fl_idx, role=east_n_role,
             bounds=(b_east, ix_max, y_mid, iy_max),
             doorways=[
-                {'x': b_east, 'y': dw_y_n, 'axis': 'Y', 'w': dw_w},
                 {'x': dw_x_east, 'y': y_mid, 'axis': 'X', 'w': dw_w},
             ],
             stair_hole=None,
             exterior_facades={'BACK': (b_east, ix_max), 'RIGHT': (y_mid, iy_max)}
         )
+        for _r in (rm_west, rm_center_s, rm_center_n, rm_east_s, rm_east_n):
+            _r.allow_large = True
         rooms = [rm_west, rm_center_s, rm_center_n, rm_east_s, rm_east_n]
 
     # Register external portals (connector doorways, skybridge entrances) in room boundaries
@@ -2336,6 +2424,615 @@ def _plan_throne_palace_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
                         if not any(abs(d.get('x', 0) - ed_x) < 0.2 and abs(d.get('y', 0) - ed_y) < 0.2 for d in r.doorways):
                             r.doorways.append(ed_entry)
 
+    return rooms, walls
+
+
+def _retinue_hall_kind(props):
+    """'GARRISON' / 'RETAINER' for the two connector-joined lower halls."""
+    if props is None:
+        return None
+    val = None
+    try:
+        val = props.get('retinue_hall')
+    except Exception:
+        val = None
+    if not val:
+        val = getattr(props, 'retinue_hall', None)
+    return str(val).upper() if val else None
+
+
+def _living_outbuilding_flag(props):
+    if props is None:
+        return False
+    try:
+        if bool(props.get('outbuilding_living', False)):
+            return True
+    except Exception:
+        pass
+    return bool(getattr(props, 'outbuilding_living', False))
+
+
+def _plan_living_outbuilding_rooms(fl_idx, bounds, stair_hole, stair_pos_info,
+                                   front_door_info, extra_doorways, wall_t,
+                                   dw_w, dw_h, props):
+    """Purpose-built interior for a servant / retainer cottage.
+
+    These are homes, not generic outbuildings.  The old BSP planner carved
+    long empty "corridors" out of the usable floor, left partition ends in
+    mid-air and produced a scatter of tiny chambers.  This plan gives each
+    storey three or four genuinely large rooms:
+
+    * Ground: a stair-side living hall, a wide kitchen and a full-depth
+      dining room, all opening off one enfilade.
+    * Upper: a stair-side sitting landing plus a short cross corridor serving
+      two deep front bedrooms and two deep rear bedrooms.
+
+    Every partition runs from the exterior shell to another partition (or to
+    the landing wall), and every doorway sits in the middle of a wall span.
+    """
+    if fl_idx < 0:
+        return None
+    ix0, ix1, iy0, iy1 = bounds
+    W, D = ix1 - ix0, iy1 - iy0
+    if W < 9.0 or D < 5.5:
+        return None
+
+    # ---- stair side and width -------------------------------------------
+    side_right = bool(getattr(props, 'stair_placement', 'LEFT') == 'RIGHT')
+    stair_cx = None
+    if stair_pos_info:
+        try:
+            stair_cx = float(stair_pos_info.get('cx'))
+        except Exception:
+            stair_cx = None
+    if stair_cx is not None:
+        side_right = stair_cx > (ix0 + ix1) * 0.5
+    if stair_hole is not None:
+        stair_w = max(1.4, float(stair_hole[1]) - float(stair_hole[0]))
+    elif stair_pos_info:
+        stair_w = max(1.4, float(stair_pos_info.get('w', 2.0) or 2.0))
+    else:
+        stair_w = 2.0
+
+    if stair_hole is not None:
+        if side_right:
+            x_split = min(float(stair_hole[0]) - 1.60, ix1 - 4.20)
+        else:
+            x_split = max(float(stair_hole[1]) + 1.60, ix0 + 4.20)
+        hall_w = (ix1 - x_split) if side_right else (x_split - ix0)
+    elif stair_pos_info and 'cx' in stair_pos_info and 'w' in stair_pos_info:
+        try:
+            sw_half = float(stair_pos_info['w']) * 0.5
+            if side_right:
+                x_split = min(float(stair_pos_info['cx']) - sw_half - 1.60, ix1 - 4.20)
+            else:
+                x_split = max(float(stair_pos_info['cx']) + sw_half + 1.60, ix0 + 4.20)
+            hall_w = (ix1 - x_split) if side_right else (x_split - ix0)
+        except Exception:
+            hall_w = max(3.80, min(4.80, stair_w + 1.80))
+            x_split = (ix1 - hall_w) if side_right else (ix0 + hall_w)
+    else:
+        hall_w = max(3.80, min(4.80, stair_w + 1.80))
+        if side_right:
+            x_split = ix1 - hall_w
+        else:
+            x_split = ix0 + hall_w
+
+    if W - hall_w < 6.5:
+        hall_w = max(3.0, W - 6.5)
+        if side_right:
+            x_split = ix1 - hall_w
+        else:
+            x_split = ix0 + hall_w
+
+    # ---- keep vertical partitions out of exterior door openings ---------
+    door_spans = []
+    if fl_idx == 0 and front_door_info:
+        try:
+            dcx, dww = float(front_door_info[0]), float(front_door_info[1])
+            door_spans.append((dcx - dww * 0.5 - 0.40,
+                               dcx + dww * 0.5 + 0.40))
+        except Exception:
+            pass
+    for dw in (extra_doorways or []):
+        try:
+            ax = dw.get('axis', 'Y' if dw.get('facade') in ('LEFT', 'RIGHT') else 'X')
+            if ax != 'X':
+                continue
+            dcx = float(dw.get('x', dw.get('pos', 0.0)))
+            dww = float(dw.get('w', 1.4))
+            door_spans.append((dcx - dww * 0.5 - 0.40,
+                               dcx + dww * 0.5 + 0.40))
+        except Exception:
+            pass
+
+    def _clear_x(px, lo, hi, min_side=2.8):
+        if hi - lo < min_side * 2.0:
+            return (lo + hi) * 0.5
+        px = min(hi - min_side, max(lo + min_side, px))
+        for _ in range(4):
+            hit = None
+            for s0, s1 in door_spans:
+                if s0 - 0.02 <= px <= s1 + 0.02:
+                    hit = (s0, s1)
+                    break
+            if hit is None:
+                break
+            cands = [c for c in (hit[0], hit[1])
+                     if c - lo >= min_side and hi - c >= min_side]
+            if not cands:
+                break
+            px = min(cands, key=lambda c: abs(c - px))
+        return min(hi - min_side, max(lo + min_side, px))
+
+    def _holds_stair(rb):
+        if stair_hole is None:
+            return None
+        sh = stair_hole
+        if rb[1] <= sh[0] or rb[0] >= sh[1] or rb[3] <= sh[2] or rb[2] >= sh[3]:
+            return None
+        return sh
+
+    def _facades(rb):
+        x0, x1, y0, y1 = rb
+        f = {}
+        if abs(x0 - ix0) < 0.02:
+            f['LEFT'] = (y0, y1)
+        if abs(x1 - ix1) < 0.02:
+            f['RIGHT'] = (y0, y1)
+        if abs(y0 - iy0) < 0.02:
+            f['FRONT'] = (x0, x1)
+        if abs(y1 - iy1) < 0.02:
+            f['BACK'] = (x0, x1)
+        return f
+
+    def _vwall(px, dw_y, door_w):
+        return {
+            'p1': (px, iy0), 'p2': (px, iy1), 'axis': 'Y', 'pos': px,
+            'thickness': wall_t,
+            'doorway': {'x': px, 'y': dw_y, 'w': door_w, 'h': dw_h,
+                        'axis': 'Y'},
+        }
+
+    def _hwall(x0, x1, py, dw_x, door_w):
+        return {
+            'p1': (x0, py), 'p2': (x1, py), 'axis': 'X', 'pos': py,
+            'thickness': wall_t,
+            'doorway': {'x': dw_x, 'y': py, 'w': door_w, 'h': dw_h,
+                        'axis': 'X'},
+        }
+
+    def _add_external_doors(room):
+        rb = room.bounds
+        doors = list(room.doorways or [])
+        for d in (extra_doorways or []):
+            try:
+                dx = float(d.get('x', 0.0))
+                dy = float(d.get('y', 0.0))
+            except Exception:
+                continue
+            if not (rb[0] - 0.45 <= dx <= rb[1] + 0.45
+                    and rb[2] - 0.45 <= dy <= rb[3] + 0.45):
+                continue
+            on_edge = (abs(dx - rb[0]) < 0.50 or abs(dx - rb[1]) < 0.50
+                       or abs(dy - rb[2]) < 0.50 or abs(dy - rb[3]) < 0.50)
+            if on_edge:
+                doors.append(dict(d))
+        if fl_idx == 0 and front_door_info:
+            try:
+                dcx, dww = float(front_door_info[0]), float(front_door_info[1])
+                if rb[0] - 0.45 <= dcx <= rb[1] + 0.45:
+                    doors.append({'x': dcx, 'y': iy0, 'axis': 'X',
+                                  'w': dww})
+            except Exception:
+                pass
+        unique = []
+        for d in doors:
+            if any(abs(float(d.get('x', 0.0)) - float(u.get('x', 1e9))) < 0.05
+                   and abs(float(d.get('y', 0.0)) - float(u.get('y', 1e9))) < 0.05
+                   and d.get('axis') == u.get('axis')
+                   for u in unique):
+                continue
+            unique.append(d)
+        room.doorways = unique
+        return room
+
+    rooms = []
+    walls = []
+
+    if fl_idx == 0:
+        # Ground floor: living hall | kitchen | dining, all one room deep.
+        kitchen_w = max(3.4, min(4.8, (W - hall_w) * 0.38))
+        if side_right:
+            x_kit = x_split - kitchen_w
+            x_kit = _clear_x(x_kit, ix0 + 2.8, x_split - 2.8)
+            if x_split - x_kit < 2.8:
+                x_kit = x_split - 2.8
+            bands = [(ix0, x_kit, 'DINING'),
+                     (x_kit, x_split, 'KITCHEN'),
+                     (x_split, ix1, 'HOUSE_HALL')]
+        else:
+            x_kit = x_split + kitchen_w
+            x_kit = _clear_x(x_kit, x_split + 2.8, ix1 - 2.8)
+            if x_kit - x_split < 2.8:
+                x_kit = x_split + 2.8
+            bands = [(ix0, x_split, 'HOUSE_HALL'),
+                     (x_split, x_kit, 'KITCHEN'),
+                     (x_kit, ix1, 'DINING')]
+        for x0, x1, role in bands:
+            rb = (x0, x1, iy0, iy1)
+            r = Room(
+                id=f"fl{fl_idx}_{role.lower()}", floor_idx=fl_idx, role=role,
+                bounds=rb, doorways=[], stair_hole=_holds_stair(rb),
+                exterior_facades=_facades(rb), allow_large=True)
+            rooms.append(_add_external_doors(r))
+        # One enfilade: both partitions carry a centered doorway, and both
+        # adjoining rooms know about that opening so furniture keeps it clear.
+        walls.append(_vwall(x_split, 0.0, dw_w))
+        walls.append(_vwall(x_kit, 0.0, dw_w))
+        for r in rooms:
+            rx0, rx1 = r.bounds[0], r.bounds[1]
+            for xw in (x_split, x_kit):
+                if abs(rx0 - xw) < 0.02 or abs(rx1 - xw) < 0.02:
+                    r.doorways.append({'x': xw, 'y': 0.0, 'axis': 'Y',
+                                       'w': dw_w})
+    else:
+        # Upper floor: compact sitting landing, central cross corridor and
+        # four really useable bedchambers (two front, two rear).
+        if stair_hole is not None:
+            if side_right:
+                x_land = min(float(stair_hole[0]) - 1.60, ix1 - 4.20)
+            else:
+                x_land = max(float(stair_hole[1]) + 1.60, ix0 + 4.20)
+            landing_w = (ix1 - x_land) if side_right else (x_land - ix0)
+        elif stair_pos_info and 'cx' in stair_pos_info and 'w' in stair_pos_info:
+            try:
+                sw_half = float(stair_pos_info['w']) * 0.5
+                if side_right:
+                    x_land = min(float(stair_pos_info['cx']) - sw_half - 1.60, ix1 - 4.20)
+                else:
+                    x_land = max(float(stair_pos_info['cx']) + sw_half + 1.60, ix0 + 4.20)
+                landing_w = (ix1 - x_land) if side_right else (x_land - ix0)
+            except Exception:
+                landing_w = max(4.20, min(5.20, stair_w + 2.00))
+                x_land = (ix1 - landing_w) if side_right else (ix0 + landing_w)
+        else:
+            landing_w = max(4.20, min(5.20, stair_w + 2.00))
+            if side_right:
+                x_land = ix1 - landing_w
+            else:
+                x_land = ix0 + landing_w
+        rem_lo, rem_hi = (ix0, x_land) if side_right else (x_land, ix1)
+        if rem_hi - rem_lo < 6.5:
+            return None
+        x_mid = (rem_lo + rem_hi) * 0.5
+        corr_h = 1.60 if D >= 7.0 else 1.30
+        yc0 = -corr_h * 0.5
+        yc1 = corr_h * 0.5
+        if yc0 - iy0 < 2.4 or iy1 - yc1 < 2.4:
+            return None
+
+        if side_right:
+            land_b = (x_land, ix1, iy0, iy1)
+        else:
+            land_b = (ix0, x_land, iy0, iy1)
+        land = Room(
+            id=f"fl{fl_idx}_stair_hall", floor_idx=fl_idx,
+            role='HOUSE_HALL', bounds=land_b, doorways=[],
+            stair_hole=_holds_stair(land_b),
+            exterior_facades=_facades(land_b), allow_large=True)
+        rooms.append(_add_external_doors(land))
+
+        corridor_b = (rem_lo, rem_hi, yc0, yc1)
+        rooms.append(Room(
+            id=f"fl{fl_idx}_passage", floor_idx=fl_idx, role='CORRIDOR',
+            bounds=corridor_b, doorways=[], stair_hole=None,
+            exterior_facades=_facades(corridor_b), allow_large=True))
+
+        # Room rectangles and the door each one takes from the corridor.
+        bed_specs = []
+        for y0, y1, tag in ((iy0, yc0, 'front'), (yc1, iy1, 'rear')):
+            for x0, x1, side in ((rem_lo, x_mid, 'w'),
+                                 (x_mid, rem_hi, 'e')):
+                bed_specs.append((x0, x1, y0, y1, f"{tag}_{side}"))
+        kind = 'SERVANT'
+        if props is not None:
+            try:
+                kind = str(props.get('outbuilding_living_kind',
+                                     getattr(props, 'outbuilding_living_kind',
+                                             'SERVANT')) or 'SERVANT')
+            except Exception:
+                kind = str(getattr(props, 'outbuilding_living_kind',
+                                   'SERVANT') or 'SERVANT')
+            kind = kind.upper()
+        master_done = False
+        for x0, x1, y0, y1, tag in bed_specs:
+            role = 'BEDROOM'
+            if kind == 'RETAINER' and not master_done and y0 >= yc1:
+                role = 'MASTER_BED'
+                master_done = True
+            rb = (x0, x1, y0, y1)
+            door_y = yc0 if y0 <= yc0 else yc1
+            r = Room(
+                id=f"fl{fl_idx}_bed_{tag}", floor_idx=fl_idx, role=role,
+                bounds=rb,
+                doorways=[{'x': (x0 + x1) * 0.5, 'y': door_y,
+                           'axis': 'X', 'w': dw_w}],
+                stair_hole=None, exterior_facades=_facades(rb),
+                allow_large=True)
+            rooms.append(_add_external_doors(r))
+
+        # Landing <-> corridor doorway.  Keep the opening just narrower than
+        # the corridor so its side walls land on the door jambs, not inside
+        # the opening.
+        walls.append(_vwall(x_land, 0.0, min(dw_w, 1.35)))
+        # Corridor walls, one segment per bedroom (so each has a doorway).
+        for y_wall in (yc0, yc1):
+            walls.append(_hwall(rem_lo, x_mid, y_wall,
+                                (rem_lo + x_mid) * 0.5, dw_w))
+            walls.append(_hwall(x_mid, rem_hi, y_wall,
+                                (x_mid + rem_hi) * 0.5, dw_w))
+        # Bedroom party wall between the two rooms on each side.
+        for y0, y1 in ((iy0, yc0), (yc1, iy1)):
+            walls.append({
+                'p1': (x_mid, y0), 'p2': (x_mid, y1), 'axis': 'Y',
+                'pos': x_mid, 'thickness': wall_t, 'doorway': None,
+            })
+        # Register the landing door and every bedroom door in the rooms they
+        # serve, so the furnisher never blocks a walk-through.
+        for r in rooms:
+            rx0, rx1 = r.bounds[0], r.bounds[1]
+            ry0, ry1 = r.bounds[2], r.bounds[3]
+            if ((abs(rx0 - x_land) < 0.02 or abs(rx1 - x_land) < 0.02)
+                    and ry0 - 0.02 <= 0.0 <= ry1 + 0.02):
+                r.doorways.append({'x': x_land, 'y': 0.0, 'axis': 'Y',
+                                   'w': min(dw_w, 1.35)})
+        corridor = next((r for r in rooms if r.role == 'CORRIDOR'), None)
+        if corridor is not None:
+            for x0, x1, y0, y1, tag in bed_specs:
+                door_y = yc0 if y0 <= yc0 else yc1
+                corridor.doorways.append({'x': (x0 + x1) * 0.5,
+                                          'y': door_y, 'axis': 'X',
+                                          'w': dw_w})
+
+    # Roles are already deliberate here: the stair lives in the hall, the
+    # narrow cross-passage is circulation, and the bedrooms each have exactly
+    # one door.  Do not run the generic stair-normaliser, which would turn the
+    # kitchen and first bedrooms into corridors because the full switchback
+    # envelope reaches past the actual stair well.
+    walls = _repair_dangling_walls(
+        walls, (ix0, ix1, iy0, iy1))
+    return rooms, walls
+
+
+def _plan_retinue_hall_rooms(fl_idx, bounds, stair_hole, stair_pos_info,
+                             doorways, wall_t, dw_w, dw_h, props,
+                             fl_wings_bounds=None):
+    """Living quarters for the two lower halls joined by the connectors.
+
+    The Great Hall and East Hall upper storeys used to be carved into a row of
+    generic halls/corridors, which left whole floors with rugs and desks but no
+    beds.  These are the retainers' and garrison's quarters, so each upper
+    storey is now a stair landing plus a short cross corridor serving four
+    deep chambers: one officer/master chamber and three dormitories/bedrooms.
+    """
+    if fl_idx <= 0:
+        return None
+    ix0, ix1, iy0, iy1 = bounds
+    W, D = ix1 - ix0, iy1 - iy0
+    if W < 11.5 or D < 6.5:
+        return None
+
+    kind = 'RETAINER'
+    try:
+        kind = str(props.get('retinue_hall', getattr(props, 'retinue_hall',
+                                                       'RETAINER')) or 'RETAINER').upper()
+    except Exception:
+        kind = str(getattr(props, 'retinue_hall', 'RETAINER') or 'RETAINER').upper()
+
+    side_right = bool(getattr(props, 'stair_placement', 'LEFT') == 'RIGHT')
+    if stair_pos_info:
+        try:
+            side_right = float(stair_pos_info.get('cx')) > (ix0 + ix1) * 0.5
+        except Exception:
+            pass
+    if stair_hole is not None:
+        stair_w = max(1.4, float(stair_hole[1]) - float(stair_hole[0]))
+    elif stair_pos_info:
+        stair_w = max(1.4, float(stair_pos_info.get('w', 2.0) or 2.0))
+    else:
+        stair_w = 2.0
+
+    stair_switchback = (
+        getattr(props, 'stair_style', 'STRAIGHT') != 'SPIRAL'
+        and getattr(props, 'building_archetype', 'NONE') != 'TENEMENT'
+    )
+    stair_total_w = (stair_w * 2.0 + 0.20) if stair_switchback else stair_w
+    landing_w = max(4.2, min(6.5, stair_total_w + 1.4))
+    if side_right:
+        x_land = ix1 - landing_w
+    else:
+        x_land = ix0 + landing_w
+    if stair_hole is not None:
+        if side_right:
+            x_land = min(x_land, float(stair_hole[0]) - 1.60)
+        else:
+            x_land = max(x_land, float(stair_hole[1]) + 1.60)
+        landing_w = (ix1 - x_land) if side_right else (x_land - ix0)
+    rem_lo, rem_hi = (ix0, x_land) if side_right else (x_land, ix1)
+    if rem_hi - rem_lo < 5.5:
+        return None
+    two_cols = (rem_hi - rem_lo >= 7.2)
+    x_mid = (rem_lo + rem_hi) * 0.5
+
+    # The skybridge doorway is 2.2 m wide; a 1.9 m corridor left a sliver
+    # between the corridor partitions and the door casing.  Match the frame.
+    corr_h = 2.40 if D >= 9.0 else 2.00
+    yc0 = -corr_h * 0.5
+    yc1 = corr_h * 0.5
+    if yc0 - iy0 < 2.2 or iy1 - yc1 < 2.2:
+        return None
+
+    def _holds_stair(rb):
+        if stair_hole is None:
+            return None
+        sh = stair_hole
+        if rb[1] <= sh[0] or rb[0] >= sh[1] or rb[3] <= sh[2] or rb[2] >= sh[3]:
+            return None
+        return sh
+
+    def _facades(rb):
+        x0, x1, y0, y1 = rb
+        f = {}
+        if abs(x0 - ix0) < 0.02:
+            f['LEFT'] = (y0, y1)
+        if abs(x1 - ix1) < 0.02:
+            f['RIGHT'] = (y0, y1)
+        if abs(y0 - iy0) < 0.02:
+            f['FRONT'] = (x0, x1)
+        if abs(y1 - iy1) < 0.02:
+            f['BACK'] = (x0, x1)
+        return f
+
+    def _add_external_doors(room):
+        rb = room.bounds
+        for d in (doorways or []):
+            try:
+                dx = float(d.get('x', 0.0))
+                dy = float(d.get('y', 0.0))
+            except Exception:
+                continue
+            if not (rb[0] - 0.45 <= dx <= rb[1] + 0.45
+                    and rb[2] - 0.45 <= dy <= rb[3] + 0.45):
+                continue
+            on_edge = (abs(dx - rb[0]) < 0.50 or abs(dx - rb[1]) < 0.50
+                       or abs(dy - rb[2]) < 0.50 or abs(dy - rb[3]) < 0.50)
+            if on_edge:
+                room.doorways.append(dict(d))
+
+    rooms = []
+    walls = []
+
+    land_b = ((x_land, ix1) if side_right else (ix0, x_land))
+    land_b = (land_b[0], land_b[1], iy0, iy1)
+    land = Room(
+        id=f"fl{fl_idx}_retinue_landing", floor_idx=fl_idx,
+        role='STAIR_LANDING', bounds=land_b, doorways=[],
+        stair_hole=_holds_stair(land_b),
+        exterior_facades=_facades(land_b), allow_large=True)
+    _add_external_doors(land)
+    rooms.append(land)
+
+    corridor_b = (rem_lo, rem_hi, yc0, yc1)
+    corridor = Room(
+        id=f"fl{fl_idx}_retinue_passage", floor_idx=fl_idx,
+        role='CORRIDOR', bounds=corridor_b, doorways=[],
+        stair_hole=None, exterior_facades=_facades(corridor_b),
+        allow_large=True)
+    rooms.append(corridor)
+
+    specs = []
+    for y0, y1, tag in ((iy0, yc0, 'front'), (yc1, iy1, 'rear')):
+        if two_cols:
+            for x0, x1, side in ((rem_lo, x_mid, 'w'),
+                                 (x_mid, rem_hi, 'e')):
+                specs.append((x0, x1, y0, y1, f"{tag}_{side}"))
+        else:
+            specs.append((rem_lo, rem_hi, y0, y1, f"{tag}"))
+
+    officer_done = False
+    for x0, x1, y0, y1, tag in specs:
+        role = 'BARRACKS_DORM' if kind == 'GARRISON' else 'BEDROOM'
+        if not officer_done and y0 >= yc1:
+            role = ('OFFICER_QUARTERS' if kind == 'GARRISON'
+                    else 'MASTER_BED')
+            officer_done = True
+        rb = (x0, x1, y0, y1)
+        door_y = yc0 if y0 <= yc0 else yc1
+        r = Room(
+            id=f"fl{fl_idx}_retinue_{tag}", floor_idx=fl_idx, role=role,
+            bounds=rb,
+            doorways=[{'x': (x0 + x1) * 0.5, 'y': door_y,
+                       'axis': 'X', 'w': min(dw_w, 1.45)}],
+            stair_hole=None, exterior_facades=_facades(rb),
+            allow_large=True)
+        _add_external_doors(r)
+        rooms.append(r)
+
+    # Landing doorway + crossing corridor.
+    walls.append({
+        'p1': (x_land, iy0), 'p2': (x_land, iy1), 'axis': 'Y',
+        'pos': x_land, 'thickness': wall_t,
+        'doorway': {'x': x_land, 'y': 0.0, 'w': min(dw_w, 1.45),
+                    'h': dw_h, 'axis': 'Y'},
+    })
+    for y_wall in (yc0, yc1):
+        if two_cols:
+            walls.append({
+                'p1': (rem_lo, y_wall), 'p2': (x_mid, y_wall),
+                'axis': 'X', 'pos': y_wall, 'thickness': wall_t,
+                'doorway': {'x': (rem_lo + x_mid) * 0.5, 'y': y_wall,
+                            'w': min(dw_w, 1.45), 'h': dw_h, 'axis': 'X'},
+            })
+            walls.append({
+                'p1': (x_mid, y_wall), 'p2': (rem_hi, y_wall),
+                'axis': 'X', 'pos': y_wall, 'thickness': wall_t,
+                'doorway': {'x': (x_mid + rem_hi) * 0.5, 'y': y_wall,
+                            'w': min(dw_w, 1.45), 'h': dw_h, 'axis': 'X'},
+            })
+        else:
+            walls.append({
+                'p1': (rem_lo, y_wall), 'p2': (rem_hi, y_wall),
+                'axis': 'X', 'pos': y_wall, 'thickness': wall_t,
+                'doorway': {'x': (rem_lo + rem_hi) * 0.5, 'y': y_wall,
+                            'w': min(dw_w, 1.45), 'h': dw_h, 'axis': 'X'},
+            })
+    if two_cols:
+        for y0, y1 in ((iy0, yc0), (yc1, iy1)):
+            walls.append({
+                'p1': (x_mid, y0), 'p2': (x_mid, y1), 'axis': 'Y',
+                'pos': x_mid, 'thickness': wall_t, 'doorway': None,
+            })
+
+    # T-wing rooms are part of the same living block; keep them furnished as
+    # dormitories/bedrooms instead of leaving an unplanned empty wing.
+    for wi, wb in enumerate(fl_wings_bounds or []):
+        try:
+            wb = (float(wb[0]), float(wb[1]), float(wb[2]), float(wb[3]))
+        except Exception:
+            continue
+        wrole = ('BARRACKS_DORM' if kind == 'GARRISON' else 'BEDROOM')
+        wr = Room(
+            id=f"fl{fl_idx}_retinue_wing{wi}", floor_idx=fl_idx,
+            role=wrole, bounds=wb, doorways=[], is_wing=True, wing_id=wi,
+            stair_hole=_holds_stair(wb), exterior_facades={},
+            allow_large=True)
+        _add_external_doors(wr)
+        rooms.append(wr)
+
+    # Register the landing and chamber doors on both sides of each opening.
+    land.doorways.append({'x': x_land, 'y': 0.0, 'axis': 'Y',
+                          'w': min(dw_w, 1.45)})
+    corridor.doorways.append({'x': x_land, 'y': 0.0, 'axis': 'Y',
+                              'w': min(dw_w, 1.45)})
+    for x0, x1, y0, y1, tag in specs:
+        door_y = yc0 if y0 <= yc0 else yc1
+        corridor.doorways.append({'x': (x0 + x1) * 0.5, 'y': door_y,
+                                  'axis': 'X', 'w': min(dw_w, 1.45)})
+
+    # Dedupe portal entries registered twice by the two ends of the passage.
+    for r in rooms:
+        unique = []
+        for d in (r.doorways or []):
+            if any(abs(float(d.get('x', 0.0)) - float(u.get('x', 1e9))) < 0.05
+                   and abs(float(d.get('y', 0.0)) - float(u.get('y', 1e9))) < 0.05
+                   and d.get('axis') == u.get('axis')
+                   for u in unique):
+                continue
+            unique.append(d)
+        r.doorways = unique
+
+    walls = _repair_dangling_walls(walls, (ix0, ix1, iy0, iy1))
     return rooms, walls
 
 
@@ -2403,9 +3100,11 @@ def _plan_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
 
     if stair_pos_info:
         _sw = float(stair_pos_info.get('w', 1.5))
-        c_stair_w = max(4.2, _sw + 2.2)
+        _stair_switch = getattr(props, 'stair_style', 'STRAIGHT') != 'SPIRAL'
+        _stair_total = (_sw * 2.0 + 0.20) if _stair_switch else _sw
+        c_stair_w = max(5.5, _stair_total + 1.7)
     else:
-        c_stair_w = 4.6
+        c_stair_w = 5.5
     c_stair_w = min(max(c_stair_w, 3.8), W * 0.28)
 
     rem_w = W - c_stair_w
@@ -3638,12 +4337,22 @@ def _merge_open_rooms(rooms, walls, min_overlap=1.0, max_passes=4):
                 bx0, bx1, by0, by1 = b.bounds
                 shared = False
                 vertical = False
-                if abs(ax1 - bx0) < 0.12 or abs(bx1 - ax0) < 0.12:
+                shared_coord = None
+                if abs(ax1 - bx0) < 0.12:
                     shared = min(ay1, by1) - max(ay0, by0) >= min_overlap
                     vertical = True
-                elif abs(ay1 - by0) < 0.12 or abs(by1 - ay0) < 0.12:
+                    shared_coord = (ax1 + bx0) * 0.5
+                elif abs(bx1 - ax0) < 0.12:
+                    shared = min(ay1, by1) - max(ay0, by0) >= min_overlap
+                    vertical = True
+                    shared_coord = (bx1 + ax0) * 0.5
+                elif abs(ay1 - by0) < 0.12:
                     shared = min(ax1, bx1) - max(ax0, bx0) >= min_overlap
-                if not shared:
+                    shared_coord = (ay1 + by0) * 0.5
+                elif abs(by1 - ay0) < 0.12:
+                    shared = min(ax1, bx1) - max(ax0, bx0) >= min_overlap
+                    shared_coord = (by1 + ay0) * 0.5
+                if not shared or shared_coord is None:
                     continue
                 # Check for any surviving wall on this boundary.
                 has_wall = False
@@ -3652,15 +4361,13 @@ def _merge_open_rooms(rooms, walls, min_overlap=1.0, max_passes=4):
                     if not p1 or not p2:
                         continue
                     if vertical and w.get('axis') == 'Y':
-                        if abs(p1[0] - ax1) < 0.15 or abs(p1[0] - bx0) < 0.15 \
-                                or abs(p1[0] - ax0) < 0.15 or abs(p1[0] - bx1) < 0.15:
+                        if abs(p1[0] - shared_coord) < 0.15:
                             lo = min(p1[1], p2[1]); hi = max(p1[1], p2[1])
                             if hi > max(ay0, by0) + 0.2 and lo < min(ay1, by1) - 0.2:
                                 has_wall = True
                                 break
                     elif not vertical and w.get('axis') == 'X':
-                        if abs(p1[1] - ay1) < 0.15 or abs(p1[1] - by0) < 0.15 \
-                                or abs(p1[1] - ay0) < 0.15 or abs(p1[1] - by1) < 0.15:
+                        if abs(p1[1] - shared_coord) < 0.15:
                             lo = min(p1[0], p2[0]); hi = max(p1[0], p2[0])
                             if hi > max(ax0, bx0) + 0.2 and lo < min(ax1, bx1) - 0.2:
                                 has_wall = True
@@ -3870,6 +4577,68 @@ def _consolidate_outbuilding_rooms(rooms, walls, max_habitable=3):
             a.stair_hole = b.stair_hole
         a.allow_large = True
         rooms.remove(b)
+    return rooms
+
+
+def _drop_contained_rooms(rooms, walls):
+    """Remove duplicate rooms swallowed by a later merge.
+
+    ``_merge_open_rooms`` can union two rooms past a third neighbour, leaving
+    a phantom sub-room wholly inside the merged room.  The furnisher then puts
+    shelves against the phantom room's walls, in the middle of the real room.
+    Absorb the inner room and delete the orphan partitions inside the result.
+    """
+    if not rooms:
+        return rooms
+    _protected = {'THRONE_ROOM', 'BANQUET_HALL', 'CHAPEL_HALL',
+                  'MEZZANINE_GALLERY', 'GREAT_HALL'}
+    changed = True
+    while changed:
+        changed = False
+        for a in list(rooms):
+            ax0, ax1, ay0, ay1 = a.bounds
+            area_a = max(1e-4, (ax1 - ax0) * (ay1 - ay0))
+            for b in list(rooms):
+                if b is a or getattr(b, 'is_wing', False):
+                    continue
+                if getattr(b, 'role', '') in _protected:
+                    continue
+                bx0, bx1, by0, by1 = b.bounds
+                if not (bx0 >= ax0 - 0.14 and bx1 <= ax1 + 0.14
+                        and by0 >= ay0 - 0.14 and by1 <= ay1 + 0.14):
+                    continue
+                area_b = max(1e-4, (bx1 - bx0) * (by1 - by0))
+                if area_a < area_b * 1.25:
+                    continue
+                a.doorways = list(a.doorways or [])
+                for d in (b.doorways or []):
+                    if d not in a.doorways:
+                        a.doorways.append(d)
+                if a.stair_hole is None:
+                    a.stair_hole = b.stair_hole
+                if getattr(a, 'floor_void', None) is None:
+                    a.floor_void = getattr(b, 'floor_void', None)
+                a.allow_large = True
+                rooms.remove(b)
+                # Any partition whose midpoint is strictly inside the merged
+                # room is now an orphan (it bounded the swallowed room).
+                keep = []
+                for w in walls:
+                    p1, p2 = w.get('p1'), w.get('p2')
+                    if not p1 or not p2:
+                        keep.append(w)
+                        continue
+                    mx = (p1[0] + p2[0]) * 0.5
+                    my = (p1[1] + p2[1]) * 0.5
+                    if (ax0 + 0.25 < mx < ax1 - 0.25
+                            and ay0 + 0.25 < my < ay1 - 0.25):
+                        continue
+                    keep.append(w)
+                walls[:] = keep
+                changed = True
+                break
+            if changed:
+                break
     return rooms
 
 
@@ -4236,6 +5005,8 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             # wing cellar shaft as a floor-wide keep-out and turns every
             # service/chamber room into a corridor, so it is deliberately
             # skipped here.
+            _n_rooms = _apply_basement_store_role(
+                _n_rooms, props, fl_idx, stair_hole)
             return _n_rooms, _n_walls
 
     if bool(getattr(props, 'has_throne_room', False)) and has_interior_walls and W >= 13.0 and D >= 5.5:
@@ -4250,12 +5021,14 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 for wi, wb in enumerate(fl_wings_bounds):
                     if fl_idx == 0:
                         w_role = 'ENTRANCE_HALL' if wi == 0 else 'BANQUET_HALL'
-                    elif fl_idx == 1:
+                    elif fl_idx == 1 and bool(getattr(props, 'has_throne_room', False) or getattr(props, 'has_double_height', False)):
                         w_role = 'ARMORY' if wi == 0 else 'LIBRARY'
-                    elif fl_idx == 2:
-                        w_role = 'BEDROOM' if wi == 0 else 'GUEST_ROOM'
                     else:
-                        w_role = 'STUDY' if wi == 0 else 'GUEST_ROOM'
+                        _has_dh = bool(getattr(props, 'has_throne_room', False) or getattr(props, 'has_double_height', False))
+                        _bfl = 2 if _has_dh else 1
+                        _sidx = max(0, min(4, fl_idx - _bfl))
+                        _wing_roles = ['GUARD_ROOM', 'LIBRARY', 'TREASURY', 'STUDY', 'OFFICE']
+                        w_role = _wing_roles[_sidx]
                     wing_dw = []
                     dw_wx = (wb[0] + wb[1]) * 0.5
                     dw_w_eff = dw_w
@@ -4267,25 +5040,44 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     elif wb[2] >= iy_max - 0.30:
                         wing_dw.append({'x': dw_wx, 'y': iy_max, 'axis': 'X', 'w': dw_w_eff})
                         for r in _p_rooms:
-                            if getattr(r, 'role', '') == 'THRONE_ROOM':
-                                if not any(abs(d.get('x', 0) - dw_wx) < 0.2 and abs(d.get('y', 0) - iy_max) < 0.2 for d in r.doorways):
-                                    r.doorways.append({'x': dw_wx, 'y': iy_max, 'axis': 'X', 'w': dw_w_eff})
+                            if getattr(r, 'role', '') in ('THRONE_ROOM', 'ROYAL_CHAMBER', 'MEZZANINE_GALLERY'):
+                                if r.bounds[0] - 0.1 <= dw_wx <= r.bounds[1] + 0.1 and abs(r.bounds[3] - iy_max) < 0.2:
+                                    if not any(abs(d.get('x', 0) - dw_wx) < 0.2 and abs(d.get('y', 0) - iy_max) < 0.2 for d in r.doorways):
+                                        r.doorways.append({'x': dw_wx, 'y': iy_max, 'axis': 'X', 'w': dw_w_eff})
                     _w_sh = None
                     if stair_hole is not None:
                         if not (stair_hole[1] < wb[0] or stair_hole[0] > wb[1]
                                 or stair_hole[3] < wb[2] or stair_hole[2] > wb[3]):
                             _w_sh = stair_hole
-                    _p_rooms.append(Room(
+                    _w_room = Room(
                         id=f"fl{fl_idx}_wing{wi}", floor_idx=fl_idx,
                         role=w_role, bounds=wb, is_wing=True, wing_id=wi,
-                        doorways=wing_dw, stair_hole=_w_sh, exterior_facades={}))
+                        doorways=wing_dw, stair_hole=_w_sh, exterior_facades={})
+                    _w_room.allow_large = True
+                    _p_rooms.append(_w_room)
             _p_rooms = _recut_oversized_rooms(
                 _p_rooms, _p_walls, bounds, wall_t, dw_w, dw_h,
                 effective_archetype, fl_idx, has_stairs_landing, total_floors, program,
                 clear_zone_rects=clear_zone_rects)
             _p_rooms = _normalize_stair_circulation_rooms(
                 _p_rooms, stair_hole, stair_pos_info, bounds)
+            _p_rooms = _apply_basement_store_role(
+                _p_rooms, props, fl_idx, stair_hole)
             return _p_rooms, _p_walls
+
+    if _living_outbuilding_flag(props) and has_interior_walls:
+        _living = _plan_living_outbuilding_rooms(
+            fl_idx, bounds, stair_hole, stair_pos_info,
+            front_door_info, doorways, wall_t, dw_w, dw_h, props)
+        if _living is not None:
+            return _living
+
+    if _retinue_hall_kind(props) and has_interior_walls:
+        _retinue = _plan_retinue_hall_rooms(
+            fl_idx, bounds, stair_hole, stair_pos_info, doorways,
+            wall_t, dw_w, dw_h, props, fl_wings_bounds=fl_wings_bounds)
+        if _retinue is not None:
+            return _retinue
 
     is_wide_mansion = (W >= 22.0 and D >= 7.0
                        and effective_archetype in ('NONE', 'HOUSE', 'AUTO', 'MANOR')
@@ -4331,6 +5123,19 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 clear_zone_rects=clear_zone_rects)
             _manor_rooms = _normalize_stair_circulation_rooms(
                 _manor_rooms, stair_hole, stair_pos_info, bounds)
+            _manor_rooms = _apply_basement_store_role(
+                _manor_rooms, props, fl_idx, stair_hole)
+            if fl_idx == 0:
+                _retinue = getattr(props, 'retinue_hall', None)
+                if not _retinue and hasattr(props, 'get'):
+                    _retinue = props.get('retinue_hall')
+                if _retinue:
+                    non_wing = [r for r in _manor_rooms if not getattr(r, 'is_wing', False)]
+                    if non_wing:
+                        largest_r = max(non_wing, key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]))
+                        if (largest_r.bounds[1] - largest_r.bounds[0]) * (largest_r.bounds[3] - largest_r.bounds[2]) >= 70.0:
+                            largest_r.role = 'COMMUNAL_DINING'
+                            largest_r.allow_large = True
             return _manor_rooms, _manor_walls
 
     # Single open room fallback (only when explicitly requested, plot is tiny
@@ -5177,7 +5982,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         _f3 = (0.58, 0.42) if _big_k3 else (0.50, 0.50)
         has_bs = (fl_idx == 0 and stair_hole is not None and getattr(props, 'has_basement_stair', False)
                  and shape != 'L_SHAPE')
-        if can_4_rooms and _cw_now >= 2.4 and not has_bs and not _strip_chunky(_hw_now, _cw_now, _f4):
+        if can_4_rooms and (D < 11.2 or (_cw_now >= 2.4 and not has_bs and not _strip_chunky(_hw_now, _cw_now, _f4))):
             can_4_rooms = False
         if can_3_rooms and not has_bs and not _strip_chunky(_hw_now, _cw_now, _f3):
             can_3_rooms = False
@@ -6845,11 +7650,47 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         _is_estate_out = bool(props.get('is_estate_outbuilding', False))
     except Exception:
         _is_estate_out = bool(getattr(props, 'is_estate_outbuilding', False))
-    if _is_estate_out:
+    _is_castle_hall = False
+    try:
+        _is_castle_hall = bool(props.get('is_castle_hall', False))
+    except Exception:
+        _is_castle_hall = False
+    if not _is_castle_hall:
+        _is_castle_hall = bool(getattr(props, 'is_castle_hall', False))
+    if _is_estate_out and not _is_castle_hall:
         rooms = _consolidate_outbuilding_rooms(
             rooms, interior_walls, max_habitable=(4 if fl_idx == 0 else 3))
+        # A merge / blocked split must never leave a partition hanging in the
+        # middle of a room (or stopping inside a doorway).  Extend it to the
+        # nearest legal wall/shell, or drop the orphaned stub.
+        interior_walls = _repair_dangling_walls(
+            interior_walls, (ix_min, ix_max, iy_min, iy_max))
     rooms = _merge_open_rooms(rooms, interior_walls)
     rooms = _rebalance_room_boundaries(rooms, interior_walls)
+    # A merge can swallow a third room; remove any phantom sub-room and its
+    # orphan partitions so furniture never lines an invisible wall.
+    rooms = _drop_contained_rooms(rooms, interior_walls)
+    if _is_castle_hall and fl_idx == 0:
+        _retinue = getattr(props, 'retinue_hall', None)
+        if not _retinue and hasattr(props, 'get'):
+            _retinue = props.get('retinue_hall')
+        if _retinue:
+            # Lower retinue halls (Great Hall & East Hall):
+            # Designate the largest ground floor chamber as COMMUNAL_DINING
+            # so the retinue living on the upper floors has a grand communal
+            # dining refectory and kitchen corner downstairs.
+            non_wing = [r for r in rooms if not getattr(r, 'is_wing', False)]
+            if non_wing:
+                largest_r = max(non_wing, key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]))
+                if (largest_r.bounds[1] - largest_r.bounds[0]) * (largest_r.bounds[3] - largest_r.bounds[2]) >= 70.0:
+                    largest_r.role = 'COMMUNAL_DINING'
+                    largest_r.allow_large = True
+        else:
+            for _r in rooms:
+                _rb = _r.bounds
+                if ((_rb[1] - _rb[0]) * (_rb[3] - _rb[2]) >= 55.0
+                        and getattr(_r, 'role', '') in ('PANTRY', 'STORAGE')):
+                    _r.role = 'DINING'
 
     if (effective_archetype in ('ARCHERY', 'ARCHERY_RANGE') and fl_idx == 0
             and rooms):
@@ -6938,20 +7779,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     _extra.role = 'STORAGE'
 
     # Nasher keep: the basement stair hall is a working store, not a parlour.
-    if (fl_idx == 0 and getattr(props, 'has_basement_stair', False)
-            and stair_hole is not None):
-        _sx = (stair_hole[0] + stair_hole[1]) * 0.5
-        _sy = (stair_hole[2] + stair_hole[3]) * 0.5
-        _holder = None
-        for _r in rooms:
-            x0, x1, y0, y1 = _r.bounds
-            if x0 <= _sx <= x1 and y0 <= _sy <= y1:
-                _holder = _r
-                break
-        if _holder is not None and getattr(_holder, 'role', '') in (
-                'ENTRANCE_HALL', 'HOUSE_HALL', 'STUDY', 'CORRIDOR',
-                'STAIR_LANDING'):
-            _holder.role = 'STORAGE'
+    rooms = _apply_basement_store_role(rooms, props, fl_idx, stair_hole)
 
     # Upper storeys of living outbuildings must expose real beds, even when a
     # simplified T-wing plan would otherwise fill the floor with salons.

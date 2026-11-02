@@ -68,7 +68,7 @@ def _build_mini_wing(bm, props, ctx, tier):
                 z_base=ctx.found_h + fl * ctx.floor_h,
                 width=width,
                 depth=depth,
-                height=max(2.85, min(3.25, ctx.floor_h - 0.55)),
+                height=max(2.10, min(2.45, ctx.floor_h - 0.70)),
                 roof_style=_prop(props, 'mini_wing_roof', 'LEAN_TO'),
                 tier=tier, floor_h=ctx.floor_h, lower_bounds=lower,
                 win_w=_prop(props, 'window_width', 0.85),
@@ -160,6 +160,15 @@ def _build_balconies(bm, props, ctx, tier):
             if any(_seg_hits_rect(w.get('p1', (0.0, 0.0)), w.get('p2', (0.0, 0.0)), _door_rect)
                    for w in _walls_by_fl.get(fl_idx, [])):
                 continue
+            is_noble = bool(
+                b.get('is_noble', False)
+                or (getattr(props, 'has_noble_balcony', False) and (
+                    fl_idx in getattr(props, 'noble_balcony_floors', (4,))
+                    or tuple(getattr(props, 'balcony_floors', ())) == (fl_idx,)
+                ))
+            )
+            b_w = max(width, 6.8) if is_noble else width
+            b_d = max(depth, 2.2) if is_noble else depth
             build_balcony(
                 bm, side=side,
                 wall_x_min=bounds[0], wall_x_max=bounds[1],
@@ -167,16 +176,19 @@ def _build_balconies(bm, props, ctx, tier):
                 lower_wall_x_min=lower[0], lower_wall_x_max=lower[1],
                 lower_wall_y_min=lower[2], lower_wall_y_max=lower[3],
                 z_floor=ctx.found_h + fl_idx * ctx.floor_h,
-                width=width, depth=depth, tier=tier,
+                width=b_w, depth=b_d, tier=tier,
                 door_angle_deg=_prop(props, 'door_angle', 0.0),
                 include_leaf=_prop(props, 'include_door_leaves', True),
                 along_wall_offset=offset,
                 wall_thickness=ctx.wall_t if hasattr(ctx, 'wall_t') else float(getattr(props, 'wall_thickness', 0.30)),
+                is_noble=is_noble,
             )
 
 
 def _build_pillared_overhang(bm, props, ctx, tier):
     if not _prop(props, 'has_pillared_overhang', False):
+        return
+    if getattr(ctx, 'num_floors', 1) < 2:
         return
     bounds = ctx.bounds_for(0)
     build_pillared_overhang(
@@ -883,7 +895,7 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
         build_bakery_oven(bm, props, ctx, tier)
     _is_out = bool(getattr(props, 'is_estate_outbuilding', False)
                    or (props.get('is_estate_outbuilding', False) if hasattr(props, 'get') else False))
-    if _kit_on(props, ctx, 'kit_chapel', 'CHAPEL') and getattr(props, 'has_chapel_kit', True) and not _is_out:
+    if _kit_on(props, ctx, 'kit_chapel', 'CHAPEL') and getattr(props, 'has_chapel_kit', True):
         build_chapel_kit(bm, props, ctx, tier)
     if _kit_on(props, ctx, 'kit_stable', 'STABLE') and getattr(props, 'has_stable_yard', True):
         from .estate import build_stable_yard_for_building

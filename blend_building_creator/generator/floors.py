@@ -498,7 +498,7 @@ def build_floors(bm, props, ctx):
                         left_ex = (wwy1 - 0.05, wwy2 + 0.05)
                     elif ww == 'RIGHT':
                         right_ex = (wwy1 - 0.05, wwy2 + 0.05)
-            has_po = getattr(props, 'has_pillared_overhang', False)
+            has_po = getattr(props, 'has_pillared_overhang', False) and num_floors >= 2
             po_s = getattr(props, 'pillared_overhang_side', 'FRONT')
             # The pillared overhang supplies its own pillars/soffit on its facade,
             # so suppress the soffit there. The decorative jetty corbels are dropped
@@ -1664,8 +1664,19 @@ def build_floors(bm, props, ctx):
         b_side_next = floor_balc_side.get(fl_idx + 1)
         b_width = getattr(props, 'balcony_width', 2.4)
 
-        balc_door_w = 0.95
-        balc_door_h = min(2.15, floor_h * 0.76)
+        is_noble_fl = bool(
+            getattr(props, 'has_noble_balcony', False) and (
+                fl_idx in getattr(props, 'noble_balcony_floors', (4,))
+                or tuple(getattr(props, 'balcony_floors', ())) == (fl_idx,)
+            )
+            or any(b.get('is_noble') for b in balconies_on_fl)
+        )
+        if is_noble_fl:
+            balc_door_w = 1.80
+            balc_door_h = min(2.55, floor_h * 0.78)
+        else:
+            balc_door_w = 0.95
+            balc_door_h = min(2.15, floor_h * 0.76)
 
         def _balc_landing_clear(bs, off, hole):
             """True when the inside apron of a balcony door is solid floor."""
@@ -1997,7 +2008,11 @@ def build_floors(bm, props, ctx):
                 _ddx = float(_pdw.get('x', 0.0)); _ddy = float(_pdw.get('y', 0.0))
                 _ddw = float(_pdw.get('w', 1.0) or 1.0)
                 _portal = bool(_pdw.get('is_portal'))
-                _depth = 1.80 if _portal else 0.30
+                # A connector portal needs a real approach apron: 1.8 m only
+                # cleared the wall slot, leaving a partition standing in the
+                # middle of the view through the doorway (and bookshelves
+                # parked as if a wall existed there).
+                _depth = 3.40 if _portal else 0.30
                 if _pdw.get('axis', 'X') == 'X':
                     _rz = (_ddx - _ddw * 0.5, _ddx + _ddw * 0.5,
                            _ddy - _depth, _ddy + _depth)

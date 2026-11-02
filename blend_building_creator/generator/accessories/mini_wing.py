@@ -267,7 +267,11 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
                 lb[0] += off_along
                 lb[1] += off_along
             lower_bounds = tuple(lb)
-    height = max(2.80, min(height, floor_h - 0.45))
+    # Cap outcrop body height so its roof apex and verge bargeboards strictly clear
+    # the ceiling / upper floor deck structure (especially under 2nd-floor cantilevers).
+    max_body_h = max(2.10, floor_h - 0.70)
+    height = min(height, max_body_h)
+    height = max(2.05, height)
     if frame is None:
         frame = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
     else:
@@ -579,12 +583,14 @@ def build_mini_wing(bm, side, floor_mode, wall_x_min, wall_x_max, wall_y_min, wa
         )
 
     # 5. Dedicated shingled roof (shared outcrop roof builder)
+    # Total roof rise and bargeboards must never breach upper floor level (floor_h)
+    avail_clearance = max(0.18, floor_h - height - 0.12)
     build_outcrop_roof(
         bm, roof_style, frame,
         z_roof=z_base + height, depth=depth, width=width,
-        avail_h=max(0.35, floor_h - height - 0.08), wall_mat=wall_mat,
+        avail_h=avail_clearance, wall_mat=wall_mat,
         wall_thick=wall_thick, shingle_scale=shingle_scale, shingle_rot=shingle_rot,
-        peak_h=peak_h,
+        peak_h=min(peak_h, avail_clearance) if peak_h else None,
     )
 
 
@@ -641,9 +647,32 @@ def plan_outcrop_spread(props, base_w, base_d, num_floors, wings, has_wing,
         _aw = 4.4 if getattr(props, 'material_tier', 'TIER_3') == 'TIER_1' else 5.2
         _annex_spans = [(-_aw * 0.5 - 0.75, _aw * 0.5 + 0.75)]
 
+    def _get_val(k, default=None):
+        v = getattr(props, k, None)
+        if v is not None:
+            return v
+        if hasattr(props, 'get'):
+            try:
+                v = props.get(k, None)
+                if v is not None:
+                    return v
+            except Exception:
+                pass
+        return default
+
+    _allowed_sides = _get_val('mini_wing_allowed_sides', None)
+    if not _allowed_sides and _get_val('mini_wing_side', None):
+        _allowed_sides = [_get_val('mini_wing_side')]
+    _user_blocked = set(_get_val('mini_wing_blocked_sides', None) or ())
+    _target_floors = _get_val('mini_wing_floors', None)
+
     _mw_open, _mw_avoid = {}, {}
     for _f in range(num_floors):
-        _blocked = set()
+        if _target_floors is not None and _f not in _target_floors:
+            _mw_open[_f] = []
+            _mw_avoid[_f] = {}
+            continue
+        _blocked = set(_user_blocked)
         if annex_on and _f < annex_floors:
             if annex_side == 'BOTH':
                 _blocked.add('LEFT')
@@ -702,8 +731,11 @@ def plan_outcrop_spread(props, base_w, base_d, num_floors, wings, has_wing,
             _tw = min(2.0 * _thalf, _hxb)
             _spans.setdefault('BACK', []).extend([
                 (-_hxb, -(_hxb - _tw) + 0.40), ((_hxb - _tw) - 0.40, _hxb)])
-        _mw_open[_f] = [s for s in ('FRONT', 'BACK', 'LEFT', 'RIGHT')
-                        if s not in _blocked]
+        if _allowed_sides:
+            _mw_open[_f] = [s for s in _allowed_sides if s not in _blocked]
+        else:
+            _mw_open[_f] = [s for s in ('FRONT', 'BACK', 'LEFT', 'RIGHT')
+                            if s not in _blocked]
         _mw_avoid[_f] = _spans
     _mw_d = float(getattr(props, 'mini_wing_depth', 1.6))
     if getattr(props, 'mini_wing_random_size', False):

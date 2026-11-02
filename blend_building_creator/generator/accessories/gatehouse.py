@@ -312,13 +312,14 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
 
 def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
                                wall_t=0.55, outward=(0.0, -1.0), tower_r=1.90, tower_h=None,
-                               rear_door=None):
+                               rear_door=None, has_banners=True):
     """Twin semicircular / D-shaped flanking bastion gate towers projecting forward
     from the curtain wall with arrow slits, cut-stone corbels, crenellated battlements,
     and direct stone access steps connecting the curtain wall-walk to the tower roof terrace."""
     from mathutils import Vector
     from ..materials import MAT_INDEX_STONE, MAT_INDEX_CUT_STONE
     from .battlement import build_battlement_run
+    from .banner import build_hanging_banner
 
     ox, oy = outward
     on = math.hypot(ox, oy)
@@ -387,6 +388,15 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
                                location=(cx_c, cy_c, corbel_z),
                                rotation=(0.0, 0.0, ang),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+
+        # 4b. Heraldic dragon banner hanging down the forward face of the gate turret
+        if has_banners:
+            ban_x = tc_x + ox * (tower_r * 0.505)
+            ban_y = tc_y + oy * (tower_r * 0.505)
+            ban_z_top = z_ground + H - 0.55
+            build_hanging_banner(bm, ban_x, ban_y, ban_z_top, outward=(ox, oy),
+                                 width=min(1.20, tower_r * 0.70), height=min(2.50, (H - talus_h) * 0.52),
+                                 wall_offset=0.05)
 
         # 5. Overhanging crenellated battlements atop the tower
         top_z = z_ground + H

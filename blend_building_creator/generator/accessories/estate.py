@@ -204,6 +204,81 @@ def cleanup_outbuilding_objects(host_obj):
                 bpy.data.meshes.remove(m)
 
 
+def _append_props_to_detached_object(out_obj, add_fn):
+    """Safely append props into a detached outbuilding object with correct canonical materials.
+
+    A detached outbuilding has pruned material slots from generate_building.
+    This helper builds props in an isolated bmesh, resolves canonical material
+    slots (CANONICAL_SLOT_NAMES) into out_obj.data.materials (adding missing slots as needed),
+    remaps face material indices, and merges into out_obj.
+    """
+    import bmesh
+    import bpy
+    from ..materials import CANONICAL_SLOT_NAMES, canonical_slot_index
+
+    prop_bm = bmesh.new()
+    try:
+        add_fn(prop_bm)
+        if not prop_bm.faces:
+            prop_bm.free()
+            return
+
+        slot_map = {}
+        for f in prop_bm.faces:
+            c_idx = f.material_index
+            if c_idx not in slot_map:
+                if 0 <= c_idx < len(CANONICAL_SLOT_NAMES):
+                    c_name = CANONICAL_SLOT_NAMES[c_idx]
+                else:
+                    c_name = "M_Building_Wood"
+
+                matched_slot = None
+                for si, slot_mat in enumerate(out_obj.data.materials):
+                    if slot_mat and canonical_slot_index(slot_mat.name) == c_idx:
+                        matched_slot = si
+                        break
+                    elif slot_mat and slot_mat.name == c_name:
+                        matched_slot = si
+                        break
+
+                if matched_slot is None:
+                    mat = bpy.data.materials.get(c_name)
+                    if mat is None:
+                        for m in bpy.data.materials:
+                            if canonical_slot_index(m.name) == c_idx:
+                                mat = m
+                                break
+                    if mat is None:
+                        mat = bpy.data.materials.new(name=c_name)
+                    out_obj.data.materials.append(mat)
+                    matched_slot = len(out_obj.data.materials) - 1
+
+                slot_map[c_idx] = matched_slot
+
+            f.material_index = slot_map[c_idx]
+
+        out_bm = bmesh.new()
+        out_bm.from_mesh(out_obj.data)
+        v_map = {v: out_bm.verts.new(v.co) for v in prop_bm.verts}
+        uv_src = prop_bm.loops.layers.uv.verify()
+        uv_dst = out_bm.loops.layers.uv.verify()
+        for f in prop_bm.faces:
+            try:
+                new_f = out_bm.faces.new([v_map[v] for v in f.verts])
+                new_f.material_index = f.material_index
+                new_f.smooth = f.smooth
+                for l_src, l_dst in zip(f.loops, new_f.loops):
+                    l_dst[uv_dst].uv = l_src[uv_src].uv
+            except Exception:
+                pass
+        out_bm.to_mesh(out_obj.data)
+        out_bm.free()
+        out_obj.data.update()
+    finally:
+        if prop_bm.is_valid:
+            prop_bm.free()
+
+
 def _create_detached_outbuilding(base_props, overrides, pos=(0.0, 0.0, 0.0), rot_z=0.0,
                                 preset_key=None, name="Outbuilding", host_obj=None):
     """Generate an independent detached outbuilding as its own Blender object.
@@ -777,6 +852,10 @@ def build_servant_quarters(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='T
         'balcony_side': 'FRONT',
         'balcony_width': 2.2,
         'balcony_depth': 1.1,
+        # These are homes, not generic outbuildings: use the purpose-built
+        # servant-cottage interior plan (large hall, kitchen, dining, bedrooms).
+        'outbuilding_living': True,
+        'outbuilding_living_kind': 'SERVANT',
     }
     if extra_overrides:
         overrides.update(extra_overrides)
@@ -843,6 +922,11 @@ def build_guardhouse(bm, props, pos=(24.0, -28.0, 0.0), rot_z=0.0, tier='TIER_1'
         'balcony_side': 'FRONT',
         'balcony_width': 2.0,
         'balcony_depth': 1.1,
+        'outbuilding_living': True,
+        'outbuilding_living_kind': 'GUARD',
+        'interior_program': 'GARRISON',
+        'has_interior_walls': True,
+        'has_interior_furnishing': True,
     }
     if extra_overrides:
         overrides.update(extra_overrides)
@@ -853,15 +937,11 @@ def build_guardhouse(bm, props, pos=(24.0, -28.0, 0.0), rot_z=0.0, tier='TIER_1'
         )
         try:
             from .military_props import build_weapon_rack
-            import bmesh
-            out_bm = bmesh.new()
-            out_bm.from_mesh(out_obj.data)
             rw_pos = Vector((-width * 0.28, -depth * 0.5 - 0.75, 0.0))
             nrm = Vector((0.0, -1.0, 0.0))
-            build_weapon_rack(out_bm, rw_pos.x, rw_pos.y, 0.0, normal=(nrm.x, nrm.y, 0.0))
-            out_bm.to_mesh(out_obj.data)
-            out_bm.free()
-            out_obj.data.update()
+            def _gh_props(p_bm):
+                build_weapon_rack(p_bm, rw_pos.x, rw_pos.y, 0.0, normal=(nrm.x, nrm.y, 0.0))
+            _append_props_to_detached_object(out_obj, _gh_props)
         except Exception:
             pass
         return out_obj
@@ -930,56 +1010,27 @@ def build_estate_forge(bm, props, pos=(-24.0, -28.0, 0.0), rot_z=0.0, tier='TIER
             name="Forge", host_obj=host_obj
         )
         try:
-            import bmesh
-            from ..materials import MAT_INDEX_TIMBER, MAT_INDEX_IRON
-            from ..mesh_utils import create_cylinder, create_beveled_box, create_cone
             from .furniture import build_barrel, build_crate
-            out_bm = bmesh.new()
-            out_bm.from_mesh(out_obj.data)
+            from .artisan_props import build_anvil
             anv_loc = Vector((width * 0.25, -depth * 0.5 - 1.25, 0.0))
-            create_cylinder(out_bm, radius=0.34, height=0.58, segments=16,
-                            location=(anv_loc.x, anv_loc.y, 0.29), mat_index=MAT_INDEX_TIMBER)
-            ang_z = 0.3
-            create_beveled_box(out_bm, size=(0.58, 0.26, 0.28),
-                               location=(anv_loc.x, anv_loc.y, 0.58 + 0.14),
-                               rotation=(0.0, 0.0, ang_z),
-                               mat_index=MAT_INDEX_IRON, bevel_amount=0.015)
-            ax = math.cos(ang_z)
-            ay = math.sin(ang_z)
-            horn_pos = anv_loc + Vector((ax * 0.36, ay * 0.36, 0.58 + 0.14))
-            create_cone(out_bm, radius1=0.09, radius2=0.015, height=0.22, segments=12,
-                        location=horn_pos,
-                        rotation=(0.0, 1.5708, ang_z),
-                        mat_index=MAT_INDEX_IRON)
             tub_loc = Vector((width * 0.25 + 1.10, -depth * 0.5 - 1.30, 0.0))
-            build_barrel(out_bm, x=tub_loc.x, y=tub_loc.y, z_ground=0.0, radius=0.36, height=0.75)
             crate_loc = Vector((width * 0.25 - 1.05, -depth * 0.5 - 1.20, 0.0))
-            build_crate(out_bm, x=crate_loc.x, y=crate_loc.y, z_ground=0.0, size=0.60, height=0.52)
-            out_bm.to_mesh(out_obj.data)
-            out_bm.free()
-            out_obj.data.update()
+            def _forge_props(p_bm):
+                build_anvil(p_bm, x=anv_loc.x, y=anv_loc.y, z_ground=0.0, ang=0.3)
+                build_barrel(p_bm, x=tub_loc.x, y=tub_loc.y, z_ground=0.0, radius=0.36, height=0.75)
+                build_crate(p_bm, x=crate_loc.x, y=crate_loc.y, z_ground=0.0, size=0.60, height=0.52)
+            _append_props_to_detached_object(out_obj, _forge_props)
         except Exception:
             pass
         return out_obj
     else:
         _merge_generated_building(bm, props, overrides, pos=pos, rot_z=rot_z)
         try:
+            from .furniture import build_barrel, build_crate
+            from .artisan_props import build_anvil
             t = Matrix.Translation(Vector(pos)) @ Matrix.Rotation(rot_z, 4, 'Z')
             anv_loc = t @ Vector((width * 0.25, -depth * 0.5 - 1.25, 0.0))
-            create_cylinder(bm, radius=0.34, height=0.58, segments=16,
-                            location=(anv_loc.x, anv_loc.y, 0.29), mat_index=MAT_INDEX_TIMBER)
-            ang_z = rot_z + 0.3
-            create_beveled_box(bm, size=(0.58, 0.26, 0.28),
-                               location=(anv_loc.x, anv_loc.y, 0.58 + 0.14),
-                               rotation=(0.0, 0.0, ang_z),
-                               mat_index=MAT_INDEX_IRON, bevel_amount=0.015)
-            ax = math.cos(ang_z)
-            ay = math.sin(ang_z)
-            horn_pos = anv_loc + Vector((ax * 0.36, ay * 0.36, 0.58 + 0.14))
-            create_cone(bm, radius1=0.09, radius2=0.015, height=0.22, segments=12,
-                        location=horn_pos,
-                        rotation=(0.0, 1.5708, ang_z),
-                        mat_index=MAT_INDEX_IRON)
+            build_anvil(bm, x=anv_loc.x, y=anv_loc.y, z_ground=0.0, ang=rot_z + 0.3)
             tub_loc = t @ Vector((width * 0.25 + 1.10, -depth * 0.5 - 1.30, 0.0))
             build_barrel(bm, x=tub_loc.x, y=tub_loc.y, z_ground=0.0, radius=0.36, height=0.75)
             crate_loc = t @ Vector((width * 0.25 - 1.05, -depth * 0.5 - 1.20, 0.0))
@@ -1037,17 +1088,13 @@ def build_estate_granary(bm, props, pos=(-28.0, 8.0, 0.0), rot_z=0.0, tier='TIER
             name="Granary", host_obj=host_obj
         )
         try:
-            import bmesh
             from .furniture import build_barrel, build_crate
-            out_bm = bmesh.new()
-            out_bm.from_mesh(out_obj.data)
             c1 = Vector((-width * 0.30, -depth * 0.5 - 0.70, 0.0))
-            build_crate(out_bm, x=c1.x, y=c1.y, z_ground=0.0, size=0.55, height=0.50)
             c2 = Vector((-width * 0.30 + 0.60, -depth * 0.5 - 0.65, 0.0))
-            build_barrel(out_bm, x=c2.x, y=c2.y, z_ground=0.0, radius=0.30, height=0.68)
-            out_bm.to_mesh(out_obj.data)
-            out_bm.free()
-            out_obj.data.update()
+            def _granary_props(p_bm):
+                build_crate(p_bm, x=c1.x, y=c1.y, z_ground=0.0, size=0.55, height=0.50)
+                build_barrel(p_bm, x=c2.x, y=c2.y, z_ground=0.0, radius=0.30, height=0.68)
+            _append_props_to_detached_object(out_obj, _granary_props)
         except Exception:
             pass
         return out_obj
@@ -1100,7 +1147,9 @@ def build_estate_chapel(bm, props, pos=(28.0, 8.0, 0.0), rot_z=0.0, tier='TIER_3
         'has_roof_shingles': True,
         'has_dormers': False,
         'has_chimney': False,
-        'has_chapel_kit': False,
+        'has_chapel_kit': True,
+        'has_chapel_apse': False,
+        'has_chapel_spire': True,
         'has_bell_cote': False,
     }
     if extra_overrides:
@@ -1272,6 +1321,10 @@ def build_retainer_house(bm, props, pos=(24.0, -10.0, 0.0), rot_z=0.0, tier='TIE
         'mini_wing_count': 1,
         'mini_wing_width': 2.2,
         'mini_wing_depth': 1.2,
+        # A retainer's home: large living hall, kitchen, dining and real
+        # bedrooms rather than an empty maze of generic chambers.
+        'outbuilding_living': True,
+        'outbuilding_living_kind': 'RETAINER',
     }
     if extra_overrides:
         overrides.update(extra_overrides)

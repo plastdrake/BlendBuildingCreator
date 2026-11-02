@@ -392,7 +392,7 @@ def build_rose_window(bm, center, normal_axis, radius=0.72):
 
 
 def build_chapel_kit(bm, props, ctx, tier):
-    """Attach the chancel apse, rooftop bell tower, rose window and wall lanterns."""
+    """Attach the rooftop bell tower / spire and optional chancel apse / rose window."""
     base_hx = ctx.base_w * 0.5
     base_hy = ctx.base_d * 0.5
     wall_t = ctx.wall_t
@@ -401,54 +401,59 @@ def build_chapel_kit(bm, props, ctx, tier):
     ridge_z = eave_z + roof_h
 
     # 1. Half-round chancel on the back wall (open to the nave, never inside it).
-    apse_r = max(1.8, min(3.2, ctx.base_w * 0.32))
-    build_chapel_apse(bm, 0.0, base_hy, 0.0, eave_z, apse_r, wall_t, tier,
-                      ctx.seed, found_h=ctx.found_h)
+    # Guarded by has_chapel_apse (defaults to False per user preference).
+    if getattr(props, 'has_chapel_apse', False):
+        apse_r = max(1.8, min(3.2, ctx.base_w * 0.32))
+        build_chapel_apse(bm, 0.0, base_hy, 0.0, eave_z, apse_r, wall_t, tier,
+                          ctx.seed, found_h=ctx.found_h)
 
-    # Grand chancel: paired columns and a heavy arch beam framing the apse
-    # portal, so the ground-floor chapel reads as a sacred hall rather than an
-    # empty room with a small back door.
-    _ceil_z = ctx.found_h + ctx.floor_h
-    _col_x = max(1.85, min(2.35, apse_r * 0.66))
-    _col_y = base_hy - 0.55
-    _col_h = max(2.6, _ceil_z - ctx.found_h - 0.30)
-    for _sx in (-1.0, 1.0):
-        _cx = _sx * _col_x
-        # stone base
+        # Grand chancel: paired columns and a heavy arch beam framing the apse
+        # portal, so the ground-floor chapel reads as a sacred hall rather than an
+        # empty room with a small back door.
+        _ceil_z = ctx.found_h + ctx.floor_h
+        _col_x = max(1.85, min(2.35, apse_r * 0.66))
+        _col_y = base_hy - 0.55
+        _col_h = max(2.6, _ceil_z - ctx.found_h - 0.30)
+        for _sx in (-1.0, 1.0):
+            _cx = _sx * _col_x
+            # stone base
+            create_beveled_box(
+                bm, size=(0.46, 0.46, 0.36),
+                location=(_cx, _col_y, ctx.found_h + 0.18),
+                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.018)
+            # timber shaft
+            create_beveled_box(
+                bm, size=(0.30, 0.30, _col_h),
+                location=(_cx, _col_y, ctx.found_h + 0.36 + _col_h * 0.5),
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
+            # capital
+            create_beveled_box(
+                bm, size=(0.48, 0.48, 0.24),
+                location=(_cx, _col_y, ctx.found_h + 0.36 + _col_h + 0.12),
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014)
+        # Heavy arch/beam spanning the chancel columns.
+        _beam_z = ctx.found_h + 0.36 + _col_h + 0.30
         create_beveled_box(
-            bm, size=(0.46, 0.46, 0.36),
-            location=(_cx, _col_y, ctx.found_h + 0.18),
-            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.018)
-        # timber shaft
-        create_beveled_box(
-            bm, size=(0.30, 0.30, _col_h),
-            location=(_cx, _col_y, ctx.found_h + 0.36 + _col_h * 0.5),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.014)
-        # capital
-        create_beveled_box(
-            bm, size=(0.48, 0.48, 0.24),
-            location=(_cx, _col_y, ctx.found_h + 0.36 + _col_h + 0.12),
-            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014)
-    # Heavy arch/beam spanning the chancel columns.
-    _beam_z = ctx.found_h + 0.36 + _col_h + 0.30
-    create_beveled_box(
-        bm, size=(_col_x * 2.0 + 0.55, 0.38, 0.30),
-        location=(0.0, _col_y, _beam_z),
-        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.018)
+            bm, size=(_col_x * 2.0 + 0.55, 0.38, 0.30),
+            location=(0.0, _col_y, _beam_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.018)
 
-    # 2. Rooftop bell tower perched astride the main building roof ridge towards the back.
-    t_size = max(1.8, min(2.2, ctx.base_w * 0.18))
-    t_cx = 0.0
-    t_cy = base_hy - t_size * 0.5 - 1.2
-    shaft_top = ridge_z + 1.85
-    build_bell_tower(bm, t_cx, t_cy, eave_z, t_size, shaft_top, tier, ctx.seed + 11,
-                     ridge_z=ridge_z)
+    # 2. Rooftop church spire / bell tower perched astride the main building roof ridge.
+    if getattr(props, 'has_chapel_spire', True):
+        t_size = max(1.8, min(2.2, min(ctx.base_w, ctx.base_d) * 0.25))
+        t_cx = 0.0
+        t_cy = 0.0
+        shaft_top = ridge_z + 1.85
+        build_bell_tower(bm, t_cx, t_cy, eave_z, t_size, shaft_top, tier, ctx.seed + 11,
+                         ridge_z=ridge_z)
 
-    # 3. Rose window high in the front gable (clear of every wall window).
-    rose_y = ctx.main_door_yf - 0.03
-    rose_z = eave_z + roof_h * 0.30
-    build_rose_window(bm, (ctx.main_door_cx, rose_y, rose_z), '-Y',
-                      radius=min(0.78, ctx.base_w * 0.15))
+    # 3. Rose window high in the front gable (only if gable faces -Y).
+    roof_ori = getattr(props, 'roof_orientation', 'FRONT_BACK')
+    if roof_ori == 'FRONT_BACK':
+        rose_y = ctx.main_door_yf - 0.03
+        rose_z = eave_z + roof_h * 0.30
+        build_rose_window(bm, (ctx.main_door_cx, rose_y, rose_z), '-Y',
+                          radius=min(0.78, ctx.base_w * 0.15))
 
     # 4. Forged wall lanterns flanking the entrance (reuses the hospitality fitment).
     door_half = getattr(props, 'door_width', 1.2) * 0.5

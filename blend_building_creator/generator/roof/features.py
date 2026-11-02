@@ -11,7 +11,7 @@ from ..mesh_utils import (
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_SHINGLES,
     MAT_INDEX_GLASS, MAT_INDEX_PLASTER_EXT, MAT_INDEX_IRON,
-    MAT_INDEX_WOOD, MAT_INDEX_TIMBER_FRAME
+    MAT_INDEX_WOOD, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_TERRACOTTA
 )
 
 def build_curved_bargeboards(bm, cx, rx_min, rx_max, y_verge, ez, rz, roof_flare=0.35, segments=4):
@@ -277,13 +277,15 @@ def build_roof_turret(bm, center_pos, z_base, turret_w=1.3, turret_h=1.9, spire_
     )
 
 
-def build_fantasy_chimney(bm, pos_xy, z_start, total_height, width=0.85, depth=0.85, crooked_angle=0.0, mat_index=MAT_INDEX_STONE):
+def build_fantasy_chimney(bm, pos_xy, z_start, total_height, width=0.85, depth=0.85, crooked_angle=0.0, mat_index=MAT_INDEX_TERRACOTTA):
     """
     Builds a stylized fantasy chimney with tapered profile, overhanging cap, and smoke pot.
-    Uses stone in T2/T3, and rustic timber/wood box chute in T1.
+    Always uses red clay bricks (MAT_INDEX_TERRACOTTA) for all chimneys.
     """
     cx, cy = pos_xy
-    trim_mat = MAT_INDEX_TIMBER if mat_index == MAT_INDEX_WOOD else MAT_INDEX_STONE
+    # Chimneys throughout the addon are always made of red clay bricks material
+    mat_index = MAT_INDEX_TERRACOTTA
+    trim_mat = MAT_INDEX_TERRACOTTA
     
     # 1. Main chimney trunk
     create_beveled_box(

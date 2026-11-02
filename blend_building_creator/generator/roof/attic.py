@@ -57,8 +57,11 @@ def _wing_loft_candidates(props, ctx, wings, found_h, floor_h, num_floors, wall_
     w_top_fl = min(wing_floors, num_floors)
     w_fl_idx = w_top_fl - 1
     w_top_z = found_h + w_top_fl * floor_h
-    w_roof_h = roof_height if wing_floors == num_floors else roof_height * wing_roof_scale
-    if w_roof_h < 2.2:
+    _wr_scale = min(0.72, float(wing_roof_scale or 0.70))
+    w_roof_h = min(roof_height * _wr_scale, roof_height - 0.75) if wing_floors == num_floors else (roof_height * _wr_scale)
+    max_wing_ridge_z = (found_h + num_floors * floor_h + roof_height) - 0.75
+    w_roof_h = min(w_roof_h, max(1.50, max_wing_ridge_z - w_top_z))
+    if w_roof_h < 1.8:
         return cands
     for idx, w_elem in enumerate(wings):
         wall = w_elem.get('wall')
@@ -342,7 +345,7 @@ def build_roof_and_attic(bm, props, ctx):
                 roof_half_w = top_hy + props.roof_overhang
                 reach_to_slope = (dormer_u - u_intersect) * roof_half_w
                 dist_to_ridge = dormer_u * roof_half_w
-                cur_dormer_reach = min(dist_to_ridge - 0.20, max(0.90, reach_to_slope + 0.14))
+                cur_dormer_reach = min(dist_to_ridge - 0.12, max(1.25, reach_to_slope + 0.60))
 
                 if d_sides == 'FRONT_LEFT':
                     n_front, n_back = d_count, 0
@@ -401,7 +404,7 @@ def build_roof_and_attic(bm, props, ctx):
                 reach_to_slope = (dormer_u - u_intersect) * roof_half_w
                 # Penetrate 14cm into slope for a watertight seam, but stop at least 20cm before the ridge
                 dist_to_ridge = dormer_u * roof_half_w
-                cur_dormer_reach = min(dist_to_ridge - 0.20, max(0.90, reach_to_slope + 0.14))
+                cur_dormer_reach = min(dist_to_ridge - 0.12, max(1.25, reach_to_slope + 0.60))
 
                 if d_sides == 'FRONT_LEFT':
                     n_left, n_right = d_count, 0
@@ -741,21 +744,34 @@ def build_roof_and_attic(bm, props, ctx):
         is_lower_wing = (wing_floors < num_floors)
         w_fl_idx = w_top_fl - 1
         w_top_z = found_h + w_top_fl * floor_h
-        _wr_scale = getattr(props, 'wing_roof_scale', 0.88)
-        w_roof_h = props.roof_height if (wing_floors == num_floors) else (props.roof_height * _wr_scale)
+        _wr_scale = min(0.72, float(getattr(props, 'wing_roof_scale', 0.70) or 0.70))
+        # Wing roofs are strictly subordinate so the ridge connects cleanly below the main ridge
+        if wing_floors == num_floors:
+            w_roof_h = min(props.roof_height * _wr_scale, props.roof_height - 0.75)
+        else:
+            w_roof_h = props.roof_height * _wr_scale
+        # Hard clamp: wing ridge must NEVER exceed main roof ridge - 0.75m
+        max_wing_ridge_z = (top_z + props.roof_height) - 0.75
+        w_roof_h = min(w_roof_h, max(1.50, max_wing_ridge_z - w_top_z))
 
         if is_lower_wing:
-            if props.has_cantilever:
-                if props.overhang_mode == 'SECOND_FLOOR_ONLY':
-                    up_fl_overhang = cantilever if w_top_fl >= 1 else 0.0
-                else:
-                    up_fl_overhang = w_top_fl * cantilever
+            up_b = floor_wall_bounds.get(w_top_fl, None)
+            if up_b is not None:
+                up_left_x, up_right_x, up_front_y, up_back_y = up_b
             else:
-                up_fl_overhang = 0.0
-            up_main_hx = (base_w + up_fl_overhang * 2.0) * 0.5
-            up_main_hy = (base_d + up_fl_overhang * 2.0) * 0.5
-            up_front_y = -up_main_hy
-            up_back_y = up_main_hy
+                if props.has_cantilever:
+                    if props.overhang_mode == 'SECOND_FLOOR_ONLY':
+                        up_fl_overhang = cantilever if w_top_fl >= 1 else 0.0
+                    else:
+                        up_fl_overhang = w_top_fl * cantilever
+                else:
+                    up_fl_overhang = 0.0
+                up_main_hx = (base_w + up_fl_overhang * 2.0) * 0.5
+                up_main_hy = (base_d + up_fl_overhang * 2.0) * 0.5
+                up_front_y = -up_main_hy
+                up_back_y = up_main_hy
+                up_left_x = -up_main_hx
+                up_right_x = up_main_hx
 
         for _w_idx, w_elem in enumerate(wings):
             w_wall = w_elem['wall']
@@ -831,13 +847,15 @@ def build_roof_and_attic(bm, props, ctx):
                     w_roof_ymax = up_front_y + 0.04
                     abut_back = True
                 elif is_rotated_roof:
-                    # Perpendicular junction (valley): extend into the main slope.
-                    # Deck past the valley lines is notch-cut in the builder.
-                    w_roof_ymax = top_cy
+                    # Perpendicular junction (valley): slope intersection point
+                    slope_frac = max(0.0, min(1.0, (z_w_ridge - top_z) / max(0.1, props.roof_height)))
+                    y_intersect_front = top_y_min + slope_frac * (top_cy - top_y_min)
+                    w_roof_ymax = min(top_cy, y_intersect_front + 0.15)
                     abut_back = True
                 else:
                     # Parallel ridges (gable-to-gable): stop flush in the main gable
                     # wall core so no tiles cross plaster outside or bands indoors.
+                    y_intersect_front = top_cy
                     w_roof_ymax = top_y_min + 0.12
                     abut_back = True
 
@@ -845,7 +863,7 @@ def build_roof_and_attic(bm, props, ctx):
                 w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
                 w_reach = (w_dormer_u - w_u_intersect) * w_roof_half_w
                 dist_to_ridge = w_dormer_u * w_roof_half_w
-                w_cur_d_reach = min(dist_to_ridge - 0.16, max(0.75, w_reach + 0.12))
+                w_cur_d_reach = min(dist_to_ridge - 0.12, max(1.10, w_reach + 0.55))
                 w_cur_d_w = min(1.10, max(0.90, (w_top_xmax - w_top_xmin) * 0.28))
 
                 if do_wing_dormers:
@@ -905,7 +923,7 @@ def build_roof_and_attic(bm, props, ctx):
 
                 # Perpendicular: open valley (outer gable only, deck notch-cut past
                 # valley lines). Parallel: finished gable abutting the main gable.
-                w_gable_fb = ('FRONT',) if (is_lower_wing or is_rotated_roof) else ('FRONT', 'BACK')
+                w_gable_fb = ('FRONT',)
                 # Trim side eave fascia where it would enter main timber/walls.
                 w_eave_fb = None
                 if is_lower_wing:
@@ -922,7 +940,7 @@ def build_roof_and_attic(bm, props, ctx):
                 if not is_lower_wing and is_rotated_roof:
                     w_notch_fb = {
                         'apex_x': w_cx,
-                        'apex_y': top_cy,
+                        'apex_y': y_intersect_front,
                         'half_width': w_roof_half_w,
                         'base_y': top_y_min - props.roof_overhang,
                         'keep': 'le',
@@ -1001,7 +1019,7 @@ def build_roof_and_attic(bm, props, ctx):
                                           top_off=0.05)
                     valley_feet = [w_top_xmin - _ov, w_top_xmax + _ov]
                     for vx in valley_feet:
-                        build_valley_rafters(bm, (vx, top_y_min - _ov), (w_cx, top_cy),
+                        build_valley_rafters(bm, (vx, top_y_min - _ov), (w_cx, y_intersect_front),
                                              _main_fn, _wing_fn)
 
             elif w_wall == 'BACK':
@@ -1009,11 +1027,14 @@ def build_roof_and_attic(bm, props, ctx):
                     w_roof_ymin = up_back_y - 0.04
                     abut_front = True
                 elif is_rotated_roof:
-                    # Perpendicular junction (valley): see FRONT.
-                    w_roof_ymin = top_cy
+                    # Perpendicular junction (valley): slope intersection point
+                    slope_frac = max(0.0, min(1.0, (z_w_ridge - top_z) / max(0.1, props.roof_height)))
+                    y_intersect_back = top_y_max - slope_frac * (top_y_max - top_cy)
+                    w_roof_ymin = max(top_cy, y_intersect_back - 0.15)
                     abut_front = True
                 else:
                     # Parallel ridges (gable-to-gable): flush in the wall core.
+                    y_intersect_back = top_cy
                     w_roof_ymin = top_y_max - 0.12
                     abut_front = True
 
@@ -1021,7 +1042,7 @@ def build_roof_and_attic(bm, props, ctx):
                 w_roof_half_w = (w_top_xmax - w_top_xmin) * 0.5 + props.roof_overhang
                 w_reach = (w_dormer_u - w_u_intersect) * w_roof_half_w
                 dist_to_ridge = w_dormer_u * w_roof_half_w
-                w_cur_d_reach = min(dist_to_ridge - 0.16, max(0.75, w_reach + 0.12))
+                w_cur_d_reach = min(dist_to_ridge - 0.12, max(1.10, w_reach + 0.55))
                 w_cur_d_w = min(1.10, max(0.90, (w_top_xmax - w_top_xmin) * 0.28))
 
                 if do_wing_dormers:
@@ -1077,7 +1098,7 @@ def build_roof_and_attic(bm, props, ctx):
                                     'sway_amount': w_sway
                                 })
 
-                w_gable_bk = ('BACK',) if (is_lower_wing or is_rotated_roof) else ('FRONT', 'BACK')
+                w_gable_bk = ('BACK',)
                 w_eave_bk = None
                 if is_lower_wing:
                     w_eave_bk = None
@@ -1091,7 +1112,7 @@ def build_roof_and_attic(bm, props, ctx):
                 if not is_lower_wing and is_rotated_roof:
                     w_notch_bk = {
                         'apex_x': w_cx,
-                        'apex_y': top_cy,
+                        'apex_y': y_intersect_back,
                         'half_width': w_roof_half_w,
                         'base_y': top_y_max + props.roof_overhang,
                         'keep': 'ge',
@@ -1172,34 +1193,47 @@ def build_roof_and_attic(bm, props, ctx):
                     valley_feet = [w_top_xmin - _ov, w_top_xmax + _ov]
 
                     for vx in valley_feet:
-                        build_valley_rafters(bm, (vx, top_y_max + _ov), (w_cx, top_cy),
+                        build_valley_rafters(bm, (vx, top_y_max + _ov), (w_cx, y_intersect_back),
                                              _main_fn, _wing_fn)
 
             elif w_wall in ('LEFT', 'RIGHT'):
-                w_ridge_len = w_top_xmax - w_top_xmin
+                if is_lower_wing:
+                    if w_wall == 'LEFT':
+                        roof_x0 = w_top_xmin
+                        roof_x1 = up_left_x + 0.04
+                    else:
+                        roof_x0 = up_right_x - 0.04
+                        roof_x1 = w_top_xmax
+                    w_ridge_len = max(0.5, roof_x1 - roof_x0)
+                    w_cx = (roof_x0 + roof_x1) * 0.5
+                    ly_half = w_ridge_len * 0.5
+                    y_max_adj = 0.0
+                    loc_abut_back = True
+                else:
+                    w_ridge_len = w_top_xmax - w_top_xmin
+                    w_cx = (w_top_xmin + w_top_xmax) * 0.5
+                    ly_half = (w_ridge_len + 0.04) * 0.5 if is_rotated_roof else (w_ridge_len * 0.5)
+                    if is_rotated_roof:
+                        loc_abut_back = True
+                        y_max_adj = 0.04
+                    else:
+                        loc_abut_back = True
+                        slope_frac = max(0.0, min(1.0, (z_w_ridge - top_z) / max(0.1, props.roof_height)))
+                        if w_wall == 'LEFT':
+                            x_intersect = top_x_min + slope_frac * (top_cx - top_x_min)
+                            serve_dist = max(0.25, x_intersect - w_cx)
+                        else:
+                            x_intersect = top_x_max - slope_frac * (top_x_max - top_cx)
+                            serve_dist = max(0.25, w_cx - x_intersect)
+                        y_max_adj = max(0.15, min(abs(top_cx - w_cx) - ly_half, serve_dist - ly_half + 0.15))
                 w_span_y = w_top_ymax - w_top_ymin
                 wing_roof_bm = bmesh.new()
                 lx_half = w_span_y * 0.5
-                ly_half = (w_ridge_len + 0.04) * 0.5 if is_rotated_roof else (w_ridge_len * 0.5)
-
-                w_cx = (w_top_xmin + w_top_xmax) * 0.5
                 w_cy = (w_top_ymin + w_top_ymax) * 0.5
-                if is_lower_wing or is_rotated_roof:
-                    # Lower wings abut the facade; rotated (parallel ridges) stop flush
-                    # in the main gable wall core.
-                    loc_abut_back = True
-                    y_max_adj = 0.04
-                else:
-                    # Perpendicular equal junction: run the ridge to the main ridge so
-                    # valleys die into the slope (cross-hipped U/L, cf. FRONT rotated).
-                    # Flush open tip (no overhang past the ridge, no cap face).
-                    loc_abut_back = True
-                    serve_dist = abs(top_cx - w_cx)
-                    y_max_adj = max(0.25, serve_dist - ly_half)
                 w_roof_half_w = lx_half + props.roof_overhang
                 w_reach = (w_dormer_u - w_u_intersect) * w_roof_half_w
                 dist_to_ridge = w_dormer_u * w_roof_half_w
-                w_cur_d_reach = min(dist_to_ridge - 0.16, max(0.75, w_reach + 0.12))
+                w_cur_d_reach = min(dist_to_ridge - 0.12, max(1.10, w_reach + 0.55))
                 w_cur_d_w = min(1.10, max(0.90, w_span_y * 0.28))
 
                 if do_wing_dormers:
@@ -1272,7 +1306,7 @@ def build_roof_and_attic(bm, props, ctx):
 
                 # Parallel (rotated): finished gable abuts main gable. Perpendicular
                 # (non-rotated): open valley, deck notch-cut (local coords).
-                w_gable_lr = ('FRONT',) if (is_lower_wing or not is_rotated_roof) else ('FRONT', 'BACK')
+                w_gable_lr = ('FRONT',)
                 # Local-coord fascia trim (see FRONT/BACK above).
                 w_eave_lr = None
                 if is_lower_wing:
@@ -1292,7 +1326,7 @@ def build_roof_and_attic(bm, props, ctx):
                 if not is_lower_wing and not is_rotated_roof:
                     w_notch_lr = {
                         'apex_x': 0.0,
-                        'apex_y': ly_half + y_max_adj,
+                        'apex_y': ly_half + y_max_adj - 0.15,
                         'half_width': lx_half + props.roof_overhang,
                         'base_y': ((top_x_min - w_cx) if w_wall == 'LEFT' else (w_cx - top_x_max)) - props.roof_overhang,
                         'keep': 'le',

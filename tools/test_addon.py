@@ -427,8 +427,8 @@ def test_chimneys_and_stoves():
     obj = bpy.context.active_object
     assert obj is not None
     mat_names = [m.name for m in obj.data.materials]
-    assert any(m.startswith("M_Building_Stone") for m in mat_names), f"Stone material not found in {mat_names}"
-    print("  [PASS] Chimney snaps to outer wall and generates proper stone flue.")
+    assert any(m.startswith("M_Building_Terracotta_Brick") or m.startswith("M_Building_Stone") for m in mat_names), f"Terracotta brick / stone material not found in {mat_names}"
+    print("  [PASS] Chimney snaps to outer wall and generates proper flue.")
 
 
 def test_stair_switchback():

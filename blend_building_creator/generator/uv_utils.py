@@ -81,9 +81,9 @@ def apply_roof_shingle_uvs(bm, faces, mat_index=MAT_INDEX_SHINGLES, scale=0.32, 
             continue
         n.normalize()
         # Skip vertical skirts (no slope direction) and near-horizontal caps.
-        if abs(n.z) < 0.02:
+        if abs(n.z) < 0.01:
             continue
-        if (n.x * n.x + n.y * n.y) < 0.02:
+        if (n.x * n.x + n.y * n.y) < 0.001:
             continue
         # Steepest-descending direction within the roof plane (points downhill).
         d = Vector((n.z * n.x, n.z * n.y, -(n.x * n.x + n.y * n.y)))
@@ -103,21 +103,27 @@ def apply_roof_shingle_uvs(bm, faces, mat_index=MAT_INDEX_SHINGLES, scale=0.32, 
                 t = -t
         elif t.y < 0.0:
             t = -t
-        center = face.calc_center_median()
         face.smooth = False
         face.tag = True
         r = rot_deg % 360
+        # Compute raw u, v projections
+        raw_coords = []
         for loop in face.loops:
-            rel = loop.vert.co - center
-            u = rel.dot(t) * scale
-            v = -rel.dot(d) * scale
+            p = loop.vert.co
+            u = p.dot(t) * scale
+            v = -p.dot(d) * scale
             if r == 90:
                 u, v = v, -u
             elif r == 180:
                 u, v = -u, -v
             elif r == 270:
                 u, v = -v, u
-            loop[uv].uv = Vector((u, v))
+            raw_coords.append((loop, u, v))
+        # Normalize so UVs start at (0, 0) for clean texture tile repeats
+        min_u = min(c[1] for c in raw_coords)
+        min_v = min(c[2] for c in raw_coords)
+        for loop, u, v in raw_coords:
+            loop[uv].uv = Vector((u - min_u, v - min_v))
 
 
 def map_beam_uvs(bm, faces, size, location=(0.0, 0.0, 0.0),

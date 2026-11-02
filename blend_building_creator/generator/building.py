@@ -266,22 +266,31 @@ def _create_building_context(props, extra_doorways=None, extra_window_exclusions
         (base_w >= 36.0 and num_floors >= 3)
     )
     if has_balc:
-        b_mode = getattr(props, 'balcony_mode', 'SINGLE')
-        if is_u_tenement and b_mode == 'SINGLE':
-            # Tenement complexes have multiple flats per storey; balconies grace all upper floors.
-            active_balc_floors = list(range(1, num_floors))
-        elif is_estate_or_manor and b_mode == 'SINGLE' and num_floors >= 3:
-            # Grand manors & ducal palaces: balconies on piano nobile (fl 2) and ducal solar (fl 3)
-            active_balc_floors = [1, 2] if num_floors >= 4 else [1]
-        elif b_mode == 'SINGLE':
-            fl = min(num_floors, max(2, getattr(props, 'balcony_floor', 2)))
-            active_balc_floors = [fl - 1]
-        elif b_mode == 'ALL_UPPER':
-            active_balc_floors = list(range(1, num_floors))
-        elif b_mode == 'CUSTOM':
-            for fl_i, toggle_p in [(1, 'balcony_fl2'), (2, 'balcony_fl3'), (3, 'balcony_fl4'), (4, 'balcony_fl5')]:
-                if fl_i < num_floors and getattr(props, toggle_p, False):
-                    active_balc_floors.append(fl_i)
+        custom_balc_floors = getattr(props, 'balcony_floors', None)
+        if custom_balc_floors is None and hasattr(props, 'get'):
+            try:
+                custom_balc_floors = props.get('balcony_floors', None)
+            except Exception:
+                pass
+        if custom_balc_floors:
+            active_balc_floors = [int(f) for f in custom_balc_floors if 1 <= int(f) < num_floors]
+        else:
+            b_mode = getattr(props, 'balcony_mode', 'SINGLE')
+            if is_u_tenement and b_mode == 'SINGLE':
+                # Tenement complexes have multiple flats per storey; balconies grace all upper floors.
+                active_balc_floors = list(range(1, num_floors))
+            elif is_estate_or_manor and b_mode == 'SINGLE' and num_floors >= 3:
+                # Grand manors & ducal palaces: balconies on piano nobile (fl 2) and ducal solar (fl 3)
+                active_balc_floors = [1, 2] if num_floors >= 4 else [1]
+            elif b_mode == 'SINGLE':
+                fl = min(num_floors, max(2, getattr(props, 'balcony_floor', 2)))
+                active_balc_floors = [fl - 1]
+            elif b_mode == 'ALL_UPPER':
+                active_balc_floors = list(range(1, num_floors))
+            elif b_mode == 'CUSTOM':
+                for fl_i, toggle_p in [(1, 'balcony_fl2'), (2, 'balcony_fl3'), (3, 'balcony_fl4'), (4, 'balcony_fl5')]:
+                    if fl_i < num_floors and getattr(props, toggle_p, False):
+                        active_balc_floors.append(fl_i)
 
     # Effective balcony facade per floor: never mount a balcony on a facade
     # occupied at that height by a projecting volume (the wing and its roof, the

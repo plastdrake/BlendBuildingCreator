@@ -286,3 +286,20 @@ def build_wall_banner(bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
             f.tag = True
 
 
+
+
+def build_hanging_banner(bm, cx, cy, z_top, outward=(0.0, -1.0),
+                         width=1.10, height=2.40, wall_offset=0.06,
+                         mat_banner=MAT_INDEX_BANNER, mat_metal=MAT_INDEX_IRON):
+    """Constructs a hanging heraldic painted-cloth standard with an iron mounting rod,
+    finials, wall brackets, and double-sided UV mapped banner mesh.
+    """
+    import math
+    ox, oy = outward
+    on = math.hypot(ox, oy)
+    if on < 1e-4:
+        ox, oy = 0.0, -1.0
+    else:
+        ox, oy = ox / on, oy / on
+    ang = math.atan2(oy, ox)
+    build_wall_banner(bm, x=cx, y=cy, z_ground=0.0, ang=ang, width=width, length=height, hang_h=z_top)

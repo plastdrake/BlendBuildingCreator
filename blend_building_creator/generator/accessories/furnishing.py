@@ -490,8 +490,8 @@ def _try_place_hearth(bm, tracker: RoomOccupancyTracker, z_floor: float,
                         tracker.occupy(*cb)
                     build_prop(bm, 'HEARTH', hx, hy, z_floor, yaw, width=width, height=1.50)
 
-                    # Solid stone chimney breast extending from mantel up to ceiling
-                    from ..materials import MAT_INDEX_STONE
+                    # Solid terracotta brick chimney breast extending from mantel up to ceiling
+                    from ..materials import MAT_INDEX_TERRACOTTA
                     from ..mesh_utils import create_beveled_box
                     ceil_z = z_ceil if z_ceil is not None else (z_floor + 3.20)
                     z_start = z_floor + 1.48
@@ -503,7 +503,7 @@ def _try_place_hearth(bm, tracker: RoomOccupancyTracker, z_floor: float,
                         bm,
                         size=(cb_w, cb_d, breast_h),
                         location=(cb_x, cb_y, z_start + breast_h * 0.5),
-                        mat_index=MAT_INDEX_STONE,
+                        mat_index=MAT_INDEX_TERRACOTTA,
                         bevel_amount=0.015
                     )
                     return (hx, hy, yaw)
@@ -622,6 +622,11 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
 
     _rb = getattr(tracker, 'room_bounds', None) or (rx0, rx1, ry0, ry1)
     _wx0, _wx1, _wy0, _wy1 = _rb
+    _ins = getattr(tracker, 'wall_insets', (0.0, 0.0, 0.0, 0.0))
+    _wx0 += _ins[0]
+    _wx1 -= _ins[1]
+    _wy0 += _ins[2]
+    _wy1 -= _ins[3]
     rcx = (rx0 + rx1) * 0.5
     rcy = (ry0 + ry1) * 0.5
 
@@ -636,6 +641,8 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
     corner_pad_y = min(0.72, max(0.40, (y_span - width) * 0.5 - 0.05)) if y_span > width + 0.80 else 0.40
 
     for wall in candidate_walls:
+        if not getattr(tracker, 'solid_walls', {}).get(wall, True):
+            continue
         # Wall props keep a small stand-off from the wall face and the collision
         # test is tightened to match, so a table/shelf can never end up half
         # sunk into the wall it stands against.
@@ -653,7 +660,7 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                         continue
                 if tracker.is_near_door(cx, cy, radius=1.25) or any(tracker.is_near_door(px, py, radius=1.05) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
-                if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, check_windows=check_windows, ignore_stair=ignore_stair,
+                if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.20, check_windows=check_windows, ignore_stair=ignore_stair,
                                    bounds_slack=0.10):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
@@ -673,7 +680,7 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                         continue
                 if tracker.is_near_door(cx, cy, radius=1.25) or any(tracker.is_near_door(px, py, radius=1.05) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
-                if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, check_windows=check_windows, ignore_stair=ignore_stair,
+                if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.20, check_windows=check_windows, ignore_stair=ignore_stair,
                                    bounds_slack=0.10):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
@@ -693,7 +700,7 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                         continue
                 if tracker.is_near_door(cx, cy, radius=1.25) or any(tracker.is_near_door(px, py, radius=1.05) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
-                if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, check_windows=check_windows, ignore_stair=ignore_stair,
+                if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.20, check_windows=check_windows, ignore_stair=ignore_stair,
                                    bounds_slack=0.10):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
@@ -713,7 +720,7 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                         continue
                 if tracker.is_near_door(cx, cy, radius=1.25) or any(tracker.is_near_door(px, py, radius=1.05) for px in (b[0], b[1]) for py in (b[2], b[3])):
                     continue
-                if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.12, check_windows=check_windows, ignore_stair=ignore_stair,
+                if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.20, check_windows=check_windows, ignore_stair=ignore_stair,
                                    bounds_slack=0.10):
                     tracker.occupy(b[0], b[1], b[2], b[3])
                     build_prop(bm, key, cx, cy, z_floor, yaw, **params)
@@ -884,9 +891,16 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
     # Headboard sits flush to the REAL wall (1 cm off the plaster).
     _rb = getattr(tracker, 'room_bounds', None) or (rx0, rx1, ry0, ry1)
     _wx0, _wx1, _wy0, _wy1 = _rb
+    # Interior partition plan bounds are centreline coordinates; inset by half
+    # the partition thickness so headboards sit on the plaster, not inside it.
+    _ins = getattr(tracker, 'wall_insets', (0.0, 0.0, 0.0, 0.0))
+    _wx0 += _ins[0]
+    _wx1 -= _ins[1]
+    _wy0 += _ins[2]
+    _wy1 -= _ins[3]
 
-    y_span = ry1 - ry0
-    x_span = rx1 - rx0
+    y_span = _wy1 - _wy0
+    x_span = _wx1 - _wx0
     if min(x_span, y_span) < 2.5:
         return None
 
@@ -903,10 +917,10 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
         bed_pad_y = min(0.60, max(0.12, (y_span - cand_w) * 0.5 - 0.05)) if y_span > cand_w + 0.35 else 0.06
         bed_pad_x = min(0.60, max(0.12, (x_span - cand_w) * 0.5 - 0.05)) if x_span > cand_w + 0.35 else 0.06
 
-        min_y = ry0 + cand_w * 0.5 + bed_pad_y
-        max_y = ry1 - cand_w * 0.5 - bed_pad_y
-        min_x = rx0 + cand_w * 0.5 + bed_pad_x
-        max_x = rx1 - cand_w * 0.5 - bed_pad_x
+        min_y = _wy0 + cand_w * 0.5 + bed_pad_y
+        max_y = _wy1 - cand_w * 0.5 - bed_pad_y
+        min_x = _wx0 + cand_w * 0.5 + bed_pad_x
+        max_x = _wx1 - cand_w * 0.5 - bed_pad_x
 
         y_pts = _sample_wall_positions(rcy, min_y, max_y, step=0.20)
         if not y_pts and y_span >= cand_w + 0.08:
@@ -916,69 +930,91 @@ def _try_place_bed(bm, tracker: RoomOccupancyTracker, z_floor: float,
         if not x_pts and x_span >= cand_w + 0.08:
             x_pts = [rcx]
 
-        # 1. Try West wall (headboard at -X, bed extends +X into room)
-        for dx in (0.0, 0.25, 0.50):
-            if ignore_west:
-                break
-            cx = _wx0 + cand_l * 0.5 + 0.01 + dx
-            if cx + cand_l * 0.5 > _wx1 - 0.10:
-                break
-            for cy in y_pts:
-                if tracker.is_near_door(cx, cy, radius=door_rad):
-                    continue
-                b = (cx - cand_l * 0.5, cx + cand_l * 0.5, cy - cand_w * 0.5, cy + cand_w * 0.5)
-                if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin, bounds_slack=bounds_slack):
-                    tracker.occupy(b[0], b[1], b[2], b[3])
-                    build_prop(bm, 'BED', cx, cy, z_floor, 0.0, length=cand_l, width=cand_w)
-                    return (cx, cy, 0.0)
+        # Prefer the shortest wall so the bed runs along the long axis and
+        # leaves a proper walking lane instead of barricading a narrow room.
+        _eff_x = _wx1 - _wx0
+        _eff_y = _wy1 - _wy0
+        if _eff_x <= _eff_y:
+            wall_order = ('NORTH', 'SOUTH', 'WEST', 'EAST')
+        else:
+            wall_order = ('WEST', 'EAST', 'NORTH', 'SOUTH')
 
-        # 2. Try East wall (headboard at +X, bed extends -X into room)
-        for dx in (0.0, 0.25, 0.50):
-            cx = _wx1 - cand_l * 0.5 - 0.01 - dx
-            if cx - cand_l * 0.5 < _wx0 + 0.10:
-                break
-            for cy in y_pts:
-                if tracker.is_near_door(cx, cy, radius=door_rad):
-                    continue
-                b = (cx - cand_l * 0.5, cx + cand_l * 0.5, cy - cand_w * 0.5, cy + cand_w * 0.5)
-                if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin, bounds_slack=bounds_slack):
-                    tracker.occupy(b[0], b[1], b[2], b[3])
-                    build_prop(bm, 'BED', cx, cy, z_floor, math.pi, length=cand_l, width=cand_w)
-                    return (cx, cy, math.pi)
-
-        # 3. Try North wall (headboard at +Y, bed extends -Y into room)
-        for dy in (0.0, 0.25, 0.50):
-            cy = _wy1 - cand_l * 0.5 - 0.01 - dy
-            if cy - cand_l * 0.5 < _wy0 + 0.10:
-                break
-            for cx in x_pts:
-                if tracker.is_near_door(cx, cy, radius=door_rad):
-                    continue
-                b = (cx - cand_w * 0.5, cx + cand_w * 0.5, cy - cand_l * 0.5, cy + cand_l * 0.5)
-                if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin, bounds_slack=bounds_slack):
-                    tracker.occupy(b[0], b[1], b[2], b[3])
-                    build_prop(bm, 'BED', cx, cy, z_floor, -math.pi / 2, length=cand_l, width=cand_w)
-                    return (cx, cy, -math.pi / 2)
-
-        # 4. Try South wall (headboard at -Y, bed extends +Y into room)
-        for dy in (0.0, 0.25, 0.50):
-            cy = _wy0 + cand_l * 0.5 + 0.01 + dy
-            if cy + cand_l * 0.5 > _wy1 - 0.10:
-                break
-            for cx in x_pts:
-                if tracker.is_near_door(cx, cy, radius=door_rad):
-                    continue
-                b = (cx - cand_w * 0.5, cx + cand_w * 0.5, cy - cand_l * 0.5, cy + cand_l * 0.5)
-                if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin, bounds_slack=bounds_slack):
-                    tracker.occupy(b[0], b[1], b[2], b[3])
-                    build_prop(bm, 'BED', cx, cy, z_floor, math.pi / 2, length=cand_l, width=cand_w)
-                    return (cx, cy, math.pi / 2)
+        _solid = getattr(tracker, 'solid_walls', {})
+        for wall in wall_order:
+            if not _solid.get(wall, True):
+                continue
+            if wall == 'WEST' and ignore_west:
+                continue
+            if wall == 'WEST':
+                for dx in (0.0, 0.25, 0.50):
+                    cx = _wx0 + cand_l * 0.5 + 0.035 + dx
+                    if cx + cand_l * 0.5 > _wx1 - 0.10:
+                        break
+                    for cy in y_pts:
+                        if tracker.is_near_door(cx, cy, radius=door_rad):
+                            continue
+                        b = (cx - cand_l * 0.5, cx + cand_l * 0.5,
+                             cy - cand_w * 0.5, cy + cand_w * 0.5)
+                        if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin,
+                                           bounds_slack=bounds_slack):
+                            tracker.occupy(b[0], b[1], b[2], b[3])
+                            build_prop(bm, 'BED', cx, cy, z_floor, 0.0,
+                                       length=cand_l, width=cand_w)
+                            return (cx, cy, 0.0)
+            elif wall == 'EAST':
+                for dx in (0.0, 0.25, 0.50):
+                    cx = _wx1 - cand_l * 0.5 - 0.035 - dx
+                    if cx - cand_l * 0.5 < _wx0 + 0.10:
+                        break
+                    for cy in y_pts:
+                        if tracker.is_near_door(cx, cy, radius=door_rad):
+                            continue
+                        b = (cx - cand_l * 0.5, cx + cand_l * 0.5,
+                             cy - cand_w * 0.5, cy + cand_w * 0.5)
+                        if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin,
+                                           bounds_slack=bounds_slack):
+                            tracker.occupy(b[0], b[1], b[2], b[3])
+                            build_prop(bm, 'BED', cx, cy, z_floor, math.pi,
+                                       length=cand_l, width=cand_w)
+                            return (cx, cy, math.pi)
+            elif wall == 'NORTH':
+                for dy in (0.0, 0.25, 0.50):
+                    cy = _wy1 - cand_l * 0.5 - 0.035 - dy
+                    if cy - cand_l * 0.5 < _wy0 + 0.10:
+                        break
+                    for cx in x_pts:
+                        if tracker.is_near_door(cx, cy, radius=door_rad):
+                            continue
+                        b = (cx - cand_w * 0.5, cx + cand_w * 0.5,
+                             cy - cand_l * 0.5, cy + cand_l * 0.5)
+                        if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin,
+                                           bounds_slack=bounds_slack):
+                            tracker.occupy(b[0], b[1], b[2], b[3])
+                            build_prop(bm, 'BED', cx, cy, z_floor, -math.pi / 2,
+                                       length=cand_l, width=cand_w)
+                            return (cx, cy, -math.pi / 2)
+            elif wall == 'SOUTH':
+                for dy in (0.0, 0.25, 0.50):
+                    cy = _wy0 + cand_l * 0.5 + 0.035 + dy
+                    if cy + cand_l * 0.5 > _wy1 - 0.10:
+                        break
+                    for cx in x_pts:
+                        if tracker.is_near_door(cx, cy, radius=door_rad):
+                            continue
+                        b = (cx - cand_w * 0.5, cx + cand_w * 0.5,
+                             cy - cand_l * 0.5, cy + cand_l * 0.5)
+                        if tracker.is_free(b[0], b[1], b[2], b[3], margin=free_margin,
+                                           bounds_slack=bounds_slack):
+                            tracker.occupy(b[0], b[1], b[2], b[3])
+                            build_prop(bm, 'BED', cx, cy, z_floor, math.pi / 2,
+                                       length=cand_l, width=cand_w)
+                            return (cx, cy, math.pi / 2)
 
     # Hard guarantee fallback: scan interior floor grid for any clear spot
     final_l, final_w = 1.85, 0.95
     for orient, l_val, w_val, yaw in (('X', final_l, final_w, 0.0), ('Y', final_w, final_l, -math.pi / 2)):
-        xs = [rx0 + l_val * 0.5 + 0.10 + i * 0.25 for i in range(int(max(1.0, x_span - l_val - 0.20) / 0.25) + 1)]
-        ys = [ry0 + w_val * 0.5 + 0.10 + i * 0.25 for i in range(int(max(1.0, y_span - w_val - 0.20) / 0.25) + 1)]
+        xs = [_wx0 + l_val * 0.5 + 0.10 + i * 0.25 for i in range(int(max(1.0, x_span - l_val - 0.20) / 0.25) + 1)]
+        ys = [_wy0 + w_val * 0.5 + 0.10 + i * 0.25 for i in range(int(max(1.0, y_span - w_val - 0.20) / 0.25) + 1)]
         for cx in xs:
             for cy in ys:
                 b = (cx - l_val * 0.5, cx + l_val * 0.5, cy - w_val * 0.5, cy + w_val * 0.5)
@@ -1224,50 +1260,78 @@ def _try_place_bunk(bm, tracker: RoomOccupancyTracker, z_floor: float,
     ry0, ry1 = tracker.ry0, tracker.ry1
     rcx = (rx0 + rx1) * 0.5
     rcy = (ry0 + ry1) * 0.5
+    _rb = getattr(tracker, 'room_bounds', None) or (rx0, rx1, ry0, ry1)
+    _wx0, _wx1, _wy0, _wy1 = _rb
+    _ins = getattr(tracker, 'wall_insets', (0.0, 0.0, 0.0, 0.0))
+    _wx0 += _ins[0]
+    _wx1 -= _ins[1]
+    _wy0 += _ins[2]
+    _wy1 -= _ins[3]
 
     def _wall_allowed(name):
         return only_wall is None or only_wall == name
 
-    min_y = ry0 + box_w * 0.5 + 0.10
-    max_y = ry1 - box_w * 0.5 - 0.10
-    min_x = rx0 + box_w * 0.5 + 0.10
-    max_x = rx1 - box_w * 0.5 - 0.10
+    min_y = _wy0 + box_w * 0.5 + 0.10
+    max_y = _wy1 - box_w * 0.5 - 0.10
+    min_x = _wx0 + box_w * 0.5 + 0.10
+    max_x = _wx1 - box_w * 0.5 - 0.10
 
-    # 1. West wall (head at -X, ladder spilling +Y into the room)
-    if _wall_allowed('WEST'):
-        cx = rx0 + length * 0.5 + 0.03
-        for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
-            if tracker.is_free(cx - length * 0.5, cx + length * 0.5, cy - box_w * 0.5, cy + box_w * 0.5):
-                tracker.occupy(cx - length * 0.5, cx + length * 0.5, cy - box_w * 0.5, cy + box_w * 0.5)
-                build_prop(bm, 'BUNK_BED', cx, cy - shift, z_floor, 0.0, length=length, width=width)
-                return (cx, cy - shift, 0.0)
+    # Line the shortest usable wall first, so a narrow dorm keeps its aisle.
+    if (_wx1 - _wx0) <= (_wy1 - _wy0):
+        wall_order = ('NORTH', 'SOUTH', 'WEST', 'EAST')
+    else:
+        wall_order = ('WEST', 'EAST', 'NORTH', 'SOUTH')
+    _solid = getattr(tracker, 'solid_walls', {})
+    wall_order = [w for w in wall_order
+                  if _wall_allowed(w) and _solid.get(w, True)]
 
-    # 2. East wall (head at +X, ladder spilling -Y into the room)
-    if _wall_allowed('EAST'):
-        cx = rx1 - length * 0.5 - 0.03
-        for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
-            if tracker.is_free(cx - length * 0.5, cx + length * 0.5, cy - box_w * 0.5, cy + box_w * 0.5):
-                tracker.occupy(cx - length * 0.5, cx + length * 0.5, cy - box_w * 0.5, cy + box_w * 0.5)
-                build_prop(bm, 'BUNK_BED', cx, cy + shift, z_floor, math.pi, length=length, width=width)
-                return (cx, cy + shift, math.pi)
-
-    # 3. North wall (head at +Y, ladder spilling +X into the room)
-    if _wall_allowed('NORTH'):
-        cy = ry1 - length * 0.5 - 0.03
-        for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
-            if tracker.is_free(cx - box_w * 0.5, cx + box_w * 0.5, cy - length * 0.5, cy + length * 0.5):
-                tracker.occupy(cx - box_w * 0.5, cx + box_w * 0.5, cy - length * 0.5, cy + length * 0.5)
-                build_prop(bm, 'BUNK_BED', cx - shift, cy, z_floor, -math.pi / 2, length=length, width=width)
-                return (cx - shift, cy, -math.pi / 2)
-
-    # 4. South wall (head at -Y)
-    if _wall_allowed('SOUTH'):
-        cy = ry0 + length * 0.5 + 0.03
-        for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
-            if tracker.is_free(cx - box_w * 0.5, cx + box_w * 0.5, cy - length * 0.5, cy + length * 0.5):
-                tracker.occupy(cx - box_w * 0.5, cx + box_w * 0.5, cy - length * 0.5, cy + length * 0.5)
-                build_prop(bm, 'BUNK_BED', cx + shift, cy, z_floor, math.pi / 2, length=length, width=width)
-                return (cx + shift, cy, math.pi / 2)
+    for wall in wall_order:
+        if wall == 'WEST' and (_wy1 - _wy0) < length + 0.20:
+            continue
+        if wall == 'EAST' and (_wy1 - _wy0) < length + 0.20:
+            continue
+        if wall in ('NORTH', 'SOUTH') and (_wx1 - _wx0) < length + 0.20:
+            continue
+        if wall == 'WEST':
+            cx = _wx0 + length * 0.5 + 0.035
+            for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
+                if tracker.is_free(cx - length * 0.5, cx + length * 0.5,
+                                   cy - box_w * 0.5, cy + box_w * 0.5, margin=0.08):
+                    tracker.occupy(cx - length * 0.5, cx + length * 0.5,
+                                   cy - box_w * 0.5, cy + box_w * 0.5)
+                    build_prop(bm, 'BUNK_BED', cx, cy - shift, z_floor, 0.0,
+                               length=length, width=width)
+                    return (cx, cy - shift, 0.0)
+        elif wall == 'EAST':
+            cx = _wx1 - length * 0.5 - 0.035
+            for cy in _sample_wall_positions(rcy, min_y, max_y, step=0.25):
+                if tracker.is_free(cx - length * 0.5, cx + length * 0.5,
+                                   cy - box_w * 0.5, cy + box_w * 0.5, margin=0.08):
+                    tracker.occupy(cx - length * 0.5, cx + length * 0.5,
+                                   cy - box_w * 0.5, cy + box_w * 0.5)
+                    build_prop(bm, 'BUNK_BED', cx, cy + shift, z_floor, math.pi,
+                               length=length, width=width)
+                    return (cx, cy + shift, math.pi)
+        elif wall == 'NORTH':
+            cy = _wy1 - length * 0.5 - 0.035
+            for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
+                if tracker.is_free(cx - box_w * 0.5, cx + box_w * 0.5,
+                                   cy - length * 0.5, cy + length * 0.5, margin=0.08):
+                    tracker.occupy(cx - box_w * 0.5, cx + box_w * 0.5,
+                                   cy - length * 0.5, cy + length * 0.5)
+                    build_prop(bm, 'BUNK_BED', cx - shift, cy, z_floor, -math.pi / 2,
+                               length=length, width=width)
+                    return (cx - shift, cy, -math.pi / 2)
+        elif wall == 'SOUTH':
+            cy = _wy0 + length * 0.5 + 0.035
+            for cx in _sample_wall_positions(rcx, min_x, max_x, step=0.25):
+                if tracker.is_free(cx - box_w * 0.5, cx + box_w * 0.5,
+                                   cy - length * 0.5, cy + length * 0.5, margin=0.08):
+                    tracker.occupy(cx - box_w * 0.5, cx + box_w * 0.5,
+                                   cy - length * 0.5, cy + length * 0.5)
+                    build_prop(bm, 'BUNK_BED', cx + shift, cy, z_floor, math.pi / 2,
+                               length=length, width=width)
+                    return (cx + shift, cy, math.pi / 2)
 
     return None
 
@@ -1301,8 +1365,9 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         bed_len = 2.45
     bed_info = _try_place_bed(bm, tracker, z_floor, length=bed_len, width=bed_w)
 
-    # 2. Bedside chest at foot of bed — only if room is wide enough
-    if bed_info is not None and not narrow_room:
+    # 2. Bedside chest at foot of bed — only when there is a real walking lane
+    # left between the chest and the far wall.
+    if bed_info is not None and not narrow_room and min(rw, rd) >= 3.6:
         bcx, bcy, bang = bed_info
         fwd_x = math.cos(bang)
         fwd_y = math.sin(bang)
@@ -1319,7 +1384,10 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         cbx1 = fcx + (cd * 0.5 if abs(fwd_x) > 0.5 else cw * 0.5)
         cby0 = fcy - (cw * 0.5 if abs(fwd_x) > 0.5 else cd * 0.5)
         cby1 = fcy + (cw * 0.5 if abs(fwd_x) > 0.5 else cd * 0.5)
-        if tracker.is_free(cbx0, cbx1, cby0, cby1):
+        _far_clear = ((rx1 - fcx) if fwd_x > 0 else (fcx - rx0)) if abs(fwd_x) > 0.5 \
+            else ((ry1 - fcy) if fwd_y > 0 else (fcy - ry0))
+        _walk_ok = (_far_clear - 0.34) >= 0.55
+        if _walk_ok and tracker.is_free(cbx0, cbx1, cby0, cby1, margin=0.10):
             tracker.occupy(cbx0, cbx1, cby0, cby1)
             chest_yaw = bang + math.pi / 2
             build_prop(bm, 'CHEST', fcx, fcy, z_floor, chest_yaw, width=cw)
@@ -1377,6 +1445,12 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                                       candidate_walls=('SOUTH', 'EAST', 'NORTH'))
             if _d:
                 _dress_desk(bm, tracker, _d[0], _d[1], _d[2], z_floor, rng, (rcx, rcy))
+            if (rw * rd) >= 24.0:
+                _try_place_wall_prop(bm, 'SOFA', 1.90, 0.92, tracker, z_floor,
+                                     candidate_walls=('SOUTH', 'NORTH', 'WEST', 'EAST'),
+                                     length=1.75, check_windows=False, fabric_mat=_sofa_fabric(rng))
+                _try_place_wall_prop(bm, 'WALL_BANNER', 0.80, 0.40, tracker, z_floor,
+                                     candidate_walls=('NORTH', 'SOUTH', 'EAST', 'WEST'))
         else:
             _try_place_wall_prop(bm, 'SHELF', 1.20, 0.40, tracker, z_floor,
                                  candidate_walls=('SOUTH', 'NORTH', 'EAST'))
@@ -2912,6 +2986,73 @@ def _furnish_banquet_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
     _place_ceiling_light(bm, tracker, tx, ty, z_ceil, prop_name='CHANDELIER', radius=0.52)
 
 
+def _furnish_communal_dining_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                                  rng, density: float, chimney_pos: Optional[Any] = None):
+    """Furnishes a castle retinue's ground-floor communal hall with an integrated kitchen
+    workstation in one corner/wall, and a grand communal refectory dining table with
+    chairs along both sides, area rug, tableware, and overhead chandelier."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    z_table = z_floor + 0.992
+
+    # 1. KITCHEN CORNER WORKSTATION: Stove & Foodprep Table SIDE-BY-SIDE
+    workstation = _try_place_kitchen_workstation(bm, tracker, z_floor, rng, chimney_pos=chimney_pos)
+    if workstation:
+        placed_stove, prep_table_pos = workstation
+    else:
+        placed_stove = _try_place_kitchen_stove(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
+        if not placed_stove:
+            placed_stove = _try_place_hearth(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
+        prep_table_pos = None
+        _prep = _try_place_wall_prop(bm, 'FOODPREP_TABLE', 1.80, 0.70, tracker, z_floor,
+                                     candidate_walls=('SOUTH', 'WEST', 'NORTH', 'EAST'))
+        if _prep:
+            prep_table_pos = (_prep[0], _prep[1])
+
+    station_x = placed_stove[0] if placed_stove else (prep_table_pos[0] if prep_table_pos else rcx)
+    station_y = placed_stove[1] if placed_stove else (prep_table_pos[1] if prep_table_pos else rcy)
+
+    # Kitchen wall shelf and storage crates / barrels near the cooking area
+    w_dists = {
+        'EAST': abs(station_x - tracker.rx1),
+        'WEST': abs(station_x - tracker.rx0),
+        'NORTH': abs(station_y - tracker.ry1),
+        'SOUTH': abs(station_y - tracker.ry0),
+    }
+    cooking_wall = min(w_dists, key=w_dists.get)
+    _try_place_wall_prop(bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                         candidate_walls=[cooking_wall, 'SOUTH', 'NORTH', 'WEST', 'EAST'], check_windows=True)
+    _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
+                         candidate_walls=[cooking_wall, 'SOUTH', 'WEST', 'EAST', 'NORTH'])
+    _try_place_wall_prop(bm, 'BARREL', 0.75, 0.75, tracker, z_floor,
+                         candidate_walls=[cooking_wall, 'SOUTH', 'WEST', 'EAST', 'NORTH'])
+
+    # 2. BIG COMMUNAL DINING TABLE ENSEMBLE (REUSABLE MODULE)
+    from .table_ensemble import try_place_dining_ensemble
+    try_place_dining_ensemble(
+        bm, tracker, rm, z_floor=z_floor, z_ceil=z_ceil, rng=rng,
+        min_len=2.00, max_len=4.20, head_chairs=False, table_width=1.15
+    )
+
+    for _w in ('WEST', 'EAST', 'SOUTH', 'NORTH'):
+        _try_place_wall_prop(bm, 'BENCH', 1.70, 0.58, tracker, z_floor,
+                             candidate_walls=(_w,), length=1.70)
+    for _w in ('WEST', 'EAST', 'SOUTH', 'NORTH'):
+        _try_place_wall_prop(bm, 'BOOKSHELF', 1.25, 0.38, tracker, z_floor,
+                             candidate_walls=(_w,))
+    for _cx, _cy in ((rm.bounds[0] + 0.75, rm.bounds[2] + 0.75),
+                     (rm.bounds[1] - 0.75, rm.bounds[2] + 0.75),
+                     (rm.bounds[0] + 0.75, rm.bounds[3] - 0.75),
+                     (rm.bounds[1] - 0.75, rm.bounds[3] - 0.75)):
+        if tracker.is_near_door(_cx, _cy, radius=1.0):
+            continue
+        if tracker.is_free(_cx - 0.55, _cx + 0.55, _cy - 0.55, _cy + 0.55):
+            tracker.occupy(_cx - 0.55, _cx + 0.55, _cy - 0.55, _cy + 0.55)
+            build_prop(bm, 'POTTED_PLANT_LARGE', _cx, _cy, z_floor, rng.uniform(0.0, 6.28))
+
+
 def _furnish_entrance_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                            rng, density: float, chimney_pos: Optional[Any] = None):
     """Civic entrance lobby: keep the walking axis clear and line the walls
@@ -4212,45 +4353,188 @@ def _place_market_display(bm, tracker: RoomOccupancyTracker, z_floor: float,
     return
 
 
+def build_chapel_altar(bm, cx: float, cy: float, z_floor: float, facing: str = '+X'):
+    """Authentic cut-stone chantry altar on a beveled dais with forged iron
+    candlesticks, beeswax taper candles, and golden reliquary chalice,
+    matching the healer's chapel preset."""
+    from ..mesh_utils import create_beveled_box, create_cylinder, create_cone
+    from ..materials import (
+        MAT_INDEX_CUT_STONE, MAT_INDEX_IRON, MAT_INDEX_WAX,
+        MAT_INDEX_GOLD
+    )
+    faces = []
+
+    if facing in ('+X', '-X'):
+        sgn = 1.0 if facing == '+X' else -1.0
+        # Altar stone block
+        faces += create_beveled_box(
+            bm, size=(0.65, 1.70, 0.90),
+            location=(cx, cy, z_floor + 0.45),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
+        # Altar top slab
+        faces += create_beveled_box(
+            bm, size=(0.72, 1.85, 0.09),
+            location=(cx, cy, z_floor + 0.925),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+        # Dais step in front of altar (towards congregation)
+        faces += create_beveled_box(
+            bm, size=(0.55, 2.10, 0.16),
+            location=(cx - sgn * 0.58, cy, z_floor + 0.08),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+        # Candlesticks flanking the center
+        for dy in (-0.58, 0.58):
+            faces += create_cylinder(
+                bm, radius=0.075, height=0.05, segments=10,
+                location=(cx, cy + dy, z_floor + 0.99),
+                mat_index=MAT_INDEX_IRON)
+            faces += create_cylinder(
+                bm, radius=0.045, height=0.38, segments=10,
+                location=(cx, cy + dy, z_floor + 1.16),
+                mat_index=MAT_INDEX_WAX)
+        # Golden ritual chalice
+        faces += create_cylinder(
+            bm, radius=0.08, height=0.025, segments=10,
+            location=(cx, cy, z_floor + 0.97 + 0.012),
+            mat_index=MAT_INDEX_GOLD)
+        faces += create_cylinder(
+            bm, radius=0.02, height=0.12, segments=8,
+            location=(cx, cy, z_floor + 0.97 + 0.025 + 0.06),
+            mat_index=MAT_INDEX_GOLD)
+        faces += create_cone(
+            bm, radius1=0.03, radius2=0.08, height=0.10, segments=10,
+            location=(cx, cy, z_floor + 0.97 + 0.025 + 0.12 + 0.05),
+            mat_index=MAT_INDEX_GOLD)
+    else:
+        sgn = 1.0 if facing == '+Y' else -1.0
+        # Altar stone block
+        faces += create_beveled_box(
+            bm, size=(1.70, 0.65, 0.90),
+            location=(cx, cy, z_floor + 0.45),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
+        # Altar top slab
+        faces += create_beveled_box(
+            bm, size=(1.85, 0.72, 0.09),
+            location=(cx, cy, z_floor + 0.925),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+        # Dais step in front of altar
+        faces += create_beveled_box(
+            bm, size=(2.10, 0.55, 0.16),
+            location=(cx, cy - sgn * 0.58, z_floor + 0.08),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+        # Candlesticks flanking the center
+        for dx in (-0.58, 0.58):
+            faces += create_cylinder(
+                bm, radius=0.075, height=0.05, segments=10,
+                location=(cx + dx, cy, z_floor + 0.99),
+                mat_index=MAT_INDEX_IRON)
+            faces += create_cylinder(
+                bm, radius=0.045, height=0.38, segments=10,
+                location=(cx + dx, cy, z_floor + 1.16),
+                mat_index=MAT_INDEX_WAX)
+        # Golden ritual chalice
+        faces += create_cylinder(
+            bm, radius=0.08, height=0.025, segments=10,
+            location=(cx, cy, z_floor + 0.97 + 0.012),
+            mat_index=MAT_INDEX_GOLD)
+        faces += create_cylinder(
+            bm, radius=0.02, height=0.12, segments=8,
+            location=(cx, cy, z_floor + 0.97 + 0.025 + 0.06),
+            mat_index=MAT_INDEX_GOLD)
+        faces += create_cone(
+            bm, radius1=0.03, radius2=0.08, height=0.10, segments=10,
+            location=(cx, cy, z_floor + 0.97 + 0.025 + 0.12 + 0.05),
+            mat_index=MAT_INDEX_GOLD)
+    return faces
+
+
 def _furnish_chapel(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                     rng, density: float):
-    """Furnish the nave as a church: rows of pews facing the apse altar.
-
-    The Healers' Chapel apse sits on the +Y end, so the congregation faces +Y
-    with a clear central aisle running from the entrance to the chancel.
-    """
+    """Furnish the nave as a church: rows of pews arranged along the length of the building,
+    facing the authentic chantry altar with a ceremonial aisle runner."""
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     rw = rm.bounds[1] - rm.bounds[0]
     rd = rm.bounds[3] - rm.bounds[2]
 
-    aisle_w = min(2.30, max(1.45, rw * 0.17))
-    bench_len = min(4.20, max(1.20, (rw - aisle_w - 1.10) * 0.50))
-    row_gap = 1.02
-    y = rm.bounds[2] + 0.95
-    # Leave clear space at the chancel end for the apse threshold/altar.
-    y_stop = rm.bounds[3] - 1.55
-    while y <= y_stop:
-        for side in (-1.0, 1.0):
-            bx = rcx + side * (aisle_w * 0.5 + 0.22 + bench_len * 0.5)
-            if tracker.is_free(bx - bench_len * 0.5 - 0.12,
-                               bx + bench_len * 0.5 + 0.12,
-                               y - 0.42, y + 0.42):
-                tracker.occupy(bx - bench_len * 0.5 - 0.12,
-                               bx + bench_len * 0.5 + 0.12,
-                               y - 0.42, y + 0.42)
-                # Local bench faces -Y; rotate 180 degrees to face the +Y altar.
-                build_prop(bm, 'BENCH', bx, y, z_floor, math.pi, length=bench_len)
-        y += row_gap
+    is_x_long = (rw >= rd)
 
-    # Ceremonial runner straight down the aisle to the chancel.
-    runner_l = max(2.8, rd * 0.84)
-    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor,
-             aisle_w * 0.90, runner_l, yaw_max=0.03, allow_overlap=False)
+    if is_x_long:
+        # Building length is along X (east-west church orientation)
+        # 1. Altar on low stone dais at the +X (East) end
+        x_altar = rm.bounds[1] - 1.10
+        build_chapel_altar(bm, x_altar, rcy, z_floor, facing='+X')
+        tracker.occupy(x_altar - 1.15, rm.bounds[1] - 0.15, rcy - 1.25, rcy + 1.25)
 
-    # Soft chancel light above the aisle.
-    _place_ceiling_light(bm, tracker, rcx, rcy + rd * 0.08, z_ceil,
-                         prop_name='CHANDELIER', radius=0.48)
+        # 2. Rows of church pews flanking the central aisle, facing +X towards altar
+        aisle_w = min(1.80, max(1.30, rd * 0.22))
+        bench_len = min(2.80, max(1.20, (rd - aisle_w - 0.90) * 0.50))
+        row_gap = 1.05
+        x = rm.bounds[0] + 0.95
+        x_stop = x_altar - 1.65
+
+        while x <= x_stop:
+            for side in (-1.0, 1.0):
+                by = rcy + side * (aisle_w * 0.5 + 0.16 + bench_len * 0.5)
+                bx0, bx1 = x - 0.40, x + 0.40
+                by0, by1 = by - bench_len * 0.5 - 0.10, by + bench_len * 0.5 + 0.10
+                if tracker.is_free(bx0, bx1, by0, by1):
+                    tracker.occupy(bx0, bx1, by0, by1)
+                    build_prop(bm, 'BENCH', x, by, z_floor, math.pi * 0.5, length=bench_len)
+            x += row_gap
+
+        # 3. Ceremonial runner straight down the aisle along X to the altar
+        x_rug_start = rm.bounds[0] + 0.65
+        x_rug_end = x_altar - 1.20
+        runner_len = max(2.5, x_rug_end - x_rug_start)
+        rug_cx = (x_rug_start + x_rug_end) * 0.5
+        _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rug_cx, rcy, z_floor,
+                 runner_len, aisle_w * 0.88, yaw_max=0.01, allow_overlap=False)
+
+        # 4. Chandeliers above the aisle and altar
+        _place_ceiling_light(bm, tracker, x_altar - 0.8, rcy, z_ceil,
+                             prop_name='CHANDELIER', radius=0.48)
+        if runner_len >= 5.0:
+            _place_ceiling_light(bm, tracker, rug_cx, rcy, z_ceil,
+                                 prop_name='CHANDELIER', radius=0.48)
+
+    else:
+        # Building length is along Y (north-south church orientation)
+        # 1. Altar on low stone dais at the +Y (North) end
+        y_altar = rm.bounds[3] - 1.10
+        build_chapel_altar(bm, rcx, y_altar, z_floor, facing='+Y')
+        tracker.occupy(rcx - 1.25, rcx + 1.25, y_altar - 1.15, rm.bounds[3] - 0.15)
+
+        # 2. Rows of church pews flanking the central aisle, facing +Y towards altar
+        aisle_w = min(1.80, max(1.30, rw * 0.22))
+        bench_len = min(4.20, max(1.20, (rw - aisle_w - 0.90) * 0.50))
+        row_gap = 1.05
+        y = rm.bounds[2] + 0.95
+        y_stop = y_altar - 1.65
+
+        while y <= y_stop:
+            for side in (-1.0, 1.0):
+                bx = rcx + side * (aisle_w * 0.5 + 0.16 + bench_len * 0.5)
+                bx0, bx1 = bx - bench_len * 0.5 - 0.10, bx + bench_len * 0.5 + 0.10
+                by0, by1 = y - 0.40, y + 0.40
+                if tracker.is_free(bx0, bx1, by0, by1):
+                    tracker.occupy(bx0, bx1, by0, by1)
+                    build_prop(bm, 'BENCH', bx, y, z_floor, math.pi, length=bench_len)
+            y += row_gap
+
+        # 3. Ceremonial runner straight down the aisle along Y to the chancel
+        y_rug_start = rm.bounds[2] + 0.65
+        y_rug_end = y_altar - 1.20
+        runner_len = max(2.5, y_rug_end - y_rug_start)
+        rug_cy = (y_rug_start + y_rug_end) * 0.5
+        _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rug_cy, z_floor,
+                 aisle_w * 0.88, runner_len, yaw_max=0.01, allow_overlap=False)
+
+        # 4. Chandeliers above the aisle and altar
+        _place_ceiling_light(bm, tracker, rcx, y_altar - 0.8, z_ceil,
+                             prop_name='CHANDELIER', radius=0.48)
+        if runner_len >= 5.0:
+            _place_ceiling_light(bm, tracker, rcx, rug_cy, z_ceil,
+                                 prop_name='CHANDELIER', radius=0.48)
 
 
 def _furnish_storage(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
@@ -4271,6 +4555,23 @@ def _furnish_storage(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                 tracker.occupy(cx - 0.3, cx + 0.3, cy - 0.3, cy + 0.3)
                 p = 'CRATE' if rng.random() < 0.5 else 'BARREL'
                 build_prop(bm, p, cx, cy, z_floor, 0.0)
+
+    # Big working stores (the keep's cellar vestibule, granary floors) should
+    # read as stocked, not as one lonely shelf in an empty hall.
+    rw = rm.bounds[1] - rm.bounds[0]
+    rd = rm.bounds[3] - rm.bounds[2]
+    if rw * rd >= 60.0:
+        for _ in range(2):
+            _try_place_wall_prop(
+                bm, 'SHELF', 1.40, 0.40, tracker, z_floor,
+                candidate_walls=('NORTH', 'SOUTH', 'EAST', 'WEST'))
+        for _ in range(2):
+            _try_place_wall_prop(
+                bm, 'CRATE', 0.70, 0.70, tracker, z_floor,
+                candidate_walls=('NORTH', 'SOUTH', 'EAST', 'WEST'))
+        _try_place_wall_prop(
+            bm, 'BARREL', 0.62, 0.62, tracker, z_floor,
+            candidate_walls=('NORTH', 'SOUTH', 'EAST', 'WEST'))
 
     _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
@@ -4461,12 +4762,26 @@ def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
         only_wall = 'WEST' if rw <= rd else 'SOUTH'
     else:
         only_wall = None
-    num_bunks = max(1, min(4, int(rw * rd / 14.0)))
+    num_bunks = max(1, min(6, int(rw * rd / 9.0)))
+    placed_bunks = 0
     for _ in range(num_bunks):
         binfo = _try_place_bunk(bm, tracker, z_floor, length=2.0, width=1.1,
                                 only_wall=only_wall, wall_gap=2.0)
         if binfo is None:
             continue
+        placed_bunks += 1
+    # Fallback: if restricted wall had doorways or obstructions, try all available walls
+    if placed_bunks == 0 and only_wall is not None:
+        for _ in range(num_bunks):
+            binfo = _try_place_bunk(bm, tracker, z_floor, length=2.0, width=1.1,
+                                    only_wall=None, wall_gap=1.5)
+            if binfo is None:
+                continue
+            placed_bunks += 1
+    # Never leave a dormitory with no sleeping furniture at all (awkward door
+    # or window layout can reject every bunk slot).
+    if placed_bunks == 0:
+        _try_place_bed(bm, tracker, z_floor, length=2.0, width=1.1)
 
     # 1b. In a genuinely roomy dorm, add a second rank on the facing wall -
     # but ONLY when the room is wide enough to keep a full 2 m aisle between
@@ -4485,6 +4800,15 @@ def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
     # 2. Weapon rack along remaining free wall
     _try_place_wall_prop(bm, 'WEAPON_RACK', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('NORTH', 'WEST', 'EAST', 'SOUTH'))
+
+    # 2b. A proper squad table and spare footlocker stop the larger dorms
+    # reading as a bare room with a couple of bunks and a rack.
+    if rw * rd >= 24.0 and min(rw, rd) >= 3.2:
+        _place_craft_table(
+            bm, tracker, z_floor, rng,
+            length=min(2.40, max(1.40, rw * 0.34)), width=0.85)
+        _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'))
 
     # 3. Single austere dorm runner rug along the walking aisle (kept clear of
     # walls/other rugs; skipped entirely if the dorm is too tight).
@@ -5053,6 +5377,9 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     # inset a metre+ off a wall that carries a flight elsewhere); the precise
     # stair/door/prop boxes still reject any slot the flight actually uses.
     tracker.room_bounds = (rx0, rx1, ry0, ry1)
+    tracker.wall_insets = (0.0, 0.0, 0.0, 0.0)
+    tracker.solid_walls = {'LEFT': True, 'RIGHT': True,
+                           'FRONT': True, 'BACK': True}
     if ctx is not None and not getattr(rm, 'is_wing', False):
         _fwb = (getattr(ctx, 'floor_wall_bounds', None) or {}).get(
             rm.floor_idx)
@@ -5060,11 +5387,58 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
         if _fwb is not None:
             # Only clamp to outer building bounds for exterior perimeter walls;
             # interior partition walls stay strictly at (rx0, rx1, ry0, ry1).
+            # Those plan bounds are the partition CENTRELINE, so the bed and
+            # wall props need a half-wall inset or their headboard embeds in
+            # the plaster by ~8 cm.
+            _p = getattr(ctx, 'props', None)
+            _half_iw = 0.5 * float(getattr(_p, 'interior_wall_thickness', 0.16)
+                                    or 0.16)
+            _in_left = 0.0 if abs(rx0 - (_fwb[0] + _wt)) < 0.6 else _half_iw
+            _in_right = 0.0 if abs(rx1 - (_fwb[1] - _wt)) < 0.6 else _half_iw
+            _in_front = 0.0 if abs(ry0 - (_fwb[2] + _wt)) < 0.6 else _half_iw
+            _in_back = 0.0 if abs(ry1 - (_fwb[3] - _wt)) < 0.6 else _half_iw
             _wx0 = (_fwb[0] + _wt) if abs(rx0 - (_fwb[0] + _wt)) < 0.6 else rx0
             _wx1 = (_fwb[1] - _wt) if abs(rx1 - (_fwb[1] - _wt)) < 0.6 else rx1
             _wy0 = (_fwb[2] + _wt) if abs(ry0 - (_fwb[2] + _wt)) < 0.6 else ry0
             _wy1 = (_fwb[3] - _wt) if abs(ry1 - (_fwb[3] - _wt)) < 0.6 else ry1
             tracker.room_bounds = (_wx0, _wx1, _wy0, _wy1)
+            tracker.wall_insets = (_in_left, _in_right, _in_front, _in_back)
+
+            # A room bound can survive after its wall was merged away.  Mark
+            # which sides actually have built wall geometry; wall props and
+            # beds must never anchor to an invisible wall in the middle of a
+            # merged room.
+            _iwalls = ((getattr(ctx, 'floor_interior_walls', None) or {})
+                       .get(rm.floor_idx) or [])
+
+            def _side_has_wall(side, coord, axis, a0, a1, shell_coord):
+                if abs(coord - shell_coord) < 0.60:
+                    return True
+                for _w in _iwalls:
+                    if _w.get('axis') != axis:
+                        continue
+                    _wp = _w.get('pos', _w.get('p1', (0.0, 0.0))[0 if axis == 'Y' else 1])
+                    if abs(float(_wp) - coord) > 0.20:
+                        continue
+                    _p1, _p2 = _w.get('p1'), _w.get('p2')
+                    if not _p1 or not _p2:
+                        continue
+                    _lo, _hi = (min(_p1[1], _p2[1]), max(_p1[1], _p2[1])) if axis == 'Y' \
+                        else (min(_p1[0], _p2[0]), max(_p1[0], _p2[0]))
+                    if min(_hi, a1) - max(_lo, a0) > 0.45:
+                        return True
+                return False
+
+            tracker.solid_walls = {
+                'LEFT': _side_has_wall('LEFT', rx0, 'Y', ry0, ry1,
+                                        _fwb[0] + _wt),
+                'RIGHT': _side_has_wall('RIGHT', rx1, 'Y', ry0, ry1,
+                                         _fwb[1] - _wt),
+                'FRONT': _side_has_wall('FRONT', ry0, 'X', rx0, rx1,
+                                         _fwb[2] + _wt),
+                'BACK': _side_has_wall('BACK', ry1, 'X', rx0, rx1,
+                                        _fwb[3] - _wt),
+            }
     tracker.stair_hole = _stair_well
     # Turned-stair rooms are pre-inset off the walls that carry a flight, so
     # the generic side pad would double-dip and deny the whole inset wall.
@@ -5208,6 +5582,8 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_great_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('BANQUET_HALL',):
             _furnish_banquet_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
+        elif role in ('COMMUNAL_DINING',):
+            _furnish_communal_dining_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('ENTRANCE_HALL',):
             _furnish_entrance_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('MAYOR_OFFICE', 'OFFICE'):
@@ -5219,8 +5595,14 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, density,
                              chimney_pos=chimney_positions,
                              floor_has_dining=(floor_has_dining or role == 'TENEMENT_KITCHEN'))
-        elif role in ('MASTER_BED', 'OFFICER_QUARTERS', 'ROYAL_CHAMBER'):
+        elif role in ('MASTER_BED', 'ROYAL_CHAMBER'):
             _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, density, is_master=True)
+        elif role in ('OFFICER_QUARTERS',):
+            _furnish_bedroom(bm, rm, tracker, z_floor, z_ceil, rng, density, is_master=True)
+            _try_place_wall_prop(bm, 'WEAPON_RACK', 1.40, 0.40, tracker, z_floor,
+                                 candidate_walls=('NORTH', 'WEST', 'EAST', 'SOUTH'))
+            _try_place_wall_prop(bm, 'CHEST', 0.95, 0.55, tracker, z_floor,
+                                 candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'))
         elif role in ('MESS_HALL',):
             _furnish_mess_hall(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('RANGE', 'FLETCHER_WORKSHOP'):
@@ -5300,7 +5682,10 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     # Minimum-dressing guarantee: a living room the recipe left almost empty
     # (awkward stairwell, door-heavy plan) still gets a sitting nook. Bare
     # industrial fit-outs, walkways and stables are exempt by design.
-    if (not _bare and role not in ('STAIR_LANDING', 'CORRIDOR', 'STABLE_HALL', 'STORE', 'MEZZANINE_GALLERY', 'UPPER_GALLERY', 'THRONE_ROOM')
+    if (not _bare and role not in ('STAIR_LANDING', 'CORRIDOR', 'STABLE_HALL',
+                                   'STORE', 'STORAGE', 'CELLAR', 'PANTRY',
+                                   'MEZZANINE_GALLERY', 'UPPER_GALLERY',
+                                   'THRONE_ROOM')
             and len(tracker.occupied_boxes) - _occ_before < 3):
         try:
             _ensure_minimum_dressing(bm, tracker, rm, z_floor, rng)
@@ -5312,8 +5697,10 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     # industrial fit-out (warehouses/lumbermills stay bare), stables, and
     # circulation (corridors/landings must stay clear). Rugs are regular-size,
     # never tiny mats, and skipped when the floor cannot fit one.
-    if (not _bare and role not in ('THRONE_ROOM', 'MEZZANINE_GALLERY', 'UPPER_GALLERY',
-                                   'STABLE_HALL', 'CORRIDOR', 'STAIR_LANDING')
+    if (not _bare and role not in ('THRONE_ROOM', 'MEZZANINE_GALLERY',
+                                   'UPPER_GALLERY', 'STABLE_HALL', 'CORRIDOR',
+                                   'STAIR_LANDING', 'STORAGE', 'CELLAR',
+                                   'PANTRY')
             and getattr(tracker, 'rug_count', 0) == 0
             and not getattr(tracker, 'no_rugs', False)):
         rw = (rx1 - rx0) - inset * 2.0
@@ -5328,7 +5715,9 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     # (skipped in bare industrial utility rooms, and never in a working stable).
     rw = rx1 - rx0
     rd = ry1 - ry0
-    if role not in ('STABLE_HALL', 'MEZZANINE_GALLERY', 'UPPER_GALLERY') and not _bare and min(rw, rd) >= 2.6 and rng.random() < 0.7:
+    if (role not in ('STABLE_HALL', 'MEZZANINE_GALLERY', 'UPPER_GALLERY',
+                     'STORAGE', 'CELLAR', 'PANTRY')
+            and not _bare and min(rw, rd) >= 2.6 and rng.random() < 0.7):
         _try_place_plant(bm, tracker, z_floor, rng, large=True)
 
 
@@ -5488,7 +5877,7 @@ def furnish_building_interior(bm, props, ctx):
         # A room on this floor already contains the dining/social set, so the
         # kitchen must not duplicate it. Shared across the whole storey.
         _dining_roles = {'HOUSE_HALL', 'DINING', 'GREAT_HALL', 'BANQUET_HALL', 'TAVERN_TAPROOM',
-                         'CHAPEL_HALL', 'MESS_HALL', 'COUNCIL_CHAMBER', 'THRONE_ROOM'}
+                         'CHAPEL_HALL', 'MESS_HALL', 'COUNCIL_CHAMBER', 'THRONE_ROOM', 'COMMUNAL_DINING'}
         floor_has_dining = any(getattr(rm, 'role', None) in _dining_roles for rm in rooms)
 
         # Designate largest ground-floor room as THRONE_ROOM if requested

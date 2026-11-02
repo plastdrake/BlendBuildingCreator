@@ -30,7 +30,8 @@ from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_TIMBER,
     MAT_INDEX_TIMBER_FRAME, MAT_INDEX_SHINGLES, MAT_INDEX_IRON,
     MAT_INDEX_GLASS, MAT_INDEX_FLOOR, MAT_INDEX_CLIFFS,
-    MAT_INDEX_WOOD, MAT_INDEX_LOG, MAT_INDEX_TARGET, MAT_INDEX_BANNER
+    MAT_INDEX_WOOD, MAT_INDEX_LOG, MAT_INDEX_TARGET, MAT_INDEX_BANNER,
+    MAT_INDEX_TERRACOTTA
 )
 from ..interior import build_spiral_staircase
 from ..poly import ring_slab
@@ -1844,13 +1845,13 @@ def optimize_castle_silhouette(bm, registry, tier):
     from all 360-degree viewing angles.
     """
     if tier == 'TIER_1':
-        # Add timber chimney & ridge pennon to Old Keep
+        # Add timber/brick chimney & ridge pennon to Old Keep
         create_beveled_box(bm, size=(0.75, 0.75, 2.2), location=(3.5, 12.0, 14.5),
-                           mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+                           mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.02)
     elif tier == 'TIER_2':
-        # Add stone chimney & heraldic standard to Keep battlement deck (deck at Z = 11.65m)
+        # Add brick chimney & heraldic standard to Keep battlement deck (deck at Z = 11.65m)
         create_beveled_box(bm, size=(0.95, 0.95, 2.2), location=(4.0, 12.0, 11.65 + 1.1),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+                           mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.02)
         create_cylinder(bm, radius=0.05, height=3.2, segments=6,
                         location=(0.0, 10.0, 11.65 + 1.6), mat_index=MAT_INDEX_IRON)
         create_box(bm, size=(1.2, 0.03, 0.6), location=(0.6, 10.0, 11.65 + 2.7), mat_index=MAT_INDEX_BANNER)

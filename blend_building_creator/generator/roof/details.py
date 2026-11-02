@@ -7,7 +7,7 @@ so the orchestrating roof builder reads as a sequence of named steps.
 import math
 from . import build_dormer, build_roof_turret, build_fantasy_chimney
 from ..accessories.tower import build_roof_clock_spire
-from ..materials import MAT_INDEX_STONE, MAT_INDEX_WOOD
+from ..materials import MAT_INDEX_STONE, MAT_INDEX_WOOD, MAT_INDEX_TERRACOTTA
 
 
 def build_roof_dormers(bm, props, effective_archetype, roof_style,
@@ -190,7 +190,7 @@ def get_planned_chimney_positions(props, effective_archetype=None, top_w=None, t
 
     res = []
     for cpx_i, cpy_i in candidates:
-        if getattr(props, 'has_pillared_overhang', False):
+        if getattr(props, 'has_pillared_overhang', False) and getattr(props, 'num_floors', 1) >= 2:
             p_side = getattr(props, 'pillared_overhang_side', 'FRONT')
             if p_side == 'BACK':
                 cpy_i = -0.65
@@ -303,7 +303,7 @@ def build_roof_chimney(bm, props, effective_archetype,
             total_height=chim_total_h,
             width=chim_w, depth=chim_d,
             crooked_angle=0.02 * (1.0 if len(placed_chimneys) % 2 == 0 else -1.0),
-            mat_index=MAT_INDEX_STONE
+            mat_index=MAT_INDEX_TERRACOTTA
         )
         placed_chimneys.append((chim_x, chim_y))
 

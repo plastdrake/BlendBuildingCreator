@@ -376,6 +376,29 @@ def build_gable_end_wall(bm, cx, x_min, x_max, rx_min, rx_max, gy, g_norm, half_
             bevel_amount=0.010
         )
 
+        # Intermediate vertical queen studs for authentic Tudor gable framing
+        if tie_span > 2.8:
+            stud_spacing = 1.65
+            half_span = tie_span * 0.5
+            n_flank_studs = max(1, int(round(half_span / stud_spacing)))
+            for s_sign in [-1, 1]:
+                for s_i in range(1, n_flank_studs + 1):
+                    frac = s_i / (n_flank_studs + 0.4)
+                    qx = cx + s_sign * (half_span * frac)
+                    if _hx0 is not None and (_hx0 - 0.20 <= qx <= _hx1 + 0.20):
+                        continue
+                    q_top = get_gable_deck_z_func(qx) - 0.06
+                    q_bot = z_base + tie_h
+                    q_h = q_top - q_bot
+                    if q_h > 0.40:
+                        create_beveled_box(
+                            bm,
+                            size=(0.14, tie_t * 0.9, q_h),
+                            location=(qx, tie_y, q_bot + q_h * 0.5),
+                            mat_index=MAT_INDEX_TIMBER,
+                            bevel_amount=0.008
+                        )
+
     # Physical logs siding for Tier 1 (split around a validated hatch opening)
     if not is_wattle:
         _siding_hatch = None

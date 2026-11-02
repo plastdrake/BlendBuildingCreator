@@ -26,7 +26,7 @@ _HALLS = (
     ("east_hall", 2, 15.0, 0.0, 8.0, 22.0, 10.0, 5, 0.0, 'T_SHAPE', 'FRONT', 8.0, 5.0, 7.0),
     ("barracks", 2, -20.0, -28.5, 3.0, 14.0, 9.0, 2, 5.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 5.5),
     ("armory", 2, 20.0, -28.5, 3.0, 14.0, 9.0, 2, -5.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 5.5),
-    ("archive_hall", 3, 20.5, 40.0, 14.0, 17.0, 10.0, 3, 0.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 7.0),
+    ("archive_hall", 3, 20.5, 40.0, 14.0, 17.0, 10.0, 5, 0.0, 'RECTANGLE', 'FRONT', 0.0, 0.0, 6.0),
 )
 
 # x, y, radius, floors, spire_h, first_tier, rank, spire_roof. Every tower is walkable inside
@@ -100,19 +100,166 @@ def _hall_overrides(tier, w, d, floors, shape, facade, ww, wd, roof_h, hid=""):
         'interior_program': _HALL_PROGRAM.get(hid, 'RESIDENTIAL'),
         'interior_partition_style': 'AUTO',
         'has_interior_walls': True,
+        # These are the castle's main halls, not detached estate outbuildings.
+        # Keep their purpose-planned manor interiors intact instead of running
+        # the outbuilding room-consolidation pass (which produced overlapping
+        # room rectangles and furniture against vanished walls).
+        'is_castle_hall': True,
     }
+    # The two lower halls joined by the connector wings are the servants' /
+    # retainers' and garrison's living blocks, so their upper storeys need real
+    # dormitories and bedrooms rather than open halls and corridors.
+    if tier == 3 and hid in ('great_hall', 'east_hall'):
+        # These two halls carry the connector wings on their rear wall.  An
+        # upper-floor cantilever projects the upper wall 0.2 m into the
+        # connector roof, so the blue shingles show through the hall's rear
+        # rooms.  Keep the two connector-joined halls flush; the other castle
+        # halls keep their overhangs.
+        o['has_cantilever'] = False
+        o['cantilever_overhang'] = 0.0
+    if hid == 'great_hall':
+        o['retinue_hall'] = 'RETAINER'
+    elif hid in ('east_hall', 'barracks', 'armory'):
+        o['retinue_hall'] = 'GARRISON'
     if shape != 'RECTANGLE':
         o.update({'wing_placement': facade, 'wing_width': ww, 'wing_depth': wd,
                   'wing_floors': max(1, floors - 1),
                   # East hall's wing sits on the free (west) side so it never
                   # overlaps the east connecting wing.
                   'wing_side': 'LEFT' if hid == 'east_hall' else 'RIGHT'})
+
+    # Sprawling & quirky architectural accessories: grand balconies, colonnaded porticos,
+    # and corbeled oriel outcrops carefully placed away from connectors, bridges, and skybridges.
+    # Cliff-top buildings have pillared overhangs removed for a clean, towering fortress silhouette.
+    if hid == 'keep':
+        # Main castle keep: perched on the high cliff (z=14) -> NO pillared overhang!
+        o['has_pillared_overhang'] = False
+        o['has_balcony'] = True
+        o['balcony_side'] = 'FRONT'
+        if tier == 3:
+            # Tier 3: Grand Noble Lord's Balcony centered on Floor 4 with draped heraldic dragon banners
+            o['has_noble_balcony'] = True
+            o['noble_balcony_floors'] = (4,)
+            o['balcony_width'] = 6.8
+            o['balcony_depth'] = 2.2
+            o['balcony_floors'] = (4,)
+        elif tier == 2:
+            o['has_noble_balcony'] = False
+            o['balcony_width'] = 4.2
+            o['balcony_depth'] = 1.6
+            o['balcony_floors'] = (3, 4)
+        else:
+            o['has_noble_balcony'] = False
+            o['balcony_width'] = 3.6
+            o['balcony_depth'] = 1.4
+            o['balcony_floors'] = (3,)
+        # Dramatic corbeled oriel outcrops on the mountain/gorge flanks & rear
+        o['has_mini_wing'] = True
+        o['mini_wing_allowed_sides'] = ('LEFT', 'BACK')
+        o['mini_wing_blocked_sides'] = ('FRONT',)
+        o['mini_wing_floors'] = (2, 3, 4, 5, 6)
+        o['mini_wing_count'] = 5
+        o['mini_wing_width'] = 2.4
+        o['mini_wing_depth'] = 1.4
+        o['mini_wing_roof'] = 'LEAN_TO'
+    elif hid == 'great_hall':
+        # Great Hall: main reception entrance of the lower courtyard
+        o['has_pillared_overhang'] = True
+        o['pillared_overhang_side'] = 'FRONT'
+        o['pillared_overhang_depth'] = 1.6
+        o['pillared_overhang_pillars'] = 4
+        o['pillared_overhang_style'] = 'TIMBER_STONE'
+        o['has_balcony'] = True
+        o['balcony_side'] = 'FRONT'
+        o['balcony_width'] = 3.2
+        o['balcony_depth'] = 1.3
+        o['balcony_floors'] = (2, 4)
+        # Oriels on the free exterior West flank (cliffside):
+        o['has_mini_wing'] = True
+        o['mini_wing_side'] = 'LEFT'
+        o['mini_wing_blocked_sides'] = ('BACK', 'RIGHT', 'FRONT')
+        o['mini_wing_floors'] = (2, 4)
+        o['mini_wing_count'] = 2
+        o['mini_wing_width'] = 2.4
+        o['mini_wing_depth'] = 1.4
+        o['mini_wing_roof'] = 'LEAN_TO'
+    elif hid == 'east_hall':
+        # East Hall: conservative facade on lower court (no pillared overhang, clean front with balconies)
+        o['has_pillared_overhang'] = False
+        o['has_balcony'] = True
+        o['balcony_side'] = 'FRONT'
+        o['balcony_width'] = 3.2
+        o['balcony_depth'] = 1.3
+        o['balcony_floors'] = (2, 4)
+        # Oriels on the free exterior East flank (overlooking chasm):
+        o['has_mini_wing'] = True
+        o['mini_wing_side'] = 'RIGHT'
+        o['mini_wing_blocked_sides'] = ('BACK', 'LEFT', 'FRONT')
+        o['mini_wing_floors'] = (2, 4)
+        o['mini_wing_count'] = 2
+        o['mini_wing_width'] = 2.4
+        o['mini_wing_depth'] = 1.4
+        o['mini_wing_roof'] = 'LEAN_TO'
+    elif hid == 'barracks':
+        # Forecourt sentry barracks has a covered guard porch and upper watch balcony
+        o['has_pillared_overhang'] = True
+        o['pillared_overhang_side'] = 'FRONT'
+        o['pillared_overhang_depth'] = 1.4
+        o['pillared_overhang_pillars'] = 3
+        o['pillared_overhang_style'] = 'TIMBER_STONE'
+        o['has_balcony'] = True
+        o['balcony_side'] = 'FRONT'
+        o['balcony_width'] = 2.4
+        o['balcony_depth'] = 1.2
+        o['balcony_floors'] = (1,)
+        o['has_mini_wing'] = True
+        o['mini_wing_side'] = 'LEFT'
+        o['mini_wing_blocked_sides'] = ('FRONT', 'RIGHT')
+        o['mini_wing_floors'] = (1,)
+        o['mini_wing_count'] = 1
+        o['mini_wing_width'] = 2.0
+        o['mini_wing_depth'] = 1.2
+        o['mini_wing_roof'] = 'LEAN_TO'
+    elif hid == 'armory':
+        # Conservative: Armory has no pillared overhang (sturdy utilitarian armory facade)
+        o['has_pillared_overhang'] = False
+        o['has_balcony'] = True
+        o['balcony_side'] = 'FRONT'
+        o['balcony_width'] = 2.4
+        o['balcony_depth'] = 1.2
+        o['balcony_floors'] = (1,)
+        o['has_mini_wing'] = True
+        o['mini_wing_side'] = 'RIGHT'
+        o['mini_wing_blocked_sides'] = ('FRONT', 'LEFT')
+        o['mini_wing_floors'] = (1,)
+        o['mini_wing_count'] = 1
+        o['mini_wing_width'] = 2.0
+        o['mini_wing_depth'] = 1.2
+        o['mini_wing_roof'] = 'LEAN_TO'
+    elif hid == 'archive_hall':
+        # Perched on the high cliff (z=14) -> NO pillared overhang
+        o['has_pillared_overhang'] = False
+        o['has_balcony'] = True
+        o['balcony_side'] = 'BACK'
+        o['balcony_width'] = 2.8
+        o['balcony_depth'] = 1.2
+        o['balcony_floors'] = (1, 2, 3, 4)
+        # Archive Hall: West is Keep, South is connector -> East (RIGHT) overlooks the gorge!
+        o['has_mini_wing'] = True
+        o['mini_wing_side'] = 'RIGHT'
+        o['mini_wing_blocked_sides'] = ('FRONT', 'LEFT', 'BACK')
+        o['mini_wing_floors'] = (1, 2, 3, 4)
+        o['mini_wing_count'] = 3
+        o['mini_wing_width'] = 2.4
+        o['mini_wing_depth'] = 1.4
+        o['mini_wing_roof'] = 'LEAN_TO'
+
     return o
 
 
 def _hall_floors(tier, floors, hid):
-    if hid == "keep" and tier == 1:
-        return 2
+    if hid == "keep":
+        return 7
     if hid in ("great_hall", "east_hall"):
         return 5 if tier == 3 else (4 if tier == 2 else 3)
     return floors if tier == 3 else max(1, floors - (2 if tier == 1 else 1))
@@ -149,29 +296,20 @@ def _build_halls(bm, props, tier):
                 extra_win_excl.append({'facade': 'BACK', 'min': -3.6, 'max': 6.6, 'floor_min': 0, 'floor_max': 4})
         elif hid == "keep":
             ov['has_basement_stair'] = True
-            # The stair outcrop must be wide enough to roof the whole
-            # basement opening; the old 2.4m mini-wing left the shaft edge
-            # and the floor behind the stair exposed.
-            ov['mini_wing_width'] = max(6.8, float(getattr(props, 'mini_wing_width', 0.0)))
-            ov['mini_wing_depth'] = max(3.2, float(getattr(props, 'mini_wing_depth', 0.0)))
-            ov['mini_wing_random_size'] = False
-            ov['window_left'] = False
             ov['has_throne_room'] = True
-            ov['has_double_height'] = True
+            ov['has_double_height'] = tier > 1
             ov['has_cantilever'] = False
             ov['cantilever_overhang'] = 0.0
             # A castle keep must have a working kitchen.
             ov['has_royal_kitchen'] = True
             ov['interior_program'] = 'PALACE'
-            if tier == 3:
-                ov['wall_splits'] = {'RIGHT': [3.0, 13.0]}
-                ov['timber_exclusions'] = {'RIGHT': [(3.0, 13.0)]}
-                ov['window_right'] = False
             # Floor 0 chapel-link doorway on West facade (-X in world = LEFT in local space)
             # Positioned at pos=3.8 (+Y in local space, world Y = 43.8) well clear of the
             # Keep interior stairs at y in [-1.8, +1.8] (world Y in [38.2, 41.8]).
             if tier >= 2:
                 extra_doors.append({'floor_idx': 0, 'facade': 'LEFT', 'pos': 3.8, 'w': 2.2, 'h': 2.85, 'is_portal': True})
+                # Left addition house connects to Keep on Floors 0 to 2; exclude windows only on these lower floors
+                extra_win_excl.append({'facade': 'LEFT', 'min': -5.8, 'max': 5.8, 'floor_min': 0, 'floor_max': 0})
             # Floor 0 west connecting wing doorway on South facade (-Y in world = FRONT in local space)
             # West Connecting Wing is at cx = -8.5. Keep center is 0.0, so local pos = -8.5
             if tier == 3:
@@ -181,6 +319,7 @@ def _build_halls(bm, props, tier):
                 extra_doors.append({'floor_idx': 0, 'facade': 'RIGHT', 'pos': 0.0, 'w': 2.4, 'h': 2.85, 'is_portal': True})
                 extra_win_excl.append({'facade': 'RIGHT', 'min': -5.5, 'max': 5.5, 'floor_min': 0, 'floor_max': 4})
         elif hid == "archive_hall":
+            ov['wall_thickness'] = 0.41
             ov['has_front_door'] = False
             ov['window_left'] = False
             ov['has_cantilever'] = False
@@ -215,12 +354,15 @@ def _build_halls(bm, props, tier):
             extra_overrides={
                 'building_archetype': 'ARMORY',
                 'interior_program': 'GARRISON',
-                'interior_partition_style': 'AUTO',
-                'has_interior_walls': True,
+                'interior_partition_style': 'OPEN',
+                'has_interior_walls': False,
+                'open_ground_floor': True,
                 'has_stairs': False,
                 'has_chapel_kit': False,
                 'has_bell_cote': False,
                 'roof_overhang': 0.50,
+                'roof_height': 3.4,
+                'has_pillared_overhang': False,
                 'extra_doorways': [
                     {'floor_idx': 0, 'facade': 'RIGHT', 'pos': 3.8, 'w': 2.2, 'h': 2.85, 'is_portal': True},
                     {'floor_idx': 0, 'facade': 'LEFT', 'pos': 0.0, 'w': 2.0, 'h': 2.85, 'is_portal': True},

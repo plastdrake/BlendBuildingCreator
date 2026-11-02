@@ -54,7 +54,7 @@ def build_dormer(bm, center_pos=None, z_base=0.0, facing_dir=(-1, 0), dormer_w=1
     # roof front sits close over the corner posts instead of floating past them)
     d_overhang = 0.16
     front_reach = half_dd + 0.12
-    back_reach = max_back_reach if max_back_reach is not None else (half_dd + 1.20)
+    back_reach = max(max_back_reach if max_back_reach is not None else 0.0, half_dd + 1.10)
     roof_len = front_reach + back_reach
     roof_mid_xf = (front_reach - back_reach) * 0.5
 

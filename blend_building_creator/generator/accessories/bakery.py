@@ -15,7 +15,7 @@ import math
 from mathutils import Vector, Matrix, Euler
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone,
-    create_horizontal_cylinder, transform_faces,
+    create_horizontal_cylinder, create_torus_ring, transform_faces,
 )
 from ..materials import (
     MAT_INDEX_STONE, MAT_INDEX_TIMBER, MAT_INDEX_IRON,
@@ -274,11 +274,18 @@ def build_bakery_oven(bm, *args, **kwargs):
     transform_faces(faces, oven_mat)
 
     # -------------------------------------------------------------------------
-    # 5. One continuous clay-brick flue: a short vertical rise from the oven,
-    #    a longer diagonal jog out through the wall (clear of the roof
-    #    overhang), then a short vertical stack outside.  The swept prism is a
-    #    single connected mesh in terracotta brick rather than stacked stone
-    #    boxes, so there are no gaps or intersecting block ends.
+    # 5. Stylized fantasy flue.
+    #
+    # The old flue was three plain brick boxes with two flat slabs on top: it
+    # read as a brick pillar, not a chimney.  The new stack keeps the same
+    # safe path (rise from the oven, diagonal jog clear of the eave, then a
+    # short outdoor stack) but dresses it as crafted bakehouse masonry:
+    #
+    #   * a corbelled cut-stone foot and stone bands on the indoor shaft
+    #   * a little iron clean-out door with a ring pull on the room side
+    #   * wrought-iron hoops around the brickwork
+    #   * a flared corbel crown, cut-stone cap and a flared clay chimney pot
+    #   * a hand-forged weathervane with a bagel-ring finial
     # -------------------------------------------------------------------------
     _roof_ov = float(getattr(props, 'roof_overhang', 0.72) or 0.72)
     _out_off = max(0.82, _roof_ov + 0.20)
@@ -287,15 +294,74 @@ def build_bakery_oven(bm, *args, **kwargs):
     _z1 = _z0 + 1.00
     _z2 = _z1 + 0.78
     _z3 = _z2 + 1.05
-    _body = 1.12
+    _body = 1.06
+    _half = _body * 0.5
     _ov = 0.22
-    # Three overlapping terracotta blocks.  Each is a normal beveled box with
-    # correct UVs, so the diagonal has a full-width textured top face instead
-    # of the old thin sheared ring face.
+    # Which way the bakehouse room lies from the flue centre.
+    _room_dir = -1.0 if _side > 0 else 1.0
+
+    def _iron_hoop(cx, cy, cz, half, height=0.055, thick=0.045):
+        """Four thin forged straps wrapping a square brick shaft."""
+        _long = 2.0 * half + 0.05
+        create_beveled_box(
+            bm, size=(_long, thick, height),
+            location=(cx, cy + half, cz),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
+        create_beveled_box(
+            bm, size=(_long, thick, height),
+            location=(cx, cy - half, cz),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
+        create_beveled_box(
+            bm, size=(thick, _long, height),
+            location=(cx + half, cy, cz),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
+        create_beveled_box(
+            bm, size=(thick, _long, height),
+            location=(cx - half, cy, cz),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
+
+    # ---- Indoor shaft: stone foot, brick body, stone band -----------------
+    create_beveled_box(
+        bm, size=(1.34, 1.34, 0.15),
+        location=(base_x, base_y, _z0 + 0.01),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.020)
     create_beveled_box(
         bm, size=(_body, _body, (_z1 - _z0) + _ov * 2.0),
         location=(base_x, base_y, (_z0 + _z1) * 0.5),
         mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.012)
+    create_beveled_box(
+        bm, size=(1.16, 1.16, 0.10),
+        location=(base_x, base_y, _z0 + 0.76),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.014)
+    _iron_hoop(base_x, base_y, _z0 + 0.93, _half + 0.012)
+
+    # ---- Little iron clean-out door on the bakehouse face -----------------
+    _face = base_x + _room_dir * _half
+    create_beveled_box(
+        bm, size=(0.05, 0.44, 0.54),
+        location=(_face + _room_dir * 0.025, base_y, _z0 + 0.34),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
+    create_beveled_box(
+        bm, size=(0.03, 0.30, 0.40),
+        location=(_face + _room_dir * 0.055, base_y, _z0 + 0.34),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
+    for _strap_z in (_z0 + 0.25, _z0 + 0.43):
+        create_beveled_box(
+            bm, size=(0.02, 0.26, 0.030),
+            location=(_face + _room_dir * 0.073, base_y, _strap_z),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
+    create_torus_ring(
+        bm, location=(_face + _room_dir * 0.095, base_y + 0.07, _z0 + 0.34),
+        rotation=(0.0, math.pi * 0.5, 0.0),
+        major_radius=0.032, minor_radius=0.007,
+        major_segments=12, minor_segments=6,
+        mat_index=MAT_INDEX_IRON)
+
+    # ---- Diagonal jog out through the eave --------------------------------
+    create_beveled_box(
+        bm, size=(1.22, 1.22, 0.13),
+        location=(base_x, base_y, _z1 + 0.02),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.018)
     _dx = _outer_x - base_x
     _dz = _z2 - _z1
     _diag_len = math.hypot(_dx, _dz) + _ov * 2.0
@@ -306,22 +372,85 @@ def build_bakery_oven(bm, *args, **kwargs):
         rotation=(0.0, _diag_ang, 0.0),
         mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.012)
     create_beveled_box(
+        bm, size=(1.22, 1.22, 0.14),
+        location=(_outer_x, base_y, _z2 - 0.01),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.018)
+
+    # ---- Outdoor stack: brick shaft, stone bands, iron hoops --------------
+    create_beveled_box(
         bm, size=(_body, _body, (_z3 - _z2) + _ov * 2.0),
         location=(_outer_x, base_y, (_z2 + _z3) * 0.5),
         mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.012)
-    # A chunky brick cap makes the top read as a finished chimney, not a pipe.
     create_beveled_box(
-        bm, size=(1.30, 1.30, 0.17),
-        location=(_outer_x, base_y, _z3 + 0.085),
+        bm, size=(1.16, 1.16, 0.09),
+        location=(_outer_x, base_y, _z2 + 0.42),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+    _iron_hoop(_outer_x, base_y, _z2 + 0.68, _half + 0.012)
+    _iron_hoop(_outer_x, base_y, _z3 - 0.36, _half + 0.012)
+
+    # ---- Flared corbel crown and cut-stone cap ----------------------------
+    create_beveled_box(
+        bm, size=(1.18, 1.18, 0.14),
+        location=(_outer_x, base_y, _z3 + 0.07),
         mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.012)
     create_beveled_box(
-        bm, size=(1.04, 1.04, 0.11),
-        location=(_outer_x, base_y, _z3 + 0.225),
-        mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.008)
-    # Dark soot throat inside the crown.
+        bm, size=(1.32, 1.32, 0.14),
+        location=(_outer_x, base_y, _z3 + 0.20),
+        mat_index=MAT_INDEX_TERRACOTTA, bevel_amount=0.014)
     create_beveled_box(
-        bm, size=(0.42, 0.42, 0.055),
-        location=(_outer_x, base_y, _z3 + 0.27),
-        mat_index=MAT_INDEX_IRON, bevel_amount=0.004)
+        bm, size=(1.44, 1.44, 0.11),
+        location=(_outer_x, base_y, _z3 + 0.32),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.016)
+    create_beveled_box(
+        bm, size=(1.16, 1.16, 0.07),
+        location=(_outer_x, base_y, _z3 + 0.41),
+        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
+
+    # ---- Flared clay chimney pot ------------------------------------------
+    _pot_z = _z3 + 0.45
+    create_cone(
+        bm, radius1=0.25, radius2=0.19, height=0.52, segments=10,
+        location=(_outer_x, base_y, _pot_z + 0.26),
+        mat_index=MAT_INDEX_CLAY)
+    create_cylinder(
+        bm, radius=0.28, height=0.08, segments=10,
+        location=(_outer_x, base_y, _pot_z + 0.54),
+        mat_index=MAT_INDEX_CLAY)
+    create_cylinder(
+        bm, radius=0.26, height=0.05, segments=10,
+        location=(_outer_x, base_y, _pot_z + 0.36),
+        mat_index=MAT_INDEX_CLAY)
+    # Soot-dark throat inside the pot rim.
+    create_cylinder(
+        bm, radius=0.205, height=0.035, segments=10,
+        location=(_outer_x, base_y, _pot_z + 0.585),
+        mat_index=MAT_INDEX_IRON)
+
+    # ---- Hand-forged weathervane with a bagel-ring finial -----------------
+    _vane_base = _pot_z + 0.60
+    create_cylinder(
+        bm, radius=0.022, height=0.82, segments=6,
+        location=(_outer_x, base_y, _vane_base + 0.41),
+        mat_index=MAT_INDEX_IRON)
+    _vane_z = _vane_base + 0.73
+    create_beveled_box(
+        bm, size=(0.035, 0.88, 0.035),
+        location=(_outer_x, base_y, _vane_z),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.005)
+    create_cone(
+        bm, radius1=0.070, radius2=0.0, height=0.18, segments=4,
+        location=(_outer_x, base_y + 0.52, _vane_z),
+        rotation=(-math.pi * 0.5, 0.0, 0.0),
+        mat_index=MAT_INDEX_IRON)
+    create_beveled_box(
+        bm, size=(0.024, 0.36, 0.20),
+        location=(_outer_x, base_y - 0.22, _vane_z),
+        mat_index=MAT_INDEX_IRON, bevel_amount=0.006)
+    create_torus_ring(
+        bm, location=(_outer_x, base_y, _vane_base + 0.88),
+        rotation=(math.pi * 0.5, 0.0, 0.0),
+        major_radius=0.095, minor_radius=0.016,
+        major_segments=16, minor_segments=6,
+        mat_index=MAT_INDEX_IRON)
 
     return faces

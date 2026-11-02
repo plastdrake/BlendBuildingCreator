@@ -1292,7 +1292,8 @@ def _build_watertight_floor(bm, r_floor, z_floor, stair_arc=None, shaft_r_in=Non
                                  (0.13, 0.09, h - 0.06, MAT_INDEX_TIMBER),
                                  (0.19, 0.045, h + 0.015, MAT_INDEX_WOOD)):
             _beam(bm, p_in, p_out, z_floor + zo, z_floor + zo, cw, ch_, m, bevel=0.010)
-        _guard_post(r_rail * math.cos(th_s), r_rail * math.sin(th_s), th_s)
+        # Terminal post at the outer corner of the return railing so it does not float
+        _guard_post(r_outb * math.cos(th_s), r_outb * math.sin(th_s), th_s)
 
         # Outer edge of the stair opening: when the belvedere floor continues
         # beyond the shaft, that side of the well was left unguarded. Add a

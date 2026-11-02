@@ -24,12 +24,18 @@ def _masonry_uv_scale(wall_mat):
 
 
 def _shingle_plane(bm, center, rotation, half_x, half_y, up_offset=0.0,
-                   mat_index=MAT_INDEX_SHINGLES):
+                   mat_index=MAT_INDEX_SHINGLES, u_scale=1.0, v_scale=1.0,
+                   slope_axis='X'):
     """A single flat shingle surface in a local slope frame.
 
     The roof edges are capped by timber bargeboards, purlins and ridge beams, so
     the visible skin needs no slab thickness - one correctly-wound quad keeps the
     geometry light and gives the shingle unwrap an exact plane to work with.
+
+    Loop UVs are authored directly in the planar roof coordinate system:
+    - U runs across the horizontal eave/width direction (0.0 to width * u_scale)
+    - V runs up the roof slope from eave (0.0) to ridge/wall (slope_len * v_scale),
+      ensuring shingle laps point down toward the eaves with crisp repeating tiles.
     """
     basis = Euler(rotation, 'XYZ').to_matrix()
     c = Vector(center)
@@ -37,6 +43,35 @@ def _shingle_plane(bm, center, rotation, half_x, half_y, up_offset=0.0,
     verts = [bm.verts.new(c + basis @ Vector((lx, ly, up_offset))) for lx, ly in corners]
     face = bm.faces.new(verts)
     face.material_index = mat_index
+
+    # Parametric unwrap in roof plane
+    uv_layer = bm.loops.layers.uv.verify()
+    if slope_axis == 'X':
+        # X is slope ( -half_x is wall/top, +half_x is eave/bottom )
+        # Y is width ( -half_y is left, +half_y is right )
+        u_span = half_y * 2.0 * u_scale
+        v_span = half_x * 2.0 * v_scale
+        uv_coords = [
+            Vector((0.0, v_span)),     # (-half_x, -half_y): wall, left
+            Vector((0.0, 0.0)),        # (+half_x, -half_y): eave, left
+            Vector((u_span, 0.0)),     # (+half_x, +half_y): eave, right
+            Vector((u_span, v_span)),  # (-half_x, +half_y): wall, right
+        ]
+    else:
+        # slope_axis == 'Y' (used in outcrop gable roofs)
+        # X is ridge width ( -half_x is back, +half_x is front )
+        # Y is slope ( -half_y is ridge/top, +half_y is eave/bottom )
+        u_span = half_x * 2.0 * u_scale
+        v_span = half_y * 2.0 * v_scale
+        uv_coords = [
+            Vector((0.0, v_span)),     # (-half_x, -half_y): ridge, back
+            Vector((u_span, v_span)),  # (+half_x, -half_y): ridge, front
+            Vector((u_span, 0.0)),     # (+half_x, +half_y): eave, front
+            Vector((0.0, 0.0)),        # (-half_x, +half_y): eave, back
+        ]
+    for loop, uv_pt in zip(face.loops, uv_coords):
+        loop[uv_layer].uv = uv_pt
+    face.tag = True
     return face
 
 
@@ -60,10 +95,12 @@ def build_lean_to_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
     mid_x = (x_front + x_back) * 0.5
     mid_z = z_roof + r_rise * 0.5 + 0.06
     world_shingle = frame.to_world(Vector((mid_x, 0.0, mid_z)))
+    # Use 1.0 scale so shingle tiles tile across the outcrop roof at standard density
+    eff_scale = 1.0 if shingle_scale == 0.32 else shingle_scale
     lean_face = _shingle_plane(
-        bm, world_shingle, roof_euler, r_len * 0.5, (width + 0.34) * 0.5, up_offset=0.04
+        bm, world_shingle, roof_euler, r_len * 0.5, (width + 0.34) * 0.5,
+        up_offset=0.04, u_scale=eff_scale, v_scale=eff_scale
     )
-    apply_roof_shingle_uvs(bm, [lean_face], scale=shingle_scale, rot_deg=shingle_rot)
 
     # Front eave purlin beam capping the slab's front edge
     timber_box(
@@ -190,11 +227,13 @@ def build_outcrop_gable_roof(bm, frame, z_roof, depth, width, avail_h, wall_mat,
         g_rot = (frame.rotation @ Matrix((sx_vec, sy_vec, sz_vec)).transposed().to_4x4()).to_euler()
 
         world_slope = frame.to_world(Vector((mid_x, (roof_half_w * 0.5) * s_sign, z_roof + g_roof_h * 0.5 + 0.02)))
+        eff_scale = 1.0 if shingle_scale == 0.32 else shingle_scale
         slope_face = _shingle_plane(
             bm, world_slope, g_rot, roof_len * 0.5, r_pitch_len * 0.5,
-            up_offset=slope_thickness * 0.5
+            up_offset=slope_thickness * 0.5,
+            u_scale=eff_scale, v_scale=eff_scale,
+            slope_axis='Y'
         )
-        apply_roof_shingle_uvs(bm, [slope_face], scale=shingle_scale, rot_deg=shingle_rot)
 
         # 5. Sloping timber bargeboard along front edge of this slope
         timber_box(

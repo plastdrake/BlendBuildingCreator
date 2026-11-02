@@ -318,6 +318,23 @@ def build_citadel_mount(bm, tier=None):
     map_planar_faces(bm, cliff_faces, scale=1.5)
 
 
+def _place_stair_post(bm, sx, py, z_top, size_xy=0.62, cap_size=0.74, cap_h=0.18):
+    """Places a monumental cut stone post at (sx, py) with beveled cap, plunging
+    deeply into the terrain/cliff bedrock so it never floats in mid-air."""
+    outer_x = sx + (0.8 if sx > 0 else -0.8)
+    gz_local = min(ground_z(sx, py), ground_z(outer_x, py), 0.0)
+    z_bot = min(gz_local - 1.2, z_top - 3.5, -2.5)
+    h_shaft = max(1.5, z_top - z_bot)
+    z_mid = (z_top + z_bot) * 0.5
+    create_beveled_box(bm, size=(size_xy, size_xy, h_shaft),
+                       location=(sx, py, z_mid),
+                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+    if cap_size and cap_h:
+        create_beveled_box(bm, size=(cap_size, cap_size, cap_h),
+                           location=(sx, py, z_top + cap_h * 0.5),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+
+
 def _stair_flight(bm, y0, z0, y1, z1, width):
     n = max(3, int(math.ceil((z1 - z0) / 0.17)))
     run = (y1 - y0) / n
@@ -332,9 +349,12 @@ def _stair_flight(bm, y0, z0, y1, z1, width):
         apron_len = 1.4
         apron_yc = y0 - apron_len * 0.5
         apron_top = z0 + 0.025
-        # Deep stone foundation block
-        create_beveled_box(bm, size=(width, apron_len, 1.8),
-                           location=(0.0, apron_yc, apron_top - 0.12 - 0.9),
+        # Deep stone foundation block plunging into bedrock
+        gz_apron = min(ground_z(0.0, apron_yc), 0.0)
+        z_bot_apron = min(gz_apron - 1.2, z0 - 3.5, -2.5)
+        h_apron = (apron_top - 0.12) - z_bot_apron
+        create_beveled_box(bm, size=(width, apron_len, h_apron),
+                           location=(0.0, apron_yc, ((apron_top - 0.12) + z_bot_apron) * 0.5),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
         # Flush cut stone apron slab
         create_beveled_box(bm, size=(width, apron_len + 0.05, 0.12),
@@ -342,33 +362,43 @@ def _stair_flight(bm, y0, z0, y1, z1, width):
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
         for side in (-1.0, 1.0):
             sx = side * (width * 0.5 + cheek_w * 0.5)
+            outer_x = sx + (0.8 if sx > 0 else -0.8)
+            gz_chk = min(ground_z(sx, apron_yc), ground_z(outer_x, apron_yc), 0.0)
+            z_bot_chk = min(gz_chk - 1.2, z0 - 3.5, -2.5)
+            z_top_chk = z0 + 0.88
+            h_chk = z_top_chk - z_bot_chk
             # Cheek wall flanking apron
-            create_beveled_box(bm, size=(cheek_w, apron_len, 1.1 + 0.9),
-                               location=(sx, apron_yc, z0 + 0.25),
+            create_beveled_box(bm, size=(cheek_w, apron_len, h_chk),
+                               location=(sx, apron_yc, (z_top_chk + z_bot_chk) * 0.5),
                                mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
             # Cap rail along apron cheek wall
             create_beveled_box(bm, size=(rail_w, apron_len + 0.05, rail_thick),
                                location=(sx, apron_yc, z0 + 0.88),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-            # Monumental entry pedestal framing the approach
-            create_beveled_box(bm, size=(0.65, 0.65, 1.5),
-                               location=(sx, y0 - apron_len, z0 + 0.75),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-            create_beveled_box(bm, size=(0.74, 0.74, 0.18),
-                               location=(sx, y0 - apron_len, z0 + 1.50 + 0.09),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+            # Monumental entry pedestal framing the approach plunging into rock
+            _place_stair_post(bm, sx, y0 - apron_len, z0 + 1.50, size_xy=0.65, cap_size=0.74, cap_h=0.18)
 
     for i in range(n):
         top = z0 + (i + 1) * rise
         ya = y0 + i * run
         yc = ya + run * 0.5
-        create_beveled_box(bm, size=(width, run, 1.6), location=(0.0, yc, top - 0.12 - 0.8),
+        gz_step = min(ground_z(0.0, yc), 0.0)
+        z_bot_step = min(gz_step - 1.2, top - 2.8, -2.5)
+        h_step = (top - 0.12) - z_bot_step
+        create_beveled_box(bm, size=(width, run, h_step),
+                           location=(0.0, yc, ((top - 0.12) + z_bot_step) * 0.5),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
         create_beveled_box(bm, size=(width, run + 0.07, 0.12), location=(0.0, yc - 0.015, top - 0.06),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
         for side in (-1.0, 1.0):
             sx = side * (width * 0.5 + cheek_w * 0.5)
-            create_beveled_box(bm, size=(cheek_w, run, 1.1 + 0.9), location=(sx, yc, top - 0.12 - 0.2 + 0.05),
+            outer_x = sx + (0.8 if sx > 0 else -0.8)
+            gz_wall = min(ground_z(sx, yc), ground_z(outer_x, yc), 0.0)
+            z_bot_cheek = min(gz_wall - 1.2, top - 2.8, -2.5)
+            z_top_cheek = top + 0.75
+            h_cheek = z_top_cheek - z_bot_cheek
+            create_beveled_box(bm, size=(cheek_w, run, h_cheek),
+                               location=(sx, yc, (z_top_cheek + z_bot_cheek) * 0.5),
                                mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
 
     # Diagonal running railing capping the cheek walls continuously from bottom to top
@@ -385,8 +415,7 @@ def _stair_flight(bm, y0, z0, y1, z1, width):
                            rotation=(pitch, 0.0, 0.0),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
         if not is_climb_start and abs(y0 - RAMPS[0][0]) < 0.1:
-            create_beveled_box(bm, size=(0.6, 0.6, 1.5), location=(sx, y0, z0 + 0.75),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+            _place_stair_post(bm, sx, y0, z0 + 1.50, size_xy=0.62, cap_size=0.72, cap_h=0.16)
 
     # Top arrival landing & monumental terminal pedestals at climb ends
     is_climb_end = (abs(y1 - (-50.0)) < 0.1 or abs(y1 - (-20.0)) < 0.1 or abs(y1 - 18.0) < 0.1)
@@ -395,8 +424,11 @@ def _stair_flight(bm, y0, z0, y1, z1, width):
         land_yc = y1 + land_len * 0.5
         land_top = z1 + 0.025
         # Deep stone foundation block
-        create_beveled_box(bm, size=(width, land_len, 1.8),
-                           location=(0.0, land_yc, land_top - 0.12 - 0.9),
+        gz_land = min(ground_z(0.0, land_yc), 0.0)
+        z_bot_land = min(gz_land - 1.2, z1 - 3.5, -2.5)
+        h_land = (land_top - 0.12) - z_bot_land
+        create_beveled_box(bm, size=(width, land_len, h_land),
+                           location=(0.0, land_yc, ((land_top - 0.12) + z_bot_land) * 0.5),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
         # Flush cut stone landing slab
         create_beveled_box(bm, size=(width, land_len + 0.05, 0.12),
@@ -404,39 +436,52 @@ def _stair_flight(bm, y0, z0, y1, z1, width):
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
         for side in (-1.0, 1.0):
             sx = side * (width * 0.5 + cheek_w * 0.5)
+            outer_x = sx + (0.8 if sx > 0 else -0.8)
+            gz_chk = min(ground_z(sx, land_yc), ground_z(outer_x, land_yc), 0.0)
+            z_bot_chk = min(gz_chk - 1.2, z1 - 3.5, -2.5)
+            z_top_chk = z1 + 0.88
+            h_chk = z_top_chk - z_bot_chk
             # Cheek wall flanking top landing
-            create_beveled_box(bm, size=(cheek_w, land_len, 1.1 + 0.9),
-                               location=(sx, land_yc, z1 + 0.25),
+            create_beveled_box(bm, size=(cheek_w, land_len, h_chk),
+                               location=(sx, land_yc, (z_top_chk + z_bot_chk) * 0.5),
                                mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
             # Cap rail along top landing cheek wall
             create_beveled_box(bm, size=(rail_w, land_len + 0.05, rail_thick),
                                location=(sx, land_yc, z1 + 0.88),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-            # Monumental terminal pedestal framing the terrace arrival
-            create_beveled_box(bm, size=(0.65, 0.65, 1.5),
-                               location=(sx, y1 + land_len, z1 + 0.75),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-            create_beveled_box(bm, size=(0.74, 0.74, 0.18),
-                               location=(sx, y1 + land_len, z1 + 1.50 + 0.09),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+            # Monumental terminal pedestal framing the terrace arrival plunging into rock
+            _place_stair_post(bm, sx, y1 + land_len, z1 + 1.50, size_xy=0.65, cap_size=0.74, cap_h=0.18)
 
 
 def _stair_landing(bm, y0, y1, z, width):
     ln = y1 - y0
     yc = (y0 + y1) * 0.5
-    create_beveled_box(bm, size=(width, ln, 1.6), location=(0.0, yc, z - 0.12 - 0.8),
+    cheek_w = 0.5
+    rail_w = cheek_w + 0.18
+    rail_thick = 0.16
+    gz_land = min(ground_z(0.0, yc), 0.0)
+    z_bot_land = min(gz_land - 1.2, z - 3.5, -2.5)
+    h_land = (z - 0.12) - z_bot_land
+    create_beveled_box(bm, size=(width, ln, h_land),
+                       location=(0.0, yc, ((z - 0.12) + z_bot_land) * 0.5),
                        mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
     create_beveled_box(bm, size=(width, ln, 0.12), location=(0.0, yc, z - 0.06),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
     for side in (-1.0, 1.0):
-        sx = side * (width * 0.5 + 0.25)
-        create_beveled_box(bm, size=(0.5, ln, 0.9 + 0.2), location=(sx, yc, z + 0.45 - 0.1),
+        sx = side * (width * 0.5 + cheek_w * 0.5)
+        outer_x = sx + (0.8 if sx > 0 else -0.8)
+        gz_chk = min(ground_z(sx, yc), ground_z(outer_x, yc), 0.0)
+        z_bot_chk = min(gz_chk - 1.2, z - 3.5, -2.5)
+        z_top_chk = z + 0.88
+        h_chk = z_top_chk - z_bot_chk
+        create_beveled_box(bm, size=(cheek_w, ln, h_chk),
+                           location=(sx, yc, (z_top_chk + z_bot_chk) * 0.5),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
-        create_beveled_box(bm, size=(0.7, ln + 0.05, 0.12), location=(sx, yc, z + 0.9 + 0.06),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.012)
+        create_beveled_box(bm, size=(rail_w, ln + 0.05, rail_thick),
+                           location=(sx, yc, z + 0.88),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
         for end in (y0, y1):
-            create_beveled_box(bm, size=(0.6, 0.6, 1.5), location=(side * (width * 0.5 + 0.25), end, z + 0.75),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+            _place_stair_post(bm, sx, end, z + 1.50, size_xy=0.62, cap_size=0.72, cap_h=0.16)
 
 
 def build_ramp_stairs(bm, width=4.4):

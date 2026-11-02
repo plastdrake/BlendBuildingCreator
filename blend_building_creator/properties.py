@@ -9,15 +9,22 @@ from bpy.props import (
     FloatVectorProperty, PointerProperty, StringProperty
 )
 
+_updating = False
+
 def on_property_updated(self, context):
     """Callback when any property is changed in the UI."""
-    if not getattr(self, "auto_update", True):
+    global _updating
+    if _updating or not getattr(self, "auto_update", True):
         return
         
     obj = context.active_object
     if obj and obj.get("is_fantasy_building", False):
-        from .generator.building import generate_building
-        generate_building(obj, self)
+        _updating = True
+        try:
+            from .generator.building import generate_building
+            generate_building(obj, self)
+        finally:
+            _updating = False
 
 def on_veranda_updated(self, context):
     """A covered veranda and an arched entry porch are mutually exclusive treatments."""
@@ -578,6 +585,20 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Chapel Kit",
         description="Rounded apse, bell tower, rose window and churchyard (any building)",
         default=False,
+        update=on_property_updated
+    )
+
+    has_chapel_apse: BoolProperty(
+        name="Chapel Apse",
+        description="Semi-circular rear chancel apse extending from the chapel nave",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_chapel_spire: BoolProperty(
+        name="Chapel Spire",
+        description="Church-like rooftop bell tower with hung bell, open belfry, pyramid spire and cross",
+        default=True,
         update=on_property_updated
     )
 
@@ -1169,7 +1190,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     wing_roof_scale: FloatProperty(
         name="Wing Roof Height",
         description="Height of a projecting wing's roof as a fraction of the main roof height. Lower values tuck the wing roof under the main roof",
-        min=0.4, max=1.4, default=0.88,
+        min=0.4, max=1.4, default=0.70,
         update=on_property_updated
     )
     
@@ -1441,6 +1462,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     has_balcony: BoolProperty(
         name="Timber Balcony",
         description="Cantilevered wooden balcony on an upper floor with heavy timber brackets and balustrade",
+        default=False,
+        update=on_property_updated
+    )
+
+    has_noble_balcony: BoolProperty(
+        name="Grand Noble Balcony",
+        description="Grand Lord's balcony: wide stepped cut-stone corbels, carved oak diagonal braces, double arched portal, corner lanterns, and draped heraldic dragon banners",
         default=False,
         update=on_property_updated
     )

@@ -12,12 +12,297 @@ from mathutils import Vector, Matrix
 from ..facade import get_facade_frame
 from ..railing import build_railing
 from ..mesh_utils import (
-    create_beveled_box, create_cylinder, create_torus_ring, create_door_batten,
+    create_beveled_box, create_cylinder, create_cone, create_torus_ring, create_door_batten,
 )
 from ..walls import create_curved_corbel
 from ..materials import (
     MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_DOOR, MAT_INDEX_IRON,
+    MAT_INDEX_CUT_STONE, MAT_INDEX_LANTERN, MAT_INDEX_BANNER,
 )
+from .banner import build_hanging_banner
+
+
+def _build_noble_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
+                         z_floor, width=6.8, depth=2.2, tier='TIER_3',
+                         lower_wall_x_min=None, lower_wall_x_max=None,
+                         lower_wall_y_min=None, lower_wall_y_max=None,
+                         door_angle_deg=0.0, include_leaf=True,
+                         along_wall_offset=0.0, wall_thickness=0.38,
+                         has_banners=True):
+    """Constructs a grand noble Lord's balcony: wide stepped cut-stone corbel brackets,
+    carved oak diagonal brace struts, spacious promenade deck, robust balustrade with
+    corner lanterns, double arched French portals, and heraldic dragon banners."""
+    wx, wy, ox, oy, tx, ty, rot_z = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
+    if along_wall_offset != 0.0:
+        wx += tx * along_wall_offset
+        wy += ty * along_wall_offset
+    facade_rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
+
+    def _w(lx, ly, lz=0.0):
+        return Vector((wx, wy, z_floor)) + (facade_rot_mat @ Vector((lx, ly, lz, 0.0))).to_3d()
+
+    half_w = width * 0.5
+    half_d = depth * 0.5
+    wall_half = float(wall_thickness) * 0.5
+
+    # 1. Stepped Cut-Stone Corbels and Heavy Oak Diagonal Braces (5 corbels across the width)
+    corbel_ys = [-half_w * 0.82, -half_w * 0.41, 0.0, half_w * 0.41, half_w * 0.82]
+    for cy_ in corbel_ys:
+        create_beveled_box(
+            bm, size=(0.55, 0.34, 0.36),
+            location=_w(wall_half + 0.25, cy_, -0.20),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+        )
+        create_beveled_box(
+            bm, size=(0.95, 0.34, 0.30),
+            location=_w(wall_half + 0.45, cy_, -0.15),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+        )
+        create_beveled_box(
+            bm, size=(1.45, 0.34, 0.26),
+            location=_w(wall_half + 0.68, cy_, -0.10),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02
+        )
+        create_beveled_box(
+            bm, size=(depth + 0.12, 0.20, 0.22),
+            location=_w((depth + wall_half) * 0.5, cy_, -0.09),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.015
+        )
+        b_x0, b_z0 = wall_half + 0.06, -1.35
+        b_x1, b_z1 = depth * 0.72, -0.14
+        brace_dx = b_x1 - b_x0
+        brace_dz = b_z1 - b_z0
+        brace_len = math.hypot(brace_dx, brace_dz)
+        brace_pitch = math.atan2(brace_dz, brace_dx)
+        brace_mid = _w((b_x0 + b_x1) * 0.5, cy_, (b_z0 + b_z1) * 0.5)
+        brace_rot = (facade_rot_mat @ Matrix.Rotation(-brace_pitch, 4, 'Y')).to_euler()
+        create_beveled_box(
+            bm, size=(brace_len, 0.16, 0.16),
+            location=brace_mid,
+            rotation=brace_rot,
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+        )
+
+    # Transverse heavy timber front bearer beam
+    create_beveled_box(
+        bm, size=(0.20, width + 0.18, 0.24),
+        location=_w(depth - 0.06, 0.0, -0.09),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.015
+    )
+
+    # 2. Deck & Bullnose Rim Frame
+    create_beveled_box(
+        bm, size=(depth + 0.08, width + 0.12, 0.08),
+        location=_w(depth * 0.5, 0.0, 0.04),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_WOOD, bevel_amount=0.010
+    )
+    create_beveled_box(
+        bm, size=(depth + 0.18, width + 0.22, 0.12),
+        location=_w(depth * 0.5, 0.0, 0.01),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.016
+    )
+
+    # 3. Grand Balustrade
+    outer_x = depth + 0.02
+    post_h = 1.15
+    # Two Front Corner Posts
+    for sgn in (-1.0, 1.0):
+        py = half_w * sgn
+        create_beveled_box(
+            bm, size=(0.24, 0.24, post_h),
+            location=_w(outer_x, py, post_h * 0.5),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.015
+        )
+        create_beveled_box(
+            bm, size=(0.30, 0.30, 0.10),
+            location=_w(outer_x, py, post_h + 0.05),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+        )
+        lz = post_h + 0.10
+        create_cylinder(
+            bm, radius=0.045, height=0.08, segments=8,
+            location=_w(outer_x, py, lz + 0.04),
+            rotation=(0.0, 0.0, rot_z), mat_index=MAT_INDEX_IRON
+        )
+        create_beveled_box(
+            bm, size=(0.22, 0.22, 0.32),
+            location=_w(outer_x, py, lz + 0.24),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_IRON, bevel_amount=0.01
+        )
+        create_beveled_box(
+            bm, size=(0.16, 0.16, 0.24),
+            location=_w(outer_x, py, lz + 0.24),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_LANTERN, bevel_amount=0.008
+        )
+        create_cone(
+            bm, radius1=0.18, radius2=0.0, height=0.14, segments=8,
+            location=_w(outer_x, py, lz + 0.47),
+            rotation=(0.0, 0.0, rot_z), mat_index=MAT_INDEX_IRON
+        )
+
+    # Two Wall Anchor Posts
+    for sgn in (-1.0, 1.0):
+        py = half_w * sgn
+        create_beveled_box(
+            bm, size=(0.20, 0.20, post_h),
+            location=_w(wall_half + 0.12, py, post_h * 0.5),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+        )
+
+    # Two Intermediate Front Posts
+    mid_post_ys = [-half_w * 0.33, half_w * 0.33]
+    for mpy in mid_post_ys:
+        create_beveled_box(
+            bm, size=(0.20, 0.20, 1.10),
+            location=_w(outer_x, mpy, 0.55),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.012
+        )
+        create_beveled_box(
+            bm, size=(0.26, 0.26, 0.08),
+            location=_w(outer_x, mpy, 1.14),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010
+        )
+
+    # Front Railing Runs (3 bays between 4 posts)
+    front_stops = [-half_w, mid_post_ys[0], mid_post_ys[1], half_w]
+    for bi in range(3):
+        y0 = front_stops[bi] + 0.12
+        y1 = front_stops[bi + 1] - 0.12
+        bay_len = y1 - y0
+        bay_cy = (y0 + y1) * 0.5
+        create_beveled_box(
+            bm, size=(0.12, bay_len, 0.10),
+            location=_w(outer_x, bay_cy, 1.00),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.014
+        )
+        create_beveled_box(
+            bm, size=(0.10, bay_len, 0.08),
+            location=_w(outer_x, bay_cy, 0.14),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010
+        )
+        n_bal = max(2, int(bay_len / 0.24))
+        b_step = bay_len / (n_bal + 1)
+        for b_idx in range(1, n_bal + 1):
+            by = y0 + b_idx * b_step
+            create_beveled_box(
+                bm, size=(0.06, 0.06, 0.78),
+                location=_w(outer_x, by, 0.57),
+                rotation=(0.0, 0.0, rot_z),
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008
+            )
+
+    # Side Return Railings (Left and Right)
+    for sgn in (-1.0, 1.0):
+        sy = half_w * sgn
+        sx0 = wall_half + 0.22
+        sx1 = outer_x - 0.12
+        side_len = sx1 - sx0
+        side_cx = (sx0 + sx1) * 0.5
+        create_beveled_box(
+            bm, size=(side_len, 0.12, 0.10),
+            location=_w(side_cx, sy, 1.00),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_WOOD, bevel_amount=0.014
+        )
+        create_beveled_box(
+            bm, size=(side_len, 0.10, 0.08),
+            location=_w(side_cx, sy, 0.14),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.010
+        )
+        n_sbal = max(2, int(side_len / 0.24))
+        s_step = side_len / (n_sbal + 1)
+        for s_idx in range(1, n_sbal + 1):
+            bx = sx0 + s_idx * s_step
+            create_beveled_box(
+                bm, size=(0.06, 0.06, 0.78),
+                location=_w(bx, sy, 0.57),
+                rotation=(0.0, 0.0, rot_z),
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.008
+            )
+
+    # 4. Heraldic Draped Banners Hanging from Front Railing
+    if has_banners:
+        for ban_sign in (-1.0, 1.0):
+            ban_y = half_w * 0.50 * ban_sign
+            ban_wpos = _w(outer_x + 0.08, ban_y, 1.04)
+            build_hanging_banner(
+                bm, cx=ban_wpos.x, cy=ban_wpos.y, z_top=z_floor + 1.04,
+                outward=(ox, oy), width=1.15, height=1.90, wall_offset=0.02
+            )
+
+    # 5. Grand Double Arched Portal (1.80m wide x 2.45m high)
+    door_w = 1.80
+    door_h = 2.45
+    frame_d = max(0.36, float(wall_thickness) + 0.06)
+    create_beveled_box(
+        bm, size=(frame_d, door_w + 0.36, 0.18),
+        location=_w(0.0, 0.0, door_h + 0.09),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014
+    )
+    for dsgn in (-1.0, 1.0):
+        dj_y = (door_w * 0.5 + 0.09) * dsgn
+        create_beveled_box(
+            bm, size=(frame_d, 0.18, door_h),
+            location=_w(0.0, dj_y, door_h * 0.5),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.014
+        )
+
+    if not include_leaf:
+        return
+
+    # Paired Door Leaves (Left & Right)
+    leaf_w = (door_w - 0.08) * 0.5
+    leaf_h = door_h - 0.06
+    leaf_th = 0.05
+    for dsgn in (-1.0, 1.0):
+        hinge_y = (door_w * 0.5 - 0.02) * dsgn
+        leaf_cy = hinge_y - dsgn * (leaf_w * 0.5)
+        create_beveled_box(
+            bm, size=(leaf_th, leaf_w - 0.01, leaf_h),
+            location=_w(wall_half + 0.035, leaf_cy, leaf_h * 0.5 + 0.03),
+            rotation=(0.0, 0.0, rot_z),
+            mat_index=MAT_INDEX_DOOR, bevel_amount=0.008
+        )
+        for h_rel in (0.22, 0.52, 0.82):
+            strap_z = leaf_h * h_rel + 0.03
+            create_beveled_box(
+                bm, size=(0.018, leaf_w * 0.82, 0.055),
+                location=_w(wall_half + 0.065, leaf_cy + dsgn * (leaf_w * 0.06), strap_z),
+                rotation=(0.0, 0.0, rot_z),
+                mat_index=MAT_INDEX_IRON, bevel_amount=0.004
+            )
+        handle_y = hinge_y - dsgn * (leaf_w * 0.80)
+        handle_z = leaf_h * 0.48 + 0.03
+        create_cylinder(
+            bm, radius=0.012, height=0.025, segments=8,
+            location=_w(wall_half + 0.075, handle_y, handle_z),
+            rotation=(1.5707963, 0.0, rot_z), mat_index=MAT_INDEX_IRON
+        )
+        create_torus_ring(
+            bm, location=_w(wall_half + 0.085, handle_y, handle_z - 0.035),
+            rotation=(0.0, 1.5707963, rot_z),
+            major_radius=0.045, minor_radius=0.009, major_segments=12, minor_segments=8,
+            mat_index=MAT_INDEX_IRON
+        )
 
 
 def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
@@ -25,7 +310,19 @@ def build_balcony(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
                   lower_wall_x_min=None, lower_wall_x_max=None,
                   lower_wall_y_min=None, lower_wall_y_max=None,
                   door_angle_deg=0.0, include_leaf=True,
-                  along_wall_offset=0.0, wall_thickness=0.30):
+                  along_wall_offset=0.0, wall_thickness=0.30,
+                  is_noble=False, has_banners=True):
+    if is_noble:
+        _build_noble_balcony(
+            bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y_max,
+            z_floor, width=width, depth=depth, tier=tier,
+            lower_wall_x_min=lower_wall_x_min, lower_wall_x_max=lower_wall_x_max,
+            lower_wall_y_min=lower_wall_y_min, lower_wall_y_max=lower_wall_y_max,
+            door_angle_deg=door_angle_deg, include_leaf=include_leaf,
+            along_wall_offset=along_wall_offset, wall_thickness=wall_thickness,
+            has_banners=has_banners
+        )
+        return
     wx, wy, ox, oy, tx, ty, rot_z = get_facade_frame(side, wall_x_min, wall_x_max, wall_y_min, wall_y_max)
     if along_wall_offset != 0.0:
         wx += tx * along_wall_offset
