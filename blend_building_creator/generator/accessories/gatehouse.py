@@ -363,16 +363,17 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
 
         # 3. Arrow slits on forward and lateral faces
         slit_z = z_ground + talus_h + shaft_h * 0.48
-        # Front arrow slit
-        fs_x = tc_x + ox * (tower_r * 0.51)
-        fs_y = tc_y + oy * (tower_r * 0.51)
-        create_beveled_box(bm, size=(0.14, 0.22, 0.90),
-                           location=(fs_x, fs_y, slit_z),
-                           rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
+        # Front arrow slit (only when no banner is displayed on the forward face)
+        if not has_banners:
+            fs_x = tc_x + ox * tower_r
+            fs_y = tc_y + oy * tower_r
+            create_beveled_box(bm, size=(0.14, 0.22, 0.90),
+                               location=(fs_x, fs_y, slit_z),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.010)
         # Flank arrow slit
-        ls_x = tc_x + tx * (sgn * tower_r * 0.51)
-        ls_y = tc_y + ty * (sgn * tower_r * 0.51)
+        ls_x = tc_x + tx * (sgn * tower_r)
+        ls_y = tc_y + ty * (sgn * tower_r)
         create_beveled_box(bm, size=(0.22, 0.14, 0.90),
                            location=(ls_x, ls_y, slit_z),
                            rotation=(0.0, 0.0, ang),
@@ -382,8 +383,8 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
         corbel_z = z_ground + H - 0.22
         for ci in range(4):
             c_u = -tower_r * 0.70 + ci * (tower_r * 1.40 / 3.0)
-            cx_c = tc_x + tx * c_u + ox * (tower_r * 0.52)
-            cy_c = tc_y + ty * c_u + oy * (tower_r * 0.52)
+            cx_c = tc_x + tx * c_u + ox * (tower_r + 0.04)
+            cy_c = tc_y + ty * c_u + oy * (tower_r + 0.04)
             create_beveled_box(bm, size=(0.18, 0.35, 0.42),
                                location=(cx_c, cy_c, corbel_z),
                                rotation=(0.0, 0.0, ang),
@@ -391,11 +392,11 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
 
         # 4b. Heraldic dragon banner hanging down the forward face of the gate turret
         if has_banners:
-            ban_x = tc_x + ox * (tower_r * 0.505)
-            ban_y = tc_y + oy * (tower_r * 0.505)
-            ban_z_top = z_ground + H - 0.55
+            ban_x = tc_x + ox * (tower_r + 0.02)
+            ban_y = tc_y + oy * (tower_r + 0.02)
+            ban_z_top = z_ground + H - 0.65
             build_hanging_banner(bm, ban_x, ban_y, ban_z_top, outward=(ox, oy),
-                                 width=min(1.20, tower_r * 0.70), height=min(2.50, (H - talus_h) * 0.52),
+                                 width=min(1.25, tower_r * 0.65), height=min(2.50, (H - talus_h) * 0.52),
                                  wall_offset=0.05)
 
         # 5. Overhanging crenellated battlements atop the tower

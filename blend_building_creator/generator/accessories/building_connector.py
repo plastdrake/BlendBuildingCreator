@@ -1208,21 +1208,11 @@ def build_curtain_wall_gate_portal(
 
     # 1. TWIN FLANKING D-SHAPED BASTION GATE TOWERS (matching main gate style)
     from .gatehouse import build_flanking_gate_towers
-    from .banner import build_hanging_banner
     build_flanking_gate_towers(
         bm, cx, cy, z_ground=z_ground, gap_w=gate_w,
         wall_h=wall_h, wall_t=thickness, outward=(ox, oy),
         tower_r=tower_rad, tower_h=tower_height, has_banners=True
     )
-    # Heraldic banners on the curtain walls immediately flanking the gate towers
-    tc_dist = half_gate + tower_rad + 0.20
-    for sgn in (-1.0, 1.0):
-        w_ban_x = cx + tx * (sgn * (tc_dist + tower_rad + 1.30)) + ox * (thickness * 0.5 + 0.04)
-        w_ban_y = cy + ty * (sgn * (tc_dist + tower_rad + 1.30)) + oy * (thickness * 0.5 + 0.04)
-        w_ban_z = z_ground + wall_h - 0.45
-        if wall_h >= 3.6:
-            build_hanging_banner(bm, w_ban_x, w_ban_y, w_ban_z, outward=(ox, oy),
-                                 width=1.10, height=min(2.20, wall_h - 1.4), wall_offset=0.03)
 
     # 2. ARCHED GATE LINTEL BAND & VOUSSOIRS SPANNING BETWEEN THE TOWERS.
     #    Same masonry as the curtain wall so the portcullis housing does not
