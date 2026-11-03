@@ -2623,13 +2623,20 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     _try_place_wall_prop(bm, 'CHEST', 1.00, 0.55, tracker, z_floor,
                          candidate_walls=('WEST', 'EAST', 'SOUTH'))
 
-    # 5. Grand ceremonial royal aisle carpet runner down the center of the hall
+    # 5. Grand ceremonial royal aisle carpet runner down the center of the hall (unified textile plane)
     runner_w = min(3.40, max(2.20, rw * 0.48))
     runner_l = min(12.00, max(5.20, rd * 0.86))
     runner_w = min(runner_w, max(1.4, rw - 0.40))
     runner_l = min(runner_l, max(2.5, rd - 0.40))
-    _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rcy, z_floor, runner_w, runner_l,
-             yaw_max=0.06)
+    from ..materials import MAT_INDEX_FABRIC_RED
+    from .interior_furniture import build_carpet_runner
+    build_carpet_runner(bm, rcx, rcy, z_floor, 0.0,
+                        width=runner_w, length=runner_l,
+                        mat_index=MAT_INDEX_FABRIC_RED)
+    if not hasattr(tracker, 'rug_rects') or tracker.rug_rects is None:
+        tracker.rug_rects = []
+    tracker.rug_rects.append((rcx - runner_w * 0.5, rcx + runner_w * 0.5,
+                              rcy - runner_l * 0.5, rcy + runner_l * 0.5))
 
     # 5b. Flanking council chamber carpets (now in most halls, not just very wide ones)
     if rw >= 5.5 and density >= 0.4:
@@ -4482,13 +4489,21 @@ def _furnish_chapel(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
                     build_prop(bm, 'BENCH', x, by, z_floor, math.pi * 0.5, length=bench_len)
             x += row_gap
 
-        # 3. Ceremonial runner straight down the aisle along X to the altar
+        # 3. Ceremonial runner straight down the aisle along X to the altar (unified textile carpet plane)
         x_rug_start = rm.bounds[0] + 0.65
         x_rug_end = x_altar - 1.20
         runner_len = max(2.5, x_rug_end - x_rug_start)
         rug_cx = (x_rug_start + x_rug_end) * 0.5
-        _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rug_cx, rcy, z_floor,
-                 runner_len, aisle_w * 0.88, yaw_max=0.01, allow_overlap=False)
+        runner_w = aisle_w * 0.88
+        from ..materials import MAT_INDEX_FABRIC_RED
+        from .interior_furniture import build_carpet_runner
+        build_carpet_runner(bm, rug_cx, rcy, z_floor, math.pi * 0.5,
+                            width=runner_w, length=runner_len,
+                            mat_index=MAT_INDEX_FABRIC_RED)
+        if not hasattr(tracker, 'rug_rects') or tracker.rug_rects is None:
+            tracker.rug_rects = []
+        tracker.rug_rects.append((rug_cx - runner_len * 0.5, rug_cx + runner_len * 0.5,
+                                  rcy - runner_w * 0.5, rcy + runner_w * 0.5))
 
         # 4. Chandeliers above the aisle and altar
         _place_ceiling_light(bm, tracker, x_altar - 0.8, rcy, z_ceil,
@@ -4521,13 +4536,21 @@ def _furnish_chapel(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
                     build_prop(bm, 'BENCH', bx, y, z_floor, math.pi, length=bench_len)
             y += row_gap
 
-        # 3. Ceremonial runner straight down the aisle along Y to the chancel
+        # 3. Ceremonial runner straight down the aisle along Y to the chancel (unified textile carpet plane)
         y_rug_start = rm.bounds[2] + 0.65
         y_rug_end = y_altar - 1.20
         runner_len = max(2.5, y_rug_end - y_rug_start)
         rug_cy = (y_rug_start + y_rug_end) * 0.5
-        _lay_rug(bm, tracker, rm, rng, 'RUG_CRIMSON', rcx, rug_cy, z_floor,
-                 aisle_w * 0.88, runner_len, yaw_max=0.01, allow_overlap=False)
+        runner_w = aisle_w * 0.88
+        from ..materials import MAT_INDEX_FABRIC_RED
+        from .interior_furniture import build_carpet_runner
+        build_carpet_runner(bm, rcx, rug_cy, z_floor, 0.0,
+                            width=runner_w, length=runner_len,
+                            mat_index=MAT_INDEX_FABRIC_RED)
+        if not hasattr(tracker, 'rug_rects') or tracker.rug_rects is None:
+            tracker.rug_rects = []
+        tracker.rug_rects.append((rcx - runner_w * 0.5, rcx + runner_w * 0.5,
+                                  rug_cy - runner_len * 0.5, rug_cy + runner_len * 0.5))
 
         # 4. Chandeliers above the aisle and altar
         _place_ceiling_light(bm, tracker, rcx, y_altar - 0.8, z_ceil,

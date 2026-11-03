@@ -153,6 +153,8 @@ for _s in (
           'interior_furniture', 'build_rug', 1.80, width=2.4, length=3.6, rug_style=2),
     _spec('RUG_FOREST', "Rug (Forest Woven)", 'SLEEP', "Sage and terracotta woven geometric carpet with tassels",
           'interior_furniture', 'build_rug', 1.80, width=2.4, length=3.6, rug_style=3),
+    _spec('CARPET_RUNNER', "Unified Carpet Runner", 'INTERIOR', "Continuous ceremonial textile fabric carpet runner",
+          'interior_furniture', 'build_carpet_runner', 1.60, width=1.40, length=6.00),
     _spec('SCATTER_TABLEWARE', "Table Clutter", 'TABLES', "Pewter tankards, ceramic plates, bottles, and candles",
           'interior_furniture', 'build_table_scatter', 0.40),
     _spec('PEWTER_TANKARD', "Pewter Mug", 'TABLES', "Hollow pewter tavern tankard with ear handle",

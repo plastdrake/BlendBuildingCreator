@@ -2693,6 +2693,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('RUG_CRIMSON', "Rug (Crimson Ornate)", "Ornate woven carpet with medallion and tassels"),
             ('RUG_SAPPHIRE', "Rug (Sapphire Royal)", "Royal blue damask carpet with tassels"),
             ('RUG_FOREST', "Rug (Forest Woven)", "Sage and terracotta woven geometric carpet with tassels"),
+            ('CARPET_RUNNER', "Unified Carpet Runner", "Continuous ceremonial textile fabric carpet runner"),
             ('SCATTER_TABLEWARE', "Table Clutter", "Pewter tankards, ceramic plates, bottles, and candles"),
             ('PEWTER_TANKARD', "Pewter Mug", "Hollow pewter tavern tankard with ear handle"),
             ('SOFA', "Sofa (Damask)", "Luxurious 2-3 seater upholstered sofa with brocade damask cushions"),

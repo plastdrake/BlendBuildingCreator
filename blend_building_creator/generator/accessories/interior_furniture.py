@@ -23,7 +23,7 @@ from ..mesh_utils import (
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON,
     MAT_INDEX_CLAY, MAT_INDEX_WAX, MAT_INDEX_LANTERN,
-    MAT_INDEX_FABRIC_WHITE, MAT_INDEX_FABRIC_RED, MAT_INDEX_FABRIC_STITCHED,
+    MAT_INDEX_FABRIC_WHITE, MAT_INDEX_FABRIC_RED, MAT_INDEX_FABRIC_STITCHED, MAT_INDEX_TARP,
     MAT_INDEX_PLANT, MAT_INDEX_PUMPKIN, MAT_INDEX_PUMPKIN_STEM,
     MAT_INDEX_UPHOLSTERY, MAT_INDEX_CLOTH_LINEN, MAT_INDEX_BOTTLE_GLASS,
     MAT_INDEX_DIRT, MAT_INDEX_CUT_STONE,
@@ -1630,6 +1630,77 @@ def build_rug(bm, x, y, z_ground=0.0, ang=0.0, width=2.4, length=3.6, rug_style=
 
     transform_faces(faces, Matrix.Translation((x, y, 0.0)) @ Matrix.Rotation(ang, 4, 'Z'))
     return faces
+
+
+class CarpetRunner:
+    """Constructor class that builds a continuous, unified carpet runner as a single plane.
+
+    Replaces segmented rows of individual patterned rugs in ceremonial aisles
+    (churches, chapels, grand halls, processional walkways) with a clean,
+    seamless textile fabric runner using M_Building_Fabric_Red or M_Building_Tarp.
+    """
+
+    def __init__(self, width: float = 1.4, length: float = 6.0,
+                 mat_index: int = None, z_lift: float = 0.005,
+                 uv_scale: float = 1.2):
+        from ..materials import MAT_INDEX_FABRIC_RED
+        self.width = float(width)
+        self.length = float(length)
+        self.mat_index = mat_index if mat_index is not None else MAT_INDEX_FABRIC_RED
+        self.z_lift = float(z_lift)
+        self.uv_scale = float(uv_scale)
+
+    def build(self, bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
+              ang: float = 0.0, width: float = None, length: float = None,
+              mat_index: int = None, z_floor: float = None, **kwargs):
+        """Constructs the carpet runner plane in bm centered at (x, y, z) with rotation ang."""
+        w = float(width) if width is not None else self.width
+        l = float(length) if length is not None else self.length
+        mat = mat_index if mat_index is not None else self.mat_index
+        z = (z_floor if z_floor is not None else z_ground) + self.z_lift
+
+        uv_layer = bm.loops.layers.uv.verify()
+        hw = w * 0.5
+        hl = l * 0.5
+
+        # Single continuous quad plane centered at origin with length along local Y and width along local X
+        v1 = bm.verts.new((-hw, -hl, z))
+        v2 = bm.verts.new((hw, -hl, z))
+        v3 = bm.verts.new((hw, hl, z))
+        v4 = bm.verts.new((-hw, hl, z))
+
+        face = bm.faces.new((v1, v2, v3, v4))
+        face.material_index = mat
+
+        # UV coordinates: seamless tiling based on dimensions and uv_scale
+        scale = max(0.1, self.uv_scale)
+        u_max = w / scale
+        v_max = l / scale
+        uvs = [
+            Vector((0.0, 0.0)),
+            Vector((u_max, 0.0)),
+            Vector((u_max, v_max)),
+            Vector((0.0, v_max)),
+        ]
+        for loop, uv in zip(face.loops, uvs):
+            loop[uv_layer].uv = uv
+
+        face.tag = True
+        faces = [face]
+
+        transform_faces(faces, Matrix.Translation((x, y, 0.0)) @ Matrix.Rotation(ang, 4, 'Z'))
+        return faces
+
+
+def build_carpet_runner(bm, x: float = 0.0, y: float = 0.0, z_ground: float = 0.0,
+                        ang: float = 0.0, width: float = 1.4, length: float = 6.0,
+                        mat_index: int = None, z_floor: float = None, **kwargs):
+    """Unified carpet runner builder function instantiating and calling CarpetRunner."""
+    from ..materials import MAT_INDEX_FABRIC_RED
+    mat = mat_index if mat_index is not None else MAT_INDEX_FABRIC_RED
+    runner = CarpetRunner(width=width, length=length, mat_index=mat)
+    return runner.build(bm, x=x, y=y, z_ground=z_ground, ang=ang, width=width,
+                        length=length, mat_index=mat, z_floor=z_floor, **kwargs)
 
 
 def build_pewter_tankard(bm, x, y, z_ground=0.0, ang=0.0):
