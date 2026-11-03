@@ -49,9 +49,17 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
     plinth_h = 0.25
     plinth_w = 0.36
 
+    # 3 pillars places a post in the center (t_offset = 0.0), directly blocking
+    # any centered doorway. Enforce 4 (or 2 for compact facades) so the entrance is clear.
+    if pillar_count == 3:
+        pillar_count = 4 if total_w >= 4.5 else 2
+
     step_t = total_w / max(1, pillar_count - 1)
     for p_i in range(pillar_count):
         t_offset = -half_w + p_i * step_t
+        # Safety: ensure no pillar stands within 0.70m of a centered doorway
+        if abs(t_offset) < 0.65:
+            t_offset = 0.75 * (1.0 if t_offset >= 0.0 else -1.0)
         px = wx + ox * (outer_d - header_w * 0.5) + tx * t_offset
         py = wy + oy * (outer_d - header_w * 0.5) + ty * t_offset
 
@@ -225,3 +233,33 @@ def build_pillared_overhang(bm, side, wall_x_min, wall_x_max, wall_y_min, wall_y
         mat_index=MAT_INDEX_WOOD if tier == 'TIER_1' else MAT_INDEX_STONE,
         bevel_amount=0.015
     )
+
+    # 4. Upper Terrace Deck & Perimeter Guard Railing on top of the overhang
+    # Allows upper floor doorways / balconies to walk out onto a safe railed terrace.
+    from ..railing import build_railing
+    terrace_z = z_ceiling + 0.02
+    # Timber terrace deck boards
+    create_beveled_box(
+        bm,
+        size=(outer_d + 0.04, total_w + 0.10, 0.05),
+        location=(wx + ox * (outer_d * 0.5), wy + oy * (outer_d * 0.5), terrace_z),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_WOOD,
+        bevel_amount=0.008
+    )
+    # Perimeter guard railing: front run + both return runs to the wall
+    facade_rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
+    def _tw(lx, ly):
+        p = Vector((wx, wy, 0.0)) + (facade_rot_mat @ Vector((lx, ly, 0.0, 0.0))).to_3d()
+        return (p.x, p.y)
+
+    tw_half = (total_w + 0.08) * 0.5
+    outer_rx = outer_d + 0.02
+    wall_rx = 0.25
+    rail_h = 0.95
+    # Front railing run
+    build_railing(bm, _tw(outer_rx, -tw_half), _tw(outer_rx, tw_half), terrace_z + 0.03, height=rail_h)
+    # Left & right return railings back to building wall
+    for s_sign in (-1, 1):
+        build_railing(bm, _tw(wall_rx, tw_half * s_sign), _tw(outer_rx, tw_half * s_sign),
+                      terrace_z + 0.03, height=rail_h, braces=False, post_spacing=1.0)

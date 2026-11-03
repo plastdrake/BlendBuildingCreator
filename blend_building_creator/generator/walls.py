@@ -1118,7 +1118,7 @@ def build_open_timber_arcade(bm, p_start, p_end, z_floor, z_top, wall_t=0.28,
 
     # 2. Evenly spaced posts along segment
     n_bays = max(1, int(round(seg_len / bay_spacing)))
-    post_h = z_top - z_floor
+    post_h = (z_top - beam_h) - z_floor
     post_mid_z = z_floor + post_h * 0.5
 
     for b_i in range(n_bays + 1):

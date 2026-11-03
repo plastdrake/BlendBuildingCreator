@@ -136,30 +136,31 @@ def _build_balconies(bm, props, ctx, tier):
                 else:
                     _rect = (_fx - 0.05, _fx + depth + 0.10,
                              _bcy - width * 0.5, _bcy + width * 0.5)
-            if any(_seg_hits_rect(w.get('p1', (0.0, 0.0)), w.get('p2', (0.0, 0.0)), _rect)
-                   for w in _walls_by_fl.get(fl_idx, [])):
-                continue
-            # The outside check above misses a partition that ends at the
-            # facade and bisects the door from inside.  Check the door's inner
-            # landing too; if a wall blocks it, omit the balcony rather than
-            # leave a balcony in the middle of an interior wall.
-            if side in ('FRONT', 'BACK'):
-                if side == 'FRONT':
-                    _door_rect = (_bcx - 0.62, _bcx + 0.62,
-                                  bounds[2], bounds[2] + 0.95)
+            # If an upper floor door has already been cut by floors.py for this balcony,
+            # we must NEVER skip building the balcony (otherwise it leaves a door to nowhere).
+            _approved_balcs = getattr(ctx, 'floor_balconies', {}).get(fl_idx, [])
+            _is_pre_approved = b in _approved_balcs
+            if not _is_pre_approved:
+                if any(_seg_hits_rect(w.get('p1', (0.0, 0.0)), w.get('p2', (0.0, 0.0)), _rect)
+                       for w in _walls_by_fl.get(fl_idx, [])):
+                    continue
+                if side in ('FRONT', 'BACK'):
+                    if side == 'FRONT':
+                        _door_rect = (_bcx - 0.62, _bcx + 0.62,
+                                      bounds[2], bounds[2] + 0.95)
+                    else:
+                        _door_rect = (_bcx - 0.62, _bcx + 0.62,
+                                      bounds[3] - 0.95, bounds[3])
                 else:
-                    _door_rect = (_bcx - 0.62, _bcx + 0.62,
-                                  bounds[3] - 0.95, bounds[3])
-            else:
-                if side == 'LEFT':
-                    _door_rect = (bounds[0], bounds[0] + 0.95,
-                                  _bcy - 0.62, _bcy + 0.62)
-                else:
-                    _door_rect = (bounds[1] - 0.95, bounds[1],
-                                  _bcy - 0.62, _bcy + 0.62)
-            if any(_seg_hits_rect(w.get('p1', (0.0, 0.0)), w.get('p2', (0.0, 0.0)), _door_rect)
-                   for w in _walls_by_fl.get(fl_idx, [])):
-                continue
+                    if side == 'LEFT':
+                        _door_rect = (bounds[0], bounds[0] + 0.95,
+                                      _bcy - 0.62, _bcy + 0.62)
+                    else:
+                        _door_rect = (bounds[1] - 0.95, bounds[1],
+                                      _bcy - 0.62, _bcy + 0.62)
+                if any(_seg_hits_rect(w.get('p1', (0.0, 0.0)), w.get('p2', (0.0, 0.0)), _door_rect)
+                       for w in _walls_by_fl.get(fl_idx, [])):
+                    continue
             is_noble = bool(
                 b.get('is_noble', False)
                 or (getattr(props, 'has_noble_balcony', False) and (
@@ -169,6 +170,10 @@ def _build_balconies(bm, props, ctx, tier):
             )
             b_w = max(width, 6.8) if is_noble else width
             b_d = max(depth, 2.2) if is_noble else depth
+            # If this balcony sits directly over a pillared overhang, the overhang header and
+            # colonnade support it: omit corbel brackets and use the overhang's platform depth.
+            _over_po = (fl_idx == 1 and _prop(props, 'has_pillared_overhang', False)
+                        and _prop(props, 'pillared_overhang_side', 'FRONT') == side)
             build_balcony(
                 bm, side=side,
                 wall_x_min=bounds[0], wall_x_max=bounds[1],
@@ -176,7 +181,8 @@ def _build_balconies(bm, props, ctx, tier):
                 lower_wall_x_min=lower[0], lower_wall_x_max=lower[1],
                 lower_wall_y_min=lower[2], lower_wall_y_max=lower[3],
                 z_floor=ctx.found_h + fl_idx * ctx.floor_h,
-                width=b_w, depth=b_d, tier=tier,
+                width=b_w, depth=b_d if not _over_po else _prop(props, 'pillared_overhang_depth', 1.6),
+                tier=tier,
                 door_angle_deg=_prop(props, 'door_angle', 0.0),
                 include_leaf=_prop(props, 'include_door_leaves', True),
                 along_wall_offset=offset,

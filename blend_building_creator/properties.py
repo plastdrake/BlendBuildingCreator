@@ -1577,7 +1577,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     pillared_overhang_pillars: IntProperty(
         name="Pillar Count",
         description="Number of vertical pillars along the facade",
-        min=2, max=6, default=3,
+        min=2, max=6, default=4,
         update=on_property_updated
     )
 

@@ -406,6 +406,20 @@ def _create_building_context(props, extra_doorways=None, extra_window_exclusions
         extra_we = list(extra_we)
         extra_we.append({'facade': 'RIGHT', 'min': -0.82 * _hy, 'max': 0.82 * _hy,
                          'floor_min': 0, 'floor_max': 0})
+        # Add exterior side doorway opening from indoor workshop/smithy onto covered forge porch
+        extra_dw = list(extra_dw)
+        # Position door clear of the central forge hearth (y=0) and tie beams:
+        # placing at -0.30 * base_d provides direct walk-in from indoor smithy to anvil and quench barrel
+        has_sd_right = (getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == 'RIGHT')
+        if not has_sd_right:
+            extra_dw.append({
+                'floor_idx': 0,
+                'facade': 'RIGHT',
+                'pos': -0.28 * base_d,
+                'w': 1.40,
+                'h': min(float(getattr(props, 'door_height', 2.60)), 2.60),
+                'is_portal': False,
+            })
 
     # The fishmonger's shop display case moves into the front-left corner: drop
     # the shopfront window there (the adjacent west window stays).

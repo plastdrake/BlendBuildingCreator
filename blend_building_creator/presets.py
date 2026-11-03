@@ -94,7 +94,7 @@ def base_settings():
         'balcony_fl4': False, 'balcony_fl5': False,
         'balcony_width': 2.4, 'balcony_depth': 1.3,
         'has_pillared_overhang': False, 'pillared_overhang_side': 'FRONT',
-        'pillared_overhang_depth': 1.6, 'pillared_overhang_pillars': 3,
+        'pillared_overhang_depth': 1.6, 'pillared_overhang_pillars': 4,
         'pillared_overhang_style': 'TIMBER_STONE',
         # Civic landmarks / annex / ramparts
         'has_clock_tower': False, 'clock_tower_side': 'RIGHT', 'clock_tower_size': 3.0,
@@ -297,7 +297,7 @@ PRESETS = {
             'has_pillared_overhang': True,
             'pillared_overhang_side': 'LEFT',
             'pillared_overhang_depth': 1.6,
-            'pillared_overhang_pillars': 3,
+            'pillared_overhang_pillars': 4,
             'pillared_overhang_style': 'ROUND_POST',
             'has_clock_tower': False,
             'clock_tower_side': 'RIGHT',
