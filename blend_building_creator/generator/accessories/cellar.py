@@ -198,8 +198,12 @@ def build_inn_cellar(bm, props, ctx, tier='TIER_2'):
 
 
 def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
-    """Build the under-wing basement + descending staircase. Returns its
-    world-space footprint or None when there is no wing to sit under."""
+    """Build the under-wing basement + descending staircase. For T2/T3, creates
+    a multi-chamber underground vault network:
+      - Chamber 1 (under wing): Fermentation vat room with mash tun, stirring vat & kegs.
+      - Chamber 2 (under main block, through stone arch): Barrel aging gallery with massive casks.
+      - Chamber 3 (T3 reserve vault, through second arch): Private bottle cellar & tasting reserve.
+    """
     wing = _wing_rect(ctx)
     if wing is None:
         return None
@@ -208,25 +212,16 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
     z_ground = float(getattr(ctx, 'found_h', 0.45))
 
     # Tier-scaled room height.
-    if tier == 'TIER_1':
-        depth = 2.40
-    elif tier == 'TIER_2':
-        depth = 2.80
-    else:
-        depth = 3.20
+    depth = {'TIER_1': 2.40, 'TIER_2': 2.90, 'TIER_3': 3.40}.get(tier, 2.80)
     z_floor = -depth
-    z_ceil = z_ground + 0.03  # meet the ground-floor slab, no gap at the top
+    z_ceil = z_ground + 0.03
 
-    # Basement room = wing footprint inset a little; deeper tiers also grow
-    # a little further under the main block so each upgrade feels more spacious.
     _tier_inset = {'TIER_1': 0.25, 'TIER_2': 0.16, 'TIER_3': 0.08}.get(tier, 0.25)
-    _tier_ext = {'TIER_1': 1.40, 'TIER_2': 2.70, 'TIER_3': 4.00}.get(tier, 1.40)
+    _tier_ext = {'TIER_1': 1.40, 'TIER_2': 5.60, 'TIER_3': 8.80}.get(tier, 1.40)
     _main_hy = (float(getattr(ctx, 'base_d', getattr(props, 'depth', 10.0))) * 0.5
                 - float(getattr(ctx, 'wall_t', 0.30)) * 0.5 - 0.30)
     bx0, bx1 = wx1 + _tier_inset, wx2 - _tier_inset
     by0 = wy1 + _tier_inset
-    # Extend the cellar past the wing's +Y wall (under the main block) so the
-    # stair, which descends toward +Y, has clear landing room at its foot.
     by1 = min(_main_hy, wy2 + _tier_ext)
     bcx, bcy = (bx0 + bx1) * 0.5, (by0 + by1) * 0.5
     bw, bd = bx1 - bx0, by1 - by0
@@ -253,8 +248,52 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
             mat_index=MAT_INDEX_STONE, bevel_amount=0.02
         )
 
-    # 3. Stair shaft in the wing (matches floors.py): a railed timber stair
-    #    from the ground floor down to the cellar.
+    # 3. Arched dividing walls for multi-chamber layout
+    arch_y1 = wy2 + 0.15
+    has_chamber2 = tier in ('TIER_2', 'TIER_3') and (by1 - arch_y1 >= 3.20)
+    arch_y2 = None
+    has_chamber3 = tier == 'TIER_3' and has_chamber2 and (by1 - arch_y1 >= 5.80)
+
+    if has_chamber2:
+        # First arch: between Fermentation Room (under wing) and Aging Gallery (under main block)
+        open_half = 1.35
+        for _x0, _x1 in ((bx0, bcx - open_half), (bcx + open_half, bx1)):
+            if _x1 - _x0 >= 0.25:
+                faces += create_beveled_box(
+                    bm, size=(_x1 - _x0, 0.32, h),
+                    location=((_x0 + _x1) * 0.5, arch_y1, (z_floor + z_ceil) * 0.5),
+                    mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+        faces += create_beveled_box(
+            bm, size=(open_half * 2.0 + 0.70, 0.24, 0.30),
+            location=(bcx, arch_y1, z_ceil - 0.24),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        for _px in (bcx - open_half - 0.18, bcx + open_half + 0.18):
+            faces += create_beveled_box(
+                bm, size=(0.34, 0.50, h),
+                location=(_px, arch_y1, (z_floor + z_ceil) * 0.5),
+                mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+
+    if has_chamber3:
+        # Second arch: between Aging Gallery and Private Bottle Reserve Vault
+        arch_y2 = arch_y1 + (by1 - arch_y1) * 0.52
+        open_half2 = 1.15
+        for _x0, _x1 in ((bx0, bcx - open_half2), (bcx + open_half2, bx1)):
+            if _x1 - _x0 >= 0.25:
+                faces += create_beveled_box(
+                    bm, size=(_x1 - _x0, 0.32, h),
+                    location=((_x0 + _x1) * 0.5, arch_y2, (z_floor + z_ceil) * 0.5),
+                    mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+        faces += create_beveled_box(
+            bm, size=(open_half2 * 2.0 + 0.70, 0.24, 0.30),
+            location=(bcx, arch_y2, z_ceil - 0.24),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+        for _px in (bcx - open_half2 - 0.18, bcx + open_half2 + 0.18):
+            faces += create_beveled_box(
+                bm, size=(0.34, 0.50, h),
+                location=(_px, arch_y2, (z_floor + z_ceil) * 0.5),
+                mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
+
+    # 4. Descending stair shaft in the wing (clears walls and props)
     shx = wx1 + 1.50
     shy = (wy1 + wy2) * 0.5
     riser = 0.185
@@ -268,55 +307,67 @@ def build_brewery_cellar(bm, props, ctx, tier='TIER_1'):
         direction_y=-1
     )
 
-    # 4. Wine racks: back wall (centred) and the left wall on larger cellars.
-    #    The right wall stays free for the big casks.
+    # --- Chamber 1: Fermentation Vat Room (under wing) --------------------
+    c1_y_end = arch_y1 if has_chamber2 else by1
+    c1_cy = (by0 + c1_y_end) * 0.5
     rack_z = z_floor + 0.02
-    build_wine_rack(bm, bcx, by1 - wall_t - 0.24, rack_z, 0.0,
-                    width=min(bw - 1.8, 1.20))
-    if tier != 'TIER_1':
-        # Tuck the left-wall rack under the higher half of the flight, one
-        # metre back from the stair's low end, so its top shelf clears the
-        # stair underside instead of poking through the steps.
-        build_wine_rack(bm, bx0 + wall_t + 0.24, bcy - 1.05, rack_z, math.pi * 0.5,
-                        width=min(bd - 2.2, 1.20))
+    build_mash_tun(bm, bcx + bw * 0.18, (by0 + wy2) * 0.5, z_floor,
+                   radius=min(0.65, max(0.42, bw * 0.11)), height=1.05)
+    build_keg_rack(bm, bx0 + wall_t + 0.24, wy1 + 1.20, z_floor, math.pi * 0.5)
+    build_barrel(bm, bx0 + wall_t + 0.85, wy1 + 0.75, z_floor, radius=0.32, height=0.76)
+    build_barrel(bm, bx0 + wall_t + 1.65, wy1 + 0.75, z_floor, radius=0.32, height=0.76)
+    build_crate(bm, bx1 - wall_t - 0.75, wy1 + 0.75, z_floor, size=0.55)
 
-    # 5. Upright bottle shelves on the RIGHT wall, above the casks and well
-    #    clear of the stair flight (which hugs the left side of the wing).
-    from .interior_furniture import build_bottle
-    _shelf_l = min(bd * 0.55, 2.0)
-    _shelf_x = bx1 - wall_t - 0.18
-    for _sz in (z_floor + 1.55, z_floor + 2.00):
-        faces += create_beveled_box(
-            bm, size=(0.30, _shelf_l, 0.05),
-            location=(_shelf_x, bcy, _sz),
-            mat_index=MAT_INDEX_WOOD, bevel_amount=0.006)
-        _n = 6
-        for _i in range(_n):
-            _by = bcy - _shelf_l * 0.5 + 0.18 + _i * ((_shelf_l - 0.36) / max(1, _n - 1))
-            faces += build_bottle(
-                bm, _shelf_x + 0.02, _by, _sz + 0.025, ang=0.0,
-                bottle_type=('POTION' if _i % 3 == 1 else 'WINE'))
+    if not has_chamber2:
+        # Tier 1 single chamber fallback: wine rack & lying casks
+        build_wine_rack(bm, bcx, by1 - wall_t - 0.24, rack_z, 0.0, width=min(bw - 1.8, 1.20))
+        for _yy in (c1_cy - 1.2, c1_cy + 1.2):
+            build_barrel(bm, bx1 - wall_t - 0.65, _yy, z_floor, 0.0, radius=0.46, height=1.10, lying=True)
+    else:
+        # --- Chamber 2: Barrel Aging Gallery ------------------------------
+        c2_y_start = arch_y1 + 0.20
+        c2_y_end = arch_y2 if has_chamber3 else by1
+        c2_cy = (c2_y_start + c2_y_end) * 0.5
+        c2_len = c2_y_end - c2_y_start
+        # Lying oak casks along both flank walls
+        cask_positions = [c2_y_start + 1.0, c2_y_start + 2.5]
+        if c2_len >= 4.0:
+            cask_positions.append(c2_y_start + 4.0)
+        for _cy in cask_positions:
+            if _cy <= c2_y_end - 0.85:
+                # Right wall casks
+                build_barrel(bm, bx1 - wall_t - 0.65, _cy, z_floor, 0.0, radius=0.52, height=1.25, lying=True)
+                # Left wall casks
+                build_barrel(bm, bx0 + wall_t + 0.65, _cy, z_floor, math.pi, radius=0.48, height=1.15, lying=True)
 
-    # 6. Big lying casks along the right wall, circular lids facing INTO the
-    #    room (barrel axis perpendicular to the wall). Sizes vary.
-    _cask_ys = (bcy - min(bd * 0.28, 2.2),
-                bcy,
-                bcy + min(bd * 0.28, 2.2))
-    _cask_specs = ((0.46, 1.10), (0.52, 1.25), (0.40, 0.95))
-    for _i, _yy in enumerate(_cask_ys):
-        _rad, _hlen = _cask_specs[_i % len(_cask_specs)]
-        build_barrel(bm, bx1 - wall_t - _hlen * 0.5 - 0.08, _yy, z_floor, 0.0,
-                     radius=_rad, height=_hlen, lying=True)
+        # Tasting barrels and hanging chandelier in gallery center
+        from .prop_registry import build_prop
+        build_barrel(bm, bcx, c2_cy, z_floor, radius=0.36, height=0.85)
+        build_prop(bm, 'CHANDELIER', bcx, c2_cy, z_ceil, 0.0, radius=0.48, chain_drop=0.50)
 
-    # 7. Standing barrels and a crate in the front-left corner.
-    build_barrel(bm, bx0 + wall_t + 1.10, by0 + wall_t + 2.10, z_floor,
-                 radius=0.32, height=0.76)
-    build_barrel(bm, bx0 + wall_t + 2.10, by0 + wall_t + 2.10, z_floor,
-                 radius=0.32, height=0.76)
-    build_crate(bm, bx0 + wall_t + 0.85, by0 + wall_t + 0.85, z_floor, size=0.52)
-
-    # 8. Stirring vat / mash tun with paddle, clear of casks and the stair.
-    build_mash_tun(bm, bcx + bw * 0.10, by0 + bd * 0.52, z_floor,
-                   radius=min(0.55, max(0.38, bw * 0.09)), height=0.95)
+        # --- Chamber 3: Private Bottle Cellar & Reserve Vault (Tier 3) ---
+        if has_chamber3:
+            c3_y_start = arch_y2 + 0.20
+            c3_cy = (c3_y_start + by1) * 0.5
+            # Back-wall full width wine bottle bins
+            build_wine_rack(bm, bcx, by1 - wall_t - 0.24, rack_z, 0.0, width=min(bw - 1.6, 2.20))
+            # Upright bottle shelves on right wall
+            from .interior_furniture import build_bottle
+            _shelf_l = min((by1 - c3_y_start) * 0.60, 2.0)
+            _shelf_x = bx1 - wall_t - 0.18
+            for _sz in (z_floor + 1.55, z_floor + 2.00):
+                faces += create_beveled_box(
+                    bm, size=(0.30, _shelf_l, 0.05),
+                    location=(_shelf_x, c3_cy, _sz),
+                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.006)
+                _n = 5
+                for _i in range(_n):
+                    _by = c3_cy - _shelf_l * 0.5 + 0.18 + _i * ((_shelf_l - 0.36) / max(1, _n - 1))
+                    faces += build_bottle(
+                        bm, _shelf_x + 0.02, _by, _sz + 0.025, ang=0.0,
+                        bottle_type=('POTION' if _i % 2 == 1 else 'WINE'))
+            # Armored reserve chest in corner
+            build_prop(bm, 'CHEST', bx0 + wall_t + 0.85, by1 - wall_t - 0.75, z_floor, 0.0)
+            build_prop(bm, 'CHANDELIER', bcx, c3_cy, z_ceil, 0.0, radius=0.42, chain_drop=0.50)
 
     return (bx0 - wall_t, bx1 + wall_t, by0 - wall_t, by1 + wall_t)

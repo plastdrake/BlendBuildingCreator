@@ -3720,6 +3720,24 @@ def _furnish_brewhouse(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
     _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
+def _furnish_tasting_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                          rng, density: float):
+    """Brewery tasting room / parlor: tasting dining table with benches, keg racks,
+    wine and brew racks, beer mugs, and goods."""
+    rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
+    rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
+    # Tasting dining ensemble
+    _furnish_dining(bm, rm, tracker, z_floor, rng, density)
+    # Keg rack & brew racks along walls
+    _try_place_wall_prop(bm, 'KEG_RACK', 1.30, 0.62, tracker, z_floor,
+                         candidate_walls=('NORTH', 'EAST', 'WEST'))
+    _try_place_wall_prop(bm, 'WINE_RACK', 1.20, 0.45, tracker, z_floor,
+                         candidate_walls=('EAST', 'WEST', 'SOUTH'))
+    _place_goods_row(bm, tracker, z_floor, rng, 'BARREL', count=2, box=0.40)
+    _place_floor_prop(bm, tracker, z_floor, rng, 'BOTTLE_CRATE', 0.33, 0.33)
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
+
+
 def _furnish_butchery(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                       rng, density: float):
     """Butchery and smokehouse: cleaver blocks, brine barrels, salt sacks and
@@ -5682,6 +5700,8 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_bakehouse(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('BREWHOUSE',):
             _furnish_brewhouse(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif role in ('TASTING_ROOM',):
+            _furnish_tasting_room(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('BUTCHERY',):
             _furnish_butchery(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('TAILOR_ATELIER',):

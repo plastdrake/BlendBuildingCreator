@@ -1892,7 +1892,18 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             # Industrial upper floors are work/storage, never bedrooms or kitchens.
             pool = ['STAIR_LANDING', 'STONE_STORE' if archetype == 'QUARRY' else 'STORAGE', 'WORKSHOP', 'OFFICE']
             return pool[:num_rooms]
-        elif archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
+        elif archetype == 'BREWERY':
+            # Brewery upper storeys: tasting room / salon, master quarters, office, storage (no duplicate kitchens)
+            if fl_idx == 1:
+                if num_rooms == 1:
+                    return ['COTTAGE']
+                pool = ['STAIR_LANDING', 'TASTING_ROOM', 'MASTER_BED', 'OFFICE', 'STORAGE', 'HOUSE_HALL']
+            else:
+                if num_rooms == 1:
+                    return ['COTTAGE']
+                pool = ['STAIR_LANDING', 'BEDROOM', 'OFFICE', 'GUEST_ROOM', 'STORAGE']
+            return pool[:num_rooms]
+        elif archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN',
                           'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER', 'HUNTER') or archetype.startswith('ARTISAN'):
             # Artisan live/work house: trade below, family living home above.
             # Living quarters (HOUSE_HALL), bedroom (MASTER_BED/BEDROOM), and trade office (OFFICE).
@@ -3555,7 +3566,10 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
     rooms.append(stair_room)
 
     # Front row (off the reception gallery).  The central span is the throne.
-    throne_bounds = (x_edges[throne_a], x_edges[throne_b + 1], front_y1, mid_y)
+    # On the ground floor, the Throne Room spans the full depth from the reception gallery
+    # to the rear head wall so the throne dais and royal carpet runner fit entirely inside.
+    throne_y1 = back_y0 if fl_idx == 0 else mid_y
+    throne_bounds = (x_edges[throne_a], x_edges[throne_b + 1], front_y1, throne_y1)
     for i in range(n_bays):
         if _is_throne_bay(i):
             continue
@@ -3595,8 +3609,10 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
     gallery.doorways.append(throne_door)
 
     # Back row (off the rear service corridor): compact chambers, never
-    # walk-through rooms.
+    # walk-through rooms. On fl_idx == 0, the throne bays are already part of the throne hall.
     for i in range(n_bays):
+        if fl_idx == 0 and _is_throne_bay(i):
+            continue
         role = north_roles[min(i, len(north_roles) - 1)]
         door = {'x': (x_edges[i] + x_edges[i + 1]) * 0.5,
                 'y': back_y0, 'axis': 'X', 'w': dw_w}
@@ -3634,9 +3650,22 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
                   'doorway': {'x': throne_door['x'], 'y': front_y1,
                               'w': throne_door['w'], 'h': dw_h, 'axis': 'X'}})
     # The central spine wall between the two chamber rows.
-    walls.append({'p1': (bay_x0, mid_y), 'p2': (bay_x1, mid_y),
-                  'axis': 'X', 'pos': mid_y, 'thickness': wall_t,
-                  'doorway': None})
+    # On fl_idx == 0, skip the throne room span so it stays one open full-depth audience chamber.
+    if fl_idx == 0:
+        if throne_bounds[0] > bay_x0:
+            walls.append({'p1': (bay_x0, mid_y), 'p2': (throne_bounds[0], mid_y),
+                          'axis': 'X', 'pos': mid_y, 'thickness': wall_t, 'doorway': None})
+        if bay_x1 > throne_bounds[1]:
+            walls.append({'p1': (throne_bounds[1], mid_y), 'p2': (bay_x1, mid_y),
+                          'axis': 'X', 'pos': mid_y, 'thickness': wall_t, 'doorway': None})
+        # Full-depth flank walls enclosing the throne room
+        for tx in (throne_bounds[0], throne_bounds[1]):
+            walls.append({'p1': (tx, front_y1), 'p2': (tx, back_y0),
+                          'axis': 'Y', 'pos': tx, 'thickness': wall_t, 'doorway': None})
+    else:
+        walls.append({'p1': (bay_x0, mid_y), 'p2': (bay_x1, mid_y),
+                      'axis': 'X', 'pos': mid_y, 'thickness': wall_t,
+                      'doorway': None})
     # Wall between the cross-passage and the first real room bay.
     walls.append({'p1': (bay_x0, front_y1), 'p2': (bay_x0, mid_y),
                   'axis': 'Y', 'pos': bay_x0, 'thickness': wall_t,
