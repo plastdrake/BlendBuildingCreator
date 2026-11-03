@@ -510,12 +510,12 @@ def _place_banners(bm, props, ctx):
     gate_cx = ctx.main_door_cx
 
     # Outward step clears the wall mass plus the pole itself: curtain walls
-    # are up to ~1m thick, so the old fixed 0.55 put the pole surface flush
-    # with (or inside) the outer face and the bastion footprints.
+    # are up to ~1m thick, and have projecting merlons and coping caps. Step
+    # far enough out so the cloth banner never clips into the stone wall.
     if _is_curtain:
-        _push = _prop(props, 'curtain_wall_thickness', 0.55) * 0.5 + 0.50
+        _push = _prop(props, 'curtain_wall_thickness', 0.55) * 0.5 + 0.95
     else:
-        _push = 0.55
+        _push = 0.70
 
     # Candidate positions — front corners shift to midpoint between tower and gate
     front_left_x  = (px_min + gate_cx) * 0.5 if has_towers else x_min

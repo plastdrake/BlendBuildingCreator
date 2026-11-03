@@ -932,6 +932,46 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
+    # 1b. Wooden walkway connecting the two stair landings across the gate span
+    # Provides continuous walkable rampart passage bridging the gatehouse opening
+    bridge_half = gap_w * 0.5 + top_off
+    bridge_span = bridge_half * 2.0
+    bridge_lat_mid = (lat0 + lat1) * 0.5
+    bridge_w = lat1 - lat0
+    bx_mid, by_mid = at(0.0, bridge_lat_mid)
+
+    # Supporting heavy timber bearer beams underneath the walkway deck
+    for b_lat_off in (-bridge_w * 0.32, bridge_w * 0.32):
+        bx_beam, by_beam = at(0.0, bridge_lat_mid + b_lat_off)
+        create_beveled_box(bm, size=(bridge_span + 0.20, 0.14, 0.16),
+                           location=(bx_beam, by_beam, deck_top - 0.14),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+
+    # Heavy oak plank walkway decking
+    create_beveled_box(bm, size=(bridge_span + 0.10, bridge_w - 0.04, 0.08),
+                       location=(bx_mid, by_mid, deck_top - 0.02),
+                       rotation=(0.0, 0.0, ang),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+
+    # Inner guard rail along the bailey-facing edge of the wooden bridge
+    bridge_rail_lat = lat1 - 0.12
+    bx_rail, by_rail = at(0.0, bridge_rail_lat)
+    create_beveled_box(bm, size=(bridge_span + 0.10, 0.12, 0.08),
+                       location=(bx_rail, by_rail, deck_top + rail_h),
+                       rotation=(0.0, 0.0, ang),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+    create_beveled_box(bm, size=(bridge_span + 0.10, 0.08, 0.06),
+                       location=(bx_rail, by_rail, deck_top + rail_h * 0.5),
+                       rotation=(0.0, 0.0, ang),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+    for p_u in (-bridge_half * 0.5, 0.0, bridge_half * 0.5):
+        bx_p, by_p = at(p_u, bridge_rail_lat)
+        create_beveled_box(bm, size=(post_size, post_size, rail_h + 0.10),
+                           location=(bx_p, by_p, deck_top + (rail_h + 0.10) * 0.5),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+
         # 2. Solid stone steps (clean treads without giant monolithic side walls)
         total_flight_len = run * n
         stair_rail_lat = inner_lat + stair_w - 0.12  # Posts mount inside treads, never float in air
@@ -1260,7 +1300,8 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
                        location=(cx + ox * front_edge_push, cy + oy * front_edge_push, platform_z + 0.22 + parapet_h * 0.5),
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-    # Merlons (crenellations) along the front edge
+    # Merlons (crenellations) along the front edge matching curtain wall styling:
+    # Stone merlon body with cut-stone coping cap on top of each merlon
     n_merlons = max(3, int(plat_w / 1.15))
     merlon_w = 0.52
     m_step = (plat_w - merlon_w) / max(1, n_merlons - 1)
@@ -1268,10 +1309,16 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
         mu = -(plat_w - merlon_w) * 0.5 + mi * m_step
         mpx = cx + tx * mu + ox * front_edge_push
         mpy = cy + ty * mu + oy * front_edge_push
-        create_beveled_box(bm, size=(merlon_w, 0.24, merlon_h),
+        # Merlon body in MAT_INDEX_STONE
+        create_beveled_box(bm, size=(merlon_w, 0.26, merlon_h),
                            location=(mpx, mpy, platform_z + 0.22 + parapet_h + merlon_h * 0.5),
                            rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+                           mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
+        # Cut-stone coping cap on top matching wall battlements
+        create_beveled_box(bm, size=(merlon_w + 0.08, 0.30, 0.10),
+                           location=(mpx, mpy, platform_z + 0.22 + parapet_h + merlon_h + 0.05),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.008)
 
     if gate_towers:
         from .gatehouse import build_flanking_gate_towers

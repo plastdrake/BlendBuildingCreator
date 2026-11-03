@@ -546,9 +546,12 @@ def build_military_props(bm, props, ctx):
             build_training_dummy(bm, right_wall - stand, ys[min(i, len(ys) - 1)], 0.0,
                                  ang=math.radians(90.0))
         # Weapon racks flank the gate against the front enclosure wall and face into the courtyard,
-        # never blocking the central entrance corridor.
+        # never blocking the central entrance corridor or colliding with curtain wall stairs.
         _x0, _x1, enclosure_y, _y1 = compound_bounds(ctx, fortification_offset(props))
-        rack_y = enclosure_y + 0.85
+        is_curtain = getattr(props, 'has_curtain_wall', False)
+        # Curtain wall access stairs extend from 0.6m to 3.2m in lateral depth.
+        # Place the weapon racks at 3.6m into the courtyard so spears never clip the stairs.
+        rack_y = enclosure_y + (3.60 if is_curtain else 0.85)
         if n_racks == 1:
             rack_xs = [ctx.main_door_cx - 3.2]
         elif n_racks == 2:

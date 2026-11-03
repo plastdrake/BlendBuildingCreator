@@ -1502,6 +1502,7 @@ PRESETS = {
             'has_curtain_wall': True,
             'curtain_wall_height': 3.4,
             'curtain_wall_thickness': 0.60,
+            'has_portcullis': True,
             'curtain_wall_offset': 6.0,
             'curtain_wall_depth_extra': 1.5,
             'has_palisade': False,

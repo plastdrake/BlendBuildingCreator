@@ -72,8 +72,10 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
         # reach the log-wall branch through a tier mismatch.
         _wall_tier = 'TIER_1'
     physical_siding = False if is_wattle else eff_wall in ('LOGS', 'WOOD_PLANKS')
-    timber_framing = bool(timber_framing and is_wattle)
-    _plaster_cells = is_wattle
+    # Allow timber framing on Tier 2/3 when enabled on the building
+    has_tf_prop = getattr(props, 'has_timber_framing', True) if props is not None else True
+    timber_framing = bool(timber_framing and (is_wattle or (tier in ('TIER_2', 'TIER_3') and has_tf_prop)))
+    _plaster_cells = bool(is_wattle or (tier in ('TIER_2', 'TIER_3') and has_tf_prop))
     wall_h = floors * floor_h
     top_z = found_h + wall_h
     wall_t = 0.28
@@ -631,9 +633,13 @@ def build_side_annex(bm, side_sgn, main_hx, main_cy0, main_cy1, z_ground=0.0,
     # The gable wall UVs came out of the roof builder in its LOCAL frame, so the
     # 90 deg rotation left the facade texture rotated/misaligned against the rest
     # of the building. Remap the gable faces (wood / plaster) to world-space UVs.
+    # When the host building uses log walls (e.g. Hunter T3), use MAT_INDEX_LOG.
+    from ..materials import MAT_INDEX_LOG
     _uvg = annex_roof_bm.loops.layers.uv.verify()
     for _gf in annex_roof_bm.faces:
-        if _gf.material_index in (MAT_INDEX_WOOD, MAT_INDEX_PLASTER_EXT):
+        if _host_wall == 'LOGS' and _gf.material_index in (MAT_INDEX_WOOD, MAT_INDEX_PLASTER_EXT):
+            _gf.material_index = MAT_INDEX_LOG
+        if _gf.material_index in (MAT_INDEX_WOOD, MAT_INDEX_PLASTER_EXT, MAT_INDEX_LOG):
             for _gl in _gf.loops:
                 _gc = _gl.vert.co
                 _gl[_uvg].uv = (_gc.y * 0.55, (_gc.z - top_z) * 0.55)
