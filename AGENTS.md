@@ -25,3 +25,4 @@ Whenever any modifications, bug fixes, or additions are made to `blend_building_
 ## 3. Code & Architecture Integrity
 - Preserve existing comments, docstrings, and procedural architecture unless explicitly asked to modify or refactor them.
 - Ensure all coordinate frames, procedural offsets, materials, and asset placements maintain consistency across building tiers (Tier 1 wood/wattle, Tier 2 timber frame/plaster, Tier 3 stone/citadel).
+

@@ -17,6 +17,7 @@ Key Functions:
 """
 
 import math
+import bmesh
 from mathutils import Vector, Matrix, Euler
 
 from ..mesh_utils import create_box, create_beveled_box, create_cylinder, create_cone
