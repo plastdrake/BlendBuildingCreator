@@ -1606,7 +1606,7 @@ _INTERIOR_PROGRAMS = {
         'upper': ('STAIR_LANDING', 'MAYOR_OFFICE', 'OFFICE', 'STUDY', 'ARCHIVE'),
     },
     'MILITARY': {
-        'ground': ('KITCHEN', 'MESS_HALL', 'DRILL_HALL', 'ARMORY', 'STORAGE'),
+        'ground': ('MESS_HALL', 'KITCHEN', 'DRILL_HALL', 'ARMORY', 'STORAGE'),
         'upper': ('STAIR_LANDING', 'BARRACKS_DORM', 'BARRACKS_DORM', 'OFFICER_QUARTERS'),
     },
     'PALACE': {
@@ -1627,7 +1627,7 @@ _INTERIOR_PROGRAMS = {
         'no_utility_rugs': True,
     },
     'RANGER': {
-        'ground': ('FLETCHER_WORKSHOP', 'RANGE', 'STORAGE', 'LODGE'),
+        'ground': ('MESS_HALL', 'RANGE', 'FLETCHER_WORKSHOP', 'STORAGE'),
         'upper': ('STAIR_LANDING', 'BARRACKS_DORM', 'LODGE', 'BEDROOM'),
     },
     'STABLE': {
@@ -1990,19 +1990,18 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         return pool[:num_rooms]
 
     if archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):
-        # A garrison needs a working kitchen and a dining/mess hall first;
-        # kitchen and mess hall first; pantry/stores support them.  Armoury
+        # A garrison needs a dining/mess hall first; kitchen supports it. Armoury
         # and drill spaces live upstairs so the ground floor never becomes a
         # row of huge empty military prop rooms.
-        pool = ['KITCHEN', 'MESS_HALL', 'PANTRY', 'STORAGE', 'DRILL_HALL']
+        pool = ['MESS_HALL', 'KITCHEN', 'PANTRY', 'STORAGE', 'DRILL_HALL']
         return pool[:num_rooms]
 
     if archetype in ('KNIGHTS_MANOR',):
-        pool = ['KITCHEN', 'MESS_HALL', 'GREAT_HALL', 'ARMORY', 'STORAGE']
+        pool = ['MESS_HALL', 'KITCHEN', 'GREAT_HALL', 'ARMORY', 'STORAGE']
         return pool[:num_rooms]
 
     if archetype in ('ARCHERY', 'ARCHERY_RANGE'):
-        pool = ['FLETCHER_WORKSHOP', 'RANGE', 'STORAGE', 'LODGE']
+        pool = ['MESS_HALL', 'RANGE', 'FLETCHER_WORKSHOP', 'STORAGE']
         return pool[:num_rooms]
 
     if archetype in ('CHAPEL', 'HEALERS_CHAPEL'):
@@ -7747,18 +7746,21 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                ('MESS_HALL', 'ARMORY', 'BARRACKS_DORM', 'DRILL_HALL',
                 'OFFICER_QUARTERS') for r in rooms))
     if _military_layout and fl_idx == 0 and rooms:
-        if not any(getattr(r, 'role', '') == 'KITCHEN' for r in rooms):
-            _cand = next((r for r in rooms if getattr(r, 'role', '') in
-                          ('STORAGE', 'OFFICE', 'ARMORY', 'PANTRY', 'GUEST_ROOM',
-                           'BEDROOM', 'GREAT_HALL', 'LODGE')), None)
-            if _cand is not None:
-                _cand.role = 'KITCHEN'
+        # Guarantee MESS_HALL as top priority in all military buildings
         if not any(getattr(r, 'role', '') == 'MESS_HALL' for r in rooms):
-            _cand = next((r for r in rooms if getattr(r, 'role', '') in
-                          ('STORAGE', 'OFFICE', 'ARMORY', 'PANTRY', 'GUEST_ROOM',
-                           'BEDROOM', 'GREAT_HALL', 'LODGE')), None)
-            if _cand is not None:
-                _cand.role = 'MESS_HALL'
+            _cand = max(rooms, key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]))
+            _cand.role = 'MESS_HALL'
+        if len(rooms) >= 2 and not any(getattr(r, 'role', '') == 'KITCHEN' for r in rooms):
+            _cand_k = next((r for r in rooms if getattr(r, 'role', '') != 'MESS_HALL'), None)
+            if _cand_k is not None:
+                _cand_k.role = 'KITCHEN'
+
+    # Town Hall must NEVER get any bedrooms on ANY floor (civic governance only)
+    if effective_archetype in ('TOWN_HALL', 'CIVIC', 'GUILDHALL') and rooms:
+        _civic_alts = ['COUNCIL_CHAMBER', 'MAYOR_OFFICE', 'OFFICE', 'STUDY', 'ARCHIVE', 'LIBRARY', 'STORAGE']
+        for _ci, _r in enumerate(rooms):
+            if getattr(_r, 'role', '') in ('BEDROOM', 'MASTER_BED', 'GUEST_ROOM', 'COTTAGE', 'TENEMENT_BEDROOM', 'BARRACKS_DORM'):
+                _r.role = _civic_alts[_ci % len(_civic_alts)]
 
     # A house is one household: never leave duplicate kitchens on a floor.
     # (Upper-storey kitchens likewise collapse into a living room when the

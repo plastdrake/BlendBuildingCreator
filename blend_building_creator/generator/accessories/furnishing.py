@@ -2236,9 +2236,10 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                         for tx, ty in candidate_points]
     candidate_points.sort(key=_score_dining_cand, reverse=True)
 
-    # A separate dining/living hall on this floor already owns the dining set,
-    # so the kitchen stays a kitchen and keeps its floor clear for a rug.
-    if floor_has_dining:
+    # A separate dining hall owns the main dining set, BUT spacious kitchens
+    # (> 18m2) still get a dining/breakfast ensemble so the room never stays bare.
+    is_spacious_kitchen = (rw * rd >= 18.0 or min(rw, rd) >= 4.0)
+    if floor_has_dining and not is_spacious_kitchen:
         candidate_points = []
 
     if is_small_kitchen:
@@ -2592,28 +2593,38 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
     # 1. Warm stone hearth if chimney exists
     _try_place_hearth(bm, tracker, z_floor, z_ceil=z_ceil, chimney_pos=chimney_pos)
 
-    # 2. Grand Council Table with Magistrate Chairs (chairs keep clear of
-    # stairs, doorways and other props).
+    # 2. Grand Council Table with Magistrate Chairs (with robust candidate search)
     tw = min(3.0, max(1.80, rw * 0.45))
     td = 1.05
-    if tracker.is_free(rcx - tw * 0.5 - 0.40, rcx + tw * 0.5 + 0.40, rcy - td * 0.5 - 0.40, rcy + td * 0.5 + 0.40):
-        # Seats first, margin reservation last (chairs tuck against the table
-        # edge and would self-reject against the margin box).
-        build_prop(bm, 'INDOOR_TABLE', rcx, rcy, z_floor, 0.0, length=tw, width=td)
-        n_chairs = max(2, int(tw / 0.85))
-        chair_step = tw / n_chairs
-        for ci in range(n_chairs):
-            chx = rcx - tw * 0.5 + (ci + 0.5) * chair_step
-            for chy, chang in ((rcy - (td * 0.5 + 0.32), math.pi),
-                               (rcy + (td * 0.5 + 0.32), 0.0)):
-                if tracker.is_free(chx - 0.30, chx + 0.30, chy - 0.30, chy + 0.30):
-                    tracker.occupy(chx - 0.30, chx + 0.30, chy - 0.30, chy + 0.30)
-                    build_prop(bm, 'CHAIR', chx, chy, z_floor, chang, seat_h=0.50)
-        _ex, _ey, _eyaw = rcx - (tw * 0.5 + 0.38), rcy, math.pi * 0.5
-        if tracker.is_free(_ex - 0.30, _ex + 0.30, _ey - 0.30, _ey + 0.30):
-            tracker.occupy(_ex - 0.30, _ex + 0.30, _ey - 0.30, _ey + 0.30)
-            build_prop(bm, 'CHAIR', _ex, _ey, z_floor, _eyaw, seat_h=0.54)
-        tracker.occupy(rcx - tw * 0.5 - 0.40, rcx + tw * 0.5 + 0.40, rcy - td * 0.5 - 0.40, rcy + td * 0.5 + 0.40)
+    placed_council = False
+    for tx_cand in (rcx, rcx - 1.2, rcx + 1.2):
+        for ty_cand in (rcy, rcy + 1.2, rcy - 1.2, rcy + 2.0, rcy - 2.0):
+            if tracker.is_free(tx_cand - tw * 0.5 - 0.30, tx_cand + tw * 0.5 + 0.30,
+                               ty_cand - td * 0.5 - 0.30, ty_cand + td * 0.5 + 0.30):
+                build_prop(bm, 'INDOOR_TABLE', tx_cand, ty_cand, z_floor, 0.0, length=tw, width=td)
+                build_prop(bm, 'SCATTER_TABLEWARE', tx_cand - 0.40, ty_cand, z_floor + 0.992, 0.0)
+                build_prop(bm, 'BOTTLE_CLUSTER', tx_cand + 0.40, ty_cand, z_floor + 0.992, 0.0)
+                n_chairs = max(2, int(tw / 0.85))
+                chair_step = tw / n_chairs
+                for ci in range(n_chairs):
+                    chx = tx_cand - tw * 0.5 + (ci + 0.5) * chair_step
+                    for chy, chang in ((ty_cand - (td * 0.5 + 0.32), math.pi),
+                                       (ty_cand + (td * 0.5 + 0.32), 0.0)):
+                        if tracker.is_free(chx - 0.30, chx + 0.30, chy - 0.30, chy + 0.30):
+                            tracker.occupy(chx - 0.30, chx + 0.30, chy - 0.30, chy + 0.30)
+                            build_prop(bm, 'CHAIR', chx, chy, z_floor, chang, seat_h=0.50)
+                tracker.occupy(tx_cand - tw * 0.5 - 0.30, tx_cand + tw * 0.5 + 0.30,
+                               ty_cand - td * 0.5 - 0.30, ty_cand + td * 0.5 + 0.30)
+                placed_council = True
+                break
+        if placed_council:
+            break
+
+    # Clerk's desk for municipal administration and records
+    _dk = _try_place_wall_prop(bm, 'DESK', 1.30, 0.65, tracker, z_floor,
+                               candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'))
+    if _dk:
+        _dress_desk(bm, tracker, _dk[0], _dk[1], _dk[2], z_floor, rng, (rcx, rcy))
 
     # 3. Perimeter benches along walls
     _try_place_wall_prop(bm, 'BENCH', 1.60, 0.58, tracker, z_floor,
@@ -3836,6 +3847,22 @@ def _furnish_smithy(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
 
+    # Shop sales counter / clerk desk near the customer entrance
+    _sd = _try_place_wall_prop(bm, 'COUNTER', 1.40, 0.60, tracker, z_floor,
+                               candidate_walls=('SOUTH', 'WEST', 'EAST', 'NORTH'),
+                               length=1.40, back_bar=False)
+    if _sd:
+        cx_c, cy_c, yaw_c = _sd
+        fwd_x, fwd_y = math.cos(yaw_c), math.sin(yaw_c)
+        stx, sty = cx_c - fwd_x * 0.45, cy_c - fwd_y * 0.45
+        if tracker.is_free(stx - 0.25, stx + 0.25, sty - 0.25, sty + 0.25):
+            tracker.occupy(stx - 0.25, stx + 0.25, sty - 0.25, sty + 0.25)
+            build_prop(bm, 'STOOL', stx, sty, z_floor, yaw_c)
+        build_prop(bm, 'BOOK_PILE_SMALL', cx_c, cy_c, z_floor + 1.00, yaw_c)
+    else:
+        _try_place_wall_prop(bm, 'DESK', 1.20, 0.60, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'WEST', 'EAST'))
+
     _try_place_wall_prop(bm, 'WEAPON_RACK', 1.20, 0.45, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'))  # tool display
     # Anvil and grindstone on the open floor, hanging tool rack on a wall.
@@ -4579,6 +4606,12 @@ def _furnish_storage(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
                 p = 'CRATE' if rng.random() < 0.5 else 'BARREL'
                 build_prop(bm, p, cx, cy, z_floor, 0.0)
 
+    # Secondary storage & artisan utility rooms: ensure stock barrels, crates, and shelving
+    for _w_cand in (('SOUTH', 'EAST'), ('NORTH', 'WEST'), ('EAST', 'NORTH')):
+        _try_place_wall_prop(bm, 'BARREL', 0.65, 0.65, tracker, z_floor, candidate_walls=_w_cand)
+        _try_place_wall_prop(bm, 'CRATE', 0.65, 0.65, tracker, z_floor, candidate_walls=_w_cand)
+        _try_place_wall_prop(bm, 'SHELF', 1.20, 0.38, tracker, z_floor, candidate_walls=_w_cand)
+
     # Big working stores (the keep's cellar vestibule, granary floors) should
     # read as stocked, not as one lonely shelf in an empty hall.
     rw = rm.bounds[1] - rm.bounds[0]
@@ -4827,9 +4860,10 @@ def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
     # 2b. A proper squad table and spare footlocker stop the larger dorms
     # reading as a bare room with a couple of bunks and a rack.
     if rw * rd >= 24.0 and min(rw, rd) >= 3.2:
-        _place_craft_table(
-            bm, tracker, z_floor, rng,
-            length=min(2.40, max(1.40, rw * 0.34)), width=0.85)
+        # Place squad table along a wall, never blocking the central walking aisle
+        _try_place_wall_prop(bm, 'INDOOR_TABLE', 1.60, 0.85, tracker, z_floor,
+                             candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'),
+                             length=1.60, width=0.85)
         _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
                              candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'))
 
@@ -4878,19 +4912,15 @@ def _furnish_mess_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_
         build_prop(bm, 'INDOOR_TABLE', tx, ty, z_floor, 0.0, length=tw, width=td)
         build_prop(bm, 'SCATTER_TABLEWARE', tx - 0.45, ty, z_floor + 0.992, 0.0)
         build_prop(bm, 'SCATTER_TABLEWARE', tx + 0.45, ty, z_floor + 0.992, 0.0)
-        if is_main:
-            # Chairs all around the big table, facing inward.
-            for ci in range(6):
-                ca = ci * (math.pi * 2.0 / 6.0)
-                chx = tx + (tw * 0.5 + 0.32) * math.cos(ca)
-                chy = ty + (td * 0.5 + 0.32) * math.sin(ca)
-                _try_place_chair(bm, tracker, chx, chy, ca - math.pi * 0.5, z_floor)
-        else:
-            for sgn in (-1.0, 1.0):
-                bx, by = tx, ty + sgn * (td * 0.5 + 0.32)
-                if tracker.is_free(bx - tw * 0.45, bx + tw * 0.45, by - 0.25, by + 0.25):
-                    tracker.occupy(bx - tw * 0.45, bx + tw * 0.45, by - 0.25, by + 0.25)
-                    build_prop(bm, 'BENCH', bx, by, z_floor, 0.0, length=min(tw - 0.2, 2.0))
+        # Benches on both sides facing inward toward table
+        for sgn in (-1.0, 1.0):
+            bx, by = tx, ty + sgn * (td * 0.5 + 0.32)
+            bench_yaw = 0.0 if sgn > 0 else math.pi
+            if tracker.is_free(bx - tw * 0.45, bx + tw * 0.45, by - 0.25, by + 0.25):
+                tracker.occupy(bx - tw * 0.45, bx + tw * 0.45, by - 0.25, by + 0.25)
+                build_prop(bm, 'BENCH', bx, by, z_floor, bench_yaw, length=min(tw - 0.2, 2.2))
+        build_prop(bm, 'PEWTER_TANKARD', tx - 0.55, ty, z_floor + 0.992, 0.0)
+        build_prop(bm, 'PEWTER_TANKARD', tx + 0.55, ty, z_floor + 0.992, 0.0)
         tracker.occupy(tx - tw * 0.5 - 0.30, tx + tw * 0.5 + 0.30,
                        ty - td * 0.5 - need, ty + td * 0.5 + need)
 
@@ -5708,7 +5738,9 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     if (not _bare and role not in ('STAIR_LANDING', 'CORRIDOR', 'STABLE_HALL',
                                    'STORE', 'STORAGE', 'CELLAR', 'PANTRY',
                                    'MEZZANINE_GALLERY', 'UPPER_GALLERY',
-                                   'THRONE_ROOM')
+                                   'THRONE_ROOM', 'BEDROOM', 'MASTER_BED',
+                                   'BARRACKS_DORM', 'GUEST_ROOM', 'OFFICER_QUARTERS',
+                                   'TENEMENT_BEDROOM', 'LODGE')
             and len(tracker.occupied_boxes) - _occ_before < 3):
         try:
             _ensure_minimum_dressing(bm, tracker, rm, z_floor, rng)
