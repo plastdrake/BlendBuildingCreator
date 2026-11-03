@@ -309,10 +309,12 @@ def build_walkable_round_tower(
             chord = 2.0 * radius * math.sin(d_ang * 0.5) * 1.06
 
             is_door = False
+            door_clear_half_w = 1.35 * 0.5 + 0.22 + 0.04
+            door_half_ang = math.asin(min(0.99, door_clear_half_w / max(0.5, radius)))
             for d_fl, d_a in door_angs:
                 if d_fl == fl:
                     diff = (ang - d_a + math.pi) % (2.0 * math.pi) - math.pi
-                    if abs(diff) < d_ang * 1.1:
+                    if abs(diff) < door_half_ang:
                         is_door = True
             if is_door:
                 dh = 2.6
@@ -413,13 +415,15 @@ def build_walkable_round_tower(
                     )
 
                 # 5. Outer cut-stone quoin blocks flanking the doorway
+                quoin_w = 0.30
                 for s in (-1.0, 1.0):
-                    ja = d_a + s * d_ang * 1.8
-                    jr = radius - wall_t * 0.5 + 0.02
+                    q_tangent = s * (door_w * 0.5 + jamb_w + quoin_w * 0.5)
+                    qx = cx + r_mid * ca_d + tx_d * q_tangent
+                    qy = cy + r_mid * sa_d + ty_d * q_tangent
                     create_beveled_box(
-                        bm, size=(wall_t + 0.12, 0.32, dh),
-                        location=(cx + jr * math.cos(ja), cy + jr * math.sin(ja), z_fl_floor + dh * 0.5),
-                        rotation=(0.0, 0.0, ja), mat_index=MAT_INDEX_CUT_STONE,
+                        bm, size=(wall_t + 0.12, quoin_w, dh),
+                        location=(qx, qy, z_fl_floor + dh * 0.5),
+                        rotation=(0.0, 0.0, d_a), mat_index=MAT_INDEX_CUT_STONE,
                         bevel_amount=0.02
                     )
 

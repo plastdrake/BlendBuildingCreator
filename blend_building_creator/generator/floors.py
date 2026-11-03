@@ -2075,7 +2075,7 @@ def build_floors(bm, props, ctx):
             _throne = next((r for r in fl_rooms if getattr(r, 'role', '') == 'THRONE_ROOM'), None)
             if _throne is not None:
                 _tx0, _tx1, _ty0, _ty1 = _throne.bounds
-                _rim = 1.45
+                _rim = 1.60
                 _vx0 = _tx0 + _rim
                 _vx1 = _tx1 - _rim
                 _vy0 = _ty0 + _rim
@@ -3197,7 +3197,7 @@ def build_floors(bm, props, ctx):
         # In Tier 1 (Log Cabin), authentic interlocking logs already provide all structural aesthetics.
         # Corner posts stay even on a stone ground storey so the frame reads as continuous;
         # only the infill/brace timbering is dropped there to keep the base solid masonry.
-        _stone_ground_fl = (fl_idx == 0 and props.ground_floor_stone)
+        _stone_ground_fl = (fl_idx == 0 and props.ground_floor_stone and mat_w == MAT_INDEX_STONE)
         _is_log_floor = (wall_tier == 'TIER_1' and phys_siding)
         _frame_here = not _is_log_floor and ((tier_val != 'TIER_1') or _stone_ground_fl or tier1_wattle)
         if not open_timber and props.has_timber_framing and effective_archetype != 'WATCHTOWER' and _frame_here:

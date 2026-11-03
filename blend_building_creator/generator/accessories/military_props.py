@@ -550,8 +550,8 @@ def build_military_props(bm, props, ctx):
         _x0, _x1, enclosure_y, _y1 = compound_bounds(ctx, fortification_offset(props))
         is_curtain = getattr(props, 'has_curtain_wall', False)
         # Curtain wall access stairs extend from 0.6m to 3.2m in lateral depth.
-        # Place the weapon racks at 3.6m into the courtyard so spears never clip the stairs.
-        rack_y = enclosure_y + (3.60 if is_curtain else 0.85)
+        # Place the weapon racks at 4.2m into the courtyard so spears never clip the stairs.
+        rack_y = enclosure_y + (4.20 if is_curtain else 0.85)
         if n_racks == 1:
             rack_xs = [ctx.main_door_cx - 3.2]
         elif n_racks == 2:

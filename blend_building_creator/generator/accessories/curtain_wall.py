@@ -875,9 +875,10 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                                   gate_towers=False):
     """Walkable stone stairs on the bailey side of the wall with authentic diagonal railings
     and posts (no bulky solid stone side walls).
-    When gate_towers is True, continues from the wall-walk landing directly up to the
-    gate tower roof terrace, providing a continuous, fully walkable path with its own landing."""
-    from mathutils import Euler
+    When gate_towers is True, a steep timber ladder leans from the wooden walkway directly
+    up to the gate tower roof terrace, keeping the walkway 100% open and unobstructed.
+    """
+    from mathutils import Matrix, Vector
     ox, oy = outward
     on = math.hypot(ox, oy)
     if on < 1e-5:
@@ -887,13 +888,17 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
     tx, ty = -oy, ox
     ang = math.atan2(ty, tx)
 
-    stair_w, run, land_len = 1.65, 0.34, 1.60
+    # Make the main flight slightly steeper (run 0.28m, rise ~0.22m) so it pulls cleanly back from adjacent towers
+    stair_w = 1.65
+    run = 0.28
+    land_len = 1.60
     deck_top = ground_z + wall_h + 0.25
-    n = max(4, int(math.ceil((deck_top - ground_z) / 0.2)))
+    n = max(4, int(math.ceil((deck_top - ground_z) / 0.22)))
     rise = (deck_top - ground_z) / n
     inner_lat = thickness * 0.5 + 1.25
     lat_c = inner_lat + stair_w * 0.5
-    outer_rail_lat = inner_lat + stair_w + 0.08
+    lat0 = thickness * 0.5 + 0.35
+    lat1 = inner_lat + stair_w
     post_size = 0.14
     rail_h = 0.90
 
@@ -903,8 +908,6 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
 
     for sgn in (-1.0, 1.0):
         u_land = sgn * (gap_w * 0.5 + top_off)
-        lat0 = thickness * 0.5 + 0.35
-        lat1 = inner_lat + stair_w
         px, py = at(u_land, (lat0 + lat1) * 0.5)
 
         # 1. Main wall-walk landing block
@@ -913,66 +916,7 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.01)
 
-        # Landing outer timber newel posts and horizontal protective rail
-        outer_rail_lat_land = lat1 - 0.12
-        for post_u in (u_land - sgn * land_len * 0.45, u_land + sgn * land_len * 0.45):
-            lx_p, ly_p = at(post_u, outer_rail_lat_land)
-            create_beveled_box(bm, size=(post_size, post_size, rail_h + 0.10),
-                               location=(lx_p, ly_p, deck_top + (rail_h + 0.10) * 0.5),
-                               rotation=(0.0, 0.0, ang),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-        # Landing horizontal handrail and mid-rail
-        lx_r, ly_r = at(u_land, outer_rail_lat_land)
-        create_beveled_box(bm, size=(land_len + 0.10, 0.12, 0.08),
-                           location=(lx_r, ly_r, deck_top + rail_h),
-                           rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-        create_beveled_box(bm, size=(land_len + 0.10, 0.08, 0.06),
-                           location=(lx_r, ly_r, deck_top + rail_h * 0.5),
-                           rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-
-    # 1b. Wooden walkway connecting the two stair landings across the gate span
-    # Provides continuous walkable rampart passage bridging the gatehouse opening
-    bridge_half = gap_w * 0.5 + top_off
-    bridge_span = bridge_half * 2.0
-    bridge_lat_mid = (lat0 + lat1) * 0.5
-    bridge_w = lat1 - lat0
-    bx_mid, by_mid = at(0.0, bridge_lat_mid)
-
-    # Supporting heavy timber bearer beams underneath the walkway deck
-    for b_lat_off in (-bridge_w * 0.32, bridge_w * 0.32):
-        bx_beam, by_beam = at(0.0, bridge_lat_mid + b_lat_off)
-        create_beveled_box(bm, size=(bridge_span + 0.20, 0.14, 0.16),
-                           location=(bx_beam, by_beam, deck_top - 0.14),
-                           rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-
-    # Heavy oak plank walkway decking
-    create_beveled_box(bm, size=(bridge_span + 0.10, bridge_w - 0.04, 0.08),
-                       location=(bx_mid, by_mid, deck_top - 0.02),
-                       rotation=(0.0, 0.0, ang),
-                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-
-    # Inner guard rail along the bailey-facing edge of the wooden bridge
-    bridge_rail_lat = lat1 - 0.12
-    bx_rail, by_rail = at(0.0, bridge_rail_lat)
-    create_beveled_box(bm, size=(bridge_span + 0.10, 0.12, 0.08),
-                       location=(bx_rail, by_rail, deck_top + rail_h),
-                       rotation=(0.0, 0.0, ang),
-                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-    create_beveled_box(bm, size=(bridge_span + 0.10, 0.08, 0.06),
-                       location=(bx_rail, by_rail, deck_top + rail_h * 0.5),
-                       rotation=(0.0, 0.0, ang),
-                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-    for p_u in (-bridge_half * 0.5, 0.0, bridge_half * 0.5):
-        bx_p, by_p = at(p_u, bridge_rail_lat)
-        create_beveled_box(bm, size=(post_size, post_size, rail_h + 0.10),
-                           location=(bx_p, by_p, deck_top + (rail_h + 0.10) * 0.5),
-                           rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-
-        # 2. Solid stone steps (clean treads without giant monolithic side walls)
+        # 2. Solid stone steps descending to courtyard ground
         total_flight_len = run * n
         stair_rail_lat = inner_lat + stair_w - 0.12  # Posts mount inside treads, never float in air
 
@@ -987,8 +931,7 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                                location=(sx, sy, ground_z + (top - ground_z) * 0.5),
                                rotation=(0.0, 0.0, ang),
                                mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
-            # Tread nosing stone cap (bottom face lifted 6mm above the riser
-            # top so no coplanar faces z-fight)
+            # Tread nosing stone cap (bottom face lifted 6mm above riser top so no z-fighting)
             create_beveled_box(bm, size=(run + 0.04, stair_w + 0.02, 0.05),
                                location=(sx, sy, top + 0.031),
                                rotation=(0.0, 0.0, ang),
@@ -1014,13 +957,10 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
         mid_z = (deck_top + ground_z) * 0.5 + rail_h
         mid_rx, mid_ry = at(mid_u, stair_rail_lat)
 
-        from mathutils import Matrix
         rail_fwd = Vector((sgn * tx * total_flight_len, sgn * ty * total_flight_len, ground_z - deck_top)).normalized()
         rail_lat = Vector((-ox, -oy, 0.0)).normalized()
         rail_up = rail_fwd.cross(rail_lat)
         if rail_up.z < 0.0:
-            # Keep the handrail right-side up (local +Z skyward) so the
-            # pitched rail never builds upside-down / mirrored.
             rail_up = -rail_up
             rail_lat = -rail_lat
         rail_up = rail_up.normalized()
@@ -1036,145 +976,128 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                            rotation=rot_handrail,
                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
-        # 4. Continuation flight climbing from wall-walk landing up to gate tower roof deck
+        # 4. Access to upper tower parts
         if gate_towers:
+            # Steep timber ladder leaning from the wooden walkway directly up to the gate tower terrace.
+            # Leaves the walkway 100% open and unobstructed, with zero awkward doorframes in the void!
             top_z = ground_z + wall_h + 1.85
-            rise_tow = top_z - deck_top  # ~1.60m
-            n_tow = 7
-            t_rise = rise_tow / n_tow
-            t_run = 0.34
-            t_w = 1.30
-            tow_flight_len = t_run * n_tow
-            tow_hyp = math.hypot(tow_flight_len, rise_tow)
-            tow_lat_c = inner_lat + t_w * 0.5
-            tow_rail_lat = inner_lat + t_w - 0.12  # Mount inside treads
+            lad_w = 0.48
+            rung_sp = 0.28
+            d_tang = Vector((tx, ty, 0.0)).normalized()
+            d_r_rot = Vector((0.0, 0.0, 1.0)).rotation_difference(d_tang).to_euler()
 
-            # The flight climbs from u_land towards the tower along -sgn * tx.
-            # Every step is a solid masonry block running all the way down to
-            # the ground (same construction as the main flight), so no part of
-            # the upper stair can ever hover in the air.
-            for ti in range(n_tow):
-                tu = u_land - sgn * (land_len * 0.5 + t_run * (ti + 0.5))
-                tz = deck_top + (ti + 1) * t_rise
-                tx_s, ty_s = at(tu, tow_lat_c)
-                # Solid stone undercarriage down to firm ground (never floating)
-                step_total_h = tz - ground_z
-                create_beveled_box(bm, size=(t_run + 0.02, t_w, step_total_h),
-                                   location=(tx_s, ty_s, ground_z + step_total_h * 0.5),
-                                   rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
-                # Tread nosing stone cap (bottom face lifted 6mm: never coplanar)
-                create_beveled_box(bm, size=(t_run + 0.04, t_w + 0.02, 0.05),
-                                   location=(tx_s, ty_s, tz + 0.031),
-                                   rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.005)
+            # Base sits on the edge of the wooden walkway/landing, top leans against the tower terrace parapet opening
+            t_u = sgn * (gap_w * 0.5 + 0.70)
+            lad_x0, lad_y0 = at(t_u, lat0 + 0.45)
+            lad_x1, lad_y1 = at(t_u, lat0 - 0.05)
 
-            # Top landing at tower deck level: solid pier down to firm ground.
-            # The pad is lengthened toward the gate tower so it laps over the
-            # tower roof deck edge: a continuous walkable step-across with no
-            # gap between stair and tower terrace.
-            top_land_u = u_land - sgn * (land_len * 0.5 + tow_flight_len + 0.65)
-            tl_x, tl_y = at(top_land_u, tow_lat_c - 0.50)
-            # Solid landing block
-            land_block_h = top_z - ground_z
-            create_beveled_box(bm, size=(1.30, t_w + 1.00, land_block_h),
-                               location=(tl_x, tl_y, ground_z + land_block_h * 0.5),
-                               rotation=(0.0, 0.0, ang),
-                               mat_index=MAT_INDEX_STONE, bevel_amount=0.01)
-            create_beveled_box(bm, size=(1.35, t_w + 1.04, 0.10),
-                               location=(tl_x, tl_y, top_z + 0.05),
-                               rotation=(0.0, 0.0, ang),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+            bot_pos = Vector((lad_x0, lad_y0, deck_top + 0.04))
+            top_pos = Vector((lad_x1, lad_y1, top_z + 0.40))
+            lad_v = top_pos - bot_pos
+            lad_l = lad_v.length
+            lad_m = (bot_pos + top_pos) * 0.5
+            lad_r = Vector((0.0, 0.0, 1.0)).rotation_difference(lad_v.normalized()).to_euler()
 
-            # Boolean carve / cut a walk-in portal through the gate turret rear wall at the landing
-            from .building_connector import carve_pass_through_portal
-            carve_pass_through_portal(
-                bm,
-                x_span=(tl_x - 0.85, tl_x + 0.85),
-                y_span=(tl_y - 0.90, tl_y + 0.90),
-                z_span=(top_z - 0.05, top_z + 2.45)
-            )
-            # Dressed cut-stone jambs and lintel framing the portal entrance into the gate turret
-            door_w_portal = 1.10
-            door_h_portal = 2.15
-            for j_side in (-1.0, 1.0):
-                jx, jy = at(top_land_u - sgn * j_side * (door_w_portal * 0.5 + 0.10), 1.25)
-                create_beveled_box(bm, size=(0.20, 0.35, door_h_portal),
-                                   location=(jx, jy, top_z + door_h_portal * 0.5),
-                                   rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-            lx, ly = at(top_land_u, 1.25)
-            create_beveled_box(bm, size=(door_w_portal + 0.40, 0.35, 0.22),
-                               location=(lx, ly, top_z + door_h_portal + 0.11),
-                               rotation=(0.0, 0.0, ang),
-                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+            # Side rails
+            for s_r in (-0.5, 0.5):
+                r_loc = lad_m + d_tang * (s_r * lad_w)
+                create_beveled_box(bm, size=(0.05, 0.07, lad_l),
+                                   location=(r_loc.x, r_loc.y, r_loc.z),
+                                   rotation=lad_r,
+                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
 
-            # Top-landing guard railing along the exposed outer edge, continuing
-            # the flight handrail line (posts + double rail with pyramid caps)
-            land_outer_lat = tow_lat_c - 0.50 + (t_w + 1.00) * 0.5 - 0.06
-            for post_du in (-0.60, 0.0, 0.60):
-                pl_x, pl_y = at(top_land_u + post_du, land_outer_lat)
-                create_beveled_box(bm, size=(post_size, post_size, rail_h + 0.08),
-                                   location=(pl_x, pl_y, top_z + (rail_h + 0.08) * 0.5),
-                                   rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-            rl_x, rl_y = at(top_land_u, land_outer_lat)
-            create_beveled_box(bm, size=(1.35, 0.12, 0.08),
-                               location=(rl_x, rl_y, top_z + rail_h),
-                               rotation=(0.0, 0.0, ang),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-            create_beveled_box(bm, size=(1.35, 0.08, 0.06),
-                               location=(rl_x, rl_y, top_z + rail_h * 0.5),
-                               rotation=(0.0, 0.0, ang),
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+            # Rungs
+            n_r = max(3, int((top_pos.z - bot_pos.z) / rung_sp))
+            for ir in range(n_r + 1):
+                rz = bot_pos.z + 0.18 + ir * rung_sp
+                if rz > top_pos.z:
+                    break
+                ft = (rz - bot_pos.z) / max(0.01, top_pos.z - bot_pos.z)
+                rp = bot_pos + lad_v * ft
+                from ..mesh_utils import create_cylinder
+                create_cylinder(bm, radius=0.016, height=lad_w, segments=8,
+                                location=(rp.x, rp.y, rz),
+                                rotation=d_r_rot,
+                                mat_index=MAT_INDEX_WOOD)
+        else:
+            # 4b. Continuation stone stairs climbing directly up to the elevated gatehouse platform (tallest part of the wall)
+            gate_h_eff = max(3.5, min(4.4, wall_h * 0.88))
+            _pc_h = gate_h_eff
+            _pc_raised = gate_h_eff - 0.35
+            _pc_top = max(_pc_raised + 0.85, _pc_h + 1.20)
+            platform_z = max(wall_h + 1.25, ground_z + gate_h_eff + 0.85, ground_z + _pc_top + 0.30)
+            plat_top_z = platform_z + 0.22
+            rise_super = plat_top_z - deck_top
 
-            # Continuation flight railing
-            n_tow_posts = 3
-            for tpi in range(n_tow_posts):
-                t_frac = tpi / (n_tow_posts - 1)
-                tpu = u_land - sgn * (land_len * 0.5 + tow_flight_len * t_frac)
-                tpz = deck_top + rise_tow * t_frac
-                tpx_p, tpy_p = at(tpu, tow_rail_lat)
-                create_beveled_box(bm, size=(post_size, post_size, rail_h + 0.08),
-                                   location=(tpx_p, tpy_p, tpz + (rail_h + 0.08) * 0.5),
-                                   rotation=(0.0, 0.0, ang),
-                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-            tow_mid_u = u_land - sgn * (land_len * 0.5 + tow_flight_len * 0.5)
-            tow_mid_z = (deck_top + top_z) * 0.5 + rail_h
-            tow_rx, tow_ry = at(tow_mid_u, tow_rail_lat)
+            if rise_super > 0.15:
+                n_sup = max(4, int(round(rise_super / 0.20)))
+                s_rise = rise_super / n_sup
+                s_run = 0.28
+                s_w = 0.95
+                super_flight_len = s_run * n_sup
+                super_hyp = math.hypot(super_flight_len, rise_super)
+                plat_half_w = (gap_w + 1.80) * 0.5
+                lat_step = thickness * 0.5 + 0.40
 
-            tow_fwd = Vector((-sgn * tx * tow_flight_len, -sgn * ty * tow_flight_len, rise_tow)).normalized()
-            tow_lat_ax = Vector((-ox, -oy, 0.0)).normalized()
-            tow_up_ax = tow_fwd.cross(tow_lat_ax)
-            if tow_up_ax.z < 0.0:
-                # Keep the handrail right-side up so the pitched rail never
-                # builds upside-down / mirrored.
-                tow_up_ax = -tow_up_ax
-                tow_lat_ax = -tow_lat_ax
-            tow_up_ax = tow_up_ax.normalized()
-            tow_lat_ax = tow_up_ax.cross(tow_fwd).normalized()
-            rot_tow_rail = Matrix([tow_fwd, tow_lat_ax, tow_up_ax]).transposed().to_euler('XYZ')
+                # Flight ascends from the landing toward the center, arriving flush onto the elevated platform
+                for si in range(n_sup):
+                    su = sgn * (plat_half_w + (n_sup - 1 - si + 0.5) * s_run)
+                    sz = deck_top + (si + 1) * s_rise
+                    sx_s, sy_s = at(su, lat_step)
+                    step_total_h = sz - ground_z
+                    create_beveled_box(bm, size=(s_run + 0.02, s_w, step_total_h),
+                                       location=(sx_s, sy_s, ground_z + step_total_h * 0.5),
+                                       rotation=(0.0, 0.0, ang),
+                                       mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
+                    create_beveled_box(bm, size=(s_run + 0.04, s_w + 0.02, 0.05),
+                                       location=(sx_s, sy_s, sz + 0.025),
+                                       rotation=(0.0, 0.0, ang),
+                                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.005)
 
-            create_beveled_box(bm, size=(tow_hyp + 0.15, 0.12, 0.08),
-                               location=(tow_rx, tow_ry, tow_mid_z),
-                               rotation=rot_tow_rail,
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-            create_beveled_box(bm, size=(tow_hyp + 0.15, 0.08, 0.06),
-                               location=(tow_rx, tow_ry, tow_mid_z - rail_h * 0.5),
-                               rotation=rot_tow_rail,
-                               mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+                # Inner protective timber handrail along the climbing flight
+                super_rail_lat = lat_step + s_w * 0.5 - 0.06
+                for spi in (0, n_sup // 2, n_sup - 1):
+                    spu = sgn * (plat_half_w + (n_sup - 1 - spi + 0.5) * s_run)
+                    spz = deck_top + (spi + 1) * s_rise
+                    spx_p, spy_p = at(spu, super_rail_lat)
+                    create_beveled_box(bm, size=(post_size, post_size, rail_h + 0.08),
+                                       location=(spx_p, spy_p, spz + (rail_h + 0.08) * 0.5),
+                                       rotation=(0.0, 0.0, ang),
+                                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
 
+                s_mid_u = sgn * (plat_half_w + super_flight_len * 0.5)
+                s_mid_z = (deck_top + plat_top_z) * 0.5 + rail_h
+                s_rx, s_ry = at(s_mid_u, super_rail_lat)
+
+                s_fwd = Vector((-sgn * tx * super_flight_len, -sgn * ty * super_flight_len, rise_super)).normalized()
+                s_lat_ax = Vector((-ox, -oy, 0.0)).normalized()
+                s_up_ax = s_fwd.cross(s_lat_ax)
+                if s_up_ax.z < 0.0:
+                    s_up_ax = -s_up_ax
+                    s_lat_ax = -s_lat_ax
+                s_up_ax = s_up_ax.normalized()
+                s_lat_ax = s_up_ax.cross(s_fwd).normalized()
+                rot_super_rail = Matrix([s_fwd, s_lat_ax, s_up_ax]).transposed().to_euler('XYZ')
+
+                create_beveled_box(bm, size=(super_hyp + 0.10, 0.12, 0.08),
+                                   location=(s_rx, s_ry, s_mid_z),
+                                   rotation=rot_super_rail,
+                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+                create_beveled_box(bm, size=(super_hyp + 0.10, 0.08, 0.06),
+                                   location=(s_rx, s_ry, s_mid_z - rail_h * 0.5),
+                                   rotation=rot_super_rail,
+                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
     # 5. Continuous wooden rampart walkway bridging the gap across the gate opening
     # connecting the left and right stair landings directly together
-    u_left = - (gap_w * 0.5 + top_off)
-    u_right = (gap_w * 0.5 + top_off)
+    u_left = - (gap_w * 0.5 + top_off + land_len * 0.5)
+    u_right = (gap_w * 0.5 + top_off + land_len * 0.5)
     span_u = abs(u_right - u_left)
     lat_c_walk = (lat0 + lat1) * 0.5
-    walk_w = 1.60
+    walk_w = lat1 - lat0
     wx_mid, wy_mid = at(0.0, lat_c_walk)
 
-    # A. Solid timber plank deck flush with the stone landings
+    # A. Solid timber plank deck spanning across the opening between landings
     create_beveled_box(bm, size=(span_u + 0.10, walk_w, 0.08),
                        location=(wx_mid, wy_mid, deck_top + 0.04),
                        rotation=(0.0, 0.0, ang),
@@ -1189,7 +1112,7 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
 
-    # C. Transverse timber joist brackets spaced every ~2m
+    # C. Transverse timber joist brackets spaced every ~1.8m
     n_joists = max(4, int(span_u / 1.8))
     for ji in range(n_joists + 1):
         ju = u_left + ji * (span_u / n_joists)
@@ -1199,9 +1122,9 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
 
-    # D. Protective timber railing along the inner bailey edge of the walkway
-    rail_lat = lat_c_walk + walk_w * 0.5 - 0.06
-    n_walk_posts = max(4, int(span_u / 2.0))
+    # D. Single protective timber railing along the inner bailey edge of the walkway
+    rail_lat = lat1 - 0.10
+    n_walk_posts = max(4, int(span_u / 1.8))
     for pi in range(n_walk_posts + 1):
         pu = u_left + pi * (span_u / n_walk_posts)
         px, py = at(pu, rail_lat)
@@ -1209,6 +1132,7 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                            location=(px, py, deck_top + (rail_h + 0.08) * 0.5),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+
     rx_mid, ry_mid = at(0.0, rail_lat)
     create_beveled_box(bm, size=(span_u + 0.10, 0.12, 0.08),
                        location=(rx_mid, ry_mid, deck_top + rail_h),

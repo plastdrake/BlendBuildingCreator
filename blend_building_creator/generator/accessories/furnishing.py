@@ -616,6 +616,9 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
     elif key == 'SOFA':
         width = max(width, float(params.get('length', 1.80)))
         depth = max(depth, 1.05)
+    elif key == 'WALL_BANNER':
+        width = max(width, 1.35)
+        depth = max(depth, 0.45)
 
     if key == 'COUNTER':
         ignore_stair = False
@@ -1208,7 +1211,8 @@ def _lay_rug(bm, tracker, rm, rng, key, cx, cy, z_floor, w, l, yaw_max=0.12,
                     cy + el * 0.5 < pbox[2] or cy - el * 0.5 > pbox[3]):
                 return None
 
-    if not allow_overlap and _overlap_frac(cx, cy, ew, el) > 0.03:
+    # Never place a rug overlapping an existing carpet runner or area rug
+    if _overlap_frac(cx, cy, ew, el) > 0.03:
         placed = False
         for radius in (0.6, 1.2, 1.8, 2.4):
             for k in range(8):
@@ -2649,6 +2653,8 @@ def _furnish_great_hall(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z
         tracker.rug_rects = []
     tracker.rug_rects.append((rcx - runner_w * 0.5, rcx + runner_w * 0.5,
                               rcy - runner_l * 0.5, rcy + runner_l * 0.5))
+    tracker.rug_count = getattr(tracker, 'rug_count', 0) + 1
+    tracker.no_rugs = True
 
     # 5b. Flanking council chamber carpets (now in most halls, not just very wide ones)
     if rw >= 5.5 and density >= 0.4:
@@ -5652,7 +5658,7 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_mezzanine_gallery(bm, rm, tracker, z_floor, z_ceil, rng, density)
         elif role in ('GREAT_HALL', 'COUNCIL_CHAMBER'):
             _furnish_great_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
-        elif role in ('BANQUET_HALL',):
+        elif role in ('BANQUET_HALL', 'DINING'):
             _furnish_banquet_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('COMMUNAL_DINING',):
             _furnish_communal_dining_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
@@ -5660,9 +5666,17 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
             _furnish_entrance_hall(bm, rm, tracker, z_floor, z_ceil, rng, density, chimney_pos=chimney_positions)
         elif role in ('MAYOR_OFFICE', 'OFFICE'):
             _furnish_office(bm, rm, tracker, z_floor, z_ceil, rng, density)
-        elif role in ('TENEMENT_PARLOUR', 'PARLOUR'):
+        elif role in ('TENEMENT_PARLOUR', 'PARLOUR', 'PARLOR', 'LOUNGE', 'SITTING_ROOM'):
             _furnish_tenement_parlour(bm, rm, tracker, z_floor, z_ceil, rng, density,
                                       chimney_pos=chimney_positions)
+        elif role in ('GUARD_ROOM',):
+            _furnish_armory(bm, rm, tracker, z_floor, z_ceil, rng, density)
+            _try_place_wall_prop(bm, 'BENCH', 1.40, 0.55, tracker, z_floor, candidate_walls=('SOUTH', 'EAST', 'WEST', 'NORTH'), length=1.40)
+            _try_place_wall_prop(bm, 'TABLE', 1.40, 0.80, tracker, z_floor, candidate_walls=('NORTH', 'WEST', 'EAST', 'SOUTH'))
+        elif role in ('TREASURY',):
+            _furnish_storage(bm, rm, tracker, z_floor, z_ceil, rng, density)
+            _try_place_wall_prop(bm, 'CHEST', 1.10, 0.60, tracker, z_floor, candidate_walls=('NORTH', 'SOUTH', 'EAST', 'WEST'))
+            _try_place_wall_prop(bm, 'DESK', 1.30, 0.65, tracker, z_floor, candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'))
         elif role in ('KITCHEN', 'TENEMENT_KITCHEN'):
             _furnish_kitchen(bm, rm, tracker, z_floor, z_ceil, rng, density,
                              chimney_pos=chimney_positions,

@@ -1275,27 +1275,24 @@ def build_curtain_wall_gate_portal(
 
     # 5. ACCESS TIMBER LADDERS LEADING UP TO THE GATE TURRET DEFENSIVE PLATFORMS
     # For each flanking cliff gate turret, place a sturdy timber climbing ladder
-    # on the rear (bailey) face leading up through the rear battlement opening.
+    # firmly leaning against the rear face of the tower wall up to the battlement opening.
     lad_w = 0.52
-    rung_spacing = 0.32
+    rung_spacing = 0.30
     d_tangent = Vector((tx, ty, 0.0)).normalized()
     d_rung_rot = Vector((0.0, 0.0, 1.0)).rotation_difference(d_tangent).to_euler()
     tc_dist = gate_w * 0.5 + tower_rad + 0.20
 
     for sgn in (-1.0, 1.0):
-        # Center of this turret
-        tc_x = cx + tx * (sgn * tc_dist) + ox * (tower_rad * 0.42)
-        tc_y = cy + ty * (sgn * tc_dist) + oy * (tower_rad * 0.42)
+        # Exact rear face of the D-bastion tower shaft (centered at ox * tower_rad * 0.42, depth = 2 * tower_rad)
+        rear_wall_dist = tower_rad * 0.42 - tower_rad
+        lad_u = sgn * (tc_dist - 0.35)
+        lad_wall_x = cx + tx * lad_u + ox * rear_wall_dist
+        lad_wall_y = cy + ty * lad_u + oy * rear_wall_dist
         top_z = z_ground + tower_height
 
-        # Position along rear face, aligned with the rear battlement opening
-        lad_u = sgn * (tc_dist - 0.56)
-        lad_wall_x = cx + tx * lad_u - ox * (tower_rad + 0.06)
-        lad_wall_y = cy + ty * lad_u - oy * (tower_rad + 0.06)
-
-        # Foot of ladder stands slightly out from wall on ground/terrace
-        bot_pos = Vector((lad_wall_x - ox * 0.55, lad_wall_y - oy * 0.55, z_ground))
-        top_pos = Vector((lad_wall_x - ox * 0.04, lad_wall_y - oy * 0.04, top_z + 0.85))
+        # Ladder rests firmly against the tower rear wall at the top, and leans outward at the foot
+        bot_pos = Vector((lad_wall_x - ox * 0.65, lad_wall_y - oy * 0.65, z_ground))
+        top_pos = Vector((lad_wall_x + ox * 0.05, lad_wall_y + oy * 0.05, top_z + 0.65))
 
         lad_vec = top_pos - bot_pos
         lad_len = lad_vec.length
@@ -1526,11 +1523,19 @@ def build_connecting_wing(
     # 3. SIDE WALLS (West and East facades) with authentic Tudor half-timber framing
     from ..openings import build_window_assembly, build_door_assembly
 
-    len_upper = deck_n - stair_y_start
-    mid_y_upper = (stair_y_start + deck_n) * 0.5
+    len_stair = stair_y_end - stair_y_start
+    mid_y_stair = (stair_y_start + stair_y_end) * 0.5
+    len_high = deck_n - stair_y_end
+    mid_y_high = (stair_y_end + deck_n) * 0.5
     found_drop = 1.0
-    h_upper_stone = (z_high + floor_h) - (z_low - found_drop)
-    mid_z_upper_stone = (z_low - found_drop) + h_upper_stone * 0.5
+
+    # Stair transition wall: climbs from z_low - found_drop up to z_high + floor_h
+    h_stair_stone = (z_high + floor_h) - (z_low - found_drop)
+    mid_z_stair_stone = (z_low - found_drop) + h_stair_stone * 0.5
+
+    # High section wall: sits purely at upper level (z_high), NEVER plunging into basement/dungeon levels
+    h_high_stone = floor_h + found_drop
+    mid_z_high_stone = (z_high - found_drop) + h_high_stone * 0.5
 
     for s_side in (-1.0, 1.0):
         wx = cx + s_side * (half_w - wall_t * 0.5)
@@ -1573,24 +1578,41 @@ def build_connecting_wing(
                 shutters_closed=False
             )
 
-        # B & C. Upper section walls (from stair_y_start to deck_n):
-        # Continuous stone base/ground story below z_high + floor_h,
-        # and stucco upper story up to z_high + floor_h * 2.0 (flush with roof eave, NO penetration)
+        # B. Stair transition section walls (from stair_y_start to stair_y_end)
         create_beveled_box(
-            bm, size=(wall_t, len_upper, h_upper_stone),
-            location=(wx, mid_y_upper, mid_z_upper_stone),
+            bm, size=(wall_t, len_stair, h_stair_stone),
+            location=(wx, mid_y_stair, mid_z_stair_stone),
             mat_index=wall_mat, bevel_amount=0.02
         )
         create_beveled_box(
-            bm, size=(wall_t - 0.04, len_upper, floor_h),
-            location=(wx, mid_y_upper, z_high + floor_h * 1.5),
+            bm, size=(wall_t - 0.04, len_stair, floor_h),
+            location=(wx, mid_y_stair, z_high + floor_h * 1.5),
             mat_index=upper_wall_mat, bevel_amount=0.01
         )
         create_beveled_box(
-            bm, size=(wall_t + 0.08, len_upper, 0.22),
-            location=(wx, mid_y_upper, z_high + floor_h),
+            bm, size=(wall_t + 0.08, len_stair, 0.22),
+            location=(wx, mid_y_stair, z_high + floor_h),
             mat_index=timber_mat, bevel_amount=0.015
         )
+
+        # C. High section walls (from stair_y_end to deck_n):
+        # Base sits at z_high - found_drop (~12.5m), keeping undercroft / dungeon Level 1 100% clear!
+        if len_high > 0.05:
+            create_beveled_box(
+                bm, size=(wall_t, len_high, h_high_stone),
+                location=(wx, mid_y_high, mid_z_high_stone),
+                mat_index=wall_mat, bevel_amount=0.02
+            )
+            create_beveled_box(
+                bm, size=(wall_t - 0.04, len_high, floor_h),
+                location=(wx, mid_y_high, z_high + floor_h * 1.5),
+                mat_index=upper_wall_mat, bevel_amount=0.01
+            )
+            create_beveled_box(
+                bm, size=(wall_t + 0.08, len_high, 0.22),
+                location=(wx, mid_y_high, z_high + floor_h),
+                mat_index=timber_mat, bevel_amount=0.015
+            )
 
         # Tudor half-timber framing over the stucco upper walls
         def _add_timber_framing(y0, y1, z_bot, z_top):

@@ -225,7 +225,7 @@ def build_side_rampart_for_shape(bm, props, ctx):
     """
     span = rampart_deck_span(props, ctx)
     if span is None:
-        return
+        return False
     side = getattr(props, 'rampart_side', 'RIGHT')
     sgn = 1.0 if side == 'RIGHT' else -1.0
     fl1 = ctx.floor_wall_bounds.get(1)
@@ -235,12 +235,11 @@ def build_side_rampart_for_shape(bm, props, ctx):
         face = sgn * ctx.base_w * 0.5
     deck_y0, deck_y1 = span
     deck_top = ctx.found_h + ctx.floor_h + 0.11
-    # The deck itself must clear towers and wings too (the old full-side span
-    # could bury its front end in a wing roof or tower); otherwise skip it all.
+    # The deck itself must clear towers and wings too; otherwise skip it all.
     obstacles, _cy0, _cy1, _has_enc = _rampart_obstacles(props, ctx)
     _dx0, _dx1 = (face, face + sgn * 2.6) if sgn > 0 else (face + sgn * 2.6, face)
-    if any(_rects_overlap((_dx0, _dx1, deck_y0, deck_y1), ob, pad=0.15) for ob in obstacles):
-        return
+    if any(_rects_overlap((_dx0, _dx1, deck_y0, deck_y1), ob, pad=0.0) for ob in obstacles):
+        return False
     choice = _descent_choice(props, ctx, sgn, face, deck_y0, deck_y1, deck_top)
     build_rampart_walk(bm, side_sgn=sgn, wall_face_x=face,
                        deck_cy=(deck_y0 + deck_y1) * 0.5,
@@ -251,6 +250,7 @@ def build_side_rampart_for_shape(bm, props, ctx):
                        battlements=bool(getattr(props, 'has_battlements', False)),
                        battlement_style=getattr(props, 'battlement_style', 'STONE'),
                        skip_ramp=(choice is None))
+    return True
 
 
 def build_entry_ramp(bm, door_x, front_y, z_floor=0.6, width=1.6, length=None,

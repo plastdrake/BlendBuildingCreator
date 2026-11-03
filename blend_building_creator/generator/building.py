@@ -601,7 +601,8 @@ def _build_foundation(bm, props, ctx):
 
     bs_hole = None
     if getattr(props, 'has_basement_stair', False):
-        if ctx.shape == 'L_SHAPE' and ctx.wings:
+        if (ctx.shape == 'L_SHAPE'
+                or (ctx.shape == 'U_SHAPE' and getattr(props, 'noble_manor_layout', False))) and ctx.wings:
             wb = ctx.wings[0]['base']
             _shx = float(wb[0]) + 1.50
             _shy = (float(wb[2]) + float(wb[3])) * 0.5

@@ -345,9 +345,25 @@ def _build_civic_landmarks(bm, props, ctx, tier):
     elif (_prop(props, 'has_tower_annex', False)
           and getattr(ctx, 'annex_kind', '') == 'tower'):
         _build_massive_tower_annex(bm, props, ctx, tier)
+
     # Rampart walk for any other footprint (the T-shaped composer owns its own).
-    elif _prop(props, 'has_side_rampart', False):
-        build_side_rampart_for_shape(bm, props, ctx)
+    if _prop(props, 'has_side_rampart', False) and not (_prop(props, 'town_hall_composer', False) and ctx.shape == 'T_SHAPE'):
+        built_rampart = build_side_rampart_for_shape(bm, props, ctx)
+        if not built_rampart:
+            # Fallback: if the side rampart walk could not be placed, build a sturdy defensive
+            # timber balcony with railings and corbels outside the upper side door!
+            r_side = getattr(props, 'rampart_side', 'RIGHT')
+            fl1 = ctx.floor_wall_bounds.get(1)
+            if fl1:
+                from .balcony import build_balcony
+                build_balcony(
+                    bm, side=r_side,
+                    wall_x_min=fl1[0], wall_x_max=fl1[1],
+                    wall_y_min=fl1[2], wall_y_max=fl1[3],
+                    z_floor=ctx.found_h + ctx.floor_h,
+                    width=3.20, depth=1.80, tier=tier,
+                    wall_thickness=ctx.wall_t
+                )
     if _prop(props, 'has_exterior_stairs', False):
         build_exterior_stairs(bm, props, ctx, tier)
 
@@ -513,7 +529,7 @@ def _place_banners(bm, props, ctx):
     # are up to ~1m thick, and have projecting merlons and coping caps. Step
     # far enough out so the cloth banner never clips into the stone wall.
     if _is_curtain:
-        _push = _prop(props, 'curtain_wall_thickness', 0.55) * 0.5 + 0.95
+        _push = _prop(props, 'curtain_wall_thickness', 0.55) * 0.5 + 1.25
     else:
         _push = 0.70
 

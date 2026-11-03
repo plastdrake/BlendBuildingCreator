@@ -895,7 +895,7 @@ def _build_curved_wall_stairs(bm, cur_r, wall_t, z0, z1, start_ang_deg, arc_deg=
     - Sturdy vertical timber support pillars support the stairs from underneath.
     """
     dz = z1 - z0
-    num_steps = max(14, int(dz / 0.19))
+    num_steps = max(16, int(math.ceil(dz / 0.162)))
     step_h = dz / num_steps
     r_wall_in = cur_r - wall_t - 0.02
     r_stair_in = r_wall_in - stair_w
