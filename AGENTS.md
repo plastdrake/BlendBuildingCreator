@@ -26,3 +26,10 @@ Whenever any modifications, bug fixes, or additions are made to `blend_building_
 - Preserve existing comments, docstrings, and procedural architecture unless explicitly asked to modify or refactor them.
 - Ensure all coordinate frames, procedural offsets, materials, and asset placements maintain consistency across building tiers (Tier 1 wood/wattle, Tier 2 timber frame/plaster, Tier 3 stone/citadel).
 
+## 4. Scratch & Verification Scripts
+- **NEVER place temporary render scripts, one-off test files, or scratch scripts in `tools/` or anywhere inside the repository.**
+- Always place scratch scripts in the external scratch directory:
+  `<appDataDir>/brain/<conversation-id>/scratch/`
+- `tools/` is reserved strictly for permanent repository tooling (`deploy_addon.py`, `bake_prop_meshes.py`, `generate_all_fbx.py`, `test_addon.py`).
+
+
