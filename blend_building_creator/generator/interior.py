@@ -1802,7 +1802,13 @@ def _normalize_stair_circulation_rooms(rooms, stair_hole, stair_pos_info, bounds
                           if bounds[0] + 0.10 < door.get('x', 0.0) < bounds[1] - 0.10
                           and bounds[2] + 0.10 < door.get('y', 0.0) < bounds[3] - 0.10]
         if len(internal_doors) >= 2:
-            room.role = 'CORRIDOR'
+            # Walk-through rooms in artisan residences act as living quarters / parlor rather than bare corridors
+            _rw = room.bounds[1] - room.bounds[0]
+            _rd = room.bounds[3] - room.bounds[2]
+            if _rw * _rd >= 16.0:
+                room.role = 'HOUSE_HALL'
+            else:
+                room.role = 'CORRIDOR'
     return rooms
 
 
@@ -1872,15 +1878,15 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
         # Bedrooms and private suites are strictly placed in the separate partitioned chambers.
         if archetype in ('TAVERN', 'INN'):
             # Upper storeys of an inn are lodgings: a cheap shared common room
-            # with bunk beds plus progressively nicer private rooms. The first
+            # with bunk beds plus rentable private guest rooms. The first
             # room is always the stair landing so guests never arrive directly
             # into a sleeping chamber or furnished common room.
             if num_rooms == 1:
                 return ['GUEST_ROOM']
             if num_rooms == 2:
                 return ['STAIR_LANDING', 'GUEST_ROOM']
-            pool = ['STAIR_LANDING', 'COMMON_ROOM', 'GUEST_ROOM', 'MASTER_BED',
-                    'GUEST_ROOM', 'GUEST_ROOM', 'STUDY', 'GUEST_ROOM']
+            pool = ['STAIR_LANDING', 'COMMON_ROOM', 'GUEST_ROOM', 'GUEST_ROOM',
+                    'MASTER_BED', 'GUEST_ROOM', 'GUEST_ROOM', 'STUDY', 'GUEST_ROOM']
             return pool[:num_rooms]
         elif archetype in ('WAREHOUSE', 'LUMBERMILL', 'QUARRY', 'BUILDER'):
             # Industrial upper floors are work/storage, never bedrooms or kitchens.
@@ -1888,23 +1894,22 @@ def _resolve_room_roles(archetype, fl_idx, num_rooms, has_stairs_landing=False, 
             return pool[:num_rooms]
         elif archetype in ('BLACKSMITH', 'BAKERY', 'FISHERMAN', 'BREWERY',
                           'BUTCHER', 'TAILOR', 'TOOLSMITH', 'JEWELER', 'FURNITURE_MAKER', 'HUNTER') or archetype.startswith('ARTISAN'):
-            # Artisan live/work house: trade below, family home above. Upper
-            # storeys are strictly residential (no offices, no studies).
-            # Highest priority: 1 bedroom then 1 kitchen.
+            # Artisan live/work house: trade below, family living home above.
+            # Living quarters (HOUSE_HALL), bedroom (MASTER_BED/BEDROOM), and trade office (OFFICE).
             if fl_idx == 1:
                 if num_rooms == 1:
                     return ['COTTAGE']
-                pool = ['STAIR_LANDING', 'MASTER_BED', 'KITCHEN', 'HOUSE_HALL', 'BEDROOM']
+                pool = ['STAIR_LANDING', 'HOUSE_HALL', 'MASTER_BED', 'OFFICE', 'BEDROOM', 'KITCHEN', 'STUDY']
             else:
                 if num_rooms == 1:
                     return ['COTTAGE']
-                pool = ['STAIR_LANDING', 'BEDROOM', 'GUEST_ROOM', 'STORAGE', 'BEDROOM']
+                pool = ['STAIR_LANDING', 'BEDROOM', 'OFFICE', 'GUEST_ROOM', 'STORAGE', 'BEDROOM']
             return pool[:num_rooms]
         elif archetype == 'ARMORY':
             pool = ['STAIR_LANDING', 'ARMORY', 'STORAGE', 'DRILL_HALL']
             return pool[:num_rooms]
         elif archetype in ('BARRACKS', 'INFANTRY_BARRACKS'):
-            pool = ['STAIR_LANDING', 'ARMORY', 'STORAGE', 'OFFICER_QUARTERS']
+            pool = ['STAIR_LANDING', 'BARRACKS_DORM', 'OFFICER_QUARTERS', 'BARRACKS_DORM', 'ARMORY', 'STORAGE', 'OFFICER_QUARTERS']
             return pool[:num_rooms]
         elif archetype in ('KNIGHTS_MANOR',):
             pool = ['STAIR_LANDING', 'BARRACKS_DORM', 'OFFICER_QUARTERS', 'ARMORY', 'BARRACKS_DORM']
@@ -3607,15 +3612,16 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
     # --- Partition walls -------------------------------------------------
     # Corridor walls: one segment per room, each with its own door.  The
     # throne bay uses one wide segment instead of two narrow ones.
+    # Front corridor walls (skipping throne bays which use a single wide wall below)
     for i in range(n_bays):
-        if _is_throne_bay(i):
-            continue
-        dw_x = (x_edges[i] + x_edges[i + 1]) * 0.5
-        walls.append({'p1': (x_edges[i], front_y1),
-                      'p2': (x_edges[i + 1], front_y1),
-                      'axis': 'X', 'pos': front_y1, 'thickness': wall_t,
-                      'doorway': {'x': dw_x, 'y': front_y1, 'w': dw_w,
-                                  'h': dw_h, 'axis': 'X'}})
+        if not _is_throne_bay(i):
+            dw_x = (x_edges[i] + x_edges[i + 1]) * 0.5
+            walls.append({'p1': (x_edges[i], front_y1),
+                          'p2': (x_edges[i + 1], front_y1),
+                          'axis': 'X', 'pos': front_y1, 'thickness': wall_t,
+                          'doorway': {'x': dw_x, 'y': front_y1, 'w': dw_w,
+                                      'h': dw_h, 'axis': 'X'}})
+        # Rear corridor walls must exist for ALL bays (the throne room is only on front_y1)
         dw_x = (x_edges[i] + x_edges[i + 1]) * 0.5
         walls.append({'p1': (x_edges[i], back_y0),
                       'p2': (x_edges[i + 1], back_y0),
@@ -3637,6 +3643,13 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
                   'doorway': None})
     walls.append({'p1': (bay_x0, mid_y), 'p2': (bay_x0, back_y0),
                   'axis': 'Y', 'pos': bay_x0, 'thickness': wall_t,
+                  'doorway': None})
+    # Walls enclosing the end chambers against the open stair hall.
+    walls.append({'p1': (bay_x1, front_y1), 'p2': (bay_x1, mid_y),
+                  'axis': 'Y', 'pos': bay_x1, 'thickness': wall_t,
+                  'doorway': None})
+    walls.append({'p1': (bay_x1, mid_y), 'p2': (bay_x1, back_y0),
+                  'axis': 'Y', 'pos': bay_x1, 'thickness': wall_t,
                   'doorway': None})
     # Bay partitions: south half always, north half except inside the throne
     # span (where the two central front bays are one room).
@@ -4293,6 +4306,9 @@ def _open_wing_entrance_walls(interior_walls, wings, bounds, tol=0.35):
         p1, p2 = w.get('p1'), w.get('p2')
         if not p1 or not p2:
             continue
+        # Never drop walls with doorways or full-depth partitions; only drop short stubs
+        if w.get('doorway') or abs(p2[1] - p1[1]) > 4.5:
+            continue
         px = p1[0]
         for wb in wings:
             try:
@@ -4337,20 +4353,18 @@ def _merge_open_rooms(rooms, walls, min_overlap=1.0, max_passes=4):
                 shared = False
                 vertical = False
                 shared_coord = None
-                if abs(ax1 - bx0) < 0.12:
-                    shared = min(ay1, by1) - max(ay0, by0) >= min_overlap
-                    vertical = True
-                    shared_coord = (ax1 + bx0) * 0.5
-                elif abs(bx1 - ax0) < 0.12:
-                    shared = min(ay1, by1) - max(ay0, by0) >= min_overlap
-                    vertical = True
-                    shared_coord = (bx1 + ax0) * 0.5
-                elif abs(ay1 - by0) < 0.12:
-                    shared = min(ax1, bx1) - max(ax0, bx0) >= min_overlap
-                    shared_coord = (ay1 + by0) * 0.5
-                elif abs(by1 - ay0) < 0.12:
-                    shared = min(ax1, bx1) - max(ax0, bx0) >= min_overlap
-                    shared_coord = (by1 + ay0) * 0.5
+                # Two adjacent rooms can only merge into a single Room if their
+                # orthogonal extent matches (otherwise the union is an L/T shape whose
+                # AABB expands across the whole floor and swallows unrelated rooms).
+                if abs(ax1 - bx0) < 0.12 or abs(bx1 - ax0) < 0.12:
+                    if abs(ay0 - by0) < 0.35 and abs(ay1 - by1) < 0.35:
+                        shared = True
+                        vertical = True
+                        shared_coord = (ax1 + bx0) * 0.5 if abs(ax1 - bx0) < 0.12 else (bx1 + ax0) * 0.5
+                elif abs(ay1 - by0) < 0.12 or abs(by1 - ay0) < 0.12:
+                    if abs(ax0 - bx0) < 0.35 and abs(ax1 - bx1) < 0.35:
+                        shared = True
+                        shared_coord = (ay1 + by0) * 0.5 if abs(ay1 - by0) < 0.12 else (by1 + ay0) * 0.5
                 if not shared or shared_coord is None:
                     continue
                 # Check for any surviving wall on this boundary.
@@ -4721,13 +4735,20 @@ def _recut_oversized_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
             out.append(room)
             continue
 
-        _big = (not _large_intended and w * d > 52.0 and min(w, d) > 4.2)
+        _big_thresh = 30.0 if fl_idx > 0 else 52.0
+        _min_dim = 2.8 if fl_idx > 0 else 4.2
+        _big = (not _large_intended and w * d > _big_thresh and min(w, d) > _min_dim)
         _strip = aspect >= (2.0 if _large_intended else 1.65) and long_side >= 5.5 and min(w, d) <= 4.5
         if not (_big or _strip):
             out.append(room)
             continue
 
-        n_axis = 'X' if w >= d else 'Y'
+        # If nearly square, split perpendicular to entry doorway so door isn't bisected
+        if 0.75 <= w / max(d, 0.1) <= 1.33 and room.doorways:
+            _dax = room.doorways[0].get('axis', 'X')
+            n_axis = 'X' if _dax == 'Y' else 'Y'
+        else:
+            n_axis = 'X' if w >= d else 'Y'
         span = w if n_axis == 'X' else d
         n = max(2, min(3, int(round(span / max(5.0, (span * span) / (w * d) / 1.4)))))
         step = span / n
@@ -4822,6 +4843,8 @@ def _recut_oversized_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
             _role = room.role if i == 0 else _secondary_role(room.role, i)
             if i > 0 and _extra and i < len(_extra) and _extra[i] != room.role:
                 _role = _extra[i]
+                if room.role in ('MASTER_BED', 'BEDROOM') and _role in ('HOUSE_HALL', 'CORRIDOR'):
+                    _role = 'MASTER_BED'
             # Keep every entrance/portal that lies on this piece's boundary.
             _piece_doors = []
             for _ii, _jj, _dd in _internal:
@@ -5004,6 +5027,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             # wing cellar shaft as a floor-wide keep-out and turns every
             # service/chamber room into a corridor, so it is deliberately
             # skipped here.
+            _n_walls = _repair_dangling_walls(_n_walls, bounds)
             _n_rooms = _apply_basement_store_role(
                 _n_rooms, props, fl_idx, stair_hole)
             return _n_rooms, _n_walls
@@ -5241,8 +5265,11 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                     if fl_idx == 0 and _craft_wing:
                         w_role = _craft_wing
                     else:
-                        w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
-                                           ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH', 'BUILDER')) else 'GUEST_ROOM'
+                        if fl_idx > 0 and (effective_archetype in ('TOOLSMITH', 'BLACKSMITH', 'TAILOR', 'JEWELER', 'FURNITURE_MAKER') or effective_archetype.startswith('ARTISAN')):
+                            w_role = 'OFFICE'
+                        else:
+                            w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
+                                                   ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH', 'BUILDER')) else 'GUEST_ROOM'
                     w_doorways = _wing_portals(wb, doorways)
                 w_rm = Room(
                     id=f"fl{fl_idx}_wing{wi}",
@@ -7330,8 +7357,11 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
                 w_role = 'ENTRANCE_HALL' if (fl_idx == 0 and wi == 0 and getattr(props, 'wing_placement', '') == 'FRONT') else 'BARRACKS_DORM'
                 w_doorways = _wing_portals(wb, doorways)
             else:
-                w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
-                                       ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH')) else 'GUEST_ROOM'
+                if fl_idx > 0 and (effective_archetype in ('TOOLSMITH', 'BLACKSMITH', 'TAILOR', 'JEWELER', 'FURNITURE_MAKER', 'BUTCHER', 'FISHERMAN', 'BAKERY', 'BREWERY', 'HUNTER') or effective_archetype.startswith('ARTISAN')):
+                    w_role = 'OFFICE'
+                else:
+                    w_role = 'STORAGE' if (fl_idx == 0 or effective_archetype in
+                                           ('WAREHOUSE', 'LUMBERMILL', 'BLACKSMITH')) else 'GUEST_ROOM'
                 w_doorways = list(_wing_portals(wb, doorways))
                 # The warehouse cargo port is cut into the wing's courtyard-side
                 # wall on the ground floor.  Register it as a doorway for the
@@ -7641,7 +7671,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         if _drop_doors:
             interior_walls[:] = [w for w in interior_walls if w not in _drop_doors]
 
-    if fl_wings_bounds:
+    if fl_wings_bounds and fl_idx == 0:
         interior_walls = _open_wing_entrance_walls(
             interior_walls, fl_wings_bounds, (ix_min, ix_max, iy_min, iy_max))
     _is_estate_out = False
