@@ -1272,6 +1272,61 @@ def build_curtain_wall_gate_portal(
             outward=(ox, oy), raised=pc_raised
         )
 
+    # 5. ACCESS TIMBER LADDERS LEADING UP TO THE GATE TURRET DEFENSIVE PLATFORMS
+    # For each flanking cliff gate turret, place a sturdy timber climbing ladder
+    # on the rear (bailey) face leading up through the rear battlement opening.
+    lad_w = 0.52
+    rung_spacing = 0.32
+    d_tangent = Vector((tx, ty, 0.0)).normalized()
+    d_rung_rot = Vector((0.0, 0.0, 1.0)).rotation_difference(d_tangent).to_euler()
+
+    for sgn in (-1.0, 1.0):
+        # Center of this turret
+        tc_x = cx + tx * (sgn * tc_dist) + ox * (tower_rad * 0.42)
+        tc_y = cy + ty * (sgn * tc_dist) + oy * (tower_rad * 0.42)
+        top_z = z_ground + tower_height
+
+        # Position along rear face, aligned with the rear battlement opening
+        lad_u = sgn * (tc_dist - 0.56)
+        lad_wall_x = cx + tx * lad_u - ox * (tower_rad + 0.06)
+        lad_wall_y = cy + ty * lad_u - oy * (tower_rad + 0.06)
+
+        # Foot of ladder stands slightly out from wall on ground/terrace
+        bot_pos = Vector((lad_wall_x - ox * 0.55, lad_wall_y - oy * 0.55, z_ground))
+        top_pos = Vector((lad_wall_x - ox * 0.04, lad_wall_y - oy * 0.04, top_z + 0.85))
+
+        lad_vec = top_pos - bot_pos
+        lad_len = lad_vec.length
+        if lad_len < 0.5:
+            continue
+        lad_mid = (bot_pos + top_pos) * 0.5
+        lad_rot = Vector((0.0, 0.0, 1.0)).rotation_difference(lad_vec.normalized()).to_euler()
+
+        # Left & Right side rails
+        for s_rail in (-0.5, 0.5):
+            rail_loc = lad_mid + d_tangent * (s_rail * lad_w)
+            create_beveled_box(
+                bm, size=(0.06, 0.08, lad_len),
+                location=(rail_loc.x, rail_loc.y, rail_loc.z),
+                rotation=lad_rot,
+                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008
+            )
+
+        # Rungs along the ladder length
+        n_rungs = max(3, int((top_z - z_ground) / rung_spacing))
+        for ir in range(n_rungs + 1):
+            rz = z_ground + 0.25 + ir * rung_spacing
+            if rz > top_z + 0.05:
+                break
+            f_t = (rz - bot_pos.z) / max(0.01, top_pos.z - bot_pos.z)
+            rp = bot_pos + lad_vec * f_t
+            create_cylinder(
+                bm, radius=0.018, height=lad_w, segments=8,
+                location=(rp.x, rp.y, rz),
+                rotation=d_rung_rot,
+                mat_index=MAT_INDEX_WOOD
+            )
+
 
 def build_connecting_wing(
     bm,
