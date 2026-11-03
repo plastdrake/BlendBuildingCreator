@@ -650,7 +650,20 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
         # test is tightened to match, so a table/shelf can never end up half
         # sunk into the wall it stands against.
         if wall == 'NORTH':
-            # Back at +Y, front at -Y -> yaw = 0.0
+            if key == 'WALL_BANNER':
+                cy = _wy1 - 0.02
+                yaw = -math.pi / 2
+                min_x = rx0 + width * 0.5 + corner_pad_x
+                max_x = rx1 - width * 0.5 - corner_pad_x
+                for cx in _sample_wall_positions(rcx + offset_bias + jit, min_x, max_x, step=0.30):
+                    b = (cx - width * 0.5, cx + width * 0.5, cy - 0.35, cy + 0.02)
+                    if tracker.is_near_door(cx, cy, radius=1.05):
+                        continue
+                    if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.10, check_windows=True, ignore_stair=ignore_stair):
+                        tracker.occupy(b[0], b[1], b[2], b[3])
+                        build_prop(bm, key, cx, cy, z_floor, yaw, **params)
+                        return (cx, cy, yaw)
+                continue
             cy = _wy1 - depth * 0.5 - 0.04
             yaw = 0.0
             min_x = rx0 + width * 0.5 + corner_pad_x
@@ -670,7 +683,20 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                     return (cx, cy, yaw)
 
         elif wall == 'SOUTH':
-            # Back at -Y, front at +Y -> yaw = math.pi
+            if key == 'WALL_BANNER':
+                cy = _wy0 + 0.02
+                yaw = math.pi / 2
+                min_x = rx0 + width * 0.5 + corner_pad_x
+                max_x = rx1 - width * 0.5 - corner_pad_x
+                for cx in _sample_wall_positions(rcx + offset_bias + jit, min_x, max_x, step=0.30):
+                    b = (cx - width * 0.5, cx + width * 0.5, cy - 0.02, cy + 0.35)
+                    if tracker.is_near_door(cx, cy, radius=1.05):
+                        continue
+                    if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.10, check_windows=True, ignore_stair=ignore_stair):
+                        tracker.occupy(b[0], b[1], b[2], b[3])
+                        build_prop(bm, key, cx, cy, z_floor, yaw, **params)
+                        return (cx, cy, yaw)
+                continue
             cy = _wy0 + depth * 0.5 + 0.04
             yaw = math.pi
             min_x = rx0 + width * 0.5 + corner_pad_x
@@ -690,7 +716,20 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                     return (cx, cy, yaw)
 
         elif wall == 'EAST':
-            # Back at +X, front at -X -> yaw = -math.pi / 2
+            if key == 'WALL_BANNER':
+                cx = _wx1 - 0.02
+                yaw = math.pi
+                min_y = ry0 + width * 0.5 + corner_pad_y
+                max_y = ry1 - width * 0.5 - corner_pad_y
+                for cy in _sample_wall_positions(rcy + offset_bias + jit, min_y, max_y, step=0.30):
+                    b = (cx - 0.35, cx + 0.02, cy - width * 0.5, cy + width * 0.5)
+                    if tracker.is_near_door(cx, cy, radius=1.05):
+                        continue
+                    if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.10, check_windows=True, ignore_stair=ignore_stair):
+                        tracker.occupy(b[0], b[1], b[2], b[3])
+                        build_prop(bm, key, cx, cy, z_floor, yaw, **params)
+                        return (cx, cy, yaw)
+                continue
             cx = _wx1 - depth * 0.5 - 0.04
             yaw = -math.pi / 2
             min_y = ry0 + width * 0.5 + corner_pad_y
@@ -710,7 +749,20 @@ def _try_place_wall_prop(bm, key: str, width: float, depth: float,
                     return (cx, cy, yaw)
 
         elif wall == 'WEST':
-            # Back at -X, front at +X -> yaw = math.pi / 2
+            if key == 'WALL_BANNER':
+                cx = _wx0 + 0.02
+                yaw = 0.0
+                min_y = ry0 + width * 0.5 + corner_pad_y
+                max_y = ry1 - width * 0.5 - corner_pad_y
+                for cy in _sample_wall_positions(rcy + offset_bias + jit, min_y, max_y, step=0.30):
+                    b = (cx - 0.02, cx + 0.35, cy - width * 0.5, cy + width * 0.5)
+                    if tracker.is_near_door(cx, cy, radius=1.05):
+                        continue
+                    if tracker.is_free(b[0], b[1], b[2], b[3], margin=0.10, check_windows=True, ignore_stair=ignore_stair):
+                        tracker.occupy(b[0], b[1], b[2], b[3])
+                        build_prop(bm, key, cx, cy, z_floor, yaw, **params)
+                        return (cx, cy, yaw)
+                continue
             cx = _wx0 + depth * 0.5 + 0.04
             yaw = math.pi / 2
             min_y = ry0 + width * 0.5 + corner_pad_y
@@ -1286,8 +1338,14 @@ def _try_place_bunk(bm, tracker: RoomOccupancyTracker, z_floor: float,
     else:
         wall_order = ('WEST', 'EAST', 'NORTH', 'SOUTH')
     _solid = getattr(tracker, 'solid_walls', {})
-    wall_order = [w for w in wall_order
-                  if _wall_allowed(w) and _solid.get(w, True)]
+    _map = {'WEST': 'LEFT', 'EAST': 'RIGHT', 'SOUTH': 'FRONT', 'NORTH': 'BACK'}
+    def _is_solid(w_name):
+        return _solid.get(w_name, _solid.get(_map.get(w_name), True))
+    filtered_walls = [w for w in wall_order if _wall_allowed(w) and _is_solid(w)]
+    if filtered_walls:
+        wall_order = filtered_walls
+    else:
+        wall_order = [w for w in wall_order if _wall_allowed(w)]
 
     for wall in wall_order:
         if wall == 'WEST' and (_wy1 - _wy0) < length + 0.20:
@@ -1336,6 +1394,33 @@ def _try_place_bunk(bm, tracker: RoomOccupancyTracker, z_floor: float,
                     build_prop(bm, 'BUNK_BED', cx + shift, cy, z_floor, math.pi / 2,
                                length=length, width=width)
                     return (cx + shift, cy, math.pi / 2)
+
+    # Lengthwise along wall fallback
+    for wall in wall_order:
+        if wall in ('WEST', 'EAST'):
+            if (_wy1 - _wy0) < length + 0.15:
+                continue
+            cx = (_wx0 + (width + lad_extra) * 0.5 + 0.04) if wall == 'WEST' else (_wx1 - (width + lad_extra) * 0.5 - 0.04)
+            yaw = math.pi * 0.5 if wall == 'WEST' else -math.pi * 0.5
+            for cy in _sample_wall_positions(rcy, _wy0 + length * 0.5 + 0.10, _wy1 - length * 0.5 - 0.10, step=0.20):
+                if tracker.is_free(cx - (width + lad_extra) * 0.5, cx + (width + lad_extra) * 0.5,
+                                   cy - length * 0.5, cy + length * 0.5, margin=0.06):
+                    tracker.occupy(cx - (width + lad_extra) * 0.5, cx + (width + lad_extra) * 0.5,
+                                   cy - length * 0.5, cy + length * 0.5)
+                    build_prop(bm, 'BUNK_BED', cx, cy, z_floor, yaw, length=length, width=width)
+                    return (cx, cy, yaw)
+        elif wall in ('NORTH', 'SOUTH'):
+            if (_wx1 - _wx0) < length + 0.15:
+                continue
+            cy = (_wy1 - (width + lad_extra) * 0.5 - 0.04) if wall == 'NORTH' else (_wy0 + (width + lad_extra) * 0.5 + 0.04)
+            yaw = 0.0 if wall == 'NORTH' else math.pi
+            for cx in _sample_wall_positions(rcx, _wx0 + length * 0.5 + 0.10, _wx1 - length * 0.5 - 0.10, step=0.20):
+                if tracker.is_free(cx - length * 0.5, cx + length * 0.5,
+                                   cy - (width + lad_extra) * 0.5, cy + (width + lad_extra) * 0.5, margin=0.06):
+                    tracker.occupy(cx - length * 0.5, cx + length * 0.5,
+                                   cy - (width + lad_extra) * 0.5, cy + (width + lad_extra) * 0.5)
+                    build_prop(bm, 'BUNK_BED', cx, cy, z_floor, yaw, length=length, width=width)
+                    return (cx, cy, yaw)
 
     return None
 
@@ -4839,57 +4924,43 @@ def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
     # are placed against a clear wall instead of at the bunk's foot (where
     # they used to stand in the middle of the room).
     narrow = min(rw, rd) < 4.2
-    if narrow:
-        only_wall = 'WEST' if rw <= rd else 'SOUTH'
-    else:
-        only_wall = None
-    num_bunks = max(1, min(6, int(rw * rd / 9.0)))
+    only_wall = ('WEST' if rw <= rd else 'SOUTH') if narrow else None
+    target_bunks = max(2, min(6, int(round(rw * rd / 8.0))))
     placed_bunks = 0
-    for _ in range(num_bunks):
-        binfo = _try_place_bunk(bm, tracker, z_floor, length=2.0, width=1.1,
-                                only_wall=only_wall, wall_gap=2.0)
-        if binfo is None:
-            continue
-        placed_bunks += 1
-    # Fallback: if restricted wall had doorways or obstructions, try all available walls
-    if placed_bunks == 0 and only_wall is not None:
-        for _ in range(num_bunks):
-            binfo = _try_place_bunk(bm, tracker, z_floor, length=2.0, width=1.1,
-                                    only_wall=None, wall_gap=1.5)
-            if binfo is None:
-                continue
-            placed_bunks += 1
-    # Never leave a dormitory with no sleeping furniture at all (awkward door
-    # or window layout can reject every bunk slot).
+    for gap in (0.40, 0.20, 0.0):
+        if placed_bunks >= target_bunks:
+            break
+        for w_opt in (only_wall, None):
+            if placed_bunks >= target_bunks:
+                break
+            for _ in range(target_bunks - placed_bunks):
+                binfo = _try_place_bunk(bm, tracker, z_floor, length=2.0, width=1.1,
+                                        only_wall=w_opt, wall_gap=gap)
+                if binfo is not None:
+                    placed_bunks += 1
+
     if placed_bunks == 0:
         _try_place_bed(bm, tracker, z_floor, length=2.0, width=1.1)
 
-    # 1b. In a genuinely roomy dorm, add a second rank on the facing wall -
-    # but ONLY when the room is wide enough to keep a full 2 m aisle between
-    # the two rows (each bunk reaches 2 m into the room).
-    if (not narrow and min(rw, rd) >= 6.0 and (rw * rd) >= 34.0):
-        for _ in range(2):
-            binfo = _try_place_bunk(bm, tracker, z_floor, length=2.0, width=1.1,
-                                    wall_gap=2.0)
-            if binfo is None:
-                break
-
-    # Footlockers along a free wall, never in the walkway.
+    # Footlockers along free wall
     _try_place_wall_prop(bm, 'CHEST', 0.95, 0.55, tracker, z_floor,
                          candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'))
+    _try_place_wall_prop(bm, 'CHEST', 0.95, 0.55, tracker, z_floor,
+                         candidate_walls=('EAST', 'WEST', 'NORTH', 'SOUTH'))
 
-    # 2. Weapon rack along remaining free wall
+    # Weapon racks
     _try_place_wall_prop(bm, 'WEAPON_RACK', 1.40, 0.40, tracker, z_floor,
                          candidate_walls=('NORTH', 'WEST', 'EAST', 'SOUTH'))
+    if rw * rd >= 18.0:
+        _try_place_wall_prop(bm, 'WEAPON_RACK', 1.40, 0.40, tracker, z_floor,
+                             candidate_walls=('EAST', 'WEST', 'SOUTH', 'NORTH'))
 
-    # 2b. A proper squad table and spare footlocker stop the larger dorms
-    # reading as a bare room with a couple of bunks and a rack.
-    if rw * rd >= 24.0 and min(rw, rd) >= 3.2:
-        # Place squad table along a wall, never blocking the central walking aisle
+    # Squad table and benches
+    if rw * rd >= 18.0 and min(rw, rd) >= 2.8:
         _try_place_wall_prop(bm, 'INDOOR_TABLE', 1.60, 0.85, tracker, z_floor,
                              candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'),
                              length=1.60, width=0.85)
-        _try_place_wall_prop(bm, 'CHEST', 0.90, 0.50, tracker, z_floor,
+        _try_place_wall_prop(bm, 'BENCH', 1.40, 0.50, tracker, z_floor,
                              candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'))
 
     # 3. Single austere dorm runner rug along the walking aisle (kept clear of
@@ -5457,7 +5528,9 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     tracker.room_bounds = (rx0, rx1, ry0, ry1)
     tracker.wall_insets = (0.0, 0.0, 0.0, 0.0)
     tracker.solid_walls = {'LEFT': True, 'RIGHT': True,
-                           'FRONT': True, 'BACK': True}
+                           'FRONT': True, 'BACK': True,
+                           'WEST': True, 'EAST': True,
+                           'SOUTH': True, 'NORTH': True}
     if ctx is not None and not getattr(rm, 'is_wing', False):
         _fwb = (getattr(ctx, 'floor_wall_bounds', None) or {}).get(
             rm.floor_idx)
@@ -5517,6 +5590,10 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
                 'BACK': _side_has_wall('BACK', ry1, 'X', rx0, rx1,
                                         _fwb[3] - _wt),
             }
+            tracker.solid_walls['WEST'] = tracker.solid_walls['LEFT']
+            tracker.solid_walls['EAST'] = tracker.solid_walls['RIGHT']
+            tracker.solid_walls['SOUTH'] = tracker.solid_walls['FRONT']
+            tracker.solid_walls['NORTH'] = tracker.solid_walls['BACK']
     tracker.stair_hole = _stair_well
     # Turned-stair rooms are pre-inset off the walls that carry a flight, so
     # the generic side pad would double-dip and deny the whole inset wall.
@@ -5984,7 +6061,7 @@ def furnish_building_interior(bm, props, ctx):
             if rw < 1.3 or rd < 1.3:
                 continue
             rm_z_ceil = z_ceil
-            if rm.role == 'THRONE_ROOM' and bool(getattr(props, 'has_double_height', False)):
+            if rm.role == 'THRONE_ROOM' and (bool(getattr(props, 'has_double_height', False)) or bool(getattr(props, 'noble_manor_layout', False))):
                 rm_z_ceil = z_floor + ctx.floor_h * 2.0 - 0.065
             try:
                 _dress_single_room(bm, rm, z_floor, rm_z_ceil, rng, density, style, ctx=ctx,

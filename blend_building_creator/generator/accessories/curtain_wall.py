@@ -825,13 +825,25 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
 
     # 5. Crenellated merlons along the exposed outer edge, optionally
     # stopping short of a corner post so perpendicular parapets never collide.
+    # When a gatehouse is present, merlons break cleanly across the gate interval
+    # because the protruding gatehouse fighting deck provides the outer battlements.
     par_t = 0.30
     off_out = thickness * 0.5 - par_t * 0.5 + 0.02
     mc0, mc1 = merlon_end_clear
-    for u0, u1 in walk_spans:
+
+    outer_battlement_gaps = []
+    if gate_gap:
+        gate_mid_u = (gate_gap[0] + gate_gap[1]) * 0.5
+        gate_half_plat = (gate_gap[1] - gate_gap[0] + 1.80) * 0.5
+        outer_battlement_gaps.append((gate_mid_u - gate_half_plat, gate_mid_u + gate_half_plat))
+    battlement_spans = _subtract_gaps(length, outer_battlement_gaps if outer_battlement_gaps else None)
+
+    for u0, u1 in battlement_spans:
         if u1 - u0 < 0.8:
             continue
-        build_battlement_run(bm, at(u0 + mc0, off_out), at(u1 - mc1, off_out),
+        c0 = mc0 if u0 < 0.5 else 0.0
+        c1 = mc1 if u1 > length - 0.5 else 0.0
+        build_battlement_run(bm, at(u0 + c0, off_out), at(u1 - c1, off_out),
                              walk_top + 0.16, height=merlon_h,
                              thickness=par_t, style='STONE')
 
@@ -892,12 +904,12 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
     stair_w = 1.65
     run = 0.28
     land_len = 1.60
-    deck_top = ground_z + wall_h + 0.25
+    deck_top = ground_z + wall_h + 0.22
     n = max(4, int(math.ceil((deck_top - ground_z) / 0.22)))
     rise = (deck_top - ground_z) / n
     inner_lat = thickness * 0.5 + 1.25
     lat_c = inner_lat + stair_w * 0.5
-    lat0 = thickness * 0.5 + 0.35
+    lat0 = thickness * 0.5 + 0.10
     lat1 = inner_lat + stair_w
     post_size = 0.14
     rail_h = 0.90
@@ -915,6 +927,10 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                            location=(px, py, ground_z + (deck_top - ground_z) * 0.5),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.01)
+        create_beveled_box(bm, size=(land_len + 0.02, lat1 - lat0 + 0.02, 0.06),
+                           location=(px, py, deck_top + 0.03),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.008)
 
         # 2. Solid stone steps descending to courtyard ground
         total_flight_len = run * n
@@ -1018,75 +1034,7 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                 create_cylinder(bm, radius=0.016, height=lad_w, segments=8,
                                 location=(rp.x, rp.y, rz),
                                 rotation=d_r_rot,
-                                mat_index=MAT_INDEX_WOOD)
-        else:
-            # 4b. Continuation stone stairs climbing directly up to the elevated gatehouse platform (tallest part of the wall)
-            gate_h_eff = max(3.5, min(4.4, wall_h * 0.88))
-            _pc_h = gate_h_eff
-            _pc_raised = gate_h_eff - 0.35
-            _pc_top = max(_pc_raised + 0.85, _pc_h + 1.20)
-            platform_z = max(wall_h + 1.25, ground_z + gate_h_eff + 0.85, ground_z + _pc_top + 0.30)
-            plat_top_z = platform_z + 0.22
-            rise_super = plat_top_z - deck_top
-
-            if rise_super > 0.15:
-                n_sup = max(4, int(round(rise_super / 0.20)))
-                s_rise = rise_super / n_sup
-                s_run = 0.28
-                s_w = 0.95
-                super_flight_len = s_run * n_sup
-                super_hyp = math.hypot(super_flight_len, rise_super)
-                plat_half_w = (gap_w + 1.80) * 0.5
-                lat_step = thickness * 0.5 + 0.40
-
-                # Flight ascends from the landing toward the center, arriving flush onto the elevated platform
-                for si in range(n_sup):
-                    su = sgn * (plat_half_w + (n_sup - 1 - si + 0.5) * s_run)
-                    sz = deck_top + (si + 1) * s_rise
-                    sx_s, sy_s = at(su, lat_step)
-                    step_total_h = sz - ground_z
-                    create_beveled_box(bm, size=(s_run + 0.02, s_w, step_total_h),
-                                       location=(sx_s, sy_s, ground_z + step_total_h * 0.5),
-                                       rotation=(0.0, 0.0, ang),
-                                       mat_index=MAT_INDEX_STONE, bevel_amount=0.005)
-                    create_beveled_box(bm, size=(s_run + 0.04, s_w + 0.02, 0.05),
-                                       location=(sx_s, sy_s, sz + 0.025),
-                                       rotation=(0.0, 0.0, ang),
-                                       mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.005)
-
-                # Inner protective timber handrail along the climbing flight
-                super_rail_lat = lat_step + s_w * 0.5 - 0.06
-                for spi in (0, n_sup // 2, n_sup - 1):
-                    spu = sgn * (plat_half_w + (n_sup - 1 - spi + 0.5) * s_run)
-                    spz = deck_top + (spi + 1) * s_rise
-                    spx_p, spy_p = at(spu, super_rail_lat)
-                    create_beveled_box(bm, size=(post_size, post_size, rail_h + 0.08),
-                                       location=(spx_p, spy_p, spz + (rail_h + 0.08) * 0.5),
-                                       rotation=(0.0, 0.0, ang),
-                                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
-
-                s_mid_u = sgn * (plat_half_w + super_flight_len * 0.5)
-                s_mid_z = (deck_top + plat_top_z) * 0.5 + rail_h
-                s_rx, s_ry = at(s_mid_u, super_rail_lat)
-
-                s_fwd = Vector((-sgn * tx * super_flight_len, -sgn * ty * super_flight_len, rise_super)).normalized()
-                s_lat_ax = Vector((-ox, -oy, 0.0)).normalized()
-                s_up_ax = s_fwd.cross(s_lat_ax)
-                if s_up_ax.z < 0.0:
-                    s_up_ax = -s_up_ax
-                    s_lat_ax = -s_lat_ax
-                s_up_ax = s_up_ax.normalized()
-                s_lat_ax = s_up_ax.cross(s_fwd).normalized()
-                rot_super_rail = Matrix([s_fwd, s_lat_ax, s_up_ax]).transposed().to_euler('XYZ')
-
-                create_beveled_box(bm, size=(super_hyp + 0.10, 0.12, 0.08),
-                                   location=(s_rx, s_ry, s_mid_z),
-                                   rotation=rot_super_rail,
-                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
-                create_beveled_box(bm, size=(super_hyp + 0.10, 0.08, 0.06),
-                                   location=(s_rx, s_ry, s_mid_z - rail_h * 0.5),
-                                   rotation=rot_super_rail,
-                                   mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+                                mat_index=MAT_INDEX_TIMBER)
 
     # 5. Continuous wooden rampart walkway bridging the gap across the gate opening
     # connecting the left and right stair landings directly together
@@ -1098,8 +1046,8 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
     wx_mid, wy_mid = at(0.0, lat_c_walk)
 
     # A. Solid timber plank deck spanning across the opening between landings
-    create_beveled_box(bm, size=(span_u + 0.10, walk_w, 0.08),
-                       location=(wx_mid, wy_mid, deck_top + 0.04),
+    create_beveled_box(bm, size=(span_u + 0.10, walk_w, 0.06),
+                       location=(wx_mid, wy_mid, deck_top + 0.03),
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005)
 
@@ -1177,18 +1125,15 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
 
-    # Elevated Defensive Superstructure & Fighting Platform
-    # Rises above the flanking curtain wall walkways, giving clear command of the approach.
-    # The deck is lifted high enough for the portcullis grille to be fully
-    # swallowed by its housing instead of poking out through the parapet.
-    _pc_h = gate_h
-    _pc_raised = gate_h - 0.35
-    _pc_top = max(_pc_raised + 0.85, _pc_h + 1.20)
-    platform_z = max(wall_h + 1.25, ground_z + gate_h + 0.85, ground_z + _pc_top + 0.30)
+    # Defensive Machicolated Platform & Fighting Deck over the Gate
+    # FLUSH with the curtain wall walk and stair landings (platform top = ground_z + wall_h + 0.28)
+    platform_z = ground_z + wall_h
+    plat_thick = 0.28
+    plat_top_z = platform_z + plat_thick
     super_h = platform_z - (ground_z + gate_h + 0.28)
     if super_h > 0.05:
         # Solid breastwork wall above lintel up to platform floor, in the same
-        # masonry as the curtain wall (NOT a separate cut stone block).
+        # masonry as the curtain wall.
         create_beveled_box(bm, size=(gap_w + 1.24, frame_depth, super_h),
                            location=(cx + ox * push, cy + oy * push, ground_z + gate_h + 0.28 + super_h * 0.5),
                            rotation=(0.0, 0.0, ang),
@@ -1198,8 +1143,8 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
     plat_w = gap_w + 1.80
     plat_depth = frame_depth + 0.50
     plat_push = push + 0.20
-    create_beveled_box(bm, size=(plat_w, plat_depth, 0.22),
-                       location=(cx + ox * plat_push, cy + oy * plat_push, platform_z + 0.11),
+    create_beveled_box(bm, size=(plat_w, plat_depth, plat_thick),
+                       location=(cx + ox * plat_push, cy + oy * plat_push, platform_z + plat_thick * 0.5),
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
 
@@ -1215,13 +1160,13 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
 
-    # Defensive crenellated battlements atop the elevated platform
+    # Defensive crenellated battlements atop the platform
     parapet_h = 0.45
     merlon_h = 0.65
     front_edge_push = plat_push + plat_depth * 0.5 - 0.12
     # Base parapet along front
     create_beveled_box(bm, size=(plat_w, 0.24, parapet_h),
-                       location=(cx + ox * front_edge_push, cy + oy * front_edge_push, platform_z + 0.22 + parapet_h * 0.5),
+                       location=(cx + ox * front_edge_push, cy + oy * front_edge_push, plat_top_z + parapet_h * 0.5),
                        rotation=(0.0, 0.0, ang),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
     # Merlons (crenellations) along the front edge matching curtain wall styling:
@@ -1235,14 +1180,28 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
         mpy = cy + ty * mu + oy * front_edge_push
         # Merlon body in MAT_INDEX_STONE
         create_beveled_box(bm, size=(merlon_w, 0.26, merlon_h),
-                           location=(mpx, mpy, platform_z + 0.22 + parapet_h + merlon_h * 0.5),
+                           location=(mpx, mpy, plat_top_z + parapet_h + merlon_h * 0.5),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.015)
         # Cut-stone coping cap on top matching wall battlements
         create_beveled_box(bm, size=(merlon_w + 0.08, 0.30, 0.10),
-                           location=(mpx, mpy, platform_z + 0.22 + parapet_h + merlon_h + 0.05),
+                           location=(mpx, mpy, plat_top_z + parapet_h + merlon_h + 0.05),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.008)
+
+    # Side return parapets on left and right flanks connecting curtain wall parapet to gate front parapet
+    off_out = thickness * 0.5 - 0.30 * 0.5 + 0.02
+    side_len = front_edge_push - off_out
+    if side_len > 0.15:
+        side_push = (off_out + front_edge_push) * 0.5
+        for s in (-1.0, 1.0):
+            su = s * (plat_w * 0.5 - 0.12)
+            spx = cx + tx * su + ox * side_push
+            spy = cy + ty * su + oy * side_push
+            create_beveled_box(bm, size=(0.24, side_len, parapet_h + merlon_h),
+                               location=(spx, spy, plat_top_z + (parapet_h + merlon_h) * 0.5),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
 
     if gate_towers:
         from .gatehouse import build_flanking_gate_towers
@@ -1257,11 +1216,11 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
 
     if portcullis:
         from .gatehouse import build_portcullis
-        # Spikes hang just inside the opening (same as the cliff gates) so the
-        # portcullis is always visible instead of being buried in the housing.
+        pc_h = min(gate_h - 0.20, wall_h - 1.25)
+        pc_raised = min(gate_h - 0.45, wall_h - 1.80)
         build_portcullis(bm, cx, cy, ground_z, width=gap_w - 0.20,
-                         height=gate_h - 0.20, outward=(ox, oy),
-                         raised=gate_h - 0.35)
+                         height=pc_h, outward=(ox, oy),
+                         raised=pc_raised)
 
     if drawbridge:
         from .gatehouse import build_drawbridge
@@ -1296,7 +1255,7 @@ def build_curtain_wall_enclosure(bm, props, ctx, height=None, thickness=None,
 
     H = height if height is not None else getattr(props, 'curtain_wall_height', 4.2)
     T = thickness if thickness is not None else getattr(props, 'curtain_wall_thickness', 0.55)
-    gate_h = max(3.5, min(4.4, H * 0.88))
+    gate_h = max(3.0, min(3.8, H * 0.82))
 
     # Towers ARE the corners: runs stop at the tower faces so the wall
     # terminates into the bastion (its outer faces continue the wall plane).

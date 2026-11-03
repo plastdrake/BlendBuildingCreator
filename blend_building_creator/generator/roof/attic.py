@@ -96,7 +96,7 @@ def _wing_loft_candidates(props, ctx, wings, found_h, floor_h, num_floors, wall_
         if getattr(props, 'has_side_door', False) and getattr(props, 'side_door_facade', 'LEFT') == side:
             pen += 3.0
         arg = {'side': side, 'x0': cx - 0.45, 'x1': cx + 0.45, 'z0': sill, 'z1': sill + 1.20}
-        spec = {'axis': 'Y', 'side': side, 'face': face, 'center': cx, 'sill': sill}
+        spec = {'axis': 'Y', 'side': side, 'face': face, 'center': cx, 'sill': sill, 'wing_idx': idx}
         cands.append((pen, idx, arg, spec))
     return cands
 

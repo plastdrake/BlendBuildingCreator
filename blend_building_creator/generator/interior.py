@@ -3981,11 +3981,16 @@ def _merge_sliver_rooms(rooms, interior_walls, min_side=1.30, max_passes=4):
     return rooms
 
 
-def _wall_endpoint_connected(pt, walls, bounds, skip=None, tol=0.22):
+def _wall_endpoint_connected(pt, walls, bounds, skip=None, tol=0.22, extra_bounds=None):
     x, y = pt
     x0, x1, y0, y1 = bounds
     if min(abs(x - x0), abs(x - x1), abs(y - y0), abs(y - y1)) <= tol:
         return True
+    if extra_bounds:
+        for eb in extra_bounds:
+            ex0, ex1, ey0, ey1 = eb
+            if min(abs(x - ex0), abs(x - ex1), abs(y - ey0), abs(y - ey1)) <= tol:
+                return True
     for other in walls:
         if other is skip:
             continue
@@ -4014,7 +4019,7 @@ def _wall_endpoint_connected(pt, walls, bounds, skip=None, tol=0.22):
     return False
 
 
-def _repair_dangling_walls(interior_walls, bounds, tol=0.22, max_extension=4.0):
+def _repair_dangling_walls(interior_walls, bounds, tol=0.22, max_extension=4.0, extra_bounds=None):
     """Never leave a partition ending in mid-air.
 
     A wall end must meet the exterior shell or another partition.  If a split
@@ -4037,7 +4042,7 @@ def _repair_dangling_walls(interior_walls, bounds, tol=0.22, max_extension=4.0):
             ax = w.get('axis')
             for which in (0, 1):
                 pt = p1 if which == 0 else p2
-                if _wall_endpoint_connected(pt, live, bounds, skip=w, tol=tol):
+                if _wall_endpoint_connected(pt, live, bounds, skip=w, tol=tol, extra_bounds=extra_bounds):
                     continue
                 px, py = pt
                 best = None
@@ -4066,9 +4071,16 @@ def _repair_dangling_walls(interior_walls, bounds, tol=0.22, max_extension=4.0):
                             if dist <= max_extension and (best is None or dist < best[0]):
                                 best = (dist, oy)
                     if best is None:
-                        shell = y1 if direction > 0 else y0
-                        if abs(shell - py) <= max_extension:
-                            best = (abs(shell - py), shell)
+                        cand_shells = [y1 if direction > 0 else y0]
+                        if extra_bounds:
+                            cand_shells.extend(
+                                eb[3] if direction > 0 else eb[2]
+                                for eb in extra_bounds
+                                if eb[0] - tol <= px <= eb[1] + tol
+                            )
+                        cand_best = [(abs(sh - py), sh) for sh in cand_shells if abs(sh - py) <= max_extension]
+                        if cand_best:
+                            best = min(cand_best, key=lambda cb: cb[0])
                     if best is not None:
                         newpt = (px, best[1])
                     else:
@@ -4097,9 +4109,16 @@ def _repair_dangling_walls(interior_walls, bounds, tol=0.22, max_extension=4.0):
                             if dist <= max_extension and (best is None or dist < best[0]):
                                 best = (dist, ox)
                     if best is None:
-                        shell = x1 if direction > 0 else x0
-                        if abs(shell - px) <= max_extension:
-                            best = (abs(shell - px), shell)
+                        cand_shells = [x1 if direction > 0 else x0]
+                        if extra_bounds:
+                            cand_shells.extend(
+                                eb[1] if direction > 0 else eb[0]
+                                for eb in extra_bounds
+                                if eb[2] - tol <= py <= eb[3] + tol
+                            )
+                        cand_best = [(abs(sh - px), sh) for sh in cand_shells if abs(sh - px) <= max_extension]
+                        if cand_best:
+                            best = min(cand_best, key=lambda cb: cb[0])
                     if best is not None:
                         newpt = (best[1], py)
                     else:
@@ -5131,7 +5150,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
             # wing cellar shaft as a floor-wide keep-out and turns every
             # service/chamber room into a corridor, so it is deliberately
             # skipped here.
-            _n_walls = _repair_dangling_walls(_n_walls, bounds)
+            _n_walls = _repair_dangling_walls(_n_walls, bounds, extra_bounds=fl_wings_bounds)
             _n_rooms = _apply_basement_store_role(
                 _n_rooms, props, fl_idx, stair_hole)
             return _n_rooms, _n_walls
@@ -7803,7 +7822,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         # middle of a room (or stopping inside a doorway).  Extend it to the
         # nearest legal wall/shell, or drop the orphaned stub.
         interior_walls = _repair_dangling_walls(
-            interior_walls, (ix_min, ix_max, iy_min, iy_max))
+            interior_walls, (ix_min, ix_max, iy_min, iy_max), extra_bounds=fl_wings_bounds)
     rooms = _merge_open_rooms(rooms, interior_walls)
     rooms = _rebalance_room_boundaries(rooms, interior_walls)
     # A merge can swallow a third room; remove any phantom sub-room and its

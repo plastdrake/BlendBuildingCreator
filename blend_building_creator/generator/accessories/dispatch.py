@@ -700,21 +700,29 @@ def _build_gable_crests(bm, props, ctx):
         _fb = (-ctx.base_w * 0.5, ctx.base_w * 0.5,
                -ctx.base_d * 0.5, ctx.base_d * 0.5)
     crest_z = eave_z + roof_h * 0.40 + 1.25
+    loft = getattr(ctx, 'loft_spec', None)
+    # When a gable wall has a loft hatch/ladder, remove crest/banner to avoid overlap
+    loft_main_side = loft.get('side') if (loft and loft.get('wing_idx') is None) else None
+
     if ctx.is_rotated_roof:
         # Ridge runs side-to-side: the real gables are the left/right walls.
-        build_gable_heraldic_crest(
-            bm, (_fb[0] - _off, 0.0, crest_z),
-            normal=(-1.0, 0.0, 0.0), scale=c_scale, style=c_style)
-        build_gable_heraldic_crest(
-            bm, (_fb[1] + _off, 0.0, crest_z),
-            normal=(1.0, 0.0, 0.0), scale=c_scale, style=c_style)
+        if loft_main_side != 'LEFT':
+            build_gable_heraldic_crest(
+                bm, (_fb[0] - _off, 0.0, crest_z),
+                normal=(-1.0, 0.0, 0.0), scale=c_scale, style=c_style)
+        if loft_main_side != 'RIGHT':
+            build_gable_heraldic_crest(
+                bm, (_fb[1] + _off, 0.0, crest_z),
+                normal=(1.0, 0.0, 0.0), scale=c_scale, style=c_style)
     else:
-        build_gable_heraldic_crest(
-            bm, (ctx.main_door_cx, _fb[2] - _off, crest_z),
-            normal=(0.0, -1.0, 0.0), scale=c_scale, style=c_style)
-        build_gable_heraldic_crest(
-            bm, (ctx.main_door_cx, _fb[3] + _off, crest_z),
-            normal=(0.0, 1.0, 0.0), scale=c_scale, style=c_style)
+        if loft_main_side != 'FRONT':
+            build_gable_heraldic_crest(
+                bm, (ctx.main_door_cx, _fb[2] - _off, crest_z),
+                normal=(0.0, -1.0, 0.0), scale=c_scale, style=c_style)
+        if loft_main_side != 'BACK':
+            build_gable_heraldic_crest(
+                bm, (ctx.main_door_cx, _fb[3] + _off, crest_z),
+                normal=(0.0, 1.0, 0.0), scale=c_scale, style=c_style)
 
     # Wing gables (outer face only). The wing gable triangle is much shorter
     # than the main one, so the crest is shrunk to fit and seated low on the
@@ -727,7 +735,11 @@ def _build_gable_crests(bm, props, ctx):
     w_top_z = found_h + w_top_fl * fl_h
     _wr_scale = getattr(props, 'wing_roof_scale', 0.88)
     w_roof_h = roof_h if ctx.wing_floors == num_fl else roof_h * _wr_scale
-    for w in ctx.wings:
+    loft_widx = loft.get('wing_idx') if loft else None
+    for wi, w in enumerate(ctx.wings):
+        if loft_widx is not None and loft_widx == wi:
+            # Loft hatch on this wing: suppress banner/crest
+            continue
         wb = (w.get('bounds_fl') or {}).get(w_fl_idx)
         if wb is None:
             continue

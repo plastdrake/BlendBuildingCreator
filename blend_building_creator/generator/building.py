@@ -106,6 +106,7 @@ def generate_building(obj, props, extra_doorways=None, extra_window_exclusions=N
     _build_foundation(bm, props, ctx)
     build_floors(bm, props, ctx)
     loft_spec = build_roof_and_attic(bm, props, ctx)
+    ctx.loft_spec = loft_spec
     build_archetype_accessories(bm, props, ctx, loft_spec)
     build_architectural_accessories(bm, props, ctx)
     _finalize_building(obj, bm, props, ctx)
@@ -604,9 +605,7 @@ def _build_foundation(bm, props, ctx):
         if (ctx.shape == 'L_SHAPE'
                 or (ctx.shape == 'U_SHAPE' and getattr(props, 'noble_manor_layout', False))) and ctx.wings:
             wb = ctx.wings[0]['base']
-            _shx = float(wb[0]) + 1.50
-            _shy = (float(wb[2]) + float(wb[3])) * 0.5
-            bs_hole = (_shx - 0.80, _shx + 0.80, _shy - 1.80, _shy + 1.80)
+            bs_hole = (float(wb[0]) + 0.25, float(wb[1]) - 0.25, float(wb[2]) + 0.25, float(wb[3]) - 0.25)
         else:
             if getattr(props, 'has_throne_room', False):
                 bs_hole = (-0.50, 4.10, 10.80, 12.40)

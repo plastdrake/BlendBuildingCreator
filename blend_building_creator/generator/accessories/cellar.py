@@ -107,18 +107,41 @@ def build_inn_cellar(bm, props, ctx, tier='TIER_2'):
             location=(_px, arch_y, (z_floor + z_ceil) * 0.5),
             mat_index=MAT_INDEX_STONE, bevel_amount=0.02)
 
-    # Chunky timber ceiling beams give the vaulted cellar some rhythm.
-    for _i in range(1, 5):
-        _by = by0 + bd * _i / 5.0
-        faces += create_beveled_box(
-            bm, size=(bw - wall_t * 2.0, 0.16, 0.20),
-            location=(bcx, _by, z_ceil - 0.30),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
-
     # Descending stair (same shaft as floors.py reserves in the wing).
     shx = wx1 + 1.50
     shy = (wy1 + wy2) * 0.5
     stair_depth = 3.60
+    stair_w = 1.35
+    stair_x0 = shx - stair_w * 0.5 - 0.20
+    stair_x1 = shx + stair_w * 0.5 + 0.20
+    stair_y0 = shy - stair_depth * 0.5 - 0.25
+    stair_y1 = shy + stair_depth * 0.5 + 0.25
+
+    # Chunky timber ceiling beams give the vaulted cellar some rhythm.
+    for _i in range(1, 5):
+        _by = by0 + bd * _i / 5.0
+        # If beam crosses the stair shaft, clip it around the stairs so headroom is 100% unobstructed
+        if stair_y0 <= _by <= stair_y1:
+            if stair_x0 - (bx0 + wall_t) >= 0.40:
+                seg_w = stair_x0 - (bx0 + wall_t)
+                seg_cx = (bx0 + wall_t + stair_x0) * 0.5
+                faces += create_beveled_box(
+                    bm, size=(seg_w, 0.16, 0.20),
+                    location=(seg_cx, _by, z_ceil - 0.30),
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+            if (bx1 - wall_t) - stair_x1 >= 0.40:
+                seg_w = (bx1 - wall_t) - stair_x1
+                seg_cx = (stair_x1 + bx1 - wall_t) * 0.5
+                faces += create_beveled_box(
+                    bm, size=(seg_w, 0.16, 0.20),
+                    location=(seg_cx, _by, z_ceil - 0.30),
+                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
+            continue
+
+        faces += create_beveled_box(
+            bm, size=(bw - wall_t * 2.0, 0.16, 0.20),
+            location=(bcx, _by, z_ceil - 0.30),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
     steps = max(8, int(round((z_ground - z_floor) / 0.185)))
     from ..interior import build_straight_staircase
     build_straight_staircase(

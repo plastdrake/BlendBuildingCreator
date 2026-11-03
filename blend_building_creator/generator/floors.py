@@ -80,6 +80,15 @@ def build_floors(bm, props, ctx):
                     _t_rm = max(_t_rooms, key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]))
                 if _t_rm is not None:
                     throne_cx = (_t_rm.bounds[0] + _t_rm.bounds[1]) * 0.5
+                    if bool(getattr(props, 'noble_manor_layout', False) or getattr(props, 'has_throne_room', False) or getattr(props, 'has_double_height', False)):
+                        _tx0, _tx1, _ty0, _ty1 = _t_rm.bounds
+                        _rim = 1.60
+                        _vx0, _vx1 = _tx0 + _rim, _tx1 - _rim
+                        _vy0, _vy1 = _ty0 + _rim, _ty1 - _rim
+                        if _vx1 - _vx0 >= 2.0 and _vy1 - _vy0 >= 2.0:
+                            if not hasattr(ctx, 'floor_voids') or ctx.floor_voids is None:
+                                ctx.floor_voids = {}
+                            ctx.floor_voids[1] = (_vx0, _vx1, _vy0, _vy1)
         except Exception:
             pass
 
@@ -1362,11 +1371,17 @@ def build_floors(bm, props, ctx):
                 # on the walk, clear of the descent ramp at the front end.
                 # Composer decks start behind the tower with the ramp at the
                 # front, so push the door toward the back end instead.
-                r_cy = (_rspan[0] + _rspan[1]) * 0.5
-                if _bias_back:
-                    r_cy = _rspan[0] + (_rspan[1] - _rspan[0]) * 0.68
-                    _clr = rdw * 0.5 + 0.9
-                    r_cy = max(_rspan[0] + _clr, min(_rspan[1] - _clr, r_cy))
+                # Push the door toward the back (+Y) so it never lands in the middle of interior stairs!
+                r_cy = _rspan[0] + (_rspan[1] - _rspan[0]) * 0.72
+                _clr = rdw * 0.5 + 0.60
+                if cur_stair_hole is not None:
+                    _sh_y0, _sh_y1 = cur_stair_hole[2], cur_stair_hole[3]
+                    if _sh_y0 - _clr <= r_cy <= _sh_y1 + _clr:
+                        if _rspan[1] - (_sh_y1 + _clr) >= rdw + 0.4:
+                            r_cy = _sh_y1 + _clr + rdw * 0.5
+                        elif (_sh_y0 - _clr) - _rspan[0] >= rdw + 0.4:
+                            r_cy = _sh_y0 - _clr - rdw * 0.5
+                r_cy = max(_rspan[0] + _clr, min(_rspan[1] - _clr, r_cy))
                 if r_side == 'LEFT':
                     left_openings.append({'u_start': (r_cy - rdw * 0.5 - r_margin) - y_min,
                                           'u_end': (r_cy + rdw * 0.5 + r_margin) - y_min,
