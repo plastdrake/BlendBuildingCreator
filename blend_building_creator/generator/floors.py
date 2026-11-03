@@ -957,11 +957,18 @@ def build_floors(bm, props, ctx):
             _ceil_stair = next_stair_hole if (fl_idx < num_floors - 1 and props.has_stairs) else None
             _ceil_void = (getattr(props, 'floor_voids', None) or getattr(ctx, 'floor_voids', None) or {}).get(fl_idx + 1, None)
             if _ceil_void is None and fl_idx == 0:
-                _f1_rooms = (getattr(ctx, 'floor_rooms', {}) or {}).get(1, [])
-                for _rm in _f1_rooms:
-                    if getattr(_rm, 'floor_void', None):
-                        _ceil_void = _rm.floor_void
-                        break
+                if 0 in floor_rooms:
+                    _throne = next((r for r in floor_rooms[0] if getattr(r, 'role', '') == 'THRONE_ROOM'), None)
+                    if _throne is not None:
+                        _tx0, _tx1, _ty0, _ty1 = _throne.bounds
+                        _rim = 1.60
+                        _ceil_void = (_tx0 + _rim, _tx1 - _rim, _ty0 + _rim, _ty1 - _rim)
+                if _ceil_void is None:
+                    _f1_rooms = (getattr(ctx, 'floor_rooms', {}) or {}).get(1, [])
+                    for _rm in _f1_rooms:
+                        if getattr(_rm, 'floor_void', None):
+                            _ceil_void = _rm.floor_void
+                            break
             if _ceil_void is None and fl_idx == 0 and bool(getattr(props, 'has_throne_room', False) or getattr(props, 'has_double_height', False)):
                 from .interior import compute_mezzanine_void
                 if getattr(props, 'has_throne_room', False):
@@ -991,6 +998,8 @@ def build_floors(bm, props, ctx):
                 if not hasattr(ctx, 'floor_voids') or ctx.floor_voids is None:
                     ctx.floor_voids = {}
                 ctx.floor_voids[1] = _ceil_void
+                if bool(getattr(props, 'has_double_height', False) or getattr(props, 'noble_manor_layout', False)):
+                    ctx.floor_voids[2] = _ceil_void
             _ceil_holes = []
             if _ceil_stair:
                 _ceil_holes.append(_ceil_stair)
@@ -1758,6 +1767,9 @@ def build_floors(bm, props, ctx):
         for b_entry in balconies_on_fl:
             bs = b_entry.get('side')
             if bs is None:
+                continue
+            # Never place a balcony on a facade that carries an attached wing on this floor!
+            if fl_has_wing and any(w.get('wall') == bs for w in wings):
                 continue
             b_off = float(b_entry.get('offset', 0.0))
             _holes = []

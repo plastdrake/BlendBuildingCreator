@@ -705,7 +705,12 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
         spans[0] = (spans[0][0] + s_trim, spans[0][1])
         spans[-1] = (spans[-1][0], spans[-1][1] - e_trim)
         plinth_spans = spans
-    walk_spans = [(0.0, length)]
+    if gate_gap:
+        breach = gate.get('breach', 3.20)
+        gate_walk_gap = (max(0.0, gate_gap[0] - breach), min(length, gate_gap[1] + breach))
+        walk_spans = _subtract_gaps(length, [gate_walk_gap])
+    else:
+        walk_spans = [(0.0, length)]
 
     # 1. Battered cut-stone plinth (broken only across the gate).
     for u0, u1 in plinth_spans:
@@ -1001,8 +1006,8 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
 
             # Base sits on the edge of the wooden walkway/landing, top leans against the tower terrace parapet opening
             t_u = sgn * (gap_w * 0.5 + 1.40)
-            lad_x0, lad_y0 = at(t_u, 1.85)
-            lad_x1, lad_y1 = at(t_u, 0.58 * 2.10 + 0.15 + 0.05)
+            lad_x0, lad_y0 = at(t_u, 2.05)
+            lad_x1, lad_y1 = at(t_u, 0.58 * 2.10 + 0.38)
 
             bot_pos = Vector((lad_x0, lad_y0, deck_top + 0.04))
             top_pos = Vector((lad_x1, lad_y1, top_z + 0.40))
@@ -1211,7 +1216,7 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
                                    tower_r=2.10, tower_h=wall_h + 1.85,
                                    rear_door=(_rear_mid, 0.85))
 
-    if portcullis:
+    if portcullis and (gate_towers or wall_h >= 4.5):
         from .gatehouse import build_portcullis
         pc_h = min(gate_h - 0.20, wall_h - 1.25)
         pc_raised = min(gate_h - 0.45, wall_h - 1.80)

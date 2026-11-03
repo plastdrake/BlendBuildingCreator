@@ -1280,8 +1280,8 @@ def build_curtain_wall_gate_portal(
         top_z = z_ground + tower_height
 
         # Ladder rests firmly against the tower rear coping lip at the top, and leans outward at the foot
-        bot_pos = Vector((lad_wall_x - ox * 0.75, lad_wall_y - oy * 0.75, z_ground))
-        top_pos = Vector((lad_wall_x - ox * 0.18, lad_wall_y - oy * 0.18, top_z + 0.65))
+        bot_pos = Vector((lad_wall_x - ox * 0.85, lad_wall_y - oy * 0.85, z_ground))
+        top_pos = Vector((lad_wall_x - ox * 0.28, lad_wall_y - oy * 0.28, top_z + 0.65))
 
         lad_vec = top_pos - bot_pos
         lad_len = lad_vec.length

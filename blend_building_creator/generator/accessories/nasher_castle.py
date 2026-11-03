@@ -173,7 +173,7 @@ def _hall_overrides(tier, w, d, floors, shape, facade, ww, wd, roof_h, hid=""):
         o['balcony_side'] = 'FRONT'
         o['balcony_width'] = 3.2
         o['balcony_depth'] = 1.3
-        o['balcony_floors'] = (2, 4)
+        o['balcony_floors'] = (4,)  # Floor 2 has the front wing attached; balcony lives high on Floor 4
         # Oriels on the free exterior West flank (cliffside):
         o['has_mini_wing'] = True
         o['mini_wing_side'] = 'LEFT'
@@ -190,7 +190,7 @@ def _hall_overrides(tier, w, d, floors, shape, facade, ww, wd, roof_h, hid=""):
         o['balcony_side'] = 'FRONT'
         o['balcony_width'] = 3.2
         o['balcony_depth'] = 1.3
-        o['balcony_floors'] = (2, 4)
+        o['balcony_floors'] = (4,)  # Floor 2 has the front wing attached; balcony lives high on Floor 4
         # Oriels on the free exterior East flank (overlooking chasm):
         o['has_mini_wing'] = True
         o['mini_wing_side'] = 'RIGHT'

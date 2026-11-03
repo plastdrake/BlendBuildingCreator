@@ -2851,7 +2851,7 @@ def _furnish_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, 
                          candidate_walls=('WEST', 'EAST', 'SOUTH'))
 
     # 9. Grand chandeliers overhead: centralized above the open mezzanine void
-    ch_drop = max(0.0, (z_ceil - z_floor) - 4.40) if (z_ceil - z_floor) > 4.5 else 0.0
+    ch_drop = max(0.0, (z_ceil - z_floor) - 5.60) if (z_ceil - z_floor) > 5.7 else 0.0
     from ..interior import compute_mezzanine_void
     v_rect = compute_mezzanine_void(rm.bounds, min_rim=2.00, doorways=rm.doorways)
     if v_rect is not None:

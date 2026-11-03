@@ -608,10 +608,11 @@ def _build_foundation(bm, props, ctx):
             main_wt = getattr(ctx, 'wall_t', 0.30)
             hx = ctx.base_w * 0.5 - main_wt * 0.5
             hy = ctx.base_d * 0.5 - main_wt * 0.5
-            bx0 = float(wb[0]) + 0.25
-            bx1 = min(float(wb[1]) - 0.25, hx - 0.30)
-            by0 = float(wb[2]) + 0.25
-            by1 = min(float(wb[3]) + 6.20, hy - 0.30)
+            # Generously pad the cutout margins so the foundation plinth (+0.35m) never encroaches into the cellar ceiling
+            bx0 = float(wb[0]) - 0.35
+            bx1 = min(float(wb[1]) + 0.35, hx + 0.35)
+            by0 = float(wb[2]) - 0.35
+            by1 = min(float(wb[3]) + 6.55, hy + 0.35)
             bs_hole = (bx0, bx1, by0, by1)
         else:
             if getattr(props, 'has_throne_room', False):

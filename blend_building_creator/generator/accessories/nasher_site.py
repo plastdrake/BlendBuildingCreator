@@ -398,23 +398,27 @@ def _stair_flight(bm, y0, z0, y1, z1, width):
 
     # Diagonal running railing capping the cheek walls continuously from bottom to top
     # (terminates cleanly at y=14.80 where meeting the Citadel gate towers, avoiding coplanar overlap)
-    y_rail_end = 14.80 if abs(y1 - 18.0) < 0.1 else y1
-    frac_rail = (y_rail_end - y0) / max(0.01, y1 - y0)
+    is_citadel_top = abs(y1 - 18.0) < 0.1
+    post_xy = rail_w + 0.06
+    y_rail_end = 14.80 if is_citadel_top else y1
+    # Abut rail cleanly against the front face of the post so rail does not slice through post interior
+    y_rail_stop = (y_rail_end - post_xy * 0.5 + 0.02) if is_citadel_top else y_rail_end
+    frac_rail = (y_rail_stop - y0) / max(0.01, y1 - y0)
     z_rail_end = z0 + (z1 - z0) * frac_rail
-    dy = y_rail_end - y0
+    dy = y_rail_stop - y0
     dz = z_rail_end - z0
     ln = math.hypot(dy, dz)
     pitch = math.atan2(dz, dy)
-    yc = (y0 + y_rail_end) * 0.5
+    yc = (y0 + y_rail_stop) * 0.5
     zc = (z0 + z_rail_end) * 0.5 + 0.88
     for side in (-1.0, 1.0):
         sx = side * (width * 0.5 + cheek_w * 0.5)
-        create_beveled_box(bm, size=(rail_w, ln + 0.06, rail_thick),
+        create_beveled_box(bm, size=(rail_w, ln + 0.02, rail_thick),
                            location=(sx, yc, zc),
                            rotation=(pitch, 0.0, 0.0),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
-        if abs(y1 - 18.0) < 0.1:
-            _place_stair_post(bm, sx, y_rail_end, z_rail_end + 0.88, size_xy=0.62, cap_size=0.72, cap_h=0.16)
+        if is_citadel_top:
+            _place_stair_post(bm, sx, y_rail_end, z_rail_end + 0.88, size_xy=post_xy, cap_size=post_xy + 0.10, cap_h=0.18)
         if not is_climb_start and abs(y0 - RAMPS[0][0]) < 0.1:
             _place_stair_post(bm, sx, y0, z0 + 1.50, size_xy=0.62, cap_size=0.72, cap_h=0.16)
 
@@ -1081,7 +1085,7 @@ _RING = (
     (-50.0, -94.0, 0, 0.0, 0),
 )
 _GATE_Y = -88.0
-_GATE_HALF = 1.8
+_GATE_HALF = 2.20
 _GATE_SPAN = 10.0
 _WALL = {1: (3.8, 0.55), 2: (4.8, 0.95), 3: (6.0, 1.2)}
 _SAMPLE = 3.5

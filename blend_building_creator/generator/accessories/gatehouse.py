@@ -203,14 +203,7 @@ def build_drawbridge(bm, cx, cy, z_ground=0.0, width=2.6, length=4.4,
                        location=(ab_pos.x, ab_pos.y, z_ground - ditch_depth * 0.5 + 0.03),
                        rotation=(0.0, 0.0, ang_gate),
                        mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.025)
-    # Low protective stone curbs framing the outer abutment landing
-    for sgn in (-1.0, 1.0):
-        ab_crb_x = ab_pos.x + tx * (sgn * (ab_w * 0.5 - 0.15))
-        ab_crb_y = ab_pos.y + ty * (sgn * (ab_w * 0.5 - 0.15))
-        create_beveled_box(bm, size=(0.32, ab_len + 0.10, 0.42),
-                           location=(ab_crb_x, ab_crb_y, z_ground + 0.26 + 0.21),
-                           rotation=(0.0, 0.0, ang_gate),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
+    # (Outer abutment landing curbs removed to eliminate floating over ramp incline)
 
     # e. Outer Stone Approach Ramp (Outside): gentle stone incline sloping down to ground level
     ramp_out_len = 3.60
@@ -348,8 +341,8 @@ def build_flanking_gate_towers(bm, cx, cy, z_ground=0.0, gap_w=2.8, wall_h=3.2,
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.035)
 
-        # 1. Battered talus base
-        create_beveled_box(bm, size=(pier_w + 0.40, pier_w + 0.40, talus_h),
+        # 1. Battered talus base (kept 5cm narrower on each side to eliminate coplanar conflict with stair cheek walls)
+        create_beveled_box(bm, size=(pier_w + 0.30, pier_w + 0.30, talus_h),
                            location=(tc_x, tc_y, z_ground + talus_h * 0.5),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.035)

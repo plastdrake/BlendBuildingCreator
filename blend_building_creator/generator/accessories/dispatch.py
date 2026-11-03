@@ -113,6 +113,9 @@ def _build_balconies(bm, props, ctx, tier):
             side = b.get('side')
             if side is None:
                 continue
+            # Never build a balcony on a facade that carries an attached wing on this floor!
+            if getattr(ctx, 'fl_has_wing', False) and any(w.get('wall') == side for w in getattr(ctx, 'wings', [])):
+                continue
             bounds = ctx.bounds_for(fl_idx)
             lower = ctx.bounds_for(max(0, fl_idx - 1))
             offset = b.get('offset', 0.0)

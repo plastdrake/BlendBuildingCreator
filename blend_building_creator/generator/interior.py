@@ -3658,16 +3658,20 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
                                       'h': dw_h, 'axis': 'X'}})
 
     if is_full_depth_throne:
+        # On ground floor (fl_idx == 0), the throne sits against a solid continuous back wall (NO door behind throne).
+        # On upper mezzanine floors (fl_idx > 0), a door connects the gallery to the rear corridor.
+        has_rear_door = (fl_idx > 0)
         throne_rear_door = {'x': (throne_bounds[0] + throne_bounds[1]) * 0.5,
                             'y': back_y0, 'axis': 'X',
-                            'w': min(2.60, dw_w + 0.55) if fl_idx == 0 else dw_w}
+                            'w': dw_w} if has_rear_door else None
         walls.append({'p1': (throne_bounds[0], back_y0),
                       'p2': (throne_bounds[1], back_y0),
                       'axis': 'X', 'pos': back_y0, 'thickness': wall_t,
                       'doorway': {'x': throne_rear_door['x'], 'y': back_y0,
-                                  'w': throne_rear_door['w'], 'h': dw_h, 'axis': 'X'}})
-        rear.doorways.append(throne_rear_door)
-        throne_room_obj.doorways.append(throne_rear_door)
+                                  'w': throne_rear_door['w'], 'h': dw_h, 'axis': 'X'} if has_rear_door else None})
+        if has_rear_door:
+            rear.doorways.append(throne_rear_door)
+            throne_room_obj.doorways.append(throne_rear_door)
 
     # The central spine wall between the two chamber rows.
     # When is_full_depth_throne is True, skip the throne room span so it stays one open full-depth space.
@@ -4860,10 +4864,10 @@ def _recut_oversized_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
         if room.role in THROUGH_ROLES or w <= 0.01 or d <= 0.01:
             out.append(room)
             continue
-        # A warehouse/lumber-yard wing is already one purpose-built storage bay.
-        # Re-cutting its 4.2 x 8.5 m footprint produced two narrow rooms and a
-        # partition right beside the cargo-port portal; keep it whole.
-        if getattr(room, 'is_wing', False) and archetype in ('WAREHOUSE', 'LUMBERMILL', 'BUILDER'):
+        # A wing is already a purpose-built architectural bay attached via a portal.
+        # Re-cutting it produces narrow rooms and partitions right down the center
+        # of the portal/doorway. Keep wings under 8m whole.
+        if getattr(room, 'is_wing', False) and (w < 8.0 or d < 8.0 or archetype in ('WAREHOUSE', 'LUMBERMILL', 'BUILDER', 'MANOR', 'KNIGHTS_MANOR', 'NOBLE_MANOR')):
             out.append(room)
             continue
         # Rooms explicitly protected from re-cutting (hallway-planned rooms with
@@ -4956,6 +4960,7 @@ def _recut_oversized_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
             _hi_b = b[1] if n_axis == 'X' else b[3]
             _fixed_coords = []
             _prev = _lo_b
+            _cannot_avoid_door = False
             for _p in _split_coords:
                 for _s0, _s1 in _door_spans:
                     if _s0 - 1e-6 <= _p <= _s1 + 1e-6:
@@ -4963,9 +4968,14 @@ def _recut_oversized_rooms(rooms, interior_walls, bounds, wall_t, dw_w, dw_h,
                                   if c - _prev >= 2.4 and _hi_b - c >= 2.4]
                         if _cands:
                             _p = min(_cands, key=lambda c: abs(c - _p))
+                        else:
+                            _cannot_avoid_door = True
                         break
                 _fixed_coords.append(_p)
                 _prev = _p
+            if _cannot_avoid_door or any(_s0 - 1e-4 <= p <= _s1 + 1e-4 for p in _fixed_coords for _s0, _s1 in _door_spans):
+                out.append(room)
+                continue
             _split_coords = _fixed_coords
 
         _edges = ([b[0]] + list(_split_coords) + [b[1]] if n_axis == 'X'
