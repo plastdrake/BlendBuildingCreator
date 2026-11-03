@@ -532,33 +532,6 @@ def build_bunk_bed(bm, x, y, z_ground=0.0, ang=0.0, length=2.45, width=1.35):
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
-    """Simple high-back tavern chair."""
-    faces = []
-    seat_z, seat_s = seat_h, 0.44
-    faces += create_beveled_box(bm, size=(seat_s, seat_s, 0.06),
-                                location=(0.0, 0.0, seat_z),
-                                mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
-    for sx in (-seat_s / 2 + 0.04, seat_s / 2 - 0.04):
-        for sy in (-seat_s / 2 + 0.04, seat_s / 2 - 0.04):
-            faces += create_beveled_box(bm, size=(0.055, 0.055, seat_z),
-                                        location=(sx, sy, seat_z / 2),
-                                        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
-    # Back posts + slats
-    for sx in (-seat_s / 2 + 0.04, seat_s / 2 - 0.04):
-        faces += create_beveled_box(bm, size=(0.055, 0.055, 0.62),
-                                    location=(sx, seat_s / 2 - 0.04, seat_z + 0.31),
-                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
-    for bz in (seat_z + 0.30, seat_z + 0.52):
-        faces += create_beveled_box(bm, size=(seat_s - 0.04, 0.045, 0.11),
-                                    location=(0.0, seat_s / 2 - 0.04, bz),
-                                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.008)
-    # Side stretchers
-    for sy in (-seat_s / 2 + 0.04, seat_s / 2 - 0.04):
-        faces += create_beveled_box(bm, size=(seat_s - 0.08, 0.035, 0.035),
-                                    location=(0.0, sy, 0.16),
-                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.004)
-    transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
 
 
 def build_indoor_table(bm, x, y, z_ground=0.0, ang=0.0, length=2.10, width=1.15):

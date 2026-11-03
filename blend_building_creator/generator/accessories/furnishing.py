@@ -1344,6 +1344,7 @@ def _furnish_bedroom(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     min_dim = min(rw, rd)
+    rx0, rx1, ry0, ry1 = tracker.rx0, tracker.rx1, tracker.ry0, tracker.ry1
 
     # Hallways, circulation corridors, and narrow passages with multiple doors
     # must NEVER be furnished as bedrooms — dress them cleanly as corridors!
@@ -3727,7 +3728,7 @@ def _furnish_tasting_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
     rcx = (rm.bounds[0] + rm.bounds[1]) * 0.5
     rcy = (rm.bounds[2] + rm.bounds[3]) * 0.5
     # Tasting dining ensemble
-    _furnish_dining(bm, rm, tracker, z_floor, rng, density)
+    _furnish_communal_dining_hall(bm, rm, tracker, z_floor, z_ceil, rng, density)
     # Keg rack & brew racks along walls
     _try_place_wall_prop(bm, 'KEG_RACK', 1.30, 0.62, tracker, z_floor,
                          candidate_walls=('NORTH', 'EAST', 'WEST'))
@@ -4095,10 +4096,10 @@ def _dress_shop_for_trade(bm, tracker: RoomOccupancyTracker, z_floor: float,
             _done = _try_place_wall_prop(bm, 'BOTTLE_CRATE', 0.52, 0.52, tracker,
                                          z_floor, candidate_walls=('EAST', 'WEST', 'SOUTH', 'NORTH')) is not None
         if not _done:
-            for _cx2, _cy2 in ((rm.bounds[0] + 0.35, rm.bounds[2] + 0.35),
-                               (rm.bounds[1] - 0.35, rm.bounds[2] + 0.35),
-                               (rm.bounds[0] + 0.35, rm.bounds[3] - 0.35),
-                               (rm.bounds[1] - 0.35, rm.bounds[3] - 0.35)):
+            for _cx2, _cy2 in ((tracker.rx0 + 0.35, tracker.ry0 + 0.35),
+                               (tracker.rx1 - 0.35, tracker.ry0 + 0.35),
+                               (tracker.rx0 + 0.35, tracker.ry1 - 0.35),
+                               (tracker.rx1 - 0.35, tracker.ry1 - 0.35)):
                 if tracker.is_free(_cx2 - 0.28, _cx2 + 0.28, _cy2 - 0.28, _cy2 + 0.28):
                     tracker.occupy(_cx2 - 0.28, _cx2 + 0.28, _cy2 - 0.28, _cy2 + 0.28)
                     build_prop(bm, 'BOTTLE_CRATE', _cx2, _cy2, z_floor,
@@ -5077,8 +5078,8 @@ def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil:
     rd = rm.bounds[3] - rm.bounds[2]
     tracker.shop_counter = None
 
-    # 1. Merchant counter: freestanding across a wall with a working strip
-    # behind it, else     _counter_len = min(2.0, max(1.2, min(rw, rd) * 0.45))
+    # 1. Merchant counter: freestanding across a wall with a working strip behind it
+    _counter_len = min(2.0, max(1.2, min(rw, rd) * 0.45))
     _placed_counter = None
 
     # Determine staircase side so the counter prioritizes the opposite clear wall

@@ -19,7 +19,7 @@ from mathutils import Vector
 from ..mesh_utils import create_beveled_box, create_cone
 from ..walls import build_wall_with_opening
 from ..openings import build_arrow_slit
-from ..materials import MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_TIMBER
+from ..materials import MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_TIMBER, MAT_INDEX_FLOOR
 from .battlement import build_battlement_run
 from .palisade import (
     compound_bounds, fortification_offset, fortification_depth_extra,

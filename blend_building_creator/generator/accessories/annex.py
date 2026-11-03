@@ -19,7 +19,7 @@ from ..roof.valley import build_valley_rafters, deck_top_z
 from ..interior import build_interior_trims
 from ..style import tier_wall_mat, get_effective_wall_material, get_effective_roof_material
 from ..materials import (
-    MAT_INDEX_STONE, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_FLOOR,
+    MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_TIMBER_FRAME, MAT_INDEX_WOOD, MAT_INDEX_FLOOR,
     MAT_INDEX_PLASTER_EXT, MAT_INDEX_TIMBER,
 )
 from .mini_wing import build_mini_wing

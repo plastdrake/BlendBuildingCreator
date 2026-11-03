@@ -216,6 +216,7 @@ def build_round_tower(bm, props, seed):
         if props.has_ceiling_beams:
             beam_d = 0.16
             beam_span = max(0.25, (cur_r - 0.05) - well_r)
+            beam_mid_r = (well_r + (cur_r - 0.05)) * 0.5
             from .uv_utils import timber_box
             for k in range(segments):
                 b_ang = k * d_ang + offset_ang

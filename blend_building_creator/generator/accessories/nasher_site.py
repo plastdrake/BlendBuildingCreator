@@ -200,13 +200,6 @@ def _ring_fractions(band, rx, ry):
     return inner + [start + band * i / _RADIAL_STEPS for i in range(_RADIAL_STEPS + 1)]
 
 
-def _in_hole(spec, x, y):
-    for hx0, hx1, hy0, hy1 in HOLES.get(spec[0], ()):
-        if hx0 <= x <= hx1 and hy0 <= y <= hy1:
-            return True
-    return False
-
-
 def _build_rock(bm, spec):
     _, cx, cy, rx, ry, _h, _seed, band, _amp, _rough = spec
     fracs = _ring_fractions(band, rx, ry)

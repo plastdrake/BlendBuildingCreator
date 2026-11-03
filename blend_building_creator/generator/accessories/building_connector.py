@@ -1280,6 +1280,7 @@ def build_curtain_wall_gate_portal(
     rung_spacing = 0.32
     d_tangent = Vector((tx, ty, 0.0)).normalized()
     d_rung_rot = Vector((0.0, 0.0, 1.0)).rotation_difference(d_tangent).to_euler()
+    tc_dist = gate_w * 0.5 + tower_rad + 0.20
 
     for sgn in (-1.0, 1.0):
         # Center of this turret
