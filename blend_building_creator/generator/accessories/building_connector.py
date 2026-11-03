@@ -1207,17 +1207,6 @@ def build_curtain_wall_gate_portal(
     gate_deck_z = max(z_ground + wall_h, lintel_top + 0.40, z_ground + pc_top + 0.30)
     tower_height = tower_h if tower_h is not None else max(wall_h + 2.8, (gate_deck_z - z_ground) + 1.8)
 
-    # Cleanly purge any residual stair cheek wall / railing faces within the flanking gate tower footprints
-    stair_cheek_purge = [
-        f for f in bm.faces if f.is_valid
-        and (2.15 <= abs(f.calc_center_median().x) <= 7.0)
-        and (cy - 3.35 <= f.calc_center_median().y <= cy + 1.50)
-        and (z_ground - 0.8 <= f.calc_center_median().z <= z_ground + wall_h + 1.0)
-        and f.material_index in (mat_stone, mat_cut_stone)
-    ]
-    if stair_cheek_purge:
-        bmesh.ops.delete(bm, geom=stair_cheek_purge, context='FACES')
-
     # 1. TWIN FLANKING D-SHAPED BASTION GATE TOWERS (matching main gate style)
     from .gatehouse import build_flanking_gate_towers
     build_flanking_gate_towers(
@@ -1290,9 +1279,9 @@ def build_curtain_wall_gate_portal(
         lad_wall_y = cy + ty * lad_u + oy * rear_wall_dist
         top_z = z_ground + tower_height
 
-        # Ladder rests firmly against the tower rear wall at the top, and leans outward at the foot
-        bot_pos = Vector((lad_wall_x - ox * 0.65, lad_wall_y - oy * 0.65, z_ground))
-        top_pos = Vector((lad_wall_x + ox * 0.05, lad_wall_y + oy * 0.05, top_z + 0.65))
+        # Ladder rests firmly against the tower rear coping lip at the top, and leans outward at the foot
+        bot_pos = Vector((lad_wall_x - ox * 0.75, lad_wall_y - oy * 0.75, z_ground))
+        top_pos = Vector((lad_wall_x - ox * 0.18, lad_wall_y - oy * 0.18, top_z + 0.65))
 
         lad_vec = top_pos - bot_pos
         lad_len = lad_vec.length
@@ -1323,7 +1312,7 @@ def build_curtain_wall_gate_portal(
                 bm, radius=0.018, height=lad_w, segments=8,
                 location=(rp.x, rp.y, rz),
                 rotation=d_rung_rot,
-                mat_index=MAT_INDEX_WOOD
+                mat_index=MAT_INDEX_TIMBER
             )
 
 

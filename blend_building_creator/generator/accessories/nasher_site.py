@@ -486,7 +486,7 @@ def _stair_landing(bm, y0, y1, z, width):
             _place_stair_post(bm, sx, end, z + 1.50, size_xy=0.62, cap_size=0.72, cap_h=0.16)
 
 
-def build_ramp_stairs(bm, width=4.4):
+def build_ramp_stairs(bm, width=4.35):
     """Flights of cheeked stone steps with landings laid over every RAMPS corridor."""
     for y0, z0, y1, z1 in RAMPS:
         if abs(z1 - z0) < 1e-6:

@@ -3397,7 +3397,7 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
     ix_min, ix_max, iy_min, iy_max = bounds
     W = ix_max - ix_min
     D = iy_max - iy_min
-    if W < 22.0 or D < 12.0:
+    if W < 18.0 or D < 9.5:
         return None
 
     stair_on_right = bool(
@@ -3478,7 +3478,7 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
     # deliberately NO banquet hall here; the only one is in the right wing.
     ground_south = ['PANTRY', 'PARLOUR', 'LIBRARY', 'STUDY', 'COUNCIL_CHAMBER',
                     'OFFICE', 'STORAGE', 'OFFICE', 'STUDY']
-    ground_north = ['ARMORY', 'GUARD_ROOM', 'TREASURY', 'STUDY', 'LIBRARY',
+    ground_north = ['ARMORY', 'BARRACKS_DORM', 'TREASURY', 'STUDY', 'LIBRARY',
                     'STORAGE', 'PANTRY', 'OFFICE', 'PARLOUR']
     upper_south = ['BEDROOM', 'GUEST_ROOM', 'BEDROOM', 'GUEST_ROOM', 'STUDY',
                    'BEDROOM', 'GUEST_ROOM', 'BEDROOM', 'STUDY']
@@ -3745,12 +3745,12 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         wing_x = (wx1 + wx2) * 0.5
         main_door_y = wy1 if abs(wy1 - iy_min) < 0.5 else wy2
 
-        if wing_depth >= 6.0:
+        if wing_depth >= 4.0:
             # Determine split point avoiding collision with the cellar stair hole in wing 0
             if wi == 0 and stair_hole is not None:
                 # Cellar stair hole sits around (wy1 + wy2)*0.5 with half-depth 1.80
                 sh_top = stair_hole[3]
-                split_y = max(wy1 + 3.0, min(wy2 - 3.0, sh_top + 0.35))
+                split_y = max(wy1 + 1.8, min(wy2 - 1.8, sh_top + 0.35))
             else:
                 split_y = (wy1 + wy2) * 0.5
 
@@ -3761,7 +3761,7 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
 
             if fl_idx == 0:
                 inner_role = 'KITCHEN' if wi == 0 else 'BANQUET_HALL'
-                outer_role = 'PANTRY' if wi == 0 else 'PARLOUR'
+                outer_role = 'BARRACKS_DORM' if wi == 0 else 'PARLOUR'
             else:
                 inner_role = 'BARRACKS_DORM' if wi == 0 else 'GUEST_ROOM'
                 outer_role = 'ARMORY' if wi == 0 else 'STUDY'
@@ -4191,8 +4191,44 @@ def _replan_knights_manor_ground(rooms, walls, bounds, stair_hole, props, doorwa
         banquet_x0, banquet_x1 = rest_x0, rest_x0 + banquet_w
         kitchen_x0, kitchen_x1 = banquet_x1, rest_x1
     inner_x = stair_x1 if not stair_on_right else stair_x0
-    banquet_stair_x = inner_x
     kitchen_boundary = banquet_x0 if stair_on_right else banquet_x1
+
+    # Ensure neither inner_x nor kitchen_boundary lands inside a wing portal or exterior door
+    door_spans_x = []
+    for d in (doorways or []):
+        if d.get('axis', 'X') == 'X':
+            dc = float(d.get('x', 0.0))
+            dw = float(d.get('w', 1.5) or 1.5)
+            door_spans_x.append((dc - dw * 0.5 - 0.35, dc + dw * 0.5 + 0.35))
+    for w_r in wings:
+        wb = w_r.bounds
+        if wb[3] <= iy_min + 0.45 or wb[2] >= iy_max - 0.45:
+            w_cx = (wb[0] + wb[1]) * 0.5
+            w_span = wb[1] - wb[0]
+            w_pw = min(2.60, max(1.2, w_span - 0.80))
+            door_spans_x.append((w_cx - w_pw * 0.5 - 0.35, w_cx + w_pw * 0.5 + 0.35))
+
+    def _shift_out_of_doors(coord, min_c, max_c):
+        for s0, s1 in door_spans_x:
+            if s0 <= coord <= s1:
+                cands = [c for c in (s0 - 0.05, s1 + 0.05) if min_c <= c <= max_c]
+                if cands:
+                    coord = min(cands, key=lambda c: abs(c - coord))
+        return coord
+
+    kitchen_boundary = _shift_out_of_doors(kitchen_boundary, rest_x0 + 2.5, rest_x1 - 2.5)
+    inner_x = _shift_out_of_doors(inner_x, ix_min + 2.5, ix_max - 2.5)
+    if stair_on_right:
+        banquet_x0 = kitchen_boundary
+        kitchen_x1 = kitchen_boundary
+        stair_x0 = inner_x
+        rest_x1 = inner_x
+    else:
+        banquet_x1 = kitchen_boundary
+        kitchen_x0 = kitchen_boundary
+        stair_x1 = inner_x
+        rest_x0 = inner_x
+    banquet_stair_x = inner_x
 
     new_rooms = []
     stair_old = stair_rm
@@ -5133,7 +5169,7 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
         return stair_hole
 
     if bool(getattr(props, 'noble_manor_layout', False)) and has_interior_walls \
-            and W >= 22.0 and D >= 12.0:
+            and W >= 18.0 and D >= 9.5:
         _noble = _plan_noble_manor_rooms(
             fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             has_stairs_landing, stair_pos_info=stair_pos_info,
@@ -7660,145 +7696,127 @@ def plan_floor_rooms(fl_idx, bounds, stair_hole=None, stair_pos_info=None,
     # All layout branches converge here. A room holding the stair landing, or
     # serving as a two-door route between rooms, is circulation—not a bedroom.
     # One-room small floors remain the intentional combined-cottage exception.
-    # Wing portals are wide openings in the main facade.  A perpendicular
-    # partition that ends on that facade inside the wing's span splits the
-    # entrance in half (Knights Manor T-wing).  Pull such wall ends 1.8 m into
-    # the room so the opening reads as one clear vestibule.
-    if fl_wings_bounds and effective_archetype == 'KNIGHTS_MANOR':
-        _drop_walls = []
-        for w in interior_walls:
-            _p1, _p2 = w.get('p1'), w.get('p2')
-            if not _p1 or not _p2:
-                continue
-            _ax = w.get('axis')
-            _pos = w.get('pos', 0.0)
-            for wb in fl_wings_bounds:
-                try:
-                    wx0, wx1, wy0, wy1 = (float(wb[0]), float(wb[1]),
-                                          float(wb[2]), float(wb[3]))
-                except Exception:
-                    continue
-                _trim = 0.12
-                _changed = False
-                if wy1 <= iy_min + 0.35 and _ax == 'Y' and wx0 + 0.20 < _pos < wx1 - 0.20:
-                    for _k in (0, 1):
-                        _pt = _p1 if _k == 0 else _p2
-                        if abs(_pt[1] - iy_min) < 0.25:
-                            _new = (_pt[0], iy_min + _trim)
-                            if _k == 0:
-                                _p1 = _new
-                            else:
-                                _p2 = _new
-                            _changed = True
-                elif wy0 >= iy_max - 0.35 and _ax == 'Y' and wx0 + 0.20 < _pos < wx1 - 0.20:
-                    for _k in (0, 1):
-                        _pt = _p1 if _k == 0 else _p2
-                        if abs(_pt[1] - iy_max) < 0.25:
-                            _new = (_pt[0], iy_max - _trim)
-                            if _k == 0:
-                                _p1 = _new
-                            else:
-                                _p2 = _new
-                            _changed = True
-                elif wx1 <= ix_min + 0.35 and _ax == 'X' and wy0 + 0.20 < _pos < wy1 - 0.20:
-                    for _k in (0, 1):
-                        _pt = _p1 if _k == 0 else _p2
-                        if abs(_pt[0] - ix_min) < 0.25:
-                            _new = (ix_min + _trim, _pt[1])
-                            if _k == 0:
-                                _p1 = _new
-                            else:
-                                _p2 = _new
-                            _changed = True
-                elif wx0 >= ix_max - 0.35 and _ax == 'X' and wy0 + 0.20 < _pos < wy1 - 0.20:
-                    for _k in (0, 1):
-                        _pt = _p1 if _k == 0 else _p2
-                        if abs(_pt[0] - ix_max) < 0.25:
-                            _new = (ix_max - _trim, _pt[1])
-                            if _k == 0:
-                                _p1 = _new
-                            else:
-                                _p2 = _new
-                            _changed = True
-                if _changed:
-                    _len = math.hypot(_p2[0] - _p1[0], _p2[1] - _p1[1])
-                    if _len < 0.8:
-                        _drop_walls.append(w)
-                    else:
-                        w['p1'], w['p2'] = _p1, _p2
-                        _dw = w.get('doorway')
-                        if _dw:
-                            _coord = _dw.get('y', 0.0) if _dw.get('axis') == 'Y' else _dw.get('x', 0.0)
-                            _lo = min(_p1[1], _p2[1]) if _dw.get('axis') == 'Y' else min(_p1[0], _p2[0])
-                            _hi = max(_p1[1], _p2[1]) if _dw.get('axis') == 'Y' else max(_p1[0], _p2[0])
-                            if not (_lo - 0.05 <= _coord <= _hi + 0.05):
-                                if _dw.get('axis') == 'Y':
-                                    _dw['y'] = (_lo + _hi) * 0.5
-                                else:
-                                    _dw['x'] = (_lo + _hi) * 0.5
-                    break
-        if _drop_walls:
-            interior_walls[:] = [w for w in interior_walls if w not in _drop_walls]
-
-    # Same issue at ordinary exterior entrances: a partition that ends on the
-    # facade inside the front/back/side door span visually splits the doorway.
+    # Doorway & Wing Portal Protection Pass:
+    # An interior wall must NEVER bisect a doorway or wing portal.
+    # Collect all doorway and portal spans on each perimeter facade:
+    _facade_door_spans = {'FRONT': [], 'BACK': [], 'LEFT': [], 'RIGHT': []}
     if doorways:
-        _facade_spans = {'FRONT': [], 'BACK': [], 'LEFT': [], 'RIGHT': []}
-        for _d in (doorways or []):
+        for _d in doorways:
             _dax = _d.get('axis', 'X')
             _dc = _d.get('x', 0.0) if _dax == 'X' else _d.get('y', 0.0)
             _dw = float(_d.get('w', 1.5) or 1.5)
+            _span = (_dc - _dw * 0.5 - 0.35, _dc + _dw * 0.5 + 0.35)
             if _dax == 'X':
                 if abs(_d.get('y', 0.0) - iy_min) < 0.45:
-                    _facade_spans['FRONT'].append((_dc - _dw * 0.5, _dc + _dw * 0.5))
+                    _facade_door_spans['FRONT'].append(_span)
                 elif abs(_d.get('y', 0.0) - iy_max) < 0.45:
-                    _facade_spans['BACK'].append((_dc - _dw * 0.5, _dc + _dw * 0.5))
+                    _facade_door_spans['BACK'].append(_span)
             else:
                 if abs(_d.get('x', 0.0) - ix_min) < 0.45:
-                    _facade_spans['LEFT'].append((_dc - _dw * 0.5, _dc + _dw * 0.5))
+                    _facade_door_spans['LEFT'].append(_span)
                 elif abs(_d.get('x', 0.0) - ix_max) < 0.45:
-                    _facade_spans['RIGHT'].append((_dc - _dw * 0.5, _dc + _dw * 0.5))
-        _drop_doors = []
-        for w in interior_walls:
-            _p1, _p2 = w.get('p1'), w.get('p2')
-            if not _p1 or not _p2:
+                    _facade_door_spans['RIGHT'].append(_span)
+
+    if fl_wings_bounds:
+        for wb in fl_wings_bounds:
+            try:
+                wx0, wx1, wy0, wy1 = float(wb[0]), float(wb[1]), float(wb[2]), float(wb[3])
+            except Exception:
                 continue
-            _ax = w.get('axis')
-            _pos = w.get('pos', 0.0)
-            _trim = 0.12
-            _changed = False
-            if _ax == 'Y' and any(_s0 - 0.35 <= _pos <= _s1 + 0.35
-                                  for _s0, _s1 in _facade_spans['FRONT']):
-                if abs(_p1[1] - iy_min) < 0.25:
-                    _p1 = (_p1[0], iy_min + _trim); _changed = True
-                elif abs(_p2[1] - iy_min) < 0.25:
-                    _p2 = (_p2[0], iy_min + _trim); _changed = True
-            elif _ax == 'Y' and any(_s0 - 0.35 <= _pos <= _s1 + 0.35
-                                    for _s0, _s1 in _facade_spans['BACK']):
-                if abs(_p1[1] - iy_max) < 0.25:
-                    _p1 = (_p1[0], iy_max - _trim); _changed = True
-                elif abs(_p2[1] - iy_max) < 0.25:
-                    _p2 = (_p2[0], iy_max - _trim); _changed = True
-            elif _ax == 'X' and any(_s0 - 0.35 <= _pos <= _s1 + 0.35
-                                    for _s0, _s1 in _facade_spans['LEFT']):
-                if abs(_p1[0] - ix_min) < 0.25:
-                    _p1 = (ix_min + _trim, _p1[1]); _changed = True
-                elif abs(_p2[0] - ix_min) < 0.25:
-                    _p2 = (ix_min + _trim, _p2[1]); _changed = True
-            elif _ax == 'X' and any(_s0 - 0.35 <= _pos <= _s1 + 0.35
-                                    for _s0, _s1 in _facade_spans['RIGHT']):
-                if abs(_p1[0] - ix_max) < 0.25:
-                    _p1 = (ix_max - _trim, _p1[1]); _changed = True
-                elif abs(_p2[0] - ix_max) < 0.25:
-                    _p2 = (ix_max - _trim, _p2[1]); _changed = True
-            if _changed:
-                _len = math.hypot(_p2[0] - _p1[0], _p2[1] - _p1[1])
-                if _len < 0.8:
-                    _drop_doors.append(w)
-                else:
-                    w['p1'], w['p2'] = _p1, _p2
-        if _drop_doors:
-            interior_walls[:] = [w for w in interior_walls if w not in _drop_doors]
+            if wy1 <= iy_min + 0.35:
+                w_cx = (wx0 + wx1) * 0.5
+                w_span = wx1 - wx0
+                w_pw = min(2.60, max(1.2, w_span - 0.80))
+                _facade_door_spans['FRONT'].append((w_cx - w_pw * 0.5 - 0.35, w_cx + w_pw * 0.5 + 0.35))
+            elif wy0 >= iy_max - 0.35:
+                w_cx = (wx0 + wx1) * 0.5
+                w_span = wx1 - wx0
+                w_pw = min(2.60, max(1.2, w_span - 0.80))
+                _facade_door_spans['BACK'].append((w_cx - w_pw * 0.5 - 0.35, w_cx + w_pw * 0.5 + 0.35))
+            elif wx1 <= ix_min + 0.35:
+                w_cy = (wy0 + wy1) * 0.5
+                w_span = wy1 - wy0
+                w_pw = min(2.60, max(1.2, w_span - 0.80))
+                _facade_door_spans['LEFT'].append((w_cy - w_pw * 0.5 - 0.35, w_cy + w_pw * 0.5 + 0.35))
+            elif wx0 >= ix_max - 0.35:
+                w_cy = (wy0 + wy1) * 0.5
+                w_span = wy1 - wy0
+                w_pw = min(2.60, max(1.2, w_span - 0.80))
+                _facade_door_spans['RIGHT'].append((w_cy - w_pw * 0.5 - 0.35, w_cy + w_pw * 0.5 + 0.35))
+
+    _drop_door_walls = set()
+    for w in list(interior_walls):
+        _p1, _p2 = w.get('p1'), w.get('p2')
+        if not _p1 or not _p2:
+            continue
+        _ax = w.get('axis')
+        _pos = float(w.get('pos', 0.0))
+
+        _in_front = (_ax == 'Y' and (abs(_p1[1] - iy_min) < 0.25 or abs(_p2[1] - iy_min) < 0.25)
+                     and any(s0 <= _pos <= s1 for s0, s1 in _facade_door_spans['FRONT']))
+        _in_back  = (_ax == 'Y' and (abs(_p1[1] - iy_max) < 0.25 or abs(_p2[1] - iy_max) < 0.25)
+                     and any(s0 <= _pos <= s1 for s0, s1 in _facade_door_spans['BACK']))
+        _in_left  = (_ax == 'X' and (abs(_p1[0] - ix_min) < 0.25 or abs(_p2[0] - ix_min) < 0.25)
+                     and any(s0 <= _pos <= s1 for s0, s1 in _facade_door_spans['LEFT']))
+        _in_right = (_ax == 'X' and (abs(_p1[0] - ix_max) < 0.25 or abs(_p2[0] - ix_max) < 0.25)
+                     and any(s0 <= _pos <= s1 for s0, s1 in _facade_door_spans['RIGHT']))
+
+        if _in_front or _in_back:
+            rel_spans = []
+            if _in_front: rel_spans.extend(_facade_door_spans['FRONT'])
+            if _in_back:  rel_spans.extend(_facade_door_spans['BACK'])
+            shifted = False
+            for s0, s1 in rel_spans:
+                if s0 <= _pos <= s1:
+                    cands = [c for c in (s0 - 0.05, s1 + 0.05) if ix_min + 1.8 <= c <= ix_max - 1.8]
+                    if cands:
+                        new_pos = min(cands, key=lambda c: abs(c - _pos))
+                        old_pos = _pos
+                        w['pos'] = new_pos
+                        w['p1'] = (new_pos, _p1[1])
+                        w['p2'] = (new_pos, _p2[1])
+                        if w.get('doorway'):
+                            w['doorway']['x'] = new_pos
+                        for r in rooms:
+                            rx0, rx1, ry0, ry1 = r.bounds
+                            if abs(rx1 - old_pos) < 0.08:
+                                r.bounds = (rx0, new_pos, ry0, ry1)
+                            elif abs(rx0 - old_pos) < 0.08:
+                                r.bounds = (new_pos, rx1, ry0, ry1)
+                        shifted = True
+                        break
+            if not shifted:
+                _drop_door_walls.add(id(w))
+
+        elif _in_left or _in_right:
+            rel_spans = []
+            if _in_left:  rel_spans.extend(_facade_door_spans['LEFT'])
+            if _in_right: rel_spans.extend(_facade_door_spans['RIGHT'])
+            shifted = False
+            for s0, s1 in rel_spans:
+                if s0 <= _pos <= s1:
+                    cands = [c for c in (s0 - 0.05, s1 + 0.05) if iy_min + 1.8 <= c <= iy_max - 1.8]
+                    if cands:
+                        new_pos = min(cands, key=lambda c: abs(c - _pos))
+                        old_pos = _pos
+                        w['pos'] = new_pos
+                        w['p1'] = (_p1[0], new_pos)
+                        w['p2'] = (_p2[0], new_pos)
+                        if w.get('doorway'):
+                            w['doorway']['y'] = new_pos
+                        for r in rooms:
+                            rx0, rx1, ry0, ry1 = r.bounds
+                            if abs(ry1 - old_pos) < 0.08:
+                                r.bounds = (rx0, rx1, ry0, new_pos)
+                            elif abs(ry0 - old_pos) < 0.08:
+                                r.bounds = (rx0, rx1, new_pos, ry1)
+                        shifted = True
+                        break
+            if not shifted:
+                _drop_door_walls.add(id(w))
+
+    if _drop_door_walls:
+        interior_walls[:] = [w for w in interior_walls if id(w) not in _drop_door_walls]
 
     if fl_wings_bounds and fl_idx == 0:
         interior_walls = _open_wing_entrance_walls(

@@ -114,8 +114,8 @@ def build_inn_cellar(bm, props, ctx, tier='TIER_2'):
     stair_w = 1.35
     stair_x0 = shx - stair_w * 0.5 - 0.20
     stair_x1 = shx + stair_w * 0.5 + 0.20
-    stair_y0 = shy - stair_depth * 0.5 - 0.25
-    stair_y1 = shy + stair_depth * 0.5 + 0.25
+    stair_y0 = shy - stair_depth * 0.5 - 0.60
+    stair_y1 = shy + stair_depth * 0.5 + 0.60
 
     # Chunky timber ceiling beams give the vaulted cellar some rhythm.
     for _i in range(1, 5):

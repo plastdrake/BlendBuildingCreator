@@ -605,7 +605,7 @@ def build_floors(bm, props, ctx):
                         or _h[3] < slab_ymin or _h[2] > slab_ymax):
                     _main_hole = _h
                     build_stair_hole_trim(bm, _main_hole, slab_z, thickness=0.12,
-                                          mat_index=MAT_INDEX_TIMBER, open_side='W',
+                                          mat_index=MAT_INDEX_TIMBER, open_side='N',
                                           bounds=(slab_xmin, slab_xmax, slab_ymin, slab_ymax))
             _cur_void = (getattr(props, 'floor_voids', None) or getattr(ctx, 'floor_voids', None) or {}).get(fl_idx, None)
             if _cur_void is None and fl_idx == 1:
@@ -757,7 +757,7 @@ def build_floors(bm, props, ctx):
                     mat_idx=floor_mat
                 )
                 if _w_hole is not None:
-                    _open_s = 'W' if (fl_idx == 0 and getattr(props, 'has_basement_stair', False)) else 'N'
+                    _open_s = 'N'
                     build_stair_hole_trim(bm, _w_hole, z_floor + 0.05, thickness=0.12,
                                           mat_index=MAT_INDEX_TIMBER, open_side=_open_s,
                                           bounds=(w_slab_xmin, w_slab_xmax, w_slab_ymin, w_slab_ymax))
@@ -913,6 +913,42 @@ def build_floors(bm, props, ctx):
                                        stair_y_bot - 0.10, stair_y_top + 0.10)
             
             floor_stair_holes[fl_idx + 1] = next_stair_hole
+
+        # Pre-plan Floor 0 rooms early so ceiling beams under Floor 1 know the exact
+        # double-height void (e.g. Throne Room opening) and never place beams across it.
+        if fl_idx == 0 and 0 not in floor_rooms:
+            _sh = cur_stair_hole or next_stair_hole
+            _spi = {
+                'cx': stair_cx,
+                'w': (stair_w * 2.0 + lane_gap) if stair_switchback else stair_w,
+                'y_bot': stair_y_bot, 'y_top': stair_y_top,
+                'y_ascend': stair_ascend_sign,
+                'has_stairs': props.has_stairs, 'style': props.stair_style,
+                'switchback': stair_switchback, 'walk_w': 1.85
+            } if props.has_stairs else None
+            _f0_rooms, _f0_walls = plan_floor_rooms(
+                0, (ix_min, ix_max, iy_min, iy_max),
+                stair_hole=_sh,
+                stair_pos_info=_spi,
+                fl_wings_bounds=fl_wings_bounds if fl_has_wing else None,
+                effective_archetype=effective_archetype,
+                props=props
+            )
+            floor_rooms[0] = _f0_rooms
+            floor_interior_walls[0] = _f0_walls
+            if bool(getattr(props, 'noble_manor_layout', False) or getattr(props, 'has_throne_room', False)):
+                _throne = next((r for r in _f0_rooms if getattr(r, 'role', '') == 'THRONE_ROOM'), None)
+                if _throne is not None:
+                    _tx0, _tx1, _ty0, _ty1 = _throne.bounds
+                    _rim = 1.60
+                    _vx0 = _tx0 + _rim
+                    _vx1 = _tx1 - _rim
+                    _vy0 = _ty0 + _rim
+                    _vy1 = _ty1 - _rim
+                    if _vx1 - _vx0 >= 2.2 and _vy1 - _vy0 >= 2.2:
+                        if not hasattr(ctx, 'floor_voids') or ctx.floor_voids is None:
+                            ctx.floor_voids = {}
+                        ctx.floor_voids[1] = (_vx0, _vx1, _vy0, _vy1)
 
         # Ceiling Beams (underneath next floor, trimmed around stairs).
         # Never on open-air temporary stockpiles: with no walls or roof the
@@ -1086,25 +1122,27 @@ def build_floors(bm, props, ctx):
                 door_offset = getattr(props, 'front_door_offset_x', 0.0)
                 if getattr(props, 'has_throne_room', False):
                     # Align the main building's front entrance directly with the Royal Throne
-                    _sh = cur_stair_hole or next_stair_hole
-                    _spi = {
-                        'cx': stair_cx,
-                        'w': (stair_w * 2.0 + lane_gap) if stair_switchback else stair_w,
-                        'y_bot': stair_y_bot, 'y_top': stair_y_top,
-                        'y_ascend': stair_ascend_sign,
-                        'has_stairs': props.has_stairs, 'style': props.stair_style,
-                        'switchback': stair_switchback, 'walk_w': 1.85
-                    } if props.has_stairs else None
-                    _f0_rooms, _f0_walls = plan_floor_rooms(
-                        0, (ix_min, ix_max, iy_min, iy_max),
-                        stair_hole=_sh,
-                        stair_pos_info=_spi,
-                        fl_wings_bounds=fl_wings_bounds if fl_has_wing else None,
-                        effective_archetype=effective_archetype,
-                        props=props
-                    )
-                    floor_rooms[0] = _f0_rooms
-                    floor_interior_walls[0] = _f0_walls
+                    _f0_rooms = floor_rooms.get(0)
+                    if _f0_rooms is None:
+                        _sh = cur_stair_hole or next_stair_hole
+                        _spi = {
+                            'cx': stair_cx,
+                            'w': (stair_w * 2.0 + lane_gap) if stair_switchback else stair_w,
+                            'y_bot': stair_y_bot, 'y_top': stair_y_top,
+                            'y_ascend': stair_ascend_sign,
+                            'has_stairs': props.has_stairs, 'style': props.stair_style,
+                            'switchback': stair_switchback, 'walk_w': 1.85
+                        } if props.has_stairs else None
+                        _f0_rooms, _f0_walls = plan_floor_rooms(
+                            0, (ix_min, ix_max, iy_min, iy_max),
+                            stair_hole=_sh,
+                            stair_pos_info=_spi,
+                            fl_wings_bounds=fl_wings_bounds if fl_has_wing else None,
+                            effective_archetype=effective_archetype,
+                            props=props
+                        )
+                        floor_rooms[0] = _f0_rooms
+                        floor_interior_walls[0] = _f0_walls
                     _t_rm = next((r for r in _f0_rooms if getattr(r, 'role', '') == 'THRONE_ROOM'), None)
                     if _t_rm is None and _f0_rooms:
                         _t_rm = max(_f0_rooms, key=lambda r: (r.bounds[1] - r.bounds[0]) * (r.bounds[3] - r.bounds[2]))

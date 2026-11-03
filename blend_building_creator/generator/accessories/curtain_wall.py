@@ -927,10 +927,7 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                            location=(px, py, ground_z + (deck_top - ground_z) * 0.5),
                            rotation=(0.0, 0.0, ang),
                            mat_index=MAT_INDEX_STONE, bevel_amount=0.01)
-        create_beveled_box(bm, size=(land_len + 0.02, lat1 - lat0 + 0.02, 0.06),
-                           location=(px, py, deck_top + 0.03),
-                           rotation=(0.0, 0.0, ang),
-                           mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.008)
+
 
         # 2. Solid stone steps descending to courtyard ground
         total_flight_len = run * n
@@ -1003,9 +1000,9 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
             d_r_rot = Vector((0.0, 0.0, 1.0)).rotation_difference(d_tang).to_euler()
 
             # Base sits on the edge of the wooden walkway/landing, top leans against the tower terrace parapet opening
-            t_u = sgn * (gap_w * 0.5 + 0.70)
-            lad_x0, lad_y0 = at(t_u, lat0 + 0.45)
-            lad_x1, lad_y1 = at(t_u, lat0 - 0.05)
+            t_u = sgn * (gap_w * 0.5 + 1.40)
+            lad_x0, lad_y0 = at(t_u, 1.85)
+            lad_x1, lad_y1 = at(t_u, 0.58 * 2.10 + 0.15 + 0.05)
 
             bot_pos = Vector((lad_x0, lad_y0, deck_top + 0.04))
             top_pos = Vector((lad_x1, lad_y1, top_z + 0.40))
@@ -1141,8 +1138,8 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
 
     # Overhanging machicolated defensive platform / fighting deck
     plat_w = gap_w + 1.80
-    plat_depth = frame_depth + 0.50
-    plat_push = push + 0.20
+    plat_depth = frame_depth + 0.42
+    plat_push = push + 0.24
     create_beveled_box(bm, size=(plat_w, plat_depth, plat_thick),
                        location=(cx + ox * plat_push, cy + oy * plat_push, platform_z + plat_thick * 0.5),
                        rotation=(0.0, 0.0, ang),

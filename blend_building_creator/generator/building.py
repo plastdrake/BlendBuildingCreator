@@ -605,7 +605,14 @@ def _build_foundation(bm, props, ctx):
         if (ctx.shape == 'L_SHAPE'
                 or (ctx.shape == 'U_SHAPE' and getattr(props, 'noble_manor_layout', False))) and ctx.wings:
             wb = ctx.wings[0]['base']
-            bs_hole = (float(wb[0]) + 0.25, float(wb[1]) - 0.25, float(wb[2]) + 0.25, float(wb[3]) - 0.25)
+            main_wt = getattr(ctx, 'wall_t', 0.30)
+            hx = ctx.base_w * 0.5 - main_wt * 0.5
+            hy = ctx.base_d * 0.5 - main_wt * 0.5
+            bx0 = float(wb[0]) + 0.25
+            bx1 = min(float(wb[1]) - 0.25, hx - 0.30)
+            by0 = float(wb[2]) + 0.25
+            by1 = min(float(wb[3]) + 6.20, hy - 0.30)
+            bs_hole = (bx0, bx1, by0, by1)
         else:
             if getattr(props, 'has_throne_room', False):
                 bs_hole = (-0.50, 4.10, 10.80, 12.40)
