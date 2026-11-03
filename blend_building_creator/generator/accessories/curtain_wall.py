@@ -1046,6 +1046,29 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                                rotation=(0.0, 0.0, ang),
                                mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
 
+            # Boolean carve / cut a walk-in portal through the gate turret rear wall at the landing
+            from .building_connector import carve_pass_through_portal
+            carve_pass_through_portal(
+                bm,
+                x_span=(tl_x - 0.85, tl_x + 0.85),
+                y_span=(tl_y - 0.90, tl_y + 0.90),
+                z_span=(top_z - 0.05, top_z + 2.45)
+            )
+            # Dressed cut-stone jambs and lintel framing the portal entrance into the gate turret
+            door_w_portal = 1.10
+            door_h_portal = 2.15
+            for j_side in (-1.0, 1.0):
+                jx, jy = at(top_land_u - sgn * j_side * (door_w_portal * 0.5 + 0.10), 1.25)
+                create_beveled_box(bm, size=(0.20, 0.35, door_h_portal),
+                                   location=(jx, jy, top_z + door_h_portal * 0.5),
+                                   rotation=(0.0, 0.0, ang),
+                                   mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+            lx, ly = at(top_land_u, 1.25)
+            create_beveled_box(bm, size=(door_w_portal + 0.40, 0.35, 0.22),
+                               location=(lx, ly, top_z + door_h_portal + 0.11),
+                               rotation=(0.0, 0.0, ang),
+                               mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.015)
+
             # Top-landing guard railing along the exposed outer edge, continuing
             # the flight handrail line (posts + double rail with pyramid caps)
             land_outer_lat = tow_lat_c - 0.50 + (t_w + 1.00) * 0.5 - 0.06
@@ -1101,6 +1124,60 @@ def build_gatehouse_access_stairs(bm, cx, cy, outward, gap_w, ground_z=0.0,
                                rotation=rot_tow_rail,
                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
+
+    # 5. Continuous wooden rampart walkway bridging the gap across the gate opening
+    # connecting the left and right stair landings directly together
+    u_left = - (gap_w * 0.5 + top_off)
+    u_right = (gap_w * 0.5 + top_off)
+    span_u = abs(u_right - u_left)
+    lat_c_walk = (lat0 + lat1) * 0.5
+    walk_w = 1.60
+    wx_mid, wy_mid = at(0.0, lat_c_walk)
+
+    # A. Solid timber plank deck flush with the stone landings
+    create_beveled_box(bm, size=(span_u + 0.10, walk_w, 0.08),
+                       location=(wx_mid, wy_mid, deck_top + 0.04),
+                       rotation=(0.0, 0.0, ang),
+                       mat_index=MAT_INDEX_FLOOR, bevel_amount=0.005)
+
+    # B. Heavy longitudinal timber bearer beams beneath the deck
+    for b_side in (-1.0, 1.0):
+        b_lat = lat_c_walk + b_side * (walk_w * 0.5 - 0.12)
+        bx, by = at(0.0, b_lat)
+        create_beveled_box(bm, size=(span_u + 0.15, 0.18, 0.24),
+                           location=(bx, by, deck_top - 0.12),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+
+    # C. Transverse timber joist brackets spaced every ~2m
+    n_joists = max(4, int(span_u / 1.8))
+    for ji in range(n_joists + 1):
+        ju = u_left + ji * (span_u / n_joists)
+        jx, jy = at(ju, lat_c_walk)
+        create_beveled_box(bm, size=(0.18, walk_w + 0.15, 0.18),
+                           location=(jx, jy, deck_top - 0.22),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+
+    # D. Protective timber railing along the inner bailey edge of the walkway
+    rail_lat = lat_c_walk + walk_w * 0.5 - 0.06
+    n_walk_posts = max(4, int(span_u / 2.0))
+    for pi in range(n_walk_posts + 1):
+        pu = u_left + pi * (span_u / n_walk_posts)
+        px, py = at(pu, rail_lat)
+        create_beveled_box(bm, size=(post_size, post_size, rail_h + 0.08),
+                           location=(px, py, deck_top + (rail_h + 0.08) * 0.5),
+                           rotation=(0.0, 0.0, ang),
+                           mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012)
+    rx_mid, ry_mid = at(0.0, rail_lat)
+    create_beveled_box(bm, size=(span_u + 0.10, 0.12, 0.08),
+                       location=(rx_mid, ry_mid, deck_top + rail_h),
+                       rotation=(0.0, 0.0, ang),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.01)
+    create_beveled_box(bm, size=(span_u + 0.10, 0.08, 0.06),
+                       location=(rx_mid, ry_mid, deck_top + rail_h * 0.5),
+                       rotation=(0.0, 0.0, ang),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
 
 def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
                      gate_h=2.7, portcullis=False, drawbridge=False,
@@ -1204,7 +1281,7 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
         # castle gates read as one family.
         build_flanking_gate_towers(bm, cx, cy, ground_z, gap_w=gap_w,
                                    wall_h=wall_h, wall_t=thickness, outward=(ox, oy),
-                                   tower_r=2.10, tower_h=max(wall_h + 2.8, 7.5),
+                                   tower_r=2.10, tower_h=wall_h + 1.85,
                                    rear_door=(_rear_mid, 0.85))
 
     if portcullis:
