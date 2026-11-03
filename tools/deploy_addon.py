@@ -26,14 +26,20 @@ except Exception as _e:
     print("Version bump skipped:", _e)
 
 targets = [
-    os.path.join(blender_root, "5.2", "extensions", "user_default", "blend_building_creator"),
+    t for t in glob.glob(os.path.join(blender_root, "*", "extensions", "user_default", "blend_building_creator"))
 ]
+# If no existing target directories yet, ensure all present Blender extension versions are targeted
+if not targets:
+    for ext_user in glob.glob(os.path.join(blender_root, "*", "extensions", "user_default")):
+        targets.append(os.path.join(ext_user, "blend_building_creator"))
+if not targets:
+    targets = [
+        os.path.join(blender_root, "5.2", "extensions", "user_default", "blend_building_creator"),
+    ]
 
 # Legacy add-on copies with the same module name conflict with the extension and
 # make only one of the two work. Remove them so a single copy is loaded.
-legacy_dupes = [
-    os.path.join(blender_root, "5.2", "scripts", "addons", "blend_building_creator"),
-]
+legacy_dupes = glob.glob(os.path.join(blender_root, "*", "scripts", "addons", "blend_building_creator"))
 
 for d in legacy_dupes:
     if os.path.exists(d):
