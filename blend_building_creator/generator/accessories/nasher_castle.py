@@ -205,7 +205,7 @@ def _hall_overrides(tier, w, d, floors, shape, facade, ww, wd, roof_h, hid=""):
         o['has_pillared_overhang'] = True
         o['pillared_overhang_side'] = 'FRONT'
         o['pillared_overhang_depth'] = 1.4
-        o['pillared_overhang_pillars'] = 3
+        o['pillared_overhang_pillars'] = 2
         o['pillared_overhang_style'] = 'TIMBER_STONE'
         o['has_balcony'] = True
         o['balcony_side'] = 'FRONT'
@@ -441,13 +441,11 @@ def _build_towers(bm, registry, tier):
             door_angs = ((0, math.pi),)  # West-facing doorway on Floor 0 opening toward East Hall courtyard
             z = _tower_base(x, y, r, door_ang=math.pi)
         elif abs(x - (-27.6)) < 1.0:
-            door_angs = ((1, 0.0),)  # East-facing doorway on Floor 1 connecting into Armory (z=14.86)
-            z = 14.86 - 4.2 - 1.0  # Floor 1 at 14.86 matching Armory and Keep floor level
-            # Ensure stairs never cross the 0 deg East doorway:
-            # Flight 0 starts at 180 deg (West) and lands at 315 deg (North-West).
-            # Flight 1 starts at 60 deg (North-East) and climbs to 195 deg (South-West).
-            # The entire Eastern arc (315 -> 0 -> 60) on Floor 1 is an open landing with zero stairs.
-            stair_base = {0: 180.0, 1: 60.0, 'default': 60.0}
+            door_angs = ((0, 0.0),)  # East-facing doorway on Floor 0 connecting into Armory/Keep at z=14.86
+            z = 14.86 - 1.06  # Floor 0 at 14.86 matching Keep ground floor level with solid floor (no descent into cliffs)
+            # Flight 0 starts at 60 deg (North-East) and climbs to 195 deg (South-West),
+            # leaving the 0 deg East doorway completely clear of stairs on an open landing.
+            stair_base = 60.0
         else:
             d_ang = math.atan2(-y, -x)
             door_angs = ((0, d_ang),)
@@ -455,7 +453,7 @@ def _build_towers(bm, registry, tier):
 
         build_walkable_round_tower(
             bm, cx=x, cy=y, z_base=z, radius=r,
-            num_floors=floors + 1 if tier == 3 else floors,
+            num_floors=floors if abs(x - (-27.6)) < 1.0 else (floors + 1 if tier == 3 else floors),
             floor_h=4.2 if tier == 3 else 4.0,
             tower_type='SPIRE' if roofed else 'BATTLEMENTS', spire_h=spire_h,
             door_angs=door_angs,

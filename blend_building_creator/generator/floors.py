@@ -1672,7 +1672,7 @@ def build_floors(bm, props, ctx):
             or any(b.get('is_noble') for b in balconies_on_fl)
         )
         if is_noble_fl:
-            balc_door_w = 1.80
+            balc_door_w = 1.90
             balc_door_h = min(2.55, floor_h * 0.78)
         else:
             balc_door_w = 0.95

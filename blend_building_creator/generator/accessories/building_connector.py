@@ -2696,7 +2696,7 @@ def build_archive_hall_portal(
         and (11.60 <= f.calc_center_median().x <= 12.40)
         and (34.85 <= f.calc_center_median().y <= 45.15)
         and all(34.85 <= v.co.y <= 45.15 for v in f.verts)
-        and (13.50 <= f.calc_center_median().z <= 26.50)
+        and (9.40 <= f.calc_center_median().z <= 26.50)
         and f.material_index in (
             MAT_INDEX_STONE, MAT_INDEX_CUT_STONE, MAT_INDEX_PLASTER_EXT,
             MAT_INDEX_TIMBER

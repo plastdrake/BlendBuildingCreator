@@ -437,11 +437,10 @@ def build_walkable_round_tower(
                            location=(cx + (radius + 0.18) * ca, cy + (radius + 0.18) * sa, z_top - 0.3),
                            rotation=(0.0, 0.0, ang + math.pi * 0.5),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
-    # Outer corbel projection ring table (open center so stairwell emerges onto the roof deck)
-    ring_slab(bm, r_in=r_wall_in - 0.02, r_out=corbel_r, z=z_top, segments=segments,
-              offset=0.0, mat_index=MAT_INDEX_CUT_STONE, height=0.35, center=(cx, cy))
-
     if tower_type == 'SPIRE':
+        # Outer corbel projection ring table (open center so stairwell emerges onto the roof deck)
+        ring_slab(bm, r_in=r_wall_in - 0.02, r_out=corbel_r, z=z_top, segments=segments,
+                  offset=0.0, mat_index=MAT_INDEX_CUT_STONE, height=0.35, center=(cx, cy))
         # Mage-tower trim: fascia disc + soffit + corbels sealing the eaves so
         # no gap shows backfaces under the witch hat.
         _witch_hat_roof(bm, cx, cy, z_top + 0.35, radius=corbel_r, height=spire_h,
@@ -449,16 +448,17 @@ def build_walkable_round_tower(
         return
 
     # Roof battlement deck with open stairwell cutout (walk straight onto the roof deck)
-    deck_z = z_top + 0.35
+    deck_z = z_top + 0.06
     deck_s_arc = _get_stair_deg(flights - 1) if flights > 0 else None
     _build_watertight_floor(
-        bm, r_floor=r_wall_in + 0.04, z_floor=deck_z + 0.30,
+        bm, r_floor=r_wall_in + 0.04, z_floor=deck_z,
         stair_arc=deck_s_arc, shaft_r_in=r_wall_in,
-        thickness=0.30, cx=cx, cy=cy
+        thickness=0.20, cx=cx, cy=cy
     )
-    # Outer cut-stone parapet walkway ring
-    ring_slab(bm, r_in=r_wall_in - 0.02, r_out=corbel_r, z=deck_z + 0.15, segments=segments,
-              offset=0.0, mat_index=MAT_INDEX_CUT_STONE, height=0.30, center=(cx, cy))
+    # Outer cut-stone parapet walkway ring flush with deck
+    slab_h = 0.30
+    ring_slab(bm, r_in=r_wall_in - 0.02, r_out=corbel_r, z=deck_z - slab_h * 0.5, segments=segments,
+              offset=0.0, mat_index=MAT_INDEX_CUT_STONE, height=slab_h, center=(cx, cy))
     m_h = 1.05
     parapet_r = corbel_r - 0.18
     n_m = max(corbel_count, int(radius * 5))
@@ -467,7 +467,7 @@ def build_walkable_round_tower(
         ca, sa = math.cos(ang), math.sin(ang)
         m_w = (2.0 * math.pi * parapet_r / n_m) * 0.88
         create_beveled_box(bm, size=(m_w, 0.34, m_h),
-                           location=(cx + parapet_r * ca, cy + parapet_r * sa, deck_z + 0.3 + m_h * 0.5),
+                           location=(cx + parapet_r * ca, cy + parapet_r * sa, deck_z + m_h * 0.5),
                            rotation=(0.0, 0.0, ang + math.pi * 0.5),
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.02)
 

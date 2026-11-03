@@ -284,6 +284,19 @@ def build_nasher_dungeon(bm, tier):
     from ..railing import build_railing
     levels = {1: 1, 2: 2}.get(tier, 4)
 
+    # 0. Cleanly carve and purge any intruder foundations, party walls, and connecting wing
+    # masonry occupying the subterranean dungeon Level 0 volume before building the undercroft:
+    carve_pass_through_portal(bm, x_span=(X0 + 0.15, X1 - 0.15), y_span=(Y0 + 0.15, Y1 - 0.15), z_span=(9.40, 13.50))
+    dungeon_intruders = [
+        f for f in bm.faces if f.is_valid
+        and (X0 + 0.20 <= f.calc_center_median().x <= X1 - 0.20)
+        and (Y0 + 0.20 <= f.calc_center_median().y <= Y1 - 0.20)
+        and (9.40 <= f.calc_center_median().z <= 13.50)
+        and f.material_index not in (WALL, FLOOR, BEAM)
+    ]
+    if dungeon_intruders:
+        bmesh.ops.delete(bm, geom=dungeon_intruders, context='FACES')
+
     # 1. Build underground dungeon levels
     for i in range(levels):
         _level(bm, i, LEVEL_Z[i], _hole(i) if i < levels - 1 else None)
