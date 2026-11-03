@@ -1206,6 +1206,17 @@ def build_curtain_wall_gate_portal(
     gate_deck_z = max(z_ground + wall_h, lintel_top + 0.40, z_ground + pc_top + 0.30)
     tower_height = tower_h if tower_h is not None else max(wall_h + 2.8, (gate_deck_z - z_ground) + 1.8)
 
+    # Cleanly purge any residual stair cheek wall / railing faces within the flanking gate tower footprints
+    stair_cheek_purge = [
+        f for f in bm.faces if f.is_valid
+        and (2.15 <= abs(f.calc_center_median().x) <= 7.0)
+        and (cy - 3.35 <= f.calc_center_median().y <= cy + 1.50)
+        and (z_ground - 0.8 <= f.calc_center_median().z <= z_ground + wall_h + 1.0)
+        and f.material_index in (mat_stone, mat_cut_stone)
+    ]
+    if stair_cheek_purge:
+        bmesh.ops.delete(bm, geom=stair_cheek_purge, context='FACES')
+
     # 1. TWIN FLANKING D-SHAPED BASTION GATE TOWERS (matching main gate style)
     from .gatehouse import build_flanking_gate_towers
     build_flanking_gate_towers(
