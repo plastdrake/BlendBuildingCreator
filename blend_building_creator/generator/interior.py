@@ -3740,8 +3740,8 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
                         room.doorways.append(entry)
 
     # --- Wings ------------------------------------------------------------
-    # Smart subdivision: each elongated wing is divided into two logical rooms:
-    # Wing 0 (Left): Inner = Kitchen / Food Prep, Outer = Pantry & Cellar Stairs (fl 0) or Barracks Dorm & Armory (fl 1+)
+    # Smart subdivision:
+    # Wing 0 (Left): Garrison wing subdivided into smaller military squad dorms with bunk beds & armory/quarters.
     # Wing 1 (Right): Inner = Banquet Hall, Outer = Parlor / Sitting Salon (fl 0) or Guest Suite & Study (fl 1+)
     for wi, wb in enumerate(fl_wings_bounds or []):
         wx1, wx2, wy1, wy2 = wb
@@ -3749,7 +3749,74 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
         wing_x = (wx1 + wx2) * 0.5
         main_door_y = wy1 if abs(wy1 - iy_min) < 0.5 else wy2
 
-        if wing_depth >= 4.0:
+        if wi == 0 and wing_depth >= 8.5:
+            # Left wing is the military / retainer garrison.
+            # Subdivide into 3 smaller squad chambers with bunk beds and armory/guard quarters.
+            if stair_hole is not None:
+                sh_bot = stair_hole[2]
+                sh_top = stair_hole[3]
+                split_y2 = max(wy1 + 3.2, min(wy2 - 2.8, sh_top + 0.40))
+                split_y1 = max(wy1 + 2.8, min(split_y2 - 2.8, sh_bot - 0.40))
+            else:
+                split_y1 = wy1 + wing_depth * (1.0 / 3.0)
+                split_y2 = wy1 + wing_depth * (2.0 / 3.0)
+
+            outer_bounds = (wx1, wx2, wy1, split_y1)
+            mid_bounds = (wx1, wx2, split_y1, split_y2)
+            inner_bounds = (wx1, wx2, split_y2, wy2)
+
+            if fl_idx == 0:
+                inner_role = 'ARMORY'
+                mid_role = 'BARRACKS_DORM'
+                outer_role = 'BARRACKS_DORM'
+            else:
+                inner_role = 'OFFICER_QUARTERS'
+                mid_role = 'BARRACKS_DORM'
+                outer_role = 'BARRACKS_DORM'
+
+            part_door1 = {'x': wing_x, 'y': split_y1, 'axis': 'X', 'w': dw_w, 'h': dw_h}
+            walls.append({
+                'p1': (wx1, split_y1), 'p2': (wx2, split_y1),
+                'axis': 'X', 'pos': split_y1, 'thickness': wall_t,
+                'doorway': part_door1
+            })
+            part_door2 = {'x': wing_x, 'y': split_y2, 'axis': 'X', 'w': dw_w, 'h': dw_h}
+            walls.append({
+                'p1': (wx1, split_y2), 'p2': (wx2, split_y2),
+                'axis': 'X', 'pos': split_y2, 'thickness': wall_t,
+                'doorway': part_door2
+            })
+
+            outer_sh = None
+            mid_sh = None
+            inner_sh = None
+            if stair_hole is not None:
+                if not (stair_hole[1] < wx1 or stair_hole[0] > wx2 or stair_hole[3] < wy1 or stair_hole[2] > split_y1):
+                    outer_sh = stair_hole
+                elif not (stair_hole[1] < wx1 or stair_hole[0] > wx2 or stair_hole[3] < split_y1 or stair_hole[2] > split_y2):
+                    mid_sh = stair_hole
+                elif not (stair_hole[1] < wx1 or stair_hole[0] > wx2 or stair_hole[3] < split_y2 or stair_hole[2] > wy2):
+                    inner_sh = stair_hole
+
+            main_dw = {'x': wing_x, 'y': main_door_y, 'axis': 'X', 'w': dw_w}
+            inner_doors = [main_dw, {'x': wing_x, 'y': split_y2, 'axis': 'X', 'w': dw_w}]
+            mid_doors = [{'x': wing_x, 'y': split_y2, 'axis': 'X', 'w': dw_w},
+                         {'x': wing_x, 'y': split_y1, 'axis': 'X', 'w': dw_w}]
+            outer_doors = [{'x': wing_x, 'y': split_y1, 'axis': 'X', 'w': dw_w}]
+
+            rooms.append(Room(
+                id=f"fl{fl_idx}_noble_wing{wi}_inner", floor_idx=fl_idx, role=inner_role,
+                bounds=inner_bounds, is_wing=True, wing_id=wi, doorways=inner_doors,
+                stair_hole=inner_sh, exterior_facades={}, allow_large=True))
+            rooms.append(Room(
+                id=f"fl{fl_idx}_noble_wing{wi}_mid", floor_idx=fl_idx, role=mid_role,
+                bounds=mid_bounds, is_wing=True, wing_id=wi, doorways=mid_doors,
+                stair_hole=mid_sh, exterior_facades={}, allow_large=True))
+            rooms.append(Room(
+                id=f"fl{fl_idx}_noble_wing{wi}_outer", floor_idx=fl_idx, role=outer_role,
+                bounds=outer_bounds, is_wing=True, wing_id=wi, doorways=outer_doors,
+                stair_hole=outer_sh, exterior_facades={}, allow_large=True))
+        elif wing_depth >= 4.0:
             # Determine split point avoiding collision with the cellar stair hole in wing 0
             if wi == 0 and stair_hole is not None:
                 # Cellar stair hole sits around (wy1 + wy2)*0.5 with half-depth 1.80
@@ -3764,7 +3831,7 @@ def _plan_noble_manor_rooms(fl_idx, bounds, stair_hole, wall_t, dw_w, dw_h,
             inner_bounds = (wx1, wx2, split_y, wy2)
 
             if fl_idx == 0:
-                inner_role = 'KITCHEN' if wi == 0 else 'BANQUET_HALL'
+                inner_role = 'ARMORY' if wi == 0 else 'BANQUET_HALL'
                 outer_role = 'BARRACKS_DORM' if wi == 0 else 'PARLOUR'
             else:
                 inner_role = 'BARRACKS_DORM' if wi == 0 else 'GUEST_ROOM'

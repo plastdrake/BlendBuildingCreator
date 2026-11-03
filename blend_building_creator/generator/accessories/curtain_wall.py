@@ -839,7 +839,8 @@ def build_curtain_wall_run(bm, p_start, p_end, outward, ground_z=0.0,
     outer_battlement_gaps = []
     if gate_gap:
         gate_mid_u = (gate_gap[0] + gate_gap[1]) * 0.5
-        gate_half_plat = (gate_gap[1] - gate_gap[0] + 1.80) * 0.5
+        # Clearance of +0.38m ensures the curtain wall merlons do not overlap the gatehouse side return parapet
+        gate_half_plat = (gate_gap[1] - gate_gap[0] + 1.80) * 0.5 + 0.38
         outer_battlement_gaps.append((gate_mid_u - gate_half_plat, gate_mid_u + gate_half_plat))
     battlement_spans = _subtract_gaps(length, outer_battlement_gaps if outer_battlement_gaps else None)
 

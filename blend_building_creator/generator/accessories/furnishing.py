@@ -4959,7 +4959,7 @@ def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
     if rw * rd >= 18.0 and min(rw, rd) >= 2.8:
         _try_place_wall_prop(bm, 'INDOOR_TABLE', 1.60, 0.85, tracker, z_floor,
                              candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'),
-                             length=1.60, width=0.85)
+                             length=1.60)
         _try_place_wall_prop(bm, 'BENCH', 1.40, 0.50, tracker, z_floor,
                              candidate_walls=('SOUTH', 'NORTH', 'EAST', 'WEST'))
 

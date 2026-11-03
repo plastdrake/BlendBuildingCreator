@@ -998,8 +998,6 @@ def build_floors(bm, props, ctx):
                 if not hasattr(ctx, 'floor_voids') or ctx.floor_voids is None:
                     ctx.floor_voids = {}
                 ctx.floor_voids[1] = _ceil_void
-                if bool(getattr(props, 'has_double_height', False) or getattr(props, 'noble_manor_layout', False)):
-                    ctx.floor_voids[2] = _ceil_void
             _ceil_holes = []
             if _ceil_stair:
                 _ceil_holes.append(_ceil_stair)
