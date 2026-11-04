@@ -1193,10 +1193,13 @@ def build_gate_house(bm, cx, cy, outward, gap_w, ground_z=0.0, thickness=0.55,
                            mat_index=MAT_INDEX_CUT_STONE, bevel_amount=0.008)
 
     # Side return parapets on left and right flanks connecting curtain wall parapet to gate front parapet
+    # Terminate strictly at the back of the front parapet/merlons (front_edge_push - 0.15)
+    # so there is zero overlap or coplanar conflict with the front merlon and its coping cap.
     off_out = thickness * 0.5 - 0.30 * 0.5 + 0.02
-    side_len = front_edge_push - off_out
+    front_term = front_edge_push - 0.15
+    side_len = front_term - off_out
     if side_len > 0.15:
-        side_push = (off_out + front_edge_push) * 0.5
+        side_push = (off_out + front_term) * 0.5
         for s in (-1.0, 1.0):
             su = s * (plat_w * 0.5 - 0.12)
             spx = cx + tx * su + ox * side_push

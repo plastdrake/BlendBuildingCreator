@@ -60,22 +60,18 @@ class RoomOccupancyTracker:
         if stair_hole is not None:
             sx0, sx1, sy0, sy1 = stair_hole
             self.stair_hole_rect = (sx0, sx1, sy0, sy1)
-            # Snug reservation: the flight opening plus a small working margin.
-            # Oversized pads used to swallow whole small rooms (e.g. the 7.5 m
-            # fishery cottage), leaving no floor for a bed or kitchen.
-            pad_land = 0.45
-            pad_side = 0.35
+            pad_land = 0.85
+            pad_side = 0.65
             self.stair_box = (sx0 - pad_side, sx1 + pad_side,
                               sy0 - pad_land, sy1 + pad_land)
             self.occupied_boxes.append(self.stair_box)
 
             # Stairs in this generator run along Y, so the step-on/off approach
-            # belongs at the two Y ends (2x2 m), never on the sides. Picking the
-            # sides for a wide switchback well starved the rest of the room.
+            # belongs at the two Y ends (2x2 m), never on the sides.
             self.stair_approach = []
             _axc = (sx0 + sx1) * 0.5
-            for _aye in (sy0 - 0.95, sy1 + 0.95):
-                _ab = (_axc - 1.0, _axc + 1.0, _aye - 1.0, _aye + 1.0)
+            for _aye in (sy0 - 1.10, sy1 + 1.10):
+                _ab = (_axc - 1.10, _axc + 1.10, _aye - 1.10, _aye + 1.10)
                 self.stair_approach.append(_ab)
                 self.occupied_boxes.append(_ab)
 
@@ -160,6 +156,13 @@ class RoomOccupancyTracker:
             if math.hypot(x - dcx, y - dcy) < r:
                 return True
         return False
+
+    def is_near_stair(self, x: float, y: float, radius: float = 1.20) -> bool:
+        """Returns True if (x, y) is within clearance distance of any stair hole."""
+        if not hasattr(self, 'stair_hole_rect') or self.stair_hole_rect is None:
+            return False
+        sx0, sx1, sy0, sy1 = self.stair_hole_rect
+        return (sx0 - radius <= x <= sx1 + radius and sy0 - radius <= y <= sy1 + radius)
 
     def is_free(self, bx0: float, bx1: float, by0: float, by1: float, margin: float = 0.03,
                 ignore_chimney: bool = False, check_windows: bool = False,
@@ -2427,6 +2430,8 @@ def _furnish_kitchen(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ce
         for cy in (rm.bounds[2] + 0.40, rm.bounds[3] - 0.40):
             jx = cx + _jit(rng, 0.08)
             jy = cy + _jit(rng, 0.08)
+            if tracker.is_near_stair(jx, jy, radius=1.35):
+                continue
             if tracker.is_free(jx - 0.24, jx + 0.24, jy - 0.24, jy + 0.24):
                 tracker.occupy(jx - 0.24, jx + 0.24, jy - 0.24, jy + 0.24)
                 prop = rng.choice(['BARREL', 'CRATE', 'SACK'])
@@ -4940,7 +4945,11 @@ def _furnish_barracks_dorm(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
                     placed_bunks += 1
 
     if placed_bunks == 0:
-        _try_place_bed(bm, tracker, z_floor, length=2.0, width=1.1)
+        binfo = _try_place_bunk(bm, tracker, z_floor, length=2.0, width=1.1, only_wall=None, wall_gap=0.0)
+        if binfo is not None:
+            placed_bunks += 1
+        else:
+            _try_place_bed(bm, tracker, z_floor, length=2.0, width=1.1)
 
     # Footlockers along free wall
     _try_place_wall_prop(bm, 'CHEST', 0.95, 0.55, tracker, z_floor,
