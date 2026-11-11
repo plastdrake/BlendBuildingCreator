@@ -888,19 +888,19 @@ def build_balance_scale(bm, x, y, z_ground=0.0, ang=0.0):
     return faces
 
 
-def build_anvil(bm, x, y, z_ground=0.0, ang=0.0):
+def build_anvil(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
     """Smith's anvil on a log stump — the artist's Anvil_Tool.fbx (per-face
     iron/log materials), falling back to the stylized build if unbaked."""
     try:
         if _stamp_baked_tool(bm, None, 'anvil_tool', x, y, z_ground, ang,
-                             length=0.64, lay_flat=False, long='X'):
+                             length=0.64 * scale, lay_flat=False, long='X'):
             return True
     except Exception:
         pass
-    return _procedural_anvil(bm, x, y, z_ground, ang)
+    return _procedural_anvil(bm, x, y, z_ground, ang, scale)
 
 
-def _procedural_anvil(bm, x, y, z_ground=0.0, ang=0.0):
+def _procedural_anvil(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
     """Smith's anvil on a stump: tapered waist, full face, conical horn."""
     faces = []
     faces += create_cylinder(
@@ -942,7 +942,10 @@ def _procedural_anvil(bm, x, y, z_ground=0.0, ang=0.0):
         location=(-0.23 - 0.05, 0.0, 0.78 + 0.05),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.010
     )
-    transform_faces(faces, _place(x, y, z_ground, ang))
+    transform_faces(
+        faces,
+        _place(x, y, z_ground, ang) @ Matrix.Diagonal((scale, scale, scale, 1.0)),
+    )
     return faces
 
 

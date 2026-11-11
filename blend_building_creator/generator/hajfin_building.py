@@ -1376,20 +1376,44 @@ def _build_hajfin_cargo_stack(bm, x, y, z):
     create_torus_ring(bm, (x + 0.48, y - 0.20, z + 0.70 + 0.08), major_radius=0.28, minor_radius=0.06, mat_index=MAT_INDEX_ROPE)
 
 
-def _build_hajfin_counter_shelf(bm, x, y, z, width=3.2, height=2.2):
-    """Back wall shelving rack loaded with scrimshaw, jars, and trinkets."""
-    shelf_d = 0.55
-    create_box(bm, (width, shelf_d, height), (x, y, z + height * 0.5), mat_index=MAT_INDEX_TIMBER)
-    # Shelves
-    num_shelves = 3
-    for si in range(num_shelves):
-        sz = z + 0.35 + si * ((height - 0.5) / (num_shelves - 1))
-        create_box(bm, (width + 0.1, shelf_d + 0.1, 0.08), (x, y, sz), mat_index=MAT_INDEX_TIMBER)
-        # Jars and bone trinkets on shelves
-        for item_i in range(3):
-            ix = x - width * 0.35 + item_i * (width * 0.35)
-            create_cylinder(bm, radius=0.12, height=0.28, segments=7,
-                            location=(ix, y + 0.08, sz + 0.16), mat_index=MAT_INDEX_BONE)
+def _build_hajfin_bone_shop_table(bm, x, y, z, width=3.8):
+    """Rough open display table for heavy scrimshaw and salvaged goods."""
+    table_d = 0.95
+    table_h = 1.18
+    top_th = 0.18
+    create_box(
+        bm, (width, table_d, top_th),
+        (x, y, z + table_h), rotation=(0.0, 0.018, -0.012),
+        mat_index=MAT_INDEX_TIMBER,
+    )
+    # Uneven legs deliberately read as lashed driftwood, not a solid wall box.
+    for lx, ly, lean in (
+        (x - width * 0.42, y - table_d * 0.34, -0.035),
+        (x + width * 0.39, y - table_d * 0.30, 0.028),
+        (x - width * 0.36, y + table_d * 0.30, 0.022),
+        (x + width * 0.43, y + table_d * 0.28, -0.030),
+    ):
+        create_box(
+            bm, (0.24, 0.24, table_h),
+            (lx, ly, z + table_h * 0.5),
+            rotation=(lean, -lean * 0.6, 0.0),
+            mat_index=MAT_INDEX_TIMBER,
+        )
+    # Open lower rack for crates and bone stock; it stays visibly separate
+    # from the wall and leaves the floor readable beneath the table.
+    create_box(
+        bm, (width - 0.28, 0.70, 0.14),
+        (x, y + 0.02, z + 0.42),
+        rotation=(0.0, -0.012, 0.008),
+        mat_index=MAT_INDEX_TIMBER,
+    )
+    for sgn in (-1.0, 1.0):
+        create_box(
+            bm, (0.16, 0.76, 0.48),
+            (x + sgn * (width * 0.5 - 0.16), y + 0.02, z + 0.66),
+            rotation=(0.0, sgn * 0.025, 0.0),
+            mat_index=MAT_INDEX_TIMBER,
+        )
 
 
 # =============================================================================
@@ -2378,7 +2402,9 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
     # Massive cantilevered trade counter slab protruding forward
     counter_depth = 0.92
     counter_slab_th = 0.18
-    counter_cy = -hd - (counter_depth * 0.5 - wall_th)
+    # Set the slab's rear edge flush with the exterior face of the wall.
+    # The previous center placed 26 cm of timber inside the wall volume.
+    counter_cy = -hd - wall_th * 0.5 - counter_depth * 0.5
     create_box(bm, (counter_w + 0.44, counter_depth, counter_slab_th),
                (stall_cx, counter_cy, counter_top_z - counter_slab_th * 0.5), mat_index=MAT_INDEX_TIMBER)
 
@@ -2654,7 +2680,7 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
                    (0.0, skirt_my + sgn_sk * (skirt_d * 0.5 - 0.05), z_mid + 0.09), mat_index=MAT_INDEX_TIMBER)
 
     # 10. Interior Trade Room Furniture & Props
-    _build_hajfin_counter_shelf(bm, 0.0, -hd + 3.2, z0, width=3.8, height=2.4)
+    _build_hajfin_bone_shop_table(bm, 0.0, -hd + 3.2, z0, width=3.8)
     _build_hajfin_weapon_rack(bm, -hw + 1.2, 0.0, z0, rot_z=math.pi * 0.5)
 
     # 11. Multi-Tier Bone Scale Roofs with Full Solid Gable Triangles
@@ -3179,46 +3205,43 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
         for cy in (-hd, hd):
             _build_chunky_corner_column(bm, cx, cy, z0, z0 + height, size=col_size, extend_top=0.0)
 
-    # Back wall & Left wall (Semi-enclosed to shield forge wind)
-    create_box(bm, (width - col_size, wall_th, height), (0.0, hd - wall_th * 0.5, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    create_box(bm, (wall_th, depth - col_size, height), (-hw + wall_th * 0.5, 0.0, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-
-    # Front eave beam & Right eave beam
+    # Open-air canopy beams; the forge remains exposed to wind and smoke.
     create_box(bm, (width, 0.32, 0.32), (0.0, -hd, z0 + height - 0.16), mat_index=MAT_INDEX_DRIFTWOOD)
     create_box(bm, (0.32, depth, 0.32), (hw, 0.0, z0 + height - 0.16), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 3. Authentic Stone Smelting Furnace with Glowing Firebox & Chimney
-    f_w, f_d, f_h = 2.4, 2.0, 1.25
+    # 3. Primitive open coal-bed forge: low stone rim, fuel chunks, and heat.
+    f_w, f_d, f_h = 2.25, 1.65, 0.38
     furnace_x = -hw + f_w * 0.5 + 0.8
-    furnace_y = hd - f_d * 0.5 - 0.8
+    furnace_y = hd - f_d * 0.5 - 1.0
     create_box(bm, (f_w, f_d, f_h), (furnace_x, furnace_y, z0 + f_h * 0.5), mat_index=MAT_INDEX_ROUGH_STONE)
-    # Fire opening facing East towards the smith (+X)
-    face_x = furnace_x + f_w * 0.5
-    open_w, open_h = 0.85, 0.60
-    open_cy = furnace_y
-    open_cz = z0 + 0.55
-    create_box(bm, (0.45, open_w, open_h), (face_x - 0.20, open_cy, open_cz), mat_index=MAT_INDEX_IRON)
-    create_box(bm, (0.35, open_w - 0.12, 0.16), (face_x - 0.16, open_cy, z0 + 0.35), mat_index=MAT_INDEX_LANTERN)
-    # Cut stone arch voussoirs over hearth mouth
-    _arch_r = open_w * 0.5 + 0.08
-    _arch_cz = open_cz + open_h * 0.35
-    for k in range(7):
-        a = math.pi * (0.08 + 0.84 * k / 6)
-        create_box(bm, (0.22, 0.24, 0.18),
-                   (face_x + 0.03, open_cy + _arch_r * math.cos(a), _arch_cz + _arch_r * math.sin(a) * 0.70),
-                   rotation=(a - math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_CUT_STONE)
-    # Forged iron hood tapering upward
-    hood_h = 0.75
-    create_box(bm, (f_w - 0.15, f_d - 0.15, hood_h),
-               (furnace_x, furnace_y, z0 + f_h + hood_h * 0.5), mat_index=MAT_INDEX_IRON)
-    # Towering stone chimney flue rising through roof
-    chim_h = height + roof_h + 1.2 - (f_h + hood_h)
-    chim_z = z0 + f_h + hood_h + chim_h * 0.5
-    create_box(bm, (1.1, 1.1, chim_h), (furnace_x, furnace_y, chim_z), mat_index=MAT_INDEX_ROUGH_STONE)
-    create_box(bm, (1.35, 1.35, 0.16), (furnace_x, furnace_y, z0 + f_h + hood_h + chim_h + 0.08), mat_index=MAT_INDEX_CUT_STONE)
+    rim_h = 0.22
+    for rx, ry, rw, rd in (
+        (furnace_x, furnace_y - f_d * 0.5, f_w, 0.16),
+        (furnace_x, furnace_y + f_d * 0.5, f_w, 0.16),
+        (furnace_x - f_w * 0.5, furnace_y, 0.16, f_d - 0.18),
+        (furnace_x + f_w * 0.5, furnace_y, 0.16, f_d - 0.18),
+    ):
+        create_box(bm, (rw, rd, rim_h), (rx, ry, z0 + f_h + rim_h * 0.5),
+                   mat_index=MAT_INDEX_ROUGH_STONE)
+    for ci in range(9):
+        cx = furnace_x + random.uniform(-f_w * 0.35, f_w * 0.35)
+        cy = furnace_y + random.uniform(-f_d * 0.30, f_d * 0.30)
+        chunk = random.uniform(0.10, 0.18)
+        create_beveled_box(
+            bm, (chunk * 1.5, chunk, chunk * 0.8),
+            (cx, cy, z0 + f_h + 0.12),
+            rotation=(random.uniform(-0.3, 0.3), random.uniform(-0.3, 0.3),
+                      random.uniform(0.0, math.pi)),
+            mat_index=MAT_INDEX_IRON, bevel_amount=chunk * 0.18,
+        )
+    create_cylinder(
+        bm, radius=0.42, height=0.10, segments=10,
+        location=(furnace_x, furnace_y, z0 + f_h + 0.16),
+        mat_index=MAT_INDEX_LANTERN,
+    )
 
     # 4. Master Blacksmith Anvil from FBX (reusing artisan props builder)
-    build_anvil(bm, x=furnace_x + 2.4, y=furnace_y - 0.9, z_ground=z0 + 0.14, ang=0.4)
+    build_anvil(bm, x=furnace_x + 2.4, y=furnace_y - 0.9, z_ground=z0 + 0.14, ang=0.4, scale=1.2)
 
     # 5. Hollow Timber Quenching Water Tub
     quench_x = furnace_x + 2.5
