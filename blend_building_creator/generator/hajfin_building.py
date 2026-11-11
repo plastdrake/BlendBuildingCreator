@@ -77,9 +77,10 @@ def _build_chunky_corner_column(bm, x, y, z0, z1, size=0.42, extend_top=0.38, wi
 
 
 def _build_wall_with_door_opening(bm, x0, x1, y, z0, z1, door_cx, door_w, door_h,
-                                  wall_th=0.26, rot_z=0.0):
-    """Builds a solid timber wall with a GENUINE DOOR OPENING cutout, recessed plank door,
-    threshold sill, header lintel, and shark jaw archway wrapping the opening."""
+                                  wall_th=0.26, rot_z=0.0, include_leaf=False):
+    """Builds a solid timber wall with a GENUINE DOOR OPENING cutout,
+    threshold sill, header lintel, and shark jaw archway wrapping the opening.
+    Door leaf is omitted by default so openings remain clear for Unreal Engine interactive doors."""
     rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
     d_half_w = door_w * 0.5
 
@@ -111,23 +112,24 @@ def _build_wall_with_door_opening(bm, x0, x1, y, z0, z1, door_cx, door_w, door_h
     create_box(bm, (door_w + 0.15, wall_th + 0.08, 0.14), (pos.x, pos.y, pos.z),
                rotation=(0, 0, rot_z), mat_index=MAT_INDEX_FLOOR)
 
-    # 5. Recessed Timber Plank Door Leaf (Set back ~10cm inside the opening)
-    recess = wall_th * 0.25
-    door_pos = rot_mat @ Vector((door_cx, y + recess, z0 + door_h * 0.48))
-    create_box(bm, (door_w * 0.90, 0.08, door_h * 0.96), (door_pos.x, door_pos.y, door_pos.z),
-               rotation=(0, 0, rot_z), mat_index=MAT_INDEX_DRIFTWOOD)
+    # 5. Optional Recessed Door Leaf (ONLY if include_leaf is True, False by default for UE export)
+    if include_leaf:
+        recess = wall_th * 0.25
+        door_pos = rot_mat @ Vector((door_cx, y + recess, z0 + door_h * 0.48))
+        create_box(bm, (door_w * 0.90, 0.08, door_h * 0.96), (door_pos.x, door_pos.y, door_pos.z),
+                   rotation=(0, 0, rot_z), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # Iron hinges/bands across the recessed door
-    for hz in (z0 + door_h * 0.22, z0 + door_h * 0.72):
-        h_pos = rot_mat @ Vector((door_cx, y + recess - 0.045, hz))
-        create_box(bm, (door_w * 0.88, 0.02, 0.07), (h_pos.x, h_pos.y, h_pos.z),
-                   rotation=(0, 0, rot_z), mat_index=MAT_INDEX_IRON)
+        # Iron hinges/bands across the recessed door
+        for hz in (z0 + door_h * 0.22, z0 + door_h * 0.72):
+            h_pos = rot_mat @ Vector((door_cx, y + recess - 0.045, hz))
+            create_box(bm, (door_w * 0.88, 0.02, 0.07), (h_pos.x, h_pos.y, h_pos.z),
+                       rotation=(0, 0, rot_z), mat_index=MAT_INDEX_IRON)
 
-    # Iron pull ring handle
-    ring_pos = rot_mat @ Vector((door_cx + door_w * 0.28, y + recess - 0.06, z0 + door_h * 0.45))
-    create_torus_ring(bm, (ring_pos.x, ring_pos.y, ring_pos.z),
-                      rotation=(math.pi * 0.5, 0, rot_z), major_radius=0.065, minor_radius=0.013,
-                      major_segments=10, minor_segments=6, mat_index=MAT_INDEX_IRON)
+        # Iron pull ring handle
+        ring_pos = rot_mat @ Vector((door_cx + door_w * 0.28, y + recess - 0.06, z0 + door_h * 0.45))
+        create_torus_ring(bm, (ring_pos.x, ring_pos.y, ring_pos.z),
+                          rotation=(math.pi * 0.5, 0, rot_z), major_radius=0.065, minor_radius=0.013,
+                          major_segments=10, minor_segments=6, mat_index=MAT_INDEX_IRON)
 
     # 6. Shark Jaw Bone Arch wrapped around the opening
     _build_shark_jaw_arch(bm, door_cx, y - wall_th * 0.45, z0, rot_z=rot_z,
@@ -606,12 +608,13 @@ def _build_hajfin_shanty(bm, props, width=6.5, depth=7.5, height=3.6, found_h=1.
     create_box(bm, (width - wall_th * 2, wall_th, height),
                (0.0, hd - wall_th * 0.5, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 4. Front Wall with REAL DOOR OPENING
+    # 4. Front Wall with REAL DOOR OPENING (No door leaf by default for UE export)
     door_w = 1.40
     door_h = min(2.5, height * 0.72)
     _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
                                   z0, z1, door_cx=0.0, door_w=door_w, door_h=door_h,
-                                  wall_th=wall_th, rot_z=0.0)
+                                  wall_th=wall_th, rot_z=0.0,
+                                  include_leaf=getattr(props, 'include_door_leaves', False))
 
     # 5. Solid Gable Triangle Walls (Front & Rear) - SEALS ROOF GAPS 100%
     _build_gable_triangle_wall(bm, -hw, hw, -hd + wall_th * 0.5, z1, peak_z, wall_th=wall_th)
@@ -630,33 +633,102 @@ def _build_hajfin_shanty(bm, props, width=6.5, depth=7.5, height=3.6, found_h=1.
 
 def _build_hajfin_round_hut(bm, props, diameter=7.5, height=3.8, found_h=0.8):
     """The Tapered Round Bone-Scale Hut (Image 2):
-    8-sided tapered conical timber hut, massive perimeter posts, conical bone-scale roof
-    with solid underlay, central shark fin crown with bone spears, shark jaw door,
-    and massive whale vertebrae buttress curving up the rear wall!"""
+    8-sided tapered conical timber hut, massive perimeter posts flanking doorways, conical bone-scale roof
+    with solid underlay, central shark fin crown with bone spears, shark jaw door with open walkthrough
+    (no door leaf by default for UE export), and massive whale vertebrae buttress curving up the rear wall!"""
     r_base = diameter * 0.5
     r_top = r_base * 0.82
     z0 = found_h
     z1 = z0 + height
     num_facets = 8
+    wall_th = 0.24
+    include_leaves = getattr(props, 'include_door_leaves', False)
 
     # 1. Reef stone foundation ring
     create_cylinder(bm, radius=r_base * 1.05, height=found_h + 0.1, segments=num_facets,
                     location=(0.0, 0.0, found_h * 0.5), mat_index=MAT_INDEX_ROUGH_STONE)
 
-    # 2. Tapered 8-sided body shell
-    create_cone(bm, radius1=r_base, radius2=r_top, height=height, segments=num_facets,
-                location=(0.0, 0.0, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    # Interior wooden floor slab
+    create_cylinder(bm, radius=r_base * 0.98, height=0.12, segments=num_facets,
+                    location=(0.0, 0.0, z0 + 0.06), mat_index=MAT_INDEX_FLOOR)
 
-    # 3. Perimeter Timber Corner Posts
-    col_size = 0.36
+    # 2. Tapered 8-sided body shell (7 solid facets, Facet 6 is South Doorway)
+    # Lean angle of the walls inward towards top
+    lean_pitch = math.atan2(r_base - r_top, height)
+    facet_w_bot = 2.0 * r_base * math.sin(math.pi / num_facets)
+    facet_w_top = 2.0 * r_top * math.sin(math.pi / num_facets)
+    facet_dist_bot = r_base * math.cos(math.pi / num_facets)
+    facet_dist_top = r_top * math.cos(math.pi / num_facets)
+    mid_dist = (facet_dist_bot + facet_dist_top) * 0.5
+
+    door_w = 1.35
+    door_h = 2.40
+
     for i in range(num_facets):
-        ang = i * (2.0 * math.pi / num_facets)
-        bx = math.cos(ang) * r_base
-        by = math.sin(ang) * r_base
-        tx = math.cos(ang) * r_top
-        ty = math.sin(ang) * r_top
-        lean_pitch = math.atan2(r_base - r_top, height)
-        post_rot = (lean_pitch * math.sin(ang), -lean_pitch * math.cos(ang), ang)
+        ac = i * (2.0 * math.pi / num_facets)  # 0=E, 2=N, 4=W, 6=S
+        if i == 6:
+            # SOUTH DOOR FACET: Real cut doorway opening!
+            # Left jamb
+            jamb_w = (facet_w_bot - door_w) * 0.5
+            if jamb_w > 0.05:
+                # Left wall segment
+                lx = -door_w * 0.5 - jamb_w * 0.5
+                create_box(bm, (jamb_w, wall_th, height), (lx, -mid_dist, z0 + height * 0.5),
+                           rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD)
+                # Right wall segment
+                rx = door_w * 0.5 + jamb_w * 0.5
+                create_box(bm, (jamb_w, wall_th, height), (rx, -mid_dist, z0 + height * 0.5),
+                           rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD)
+
+            # Lintel segment above door up to eave
+            lintel_h = height - door_h
+            if lintel_h > 0.05:
+                create_box(bm, (door_w, wall_th, lintel_h),
+                           (0.0, -mid_dist - (door_h + lintel_h * 0.5 - height * 0.5) * math.tan(lean_pitch),
+                            z0 + door_h + lintel_h * 0.5),
+                           rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD)
+
+            # Threshold sill beam at bottom
+            create_box(bm, (door_w + 0.20, wall_th + 0.08, 0.12), (0.0, -facet_dist_bot, z0 - 0.05),
+                       mat_index=MAT_INDEX_FLOOR)
+
+            # Carved bone shark fin emblem plaque above door header (Image 2)
+            emblem_z = z0 + door_h + 0.45
+            create_box(bm, (0.65, 0.06, 0.45),
+                       (0.0, -mid_dist - (emblem_z - z0 - height * 0.5) * math.tan(lean_pitch) - 0.05, emblem_z),
+                       rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_BONE)
+            create_cone(bm, radius1=0.22, radius2=0.03, height=0.38, segments=4,
+                        location=(0.0, -mid_dist - (emblem_z - z0 - height * 0.5) * math.tan(lean_pitch) - 0.12, emblem_z + 0.05),
+                        rotation=(math.pi * 0.5 - lean_pitch, 0.2, 0), mat_index=MAT_INDEX_BONE)
+
+            # Optional recessed door leaf (ONLY if include_leaves is True!)
+            if include_leaves:
+                create_box(bm, (door_w * 0.90, 0.08, door_h * 0.96),
+                           (0.0, -mid_dist + 0.10, z0 + door_h * 0.48),
+                           rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD)
+
+            # Shark jaw bone archway framing the opening
+            _build_shark_jaw_arch(bm, 0.0, -facet_dist_bot, z0, rot_z=0.0, width=door_w * 1.15, height=door_h * 1.05)
+        else:
+            # Solid tapered wall panel for other 7 facets
+            # Positioned at facet center with inward lean
+            fc_x = math.cos(ac) * mid_dist
+            fc_y = math.sin(ac) * mid_dist
+            p_rot = (lean_pitch * math.sin(ac), -lean_pitch * math.cos(ac), ac - math.pi * 0.5)
+            avg_w = (facet_w_bot + facet_w_top) * 0.5
+            create_box(bm, (avg_w * 1.02, wall_th, height), (fc_x, fc_y, z0 + height * 0.5),
+                       rotation=p_rot, mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 3. Perimeter Timber Corner Posts at Vertex Junctions
+    # Placed at vertex angles so they flank each facet (and flank the door!)
+    col_size = 0.38
+    for i in range(num_facets):
+        v_ang = (i - 0.5) * (2.0 * math.pi / num_facets)
+        bx = math.cos(v_ang) * r_base
+        by = math.sin(v_ang) * r_base
+        tx = math.cos(v_ang) * r_top
+        ty = math.sin(v_ang) * r_top
+        post_rot = (lean_pitch * math.sin(v_ang), -lean_pitch * math.cos(v_ang), v_ang)
 
         mid_x = (bx + tx) * 0.5
         mid_y = (by + ty) * 0.5
@@ -668,18 +740,10 @@ def _build_hajfin_round_hut(bm, props, diameter=7.5, height=3.8, found_h=0.8):
         create_box(bm, (col_size + 0.04, col_size + 0.04, 0.22), (tx, ty, z1 - 0.2),
                    rotation=post_rot, mat_index=MAT_INDEX_IRON)
 
-    # 4. Front Shark Jaw Doorway (South, ang = -pi/2)
-    door_w = 1.35
-    door_h = 2.40
-    # Recessed door cavity
-    create_box(bm, (door_w * 0.88, 0.10, door_h * 0.95), (0.0, -r_base + 0.15, z0 + door_h * 0.5),
-               mat_index=MAT_INDEX_DRIFTWOOD)
-    _build_shark_jaw_arch(bm, 0.0, -r_base, z0, rot_z=0.0, width=door_w, height=door_h)
-
-    # 5. Rear Whale Spine Buttress (North, ang = +pi/2)
+    # 4. Rear Whale Spine Buttress (North, ang = +pi/2)
     _build_whale_spine_buttress(bm, 0.0, r_base * 0.95, z0, rot_z=0.0, num_vertebrae=7, max_h=height * 0.9)
 
-    # 6. Diagonal Bone-Framed Windows
+    # 5. Diagonal Bone-Framed Windows (East and West flanks)
     for ang in (-math.pi * 0.75, -math.pi * 0.25):
         wx = math.cos(ang) * (r_base * 0.6 + r_top * 0.4)
         wy = math.sin(ang) * (r_base * 0.6 + r_top * 0.4)
@@ -722,12 +786,13 @@ def _build_hajfin_crate_blockhouse(bm, props, width=7.0, depth=7.0, height=5.5, 
     create_box(bm, (width - wall_th * 2, wall_th, height),
                (0.0, hd - wall_th * 0.5, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # Front wall with real door cutout
+    # Front wall with real door cutout (No door leaf by default for UE export)
     door_w = 1.45
     door_h = 2.45
     _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
                                   z0, z1, door_cx=0.0, door_w=door_w, door_h=door_h,
-                                  wall_th=wall_th, rot_z=0.0)
+                                  wall_th=wall_th, rot_z=0.0,
+                                  include_leaf=getattr(props, 'include_door_leaves', False))
 
     # Upper front windows
     for sgn_x in (-1.0, 1.0):
@@ -795,10 +860,11 @@ def _build_hajfin_bone_shop(bm, props, width=9.5, depth=8.5, height=6.8, found_h
 
     create_box(bm, (3.2, 0.08, 0.55), (0.0, -hd - 0.15, z0 + counter_h + 1.95), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # Ground floor side entrance door
+    # Ground floor side entrance door (No door leaf by default for UE export)
     _build_wall_with_door_opening(bm, -hw + wall_th, -counter_w * 0.5 - 0.2, -hd + wall_th * 0.5,
                                   z0, z_mid, door_cx=-hw * 0.65, door_w=1.2, door_h=2.2,
-                                  wall_th=wall_th, rot_z=0.0)
+                                  wall_th=wall_th, rot_z=0.0,
+                                  include_leaf=getattr(props, 'include_door_leaves', False))
 
     # 4. Flanking Wooden Dock / Pier Platforms
     for sgn_x in (-1.0, 1.0):
@@ -886,12 +952,13 @@ def _build_hajfin_chieftain_hall(bm, props, width=12.0, depth=16.0, height=5.2, 
     # Side walls
     create_box(bm, (wall_th, depth - wall_th * 2, nave_h), (-nave_w * 0.5 + wall_th * 0.5, 0.0, z0 + nave_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
     create_box(bm, (wall_th, depth - wall_th * 2, nave_h), (nave_w * 0.5 - wall_th * 0.5, 0.0, z0 + nave_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    # Front wall with real cut door opening inside rib tunnel
+    # Front wall with real cut door opening inside rib tunnel (No door leaf by default for UE export)
     door_w = 1.75
     door_h = min(3.0, nave_h * 0.75)
     _build_wall_with_door_opening(bm, -nave_w * 0.5 + wall_th, nave_w * 0.5 - wall_th, -hd + wall_th * 0.5,
                                   z0, z0 + nave_h, door_cx=0.0, door_w=door_w, door_h=door_h,
-                                  wall_th=wall_th, rot_z=0.0)
+                                  wall_th=wall_th, rot_z=0.0,
+                                  include_leaf=getattr(props, 'include_door_leaves', False))
 
     # 3. Flanking Lower Side Aisles
     side_w = (width - nave_w) * 0.5
@@ -1000,10 +1067,11 @@ def _build_hajfin_pirate_tavern(bm, props, width=11.0, depth=11.0, height=6.2, f
         for cy in (-hd, my + m_d * 0.5):
             _build_chunky_corner_column(bm, cx, cy, z0, z0 + height, size=col_size, extend_top=0.35)
 
-    # 5. Shark Jaw Entrance Doorways
+    # 5. Shark Jaw Entrance Doorways (No door leaf by default for UE export)
     _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
                                   z0, z0 + height * 0.5, door_cx=-0.6, door_w=1.55, door_h=2.55,
-                                  wall_th=wall_th, rot_z=0.0)
+                                  wall_th=wall_th, rot_z=0.0,
+                                  include_leaf=getattr(props, 'include_door_leaves', False))
 
     # 6. Bone-Framed Windows
     for sgn_x in (-1.0, 1.0):
