@@ -1252,7 +1252,7 @@ def build_floors(bm, props, ctx):
                 ctx.floor_doorways.setdefault(0, []).append({'x': door_cx, 'y': door_yf, 'axis': 'X', 'w': _apt_dw})
 
                 door_gf_stone = props.ground_floor_stone and tier_val != 'TIER_1'
-                steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') == 'WOOD') else MAT_INDEX_CUT_STONE
+                steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') in ('WOOD', 'STILT')) else MAT_INDEX_CUT_STONE
 
                 build_door_assembly(
                     bm, center_x=door_cx, y_front=door_yf, z_base=z_floor,
@@ -2710,7 +2710,7 @@ def build_floors(bm, props, ctx):
                         _u_cg = _cx_gable - wx1
                         _apt_dw, _apt_dh = 1.65, 2.95
                         door_gf_stone = props.ground_floor_stone and tier_val != 'TIER_1'
-                        steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') == 'WOOD') else MAT_INDEX_CUT_STONE
+                        steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') in ('WOOD', 'STILT')) else MAT_INDEX_CUT_STONE
                         w_ops_1.append({'u_start': _u_cg - _apt_dw * 0.5 - frame_margin, 'u_end': _u_cg + _apt_dw * 0.5 + frame_margin,
                                         'z_start': z_floor, 'z_end': z_floor + _apt_dh + frame_margin})
                         build_door_assembly(bm, center_x=_cx_gable, y_front=wy1, z_base=z_floor,
@@ -2769,7 +2769,7 @@ def build_floors(bm, props, ctx):
                     if _is_u_tenement:
                         _apt_dw, _apt_dh = 1.65, 2.95
                         door_gf_stone = props.ground_floor_stone and tier_val != 'TIER_1'
-                        steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') == 'WOOD') else MAT_INDEX_CUT_STONE
+                        steps_mat = MAT_INDEX_TIMBER if (tier_val == 'TIER_1' or getattr(props, 'foundation_type', 'STONE') in ('WOOD', 'STILT')) else MAT_INDEX_CUT_STONE
                         if fl_idx == 0:
                             _dy = wy1 + max(1.3, (wy2 - wy1) * 0.26)
                             _u_c = _dy - wy1
@@ -3570,7 +3570,7 @@ def _place_exterior_stair_doors(bm, props, ctx, fl_idx, z_floor,
             if getattr(props, 'has_front_steps', False) and getattr(props, 'has_foundation', False):
                 steps_mat = MAT_INDEX_TIMBER if (
                     getattr(props, 'material_tier', 'TIER_3') == 'TIER_1'
-                    or getattr(props, 'foundation_type', 'STONE') == 'WOOD'
+                    or getattr(props, 'foundation_type', 'STONE') in ('WOOD', 'STILT')
                 ) else MAT_INDEX_CUT_STONE
                 build_front_steps(
                     bm, center_x=xf, y_front=along, z_base=z_floor,

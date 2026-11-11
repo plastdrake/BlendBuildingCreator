@@ -122,6 +122,9 @@ MAT_INDEX_BREAD_FBX     = 49
 MAT_INDEX_GOLD          = 50
 MAT_INDEX_SILVER        = 51
 MAT_INDEX_TERRACOTTA    = 52
+MAT_INDEX_DRIFTWOOD     = 53
+MAT_INDEX_ROUGH_STONE   = 54
+MAT_INDEX_BONE          = 55
 
 
 # ---------------------------------------------------------------------------
@@ -2652,6 +2655,113 @@ def create_stylized_water(name="M_Water", color=(0.16, 0.38, 0.50, 1.0)):
     return mat
 
 
+def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
+    """Weathered, sun-bleached driftwood planks with sea-salt washes for Hajfin buildings."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-1000)
+    tex_node = _load_image_texture(tree, "driftwood_planks_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.75, 0.75, 1.0))
+    if tex_node is not None:
+        if color is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-350, 100)
+            tint.inputs["Factor"].default_value = 0.25
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = color
+            color_out = tint.outputs["Result"]
+        else:
+            color_out = tex_node.outputs["Color"]
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.08, scale=1.1)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.10, scale=0.32)
+        _apply_ao(tree, bsdf, macro, strength=0.55, distance=0.18)
+        _setup_pbr(tree, bsdf, out, roughness=0.86, metallic=0.0)
+
+        bump = tree.nodes.new("ShaderNodeBump")
+        bump.location = (600, -210)
+        bump.inputs["Strength"].default_value = 0.22
+        bump.inputs["Distance"].default_value = 0.03
+        tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+        tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", color or (0.64, 0.65, 0.62, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.86)
+    return mat
+
+
+def create_stylized_rough_reef_stone(name="M_Building_Rough_Stone", color=None):
+    """Rough craggy coastal reef stone with barnacles and salt weathering for Hajfin foundations."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-1000)
+    tex_node = _load_image_texture(tree, "rough_stone_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.60, 0.60, 1.0))
+    if tex_node is not None:
+        if color is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-350, 100)
+            tint.inputs["Factor"].default_value = 0.22
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = color
+            color_out = tint.outputs["Result"]
+        else:
+            color_out = tex_node.outputs["Color"]
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.08, scale=1.2)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.10, scale=0.30)
+        _apply_ao(tree, bsdf, macro, strength=0.68, distance=0.20)
+        _setup_pbr(tree, bsdf, out, roughness=0.92, metallic=0.0)
+
+        bump = tree.nodes.new("ShaderNodeBump")
+        bump.location = (600, -210)
+        bump.inputs["Strength"].default_value = 0.26
+        bump.inputs["Distance"].default_value = 0.04
+        tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+        tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", color or (0.36, 0.38, 0.40, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.92)
+    return mat
+
+
+def create_stylized_bone(name="M_Building_Bone", color=None):
+    """Sun-bleached ivory bone with organic marrow grain and scrimshaw engravings for Hajfin ribs and totems."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-1000)
+    tex_node = _load_image_texture(tree, "bone_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.80, 0.80, 1.0))
+    if tex_node is not None:
+        if color is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-350, 100)
+            tint.inputs["Factor"].default_value = 0.18
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = color
+            color_out = tint.outputs["Result"]
+        else:
+            color_out = tex_node.outputs["Color"]
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.06, scale=1.0)
+        _apply_ao(tree, bsdf, painted, strength=0.48, distance=0.15)
+        _setup_pbr(tree, bsdf, out, roughness=0.68, metallic=0.0)
+
+        bump = tree.nodes.new("ShaderNodeBump")
+        bump.location = (600, -210)
+        bump.inputs["Strength"].default_value = 0.18
+        bump.inputs["Distance"].default_value = 0.02
+        tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+        tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", color or (0.84, 0.82, 0.75, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.68)
+    return mat
+
+
 # ---------------------------------------------------------------------------
 # Material slot setup
 # ---------------------------------------------------------------------------
@@ -2944,6 +3054,22 @@ def setup_building_material_slots(obj, props):
     mat_terracotta = (getattr(props, 'custom_terracotta', None)
                       or create_stylized_terracotta_brick("M_Building_Terracotta_Brick"))
 
+    # 53-55. Hajfin faction specific materials (Driftwood, Rough Reef Stone, Ancient Bone)
+    mat_driftwood = (getattr(props, 'custom_driftwood', None)
+                     or create_stylized_driftwood(f"{mat_prefix}Driftwood", color=getattr(props, 'color_timber', None)))
+    mat_rough_stone = (getattr(props, 'custom_rough_stone', None)
+                       or create_stylized_rough_reef_stone(f"{mat_prefix}Rough_Stone", color=getattr(props, 'color_stone', None)))
+    mat_bone = (getattr(props, 'custom_bone', None)
+                or create_stylized_bone(f"{mat_prefix}Bone"))
+
+    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+        if not getattr(props, 'custom_stone', None):
+            mat_stone = mat_rough_stone
+        if not getattr(props, 'custom_timber', None):
+            mat_wood = mat_driftwood
+        if not getattr(props, 'custom_timber_frame', None):
+            mat_timber = mat_driftwood
+
     # Assemble canonical slots in strict order
     required_mats = [
         mat_stone,          # 0  MAT_INDEX_STONE
@@ -2999,6 +3125,9 @@ def setup_building_material_slots(obj, props):
         mat_gold,           # 50 MAT_INDEX_GOLD
         mat_silver,         # 51 MAT_INDEX_SILVER
         mat_terracotta,     # 52 MAT_INDEX_TERRACOTTA
+        mat_driftwood,      # 53 MAT_INDEX_DRIFTWOOD
+        mat_rough_stone,    # 54 MAT_INDEX_ROUGH_STONE
+        mat_bone,           # 55 MAT_INDEX_BONE
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -3064,6 +3193,9 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Gold",          # 50
     "M_Building_Silver",        # 51
     "M_Building_Terracotta_Brick",  # 52
+    "M_Building_Driftwood",     # 53
+    "M_Building_Rough_Stone",   # 54
+    "M_Building_Bone",          # 55
 )
 
 

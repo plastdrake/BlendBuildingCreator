@@ -53,6 +53,12 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         is_bldg = obj and obj.get("is_fantasy_building", False)
         layout.label(text=f"Version {ADDON_VERSION}", icon='INFO')
 
+        box_fac = layout.box()
+        box_fac.label(text="Faction & Civilization", icon='COMMUNITY')
+        row_fac = box_fac.row(align=True)
+        row_fac.scale_y = 1.35
+        row_fac.prop(props, "faction", expand=True)
+
         col = layout.column(align=True)
         col.scale_y = 1.4
         col.operator("building.create_fantasy_building", text="Create New Building", icon='ADD')
@@ -98,9 +104,17 @@ class VIEW3D_PT_fantasy_building_presets(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         props = context.scene.fantasy_building_settings
+        active_faction = getattr(props, 'faction', 'HUMAN')
+
+        row_fac = layout.row(align=True)
+        row_fac.scale_y = 1.2
+        row_fac.prop(props, "faction", expand=True)
+
         layout.prop(props, "preset_category", text="Category")
         cat_filter = props.preset_category
         for family in BUILDING_FAMILIES:
+            if family.get('faction', 'HUMAN') != active_faction:
+                continue
             fam_cat = family.get('category', 'ALL')
             if cat_filter != 'ALL':
                 if isinstance(fam_cat, (list, tuple, set)):
@@ -812,6 +826,9 @@ class VIEW3D_PT_fantasy_building_materials(bpy.types.Panel):
         col.prop(props, "custom_railing", text="Railing Mat")
         col.prop(props, "custom_window_frame", text="Window Frame Mat")
         col.prop(props, "custom_shutter", text="Shutter Mat")
+        col.prop(props, "custom_driftwood", text="Driftwood Mat")
+        col.prop(props, "custom_rough_stone", text="Rough Stone Mat")
+        col.prop(props, "custom_bone", text="Bone Mat")
 
 
 # ---------------------------------------------------------------------------

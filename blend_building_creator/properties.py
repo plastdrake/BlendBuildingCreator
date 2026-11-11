@@ -121,15 +121,21 @@ def _export_category_for_family(family):
     return category
 
 
-def export_category_items(_self, _context):
+def export_category_items(self, _context):
     from .presets import BUILDING_FAMILIES
 
+    faction = getattr(self, 'faction', 'HUMAN') if self else 'HUMAN'
     categories = sorted({
         _export_category_for_family(family)
         for family in BUILDING_FAMILIES
+        if family.get('faction', 'HUMAN') == faction
     })
     labels = {
         'CONSTRUCTION_BUILDINGS': 'Scaffolded Buildings',
+        'SHANTIES': 'Shanties & Huts',
+        'COMMERCE': 'Commerce & Bones',
+        'CHIEFTAIN': 'Chieftain & Strongholds',
+        'HOSPITALITY': 'Taverns & Taprooms',
     }
     return [('ALL', 'All Categories', 'Export every category')] + [
         (category, labels.get(category, category.title()),
@@ -141,10 +147,11 @@ def export_category_items(_self, _context):
 def export_family_items(self, _context):
     from .presets import BUILDING_FAMILIES
 
+    faction = getattr(self, 'faction', 'HUMAN') if self else 'HUMAN'
     families = [
         family for family in BUILDING_FAMILIES
-        if self.export_category == 'ALL'
-        or self.export_category == _export_category_for_family(family)
+        if family.get('faction', 'HUMAN') == faction
+        and (self.export_category == 'ALL' or self.export_category == _export_category_for_family(family))
     ]
     return [('ALL', 'All Presets', 'Export every preset in the selected category')] + [
         (family['id'], family['name'], family.get('description', ''))
@@ -175,6 +182,31 @@ def on_export_category_updated(self, _context):
 
 def on_export_family_updated(self, _context):
     self.export_tier = 'ALL'
+
+
+def preset_category_items(self, _context):
+    """Dynamic category filters filtered by the selected faction."""
+    faction = getattr(self, 'faction', 'HUMAN') if self else 'HUMAN'
+    if faction == 'HAJFIN':
+        return [
+            ('ALL', "All Presets", "Show all Hajfin presets"),
+            ('SHANTIES', "Shanties & Huts", "Ramshackle driftwood stilt shacks, net huts, and beach shelters"),
+            ('COMMERCE', "Commerce & Bones", "Bone trading posts, scrimshaw stalls, and nautical barter shops"),
+            ('CHIEFTAIN', "Chieftain & Strongholds", "Grand Fin Halls and pirate chieftain longhouses"),
+            ('HOSPITALITY', "Hospitality", "Pirate taverns, grog houses, and seaside taprooms"),
+        ]
+    return [
+        ('ALL', "All Presets", "Show all building style presets"),
+        ('CIVIC', "Civic", "Town halls and civic estates"),
+        ('ESTATE', "Estate", "Manors, palatial compounds, stables and country estates"),
+        ('ARTISAN', "Artisan", "Artisans, workshops, and trade shops"),
+        ('MILITARY', "Military", "Barracks, ranges and military quarters"),
+        ('INDUSTRIAL', "Industrial", "Warehouses, storage, and lumbermills"),
+        ('RESIDENTIAL', "Residential", "Houses, cottages, and town residences"),
+        ('HOSPITALITY', "Hospitality", "Taverns, inns, and wayside hostelries"),
+        ('CONSTRUCTION', "Construction", "Scaffolded buildings under construction"),
+    ]
+
 
 def on_palette_updated(self, context):
     """Applies curated stylized fantasy color palettes inspired by game and animation art."""
@@ -222,9 +254,62 @@ def on_palette_updated(self, context):
         self.color_timber = (0.28, 0.17, 0.10, 1.0)
         self.color_door = (0.32, 0.18, 0.10, 1.0)
         self.color_floor = (0.36, 0.24, 0.14, 1.0)
+    elif palette == 'HAJFIN_DRIFTWOOD':
+        self.color_shingles = (0.28, 0.44, 0.46, 1.0)
+        self.color_stone = (0.36, 0.38, 0.40, 1.0)
+        self.color_wall_ext = (0.64, 0.65, 0.62, 1.0)
+        self.color_wall_int = (0.58, 0.59, 0.56, 1.0)
+        self.color_timber_frame = (0.28, 0.26, 0.22, 1.0)
+        self.color_timber = (0.35, 0.32, 0.28, 1.0)
+        self.color_door = (0.25, 0.22, 0.18, 1.0)
+        self.color_floor = (0.42, 0.38, 0.32, 1.0)
+        self.color_banner = (0.15, 0.35, 0.42, 1.0)
+    elif palette == 'HAJFIN_BONE':
+        self.color_shingles = (0.82, 0.80, 0.72, 1.0)
+        self.color_stone = (0.24, 0.26, 0.28, 1.0)
+        self.color_wall_ext = (0.55, 0.52, 0.48, 1.0)
+        self.color_wall_int = (0.60, 0.58, 0.52, 1.0)
+        self.color_timber_frame = (0.22, 0.20, 0.18, 1.0)
+        self.color_timber = (0.30, 0.28, 0.24, 1.0)
+        self.color_door = (0.75, 0.72, 0.65, 1.0)
+        self.color_floor = (0.38, 0.35, 0.30, 1.0)
+        self.color_banner = (0.65, 0.15, 0.15, 1.0)
+    elif palette == 'HAJFIN_CORAL':
+        self.color_shingles = (0.72, 0.32, 0.24, 1.0)
+        self.color_stone = (0.32, 0.36, 0.38, 1.0)
+        self.color_wall_ext = (0.68, 0.67, 0.62, 1.0)
+        self.color_wall_int = (0.62, 0.61, 0.58, 1.0)
+        self.color_timber_frame = (0.26, 0.22, 0.20, 1.0)
+        self.color_timber = (0.34, 0.30, 0.26, 1.0)
+        self.color_door = (0.58, 0.25, 0.20, 1.0)
+        self.color_floor = (0.40, 0.36, 0.32, 1.0)
+        self.color_banner = (0.70, 0.28, 0.22, 1.0)
     self.auto_update = True
     
     on_property_updated(self, context)
+
+
+def on_faction_updated(self, context):
+    """When switching factions, switch palette and filter presets."""
+    if not getattr(self, "auto_update", True):
+        return
+    faction = getattr(self, "faction", "HUMAN")
+    self.auto_update = False
+    try:
+        self.preset_category = 'ALL'
+        self.export_category = 'ALL'
+        self.export_family = 'ALL'
+        self.export_tier = 'ALL'
+        if faction == 'HAJFIN':
+            self.color_palette = 'HAJFIN_DRIFTWOOD'
+            self.foundation_type = 'STILT'
+        else:
+            self.color_palette = 'STORMWIND'
+            self.foundation_type = 'STONE'
+    finally:
+        self.auto_update = True
+    on_palette_updated(self, context)
+
 
 class FantasyBuildingSettings(bpy.types.PropertyGroup):
     auto_update: BoolProperty(
@@ -233,6 +318,17 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default=True
     )
     
+    faction: EnumProperty(
+        name="Faction",
+        description="Select civilization / faction architecture and style",
+        items=[
+            ('HUMAN', "Human", "Classic medieval fantasy kingdom architecture", 'COMMUNITY', 0),
+            ('HAJFIN', "Hajfin", "Shark-humanoid pirate shanties, stilt huts, and bone trading posts", 'MOD_OCEAN', 1),
+        ],
+        default='HUMAN',
+        update=on_faction_updated
+    )
+
     seed: IntProperty(
         name="Seed",
         description="Random seed for building variation and wonkiness",
@@ -243,18 +339,8 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     preset_category: EnumProperty(
         name="Preset Category",
         description="Filter architectural presets by category",
-        items=[
-            ('ALL', "All Presets", "Show all building style presets"),
-            ('CIVIC', "Civic", "Town halls and civic estates"),
-            ('ESTATE', "Estate", "Manors, palatial compounds, stables and country estates"),
-            ('ARTISAN', "Artisan", "Artisans, workshops, and trade shops"),
-            ('MILITARY', "Military", "Barracks, ranges and military quarters"),
-            ('INDUSTRIAL', "Industrial", "Warehouses, storage, and lumbermills"),
-            ('RESIDENTIAL', "Residential", "Houses, cottages, and town residences"),
-            ('HOSPITALITY', "Hospitality", "Taverns, inns, and wayside hostelries"),
-            ('CONSTRUCTION', "Construction", "Scaffolded buildings under construction"),
-        ],
-        default='ALL'
+        items=preset_category_items,
+        default=None
     )
 
     export_category: EnumProperty(
@@ -724,6 +810,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('STONE', "Stone Plinth", "Chunky cut-stone masonry foundation base"),
             ('WOOD', "Timber Sleeper Deck", "Heavy timber sill beams, sleeper joists, and wooden platform"),
+            ('STILT', "Stilt Pilings", "Elevated pier stilts and weathered wooden posts with cross bracing"),
         ],
         default='STONE',
         update=on_property_updated
@@ -2433,6 +2520,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('HEARTHSIDE', "Hearthside (Amber Terracotta)", "Warm terracotta orange roof, creamy plaster, honey oak timber, charcoal slate"),
             ('MOSS_CEDAR', "Forest Moss (Green & Cedar)", "Forest moss green roof, weathered cedar timber, rustic fieldstone"),
             ('VINTAGE_SLATE', "Vintage Fantasy (Indigo & Cream)", "Deep purple-indigo slate roof, antique plaster, dark walnut timber"),
+            ('HAJFIN_DRIFTWOOD', "Hajfin Driftwood (Salty Teal & Grey)", "Weathered driftwood grey walls, salty teal roof, craggy reef stone"),
+            ('HAJFIN_BONE', "Hajfin Bone (Ivory & Deep Trench)", "Sun-bleached ivory bone accents, dark abyssal basalt stone, weathered timber"),
+            ('HAJFIN_CORAL', "Hajfin Coral (Pirate Crimson & Sand)", "Sun-faded red sailcloth, pirate brass, sand and barnacle reef stone"),
         ],
         default='CUSTOM',
         update=on_palette_updated
@@ -2558,6 +2648,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     custom_shutter: PointerProperty(type=bpy.types.Material, name="Shutter Mat", update=on_property_updated)
     custom_wall_brick: PointerProperty(type=bpy.types.Material, name="Exposed Brick Stucco Mat", update=on_property_updated)
     custom_banner: PointerProperty(type=bpy.types.Material, name="Banner Mat", update=on_property_updated)
+    custom_driftwood: PointerProperty(type=bpy.types.Material, name="Driftwood Mat", update=on_property_updated)
+    custom_rough_stone: PointerProperty(type=bpy.types.Material, name="Rough Stone Mat", update=on_property_updated)
+    custom_bone: PointerProperty(type=bpy.types.Material, name="Bone Mat", update=on_property_updated)
 
     # --- Interior furnishing (whole-building, one click) + standalone props ---
     has_interior_furnishing: BoolProperty(

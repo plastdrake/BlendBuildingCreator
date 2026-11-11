@@ -9,7 +9,8 @@ import bmesh
 from .mesh_utils import create_beveled_box, apply_box_uvs, add_wonkiness, apply_organic_shading
 from .materials import (
     setup_building_material_slots, MAT_INDEX_STONE,
-    MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON
+    MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON,
+    MAT_INDEX_DRIFTWOOD, MAT_INDEX_ROUGH_STONE
 )
 from .shapes import get_wings_setup
 from .round_tower import build_round_tower
@@ -541,6 +542,53 @@ def _build_foundation_block(bm, fw, fd, fcx, fcy, found_h, found_type, stair_hol
                 mat_index=MAT_INDEX_TIMBER,
                 bevel_amount=0.012
             )
+    elif found_type == 'STILT':
+        sill_w = 0.28
+        sill_d = 0.24
+        top_z = max(found_h - sill_d * 0.5, sill_d * 0.5)
+        stilt_mat = MAT_INDEX_DRIFTWOOD
+        # 1. Top perimeter sill beam rim
+        for sgn in (-1.0, 1.0):
+            py = fcy + sgn * (fd * 0.5 - sill_w * 0.5)
+            create_beveled_box(
+                bm,
+                size=(fw, sill_w, sill_d),
+                location=(fcx, py, top_z),
+                mat_index=stilt_mat,
+                bevel_amount=0.015
+            )
+        side_l = max(0.2, fd - sill_w * 2.0)
+        for sgn in (-1.0, 1.0):
+            px = fcx + sgn * (fw * 0.5 - sill_w * 0.5)
+            create_beveled_box(
+                bm,
+                size=(sill_w, side_l, sill_d),
+                location=(px, fcy, top_z),
+                mat_index=stilt_mat,
+                bevel_amount=0.015
+            )
+        # 2. Pier stilt pilings (vertical driftwood / timber posts)
+        post_sz = 0.26
+        post_h = found_h + 0.05
+        nx = max(2, int(round(fw / 2.6)) + 1)
+        ny = max(2, int(round(fd / 2.6)) + 1)
+        x_pts = [fcx - fw * 0.5 + post_sz * 0.5 + i * ((fw - post_sz) / (nx - 1)) for i in range(nx)]
+        y_pts = [fcy - fd * 0.5 + post_sz * 0.5 + j * ((fd - post_sz) / (ny - 1)) for j in range(ny)]
+        placed = set()
+        for px in x_pts:
+            for py in (y_pts[0], y_pts[-1]):
+                placed.add((round(px, 3), round(py, 3)))
+        for py in y_pts:
+            for px in (x_pts[0], x_pts[-1]):
+                placed.add((round(px, 3), round(py, 3)))
+        for px, py in placed:
+            create_beveled_box(
+                bm,
+                size=(post_sz, post_sz, post_h),
+                location=(px, py, post_h * 0.5),
+                mat_index=stilt_mat,
+                bevel_amount=0.02
+            )
     else:
         fx0, fx1 = fcx - fw * 0.5, fcx + fw * 0.5
         fy0, fy1 = fcy - fd * 0.5, fcy + fd * 0.5
@@ -589,7 +637,11 @@ def _build_foundation(bm, props, ctx):
     found_h = ctx.found_h
     found_type = getattr(props, 'foundation_type', 'STONE')
     tier = getattr(props, 'material_tier', 'TIER_3')
-    if tier == 'TIER_1':
+    faction = getattr(props, 'faction', 'HUMAN')
+    if faction == 'HAJFIN':
+        if found_type not in ('STILT', 'WOOD'):
+            found_type = 'STILT'
+    elif tier == 'TIER_1' and found_type != 'STILT':
         found_type = 'WOOD'
     fw = ctx.base_w + 0.35
     fd = ctx.base_d + 0.35
