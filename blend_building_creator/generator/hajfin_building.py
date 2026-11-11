@@ -592,7 +592,7 @@ def _build_wall_with_window_y(bm, y0, y1, x, z0, z1, win_cy, win_cz, win_w=0.75,
     _build_bone_window(bm, frame_x, win_cy, win_cz, rot_z=rot_z, w=win_w, h=win_h, wall_th=wall_th)
 
 
-def _build_bone_window(bm, x, y, z, rot_z=0.0, pitch=0.0, w=0.75, h=0.75, wall_th=0.26):
+def _build_bone_window(bm, x, y, z, rot_z=0.0, pitch=0.0, w=0.75, h=0.75, wall_th=0.26, rot_matrix=None):
     """Complete, weather-tight stylized window assembly for Hajfin buildings.
     Fully covers and seals the entire wall cutout hole on BOTH exterior and interior:
     - Full-depth timber jamb liners encasing the cutout through the entire wall thickness.
@@ -600,7 +600,10 @@ def _build_bone_window(bm, x, y, z, rot_z=0.0, pitch=0.0, w=0.75, h=0.75, wall_t
     - Interior timber window casing trim framing the opening inside the room.
     - Vertical iron security bars and recessed glass pane.
     - Zero visible cut gaps, zero see-through cracks, zero unfinished wall guts."""
-    rot_mat = Matrix.Rotation(rot_z, 4, 'Z') @ Matrix.Rotation(pitch, 4, 'X')
+    if rot_matrix is not None:
+        rot_mat = rot_matrix
+    else:
+        rot_mat = Matrix.Rotation(rot_z, 4, 'Z') @ Matrix.Rotation(pitch, 4, 'X')
     rot_euler = rot_mat.to_euler()
     hw = w * 0.5
     hh = h * 0.5
@@ -644,6 +647,7 @@ def _build_bone_window(bm, x, y, z, rot_z=0.0, pitch=0.0, w=0.75, h=0.75, wall_t
     _add_local_box((casing_w, casing_th, jamb_h), (hw + casing_w * 0.5 - 0.025, ext_y, 0.0), MAT_INDEX_BONE)
 
     # 4 Carved bone knuckle condyles at exterior frame corners
+    condyle_euler = (rot_mat @ Matrix.Rotation(math.pi * 0.5, 4, 'X')).to_euler()
     for sgn_cx in (-1.0, 1.0):
         for sgn_cz in (-1.0, 1.0):
             corner_x = sgn_cx * (hw + casing_w * 0.5)
@@ -651,7 +655,7 @@ def _build_bone_window(bm, x, y, z, rot_z=0.0, pitch=0.0, w=0.75, h=0.75, wall_t
             c_pos = rot_mat @ Vector((corner_x, ext_y - 0.01, corner_z)) + Vector((x, y, z))
             create_cylinder(bm, radius=0.065, height=0.07, segments=6,
                             location=(c_pos.x, c_pos.y, c_pos.z),
-                            rotation=(rot_euler.x + math.pi * 0.5, rot_euler.y, rot_euler.z),
+                            rotation=(condyle_euler.x, condyle_euler.y, condyle_euler.z),
                             mat_index=MAT_INDEX_BONE)
 
     # 3. Interior Timber Window Trim (Covers the cutout on the INSIDE room face)
@@ -1050,28 +1054,63 @@ def _build_bone_scale_roof_conical(bm, cx, cy, eave_z, radius, height,
         f_under = bm.faces.new([v_center_bot, v_bot_ring[i_next], v_bot_ring[i]])
         f_under.material_index = MAT_INDEX_DRIFTWOOD
 
-    # 2. Solid Apex Timber Socket
-    create_cylinder(bm, radius=0.55, height=0.22, segments=10,
-                    location=(cx, cy, apex_z), mat_index=MAT_INDEX_DRIFTWOOD)
+    # 2. Tiered Stylized Timber Apex Hub Cap & Iron Strapping
+    # Lower octagon timber collar anchoring onto cone peak
+    cap_r0 = 0.68
+    cap_h0 = 0.26
+    create_cylinder(bm, radius=cap_r0, height=cap_h0, segments=8,
+                    location=(cx, cy, apex_z + cap_h0 * 0.5), mat_index=MAT_INDEX_TIMBER)
 
-    # 3. Central giant shark fin
-    fin_h = 1.55 * fin_scale
-    fin_len = 1.25 * fin_scale
-    _build_shark_dorsal_fin(bm, cx, cy, apex_z + 0.11, height=fin_h, length=fin_len, thickness=0.22, rot_z=0.0)
+    # Upper tapering timber cap hub
+    cap_h1 = 0.42
+    create_cone(bm, radius1=cap_r0 * 0.88, radius2=0.30, height=cap_h1, segments=8,
+                location=(cx, cy, apex_z + cap_h0 + cap_h1 * 0.5), mat_index=MAT_INDEX_TIMBER)
 
-    # 4. Miniature bone spears planted around fin
-    for i in range(num_spears):
-        ang = i * (2.0 * math.pi / num_spears) + math.pi * 0.25
-        sp_x = cx + math.cos(ang) * 0.35
-        sp_y = cy + math.sin(ang) * 0.35
-        sp_h = 0.75 + 0.15 * math.sin(i * 2.0)
-        create_cylinder(bm, radius=0.02, height=sp_h, segments=5,
-                        location=(sp_x, sp_y, apex_z + sp_h * 0.45),
-                        rotation=(0.18 * math.sin(ang), 0.18 * math.cos(ang), 0),
-                        mat_index=MAT_INDEX_DRIFTWOOD)
-        create_cone(bm, radius1=0.065, radius2=0.005, height=0.22, segments=4,
-                    location=(sp_x, sp_y, apex_z + sp_h + 0.1),
-                    rotation=(0, 0, 0), mat_index=MAT_INDEX_BONE)
+    # Forged iron collar rings wrapping the apex hub
+    create_cylinder(bm, radius=cap_r0 + 0.04, height=0.08, segments=8,
+                    location=(cx, cy, apex_z + cap_h0 * 0.70), mat_index=MAT_INDEX_IRON)
+    create_cylinder(bm, radius=0.34, height=0.07, segments=8,
+                    location=(cx, cy, apex_z + cap_h0 + cap_h1 * 0.90), mat_index=MAT_INDEX_IRON)
+
+    # 3. Sculpted Predatory Curved Bone Spire Finial (seamlessly integrated into hub)
+    finial_z0 = apex_z + cap_h0 + cap_h1
+    spire_h = 1.35 * fin_scale
+    num_spire_rings = 7
+    r_spire_base = 0.20
+    spire_rings = []
+    for si in range(num_spire_rings):
+        t_sp = si / (num_spire_rings - 1)
+        # Gentle tribal backward sweep
+        curve_y = 0.24 * (t_sp ** 1.8)
+        r_sp = r_spire_base * (1.0 - t_sp * 0.90)
+        curr_sz = finial_z0 + t_sp * spire_h
+        ring_v = []
+        for ri in range(8):
+            ang_r = ri * (2.0 * math.pi / 8)
+            rx = cx + math.cos(ang_r) * r_sp
+            ry = cy + curve_y + math.sin(ang_r) * r_sp
+            ring_v.append(bm.verts.new(Vector((rx, ry, curr_sz))))
+        spire_rings.append(ring_v)
+
+    for si in range(num_spire_rings - 1):
+        rA = spire_rings[si]
+        rB = spire_rings[si + 1]
+        for ri in range(8):
+            ri_next = (ri + 1) % 8
+            f_sp = bm.faces.new([rA[ri], rA[ri_next], rB[ri_next], rB[ri]])
+            f_sp.material_index = MAT_INDEX_BONE
+
+    # Spire apex tip cap
+    tip_v = bm.verts.new(Vector((cx, cy + 0.24, finial_z0 + spire_h + 0.04)))
+    top_r = spire_rings[-1]
+    for ri in range(8):
+        ri_next = (ri + 1) % 8
+        f_tip = bm.faces.new([tip_v, top_r[ri], top_r[ri_next]])
+        f_tip.material_index = MAT_INDEX_BONE
+
+    # Forged iron strapping collar at bone spire base
+    create_cylinder(bm, radius=r_spire_base + 0.035, height=0.10, segments=8,
+                    location=(cx, cy, finial_z0 + 0.05), mat_index=MAT_INDEX_IRON)
 
 
 # =============================================================================
@@ -1355,13 +1394,87 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
                                  overhang_x=0.55, overhang_y=0.55, fin_scale=1.5, num_ridge_teeth=7)
 
 
+def _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
+                               u_start=0.0, u_scale=0.70, v_scale=0.40,
+                               mat_index=MAT_INDEX_DRIFTWOOD,
+                               build_left_cap=False, build_right_cap=False,
+                               build_top_cap=True, build_bot_cap=True):
+    """Constructs a true planar trapezoidal wall panel with thickness and vertical plank UV unwrapping.
+    Guarantees zero twist, zero clipping, zero diagonal stretching, and continuous vertical wood grain."""
+    uv_layer = bm.loops.layers.uv.verify()
+
+    ipb0 = pb0 - n_vec * wall_th
+    ipb1 = pb1 - n_vec * wall_th
+    ipt0 = pt0 - n_vec * wall_th
+    ipt1 = pt1 - n_vec * wall_th
+
+    v_pb0 = bm.verts.new(pb0)
+    v_pb1 = bm.verts.new(pb1)
+    v_pt0 = bm.verts.new(pt0)
+    v_pt1 = bm.verts.new(pt1)
+
+    v_ipb0 = bm.verts.new(ipb0)
+    v_ipb1 = bm.verts.new(ipb1)
+    v_ipt0 = bm.verts.new(ipt0)
+    v_ipt1 = bm.verts.new(ipt1)
+
+    # 1. Outer Face
+    f_out = bm.faces.new([v_pb0, v_pb1, v_pt1, v_pt0])
+    f_out.material_index = mat_index
+    f_out.tag = True
+
+    # 2. Inner Face
+    f_in = bm.faces.new([v_ipb1, v_ipb0, v_ipt0, v_ipt1])
+    f_in.material_index = mat_index
+    f_in.tag = True
+
+    # 3. Top and Bottom Caps
+    if build_top_cap:
+        f_top = bm.faces.new([v_pt0, v_pt1, v_ipt1, v_ipt0])
+        f_top.material_index = mat_index
+        f_top.tag = True
+    if build_bot_cap:
+        f_bot = bm.faces.new([v_ipb0, v_ipb1, v_pb1, v_pb0])
+        f_bot.material_index = mat_index
+        f_bot.tag = True
+
+    # 4. Side Jamb Caps
+    if build_left_cap:
+        f_left = bm.faces.new([v_ipt0, v_pt0, v_pb0, v_ipb0])
+        f_left.material_index = mat_index
+        f_left.tag = True
+    if build_right_cap:
+        f_right = bm.faces.new([v_pt1, v_ipt1, v_ipb1, v_pb1])
+        f_right.material_index = mat_index
+        f_right.tag = True
+
+    # Calibrated UV Unwrapping: vertical boards running straight along local height
+    w_bot = (pb1 - pb0).length
+    h_slope = ((pt0 - pb0).length + (pt1 - pb1).length) * 0.5
+    u0 = u_start
+    u1 = u_start + w_bot * u_scale
+    v0 = 0.0
+    v1 = h_slope * v_scale
+
+    for loop in f_out.loops:
+        if loop.vert == v_pb0: loop[uv_layer].uv = Vector((u0, v0))
+        elif loop.vert == v_pb1: loop[uv_layer].uv = Vector((u1, v0))
+        elif loop.vert == v_pt1: loop[uv_layer].uv = Vector((u1, v1))
+        elif loop.vert == v_pt0: loop[uv_layer].uv = Vector((u0, v1))
+
+    for loop in f_in.loops:
+        if loop.vert == v_ipb1: loop[uv_layer].uv = Vector((u0, v0))
+        elif loop.vert == v_ipb0: loop[uv_layer].uv = Vector((u1, v0))
+        elif loop.vert == v_ipt0: loop[uv_layer].uv = Vector((u1, v1))
+        elif loop.vert == v_ipt1: loop[uv_layer].uv = Vector((u0, v1))
+
+
 def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
-    """The Tapered Round Bone-Scale Hut (Image 2):
+    """The Tapered Round Bone-Scale Hut:
     Scaled for 2-3m tall Hajfin characters with accessible hollow interior.
-    8-sided tapered conical timber hut, massive perimeter posts flanking doorways, conical bone-scale roof
-    with solid underlay, central shark fin crown with bone spears, shark jaw door with open walkthrough
-    (no door leaf by default for UE export), accessible upper mezzanine loft with interior timber stairs,
-    and massive whale vertebrae buttress curving up the rear wall!"""
+    8-sided tapered conical timber hut with true planar trapezoidal wall panels, massive perimeter posts
+    extending 10m downwards, conical bone-scale roof with solid underlay, tiered timber apex cap and
+    sculpted curved bone spire finial, shark jaw door with open walkthrough, and accessible upper mezzanine loft."""
     r_base = diameter * 0.5
     r_top = r_base * 0.82
     z0 = found_h
@@ -1369,22 +1482,20 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
     num_facets = 8
     wall_th = 0.26
     num_fl = max(1, getattr(props, 'num_floors', 1))
-    include_leaves = getattr(props, 'include_door_leaves', False)
 
-    # 1. Reef stone foundation ring
-    create_cylinder(bm, radius=r_base * 1.05, height=found_h + 0.1, segments=num_facets,
-                    location=(0.0, 0.0, found_h * 0.5), mat_index=MAT_INDEX_ROUGH_STONE)
+    # 1. Reef stone foundation ring extending 10m downwards into water / terrain bed
+    found_depth = 10.0
+    total_found_h = found_h + found_depth
+    create_cylinder(bm, radius=r_base * 1.05, height=total_found_h, segments=num_facets,
+                    location=(0.0, 0.0, (found_h - found_depth) * 0.5), mat_index=MAT_INDEX_ROUGH_STONE)
 
-    # Interior wooden floor slab across entire circular ground floor
+    # Interior wooden floor slab across circular ground floor
     create_cylinder(bm, radius=r_base * 0.98, height=0.14, segments=num_facets,
                     location=(0.0, 0.0, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
 
-    # 2. Tapered 8-sided body shell (ZERO twist, perfectly aligned planar facets)
-    lean_pitch = math.atan2(r_base - r_top, height)
+    # 2. Tapered 8-sided body shell (True planar trapezoidal facets, zero twist, zero clipping)
     door_w = float(getattr(props, 'door_width', 1.85))
     door_h = min(float(getattr(props, 'door_height', 3.50)), height * 0.82)
-    facet_dist_bot = r_base * math.cos(math.pi / num_facets)
-    facet_dist_top = r_top * math.cos(math.pi / num_facets)
 
     # Corner angles around the perimeter (8 corners)
     theta_corners = [(i - 0.5) * (2.0 * math.pi / num_facets) for i in range(num_facets + 1)]
@@ -1392,7 +1503,6 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
     for i in range(num_facets):
         th0 = theta_corners[i]
         th1 = theta_corners[i + 1]
-        mid_ang = (th0 + th1) * 0.5
 
         # Corner positions
         pb0 = Vector((r_base * math.cos(th0), r_base * math.sin(th0), z0))
@@ -1400,106 +1510,118 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         pt0 = Vector((r_top * math.cos(th0), r_top * math.sin(th0), z1))
         pt1 = Vector((r_top * math.cos(th1), r_top * math.sin(th1), z1))
 
-        # Orthonormal orientation matrix for the facet (X horizontal, Z up-leaning, Y normal outward)
-        # Guarantees ZERO roll, ZERO shear, 100% planar facet!
-        x_loc = Vector((-math.sin(mid_ang), math.cos(mid_ang), 0.0))
-        z_loc = Vector((-math.cos(mid_ang) * math.sin(lean_pitch), -math.sin(mid_ang) * math.sin(lean_pitch), math.cos(lean_pitch)))
-        y_loc = z_loc.cross(x_loc).normalized()
+        mb = (pb0 + pb1) * 0.5
+        mt = (pt0 + pt1) * 0.5
+        u_vec = (pb1 - pb0).normalized()
+        w_vec = (mt - mb).normalized()
+        n_vec = u_vec.cross(w_vec).normalized()
 
-        rot_mat_facet = Matrix((
-            (x_loc.x, y_loc.x, z_loc.x, 0.0),
-            (x_loc.y, y_loc.y, z_loc.y, 0.0),
-            (x_loc.z, y_loc.z, z_loc.z, 0.0),
-            (0.0, 0.0, 0.0, 1.0)
-        ))
-        p_rot = rot_mat_facet.to_euler()
-
-        mid_r_bot = r_base * math.cos(math.pi / num_facets)
-        mid_r_top = r_top * math.cos(math.pi / num_facets)
-        f_cx = math.cos(mid_ang) * (mid_r_bot + mid_r_top) * 0.5
-        f_cy = math.sin(mid_ang) * (mid_r_bot + mid_r_top) * 0.5
-        f_w = (pb1 - pb0).length
+        w_base_f = (pb1 - pb0).length
+        w_top_f = (pt1 - pt0).length
 
         if i == 6:
             # SOUTH DOOR FACET (facing South, centered at x=0)
-            door_hw = door_w * 0.5
-            y_bot = -facet_dist_bot
-            y_top = -facet_dist_top
+            t_door_half = (door_w * 0.5) / max(0.01, w_base_f)
+            s_L = max(0.05, 0.5 - t_door_half)
+            s_R = min(0.95, 0.5 + t_door_half)
 
-            # Left jamb wall panel (x < -door_hw)
-            lw_w = abs(-door_hw - pb0.x)
-            create_box(bm, (lw_w, wall_th, height),
-                       ((-door_hw + pb0.x) * 0.5, (y_bot + y_top) * 0.5, z0 + height * 0.5),
-                       rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+            pb_jL = pb0 * (1.0 - s_L) + pb1 * s_L
+            pb_jR = pb0 * (1.0 - s_R) + pb1 * s_R
+            pt_jL = pt0 * (1.0 - s_L) + pt1 * s_L
+            pt_jR = pt0 * (1.0 - s_R) + pt1 * s_R
 
-            # Right jamb wall panel (x > door_hw)
-            rw_w = abs(pb1.x - door_hw)
-            create_box(bm, (rw_w, wall_th, height),
-                       ((door_hw + pb1.x) * 0.5, (y_bot + y_top) * 0.5, z0 + height * 0.5),
-                       rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+            h_door = min(0.85, door_h / height)
+            p_headL = pb_jL * (1.0 - h_door) + pt_jL * h_door
+            p_headR = pb_jR * (1.0 - h_door) + pt_jR * h_door
 
-            # Continuous vertical plank infill above pointed bone jaw (no rectangular gap)
-            z_spring = door_h * 0.52
-            num_door_planks = 8
-            plank_w = door_w / num_door_planks
-            for ki in range(num_door_planks):
-                pk_cx = -door_hw + (ki + 0.5) * plank_w
-                u_pk = min(1.0, abs(pk_cx) / max(0.001, door_hw))
-                st = max(0.0, 1.0 - u_pk) ** 0.80
-                z_arch = z_spring + st * (door_h - z_spring)
-                pk_z_bot = z0 + z_arch - 0.08
-                pk_h = (z0 + height) - pk_z_bot
-                if pk_h > 0.05:
-                    p_mid_z = pk_z_bot + pk_h * 0.5
-                    p_mid_y = y_bot + (y_top - y_bot) * ((p_mid_z - z0) / height)
-                    create_box(bm, (plank_w * 1.02, wall_th, pk_h),
-                               (pk_cx, p_mid_y, p_mid_z),
-                               rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+            # Left jamb wall panel
+            _build_tapered_facet_panel(bm, pb0, pb_jL, pt0, pt_jL, n_vec, wall_th,
+                                       u_start=0.0, build_right_cap=True)
+
+            # Right jamb wall panel
+            _build_tapered_facet_panel(bm, pb_jR, pb1, pt_jR, pt1, n_vec, wall_th,
+                                       u_start=2.5, build_left_cap=True)
+
+            # Header wall panel above door walkthrough
+            _build_tapered_facet_panel(bm, p_headL, p_headR, pt_jL, pt_jR, n_vec, wall_th,
+                                       u_start=1.2, build_bot_cap=True)
 
             # Heavy timber threshold sill beam
-            create_box(bm, (door_w + 0.40, wall_th + 0.14, 0.16), (0.0, y_bot, z0 - 0.05),
+            create_box(bm, (door_w + 0.35, wall_th + 0.12, 0.16), (0.0, mb.y, z0 + 0.07),
                        mat_index=MAT_INDEX_TIMBER)
 
-            if include_leaves:
-                create_box(bm, (door_w * 0.90, 0.08, door_h * 0.96),
-                           (0.0, y_bot + wall_th * 0.35, z0 + door_h * 0.48),
-                           rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
-
-            # Continuous 3D Shark Jaw Bone Archway perfectly framing the opening
-            _build_shark_jaw_arch(bm, 0.0, y_bot, z0, rot_z=0.0, width=door_w, height=door_h, wall_th=wall_th)
+            # Continuous 3D Shark Jaw Bone Archway framing the opening
+            _build_shark_jaw_arch(bm, 0.0, mb.y, z0, rot_z=0.0, width=door_w, height=door_h, wall_th=wall_th)
 
         elif i in (5, 7):
             # SOUTH-WEST (i=5) and SOUTH-EAST (i=7) FLANK WINDOW FACETS
-            # Solid facet wall panel
-            create_box(bm, (f_w * 0.98, wall_th, height), (f_cx, f_cy, z0 + height * 0.5),
-                       rotation=(p_rot.x, p_rot.y, p_rot.z), mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+            win_w = 0.85
+            win_h = 0.85
+            win_cz = z0 + height * 0.48
 
-            # Window placed flush on this facet surface with matching lean pitch
-            win_z = z0 + height * 0.48
-            t_win = (win_z - z0) / height
-            r_at_win = mid_r_bot * (1.0 - t_win) + mid_r_top * t_win
-            w_cx = math.cos(mid_ang) * (r_at_win + wall_th * 0.48)
-            w_cy = math.sin(mid_ang) * (r_at_win + wall_th * 0.48)
+            h_mid = (win_cz - z0) / height
+            w_mid_f = w_base_f * (1.0 - h_mid) + w_top_f * h_mid
+            t_win_half = (win_w * 0.5) / max(0.01, w_mid_f)
+            s_L = max(0.05, 0.5 - t_win_half)
+            s_R = min(0.95, 0.5 + t_win_half)
 
-            # Build carved bone window tilted flush with the tapered wall (-lean_pitch)
-            _build_bone_window(bm, w_cx, w_cy, win_z,
-                               rot_z=mid_ang + math.pi * 0.5, pitch=-lean_pitch,
-                               w=0.85, h=0.85)
+            pb_wL = pb0 * (1.0 - s_L) + pb1 * s_L
+            pb_wR = pb0 * (1.0 - s_R) + pb1 * s_R
+            pt_wL = pt0 * (1.0 - s_L) + pt1 * s_L
+            pt_wR = pt0 * (1.0 - s_R) + pt1 * s_R
+
+            h_bot = max(0.05, (win_cz - win_h * 0.5 - z0) / height)
+            h_top = min(0.95, (win_cz + win_h * 0.5 - z0) / height)
+
+            p_sillL = pb_wL * (1.0 - h_bot) + pt_wL * h_bot
+            p_sillR = pb_wR * (1.0 - h_bot) + pt_wR * h_bot
+            p_headL = pb_wL * (1.0 - h_top) + pt_wL * h_top
+            p_headR = pb_wR * (1.0 - h_top) + pt_wR * h_top
+
+            # 1. Left flank panel
+            _build_tapered_facet_panel(bm, pb0, pb_wL, pt0, pt_wL, n_vec, wall_th,
+                                       u_start=i * 2.8, build_right_cap=True)
+
+            # 2. Right flank panel
+            _build_tapered_facet_panel(bm, pb_wR, pb1, pt_wR, pt1, n_vec, wall_th,
+                                       u_start=i * 2.8 + 2.0, build_left_cap=True)
+
+            # 3. Bottom sill panel
+            _build_tapered_facet_panel(bm, pb_wL, pb_wR, p_sillL, p_sillR, n_vec, wall_th,
+                                       u_start=i * 2.8 + 1.0, build_top_cap=True)
+
+            # 4. Top header panel
+            _build_tapered_facet_panel(bm, p_headL, p_headR, pt_wL, pt_wR, n_vec, wall_th,
+                                       u_start=i * 2.8 + 1.0, build_bot_cap=True)
+
+            # 5. Carved bone window assembly flush in the cutout opening
+            p_win_center = (p_sillL + p_sillR + p_headL + p_headR) * 0.25
+            r_win_mat = Matrix((
+                (u_vec.x, -n_vec.x, w_vec.x, 0.0),
+                (u_vec.y, -n_vec.y, w_vec.y, 0.0),
+                (u_vec.z, -n_vec.z, w_vec.z, 0.0),
+                (0.0,     0.0,      0.0,     1.0)
+            ))
+            _build_bone_window(bm, p_win_center.x, p_win_center.y, p_win_center.z,
+                               rot_matrix=r_win_mat, w=win_w, h=win_h, wall_th=wall_th)
 
         else:
             # SOLID WALL FACETS (i = 0, 1, 2, 3, 4)
-            create_box(bm, (f_w * 0.98, wall_th, height), (f_cx, f_cy, z0 + height * 0.5),
-                       rotation=(p_rot.x, p_rot.y, p_rot.z), mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+            _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
+                                       u_start=i * 2.8)
 
-    # 3. Perimeter Timber Corner Posts at Vertex Junctions
+    # 3. Perimeter Timber Corner Posts at Vertex Junctions (extending 10m deep)
     col_size = 0.44
     for i in range(num_facets):
         v_ang = theta_corners[i]
         p_b = Vector((math.cos(v_ang) * r_base, math.sin(v_ang) * r_base, z0))
         p_t = Vector((math.cos(v_ang) * r_top, math.sin(v_ang) * r_top, z1 + 0.35))
+        p_b_deep = Vector((math.cos(v_ang) * r_base, math.sin(v_ang) * r_base, -10.0))
 
-        # Heavy corner post running straight along the corner crease with longitudinal wood grain
+        # Heavy corner post running straight along the corner crease
         _create_oriented_beam(bm, p_b, p_t, width=col_size, depth=col_size, mat_index=MAT_INDEX_TIMBER)
+        # Deep stilt pilings plunging 10m down into water/ground bed
+        _create_oriented_beam(bm, p_b_deep, p_b, width=col_size, depth=col_size, mat_index=MAT_INDEX_TIMBER)
 
         # Forged iron cuff brackets at base and top
         create_box(bm, (col_size + 0.06, col_size + 0.06, 0.24), (p_b.x, p_b.y, z0 + 0.22),
@@ -1507,10 +1629,7 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         create_box(bm, (col_size + 0.06, col_size + 0.06, 0.24), (p_t.x, p_t.y, z1 - 0.15),
                    mat_index=MAT_INDEX_IRON)
 
-    # 4. Rear Whale Spine Buttress (North, ang = +pi/2)
-    _build_whale_spine_buttress(bm, 0.0, r_base * 0.95, z0, rot_z=0.0, num_vertebrae=7, max_h=height * 0.9)
-
-    # 6. Accessible Mezzanine Loft & Interior Staircase (if num_floors >= 2 or height >= 5.5)
+    # 4. Accessible Mezzanine Loft & Interior Staircase (if num_floors >= 2 or height >= 5.5)
     if num_fl >= 2 or height >= 5.5:
         z_mez = z0 + 3.8
         mez_w = r_top * 1.85
@@ -1528,16 +1647,10 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         _build_hajfin_interior_staircase(bm, x0=stair_x, y0=-1.8, z0=z0,
                                          x1=stair_x, y1=1.4, z1=z_mez, width=1.60)
 
-        # Upper bone windows on northwest and northeast upper walls
-        for u_ang in (math.pi * 0.25, math.pi * 0.75):
-            uwx = math.cos(u_ang) * (r_top * 0.92)
-            uwy = math.sin(u_ang) * (r_top * 0.92)
-            _build_bone_window(bm, uwx, uwy, z_mez + 1.2, rot_z=u_ang + math.pi * 0.5, w=0.75, h=0.75)
-
-    # 7. Conical Bone Scale Roof with Solid Deck
+    # 5. Conical Bone Scale Roof with Tiered Timber Hub Cap & Curved Bone Spire
     roof_h = max(3.5, diameter * 0.35)
     _build_bone_scale_roof_conical(bm, 0.0, 0.0, z1, radius=r_top * 1.25, height=roof_h,
-                                   fin_scale=1.6, num_spears=4)
+                                   fin_scale=1.6, num_spears=0)
 
 
 def _build_carved_bone_lookout_frame(bm, cx, cy, cz, width=1.80, height=1.35):
@@ -1704,6 +1817,9 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
         p0 = (sgn_x * h_bw, sgn_y * h_bd, 0.0)
         p1 = (sgn_x * h_tw, sgn_y * h_td, stilt_h)
         _create_oriented_beam(bm, p0, p1, width=0.42, depth=0.42, mat_index=MAT_INDEX_DRIFTWOOD)
+        # Deep stilt pilings (extending 10m downwards) for placing tower in deep water / next to piers
+        p_deep = (sgn_x * h_bw, sgn_y * h_bd, -10.0)
+        _create_oriented_beam(bm, p_deep, p0, width=0.42, depth=0.42, mat_index=MAT_INDEX_DRIFTWOOD)
 
     # 3. Intermediate Ring Tie-Beams & Iron Plates (Two bays)
     num_bays = 2
