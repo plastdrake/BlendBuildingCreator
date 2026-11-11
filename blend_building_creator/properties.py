@@ -339,6 +339,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('CHIEFTAIN_HALL', "Chieftain Great Hall", "Grand multi-tier staggered longhouse with whale rib tunnel entrance and continuous spine crest (Image 4)", 'COMMUNITY', 3),
             ('BLOCKHOUSE', "Crate Blockhouse", "Heavy cubic timber blockhouse with flat plank deck roof, bone windows, and iron cuffs (Image 5)", 'MOD_OCEAN', 4),
             ('TAVERN', "Pirate Tavern", "Sprawling multi-deck pirate haven with open drinking deck and grog barrels", 'COMMUNITY', 5),
+            ('WATCHTOWER', "Rickety Watchtower", "Tall stilt watchtower with X-bracing, timber ladder, sentry cabin, and carved bone window", 'OUTLINER_OB_LIGHTPROBE', 6),
         ],
         default='SHANTY',
         update=on_property_updated

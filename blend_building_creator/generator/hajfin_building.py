@@ -36,12 +36,35 @@ from .mesh_utils import (
     create_cone,
     create_torus_ring,
     apply_box_uvs,
+    transform_faces,
 )
 
 
 # =============================================================================
 # SIGNATURE ARCHITECTURAL COMPONENTS & INTERIOR CIRCULATION
 # =============================================================================
+
+def _create_oriented_beam(bm, p0, p1, width=0.30, depth=0.30, mat_index=MAT_INDEX_DRIFTWOOD):
+    """Creates a rectangular timber beam connecting any two 3D points p0 and p1."""
+    v0 = Vector(p0)
+    v1 = Vector(p1)
+    v_dir = v1 - v0
+    length = v_dir.length
+    if length < 1e-4:
+        return []
+    mid = (v0 + v1) * 0.5
+    up = Vector((0.0, 0.0, 1.0))
+    d_norm = v_dir.normalized()
+    axis = up.cross(d_norm)
+    if axis.length < 1e-4:
+        rot_mat = Matrix.Identity(4) if d_norm.z > 0 else Matrix.Rotation(math.pi, 4, 'X')
+    else:
+        angle = up.angle(d_norm)
+        rot_mat = Matrix.Rotation(angle, 4, axis.normalized())
+    faces = create_box(bm, (width, depth, length), (0.0, 0.0, 0.0), mat_index=mat_index)
+    tr = Matrix.Translation(mid) @ rot_mat
+    transform_faces(faces, tr)
+    return faces
 
 def _build_railing_segment(bm, x0, x1, y0, y1, z_base, height=1.0):
     """Builds a sturdy timber railing line with end posts and top/mid rails."""
@@ -696,27 +719,57 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
     # 3. Heavy Timber Verge Bargeboards on Front & Rear Gable Slopes
     for gy in (y0 - overhang_y, y1 + overhang_y):
         for side in (-1.0, 1.0):
-            bx = mx + side * (half_span * 0.5)
-            bz = eave_z + peak_h * 0.5
-            create_box(bm, (slope_len * 1.02, 0.26, 0.26), (bx, gy, bz),
-                       rotation=(0, side * (math.pi * 0.5 - pitch_angle), 0),
-                       mat_index=MAT_INDEX_DRIFTWOOD)
+            p_peak = (mx, gy, peak_z)
+            p_eave = (mx + side * half_span, gy, eave_z)
+            _create_oriented_beam(bm, p_peak, p_eave, width=0.24, depth=0.24, mat_index=MAT_INDEX_DRIFTWOOD)
 
     # 4. Ridge Dorsal Fin Bone & Jagged Teeth Crest
     _build_ridge_crest_fin_and_spines(bm, mx, y0 - overhang_y, y1 + overhang_y,
                                       peak_z + 0.18, fin_scale=fin_scale, num_teeth=num_ridge_teeth)
 
 
+def _build_shark_dorsal_fin(bm, cx, cy, cz, height=1.8, length=1.3, thickness=0.22, rot_z=0.0):
+    """Volumetric sculpted bone shark dorsal fin standing upright on roof ridge/apex."""
+    rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
+    # Profile points in local X-Z (Z is up, X is along fin length, Y is fin thickness)
+    # Swept leading edge, arched tip, recurved trailing edge with notch
+    profile = [
+        Vector((-length * 0.50, 0.0, 0.0)),
+        Vector((-length * 0.28, 0.0, height * 0.52)),
+        Vector((length * 0.15, 0.0, height)),
+        Vector((length * 0.08, 0.0, height * 0.68)),
+        Vector((length * 0.22, 0.0, height * 0.40)),
+        Vector((length * 0.45, 0.0, 0.0)),
+    ]
+    half_th = thickness * 0.5
+    v_left = []
+    v_right = []
+    for p in profile:
+        pt_l = rot_mat @ Vector((p.x, -half_th, p.z)) + Vector((cx, cy, cz))
+        pt_r = rot_mat @ Vector((p.x, half_th, p.z)) + Vector((cx, cy, cz))
+        v_left.append(bm.verts.new(pt_l))
+        v_right.append(bm.verts.new(pt_r))
+
+    f_l = bm.faces.new(v_left)
+    f_l.material_index = MAT_INDEX_BONE
+    f_r = bm.faces.new(list(reversed(v_right)))
+    f_r.material_index = MAT_INDEX_BONE
+
+    n = len(profile)
+    for i in range(n):
+        nxt = (i + 1) % n
+        f_side = bm.faces.new([v_left[i], v_left[nxt], v_right[nxt], v_right[i]])
+        f_side.material_index = MAT_INDEX_BONE
+
+
 def _build_ridge_crest_fin_and_spines(bm, rx, y_start, y_end, rz, fin_scale=1.5, num_teeth=8):
     """Crown of giant curved shark dorsal fin and jagged bone spikes along the roof peak."""
     fin_y = y_start + 0.65
-    fin_h = 1.35 * fin_scale
-    fin_base_w = 0.95 * fin_scale
+    fin_h = 1.45 * fin_scale
+    fin_base_w = 1.15 * fin_scale
 
-    # Primary giant dorsal fin bone near front gable
-    create_cone(bm, radius1=fin_base_w * 0.45, radius2=0.03, height=fin_h, segments=5,
-                location=(rx, fin_y, rz + fin_h * 0.45),
-                rotation=(0.28, 0, 0), mat_index=MAT_INDEX_BONE)
+    # Primary giant volumetric dorsal fin bone near front gable (facing along ridge Y)
+    _build_shark_dorsal_fin(bm, rx, fin_y, rz, height=fin_h, length=fin_base_w, thickness=0.22, rot_z=math.pi * 0.5)
 
     # Row of jagged bone teeth running down the ridge
     spine_span = (y_end - (fin_y + fin_base_w * 0.6))
@@ -783,10 +836,9 @@ def _build_bone_scale_roof_conical(bm, cx, cy, eave_z, radius, height,
                     location=(cx, cy, apex_z), mat_index=MAT_INDEX_DRIFTWOOD)
 
     # 3. Central giant shark fin
-    fin_h = 1.4 * fin_scale
-    create_cone(bm, radius1=0.48, radius2=0.03, height=fin_h, segments=5,
-                location=(cx, cy, apex_z + fin_h * 0.45),
-                rotation=(0.25, 0, 0), mat_index=MAT_INDEX_BONE)
+    fin_h = 1.55 * fin_scale
+    fin_len = 1.25 * fin_scale
+    _build_shark_dorsal_fin(bm, cx, cy, apex_z + 0.11, height=fin_h, length=fin_len, thickness=0.22, rot_z=0.0)
 
     # 4. Miniature bone spears planted around fin
     for i in range(num_spears):
@@ -1054,6 +1106,305 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
     roof_h = max(3.5, diameter * 0.35)
     _build_bone_scale_roof_conical(bm, 0.0, 0.0, z1, radius=r_top * 1.25, height=roof_h,
                                    fin_scale=1.6, num_spears=4)
+
+
+def _build_carved_bone_lookout_frame(bm, cx, cy, cz, width=1.80, height=1.35):
+    """Carved bone window frame matching the Hajfin concept art:
+    Four thick bone beams meet at the corners, with bulbous double joint knobs at each corner."""
+    bone_r = 0.13
+    hw = width * 0.5
+    hh = height * 0.5
+
+    # Horizontal bones (top and bottom)
+    for sgn_z in (-1.0, 1.0):
+        bz = cz + sgn_z * hh
+        create_cylinder(bm, radius=bone_r, height=width * 0.95, segments=8,
+                        location=(cx, cy, bz),
+                        rotation=(0, math.pi * 0.5, 0), mat_index=MAT_INDEX_BONE)
+
+    # Vertical bones (left and right)
+    for sgn_x in (-1.0, 1.0):
+        bx = cx + sgn_x * hw
+        create_cylinder(bm, radius=bone_r, height=height * 0.95, segments=8,
+                        location=(bx, cy, cz),
+                        rotation=(0, 0, 0), mat_index=MAT_INDEX_BONE)
+
+    # Bulbous bone joint knobs at the 4 corners (double condyle joint knobs)
+    for sgn_x, sgn_z in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+        kx = cx + sgn_x * hw
+        kz = cz + sgn_z * hh
+        create_cylinder(bm, radius=0.17, height=0.22, segments=7,
+                        location=(kx + sgn_x * 0.05, cy - 0.02, kz),
+                        rotation=(math.pi * 0.5, 0, 0), mat_index=MAT_INDEX_BONE)
+        create_cylinder(bm, radius=0.17, height=0.22, segments=7,
+                        location=(kx, cy - 0.02, kz + sgn_z * 0.05),
+                        rotation=(math.pi * 0.5, 0, 0), mat_index=MAT_INDEX_BONE)
+
+
+def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26):
+    """Builds a gable triangle wall on the West or East side when ridge runs along X."""
+    my = (y0 + y1) * 0.5
+    h = z_peak - z_eave
+    d = abs(y1 - y0)
+    num_planks = max(3, int(h / 0.45))
+    dz = h / num_planks
+    for i in range(num_planks):
+        pz0 = z_eave + i * dz
+        t_mid = (i + 0.5) / num_planks
+        plank_d = d * (1.0 - t_mid)
+        if plank_d > 0.08:
+            create_box(bm, (wall_th, plank_d, dz * 1.02), (x, my, pz0 + dz * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+
+def _build_bone_scale_roof_gable_ew(bm, x0, x1, y0, y1, eave_z, peak_h,
+                                    overhang_x=0.45, overhang_y=0.45,
+                                    fin_scale=1.5, num_ridge_teeth=6):
+    """Gable roof whose ridge runs along the X axis (East-West), so the front and back
+    faces are sloped roof decks with scalloped bone scales, matching the watchtower concept art."""
+    my = (y0 + y1) * 0.5
+    half_span_y = (y1 - y0) * 0.5 + overhang_y
+    span_x = (x1 - x0) + overhang_x * 2
+    mx = (x0 + x1) * 0.5
+    peak_z = eave_z + peak_h
+
+    slope_len = math.hypot(half_span_y, peak_h)
+    pitch_angle = math.atan2(peak_h, half_span_y)
+
+    # 1. Heavy Timber Ridge Beam along X
+    create_box(bm, (span_x + 0.4, 0.36, 0.38), (mx, my, peak_z), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 2. Solid Roof Deck Slopes with Downward Bone Scale Texture Mapping
+    uv_layer = bm.loops.layers.uv.verify()
+    slab_th = 0.14
+    
+    # Front slope (y < my, eaves at my - half_span_y, z=eave_z)
+    v_rf = bm.verts.new(Vector((x0 - overhang_x, my, peak_z)))
+    v_rb = bm.verts.new(Vector((x1 + overhang_x, my, peak_z)))
+    v_ef = bm.verts.new(Vector((x0 - overhang_x, my - half_span_y, eave_z)))
+    v_eb = bm.verts.new(Vector((x1 + overhang_x, my - half_span_y, eave_z)))
+
+    f_front = bm.faces.new([v_rf, v_rb, v_eb, v_ef])
+    f_front.material_index = MAT_INDEX_SHINGLES
+    
+    u_repeat = max(1.0, span_x * 0.35)
+    v_repeat = max(0.85, slope_len * 0.35)
+    for loop in f_front.loops:
+        v_co = loop.vert.co
+        u = ((v_co.x - (x0 - overhang_x)) / span_x) * u_repeat
+        v = ((v_co.z - eave_z) / max(0.1, peak_h)) * v_repeat
+        loop[uv_layer].uv = Vector((u, v))
+
+    # Back slope (y > my, eaves at my + half_span_y, z=eave_z)
+    v_brf = bm.verts.new(Vector((x0 - overhang_x, my, peak_z)))
+    v_brb = bm.verts.new(Vector((x1 + overhang_x, my, peak_z)))
+    v_bef = bm.verts.new(Vector((x0 - overhang_x, my + half_span_y, eave_z)))
+    v_beb = bm.verts.new(Vector((x1 + overhang_x, my + half_span_y, eave_z)))
+
+    f_back = bm.faces.new([v_brf, v_bef, v_beb, v_brb])
+    f_back.material_index = MAT_INDEX_SHINGLES
+    for loop in f_back.loops:
+        v_co = loop.vert.co
+        u = ((v_co.x - (x0 - overhang_x)) / span_x) * u_repeat
+        v = ((v_co.z - eave_z) / max(0.1, peak_h)) * v_repeat
+        loop[uv_layer].uv = Vector((u, v))
+
+    # Ceiling underlay boards
+    create_box(bm, (span_x, (half_span_y - 0.15) * 2, 0.12), (mx, my, eave_z + 0.06), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 3. Verge Bargeboards on Left (x0) and Right (x1) Gable Slopes
+    for gx in (x0 - overhang_x, x1 + overhang_x):
+        for side in (-1.0, 1.0):
+            p_peak = (gx, my, peak_z)
+            p_eave = (gx, my + side * half_span_y, eave_z)
+            _create_oriented_beam(bm, p_peak, p_eave, width=0.24, depth=0.24, mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 4. Central Giant Curved Shark Dorsal Fin on Ridge
+    fin_h = 1.65 * fin_scale
+    fin_len = 1.25 * fin_scale
+    _build_shark_dorsal_fin(bm, mx, my, peak_z + 0.12, height=fin_h, length=fin_len, thickness=0.22, rot_z=0.0)
+
+    # Flanking ridge teeth spikes along the ridge beam
+    for sgn_rx in (-1.0, 1.0):
+        for i in range(1, 4):
+            tx = mx + sgn_rx * (fin_len * 0.42 + i * 0.42)
+            if abs(tx - mx) < span_x * 0.48:
+                th = 0.55 * (1.0 - i * 0.16) * fin_scale
+                create_cone(bm, radius1=0.09, radius2=0.015, height=th, segments=5,
+                            location=(tx, my, peak_z + th * 0.45),
+                            rotation=(0, -sgn_rx * 0.18, 0), mat_index=MAT_INDEX_BONE)
+
+
+def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found_h=0.0):
+    """The Rickety Simple Hajfin Watchtower (matching concept art media_1794407220362_da16a290.jpg):
+    - Tapering 4-legged heavy timber stilt tower with intermediate ring tie-beams and iron corner plates.
+    - Diagonal X-bracing timbers across multiple vertical bays on all 4 sides.
+    - Front-right angled timber ladder with chunky rungs climbing from ground to platform.
+    - Elevated observation platform with floor deck, floor joists, and protective railing.
+    - Sentry lookout booth with 4 corner posts, low half-walls, and an iconic giant carved bone window frame.
+    - Scalloped bone-scale gable roof with timber bargeboards, shark dorsal fin crest, and ridge spikes.
+    - Fully accessible and hollow inside for 2-3m tall Hajfin sentries."""
+    # 1. Proportions & Levels
+    stilt_h = max(6.2, height * 0.62)
+    cabin_h = max(3.8, height - stilt_h)
+    eave_z = stilt_h + cabin_h
+    peak_z = eave_z + 2.5
+
+    # Footprint: base leg spacing at ground
+    bw = max(4.8, width)
+    bd = max(4.8, depth)
+    h_bw = bw * 0.5
+    h_bd = bd * 0.5
+
+    # Tapered platform leg spacing at stilt_h
+    taper = 0.72
+    tw = bw * taper
+    td = bd * taper
+    h_tw = tw * 0.5
+    h_td = td * 0.5
+
+    # 2. Four Main Corner Legs (Pyramidal stance)
+    corner_signs = ((-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0))
+    for sgn_x, sgn_y in corner_signs:
+        p0 = (sgn_x * h_bw, sgn_y * h_bd, 0.0)
+        p1 = (sgn_x * h_tw, sgn_y * h_td, stilt_h)
+        _create_oriented_beam(bm, p0, p1, width=0.42, depth=0.42, mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 3. Intermediate Ring Tie-Beams & Iron Plates (Two bays)
+    num_bays = 2
+    z_bays = [0.0, stilt_h * 0.48, stilt_h]
+
+    for b_idx in range(1, len(z_bays)):
+        bz = z_bays[b_idx]
+        t = bz / stilt_h
+        cur_w = bw * (1.0 - t) + tw * t
+        cur_d = bd * (1.0 - t) + td * t
+        c_hw = cur_w * 0.5
+        c_hd = cur_d * 0.5
+
+        # Horizontal ring tie-beams (Front, Back, Left, Right)
+        _create_oriented_beam(bm, (-c_hw, -c_hd, bz), (c_hw, -c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (-c_hw, c_hd, bz), (c_hw, c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (-c_hw, -c_hd, bz), (-c_hw, c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (c_hw, -c_hd, bz), (c_hw, c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_DRIFTWOOD)
+
+        # Iron corner reinforcement plates at each joint
+        for sgn_x, sgn_y in corner_signs:
+            create_box(bm, (0.46, 0.46, 0.34), (sgn_x * c_hw, sgn_y * c_hd, bz), mat_index=MAT_INDEX_IRON)
+
+    # 4. Diagonal X-Bracing Timbers in each bay (Front, Back, Left, Right)
+    for b_idx in range(num_bays):
+        z_bot = z_bays[b_idx]
+        z_top = z_bays[b_idx + 1]
+        t_bot = z_bot / stilt_h
+        t_top = z_top / stilt_h
+
+        wb = bw * (1.0 - t_bot) + tw * t_bot
+        db = bd * (1.0 - t_bot) + td * t_bot
+        wt = bw * (1.0 - t_top) + tw * t_top
+        dt = bd * (1.0 - t_top) + td * t_top
+
+        h_wb, h_db = wb * 0.5, db * 0.5
+        h_wt, h_dt = wt * 0.5, dt * 0.5
+
+        # Front (Y = -d): X-brace
+        _create_oriented_beam(bm, (-h_wb, -h_db, z_bot + 0.15), (h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (h_wb, -h_db, z_bot + 0.15), (-h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+
+        # Back (Y = +d): X-brace
+        _create_oriented_beam(bm, (-h_wb, h_db, z_bot + 0.15), (h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (h_wb, h_db, z_bot + 0.15), (-h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+
+        # Left (X = -w): X-brace
+        _create_oriented_beam(bm, (-h_wb, -h_db, z_bot + 0.15), (-h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (-h_wb, h_db, z_bot + 0.15), (-h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+
+        # Right (X = +w): X-brace
+        _create_oriented_beam(bm, (h_wb, -h_db, z_bot + 0.15), (h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (h_wb, h_db, z_bot + 0.15), (h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 5. Access Ladder (Mounted on Front-Right, leading from ground to platform)
+    lad_w = 0.85
+    lad_x = h_tw * 0.65
+    lad_y0 = -h_bd * 1.15
+    lad_y1 = -h_td * 0.96
+
+    # Two heavy timber ladder stringers
+    for sgn_lad in (-1.0, 1.0):
+        lx = lad_x + sgn_lad * (lad_w * 0.5)
+        _create_oriented_beam(bm, (lx, lad_y0, 0.0), (lx, lad_y1, stilt_h + 0.65),
+                              width=0.14, depth=0.16, mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # Ladder rungs spaced vertically
+    num_rungs = max(5, int(stilt_h / 0.35))
+    for i in range(1, num_rungs + 1):
+        rz = i * (stilt_h / (num_rungs + 1))
+        t_lad = rz / stilt_h
+        ry = lad_y0 * (1.0 - t_lad) + lad_y1 * t_lad
+        _create_oriented_beam(bm, (lad_x - lad_w * 0.46, ry, rz), (lad_x + lad_w * 0.46, ry, rz),
+                              width=0.10, depth=0.12, mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 6. Elevated Platform Deck with Cantilevered Sill Joists
+    deck_w = tw + 0.80
+    deck_d = td + 0.80
+    h_dw = deck_w * 0.5
+    h_dd = deck_d * 0.5
+
+    # Heavy perimeter sill joists underneath deck
+    for sgn_y in (-1.0, 1.0):
+        create_box(bm, (deck_w, 0.30, 0.30), (0.0, sgn_y * (h_td + 0.15), stilt_h - 0.15), mat_index=MAT_INDEX_DRIFTWOOD)
+    for sgn_x in (-1.0, 1.0):
+        create_box(bm, (0.30, deck_d, 0.30), (sgn_x * (h_tw + 0.15), 0.0, stilt_h - 0.15), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # Walkable timber floor slab
+    create_box(bm, (deck_w, deck_d, 0.16), (0.0, 0.0, stilt_h + 0.08), mat_index=MAT_INDEX_FLOOR)
+
+    # 7. Sentry Lookout Cabin (4 Corner Posts & Balustrade)
+    col_size = 0.42
+    for sgn_x, sgn_y in corner_signs:
+        cx = sgn_x * h_tw
+        cy = sgn_y * h_td
+        create_box(bm, (col_size, col_size, cabin_h + 0.20), (cx, cy, stilt_h + cabin_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+        # Iron corner brackets at base and top
+        create_box(bm, (col_size + 0.05, col_size + 0.05, 0.26), (cx, cy, stilt_h + 0.18), mat_index=MAT_INDEX_IRON)
+        create_box(bm, (col_size + 0.05, col_size + 0.05, 0.26), (cx, cy, eave_z - 0.18), mat_index=MAT_INDEX_IRON)
+
+    # Balustrades / Half-walls around the observation platform
+    # Left (West) balustrade:
+    create_box(bm, (0.16, td, 1.10), (-h_tw, 0.0, stilt_h + 0.55), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (0.24, td + 0.1, 0.12), (-h_tw, 0.0, stilt_h + 1.10), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # Rear (North) balustrade / half-wall:
+    create_box(bm, (tw, 0.16, 1.10), (0.0, h_td, stilt_h + 0.55), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (tw + 0.1, 0.24, 0.12), (0.0, h_td, stilt_h + 1.10), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # Right (East) balustrade (leaves front portion open for ladder entrance):
+    create_box(bm, (0.16, td * 0.55, 1.10), (h_tw, h_td * 0.45, stilt_h + 0.55), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (0.24, td * 0.55, 0.12), (h_tw, h_td * 0.45, stilt_h + 1.10), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 8. Front Facade: Low Timber Apron & Giant Carved Bone Window Frame
+    apron_h = 1.25
+    apron_w = tw - col_size
+    create_box(bm, (apron_w, 0.22, apron_h), (0.0, -h_td, stilt_h + apron_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # Header beam above window opening
+    create_box(bm, (tw, 0.26, 0.26), (0.0, -h_td, eave_z - 0.13), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # GIANT CARVED BONE WINDOW FRAME (Matching Concept Art):
+    win_w = apron_w * 0.92
+    win_h = 1.35
+    win_cx = 0.0
+    win_cy = -h_td - 0.12
+    win_cz = stilt_h + apron_h + win_h * 0.52
+
+    _build_carved_bone_lookout_frame(bm, win_cx, win_cy, win_cz, width=win_w, height=win_h)
+
+    # 9. Scalloped Bone Scale Gable Roof (East-West Ridge, Front slope over bone window)
+    _build_gable_triangle_wall_ew(bm, -h_td - 0.15, h_td + 0.15, -h_tw - 0.15, eave_z, peak_z, wall_th=0.22)
+    _build_gable_triangle_wall_ew(bm, -h_td - 0.15, h_td + 0.15, h_tw + 0.15, eave_z, peak_z, wall_th=0.22)
+
+    _build_bone_scale_roof_gable_ew(bm, -h_tw - 0.2, h_tw + 0.2, -h_td - 0.25, h_td + 0.25,
+                                    eave_z, peak_z - eave_z,
+                                    overhang_x=0.55, overhang_y=0.55, fin_scale=1.5, num_ridge_teeth=6)
 
 
 def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, found_h=1.0):
@@ -1649,6 +2000,8 @@ def build_hajfin_building(obj, bm, props):
         _build_hajfin_pirate_tavern(bm, props, width=max(9.0, width), depth=max(9.0, depth), height=height, found_h=found_h)
     elif style == 'BONE_SHOP' or arch in ('STORE', 'COMMERCE'):
         _build_hajfin_bone_shop(bm, props, width=max(8.0, width), depth=max(7.5, depth), height=height, found_h=found_h)
+    elif style in ('WATCHTOWER', 'LOOKOUT') or arch in ('WATCHTOWER', 'BARRACKS'):
+        _build_hajfin_watchtower(bm, props, width=max(5.0, width), depth=max(5.0, depth), height=max(9.0, height), found_h=found_h)
     elif style == 'BLOCKHOUSE' or shape == 'CUBE':
         _build_hajfin_crate_blockhouse(bm, props, width=width, depth=depth, height=height, found_h=found_h)
     else:
