@@ -876,90 +876,6 @@ def _build_whale_spine_buttress(bm, x, y, z0, rot_z=0.0, num_vertebrae=6, max_h=
         curr_z += seg_dz
 
 
-def _build_shark_skull_mount(bm, x, y, z, rot_z=0.0, scale=1.0):
-    """Build a readable carved shark skull trophy on a timber wall plaque."""
-    rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
-    scale = max(0.5, float(scale))
-
-    # 1. Carved Timber Mounting Shield Plaque flat against the wall
-    b_pos = rot_mat @ Vector((0.0, 0.04 * scale, 0.0)) + Vector((x, y, z))
-    create_box(bm, (0.75 * scale, 0.06 * scale, 0.95 * scale),
-               (b_pos.x, b_pos.y, b_pos.z), rotation=(0, 0, rot_z), mat_index=MAT_INDEX_TIMBER)
-
-    # Forged iron border rim brackets on plaque
-    for sgn_f in (-1.0, 1.0):
-        rim_pos = rot_mat @ Vector((sgn_f * 0.35 * scale, 0.05 * scale, 0.0)) + Vector((x, y, z))
-        create_box(bm, (0.06 * scale, 0.08 * scale, 0.92 * scale),
-                   (rim_pos.x, rim_pos.y, rim_pos.z), rotation=(0, 0, rot_z), mat_index=MAT_INDEX_IRON)
-
-    # 2. Complete skull: broad cranium, cheek plates, open jaw, and individual teeth.
-    def _local(p):
-        return rot_mat @ Vector(p) + Vector((x, y, z))
-
-    cranium = _local((0.0, 0.14 * scale, 0.13 * scale))
-    create_cylinder(bm, radius=0.30 * scale, height=0.20 * scale, segments=14,
-                    location=cranium, rotation=(math.pi * 0.5, 0, rot_z),
-                    mat_index=MAT_INDEX_BONE, smooth=True)
-    # A shark skull reads through its long tapered snout rather than a human-like
-    # flat face. Keep the muzzle slightly proud of the cranium and leave a dark
-    # nasal opening between the upper plates.
-    muzzle = _local((0.0, 0.31 * scale, 0.01 * scale))
-    create_beveled_box(
-        bm, (0.34 * scale, 0.24 * scale, 0.20 * scale), muzzle,
-        rotation=(0.0, 0.0, rot_z), mat_index=MAT_INDEX_BONE,
-        bevel_amount=0.045 * scale,
-    )
-    nasal = _local((0.0, 0.445 * scale, 0.02 * scale))
-    create_cylinder(
-        bm, radius=0.052 * scale, height=0.018 * scale, segments=10,
-        location=nasal, rotation=(math.pi * 0.5, 0, rot_z),
-        mat_index=MAT_INDEX_IRON,
-    )
-    for sx in (-1.0, 1.0):
-        cheek = _local((sx * 0.24 * scale, 0.16 * scale, -0.03 * scale))
-        create_beveled_box(bm, (0.18 * scale, 0.16 * scale, 0.42 * scale),
-                           cheek, rotation=(0.0, sx * 0.20, rot_z),
-                           mat_index=MAT_INDEX_BONE, bevel_amount=0.035 * scale)
-
-    jaw = _local((0.0, 0.18 * scale, -0.22 * scale))
-    create_beveled_box(bm, (0.48 * scale, 0.14 * scale, 0.12 * scale), jaw,
-                       rotation=(0.0, 0.0, rot_z),
-                       mat_index=MAT_INDEX_BONE, bevel_amount=0.025 * scale)
-    for sx in (-1.0, 1.0):
-        jaw_arm = _local((sx * 0.20 * scale, 0.15 * scale, -0.12 * scale))
-        create_beveled_box(bm, (0.10 * scale, 0.13 * scale, 0.26 * scale),
-                           jaw_arm, rotation=(0.0, sx * 0.35, rot_z),
-                           mat_index=MAT_INDEX_BONE, bevel_amount=0.018 * scale)
-
-    # Dark iron eye sockets give the otherwise pale skull a clear face.
-    for sx in (-1.0, 1.0):
-        eye = _local((sx * 0.12 * scale, 0.245 * scale, 0.13 * scale))
-        create_cylinder(bm, radius=0.075 * scale, height=0.018 * scale, segments=12,
-                        location=eye, rotation=(math.pi * 0.5, 0, rot_z),
-                        mat_index=MAT_INDEX_IRON)
-
-        # Thin brow fins give the eye sockets an aggressive shark silhouette.
-        brow_fin = _local((sx * 0.16 * scale, 0.27 * scale, 0.27 * scale))
-        create_cone(
-            bm, radius1=0.07 * scale, radius2=0.008 * scale,
-            height=0.22 * scale, segments=7, location=brow_fin,
-            rotation=(0.15, sx * 0.35, rot_z), mat_index=MAT_INDEX_BONE,
-        )
-
-    for i in range(5):
-        tx = (-0.20 + i * 0.10) * scale
-        tooth = _local((tx, 0.25 * scale, -0.27 * scale))
-        create_cone(bm, radius1=0.035 * scale, radius2=0.004 * scale,
-                    height=(0.18 if i % 2 else 0.14) * scale, segments=6,
-                    location=tooth, rotation=(math.pi, 0, rot_z),
-                    mat_index=MAT_INDEX_BONE)
-
-    brow = _local((0.0, 0.20 * scale, 0.34 * scale))
-    create_cone(bm, radius1=0.11 * scale, radius2=0.015 * scale,
-                height=0.36 * scale, segments=8, location=brow,
-                rotation=(0.35, 0, rot_z), mat_index=MAT_INDEX_BONE)
-
-
 def _build_continuous_bone_arc(bm, points, base_radius=0.20, mat_index=MAT_INDEX_BONE):
     """Create one uninterrupted tapered bone tube along a curved centreline."""
     if len(points) < 2:
@@ -993,7 +909,7 @@ def _build_whale_rib_tunnel_entrance(bm, entrance_x, entrance_y, z0, rot_z=0.0,
     """Projecting whale rib cage tunnel entrance extending OUTWARD from the main door.
     Features elevated solid reef-stone foundation plinth, wide ceremonial access steps,
     raised timber boardwalk platform, continuous curved bone ribs connecting cleanly,
-    rope lashings, and flanking tribal totem posts with mounted shark skull trophies."""
+    rope lashings, and flanking tribal totem posts."""
     rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
     step_d = length / max(1, num_pairs)
 
@@ -1067,8 +983,6 @@ def _build_whale_rib_tunnel_entrance(bm, entrance_x, entrance_y, z0, rot_z=0.0,
         p_x = entrance_x + sgn * (width * 0.5 + 0.55)
         p_y = entrance_y + post_y
         _build_tribal_totem_post(bm, p_x, p_y, z0, height=3.4)
-        # Shark skull faces outward (-Y) towards approaching visitors
-        _build_shark_skull_mount(bm, p_x, p_y - 0.24, z0 + 2.4, rot_z=math.pi, scale=0.75)
 
 def _build_tribal_totem_post(bm, x, y, z0, height=2.4):
     """Carved timber totem pole with rope coils and cross arms."""
@@ -2494,7 +2408,7 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
     Open barter stall counter, flip-up timber awning with diagonal struts, hanging carved bone trade sign,
     flanking pier dock platforms with stacked cargo crates and barrels,
     internal timber staircase connecting ground floor trade room to the upper lookout room,
-    hollow upper room with bone windows, giant mounted Megalodon shark skull trophy,
+    hollow upper room with bone windows and bone-window detailing,
     exterior dock access ladder with longitudinal timber grain, diagonal X-braces,
     and multi-tier bone scale roofs with ridge crests."""
     hw = width * 0.5
@@ -2995,9 +2909,8 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
         t_x = sgn_tp * (terrace_w * 0.48)
         t_y = -hd - terrace_d * 0.70
         _build_tribal_totem_post(bm, t_x, t_y, z0, height=4.2)
-        _build_shark_skull_mount(bm, t_x, t_y - 0.26, z0 + 3.0, rot_z=math.pi, scale=0.90)
 
-    # 7B. Front Facade Structural Belt Beams, War Banners & Upper Skull Trophy
+    # 7B. Front Facade Structural Belt Beams & War Banners
     # Horizontal structural timber belt course flanking the grand entrance (leaving doorway 100% open)
     d_half_door = door_w * 0.5 + 0.35
     for sgn_bx in (-1.0, 1.0):
@@ -3017,9 +2930,6 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
                               width=0.10, depth=0.10, mat_index=MAT_INDEX_BONE)
         # Hanging banner cloth
         create_box(bm, (1.1, 0.04, 2.5), (ban_x, -hd - 0.14, ban_z - 1.25), mat_index=MAT_INDEX_BANNER)
-
-    # Giant Megalodon Shark Skull Trophy mounted on front gable peak
-    _build_shark_skull_mount(bm, 0.0, -hd - 0.28, z0 + nave_h + 1.8, rot_z=math.pi, scale=2.0)
 
     # 8. Solid Gable Triangle Walls (Zero gaps!)
     _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, -hd, z0 + nave_h, nave_peak_z, wall_th=wall_th)
@@ -3211,7 +3121,7 @@ def _build_hajfin_bone_gate(bm, props, width=12.0, depth=4.0, height=4.5, found_
     - Elevated rear sentry bastion platforms with access ladders for Hajfin defenders.
     - Massive dual gate posts bound with nautical cordage.
     - Heavy double lintel beam structure with diagonal timber knee braces.
-    - Monumental predatory shark skull crest with carved bone horns at apex.
+    - Monumental timber crest with carved bone horns at apex.
     - Symmetrical gate wings with central open gateway for 2-3m tall Hajfin warriors."""
     hw = width * 0.5
     gate_w = max(2.8, float(getattr(props, 'door_width', 3.20)))
@@ -3280,7 +3190,7 @@ def _build_hajfin_bone_gate(bm, props, width=12.0, depth=4.0, height=4.5, found_
                             location=(lad_x, cat_d + 0.10, rz),
                             rotation=(0, math.pi * 0.5, 0), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 4. Monumental Gate Portal (Massive Posts & Sculpted Shark Skull Crest)
+    # 4. Monumental Gate Portal (Massive Posts and Timber Crest)
     gate_post_h = log_h * 1.45
     gate_post_r = 0.28
     for sgn_gx in (-1.0, 1.0):
@@ -3304,16 +3214,14 @@ def _build_hajfin_bone_gate(bm, props, width=12.0, depth=4.0, height=4.5, found_
         p_kb_lintel = Vector((sgn_k * (h_gw * 0.45), 0.0, lintel_z - 0.10))
         _create_oriented_beam(bm, p_kb_post, p_kb_lintel, width=0.20, depth=0.20, mat_index=MAT_INDEX_TIMBER)
 
-    # Central Tall Totem Pole above lintel crowned with Giant Predatory Shark Skull
-    skull_pole_h = 2.6
-    create_cylinder(bm, radius=0.22, height=skull_pole_h, segments=8,
-                    location=(0.0, 0.0, lintel_z + 0.35 + skull_pole_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+    # Central Tall Timber Totem above lintel
+    totem_pole_h = 2.6
+    create_cylinder(bm, radius=0.22, height=totem_pole_h, segments=8,
+                    location=(0.0, 0.0, lintel_z + 0.35 + totem_pole_h * 0.5), mat_index=MAT_INDEX_TIMBER)
     create_cone(bm, radius1=0.22, radius2=0.03, height=0.75, segments=8,
-                location=(0.0, 0.0, lintel_z + 0.35 + skull_pole_h + 0.35), mat_index=MAT_INDEX_TIMBER)
+                location=(0.0, 0.0, lintel_z + 0.35 + totem_pole_h + 0.35), mat_index=MAT_INDEX_TIMBER)
 
-    # Mount Giant Open-Maw Shark Skull Totem at apex of center pole
-    totem_z = lintel_z + 0.35 + skull_pole_h * 0.68
-    _build_shark_skull_mount(bm, 0.0, -0.24, totem_z, rot_z=0.0, scale=1.8)
+    totem_z = lintel_z + 0.35 + totem_pole_h * 0.68
     create_torus_ring(bm, (0.0, 0.0, totem_z), major_radius=0.38, minor_radius=0.04,
                       mat_index=MAT_INDEX_ROPE)
 
@@ -3322,9 +3230,9 @@ def _build_hajfin_bone_gate(bm, props, width=12.0, depth=4.0, height=4.5, found_
         _build_curved_bone_spine(bm, sgn_h * 0.65, -0.15, totem_z - 0.20, height=1.35,
                                  base_radius=0.13, sweep_y=-0.15)
 
-    # Hanging bone amulet dangling beneath skull
+    # Hanging bone amulet beneath the totem
     create_cone(bm, radius1=0.10, radius2=0.01, height=0.42, segments=6,
-                location=(0.0, -0.28, lintel_z + 0.35 + skull_pole_h * 0.30),
+                location=(0.0, -0.28, lintel_z + 0.35 + totem_pole_h * 0.30),
                 rotation=(math.pi, 0, 0), mat_index=MAT_INDEX_BONE)
 
     # Side post shark fin wedge
@@ -3556,7 +3464,7 @@ def _build_hajfin_shaman_shrine(bm, props, diameter=11.0, height=7.5, found_h=0.
     - Two-tier stepped circular reef-stone dais.
     - Ring of 6 towering curved whale rib arches soaring inward to form a ribcage dome sanctuary.
     - Central carved megalodon jaw bone altar table with sacred offering bowl.
-    - Tribal skull totems, glowing smoking brazier, and shark tooth fetish staves."""
+    - Tribal totems, glowing smoking brazier, and shark tooth fetish staves."""
     r_base = diameter * 0.5
     z0 = found_h
 
@@ -3634,8 +3542,6 @@ def _build_hajfin_shaman_shrine(bm, props, diameter=11.0, height=7.5, found_h=0.
                         location=(0.0, ty, z0 + totem_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
         create_cone(bm, radius1=0.15, radius2=0.02, height=0.5, segments=6,
                     location=(0.0, ty, z0 + totem_h + 0.25), mat_index=MAT_INDEX_DRIFTWOOD)
-        _build_shark_skull_mount(bm, -0.15, ty, z0 + totem_h * 0.75,
-                                 rot_z=math.pi * 0.5, scale=0.95)
 
 
 # =============================================================================

@@ -6,7 +6,7 @@ Features stylized, fantasy-overexaggerated nautical and tribal pirate props:
 - Menacing shark jaw totems
 - Scrimshaw bone trading counter
 - Heavy whaling harpoon weapon rack
-- Chieftain's driftwood & shark skull throne
+- Chieftain's driftwood throne
 - Grog casks & rum barrels cluster
 - Fish drying & net hanging rack
 - Stylized dorsal fin rooftop crest
@@ -410,7 +410,7 @@ def build_chieftain_driftwood_throne(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0)
     """
     Grand pirate chieftain throne:
     Anchored on rough reef basalt, wide weathered driftwood seat,
-    flaring dorsal-fin backrest crowned with curved whale ribs and mounted shark skull.
+    flaring dorsal-fin backrest crowned with curved whale ribs.
     """
     faces = []
     
@@ -451,23 +451,7 @@ def build_chieftain_driftwood_throne(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0)
             mat_index=MAT_INDEX_BONE
         )
 
-    # 5. Mounted Predator / Shark Skull crest at top center of backrest
-    crest_z = seat_z + 1.45 * scale
-    faces += create_cone(
-        bm, radius1=0.18 * scale, radius2=0.04 * scale, height=0.38 * scale, segments=8,
-        location=(0.0, 0.32 * scale, crest_z),
-        rotation=(-math.pi * 0.5 - 0.2, 0.0, 0.0),
-        mat_index=MAT_INDEX_BONE
-    )
-    # Flanking eye socket hollows
-    for sgn in (-1.0, 1.0):
-        faces += create_cylinder(
-            bm, radius=0.045 * scale, height=0.10 * scale, segments=6,
-            location=(sgn * 0.09 * scale, 0.26 * scale, crest_z + 0.05 * scale),
-            mat_index=MAT_INDEX_IRON
-        )
-
-    # 6. Armrests with bone cap caps
+    # 5. Armrests with bone caps
     for sgn in (-1.0, 1.0):
         ax = sgn * 0.50 * scale
         # Timber arm support

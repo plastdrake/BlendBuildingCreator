@@ -5150,7 +5150,7 @@ def _furnish_armory(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
 
 def _furnish_hajfin_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                                 rng, density: float):
-    """Grand Hajfin Chieftain Great Hall: Driftwood & shark skull throne on a stone dais,
+    """Grand Hajfin Chieftain Great Hall: Driftwood throne on a stone dais,
     flanked by menacing shark jaw totems, whaling harpoon racks, and grog barrels."""
     rx0, rx1, ry0, ry1 = rm.bounds
     rcx = (rx0 + rx1) * 0.5

@@ -298,7 +298,7 @@ for _s in (
           'hajfin_props', 'build_scrimshaw_bone_counter', 1.20, width=2.2, depth=0.8),
     _spec('HAJFIN_HARPOON_RACK', "Whaling Harpoon Rack", 'HAJFIN', "A-frame rack holding barbed whaling harpoons with rope lanyards",
           'hajfin_props', 'build_harpoon_rack', 0.95, width=1.6, height=1.75),
-    _spec('HAJFIN_DRIFTWOOD_THRONE', "Chieftain Driftwood Throne", 'HAJFIN', "Grand pirate throne with flaring fin backrest, ribs and shark skull",
+    _spec('HAJFIN_DRIFTWOOD_THRONE', "Chieftain Driftwood Throne", 'HAJFIN', "Grand pirate throne with flaring fin backrest and ribs",
           'hajfin_props', 'build_chieftain_driftwood_throne', 1.10, scale=1.0),
     _spec('HAJFIN_GROG_BARRELS', "Pirate Grog Barrels", 'HAJFIN', "Cluster of 3 grog casks on pallet with iron tap",
           'hajfin_props', 'build_pirate_grog_barrels', 0.85, scale=1.0),

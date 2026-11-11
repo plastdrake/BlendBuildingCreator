@@ -7096,7 +7096,7 @@ PRESETS = {
         'tier': 1,
         'name': "Bone Trading Post (Tier 1)",
         'plot': "24m x 24m",
-        'description': "Two-storey pirate barter bazaar with open barter counter, accessible upper lookout room, and mounted shark skull.",
+        'description': "Two-storey pirate barter bazaar with open barter counter and accessible upper lookout room.",
         'settings': _hajfin_settings(width=11.5, depth=10.5, num_floors=2, found_h=1.0, wonkiness=0.20, has_pillared=True, pillars=4, has_trade_sign=True, sign_icon='general_store_sign.png', roof_h=4.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', tier=1, hajfin_style='BONE_SHOP'),
     },
     'HAJFIN_BONE_SHOP_T2': {
@@ -7162,7 +7162,7 @@ PRESETS = {
         'tier': 1,
         'name': "Shark-Bone Palisade Gate (Tier 1)",
         'plot': "16m x 10m",
-        'description': "Timber and bone palisade gate with curved whale ribs, hanging tooth festoons, and shark skull gateway.",
+        'description': "Timber and bone palisade gate with curved whale ribs and hanging tooth festoons.",
         'settings': _hajfin_settings(width=12.0, depth=4.0, num_floors=1, found_h=0.0, wonkiness=0.15, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=3.20, door_h=4.50, tier=1, hajfin_style='PALISADE_GATE'),
     },
     'HAJFIN_BONE_GATE_T2': {
@@ -7171,7 +7171,7 @@ PRESETS = {
         'tier': 2,
         'name': "Shark-Bone Palisade Gate (Tier 2)",
         'plot': "18m x 10m",
-        'description': "Reinforced tribal bone bastion gate with flanking megalodon dorsal fin wedge and towering shark skull totem.",
+        'description': "Reinforced tribal bone bastion gate with flanking megalodon dorsal fin wedge.",
         'settings': _hajfin_settings(width=14.0, depth=4.5, num_floors=1, found_h=0.0, wonkiness=0.12, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=3.60, door_h=5.00, tier=2, hajfin_style='PALISADE_GATE'),
     },
 
@@ -7237,7 +7237,7 @@ PRESETS = {
         'tier': 2,
         'name': "Great Megalodon Sanctuary (Tier 2)",
         'plot': "24m x 24m",
-        'description': "Monumental megalodon sanctuary with high ribcage dome, ceremonial offering brazier, and sacred skull totems.",
+        'description': "Monumental megalodon sanctuary with high ribcage dome and ceremonial offering brazier.",
         'settings': _hajfin_settings(width=12.5, depth=12.5, num_floors=1, found_h=0.8, wonkiness=0.10, roof_h=2.5, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', tier=2, hajfin_style='SHRINE'),
     },
 
@@ -7824,9 +7824,9 @@ BUILDING_FAMILIES = [
         'plot': "16m x 10m",
         'shape': "Linear",
         'icon': 'MOD_BUILD',
-        'description': "Sharpened timber palisade gate fortified with curved whale ribs, tooth garlands, and predatory shark skull totem.",
+        'description': "Sharpened timber palisade gate fortified with curved whale ribs and tooth garlands.",
         'tiers': [
-            ("T1", 'HAJFIN_BONE_GATE_T1', "Timber & bone palisade fence with shark skull gateway"),
+            ("T1", 'HAJFIN_BONE_GATE_T1', "Timber & bone palisade fence with curved whale ribs"),
             ("T2", 'HAJFIN_BONE_GATE_T2', "Reinforced tribal bone bastion gate with flanking dorsal fin"),
         ],
     },
@@ -7869,7 +7869,7 @@ BUILDING_FAMILIES = [
         'description': "Sacred stepped reef-stone dais crowned by soaring whale-rib arches and central megalodon jawbone altar.",
         'tiers': [
             ("T1", 'HAJFIN_SHAMAN_SHRINE_T1', "Circular stone dais with ribcage dome and jaw altar"),
-            ("T2", 'HAJFIN_SHAMAN_SHRINE_T2', "Monumental megalodon sanctuary with ceremonial brazier and skull totems"),
+            ("T2", 'HAJFIN_SHAMAN_SHRINE_T2', "Monumental megalodon sanctuary with ceremonial brazier and ribcage dome"),
         ],
     },
 ]
@@ -8223,7 +8223,6 @@ def apply_preset(props, preset_key):
         obj = context.active_object
         if obj and obj.get("is_fantasy_building", False):
             generate_building(obj, props)
-
 
 
 
