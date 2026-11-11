@@ -1087,7 +1087,7 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
         try:
             import math
             from .hajfin_props import (
-                build_whale_rib_arch, build_shark_jaw_totem,
+                build_whale_rib_arch,
                 build_scrimshaw_bone_counter, build_harpoon_rack,
                 build_chieftain_driftwood_throne, build_pirate_grog_barrels,
                 build_fish_hanging_rack, build_dorsal_fin_crest
@@ -1103,8 +1103,6 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
             # 1. Chieftain Hut / Great Fin Hall
             if 'CHIEFTAIN' in _p_key or getattr(props, 'has_throne_room', False):
                 build_whale_rib_arch(bm, _door_x, _front_y - 0.40, found_h, 0.0, width=2.4, height=3.2)
-                build_shark_jaw_totem(bm, _door_x - 1.8, _front_y - 0.8, 0.0, 0.2, height=2.8)
-                build_shark_jaw_totem(bm, _door_x + 1.8, _front_y - 0.8, 0.0, -0.2, height=2.8)
                 throne_y = hy - 2.2
                 build_chieftain_driftwood_throne(bm, 0.0, throne_y, found_h, math.pi, scale=1.15)
                 roof_h = getattr(props, 'roof_height', 4.0)
@@ -1115,7 +1113,6 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
             elif 'BONE' in _p_key:
                 build_scrimshaw_bone_counter(bm, _door_x + 1.6, _front_y - 1.1, found_h, 0.0, width=2.0, depth=0.75)
                 build_whale_rib_arch(bm, _door_x, _front_y - 0.35, found_h, 0.0, width=2.2, height=3.0)
-                build_shark_jaw_totem(bm, _door_x - 1.6, _front_y - 0.8, 0.0, 0.3, height=2.5)
                 build_harpoon_rack(bm, _door_x - 2.8, _front_y - 0.6, found_h, 0.1, width=1.5, height=1.7)
 
             # 3. Pirate Tavern (The Barnacle Bilge)
