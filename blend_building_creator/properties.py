@@ -132,8 +132,10 @@ def export_category_items(self, _context):
     })
     labels = {
         'CONSTRUCTION_BUILDINGS': 'Scaffolded Buildings',
-        'SHANTIES': 'Shanties & Huts',
-        'COMMERCE': 'Commerce & Bones',
+        'SHANTIES': 'Shanties & Defenses',
+        'COMMERCE': 'Commerce & Docks',
+        'ARTISAN': 'Smithies & Forges',
+        'CIVIC': 'Shrines & Totems',
         'CHIEFTAIN': 'Chieftain & Strongholds',
         'HOSPITALITY': 'Taverns & Taprooms',
     }
@@ -190,8 +192,10 @@ def preset_category_items(self, _context):
     if faction == 'HAJFIN':
         return [
             ('ALL', "All Presets", "Show all Hajfin presets"),
-            ('SHANTIES', "Shanties & Huts", "Ramshackle driftwood stilt shacks, net huts, and beach shelters"),
-            ('COMMERCE', "Commerce & Bones", "Bone trading posts, scrimshaw stalls, and nautical barter shops"),
+            ('SHANTIES', "Shanties & Defenses", "Ramshackle driftwood stilt shacks, watchtowers, and bone palisade gates"),
+            ('COMMERCE', "Commerce & Docks", "Bone trading posts, scrimshaw stalls, and fish depot piers"),
+            ('ARTISAN', "Smithies & Forges", "Shark-tooth harpoon smithies and coral-stone bone forges"),
+            ('CIVIC', "Shrines & Totems", "Leviathan bone shrines, ceremonial sanctuaries, and shark totem altars"),
             ('CHIEFTAIN', "Chieftain & Strongholds", "Grand Fin Halls and pirate chieftain longhouses"),
             ('HOSPITALITY', "Hospitality", "Pirate taverns, grog houses, and seaside taprooms"),
         ]
@@ -340,6 +344,10 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('BLOCKHOUSE', "Crate Blockhouse", "Heavy cubic timber blockhouse with flat plank deck roof, bone windows, and iron cuffs (Image 5)", 'MOD_OCEAN', 4),
             ('TAVERN', "Pirate Tavern", "Sprawling multi-deck pirate haven with open drinking deck and grog barrels", 'COMMUNITY', 5),
             ('WATCHTOWER', "Rickety Watchtower", "Tall stilt watchtower with X-bracing, timber ladder, sentry cabin, and carved bone window", 'OUTLINER_OB_LIGHTPROBE', 6),
+            ('PALISADE_GATE', "Shark-Bone Palisade Gate", "Sharpened timber palisade with curved whale ribs, teeth garlands, and towering skull totem gate (Image 1)", 'SELECT_SET', 7),
+            ('FORGE', "Harpoon Smithy & Bone Forge", "Open-sided timber workshop with stone chimney, iron anvil, and weapon tool racks", 'MOD_BUILD', 8),
+            ('FISH_DEPOT', "Fisher's Stilt Pier & Depot", "Tidal dock house with hanging net drying frames, fish curing racks, and cargo crane", 'HOOK', 9),
+            ('SHRINE', "Leviathan Bone Shrine", "Sacred ceremonial ring with towering whale-rib arches, sacrificial bone altar, and smoking brazier", 'LIGHT_SUN', 10),
         ],
         default='SHANTY',
         update=on_property_updated

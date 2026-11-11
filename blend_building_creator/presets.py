@@ -7139,6 +7139,94 @@ PRESETS = {
         'settings': _hajfin_settings(width=15.5, depth=15.5, shape='L_SHAPE', wing_w=7.8, wing_d=7.5, wing_floors=2, num_floors=2, found_h=1.4, wonkiness=0.18, has_veranda=True, has_balcony=True, balcony_fl=2, has_trade_sign=True, sign_icon='tavern_sign.png', has_banners=True, banner_count=2, roof_h=4.8, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_CORAL', door_w=2.00, door_h=3.60, tier=2, hajfin_style='TAVERN'),
     },
 
+    # =========================================================================
+    # HAJFIN: PALISADE GATE & FORTIFICATIONS
+    # =========================================================================
+    'HAJFIN_BONE_GATE_T1': {
+        'category': 'SHANTIES',
+        'family': 'HAJFIN_BONE_GATE',
+        'tier': 1,
+        'name': "Shark-Bone Palisade Gate (Tier 1)",
+        'plot': "16m x 10m",
+        'description': "Timber and bone palisade gate with curved whale ribs, hanging tooth festoons, and shark skull gateway.",
+        'settings': _hajfin_settings(width=12.0, depth=4.0, num_floors=1, found_h=0.0, wonkiness=0.15, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=3.20, door_h=4.50, tier=1, hajfin_style='PALISADE_GATE'),
+    },
+    'HAJFIN_BONE_GATE_T2': {
+        'category': 'SHANTIES',
+        'family': 'HAJFIN_BONE_GATE',
+        'tier': 2,
+        'name': "Shark-Bone Palisade Gate (Tier 2)",
+        'plot': "18m x 10m",
+        'description': "Reinforced tribal bone bastion gate with flanking megalodon dorsal fin wedge and towering shark skull totem.",
+        'settings': _hajfin_settings(width=14.0, depth=4.5, num_floors=1, found_h=0.0, wonkiness=0.12, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=3.60, door_h=5.00, tier=2, hajfin_style='PALISADE_GATE'),
+    },
+
+    # =========================================================================
+    # HAJFIN: HARPOON SMITHY & FORGE
+    # =========================================================================
+    'HAJFIN_FORGE_T1': {
+        'category': 'ARTISAN',
+        'family': 'HAJFIN_FORGE',
+        'tier': 1,
+        'name': "Harpoon Smithy (Tier 1)",
+        'plot': "20m x 20m",
+        'description': "Open timber blacksmith forge with coral-stone smelting hearth, heavy iron anvil, quenching vat, and harpoon racks.",
+        'settings': _hajfin_settings(width=9.5, depth=8.5, num_floors=1, found_h=0.8, wonkiness=0.18, roof_h=3.5, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=2.00, door_h=3.50, tier=1, hajfin_style='FORGE'),
+    },
+    'HAJFIN_FORGE_T2': {
+        'category': 'ARTISAN',
+        'family': 'HAJFIN_FORGE',
+        'tier': 2,
+        'name': "Bone & Steel Forge (Tier 2)",
+        'plot': "22m x 22m",
+        'description': "Master harpoon forge with tall stone chimney flue, massive scrap anvil, tool benches, and multiple weapon racks.",
+        'settings': _hajfin_settings(width=11.5, depth=10.0, num_floors=1, found_h=1.0, wonkiness=0.14, roof_h=4.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', door_w=2.20, door_h=3.80, tier=2, hajfin_style='FORGE'),
+    },
+
+    # =========================================================================
+    # HAJFIN: FISH DEPOT & PIER
+    # =========================================================================
+    'HAJFIN_FISH_DEPOT_T1': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_FISH_DEPOT',
+        'tier': 1,
+        'name': "Fisher's Stilt Pier & Depot (Tier 1)",
+        'plot': "24m x 24m",
+        'description': "Stilted fish curing shack with pier dock, drying frames, grog casks, and cantilevered cargo hoist crane.",
+        'settings': _hajfin_settings(width=11.0, depth=13.0, num_floors=2, found_h=1.6, wonkiness=0.20, roof_h=3.6, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.85, door_h=3.50, tier=1, hajfin_style='FISH_DEPOT'),
+    },
+    'HAJFIN_FISH_DEPOT_T2': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_FISH_DEPOT',
+        'tier': 2,
+        'name': "Grand Tidal Fish Depot (Tier 2)",
+        'plot': "26m x 26m",
+        'description': "Grand tidal depot with two-storey salting cabin, wraparound pier platform, heavy boom crane, and drying nets.",
+        'settings': _hajfin_settings(width=13.0, depth=15.0, num_floors=2, found_h=1.8, wonkiness=0.16, roof_h=4.2, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_CORAL', door_w=2.00, door_h=3.60, tier=2, hajfin_style='FISH_DEPOT'),
+    },
+
+    # =========================================================================
+    # HAJFIN: LEVIATHAN BONE SHRINE
+    # =========================================================================
+    'HAJFIN_SHAMAN_SHRINE_T1': {
+        'category': 'CIVIC',
+        'family': 'HAJFIN_SHAMAN_SHRINE',
+        'tier': 1,
+        'name': "Leviathan Bone Shrine (Tier 1)",
+        'plot': "20m x 20m",
+        'description': "Sacred stepped reef-stone dais crowned by soaring whale-rib arches and central megalodon jawbone altar.",
+        'settings': _hajfin_settings(width=10.0, depth=10.0, num_floors=1, found_h=0.6, wonkiness=0.14, roof_h=2.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', tier=1, hajfin_style='SHRINE'),
+    },
+    'HAJFIN_SHAMAN_SHRINE_T2': {
+        'category': 'CIVIC',
+        'family': 'HAJFIN_SHAMAN_SHRINE',
+        'tier': 2,
+        'name': "Great Megalodon Sanctuary (Tier 2)",
+        'plot': "24m x 24m",
+        'description': "Monumental megalodon sanctuary with high ribcage dome, ceremonial offering brazier, and sacred skull totems.",
+        'settings': _hajfin_settings(width=12.5, depth=12.5, num_floors=1, found_h=0.8, wonkiness=0.10, roof_h=2.5, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', tier=2, hajfin_style='SHRINE'),
+    },
+
 }
 
 BUILDING_FAMILIES = [
@@ -7714,6 +7802,62 @@ BUILDING_FAMILIES = [
             ("T2", 'HAJFIN_PIRATE_TAVERN_T2', "The Salty Megalodon Taproom: multi-deck pirate haven"),
         ],
     },
+    {
+        'id': 'HAJFIN_BONE_GATE',
+        'faction': 'HAJFIN',
+        'name': "Shark-Bone Palisade Gate",
+        'category': 'SHANTIES',
+        'plot': "16m x 10m",
+        'shape': "Linear",
+        'icon': 'MOD_BUILD',
+        'description': "Sharpened timber palisade gate fortified with curved whale ribs, tooth garlands, and predatory shark skull totem.",
+        'tiers': [
+            ("T1", 'HAJFIN_BONE_GATE_T1', "Timber & bone palisade fence with shark skull gateway"),
+            ("T2", 'HAJFIN_BONE_GATE_T2', "Reinforced tribal bone bastion gate with flanking dorsal fin"),
+        ],
+    },
+    {
+        'id': 'HAJFIN_FORGE',
+        'faction': 'HAJFIN',
+        'name': "Harpoon Smithy & Bone Forge",
+        'category': 'ARTISAN',
+        'plot': "20m x 20m",
+        'shape': "Workshop",
+        'icon': 'LIGHT_SUN',
+        'description': "Open timber blacksmith forge with coral-stone smelting hearth, heavy iron anvil, quenching vat, and harpoon racks.",
+        'tiers': [
+            ("T1", 'HAJFIN_FORGE_T1', "Open-air smithy with stone hearth and scrap anvil"),
+            ("T2", 'HAJFIN_FORGE_T2', "Master harpoon forge with dual weapon racks and high stone flue"),
+        ],
+    },
+    {
+        'id': 'HAJFIN_FISH_DEPOT',
+        'faction': 'HAJFIN',
+        'name': "Fisher's Stilt Pier & Depot",
+        'category': 'COMMERCE',
+        'plot': "24m x 24m",
+        'shape': "Pier Deck",
+        'icon': 'MOD_BUILD',
+        'description': "Tidal stilt pier house with cargo boom hoist crane, net drying racks, cured fish stores, and salting cabin.",
+        'tiers': [
+            ("T1", 'HAJFIN_FISH_DEPOT_T1', "Stilted fish curing shack with pier dock and cargo hoist"),
+            ("T2", 'HAJFIN_FISH_DEPOT_T2', "Grand tidal depot with multi-tier pier and heavy boom crane"),
+        ],
+    },
+    {
+        'id': 'HAJFIN_SHAMAN_SHRINE',
+        'faction': 'HAJFIN',
+        'name': "Leviathan Bone Shrine",
+        'category': 'CIVIC',
+        'plot': "20m x 20m",
+        'shape': "Circular",
+        'icon': 'COMMUNITY',
+        'description': "Sacred stepped reef-stone dais crowned by soaring whale-rib arches and central megalodon jawbone altar.",
+        'tiers': [
+            ("T1", 'HAJFIN_SHAMAN_SHRINE_T1', "Circular stone dais with ribcage dome and jaw altar"),
+            ("T2", 'HAJFIN_SHAMAN_SHRINE_T2', "Monumental megalodon sanctuary with ceremonial brazier and skull totems"),
+        ],
+    },
 ]
 
 ARCHETYPE_MAP = {
@@ -7819,6 +7963,14 @@ ARCHETYPE_MAP = {
     'HAJFIN_HULL_SHACK_T2': 'NONE',
     'HAJFIN_STILT_SHACK_T1': 'NONE',
     'HAJFIN_STILT_SHACK_T2': 'NONE',
+    'HAJFIN_BONE_GATE_T1': 'NONE',
+    'HAJFIN_BONE_GATE_T2': 'NONE',
+    'HAJFIN_FORGE_T1': 'BLACKSMITH',
+    'HAJFIN_FORGE_T2': 'BLACKSMITH',
+    'HAJFIN_FISH_DEPOT_T1': 'WAREHOUSE',
+    'HAJFIN_FISH_DEPOT_T2': 'WAREHOUSE',
+    'HAJFIN_SHAMAN_SHRINE_T1': 'CHAPEL',
+    'HAJFIN_SHAMAN_SHRINE_T2': 'CHAPEL',
 }
 
 KIT_FOR_ARCHETYPE = {
