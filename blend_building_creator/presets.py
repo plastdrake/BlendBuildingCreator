@@ -7803,6 +7803,18 @@ ARCHETYPE_MAP = {
     'MAGE_TOWER_T3': 'MAGE_TOWER',
     'HAJFIN_PIRATE_TAVERN_T1': 'TAVERN',
     'HAJFIN_PIRATE_TAVERN_T2': 'TAVERN',
+    'HAJFIN_CHIEFTAIN_HUT_T1': 'TOWN_HALL',
+    'HAJFIN_CHIEFTAIN_HUT_T2': 'TOWN_HALL',
+    'HAJFIN_BONE_SHOP_T1': 'NONE',
+    'HAJFIN_BONE_SHOP_T2': 'NONE',
+    'HAJFIN_LOOKOUT_HUT_T1': 'WATCHTOWER',
+    'HAJFIN_LOOKOUT_HUT_T2': 'WATCHTOWER',
+    'HAJFIN_NET_HUT_T1': 'FISHERMAN',
+    'HAJFIN_NET_HUT_T2': 'FISHERMAN',
+    'HAJFIN_HULL_SHACK_T1': 'NONE',
+    'HAJFIN_HULL_SHACK_T2': 'NONE',
+    'HAJFIN_STILT_SHACK_T1': 'NONE',
+    'HAJFIN_STILT_SHACK_T2': 'NONE',
 }
 
 KIT_FOR_ARCHETYPE = {
@@ -7965,7 +7977,10 @@ def apply_preset(props, preset_key):
     # dispatch (kit OR archetype) fires exactly once either way.
     arch = ARCHETYPE_MAP.get(preset_key, 'NONE')
     if hasattr(props, 'building_archetype'):
-        props.building_archetype = arch
+        try:
+            props.building_archetype = arch
+        except Exception:
+            props.building_archetype = 'NONE'
     _kit_flag = KIT_FOR_ARCHETYPE.get(arch)
     if _kit_flag and hasattr(props, _kit_flag):
         try:

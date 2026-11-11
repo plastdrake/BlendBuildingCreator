@@ -5148,6 +5148,155 @@ def _furnish_armory(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_cei
     _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
+def _furnish_hajfin_throne_room(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                                rng, density: float):
+    """Grand Hajfin Chieftain Great Hall: Driftwood & shark skull throne on a stone dais,
+    flanked by menacing shark jaw totems, whaling harpoon racks, and grog barrels."""
+    rx0, rx1, ry0, ry1 = rm.bounds
+    rcx = (rx0 + rx1) * 0.5
+    rcy = (ry0 + ry1) * 0.5
+    rw = rx1 - rx0
+    rd = ry1 - ry0
+
+    # 1. Chieftain Throne at back wall
+    throne_y = ry1 - 1.2
+    if tracker.is_free(rcx - 0.9, rcx + 0.9, throne_y - 0.8, throne_y + 0.8):
+        build_prop(bm, 'HAJFIN_DRIFTWOOD_THRONE', rcx, throne_y, z_floor, math.pi, scale=1.1)
+        tracker.occupy(rcx - 0.9, rcx + 0.9, throne_y - 0.8, throne_y + 0.8)
+
+        # Flanking Shark Jaw Totems
+        for sgn in (-1.0, 1.0):
+            tx = rcx + sgn * 1.5
+            if tracker.is_free(tx - 0.4, tx + 0.4, throne_y - 0.4, throne_y + 0.4):
+                build_prop(bm, 'HAJFIN_SHARK_JAW_TOTEM', tx, throne_y, z_floor, -sgn * 0.2, height=2.4)
+                tracker.occupy(tx - 0.4, tx + 0.4, throne_y - 0.4, throne_y + 0.4)
+
+    # 2. Harpoon rack on side wall
+    hx = rx0 + 0.6
+    if tracker.is_free(hx - 0.3, hx + 0.3, rcy - 0.9, rcy + 0.9):
+        build_prop(bm, 'HAJFIN_HARPOON_RACK', hx, rcy, z_floor, math.pi * 0.5, width=1.5, height=1.7)
+        tracker.occupy(hx - 0.3, hx + 0.3, rcy - 0.9, rcy + 0.9)
+
+    # 3. Grog barrels cluster in front corner
+    bx = rx1 - 0.8
+    by = ry0 + 0.8
+    if tracker.is_free(bx - 0.6, bx + 0.6, by - 0.6, by + 0.6):
+        build_prop(bm, 'HAJFIN_GROG_BARRELS', bx, by, z_floor, -0.4, scale=1.0)
+        tracker.occupy(bx - 0.6, bx + 0.6, by - 0.6, by + 0.6)
+
+    # 4. Long pirate dining table & benches in center
+    if rw >= 4.5 and rd >= 4.5:
+        if tracker.is_free(rcx - 1.2, rcx + 1.2, rcy - 0.6, rcy + 0.6):
+            build_prop(bm, 'PICNIC_TABLE', rcx, rcy, z_floor, 0.0, length=2.2)
+            tracker.occupy(rcx - 1.2, rcx + 1.2, rcy - 0.6, rcy + 0.6)
+
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
+
+
+def _furnish_hajfin_bone_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                              rng, density: float):
+    """Hajfin Bone Trading Post: Scrimshaw trading counter with whale vertebrae,
+    harpoon weapon racks, shark jaw totem, and fish drying display."""
+    rx0, rx1, ry0, ry1 = rm.bounds
+    rcx = (rx0 + rx1) * 0.5
+    rcy = (ry0 + ry1) * 0.5
+
+    # 1. Scrimshaw trade counter
+    cy = rcy + 0.4
+    if tracker.is_free(rcx - 1.2, rcx + 1.2, cy - 0.5, cy + 0.5):
+        build_prop(bm, 'HAJFIN_BONE_COUNTER', rcx, cy, z_floor, 0.0, width=2.0, depth=0.75)
+        tracker.occupy(rcx - 1.2, rcx + 1.2, cy - 0.5, cy + 0.5)
+
+    # 2. Shark jaw totem at corner
+    tx = rx0 + 0.6
+    ty = ry0 + 0.6
+    if tracker.is_free(tx - 0.4, tx + 0.4, ty - 0.4, ty + 0.4):
+        build_prop(bm, 'HAJFIN_SHARK_JAW_TOTEM', tx, ty, z_floor, 0.3, height=2.4)
+        tracker.occupy(tx - 0.4, tx + 0.4, ty - 0.4, ty + 0.4)
+
+    # 3. Harpoon rack on side wall
+    hx = rx1 - 0.5
+    if tracker.is_free(hx - 0.3, hx + 0.3, rcy - 0.9, rcy + 0.9):
+        build_prop(bm, 'HAJFIN_HARPOON_RACK', hx, rcy, z_floor, -math.pi * 0.5, width=1.5, height=1.6)
+        tracker.occupy(hx - 0.3, hx + 0.3, rcy - 0.9, rcy + 0.9)
+
+    # 4. Grog barrels or fish rack
+    gx = rx0 + 0.7
+    gy = ry1 - 0.7
+    if tracker.is_free(gx - 0.5, gx + 0.5, gy - 0.5, gy + 0.5):
+        build_prop(bm, 'HAJFIN_GROG_BARRELS', gx, gy, z_floor, 0.2, scale=0.9)
+        tracker.occupy(gx - 0.5, gx + 0.5, gy - 0.5, gy + 0.5)
+
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
+
+
+def _furnish_hajfin_tavern(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                           rng, density: float):
+    """The Barnacle Bilge Pirate Tavern taproom:
+    Grog barrels cluster, heavy wooden tables, stools, harpoon rack, and fish prep."""
+    rx0, rx1, ry0, ry1 = rm.bounds
+    rcx = (rx0 + rx1) * 0.5
+    rcy = (ry0 + ry1) * 0.5
+
+    # 1. Grog barrels cluster behind bar area
+    bx = rx1 - 0.9
+    by = ry1 - 0.9
+    if tracker.is_free(bx - 0.6, bx + 0.6, by - 0.6, by + 0.6):
+        build_prop(bm, 'HAJFIN_GROG_BARRELS', bx, by, z_floor, -0.5, scale=1.1)
+        tracker.occupy(bx - 0.6, bx + 0.6, by - 0.6, by + 0.6)
+
+    # 2. Whaling harpoon rack mounted on wall
+    hx = rx0 + 0.5
+    if tracker.is_free(hx - 0.3, hx + 0.3, rcy - 0.8, rcy + 0.8):
+        build_prop(bm, 'HAJFIN_HARPOON_RACK', hx, rcy, z_floor, math.pi * 0.5, width=1.5, height=1.6)
+        tracker.occupy(hx - 0.3, hx + 0.3, rcy - 0.8, rcy + 0.8)
+
+    # 3. Tavern tables with benches
+    for dy in (-0.8, 0.8):
+        ty = rcy + dy
+        if tracker.is_free(rcx - 1.1, rcx + 1.1, ty - 0.6, ty + 0.6):
+            build_prop(bm, 'PICNIC_TABLE', rcx, ty, z_floor, 0.0, length=1.9)
+            tracker.occupy(rcx - 1.1, rcx + 1.1, ty - 0.6, ty + 0.6)
+
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
+
+
+def _furnish_hajfin_shack(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
+                          rng, density: float):
+    """Rustic Hajfin shanty / hut interior: fish drying rack, grog kegs, harpoon rack,
+    rough wooden cot/bench, and hanging ceiling lantern."""
+    rx0, rx1, ry0, ry1 = rm.bounds
+    rcx = (rx0 + rx1) * 0.5
+    rcy = (ry0 + ry1) * 0.5
+
+    # 1. Harpoon rack or fish rack along a side wall
+    hx = rx0 + 0.5
+    if tracker.is_free(hx - 0.3, hx + 0.3, rcy - 0.8, rcy + 0.8):
+        build_prop(bm, 'HAJFIN_HARPOON_RACK', hx, rcy, z_floor, math.pi * 0.5, width=1.4, height=1.5)
+        tracker.occupy(hx - 0.3, hx + 0.3, rcy - 0.8, rcy + 0.8)
+
+    # 2. Fish drying rack on opposite wall
+    fx = rx1 - 0.6
+    if tracker.is_free(fx - 0.4, fx + 0.4, rcy - 0.7, rcy + 0.7):
+        build_prop(bm, 'HAJFIN_FISH_DRYING_RACK', fx, rcy, z_floor, -math.pi * 0.5, length=1.4, height=1.3)
+        tracker.occupy(fx - 0.4, fx + 0.4, rcy - 0.7, rcy + 0.7)
+
+    # 3. Grog barrels cluster in corner
+    bx = rx0 + 0.7
+    by = ry0 + 0.7
+    if tracker.is_free(bx - 0.5, bx + 0.5, by - 0.5, by + 0.5):
+        build_prop(bm, 'HAJFIN_GROG_BARRELS', bx, by, z_floor, 0.4, scale=0.85)
+        tracker.occupy(bx - 0.5, bx + 0.5, by - 0.5, by + 0.5)
+
+    # 4. Simple bunk/cot on rear wall
+    by2 = ry1 - 0.9
+    if tracker.is_free(rcx - 0.6, rcx + 0.6, by2 - 0.5, by2 + 0.5):
+        build_prop(bm, 'BED_POOR', rcx, by2, z_floor, 0.0)
+        tracker.occupy(rcx - 0.6, rcx + 0.6, by2 - 0.5, by2 + 0.5)
+
+    _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
+
+
 def _furnish_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: float, z_ceil: float,
                   rng, density: float):
     """Artisan storefront: merchant counter with a working side for the
@@ -5726,7 +5875,19 @@ def _dress_single_room(bm, rm, z_floor: float, z_ceil: float, rng,
     role = rm.role
     _occ_before = len(tracker.occupied_boxes)
     try:
-        if tracker.bare_stockpile and role in ('STORE', 'WORKSHOP', 'SMITHY', 'STORAGE',
+        _is_hajfin = (getattr(props, 'faction', 'HUMAN') == 'HAJFIN') if props is not None else False
+        if _is_hajfin:
+            if role in ('THRONE_ROOM', 'GREAT_HALL', 'COUNCIL_CHAMBER', 'BANQUET_HALL') or tracker.archetype in ('CIVIC', 'PALACE', 'TOWN_HALL'):
+                _furnish_hajfin_throne_room(bm, rm, tracker, z_floor, z_ceil, rng, density)
+            elif role in ('STORE', 'WORKSHOP') or (getattr(props, 'has_trade_sign', False) and tracker.archetype != 'TAVERN'):
+                _furnish_hajfin_bone_shop(bm, rm, tracker, z_floor, z_ceil, rng, density)
+            elif role in ('TAVERN_TAPROOM', 'COMMON', 'DINING', 'COMMUNAL_DINING') or tracker.archetype in ('TAVERN', 'INN'):
+                _furnish_hajfin_tavern(bm, rm, tracker, z_floor, z_ceil, rng, density)
+            elif role not in ('STAIR_LANDING', 'CORRIDOR'):
+                _furnish_hajfin_shack(bm, rm, tracker, z_floor, z_ceil, rng, density)
+            else:
+                _furnish_corridor(bm, rm, tracker, z_floor, z_ceil, rng, density)
+        elif tracker.bare_stockpile and role in ('STORE', 'WORKSHOP', 'SMITHY', 'STORAGE',
                                                'CELLAR', 'PANTRY', 'STONE_STORE', 'OFFICE',
                                                'CORRIDOR', 'STAIR_LANDING'):
             _furnish_industrial_bay(bm, rm, tracker, z_floor, z_ceil, rng, density)

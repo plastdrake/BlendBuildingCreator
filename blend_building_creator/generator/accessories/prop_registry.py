@@ -28,6 +28,7 @@ PROP_CATEGORIES: Tuple[Tuple[str, str], ...] = (
     ('YARD', "Yard & Garden",),
     ('SIGN', "Signs & Boards",),
     ('ARCANE', "Arcane & Magical",),
+    ('HAJFIN', "Hajfin & Pirate",),
 )
 
 
@@ -288,6 +289,23 @@ for _s in (
           'artisan_props', 'build_cleaver', 0.40, length=0.36),
     _spec('WINE_RACK', "Wine Rack", 'WORK', "Cellar rack of lying wine bottles",
           'artisan_props', 'build_wine_rack', 0.80, width=1.10),
+    # --- Hajfin & Pirate props ---
+    _spec('HAJFIN_WHALE_RIB_ARCH', "Whale Rib Arch", 'HAJFIN', "Curved whale rib archway bound with hemp rope",
+          'hajfin_props', 'build_whale_rib_arch', 1.40, width=2.4, height=3.2),
+    _spec('HAJFIN_SHARK_JAW_TOTEM', "Shark Jaw Totem", 'HAJFIN', "Driftwood totem post crowned with gaping shark jaw",
+          'hajfin_props', 'build_shark_jaw_totem', 0.65, height=2.6),
+    _spec('HAJFIN_BONE_COUNTER', "Bone Trading Counter", 'HAJFIN', "Driftwood & whale vertebrae trade counter with bone slab",
+          'hajfin_props', 'build_scrimshaw_bone_counter', 1.20, width=2.2, depth=0.8),
+    _spec('HAJFIN_HARPOON_RACK', "Whaling Harpoon Rack", 'HAJFIN', "A-frame rack holding barbed whaling harpoons with rope lanyards",
+          'hajfin_props', 'build_harpoon_rack', 0.95, width=1.6, height=1.75),
+    _spec('HAJFIN_DRIFTWOOD_THRONE', "Chieftain Driftwood Throne", 'HAJFIN', "Grand pirate throne with flaring fin backrest, ribs and shark skull",
+          'hajfin_props', 'build_chieftain_driftwood_throne', 1.10, scale=1.0),
+    _spec('HAJFIN_GROG_BARRELS', "Pirate Grog Barrels", 'HAJFIN', "Cluster of 3 grog casks on pallet with iron tap",
+          'hajfin_props', 'build_pirate_grog_barrels', 0.85, scale=1.0),
+    _spec('HAJFIN_FISH_DRYING_RACK', "Fish & Net Hanging Rack", 'HAJFIN', "Two driftwood posts with crossbeam, net and hung fish",
+          'hajfin_props', 'build_fish_hanging_rack', 1.10, width=1.8, height=1.65),
+    _spec('HAJFIN_DORSAL_FIN_CREST', "Dorsal Fin Crest", 'HAJFIN', "Stylized shark dorsal fin roof ornament with scrimshaw bone trim",
+          'hajfin_props', 'build_dorsal_fin_crest', 0.60, scale=1.0),
 ):
     PROP_REGISTRY[_s.key] = _s
 

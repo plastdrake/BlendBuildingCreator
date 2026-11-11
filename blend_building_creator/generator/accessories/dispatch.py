@@ -1081,3 +1081,62 @@ def build_archetype_accessories(bm, props, ctx, _loft_spec):
             bm, wall_axis=_loft_spec['axis'], wall_face=_loft_spec['face'],
             center=_loft_spec['center'], sill_z=_loft_spec['sill'], outward=_lout,
         )
+
+    # 4.6 Hajfin Faction Accessories (Pirate shanties, bone trading, chieftain hall)
+    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+        try:
+            import math
+            from .hajfin_props import (
+                build_whale_rib_arch, build_shark_jaw_totem,
+                build_scrimshaw_bone_counter, build_harpoon_rack,
+                build_chieftain_driftwood_throne, build_pirate_grog_barrels,
+                build_fish_hanging_rack, build_dorsal_fin_crest
+            )
+            from .hospitality import is_point_outside_building
+
+            _door_x = ctx.main_door_cx
+            _front_y = -hy
+            _p_key = getattr(props, 'preset_name', '') or ''
+            _arch = getattr(ctx, 'effective_archetype', '')
+            found_h = ctx.found_h
+
+            # 1. Chieftain Hut / Great Fin Hall
+            if 'CHIEFTAIN' in _p_key or getattr(props, 'has_throne_room', False):
+                build_whale_rib_arch(bm, _door_x, _front_y - 0.40, found_h, 0.0, width=2.4, height=3.2)
+                build_shark_jaw_totem(bm, _door_x - 1.8, _front_y - 0.8, 0.0, 0.2, height=2.8)
+                build_shark_jaw_totem(bm, _door_x + 1.8, _front_y - 0.8, 0.0, -0.2, height=2.8)
+                throne_y = hy - 2.2
+                build_chieftain_driftwood_throne(bm, 0.0, throne_y, found_h, math.pi, scale=1.15)
+                roof_h = getattr(props, 'roof_height', 4.0)
+                tot_h = found_h + ctx.num_floors * ctx.floor_h + roof_h
+                build_dorsal_fin_crest(bm, 0.0, 0.0, tot_h - 0.2, 0.0, scale=1.3)
+
+            # 2. Bone Trading Post
+            elif 'BONE' in _p_key:
+                build_scrimshaw_bone_counter(bm, _door_x + 1.6, _front_y - 1.1, found_h, 0.0, width=2.0, depth=0.75)
+                build_whale_rib_arch(bm, _door_x, _front_y - 0.35, found_h, 0.0, width=2.2, height=3.0)
+                build_shark_jaw_totem(bm, _door_x - 1.6, _front_y - 0.8, 0.0, 0.3, height=2.5)
+                build_harpoon_rack(bm, _door_x - 2.8, _front_y - 0.6, found_h, 0.1, width=1.5, height=1.7)
+
+            # 3. Pirate Tavern (The Barnacle Bilge)
+            elif 'TAVERN' in _p_key or _arch == 'TAVERN':
+                build_pirate_grog_barrels(bm, _door_x + 2.2, _front_y - 1.0, found_h, -0.3, scale=1.1)
+                roof_h = getattr(props, 'roof_height', 3.8)
+                tot_h = found_h + ctx.num_floors * ctx.floor_h + roof_h
+                build_dorsal_fin_crest(bm, 0.0, -1.0, tot_h - 0.2, 0.0, scale=1.0)
+                build_harpoon_rack(bm, _door_x - 2.0, _front_y - 0.7, found_h, 0.0, width=1.4, height=1.6)
+
+            # 4. Net-Mender's Beach Hut
+            elif 'NET_HUT' in _p_key:
+                build_fish_hanging_rack(bm, _door_x + 1.8, _front_y - 0.8, found_h, 0.0, width=1.8, height=1.6)
+                build_pirate_grog_barrels(bm, _door_x - 1.8, _front_y - 0.8, found_h, 0.4, scale=0.85)
+
+            # 5. Stilt Shacks, Hull Shack, Lookout
+            elif 'SHACK' in _p_key or 'LOOKOUT' in _p_key:
+                build_pirate_grog_barrels(bm, _door_x + 1.6, _front_y - 0.7, found_h, 0.2, scale=0.9)
+                if 'HULL' in _p_key:
+                    roof_h = getattr(props, 'roof_height', 3.6)
+                    tot_h = found_h + ctx.num_floors * ctx.floor_h + roof_h
+                    build_dorsal_fin_crest(bm, 0.0, 0.0, tot_h - 0.2, 0.0, scale=0.9)
+        except Exception:
+            pass
