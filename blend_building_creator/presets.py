@@ -7647,7 +7647,7 @@ BUILDING_FAMILIES = [
         'category': 'SHANTIES',
         'plot': "12m x 12m",
         'shape': "Rectangular",
-        'icon': 'ANCHOR',
+        'icon': 'MOD_OCEAN',
         'description': "Pirate hovel built around salvaged ship timbers and an overturned cutter hull roof.",
         'tiers': [
             ("T1", 'HAJFIN_HULL_SHACK_T1', "Overturned cutter hull roof and scrap timber walls"),
@@ -7689,7 +7689,7 @@ BUILDING_FAMILIES = [
         'category': 'CHIEFTAIN',
         'plot': "40m x 40m",
         'shape': "Rectangular",
-        'icon': 'CROWN',
+        'icon': 'COMMUNITY',
         'description': "Grand elevated timber longhouse with soaring whale-rib rafters, dorsal fin crest, and war banners.",
         'tiers': [
             ("T1", 'HAJFIN_CHIEFTAIN_HUT_T1', "Elevated rib longhouse with dorsal crest and banners"),

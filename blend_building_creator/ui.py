@@ -124,7 +124,11 @@ class VIEW3D_PT_fantasy_building_presets(bpy.types.Panel):
                     continue
             card = layout.box()
             head = card.row(align=True)
-            head.label(text=f"{family['name']}", icon=family.get('icon', 'HOME'))
+            icon_name = family.get('icon', 'HOME')
+            try:
+                head.label(text=f"{family['name']}", icon=icon_name)
+            except Exception:
+                head.label(text=f"{family['name']}", icon='HOME')
             head.label(text=f"{family.get('plot', '')} | {family.get('shape', '')}")
             row = card.row(align=True)
             row.scale_y = 1.15
