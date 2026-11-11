@@ -39,6 +39,7 @@ from .materials import (
 )
 from .mesh_utils import (
     create_box,
+    create_beveled_box,
     create_cylinder,
     create_cone,
     create_torus_ring,
@@ -392,6 +393,26 @@ def _build_wall_with_door_opening(bm, x0, x1, y, z0, z1, door_cx, door_w, door_h
     # 4. Heavy Structural Timber Threshold Sill Beam under Doorway
     sill_w = door_w + 0.60
     _add_local_box(sill_w, wall_th + 0.24, 0.16, 0.0, z0 + 0.08, MAT_INDEX_TIMBER)
+
+    # 4b. Square structural jambs behind the jaw.  The bone arch is decorative;
+    # these continuous posts define the actual opening and keep the frame
+    # precise when the door dimensions change.
+    jamb_h = max(0.20, z_spring - z0)
+    jamb_w = min(0.34, max(0.22, door_w * 0.12))
+    for jamb_x in (-d_half_w - jamb_w * 0.16, d_half_w + jamb_w * 0.16):
+        _add_local_box(
+            jamb_w, wall_th + 0.20, jamb_h,
+            jamb_x, z0 + jamb_h * 0.5,
+            MAT_INDEX_TIMBER,
+        )
+    create_beveled_box(
+        bm,
+        size=(door_w + jamb_w * 1.8, wall_th + 0.20, 0.22),
+        location=(door_cx, y, z0 + z_spring + 0.08),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.035,
+    )
 
     # 5. Optional Recessed Door Leaf (ONLY if include_leaf is True)
     if include_leaf:

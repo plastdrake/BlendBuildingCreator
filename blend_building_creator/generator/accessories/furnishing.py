@@ -5227,6 +5227,13 @@ def _furnish_hajfin_bone_shop(bm, rm, tracker: RoomOccupancyTracker, z_floor: fl
         build_prop(bm, 'HAJFIN_GROG_BARRELS', gx, gy, z_floor, 0.2, scale=0.9)
         tracker.occupy(gx - 0.5, gx + 0.5, gy - 0.5, gy + 0.5)
 
+    # Artist-made trade goods make the station read as a working pirate
+    # scrimshaw shop instead of a generic empty room.
+    if tracker.is_free(rcx - 0.55, rcx + 0.55, cy - 0.35, cy + 0.35):
+        build_prop(bm, 'CLEAVER', rcx - 0.22, cy - 0.08, z_floor + 0.95, 0.18, length=0.36, stuck=True)
+        build_prop(bm, 'FISH', rcx + 0.24, cy - 0.08, z_floor + 0.94, -0.22, length=0.34, smoked=True)
+        tracker.occupy(rcx - 0.55, rcx + 0.55, cy - 0.35, cy + 0.35)
+
     _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
 
@@ -5256,6 +5263,8 @@ def _furnish_hajfin_tavern(bm, rm, tracker: RoomOccupancyTracker, z_floor: float
         ty = rcy + dy
         if tracker.is_free(rcx - 1.1, rcx + 1.1, ty - 0.6, ty + 0.6):
             build_prop(bm, 'PICNIC_TABLE', rcx, ty, z_floor, 0.0, length=1.9)
+            build_prop(bm, 'FISH', rcx - 0.34, ty, z_floor + 0.88, 0.20, length=0.30, smoked=True)
+            build_prop(bm, 'MEAT_SMALL', rcx + 0.30, ty + 0.04, z_floor + 0.88, -0.28)
             tracker.occupy(rcx - 1.1, rcx + 1.1, ty - 0.6, ty + 0.6)
 
     _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
@@ -5287,6 +5296,16 @@ def _furnish_hajfin_shack(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
     if tracker.is_free(bx - 0.5, bx + 0.5, by - 0.5, by + 0.5):
         build_prop(bm, 'HAJFIN_GROG_BARRELS', bx, by, z_floor, 0.4, scale=0.85)
         tracker.occupy(bx - 0.5, bx + 0.5, by - 0.5, by + 0.5)
+
+    # Small curing/prep vignette: use the same FBX-backed fish and cleaver
+    # assets as the human artisan rooms, but place them in Hajfin-specific
+    # working zones.
+    px = rcx
+    py = ry0 + 1.1
+    if tracker.is_free(px - 0.55, px + 0.55, py - 0.35, py + 0.35):
+        build_prop(bm, 'FISH', px - 0.25, py, z_floor + 0.86, 0.12, length=0.32, smoked=True)
+        build_prop(bm, 'CLEAVER', px + 0.25, py, z_floor + 0.86, -0.18, length=0.34, stuck=True)
+        tracker.occupy(px - 0.55, px + 0.55, py - 0.35, py + 0.35)
 
     # 4. Simple bunk/cot on rear wall
     by2 = ry1 - 0.9
