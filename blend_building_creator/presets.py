@@ -219,6 +219,20 @@ def _hajfin_settings(width=8.5, depth=9.5, num_floors=1, found_h=1.2,
                      door_w=1.80, door_h=3.50, tier=1,
                      hajfin_style='SHANTY'):
     """Calibrated preset baseline for Hajfin pirate shanties, stilt huts, and strongholds (scaled for 2-3m tall Hajfin)."""
+    if roof_style == 'SWAY':
+        roof_style = {
+            'BONE_SHOP': 'SWAY',
+            'CHIEFTAIN_HALL': 'SWAY',
+            'TAVERN': 'PLANKS',
+            'SHANTY': 'TARP',
+            'ROUND_HUT': 'PLANKS',
+            'BLOCKHOUSE': 'FLAT',
+            'WATCHTOWER': 'PLANKS',
+            'FORGE': 'TARP',
+            'FISH_DEPOT': 'PLANKS',
+            'BONE_SHRINE': 'FLAT',
+            'PALISADE_GATE': 'FLAT',
+        }.get(hajfin_style, 'SWAY')
     return {
         **base_settings(),
         'faction': 'HAJFIN',
@@ -8209,7 +8223,6 @@ def apply_preset(props, preset_key):
         obj = context.active_object
         if obj and obj.get("is_fantasy_building", False):
             generate_building(obj, props)
-
 
 
 

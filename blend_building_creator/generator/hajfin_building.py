@@ -51,6 +51,68 @@ from .interior import build_straight_staircase
 from .railing import build_railing
 from .accessories.artisan_props import build_anvil, build_tool_rack
 
+_HAJFIN_ROOF_PROPS = None
+
+
+def _build_hajfin_roof_variant(bm, x0, x1, y0, y1, eave_z, peak_h,
+                               overhang_x=0.55, overhang_y=0.55):
+    """Build a Hajfin roof using the selected human-style structural variant."""
+    props = _HAJFIN_ROOF_PROPS
+    style = getattr(props, 'roof_style', 'SHINGLES') if props is not None else 'SHINGLES'
+    if style == 'SHINGLES':
+        return False
+
+    if style == 'SWAY':
+        from .roof.sway_roof import build_sway_roof
+        build_sway_roof(
+            bm, x0, x1, y0, y1, eave_z, roof_height=peak_h,
+            overhang=max(overhang_x, overhang_y),
+            sway_amount=float(getattr(props, 'roof_sway', 0.28)),
+            wall_thickness=0.26, tier='TIER_2', roof_mat='WOOD_SHINGLES',
+            gable_ends=(), roof_flare=0.42,
+        )
+        return True
+
+    if style == 'TARP':
+        from .roof.makeshift_roof import build_makeshift_roof
+        build_makeshift_roof(
+            bm, x0, x1, y0, y1, z_base=eave_z,
+            effective_archetype='HAJFIN', seed=int(getattr(props, 'seed', 42)),
+        )
+        return True
+
+    if style == 'FLAT':
+        ox = max(0.35, overhang_x)
+        oy = max(0.35, overhang_y)
+        z = eave_z + 0.08
+        create_box(bm, (x1 - x0 + ox * 2.0, y1 - y0 + oy * 2.0, 0.18),
+                   ((x0 + x1) * 0.5, (y0 + y1) * 0.5, z),
+                   mat_index=MAT_INDEX_TIMBER)
+        for size, loc in (
+            ((x1 - x0 + ox * 2.0, 0.24, 0.28), ((x0 + x1) * 0.5, y0 - oy, z + 0.16)),
+            ((x1 - x0 + ox * 2.0, 0.24, 0.28), ((x0 + x1) * 0.5, y1 + oy, z + 0.16)),
+            ((0.24, y1 - y0 + oy * 2.0, 0.28), (x0 - ox, (y0 + y1) * 0.5, z + 0.16)),
+            ((0.24, y1 - y0 + oy * 2.0, 0.28), (x1 + ox, (y0 + y1) * 0.5, z + 0.16)),
+        ):
+            create_box(bm, size, loc, mat_index=MAT_INDEX_TIMBER)
+        return True
+
+    if style == 'PLANKS':
+        from .roof.gable_roof import build_gable_roof
+        build_gable_roof(
+            bm, x0, x1, y0, y1, eave_z, roof_height=peak_h,
+            overhang=max(overhang_x, overhang_y), wall_thickness=0.26,
+            gable_ends=(), tier='TIER_1', roof_mat='WOOD_PLANKS',
+        )
+        return True
+
+    return False
+
+
+def _hajfin_roof_props(props):
+    global _HAJFIN_ROOF_PROPS
+    _HAJFIN_ROOF_PROPS = props
+
 
 # =============================================================================
 # SIGNATURE ARCHITECTURAL COMPONENTS & INTERIOR CIRCULATION
@@ -1012,6 +1074,9 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
     """Builds an optimized, 100% weather-tight gable roof with textured bone scale shingles
     pointing downward toward the eaves, heavy timber verge bargeboards, ridge beam, and dorsal fin crest.
     Supports asymmetric left/right overhangs for multi-tier roofs meeting interior/tower walls."""
+    if _build_hajfin_roof_variant(bm, x0, x1, y0, y1, eave_z, peak_h,
+                                  overhang_x, overhang_y):
+        return
     mx = (x0 + x1) * 0.5
     ov_xl = overhang_x if overhang_x_left is None else overhang_x_left
     ov_xr = overhang_x if overhang_x_right is None else overhang_x_right
@@ -1969,6 +2034,9 @@ def _build_bone_scale_roof_gable_ew(bm, x0, x1, y0, y1, eave_z, peak_h,
                                     fin_scale=1.5, num_ridge_teeth=6):
     """Gable roof whose ridge runs along the X axis (East-West), so the front and back
     faces are sloped roof decks with scalloped bone scales, matching the watchtower concept art."""
+    if _build_hajfin_roof_variant(bm, x0, x1, y0, y1, eave_z, peak_h,
+                                  overhang_x, overhang_y):
+        return
     my = (y0 + y1) * 0.5
     half_span_y = (y1 - y0) * 0.5 + overhang_y
     span_x = (x1 - x0) + overhang_x * 2
@@ -3630,6 +3698,7 @@ def build_hajfin_building(obj, bm, props):
     """Primary entry point for generating authentic Hajfin pirate architecture.
     Completely replaces human half-timber/stone construction with 100% dedicated
     procedural geometry matching the Hajfin fantasy concept art."""
+    _hajfin_roof_props(props)
     seed = getattr(props, 'seed', 42)
     random.seed(seed)
 
