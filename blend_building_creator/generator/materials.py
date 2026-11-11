@@ -2889,6 +2889,9 @@ def setup_building_material_slots(obj, props):
     Custom material overrides on props take priority.
     """
     tier = getattr(props, 'tier', getattr(props, 'material_tier', 'TIER_2'))
+    is_hajfin = (getattr(props, 'faction', 'HUMAN') == 'HAJFIN' or 
+                 getattr(props, 'building_style', '') == 'HAJFIN_COASTAL' or 
+                 getattr(props, 'preset_name', '').startswith('HAJFIN_'))
 
     # Canonical material names across all tiers (no _T1, _T2, _T3 suffix)
     # for seamless, automatic master/instance material assignment in Unreal Engine.
@@ -2931,7 +2934,7 @@ def setup_building_material_slots(obj, props):
     mat_prefix = "M_Building_"
 
     # 0. Stone (stone_wall_diffuse.jpg / mud_fieldstone / squared_fieldstone / ashlar_stone / rough reef stone)
-    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+    if is_hajfin:
         mat_stone = getattr(props, 'custom_stone', None) or create_stylized_rough_reef_stone(f"{mat_prefix}Stone", color=getattr(props, 'color_stone', None))
     else:
         stone_tier = tier
@@ -2982,13 +2985,13 @@ def setup_building_material_slots(obj, props):
 
     # 3. Floor (floorboards variations / driftwood deck)
     clr_floor = getattr(props, 'color_floor', None) or (0.50, 0.35, 0.20, 1.0)
-    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+    if is_hajfin:
         mat_floor = getattr(props, 'custom_floor', None) or create_stylized_driftwood(f"{mat_prefix}Floor", color=clr_floor)
     else:
         mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards(f"{mat_prefix}Floor", color=clr_floor, tier=tier)
 
     # 4. Shingles (thatch / wood shingles / terracotta / slate / bone shingles)
-    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+    if is_hajfin:
         mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_bone_shingles(
             f"{mat_prefix}Bone_Shingles",
             color=getattr(props, 'color_shingles', None)
@@ -3023,14 +3026,14 @@ def setup_building_material_slots(obj, props):
 
     # 7. Wood (facade planks, dormer cheeks, weatherboards / driftwood)
     clr_wood = getattr(props, 'color_timber', None) or (0.86, 0.74, 0.58, 1.0)
-    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+    if is_hajfin:
         mat_wood = getattr(props, 'custom_timber', None) or create_stylized_driftwood(f"{mat_prefix}Wood", color=clr_wood)
     else:
         mat_wood = getattr(props, 'custom_timber', None) or create_stylized_facade_planks(f"{mat_prefix}Wood", color=clr_wood, tier=tier)
 
     # 8. Cut Stone (steps, sills, door arches, thresholds)
     clr_cs = getattr(props, 'color_cut_stone', None) or (0.78, 0.74, 0.68, 1.0)
-    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+    if is_hajfin:
         mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_rough_reef_stone(f"{mat_prefix}Cut_Stone", color=clr_cs)
     else:
         mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone(f"{mat_prefix}Cut_Stone", color=clr_cs, tier=tier)
@@ -3203,7 +3206,7 @@ def setup_building_material_slots(obj, props):
     mat_bone = (getattr(props, 'custom_bone', None)
                 or create_stylized_bone(f"{mat_prefix}Bone"))
 
-    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+    if is_hajfin:
         if not getattr(props, 'custom_stone', None):
             mat_stone = mat_rough_stone
         if not getattr(props, 'custom_timber', None):
