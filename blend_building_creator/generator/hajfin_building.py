@@ -50,6 +50,7 @@ from .mesh_utils import (
 from .interior import build_straight_staircase
 from .railing import build_railing
 from .accessories.artisan_props import build_anvil, build_tool_rack
+from .uv_utils import timber_box
 
 _HAJFIN_ROOF_PROPS = None
 
@@ -98,15 +99,67 @@ def _build_hajfin_roof_variant(bm, x0, x1, y0, y1, eave_z, peak_h,
         return True
 
     if style == 'PLANKS':
-        from .roof.gable_roof import build_gable_roof
-        build_gable_roof(
-            bm, x0, x1, y0, y1, eave_z, roof_height=peak_h,
-            overhang=max(overhang_x, overhang_y), wall_thickness=0.26,
-            gable_ends=(), tier='TIER_1', roof_mat='WOOD_PLANKS',
+        _build_hajfin_supported_plank_roof(
+            bm, x0, x1, y0, y1, eave_z, peak_h,
+            overhang_x, overhang_y,
         )
         return True
 
     return False
+
+
+def _build_hajfin_supported_plank_roof(bm, x0, x1, y0, y1, eave_z, peak_h,
+                                       overhang_x=0.55, overhang_y=0.55):
+    """Build a shabby plank roof with visible gaps and timber support below."""
+    ridge_x = (x0 + x1) * 0.5
+    ridge_z = eave_z + peak_h
+    roof_y0 = y0 - overhang_y
+    roof_y1 = y1 + overhang_y
+    span_y = roof_y1 - roof_y0
+    left_eave = x0 - overhang_x
+    right_eave = x1 + overhang_x
+    slope_len = math.hypot(ridge_x - left_eave, peak_h)
+    pitch = math.atan2(peak_h, (x1 - x0) * 0.5 + overhang_x)
+
+    # Primary ridge and eave beams carry the boards instead of leaving them
+    # suspended above the frame.
+    for bx, bz in ((ridge_x, ridge_z), (left_eave, eave_z), (right_eave, eave_z)):
+        timber_box(
+            bm, size=(0.26, span_y, 0.30),
+            location=(bx, (roof_y0 + roof_y1) * 0.5, bz),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012, long_axis=1,
+        )
+
+    # Sloped rafters are evenly spaced along the ridge and visibly meet both
+    # eave beams. Their UVs follow the beam length.
+    rafter_count = max(4, int(span_y / 1.35) + 1)
+    for i in range(rafter_count):
+        ty = roof_y0 + (roof_y1 - roof_y0) * i / max(1, rafter_count - 1)
+        _create_oriented_beam(
+            bm, (ridge_x, ty, ridge_z - 0.02),
+            (left_eave, ty, eave_z),
+            width=0.16, depth=0.18, mat_index=MAT_INDEX_TIMBER,
+        )
+        _create_oriented_beam(
+            bm, (ridge_x, ty, ridge_z - 0.02),
+            (right_eave, ty, eave_z),
+            width=0.16, depth=0.18, mat_index=MAT_INDEX_TIMBER,
+        )
+
+    # Wide boards lie directly on the rafters, with deliberate narrow gaps.
+    board_width = 0.30
+    board_gap = 0.055
+    board_count = max(3, int(span_y / (board_width + board_gap)))
+    for i in range(board_count):
+        ty = roof_y0 + (i + 0.5) * span_y / board_count
+        for side, eave_x in ((-1.0, left_eave), (1.0, right_eave)):
+            timber_box(
+                bm, size=(slope_len + 0.12, board_width, 0.10),
+                location=((ridge_x + eave_x) * 0.5, ty,
+                          (ridge_z + eave_z) * 0.5 + 0.085),
+                rotation=(0.0, side * pitch, 0.0),
+                mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, long_axis=0,
+            )
 
 
 def _hajfin_roof_props(props):
@@ -968,8 +1021,13 @@ def _build_whale_rib_tunnel_entrance(bm, entrance_x, entrance_y, z0, rot_z=0.0,
     # Timber curb sill beams on left & right edges
     for sgn_c in (-1.0, 1.0):
         cx_pos = entrance_x + sgn_c * (width * 0.5 + 0.14)
-        create_box(bm, (0.26, bw_len, 0.22), (cx_pos, bw_cy, z0 + 0.18),
-                   rotation=(0, 0, rot_z), mat_index=MAT_INDEX_TIMBER)
+        # The curb sits on the deck top; its former center left 9 cm of
+        # coplanar/intersecting timber inside the floor slab.
+        timber_box(
+            bm, (0.26, bw_len, 0.22), (cx_pos, bw_cy, z0 + 0.27),
+            rotation=(0, 0, rot_z), mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.012, long_axis=1,
+        )
 
     # 3. Outward Whale Rib Arches (Arched high and wide overhead, completely clear of the doorway)
     for i in range(num_pairs):
@@ -3302,8 +3360,17 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
             _build_chunky_corner_column(bm, cx, cy, z0, z0 + height, size=col_size, extend_top=0.0)
 
     # Open-air canopy beams; the forge remains exposed to wind and smoke.
-    create_box(bm, (width, 0.32, 0.32), (0.0, -hd, z0 + height - 0.16), mat_index=MAT_INDEX_DRIFTWOOD)
-    create_box(bm, (0.32, depth, 0.32), (hw, 0.0, z0 + height - 0.16), mat_index=MAT_INDEX_DRIFTWOOD)
+    canopy_z = z0 + height - 0.16
+    for size, loc in (
+        ((width, 0.32, 0.32), (0.0, -hd, canopy_z)),
+        ((0.32, depth, 0.32), (hw, 0.0, canopy_z)),
+        ((width, 0.32, 0.32), (0.0, hd, canopy_z)),
+        ((0.32, depth, 0.32), (-hw, 0.0, canopy_z)),
+    ):
+        timber_box(
+            bm, size, loc, mat_index=MAT_INDEX_TIMBER,
+            bevel_amount=0.018, long_axis=0 if size[0] > size[1] else 1,
+        )
 
     # 3. Primitive open coal-bed forge: low stone rim, fuel chunks, and heat.
     f_w, f_d, f_h = 2.25, 1.65, 0.38
@@ -3609,13 +3676,21 @@ def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_dept
     # Landing deck floor slab
     create_box(bm, (landing_w, landing_d, 0.16), (door_cx, landing_cy, height - 0.08), mat_index=MAT_INDEX_FLOOR)
     # Landing perimeter support joists
-    create_box(bm, (landing_w, 0.22, 0.22), (door_cx, y0 - landing_d + 0.11, height - 0.20), mat_index=MAT_INDEX_TIMBER)
+    landing_beam_z = height - 0.27
+    timber_box(
+        bm, (landing_w, 0.22, 0.22),
+        (door_cx, y0 - landing_d + 0.11, landing_beam_z),
+        mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012, long_axis=0,
+    )
     for sgn_lp in (-1.0, 1.0):
         # Flanking joists
-        create_box(bm, (0.22, landing_d, 0.22), (door_cx + sgn_lp * (landing_w * 0.5 - 0.11), landing_cy, height - 0.20),
-                   mat_index=MAT_INDEX_TIMBER)
+        timber_box(
+            bm, (0.22, landing_d, 0.22),
+            (door_cx + sgn_lp * (landing_w * 0.5 - 0.11), landing_cy, landing_beam_z),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012, long_axis=1,
+        )
         # 2 sturdy stilt posts extending 10m downwards under landing outer corners (capped cleanly under joists)
-        landing_post_top = height - 0.31
+        landing_post_top = height - 0.38
         landing_post_h = landing_post_top + post_depth
         landing_post_cz = landing_post_top - landing_post_h * 0.5
         create_cylinder(bm, radius=0.18, height=landing_post_h, segments=7,
