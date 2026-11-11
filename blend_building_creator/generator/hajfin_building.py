@@ -2259,9 +2259,9 @@ def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, 
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
-    z1 = z0 + height
     wall_th = 0.26
-    story_h = height * 0.5
+    story_h = max(height * 0.5, 4.8)
+    z1 = z0 + story_h * 2.0
     z_mid = z0 + story_h
 
     # 1. Foundation base
