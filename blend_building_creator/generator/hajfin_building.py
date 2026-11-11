@@ -3598,11 +3598,13 @@ def _apply_hajfin_wall_uvs(bm, scale=0.18):
         elif abs(normal.x) >= abs(normal.y):
             for loop in face.loops:
                 co = loop.vert.co
-                loop[uv_layer].uv = Vector((co.y * scale, co.z * scale))
+                u = co.y * scale * (-1.0 if normal.x < 0.0 else 1.0)
+                loop[uv_layer].uv = Vector((u, co.z * scale))
         else:
             for loop in face.loops:
                 co = loop.vert.co
-                loop[uv_layer].uv = Vector((co.x * scale, co.z * scale))
+                u = co.x * scale * (-1.0 if normal.y < 0.0 else 1.0)
+                loop[uv_layer].uv = Vector((u, co.z * scale))
 
 
 # =============================================================================

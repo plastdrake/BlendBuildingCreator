@@ -1258,7 +1258,7 @@ def create_stylized_floorboards(name="M_Building_Floor",
     c = _coord(tree, loc_x=-1500)
     c_use = color or ((0.42, 0.28, 0.18, 1.0) if tier == 'TIER_3' else ((0.50, 0.35, 0.20, 1.0) if tier == 'TIER_2' else (0.48, 0.32, 0.18, 1.0)))
 
-    tex_node = _load_image_texture(tree, "wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(0.70, 0.70, 1.0), rotation=(0.0, 0.0, 0.0))
+    tex_node = _load_image_texture(tree, "wood_planks_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(0.35, 0.35, 1.0), rotation=(0.0, 0.0, 0.0))
     if tex_node is not None:
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
@@ -2739,7 +2739,7 @@ def create_stylized_hajfin_deck(name="M_Building_Floor", color=None):
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-1000)
-    tex_node = _load_image_texture(tree, "wood_planks_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.80, 0.80, 1.0))
+    tex_node = _load_image_texture(tree, "wood_planks_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.35, 0.35, 1.0))
     if tex_node is not None:
         default_clr = (0.28, 0.17, 0.10, 1.0)
         c_use = color or default_clr
@@ -3424,4 +3424,3 @@ def prune_material_slots_for_bmesh(obj, bm):
     for f in bm.faces:
         if f.is_valid:
             f.material_index = remap.get(f.material_index, 0)
-
