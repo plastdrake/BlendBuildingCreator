@@ -2043,10 +2043,10 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
     for sgn_x, sgn_y in corner_signs:
         p0 = (sgn_x * h_bw, sgn_y * h_bd, 0.0)
         p1 = (sgn_x * h_tw, sgn_y * h_td, stilt_h)
-        _create_oriented_beam(bm, p0, p1, width=0.42, depth=0.42, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, p0, p1, width=0.42, depth=0.42, mat_index=MAT_INDEX_TIMBER)
         # Deep stilt pilings (extending 10m downwards) for placing tower in deep water / next to piers
         p_deep = (sgn_x * h_bw, sgn_y * h_bd, -10.0)
-        _create_oriented_beam(bm, p_deep, p0, width=0.42, depth=0.42, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, p_deep, p0, width=0.42, depth=0.42, mat_index=MAT_INDEX_TIMBER)
 
     # 3. Intermediate Ring Tie-Beams & Iron Plates (Two bays)
     num_bays = 2
@@ -2209,8 +2209,10 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
                               (cx, cy - sgn_y * 0.85, eave_z - 0.13), width=0.14, depth=0.14, mat_index=MAT_INDEX_TIMBER)
 
     # 9. Scalloped Bone Scale Gable Roof (East-West Ridge, Front slope over bone window)
-    _build_gable_triangle_wall_ew(bm, -h_td - 0.15, h_td + 0.15, -h_tw - 0.15, eave_z, peak_z, wall_th=0.22)
-    _build_gable_triangle_wall_ew(bm, -h_td - 0.15, h_td + 0.15, h_tw + 0.15, eave_z, peak_z, wall_th=0.22)
+    # Match the gable footprint to the roof eaves so no daylight seam remains
+    # between the triangular wall and the sloped roof deck.
+    _build_gable_triangle_wall_ew(bm, -h_td - 0.25, h_td + 0.25, -h_tw - 0.25, eave_z, peak_z, wall_th=0.22)
+    _build_gable_triangle_wall_ew(bm, -h_td - 0.25, h_td + 0.25, h_tw + 0.25, eave_z, peak_z, wall_th=0.22)
 
     _build_bone_scale_roof_gable_ew(bm, -h_tw - 0.2, h_tw + 0.2, -h_td - 0.25, h_td + 0.25,
                                     eave_z, peak_z - eave_z,

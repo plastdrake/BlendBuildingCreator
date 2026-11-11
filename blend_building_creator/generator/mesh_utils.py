@@ -183,6 +183,28 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                         v = co.z * sv + v_offset
                     loop[uv_layer].uv = Vector((u, v))
             f.tag = True
+        elif mat_index == 6:
+            # Iron bindings and plates use the same local box projection as
+            # structural parts, rather than leaving their UVs uninitialized.
+            if dz >= dx and dz >= dy:
+                su, sv = 0.85, 0.35
+            elif dx >= dy and dx >= dz:
+                su, sv = 0.85, 0.35
+            else:
+                su, sv = 0.85, 0.35
+            for loop_idx, v_idx in enumerate(idxs):
+                lv = verts[v_idx]
+                if f_idx in (0, 1):
+                    u = lv.x * su + u_offset
+                    v = lv.y * su + v_offset
+                elif f_idx in (2, 4):
+                    u = lv.x * su + u_offset
+                    v = lv.z * sv + v_offset
+                else:
+                    u = lv.y * su + u_offset
+                    v = lv.z * sv + v_offset
+                f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+            f.tag = True
         elif mat_index in (0, 1, 3, 8, 11, 43, 44):
             # Masonry / stone / plaster / cut stone / floor / dungeon wall & floor box (foundations, steps, plinths, slabs, pillars, stone blocks):
             # Normalized world-space meter scaling (1.0/m).
