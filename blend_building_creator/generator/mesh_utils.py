@@ -122,6 +122,7 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
     
     uv_layer = bm.loops.layers.uv.verify()
     dx, dy, dz = size
+    dims_sorted = sorted([dx, dy, dz])
     scale = 1.0
 
     faces = []
@@ -134,47 +135,33 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
             f.material_index = 1 # Keep interior room wall clean plaster
             
         if is_wall:
-            # Wall unwrap: U along wall length, V up the wall height.
-            # Masonry (stone/plaster/cut-stone) uses the 1.0/m world density so
-            # image bricks read at the canonical 0.22 x 0.14 m on every wall
-            # and every orientation; wood joinery keeps the 0.55/m scale its
-            # shaders are tuned for. Faces are tagged so the final world-space
-            # UV pass preserves this continuous (u_offset/v_offset) unwrap.
-            if mat_index in (0, 1, 7, 8, 11):
+            # Wall unwrap: Continuous world-space UV coordinates across the facade.
+            # Avoids identical knot repetition across adjacent wall panels/planks.
+            # Staggers vertical texture offset so knots never align in horizontal rows.
+            if mat_index in (0, 1, 8, 11):
                 su = 1.0
                 sv = 1.0
+                v_stagger = 0.0
             else:
-                su = 0.55
-                sv = 0.55
-            u0 = u_offset * su
-            u1 = (u_offset + dx) * su
-            v0 = v_offset * sv
-            v1 = (v_offset + dz) * sv
-            if f_idx == 2: # Front (-Y, exterior)
-                f.loops[0][uv_layer].uv = Vector((u0, v0))
-                f.loops[1][uv_layer].uv = Vector((u1, v0))
-                f.loops[2][uv_layer].uv = Vector((u1, v1))
-                f.loops[3][uv_layer].uv = Vector((u0, v1))
-            elif f_idx == 4: # Back (+Y, interior)
-                f.loops[0][uv_layer].uv = Vector((u1, v0))
-                f.loops[1][uv_layer].uv = Vector((u0, v0))
-                f.loops[2][uv_layer].uv = Vector((u0, v1))
-                f.loops[3][uv_layer].uv = Vector((u1, v1))
-            elif f_idx in (3, 5): # End jambs (+X, -X)
-                f.loops[0][uv_layer].uv = Vector((0.0, v0))
-                f.loops[1][uv_layer].uv = Vector((dy * su, v0))
-                f.loops[2][uv_layer].uv = Vector((dy * su, v1))
-                f.loops[3][uv_layer].uv = Vector((0.0, v1))
-            elif f_idx == 1: # Top (+Z)
-                f.loops[0][uv_layer].uv = Vector((u0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((u1, 0.0))
-                f.loops[2][uv_layer].uv = Vector((u1, dy * sv))
-                f.loops[3][uv_layer].uv = Vector((u0, dy * sv))
-            else: # Bottom (-Z, 0)
-                f.loops[0][uv_layer].uv = Vector((u0, 0.0))
-                f.loops[1][uv_layer].uv = Vector((u0, dy * sv))
-                f.loops[2][uv_layer].uv = Vector((u1, dy * sv))
-                f.loops[3][uv_layer].uv = Vector((u1, 0.0))
+                su = 0.26
+                sv = 0.20
+                # Stagger vertical plank texture based on wall location
+                v_stagger = math.sin(location[0] * 3.17 + location[1] * 2.11) * 0.42
+
+            for loop in f.loops:
+                co = loop.vert.co
+                fn = f.normal
+                fnx, fny, fnz = abs(fn.x), abs(fn.y), abs(fn.z)
+                if fnz >= fnx and fnz >= fny:
+                    u = co.x * su + u_offset
+                    v = co.y * sv + v_offset
+                elif fnx >= fny:
+                    u = co.y * su + u_offset
+                    v = (co.z + v_stagger) * sv + v_offset
+                else:
+                    u = co.x * su + u_offset
+                    v = (co.z + v_stagger) * sv + v_offset
+                loop[uv_layer].uv = Vector((u, v))
             f.tag = True
         elif mat_index in (0, 1, 3, 8, 11, 43, 44):
             # Masonry / stone / plaster / cut stone / floor / dungeon wall & floor box (foundations, steps, plinths, slabs, pillars, stone blocks):
@@ -196,57 +183,59 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                     v = (lv.z + sz) * scale + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
             f.tag = True
-        elif dz >= dx and dz >= dy:
-            # Vertical post / column: V along longitudinal Z axis, U around circumference
-            su = scale * 1.2
-            sv = scale * 0.40
-            for loop_idx, v_idx in enumerate(idxs):
-                lv = verts[v_idx]
-                if f_idx in (0, 1): # End caps (-Z, +Z)
-                    u = (lv.x + sx) * su + u_offset
-                    v = (lv.y + sy) * su + v_offset
-                elif f_idx in (2, 4): # Front (-Y), Back (+Y)
-                    u = (lv.x + sx) * su + u_offset
-                    v = (lv.z + sz) * sv + v_offset
-                else: # Right (+X), Left (-X)
-                    u = (lv.y + sy) * su + u_offset
-                    v = (lv.z + sz) * sv + v_offset
-                f.loops[loop_idx][uv_layer].uv = Vector((u, v))
-            f.tag = True
-        elif dx >= dy and dx >= dz:
-            # Horizontal beam along X: V along longitudinal X axis, U around circumference
-            su = scale * 1.2
-            sv = scale * 0.40
-            for loop_idx, v_idx in enumerate(idxs):
-                lv = verts[v_idx]
-                if f_idx in (3, 5): # End caps (+X, -X)
-                    u = (lv.y + sy) * su + u_offset
-                    v = (lv.z + sz) * su + v_offset
-                elif f_idx in (0, 1): # Bottom (-Z), Top (+Z)
-                    u = (lv.y + sy) * su + u_offset
-                    v = (lv.x + sx) * sv + v_offset
-                else: # Front (-Y), Back (+Y)
-                    u = (lv.z + sz) * su + u_offset
-                    v = (lv.x + sx) * sv + v_offset
-                f.loops[loop_idx][uv_layer].uv = Vector((u, v))
-            f.tag = True
-        else:
-            # Horizontal beam along Y: V along longitudinal Y axis, U around circumference
-            su = scale * 1.2
-            sv = scale * 0.40
-            for loop_idx, v_idx in enumerate(idxs):
-                lv = verts[v_idx]
-                if f_idx in (2, 4): # End caps (-Y, +Y)
-                    u = (lv.x + sx) * su + u_offset
-                    v = (lv.z + sz) * su + v_offset
-                elif f_idx in (0, 1): # Bottom (-Z), Top (+Z)
-                    u = (lv.x + sx) * su + u_offset
-                    v = (lv.y + sy) * sv + v_offset
-                else: # Right (+X), Left (-X)
-                    u = (lv.z + sz) * su + u_offset
-                    v = (lv.y + sy) * sv + v_offset
-                f.loops[loop_idx][uv_layer].uv = Vector((u, v))
-            f.tag = True
+        elif mat_index == 2 or (not is_wall and dims_sorted[2] >= 1.4 * dims_sorted[1] and dims_sorted[1] <= 1.25):
+            # True slender structural beam or column: V along longitudinal axis, U around perimeter
+            if dz >= dx and dz >= dy:
+                # Vertical post / column: V along longitudinal Z axis, U around circumference
+                su = scale * 1.2
+                sv = scale * 0.40
+                for loop_idx, v_idx in enumerate(idxs):
+                    lv = verts[v_idx]
+                    if f_idx in (0, 1): # End caps (-Z, +Z)
+                        u = (lv.x + sx) * su + u_offset
+                        v = (lv.y + sy) * su + v_offset
+                    elif f_idx in (2, 4): # Front (-Y), Back (+Y)
+                        u = (lv.x + sx) * su + u_offset
+                        v = (lv.z + sz) * sv + v_offset
+                    else: # Right (+X), Left (-X)
+                        u = (lv.y + sy) * su + u_offset
+                        v = (lv.z + sz) * sv + v_offset
+                    f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+                f.tag = True
+            elif dx >= dy and dx >= dz:
+                # Horizontal beam along X: V along longitudinal X axis, U around circumference
+                su = scale * 1.2
+                sv = scale * 0.40
+                for loop_idx, v_idx in enumerate(idxs):
+                    lv = verts[v_idx]
+                    if f_idx in (3, 5): # End caps (+X, -X)
+                        u = (lv.y + sy) * su + u_offset
+                        v = (lv.z + sz) * su + v_offset
+                    elif f_idx in (0, 1): # Bottom (-Z), Top (+Z)
+                        u = (lv.y + sy) * su + u_offset
+                        v = (lv.x + sx) * sv + v_offset
+                    else: # Front (-Y), Back (+Y)
+                        u = (lv.z + sz) * su + u_offset
+                        v = (lv.x + sx) * sv + v_offset
+                    f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+                f.tag = True
+            else:
+                # Horizontal beam along Y: V along longitudinal Y axis, U around circumference
+                su = scale * 1.2
+                sv = scale * 0.40
+                for loop_idx, v_idx in enumerate(idxs):
+                    lv = verts[v_idx]
+                    if f_idx in (2, 4): # End caps (-Y, +Y)
+                        u = (lv.x + sx) * su + u_offset
+                        v = (lv.z + sz) * su + v_offset
+                    elif f_idx in (0, 1): # Bottom (-Z), Top (+Z)
+                        u = (lv.x + sx) * su + u_offset
+                        v = (lv.y + sy) * sv + v_offset
+                    else: # Right (+X), Left (-X)
+                        u = (lv.z + sz) * su + u_offset
+                        v = (lv.y + sy) * sv + v_offset
+                    f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+                f.tag = True
         
     return faces
 

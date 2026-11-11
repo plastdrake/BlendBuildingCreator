@@ -2656,33 +2656,55 @@ def create_stylized_water(name="M_Water", color=(0.16, 0.38, 0.50, 1.0)):
 
 
 def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
-    """Weathered, rich stylized pirate wood planks with warm amber/honey tones for Hajfin wall siding."""
+    """Weathered, rich stylized pirate wood planks with warm amber/honey tones for Hajfin wall siding.
+    Features dual-sample anti-tiling texture blending with Perlin noise to eliminate repeating knots."""
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
-    c = _coord(tree, loc_x=-1000)
-    tex_node = _load_image_texture(tree, "pirate_timber_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(1.0, 1.0, 1.0))
+    c = _coord(tree, loc_x=-1200)
+    tex_node = _load_image_texture(tree, "pirate_timber_diffuse.jpg", c, loc_x=-850, loc_y=200, scale=(1.0, 1.0, 1.0))
     if tex_node is not None:
+        # Sample B: offset and staggered to break up repetitive knots and horizontal lines
+        tex_node_b = _load_image_texture(tree, "pirate_timber_diffuse.jpg", c, loc_x=-850, loc_y=-150,
+                                         scale=(0.92, 0.88, 1.0))
+
+        # Anti-tiling smooth noise blend factor
+        noise = tree.nodes.new("ShaderNodeTexNoise")
+        noise.location = (-600, 30)
+        noise.inputs["Scale"].default_value = 0.45
+        noise.inputs["Detail"].default_value = 1.8
+        tree.links.new(c.outputs["UV"], noise.inputs["Vector"])
+
+        blend = tree.nodes.new("ShaderNodeMix")
+        blend.data_type = 'RGBA'
+        blend.blend_type = 'MIX'
+        blend.location = (-380, 100)
+        tree.links.new(noise.outputs["Fac"], blend.inputs["Factor"])
+        tree.links.new(tex_node.outputs["Color"], blend.inputs["A"])
+        tree.links.new(tex_node_b.outputs["Color"], blend.inputs["B"])
+        base_col = blend.outputs["Result"]
+
         if color is not None:
             tint = tree.nodes.new("ShaderNodeMix")
             tint.data_type = 'RGBA'
             tint.blend_type = 'MULTIPLY'
-            tint.location = (-350, 100)
+            tint.location = (-160, 100)
             tint.inputs["Factor"].default_value = 0.15
-            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tree.links.new(base_col, tint.inputs["A"])
             tint.inputs["B"].default_value = color
             color_out = tint.outputs["Result"]
         else:
-            color_out = tex_node.outputs["Color"]
-        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.06, scale=1.1)
-        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.08, scale=0.32)
+            color_out = base_col
+
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=80, loc_y=-210, strength=0.06, scale=1.1)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=320, loc_y=-210, strength=0.08, scale=0.32)
         _apply_ao(tree, bsdf, macro, strength=0.50, distance=0.20)
         _setup_pbr(tree, bsdf, out, roughness=0.82, metallic=0.0)
 
         bump = tree.nodes.new("ShaderNodeBump")
-        bump.location = (600, -210)
-        bump.inputs["Strength"].default_value = 0.20
+        bump.location = (680, -210)
+        bump.inputs["Strength"].default_value = 0.18
         bump.inputs["Distance"].default_value = 0.03
-        tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+        tree.links.new(base_col, bump.inputs["Height"])
         tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
         return mat
 
@@ -2726,6 +2748,43 @@ def create_stylized_hajfin_timber(name="M_Building_Timber", color=None):
 
     _set_bsdf_input(bsdf, "Base Color", color or (0.34, 0.20, 0.12, 1.0))
     _setup_pbr(tree, bsdf, out, roughness=0.74)
+    return mat
+
+
+def create_stylized_hajfin_deck(name="M_Building_Floor", color=None):
+    """Weathered, dark-oiled pirate ship deck planks for Hajfin floor slabs, docks, and platforms.
+    Distinct from wall siding with deep chestnut/teak tones, caulked seams, and salt patina."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-1000)
+    tex_node = _load_image_texture(tree, "wood_planks_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.80, 0.80, 1.0))
+    if tex_node is not None:
+        default_clr = (0.28, 0.17, 0.10, 1.0)
+        c_use = color or default_clr
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-350, 100)
+        tint.inputs["Factor"].default_value = 0.35
+        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = c_use
+        color_out = tint.outputs["Result"]
+
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.06, scale=1.0)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.08, scale=0.30)
+        _apply_ao(tree, bsdf, macro, strength=0.60, distance=0.22)
+        _setup_pbr(tree, bsdf, out, roughness=0.78, metallic=0.0)
+
+        bump = tree.nodes.new("ShaderNodeBump")
+        bump.location = (600, -210)
+        bump.inputs["Strength"].default_value = 0.22
+        bump.inputs["Distance"].default_value = 0.03
+        tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+        tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", color or (0.28, 0.17, 0.10, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.78)
     return mat
 
 
@@ -3171,6 +3230,8 @@ def setup_building_material_slots(obj, props):
             mat_timber = create_stylized_hajfin_timber(f"{mat_prefix}Hajfin_Timber", color=getattr(props, 'color_timber_frame', None))
         if not getattr(props, 'custom_shingles', None):
             mat_shingles = create_stylized_bone_shingles(f"{mat_prefix}Bone_Shingles", color=getattr(props, 'color_roof', None))
+        if not getattr(props, 'custom_floor', None):
+            mat_floor = create_stylized_hajfin_deck(f"{mat_prefix}Hajfin_Deck", color=getattr(props, 'color_floor', None))
 
     # Assemble canonical slots in strict order
     required_mats = [
