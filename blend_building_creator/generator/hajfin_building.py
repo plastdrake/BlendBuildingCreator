@@ -434,6 +434,10 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
         rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
 
     d_half_w = width * 0.5
+    # Keep the decorative jaw on top of the structural sill instead of
+    # embedding its base cap through the sill and floor.
+    base_lift = 0.18
+    base_z = cz + base_lift
     z_spring = min(height * 0.78, 3.40)  # Upright jamb height (3.4m clear!)
     bone_rad = 0.32  # Sturdy, exaggerated, beefy bone cross-section
     y_off = 0.0
@@ -441,7 +445,7 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
     num_segs = 8  # 8-sided octagonal cross section for the bone tube
     uv_layer = bm.loops.layers.uv.verify()
 
-    top_rings = {}
+    apex_ring = None
     for side_sgn in (-1.0, 1.0):
         # 1. Generate smooth spine path from ground to apex
         num_steps = 7
@@ -451,7 +455,7 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
             t = si / (num_steps - 1)
             if t <= 0.45:
                 st = t / 0.45
-                cur_z = st * z_spring
+                cur_z = base_lift + st * (z_spring - base_lift)
                 cur_x = side_sgn * (d_half_w + bone_rad * 0.55)
             else:
                 st = (t - 0.45) / 0.55
@@ -465,7 +469,12 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
         rings = []
         for si in range(num_steps):
             p = spine_pts[si]
-            if si == 0:
+            if si == num_steps - 1:
+                # Both mandibles meet at the same apex. Reusing one ring
+                # welds the arch instead of leaving two coincident terminal
+                # rings that need a twisted bridge between them.
+                tang = Vector((0.0, 0.0, 1.0))
+            elif si == 0:
                 tang = (spine_pts[1] - spine_pts[0]).normalized()
             elif si == num_steps - 1:
                 tang = (spine_pts[si] - spine_pts[si - 1]).normalized()
@@ -477,17 +486,26 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
             norm_y = norm_x.cross(tang).normalized()
 
             r = radii[si]
-            v_ring = []
-            for j in range(num_segs):
-                ang = j * (2.0 * math.pi / num_segs)
-                offset = norm_x * (math.cos(ang) * r) + norm_y * (math.sin(ang) * r * 1.18)
-                local_pt = p + offset
-                w_pt = rot_mat @ local_pt + Vector((cx, cy, cz))
-                v = bm.verts.new(w_pt)
-                v_ring.append(v)
+            if si == num_steps - 1 and apex_ring is not None:
+                v_ring = apex_ring
+            else:
+                v_ring = []
+                for j in range(num_segs):
+                    ang = j * (2.0 * math.pi / num_segs)
+                    offset = norm_x * (math.cos(ang) * r) + norm_y * (math.sin(ang) * r * 1.18)
+                    local_pt = p + offset
+                    w_pt = rot_mat @ local_pt + Vector((cx, cy, cz))
+                    # Faceted walls can tilt the local cross-section enough for
+                    # its lower edge to dip below the horizontal sill. Keep the
+                    # correction local to the arch base so the profile remains
+                    # unchanged everywhere else.
+                    if si < 2 and w_pt.z < base_z:
+                        w_pt.z = base_z
+                    v = bm.verts.new(w_pt)
+                    v_ring.append(v)
+                if si == num_steps - 1:
+                    apex_ring = v_ring
             rings.append(v_ring)
-
-        top_rings[side_sgn] = rings[-1]
 
         # 3. Create continuous quad faces connecting adjacent rings
         for si in range(num_steps - 1):
@@ -519,22 +537,7 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
 
         # NOTE: Obstructing sharp teeth cones are removed so walkthrough is 100% open and unobstructed!
 
-    # 4. Seamless Apex Cap joining the left and right mandibles together.
-    # The two terminal rings are already mirrored by their opposing tangents.
-    # Reversing one ring here twists the quads into a detached-looking wedge;
-    # corresponding perimeter vertices must be paired directly.
-    r_left = top_rings[-1.0]
-    r_right = top_rings[1.0]
-    for j in range(num_segs):
-        j_next = (j + 1) % num_segs
-        try:
-            f_bridge = bm.faces.new([r_left[j], r_left[j_next], r_right[j_next], r_right[j]])
-            f_bridge.material_index = MAT_INDEX_BONE
-            f_bridge.tag = True
-        except ValueError:
-            pass
-
-    # 5. Carved Bone Dorsal Fin Emblem firmly mounted directly atop the arch apex (no air gap)
+    # 4. Carved Bone Dorsal Fin Emblem firmly mounted directly atop the arch apex (no air gap)
     emblem_loc = rot_mat @ Vector((0.0, 0.0, height + 0.02)) + Vector((cx, cy, cz))
     rot_euler = rot_mat.to_euler()
     _build_bone_fin_emblem(bm, emblem_loc.x, emblem_loc.y, emblem_loc.z, rot_euler.z, scale=0.85)
