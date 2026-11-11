@@ -233,12 +233,12 @@ def _build_hajfin_floor_slab_with_stairwell(bm, x0, x1, y0, y1, z_floor,
         if stair_x0 is not None and stair_x0 < jx < stair_x1:
             if stair_y0 > y0:
                 jy = (y0 + stair_y0) * 0.5
-                create_box(bm, (0.24, stair_y0 - y0, 0.28), (jx, jy, z_floor - slab_th - 0.14), mat_index=MAT_INDEX_DRIFTWOOD)
+                create_box(bm, (0.24, stair_y0 - y0, 0.28), (jx, jy, z_floor - slab_th - 0.14), mat_index=MAT_INDEX_TIMBER)
             if stair_y1 < y1:
                 jy = (stair_y1 + y1) * 0.5
-                create_box(bm, (0.24, y1 - stair_y1, 0.28), (jx, jy, z_floor - slab_th - 0.14), mat_index=MAT_INDEX_DRIFTWOOD)
+                create_box(bm, (0.24, y1 - stair_y1, 0.28), (jx, jy, z_floor - slab_th - 0.14), mat_index=MAT_INDEX_TIMBER)
         else:
-            create_box(bm, (0.24, (y1 - y0), 0.28), (jx, (y0 + y1) * 0.5, z_floor - slab_th - 0.14), mat_index=MAT_INDEX_DRIFTWOOD)
+            create_box(bm, (0.24, (y1 - y0), 0.28), (jx, (y0 + y1) * 0.5, z_floor - slab_th - 0.14), mat_index=MAT_INDEX_TIMBER)
 
     # 2. Floor Slabs around Stairwell
     if stair_x0 is None or stair_x1 is None or stair_y0 is None or stair_y1 is None:
