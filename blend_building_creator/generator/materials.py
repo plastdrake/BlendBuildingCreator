@@ -2656,38 +2656,38 @@ def create_stylized_water(name="M_Water", color=(0.16, 0.38, 0.50, 1.0)):
 
 
 def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
-    """Weathered, sun-bleached driftwood planks with sea-salt washes for Hajfin buildings."""
+    """Weathered, rich stylized pirate wood planks with warm amber/honey tones for Hajfin buildings."""
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-1000)
-    tex_node = _load_image_texture(tree, "driftwood_planks_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.75, 0.75, 1.0))
+    tex_node = _load_image_texture(tree, "pirate_timber_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.35, 0.35, 1.0))
     if tex_node is not None:
         if color is not None:
             tint = tree.nodes.new("ShaderNodeMix")
             tint.data_type = 'RGBA'
             tint.blend_type = 'MULTIPLY'
             tint.location = (-350, 100)
-            tint.inputs["Factor"].default_value = 0.25
+            tint.inputs["Factor"].default_value = 0.15
             tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
             tint.inputs["B"].default_value = color
             color_out = tint.outputs["Result"]
         else:
             color_out = tex_node.outputs["Color"]
-        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.08, scale=1.1)
-        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.10, scale=0.32)
-        _apply_ao(tree, bsdf, macro, strength=0.55, distance=0.18)
-        _setup_pbr(tree, bsdf, out, roughness=0.86, metallic=0.0)
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.06, scale=1.1)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.08, scale=0.32)
+        _apply_ao(tree, bsdf, macro, strength=0.50, distance=0.20)
+        _setup_pbr(tree, bsdf, out, roughness=0.82, metallic=0.0)
 
         bump = tree.nodes.new("ShaderNodeBump")
         bump.location = (600, -210)
-        bump.inputs["Strength"].default_value = 0.22
+        bump.inputs["Strength"].default_value = 0.20
         bump.inputs["Distance"].default_value = 0.03
         tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
         tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
         return mat
 
-    _set_bsdf_input(bsdf, "Base Color", color or (0.64, 0.65, 0.62, 1.0))
-    _setup_pbr(tree, bsdf, out, roughness=0.86)
+    _set_bsdf_input(bsdf, "Base Color", color or (0.58, 0.36, 0.20, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.82)
     return mat
 
 
