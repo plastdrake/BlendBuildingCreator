@@ -207,18 +207,18 @@ def _dense_tenement_settings(material_tier, num_floors, floor_height,
     }
 
 
-def _hajfin_settings(width=6.0, depth=7.0, num_floors=1, found_h=1.2,
-                     wonkiness=0.25, roof_style='SWAY', roof_h=3.2,
-                     roof_mat='THATCH', shape='RECTANGLE',
-                     wing_w=5.0, wing_d=4.5, wing_floors=1,
+def _hajfin_settings(width=8.5, depth=9.5, num_floors=1, found_h=1.2,
+                     wonkiness=0.25, roof_style='SWAY', roof_h=3.6,
+                     roof_mat='WOOD_SHINGLES', shape='RECTANGLE',
+                     wing_w=6.5, wing_d=6.0, wing_floors=1,
                      has_veranda=False, has_balcony=False, balcony_fl=2,
                      has_pillared=False, pillars=4,
                      has_trade_sign=False, sign_icon='tavern_sign.png',
                      has_banners=False, banner_count=2,
                      color_palette='HAJFIN_DRIFTWOOD',
-                     door_w=1.40, door_h=2.80, tier=1,
+                     door_w=1.80, door_h=3.50, tier=1,
                      hajfin_style='SHANTY'):
-    """Calibrated preset baseline for Hajfin pirate shanties, stilt huts, and strongholds."""
+    """Calibrated preset baseline for Hajfin pirate shanties, stilt huts, and strongholds (scaled for 2-3m tall Hajfin)."""
     return {
         **base_settings(),
         'faction': 'HAJFIN',
@@ -226,13 +226,13 @@ def _hajfin_settings(width=6.0, depth=7.0, num_floors=1, found_h=1.2,
         'building_shape': shape,
         'material_tier': 'TIER_1' if tier == 1 else 'TIER_2',
         'num_floors': num_floors,
-        'floor_height': 3.6,
+        'floor_height': 4.2,
         'width': float(width),
         'depth': float(depth),
-        'wall_thickness': 0.24,
+        'wall_thickness': 0.26,
         'has_cantilever': (num_floors > 1 and tier > 1),
         'overhang_mode': 'SECOND_FLOOR_ONLY',
-        'cantilever_overhang': 0.35,
+        'cantilever_overhang': 0.40,
         'wonkiness': float(wonkiness),
         'enable_bevels': False,
         'has_foundation': True,
@@ -242,9 +242,9 @@ def _hajfin_settings(width=6.0, depth=7.0, num_floors=1, found_h=1.2,
         'has_front_steps': True,
         'has_stairs': (num_floors > 1),
         'stair_style': 'STRAIGHT',
-        'stair_width': 1.40,
+        'stair_width': 1.60,
         'has_ceiling_beams': True,
-        'has_interior_walls': (width >= 8.0),
+        'has_interior_walls': (width >= 10.0),
         'interior_partition_style': 'AUTO',
         'has_front_door': True,
         'door_width': float(door_w),
@@ -6998,77 +6998,79 @@ PRESETS = {
     # =========================================================================
     # HAJFIN: SHANTIES & HUTS
     # =========================================================================
+    # HAJFIN: SHANTIES & HUTS (SCALED FOR 2-3M TALL HAJFIN & ACCESSIBLE INTERIORS)
+    # =========================================================================
     'HAJFIN_STILT_SHACK_T1': {
         'category': 'SHANTIES',
         'family': 'HAJFIN_STILT_SHACK',
         'tier': 1,
         'name': "Driftwood Stilt Shack (Tier 1)",
-        'plot': "12m x 12m",
-        'description': "Ramshackle single-room driftwood shanty on crooked pier stilts with lean-to roof.",
-        'settings': _hajfin_settings(width=6.0, depth=7.0, num_floors=1, found_h=1.2, wonkiness=0.28, roof_h=2.8, roof_mat='THATCH', tier=1, hajfin_style='SHANTY'),
+        'plot': "16m x 16m",
+        'description': "Ramshackle large driftwood shanty on crooked pier stilts with accessible vaulted interior.",
+        'settings': _hajfin_settings(width=8.5, depth=9.5, num_floors=1, found_h=1.2, wonkiness=0.28, roof_h=3.6, roof_mat='WOOD_SHINGLES', tier=1, hajfin_style='SHANTY'),
     },
     'HAJFIN_STILT_SHACK_T2': {
         'category': 'SHANTIES',
         'family': 'HAJFIN_STILT_SHACK',
         'tier': 2,
         'name': "Driftwood Stilt Shack (Tier 2)",
-        'plot': "12m x 12m",
-        'description': "Reinforced stilt shack with patched sailcloth, copper nails, and extended roof overhang.",
-        'settings': _hajfin_settings(width=7.0, depth=8.0, num_floors=1, found_h=1.4, wonkiness=0.22, roof_h=3.2, roof_mat='WOOD_SHINGLES', tier=2, hajfin_style='SHANTY'),
+        'plot': "16m x 16m",
+        'description': "Two-storey stilt shack with interior stairs, upper deck, copper nails, and extended roof overhang.",
+        'settings': _hajfin_settings(width=9.5, depth=11.0, num_floors=2, found_h=1.4, wonkiness=0.22, roof_h=4.0, roof_mat='WOOD_SHINGLES', tier=2, hajfin_style='SHANTY'),
     },
     'HAJFIN_NET_HUT_T1': {
         'category': 'SHANTIES',
         'family': 'HAJFIN_NET_HUT',
         'tier': 1,
         'name': "Net-Mender's Beach Hut (Tier 1)",
-        'plot': "12m x 12m",
-        'description': "Squat seaside fisherman hut with an open plank porch for hanging nets and drying frames.",
-        'settings': _hajfin_settings(width=7.5, depth=6.5, num_floors=1, found_h=0.8, wonkiness=0.25, has_veranda=True, roof_h=2.6, roof_mat='THATCH', tier=1, hajfin_style='ROUND_HUT'),
+        'plot': "16m x 16m",
+        'description': "Large seaside tapered conical timber hut with shark jaw door, reef stone base, and rear whale vertebrae.",
+        'settings': _hajfin_settings(width=9.5, depth=9.5, num_floors=1, found_h=0.8, wonkiness=0.22, has_veranda=True, roof_h=3.6, roof_mat='WOOD_SHINGLES', tier=1, hajfin_style='ROUND_HUT'),
     },
     'HAJFIN_NET_HUT_T2': {
         'category': 'SHANTIES',
         'family': 'HAJFIN_NET_HUT',
         'tier': 2,
         'name': "Net-Mender's Beach Hut (Tier 2)",
-        'plot': "12m x 12m",
-        'description': "Master fisher's stilt hut with deep sheltered porch and sea-salt weathered shakes.",
-        'settings': _hajfin_settings(width=8.5, depth=7.5, num_floors=1, found_h=1.0, wonkiness=0.18, has_veranda=True, has_pillared=True, pillars=3, roof_h=3.0, roof_mat='WOOD_SHINGLES', tier=2, hajfin_style='ROUND_HUT'),
+        'plot': "18m x 18m",
+        'description': "Grand two-level round lodge with internal stairs leading to an accessible curved mezzanine loft.",
+        'settings': _hajfin_settings(width=11.5, depth=11.5, num_floors=2, found_h=1.0, wonkiness=0.18, has_veranda=True, has_pillared=True, pillars=4, roof_h=4.2, roof_mat='WOOD_SHINGLES', tier=2, hajfin_style='ROUND_HUT'),
     },
     'HAJFIN_HULL_SHACK_T1': {
         'category': 'SHANTIES',
         'family': 'HAJFIN_HULL_SHACK',
         'tier': 1,
         'name': "Scavenger's Hull Shack (Tier 1)",
-        'plot': "12m x 12m",
-        'description': "Ramshackle pirate hovel built around salvaged ship timbers and an overturned cutter hull profile.",
-        'settings': _hajfin_settings(width=6.5, depth=8.5, num_floors=1, found_h=0.9, wonkiness=0.35, roof_h=3.8, roof_mat='WOOD_SHINGLES', tier=1, hajfin_style='BLOCKHOUSE'),
+        'plot': "16m x 16m",
+        'description': "Heavy timber crate blockhouse built with salvaged ship timbers, open shark jaw door, and barred windows.",
+        'settings': _hajfin_settings(width=8.5, depth=10.0, num_floors=1, found_h=1.0, wonkiness=0.30, roof_h=4.0, roof_mat='WOOD_SHINGLES', tier=1, hajfin_style='BLOCKHOUSE'),
     },
     'HAJFIN_HULL_SHACK_T2': {
         'category': 'SHANTIES',
         'family': 'HAJFIN_HULL_SHACK',
         'tier': 2,
         'name': "Scavenger's Hull Shack (Tier 2)",
-        'plot': "12m x 12m",
-        'description': "Buccaneer's hull depot with reinforced keel beams, salvaged deck siding, and lookout hatch.",
-        'settings': _hajfin_settings(width=8.0, depth=10.0, num_floors=1, found_h=1.1, wonkiness=0.26, roof_h=4.2, roof_mat='WOOD_SHINGLES', tier=2, hajfin_style='BLOCKHOUSE'),
+        'plot': "18m x 18m",
+        'description': "Two-storey buccaneer hull fortress with internal staircase, upper quarters, and reinforced deck siding.",
+        'settings': _hajfin_settings(width=10.0, depth=12.0, num_floors=2, found_h=1.2, wonkiness=0.24, roof_h=4.6, roof_mat='WOOD_SHINGLES', tier=2, hajfin_style='BLOCKHOUSE'),
     },
     'HAJFIN_LOOKOUT_HUT_T1': {
         'category': 'SHANTIES',
         'family': 'HAJFIN_LOOKOUT_HUT',
         'tier': 1,
         'name': "Lookout Stilt Box (Tier 1)",
-        'plot': "12m x 12m",
-        'description': "Narrow two-storey stilt watchtower with high pier stilts and an observation deck.",
-        'settings': _hajfin_settings(width=5.0, depth=5.0, num_floors=2, found_h=1.6, wonkiness=0.24, has_balcony=True, balcony_fl=2, roof_h=2.4, roof_mat='THATCH', tier=1, hajfin_style='BLOCKHOUSE'),
+        'plot': "14m x 14m",
+        'description': "Spacious two-storey watch box on high stilts with interior stairs and an upper observation deck.",
+        'settings': _hajfin_settings(width=7.5, depth=7.5, num_floors=2, found_h=1.8, wonkiness=0.22, has_balcony=True, balcony_fl=2, roof_h=3.2, roof_mat='WOOD_SHINGLES', tier=1, hajfin_style='BLOCKHOUSE'),
     },
     'HAJFIN_LOOKOUT_HUT_T2': {
         'category': 'SHANTIES',
         'family': 'HAJFIN_LOOKOUT_HUT',
         'tier': 2,
         'name': "Lookout Stilt Box (Tier 2)",
-        'plot': "12m x 12m",
-        'description': "Reef watchtower overlooking the bay, rigged with crow's nest gallery and search deck.",
-        'settings': _hajfin_settings(width=6.0, depth=6.0, num_floors=2, found_h=1.8, wonkiness=0.18, has_balcony=True, balcony_fl=2, roof_h=2.8, roof_mat='WOOD_SHINGLES', tier=2, hajfin_style='BLOCKHOUSE'),
+        'plot': "16m x 16m",
+        'description': "Massive two-storey reef fortress watchtower with interior stairs, upper gallery, and crow's nest deck.",
+        'settings': _hajfin_settings(width=8.5, depth=8.5, num_floors=2, found_h=2.0, wonkiness=0.18, has_balcony=True, balcony_fl=2, roof_h=3.6, roof_mat='WOOD_SHINGLES', tier=2, hajfin_style='BLOCKHOUSE'),
     },
 
     # =========================================================================
@@ -7079,18 +7081,18 @@ PRESETS = {
         'family': 'HAJFIN_BONE_SHOP',
         'tier': 1,
         'name': "Bone Trading Post (Tier 1)",
-        'plot': "20m x 20m",
-        'description': "Open-front pirate barter bazaar trading in whale ribs, shark teeth, and scrimshaw charms.",
-        'settings': _hajfin_settings(width=9.5, depth=8.5, num_floors=1, found_h=0.9, wonkiness=0.20, has_pillared=True, pillars=4, has_trade_sign=True, sign_icon='general_store_sign.png', roof_h=3.4, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', tier=1, hajfin_style='BONE_SHOP'),
+        'plot': "24m x 24m",
+        'description': "Two-storey pirate barter bazaar with open barter counter, accessible upper lookout room, and mounted shark skull.",
+        'settings': _hajfin_settings(width=11.5, depth=10.5, num_floors=2, found_h=1.0, wonkiness=0.20, has_pillared=True, pillars=4, has_trade_sign=True, sign_icon='general_store_sign.png', roof_h=4.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', tier=1, hajfin_style='BONE_SHOP'),
     },
     'HAJFIN_BONE_SHOP_T2': {
         'category': 'COMMERCE',
         'family': 'HAJFIN_BONE_SHOP',
         'tier': 2,
         'name': "Bone Trading Post (Tier 2)",
-        'plot': "20m x 20m",
-        'description': "Grand Scrimshaw Emporium with an arched bone entryway, deep trade counters, and bone stock racks.",
-        'settings': _hajfin_settings(width=11.5, depth=10.0, num_floors=1, found_h=1.1, wonkiness=0.16, has_pillared=True, pillars=5, has_trade_sign=True, sign_icon='general_store_sign.png', roof_h=4.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', tier=2, hajfin_style='BONE_SHOP'),
+        'plot': "24m x 24m",
+        'description': "Grand Scrimshaw Emporium: expanded two-storey depot with internal staircase, dual dock verandas, and stock loft.",
+        'settings': _hajfin_settings(width=13.5, depth=12.0, num_floors=2, found_h=1.2, wonkiness=0.16, has_pillared=True, pillars=5, has_trade_sign=True, sign_icon='general_store_sign.png', roof_h=4.5, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', tier=2, hajfin_style='BONE_SHOP'),
     },
 
     # =========================================================================
@@ -7101,18 +7103,18 @@ PRESETS = {
         'family': 'HAJFIN_CHIEFTAIN_HUT',
         'tier': 1,
         'name': "Chieftain's Great Fin Hall (Tier 1)",
-        'plot': "40m x 40m",
-        'description': "Imposing elevated pirate longhouse with whale-rib rafters, dorsal fin ridge crest, and tribal standards.",
-        'settings': _hajfin_settings(width=12.0, depth=15.0, num_floors=1, found_h=1.4, wonkiness=0.18, has_pillared=True, pillars=4, has_banners=True, banner_count=2, roof_h=5.2, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.80, door_h=3.40, tier=1, hajfin_style='CHIEFTAIN_HALL'),
+        'plot': "44m x 44m",
+        'description': "Colossal elevated longhouse with projecting whale-rib cage entrance, soaring vaulted nave, and accessible mezzanine galleries.",
+        'settings': _hajfin_settings(width=14.0, depth=18.0, num_floors=2, found_h=1.4, wonkiness=0.18, has_pillared=True, pillars=4, has_banners=True, banner_count=2, roof_h=5.5, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=2.00, door_h=3.60, tier=1, hajfin_style='CHIEFTAIN_HALL'),
     },
     'HAJFIN_CHIEFTAIN_HUT_T2': {
         'category': 'CHIEFTAIN',
         'family': 'HAJFIN_CHIEFTAIN_HUT',
         'tier': 2,
         'name': "Chieftain's Great Fin Hall (Tier 2)",
-        'plot': "40m x 40m",
-        'description': "Grand Chieftain Citadel: massive stilt throne hall with soaring vaulted ribs, trophy displays, and war banners.",
-        'settings': _hajfin_settings(width=14.0, depth=18.0, num_floors=2, found_h=1.6, wonkiness=0.14, has_pillared=True, pillars=6, has_balcony=True, balcony_fl=2, has_banners=True, banner_count=4, roof_h=6.0, roof_mat='SLATE', color_palette='HAJFIN_CORAL', door_w=2.00, door_h=3.60, tier=2, hajfin_style='CHIEFTAIN_HALL'),
+        'plot': "48m x 48m",
+        'description': "Grand Chieftain Citadel: monumental stilt throne hall with elevated Chieftain dais, twin stairs, and war banners.",
+        'settings': _hajfin_settings(width=16.0, depth=22.0, num_floors=2, found_h=1.6, wonkiness=0.14, has_pillared=True, pillars=6, has_balcony=True, balcony_fl=2, has_banners=True, banner_count=4, roof_h=6.5, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_CORAL', door_w=2.20, door_h=3.80, tier=2, hajfin_style='CHIEFTAIN_HALL'),
     },
 
     # =========================================================================
@@ -7123,18 +7125,18 @@ PRESETS = {
         'family': 'HAJFIN_PIRATE_TAVERN',
         'tier': 1,
         'name': "The Barnacle Bilge Tavern (Tier 1)",
-        'plot': "20m x 20m",
-        'description': "Rambling two-storey seaside den of scoundrels with an open-air stilt drinking deck and grog barrels.",
-        'settings': _hajfin_settings(width=11.0, depth=11.0, shape='L_SHAPE', wing_w=5.5, wing_d=5.0, wing_floors=1, num_floors=2, found_h=1.1, wonkiness=0.22, has_veranda=True, has_balcony=True, balcony_fl=2, has_trade_sign=True, sign_icon='tavern_sign.png', roof_h=3.8, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=1, hajfin_style='TAVERN'),
+        'plot': "24m x 24m",
+        'description': "Sprawling two-storey pirate tavern with open-air stilt drinking veranda, internal stairs, and upper crew quarters.",
+        'settings': _hajfin_settings(width=13.5, depth=13.5, shape='L_SHAPE', wing_w=6.8, wing_d=6.5, wing_floors=1, num_floors=2, found_h=1.2, wonkiness=0.22, has_veranda=True, has_balcony=True, balcony_fl=2, has_trade_sign=True, sign_icon='tavern_sign.png', roof_h=4.2, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.80, door_h=3.50, tier=1, hajfin_style='TAVERN'),
     },
     'HAJFIN_PIRATE_TAVERN_T2': {
         'category': 'HOSPITALITY',
         'family': 'HAJFIN_PIRATE_TAVERN',
         'tier': 2,
         'name': "The Barnacle Bilge Tavern (Tier 2)",
-        'plot': "20m x 20m",
-        'description': "The Salty Megalodon Taproom: expanded multi-deck pirate haven with wraparound pier deck and lookout loft.",
-        'settings': _hajfin_settings(width=13.0, depth=13.0, shape='L_SHAPE', wing_w=6.5, wing_d=6.0, wing_floors=2, num_floors=2, found_h=1.3, wonkiness=0.18, has_veranda=True, has_balcony=True, balcony_fl=2, has_trade_sign=True, sign_icon='tavern_sign.png', has_banners=True, banner_count=2, roof_h=4.2, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_CORAL', tier=2, hajfin_style='TAVERN'),
+        'plot': "26m x 26m",
+        'description': "The Salty Megalodon Taproom: massive multi-deck pirate haven with wraparound pier deck, interior stairs, and lookout loft.",
+        'settings': _hajfin_settings(width=15.5, depth=15.5, shape='L_SHAPE', wing_w=7.8, wing_d=7.5, wing_floors=2, num_floors=2, found_h=1.4, wonkiness=0.18, has_veranda=True, has_balcony=True, balcony_fl=2, has_trade_sign=True, sign_icon='tavern_sign.png', has_banners=True, banner_count=2, roof_h=4.8, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_CORAL', door_w=2.00, door_h=3.60, tier=2, hajfin_style='TAVERN'),
     },
 
 }
@@ -7955,8 +7957,9 @@ def apply_preset(props, preset_key):
         
     data = PRESETS[preset_key]['settings']
     # Temporarily disable auto_update during batch assignment to avoid multiple regenerations
-    old_auto = props.auto_update
-    props.auto_update = False
+    old_auto = getattr(props, 'auto_update', True)
+    if hasattr(props, 'auto_update'):
+        props.auto_update = False
 
     preset_info = PRESETS.get(preset_key, {})
     preset_family_id = preset_info.get('family', '')
@@ -8043,7 +8046,8 @@ def apply_preset(props, preset_key):
     except Exception:
         pass
 
-    props.auto_update = old_auto
+    if hasattr(props, 'auto_update'):
+        props.auto_update = old_auto
     
     # Trigger final regeneration
     if old_auto:

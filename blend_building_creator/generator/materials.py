@@ -2660,7 +2660,7 @@ def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-1000)
-    tex_node = _load_image_texture(tree, "pirate_timber_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.35, 0.35, 1.0))
+    tex_node = _load_image_texture(tree, "pirate_timber_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(1.0, 1.0, 1.0))
     if tex_node is not None:
         if color is not None:
             tint = tree.nodes.new("ShaderNodeMix")
@@ -2851,40 +2851,44 @@ def setup_building_material_slots(obj, props):
     # so materials with identical textures are never duplicated into M_Outbuilding_ variants.
     mat_prefix = "M_Building_"
 
-    # 0. Stone (stone_wall_diffuse.jpg / mud_fieldstone / squared_fieldstone / ashlar_stone)
-    stone_tier = tier
-    if tier == 'TIER_2' and (getattr(props, 'has_castle_citadel', False) or 
-                             getattr(props, 'has_curtain_wall', False) or 
-                             getattr(props, 'castle_tier', '') in ('TIER_2', 'TIER_3') or
-                             getattr(props, 'archetype', '') == 'CASTLE' or
-                             getattr(props, 'building_archetype', '') == 'CASTLE' or
-                             getattr(props, 'preset_name', '') in ('LORD_NASHERS_MANOR', 'CASTLE')):
-        stone_tier = 'TIER_3'
-    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone(f"{mat_prefix}Stone", color=props.color_stone, tier=stone_tier)
+    # 0. Stone (stone_wall_diffuse.jpg / mud_fieldstone / squared_fieldstone / ashlar_stone / rough reef stone)
+    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+        mat_stone = getattr(props, 'custom_stone', None) or create_stylized_rough_reef_stone(f"{mat_prefix}Stone", color=getattr(props, 'color_stone', None))
+    else:
+        stone_tier = tier
+        if tier == 'TIER_2' and (getattr(props, 'has_castle_citadel', False) or 
+                                 getattr(props, 'has_curtain_wall', False) or 
+                                 getattr(props, 'castle_tier', '') in ('TIER_2', 'TIER_3') or
+                                 getattr(props, 'archetype', '') == 'CASTLE' or
+                                 getattr(props, 'building_archetype', '') == 'CASTLE' or
+                                 getattr(props, 'preset_name', '') in ('LORD_NASHERS_MANOR', 'CASTLE')):
+            stone_tier = 'TIER_3'
+        mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone(f"{mat_prefix}Stone", color=getattr(props, 'color_stone', (0.6, 0.6, 0.6, 1.0)), tier=stone_tier)
 
     # 1. Plaster (wattle_daub / stucco_plaster / smooth_ivory_stucco)
+    clr_wall = getattr(props, 'color_wall_ext', (0.85, 0.82, 0.76, 1.0))
     freq = getattr(props, 'exposed_brick_frequency', 0.25)
     from .style import is_tier1_wattle_daub
     if eff_wall_mat == 'WATTLE_DAUB' or (tier == 'TIER_1' and is_tier1_wattle_daub(props)):
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_plaster(f"{mat_prefix}WattleDaub", color=props.color_wall_ext, is_interior=False, tier='TIER_1'))
+                       create_stylized_plaster(f"{mat_prefix}WattleDaub", color=clr_wall, is_interior=False, tier='TIER_1'))
     elif eff_wall_mat == 'STUCCO':
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_plaster(f"{mat_prefix}Plaster", color=props.color_wall_ext, is_interior=False, tier='TIER_2'))
+                       create_stylized_plaster(f"{mat_prefix}Plaster", color=clr_wall, is_interior=False, tier='TIER_2'))
     elif eff_wall_mat == 'STONE':
         # Stone buildings STILL have separate authentic plaster for timber-framing infill & interior walls
         mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                       create_stylized_plaster(f"{mat_prefix}Plaster", color=props.color_wall_ext, is_interior=False, tier=tier))
+                       create_stylized_plaster(f"{mat_prefix}Plaster", color=clr_wall, is_interior=False, tier=tier))
     else:
         if tier != 'TIER_1' and getattr(props, 'has_exposed_brick', False):
             mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
-                           create_stylized_plaster_brick(f"{mat_prefix}Plaster", color=props.color_wall_ext, frequency=freq))
+                           create_stylized_plaster_brick(f"{mat_prefix}Plaster", color=clr_wall, frequency=freq))
         else:
             mat_plaster = (getattr(props, 'custom_wall_ext', None) or 
                            getattr(props, 'custom_wall_int', None) or 
-                           create_stylized_plaster(f"{mat_prefix}Plaster", color=props.color_wall_ext, is_interior=False, tier=tier))
+                           create_stylized_plaster(f"{mat_prefix}Plaster", color=clr_wall, is_interior=False, tier=tier))
 
-    # 2. Timber (fachwerk_timber / oiled_timber / timber_beam)
+    # 2. Timber (fachwerk_timber / oiled_timber / timber_beam / driftwood)
     clr_tf = getattr(props, 'color_timber_frame', None) or (0.24, 0.14, 0.08, 1.0)
     custom_tf = (getattr(props, 'custom_timber_frame', None) or 
                  getattr(props, 'custom_door', None) or 
@@ -2892,11 +2896,17 @@ def setup_building_material_slots(obj, props):
                  getattr(props, 'custom_railing', None) or 
                  getattr(props, 'custom_window_frame', None) or 
                  getattr(props, 'custom_shutter', None))
-    mat_timber = custom_tf or create_stylized_timber(f"{mat_prefix}Timber", color=clr_tf, tier=tier)
+    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+        mat_timber = custom_tf or create_stylized_driftwood(f"{mat_prefix}Timber", color=clr_tf)
+    else:
+        mat_timber = custom_tf or create_stylized_timber(f"{mat_prefix}Timber", color=clr_tf, tier=tier)
 
-    # 3. Floor (floorboards variations)
+    # 3. Floor (floorboards variations / driftwood deck)
     clr_floor = getattr(props, 'color_floor', None) or (0.50, 0.35, 0.20, 1.0)
-    mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards(f"{mat_prefix}Floor", color=clr_floor, tier=tier)
+    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+        mat_floor = getattr(props, 'custom_floor', None) or create_stylized_driftwood(f"{mat_prefix}Floor", color=clr_floor)
+    else:
+        mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards(f"{mat_prefix}Floor", color=clr_floor, tier=tier)
 
     # 4. Shingles (thatch / wood shingles / terracotta / slate / bone shingles)
     if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
@@ -2932,13 +2942,19 @@ def setup_building_material_slots(obj, props):
     # 6. Iron (iron_metal_diffuse.jpg)
     mat_iron = getattr(props, 'custom_iron', None) or create_stylized_iron(f"{mat_prefix}Iron")
 
-    # 7. Wood (facade planks, dormer cheeks, weatherboards)
+    # 7. Wood (facade planks, dormer cheeks, weatherboards / driftwood)
     clr_wood = getattr(props, 'color_timber', None) or (0.86, 0.74, 0.58, 1.0)
-    mat_wood = getattr(props, 'custom_timber', None) or create_stylized_facade_planks(f"{mat_prefix}Wood", color=clr_wood, tier=tier)
+    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+        mat_wood = getattr(props, 'custom_timber', None) or create_stylized_driftwood(f"{mat_prefix}Wood", color=clr_wood)
+    else:
+        mat_wood = getattr(props, 'custom_timber', None) or create_stylized_facade_planks(f"{mat_prefix}Wood", color=clr_wood, tier=tier)
 
     # 8. Cut Stone (steps, sills, door arches, thresholds)
     clr_cs = getattr(props, 'color_cut_stone', None) or (0.78, 0.74, 0.68, 1.0)
-    mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone(f"{mat_prefix}Cut_Stone", color=clr_cs, tier=tier)
+    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+        mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_rough_reef_stone(f"{mat_prefix}Cut_Stone", color=clr_cs)
+    else:
+        mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone(f"{mat_prefix}Cut_Stone", color=clr_cs, tier=tier)
 
     # 9. Log (stylized_log_bark_diffuse.png / log_bark_diffuse.jpg) - Tier 1 rounded logs
     clr_log = (clr_tf[0] * 0.92, clr_tf[1] * 0.88, clr_tf[2] * 0.82, 1.0)
@@ -2950,7 +2966,7 @@ def setup_building_material_slots(obj, props):
 
     # 11. Plaster with Exposed Brick (plaster_wall_diffuse.jpg + handpainted terracotta bricks)
     mat_plaster_brick = (getattr(props, 'custom_wall_brick', None) or 
-                         create_stylized_plaster_brick("M_Building_Plaster_Brick", color=props.color_wall_ext, frequency=freq))
+                         create_stylized_plaster_brick("M_Building_Plaster_Brick", color=clr_wall, frequency=freq))
 
     # 12. Clock Face (plain painted-white enamel dial)
     mat_clock_face = getattr(props, 'custom_clock_face', None) or create_stylized_clock_face(
@@ -3030,7 +3046,7 @@ def setup_building_material_slots(obj, props):
     mat_lantern = (getattr(props, 'custom_lantern', None) or
                    create_lantern_emissive(
                        "LanternEmissive",
-                       glow_strength=max(3.0, props.window_glow_strength * 1.8)))
+                       glow_strength=max(3.0, getattr(props, 'window_glow_strength', 0.0) * 1.8)))
 
     # 20. Tarp / Coarse Textile Fabric (tarp_fabric_diffuse.png)
     mat_tarp = getattr(props, 'custom_tarp', None) or create_stylized_tarp("M_Building_Tarp")

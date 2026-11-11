@@ -40,8 +40,163 @@ from .mesh_utils import (
 
 
 # =============================================================================
-# SIGNATURE ARCHITECTURAL COMPONENTS
+# SIGNATURE ARCHITECTURAL COMPONENTS & INTERIOR CIRCULATION
 # =============================================================================
+
+def _build_railing_segment(bm, x0, x1, y0, y1, z_base, height=1.0):
+    """Builds a sturdy timber railing line with end posts and top/mid rails."""
+    seg_len = math.hypot(x1 - x0, y1 - y0)
+    if seg_len < 0.2:
+        return
+    yaw = math.atan2(y1 - y0, x1 - x0)
+    mx = (x0 + x1) * 0.5
+    my = (y0 + y1) * 0.5
+
+    # Corner posts at each end
+    for px, py in ((x0, y0), (x1, y1)):
+        create_cylinder(bm, radius=0.08, height=height, segments=6,
+                        location=(px, py, z_base + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # Top rail
+    create_box(bm, (seg_len, 0.12, 0.08), (mx, my, z_base + height),
+               rotation=(0, 0, yaw), mat_index=MAT_INDEX_DRIFTWOOD)
+    # Mid rail
+    create_box(bm, (seg_len, 0.08, 0.06), (mx, my, z_base + height * 0.5),
+               rotation=(0, 0, yaw), mat_index=MAT_INDEX_DRIFTWOOD)
+
+
+def _build_hajfin_interior_staircase(bm, x0, y0, z0, x1, y1, z1, width=1.60, with_railing=True):
+    """Builds a wide, chunky pirate timber staircase calibrated for 2-3m tall Hajfin characters.
+    Runs from (x0, y0, z0) at the bottom floor to (x1, y1, z1) at the upper floor landing.
+    Features heavy drift timber stringers, thick floor-plank treads, and a rough rope/timber handrail."""
+    dx = x1 - x0
+    dy = y1 - y0
+    dz = z1 - z0
+    run_len = math.hypot(dx, dy)
+    yaw = math.atan2(dy, dx)
+    cos_yaw = dx / max(0.001, run_len)
+    sin_yaw = dy / max(0.001, run_len)
+
+    # Perpendicular unit vector (across stair width)
+    px = -sin_yaw
+    py = cos_yaw
+
+    num_steps = max(6, int(dz / 0.26))
+    step_dz = dz / num_steps
+    step_drun = run_len / num_steps
+
+    # 1. Thick Drift Plank Treads
+    for i in range(num_steps):
+        s_mid_run = (i + 0.5) * step_drun
+        sx = x0 + cos_yaw * s_mid_run
+        sy = y0 + sin_yaw * s_mid_run
+        sz = z0 + (i + 0.5) * step_dz
+        create_box(bm, (step_drun * 1.08, width, 0.12), (sx, sy, sz),
+                   rotation=(0, 0, yaw), mat_index=MAT_INDEX_FLOOR)
+
+    # 2. Heavy Timber Stringer Beams (Left & Right)
+    slope_len = math.hypot(run_len, dz)
+    pitch = math.atan2(dz, run_len)
+    for sgn_p in (-0.5, 0.5):
+        str_x = (x0 + x1) * 0.5 + px * (width * sgn_p)
+        str_y = (y0 + y1) * 0.5 + py * (width * sgn_p)
+        str_z = (z0 + z1) * 0.5 - 0.08
+        create_box(bm, (slope_len * 1.02, 0.18, 0.28), (str_x, str_y, str_z),
+                   rotation=(0, -pitch, yaw), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 3. Rough Timber & Rope Handrail on the inner room side
+    if with_railing:
+        rail_side = -0.5
+        num_posts = max(3, int(run_len / 1.5) + 1)
+        for pi in range(num_posts):
+            t_post = pi / max(1, num_posts - 1)
+            pos_x = x0 + dx * t_post + px * (width * rail_side)
+            pos_y = y0 + dy * t_post + py * (width * rail_side)
+            pos_z = z0 + dz * t_post + 0.50
+            create_cylinder(bm, radius=0.07, height=1.0, segments=6,
+                            location=(pos_x, pos_y, pos_z), mat_index=MAT_INDEX_DRIFTWOOD)
+            # Rope tie ring
+            create_torus_ring(bm, (pos_x, pos_y, pos_z + 0.42), major_radius=0.09, minor_radius=0.02,
+                              mat_index=MAT_INDEX_ROPE)
+
+        # Top handrail beam running along the slope
+        top_rail_x = (x0 + x1) * 0.5 + px * (width * rail_side)
+        top_rail_y = (y0 + y1) * 0.5 + py * (width * rail_side)
+        top_rail_z = (z0 + z1) * 0.5 + 0.95
+        create_box(bm, (slope_len * 1.02, 0.10, 0.08), (top_rail_x, top_rail_y, top_rail_z),
+                   rotation=(0, -pitch, yaw), mat_index=MAT_INDEX_DRIFTWOOD)
+
+
+def _build_hajfin_floor_slab_with_stairwell(bm, x0, x1, y0, y1, z_floor,
+                                            stair_x0=None, stair_x1=None,
+                                            stair_y0=None, stair_y1=None,
+                                            slab_th=0.18, with_railing=True,
+                                            open_exit_side='NORTH'):
+    """Builds a complete, accessible timber floor deck spanning [x0, x1] x [y0, y1] at z_floor.
+    Leaves an open stairwell cutout [stair_x0, stair_x1] x [stair_y0, stair_y1] with protective
+    timber balustrades on the non-exit sides, and heavy supporting ceiling joists underneath."""
+    # 1. Structural Timber Ceiling Joists running under floor
+    joist_spacing = 2.2
+    num_joists = max(2, int((x1 - x0) / joist_spacing) + 1)
+    for ji in range(num_joists):
+        jx = x0 + ji * ((x1 - x0) / max(1, num_joists - 1))
+        if stair_x0 is not None and stair_x0 < jx < stair_x1:
+            if stair_y0 > y0:
+                jy = (y0 + stair_y0) * 0.5
+                create_box(bm, (0.24, stair_y0 - y0, 0.28), (jx, jy, z_floor - slab_th - 0.14), mat_index=MAT_INDEX_DRIFTWOOD)
+            if stair_y1 < y1:
+                jy = (stair_y1 + y1) * 0.5
+                create_box(bm, (0.24, y1 - stair_y1, 0.28), (jx, jy, z_floor - slab_th - 0.14), mat_index=MAT_INDEX_DRIFTWOOD)
+        else:
+            create_box(bm, (0.24, (y1 - y0), 0.28), (jx, (y0 + y1) * 0.5, z_floor - slab_th - 0.14), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 2. Floor Slabs around Stairwell
+    if stair_x0 is None or stair_x1 is None or stair_y0 is None or stair_y1 is None:
+        create_box(bm, (x1 - x0, y1 - y0, slab_th), ((x0 + x1) * 0.5, (y0 + y1) * 0.5, z_floor - slab_th * 0.5),
+                   mat_index=MAT_INDEX_FLOOR)
+        return
+
+    sx0 = max(x0, min(x1, stair_x0))
+    sx1 = max(x0, min(x1, stair_x1))
+    sy0 = max(y0, min(y1, stair_y0))
+    sy1 = max(y0, min(y1, stair_y1))
+
+    # A. Slab left of stairwell (x0 to sx0)
+    if sx0 - x0 > 0.05:
+        w_a = sx0 - x0
+        create_box(bm, (w_a, y1 - y0, slab_th), (x0 + w_a * 0.5, (y0 + y1) * 0.5, z_floor - slab_th * 0.5),
+                   mat_index=MAT_INDEX_FLOOR)
+
+    # B. Slab right of stairwell (sx1 to x1)
+    if x1 - sx1 > 0.05:
+        w_b = x1 - sx1
+        create_box(bm, (w_b, y1 - y0, slab_th), (sx1 + w_b * 0.5, (y0 + y1) * 0.5, z_floor - slab_th * 0.5),
+                   mat_index=MAT_INDEX_FLOOR)
+
+    # C. Slab below stairwell (y0 to sy0) across [sx0, sx1]
+    if sy0 - y0 > 0.05:
+        d_c = sy0 - y0
+        create_box(bm, (sx1 - sx0, d_c, slab_th), ((sx0 + sx1) * 0.5, y0 + d_c * 0.5, z_floor - slab_th * 0.5),
+                   mat_index=MAT_INDEX_FLOOR)
+
+    # D. Slab above stairwell (sy1 to y1) across [sx0, sx1]
+    if y1 - sy1 > 0.05:
+        d_d = y1 - sy1
+        create_box(bm, (sx1 - sx0, d_d, slab_th), ((sx0 + sx1) * 0.5, sy1 + d_d * 0.5, z_floor - slab_th * 0.5),
+                   mat_index=MAT_INDEX_FLOOR)
+
+    # 3. Protective Railings around the stairwell opening on the upper floor
+    if with_railing:
+        rail_h = 1.0
+        if open_exit_side != 'NORTH' and sy1 < y1 - 0.2:
+            _build_railing_segment(bm, sx0, sx1, sy1, sy1, z_floor, rail_h)
+        if open_exit_side != 'SOUTH' and sy0 > y0 + 0.2:
+            _build_railing_segment(bm, sx0, sx1, sy0, sy0, z_floor, rail_h)
+        if open_exit_side != 'WEST' and sx0 > x0 + 0.2:
+            _build_railing_segment(bm, sx0, sx0, sy0, sy1, z_floor, rail_h)
+        if open_exit_side != 'EAST' and sx1 < x1 - 0.2:
+            _build_railing_segment(bm, sx1, sx1, sy0, sy1, z_floor, rail_h)
+
 
 def _build_chunky_corner_column(bm, x, y, z0, z1, size=0.42, extend_top=0.38, with_spikes=True):
     """Oversized square timber column extending proudly above eaves with beveled cap, iron brackets, and spikes."""
@@ -225,44 +380,68 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26):
             create_box(bm, (plank_w, wall_th, dz * 1.02), (mx, y, pz0 + dz * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
 
-def _build_wall_with_window(bm, x0, x1, y, z0, z1, win_cx, win_cz, win_w=0.75, win_h=0.75,
-                            wall_th=0.26, rot_z=0.0):
-    """Builds a wall with an actual recessed window opening, bone frame, and iron bars."""
-    rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
+def _build_wall_with_window_x(bm, x0, x1, y, z0, z1, win_cx, win_cz, win_w=0.75, win_h=0.75,
+                              wall_th=0.26, facing_north=False):
+    """Builds a wall along the X axis (from x0 to x1 at constant y) with a window cutout and frame."""
     w_half_w = win_w * 0.5
     w_half_h = win_h * 0.5
 
     # 1. Below Window Wall
     sill_h = (win_cz - w_half_h) - z0
     if sill_h > 0.05:
-        pos = rot_mat @ Vector((win_cx, y, z0 + sill_h * 0.5))
-        create_box(bm, (win_w, wall_th, sill_h), (pos.x, pos.y, pos.z),
-                   rotation=(0, 0, rot_z), mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (win_w, wall_th, sill_h), (win_cx, y, z0 + sill_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
     # 2. Above Window Wall
     header_h = z1 - (win_cz + w_half_h)
     if header_h > 0.05:
-        pos = rot_mat @ Vector((win_cx, y, win_cz + w_half_h + header_h * 0.5))
-        create_box(bm, (win_w, wall_th, header_h), (pos.x, pos.y, pos.z),
-                   rotation=(0, 0, rot_z), mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (win_w, wall_th, header_h), (win_cx, y, win_cz + w_half_h + header_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 3. Left Wall
+    # 3. Left Wall Segment
     left_w = (win_cx - w_half_w) - x0
     if left_w > 0.05:
-        pos = rot_mat @ Vector((x0 + left_w * 0.5, y, z0 + (z1 - z0) * 0.5))
-        create_box(bm, (left_w, wall_th, z1 - z0), (pos.x, pos.y, pos.z),
-                   rotation=(0, 0, rot_z), mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (left_w, wall_th, z1 - z0), (x0 + left_w * 0.5, y, z0 + (z1 - z0) * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 4. Right Wall
+    # 4. Right Wall Segment
     right_w = x1 - (win_cx + w_half_w)
     if right_w > 0.05:
-        pos = rot_mat @ Vector((win_cx + w_half_w + right_w * 0.5, y, z0 + (z1 - z0) * 0.5))
-        create_box(bm, (right_w, wall_th, z1 - z0), (pos.x, pos.y, pos.z),
-                   rotation=(0, 0, rot_z), mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (right_w, wall_th, z1 - z0), (win_cx + w_half_w + right_w * 0.5, y, z0 + (z1 - z0) * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
     # 5. Window Frame & Iron Bars inside opening
-    win_pos = rot_mat @ Vector((win_cx, y - wall_th * 0.45, win_cz))
-    _build_bone_window(bm, win_pos.x, win_pos.y, win_pos.z, rot_z=rot_z, w=win_w, h=win_h)
+    frame_y = y + (wall_th * 0.45 if facing_north else -wall_th * 0.45)
+    rot_z = math.pi if facing_north else 0.0
+    _build_bone_window(bm, win_cx, frame_y, win_cz, rot_z=rot_z, w=win_w, h=win_h)
+
+
+def _build_wall_with_window_y(bm, y0, y1, x, z0, z1, win_cy, win_cz, win_w=0.75, win_h=0.75,
+                              wall_th=0.26, facing_east=False):
+    """Builds a wall along the Y axis (from y0 to y1 at constant x) with a window cutout and frame."""
+    w_half_w = win_w * 0.5
+    w_half_h = win_h * 0.5
+
+    # 1. Below Window Wall
+    sill_h = (win_cz - w_half_h) - z0
+    if sill_h > 0.05:
+        create_box(bm, (wall_th, win_w, sill_h), (x, win_cy, z0 + sill_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 2. Above Window Wall
+    header_h = z1 - (win_cz + w_half_h)
+    if header_h > 0.05:
+        create_box(bm, (wall_th, win_w, header_h), (x, win_cy, win_cz + w_half_h + header_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 3. Front Wall Segment (smaller y)
+    front_w = (win_cy - w_half_w) - y0
+    if front_w > 0.05:
+        create_box(bm, (wall_th, front_w, z1 - z0), (x, y0 + front_w * 0.5, z0 + (z1 - z0) * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 4. Back Wall Segment (larger y)
+    back_w = y1 - (win_cy + w_half_w)
+    if back_w > 0.05:
+        create_box(bm, (wall_th, back_w, z1 - z0), (x, win_cy + w_half_w + back_w * 0.5, z0 + (z1 - z0) * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 5. Window Frame & Iron Bars inside opening
+    frame_x = x + (wall_th * 0.45 if facing_east else -wall_th * 0.45)
+    rot_z = math.pi * 0.5 if facing_east else -math.pi * 0.5
+    _build_bone_window(bm, frame_x, win_cy, win_cz, rot_z=rot_z, w=win_w, h=win_h)
 
 
 def _build_bone_window(bm, x, y, z, rot_z=0.0, w=0.75, h=0.75):
@@ -628,80 +807,137 @@ def _build_bone_scale_roof_conical(bm, cx, cy, eave_z, radius, height,
 # DEDICATED HAJFIN PRESET ARCHETYPE ASSEMBLERS
 # =============================================================================
 
-def _build_hajfin_shanty(bm, props, width=6.5, depth=7.5, height=3.6, found_h=1.2):
+def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.2):
     """The Quintessential Hajfin Pirate Shanty (Image 6):
-    Real doorway cutout with recessed door, full gable triangle walls, 4 massive corner columns
-    extending above eaves, bone fin emblem, and bone-scale gable roof with ridge fin."""
+    Scaled for 2-3m tall Hajfin characters with accessible hollow interior.
+    Supports single-story vaulted interiors or two full stories with internal timber staircase,
+    upper floor deck with stairwell cutout, real doorway cutout, full gable triangle walls,
+    4 massive corner columns extending above eaves, bone fin emblem, and bone-scale gable roof with ridge fin."""
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
     z1 = z0 + height
     wall_th = 0.26
-    roof_h = 3.2
+    num_fl = max(1, getattr(props, 'num_floors', 1))
+    roof_h = max(3.4, width * 0.42)
     peak_z = z1 + roof_h
 
     # 1. Elevated Pier Stilts if foundation height > 0
     if found_h > 0.2:
         _build_stilt_substructure(bm, -hw, hw, -hd, hd, found_h)
 
-    # 2. Left & Right Walls with Window Openings
-    _build_wall_with_window(bm, -hd, hd, -hw + wall_th * 0.5, z0, z1,
-                            win_cx=0.0, win_cz=z0 + height * 0.52,
-                            win_w=0.75, win_h=0.75, wall_th=wall_th, rot_z=-math.pi * 0.5)
-    _build_wall_with_window(bm, -hd, hd, hw - wall_th * 0.5, z0, z1,
-                            win_cx=0.0, win_cz=z0 + height * 0.52,
-                            win_w=0.75, win_h=0.75, wall_th=wall_th, rot_z=math.pi * 0.5)
+    # 2. Ground Floor Slab (Accessible Walkable Interior)
+    create_box(bm, (width - wall_th * 2, depth - wall_th * 2, 0.14),
+               (0.0, 0.0, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
 
-    # 3. Rear Wall (Solid)
-    create_box(bm, (width - wall_th * 2, wall_th, height),
-               (0.0, hd - wall_th * 0.5, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    door_w = float(getattr(props, 'door_width', 1.80))
+    door_h = float(getattr(props, 'door_height', 3.50))
+    # Ensure door fits within ground story height
+    door_h = min(door_h, (height / num_fl) * 0.85)
 
-    # 4. Front Wall with REAL DOOR OPENING (No door leaf by default for UE export)
-    door_w = 1.40
-    door_h = min(2.5, height * 0.72)
-    _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
-                                  z0, z1, door_cx=0.0, door_w=door_w, door_h=door_h,
-                                  wall_th=wall_th, rot_z=0.0,
-                                  include_leaf=getattr(props, 'include_door_leaves', False))
+    if num_fl >= 2:
+        story_h = height / num_fl
+        z_mid = z0 + story_h
 
-    # 5. Solid Gable Triangle Walls (Front & Rear) - SEALS ROOF GAPS 100%
+        # GROUND FLOOR WALLS
+        _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z_mid,
+                                  win_cy=0.0, win_cz=z0 + story_h * 0.52,
+                                  win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=False)
+        _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
+                                  win_cy=hd * 0.35, win_cz=z0 + story_h * 0.52,
+                                  win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=True)
+        create_box(bm, (width - wall_th * 2, wall_th, story_h),
+                   (0.0, hd - wall_th * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+        _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
+                                      z0, z_mid, door_cx=-0.4, door_w=door_w, door_h=door_h,
+                                      wall_th=wall_th, rot_z=0.0,
+                                      include_leaf=getattr(props, 'include_door_leaves', False))
+
+        # INTERIOR STAIRCASE & UPPER FLOOR DECK WITH STAIRWELL CUTOUT
+        stair_w = 1.60
+        stair_x0 = hw - wall_th - stair_w - 0.2
+        stair_x1 = hw - wall_th - 0.2
+        stair_y0 = -hd + 1.8
+        stair_y1 = -hd + 5.8
+        _build_hajfin_floor_slab_with_stairwell(bm, -hw + wall_th, hw - wall_th, -hd + wall_th, hd - wall_th,
+                                                z_mid, stair_x0, stair_x1, stair_y0, stair_y1,
+                                                open_exit_side='NORTH')
+        _build_hajfin_interior_staircase(bm, x0=(stair_x0 + stair_x1) * 0.5, y0=stair_y0 + 0.2, z0=z0,
+                                         x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1 - 0.4, z1=z_mid,
+                                         width=stair_w)
+
+        # UPPER FLOOR WALLS
+        _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
+                                  win_cy=0.0, win_cz=z_mid + story_h * 0.52,
+                                  win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=False)
+        _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
+                                  win_cy=-hd * 0.35, win_cz=z_mid + story_h * 0.52,
+                                  win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=True)
+        _build_wall_with_window_x(bm, -hw + wall_th, hw - wall_th, hd - wall_th * 0.5, z_mid, z1,
+                                  win_cx=0.0, win_cz=z_mid + story_h * 0.52,
+                                  win_w=0.85, win_h=0.85, wall_th=wall_th, facing_north=True)
+        _build_wall_with_window_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z_mid, z1,
+                                  win_cx=0.0, win_cz=z_mid + story_h * 0.52,
+                                  win_w=0.85, win_h=0.85, wall_th=wall_th, facing_north=False)
+    else:
+        # SINGLE STORY VAULTED INTERIOR
+        _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z1,
+                                  win_cy=0.0, win_cz=z0 + height * 0.52,
+                                  win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=False)
+        _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z1,
+                                  win_cy=0.0, win_cz=z0 + height * 0.52,
+                                  win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=True)
+        create_box(bm, (width - wall_th * 2, wall_th, height),
+                   (0.0, hd - wall_th * 0.5, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+        _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
+                                      z0, z1, door_cx=-0.4, door_w=door_w, door_h=door_h,
+                                      wall_th=wall_th, rot_z=0.0,
+                                      include_leaf=getattr(props, 'include_door_leaves', False))
+
+        # Exposed heavy timber collar tie beams spanning across ceiling
+        for ty in (-hd * 0.5, 0.0, hd * 0.5):
+            create_box(bm, (width - wall_th * 2, 0.22, 0.26), (0.0, ty, z1 - 0.15), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 3. Solid Gable Triangle Walls (Front & Rear) - SEALS ROOF GAPS 100%
     _build_gable_triangle_wall(bm, -hw, hw, -hd + wall_th * 0.5, z1, peak_z, wall_th=wall_th)
     _build_gable_triangle_wall(bm, -hw, hw, hd - wall_th * 0.5, z1, peak_z, wall_th=wall_th)
 
-    # 6. 4 Oversized Timber Corner Columns
-    col_size = 0.44
+    # 4. 4 Oversized Timber Corner Columns
+    col_size = 0.46
     for cx in (-hw, hw):
         for cy in (-hd, hd):
             _build_chunky_corner_column(bm, cx, cy, z0, z1, size=col_size, extend_top=0.45)
 
-    # 7. Dense Bone Scale Gable Roof
+    # 5. Dense Bone Scale Gable Roof
     _build_bone_scale_roof_gable(bm, -hw, hw, -hd, hd, z1, roof_h,
                                  overhang_x=0.55, overhang_y=0.55, fin_scale=1.5, num_ridge_teeth=7)
 
 
-def _build_hajfin_round_hut(bm, props, diameter=7.5, height=3.8, found_h=0.8):
+def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
     """The Tapered Round Bone-Scale Hut (Image 2):
+    Scaled for 2-3m tall Hajfin characters with accessible hollow interior.
     8-sided tapered conical timber hut, massive perimeter posts flanking doorways, conical bone-scale roof
     with solid underlay, central shark fin crown with bone spears, shark jaw door with open walkthrough
-    (no door leaf by default for UE export), and massive whale vertebrae buttress curving up the rear wall!"""
+    (no door leaf by default for UE export), accessible upper mezzanine loft with interior timber stairs,
+    and massive whale vertebrae buttress curving up the rear wall!"""
     r_base = diameter * 0.5
     r_top = r_base * 0.82
     z0 = found_h
     z1 = z0 + height
     num_facets = 8
-    wall_th = 0.24
+    wall_th = 0.26
+    num_fl = max(1, getattr(props, 'num_floors', 1))
     include_leaves = getattr(props, 'include_door_leaves', False)
 
     # 1. Reef stone foundation ring
     create_cylinder(bm, radius=r_base * 1.05, height=found_h + 0.1, segments=num_facets,
                     location=(0.0, 0.0, found_h * 0.5), mat_index=MAT_INDEX_ROUGH_STONE)
 
-    # Interior wooden floor slab
-    create_cylinder(bm, radius=r_base * 0.98, height=0.12, segments=num_facets,
-                    location=(0.0, 0.0, z0 + 0.06), mat_index=MAT_INDEX_FLOOR)
+    # Interior wooden floor slab across entire circular ground floor
+    create_cylinder(bm, radius=r_base * 0.98, height=0.14, segments=num_facets,
+                    location=(0.0, 0.0, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
 
     # 2. Tapered 8-sided body shell (7 solid facets, Facet 6 is South Doorway)
-    # Lean angle of the walls inward towards top
     lean_pitch = math.atan2(r_base - r_top, height)
     facet_w_bot = 2.0 * r_base * math.sin(math.pi / num_facets)
     facet_w_top = 2.0 * r_top * math.sin(math.pi / num_facets)
@@ -709,26 +945,23 @@ def _build_hajfin_round_hut(bm, props, diameter=7.5, height=3.8, found_h=0.8):
     facet_dist_top = r_top * math.cos(math.pi / num_facets)
     mid_dist = (facet_dist_bot + facet_dist_top) * 0.5
 
-    door_w = 1.35
-    door_h = 2.40
+    door_w = float(getattr(props, 'door_width', 1.85))
+    door_h = float(getattr(props, 'door_height', 3.50))
+    door_h = min(door_h, height * 0.82)
 
     for i in range(num_facets):
         ac = i * (2.0 * math.pi / num_facets)  # 0=E, 2=N, 4=W, 6=S
         if i == 6:
             # SOUTH DOOR FACET: Real cut doorway opening!
-            # Left jamb
             jamb_w = (facet_w_bot - door_w) * 0.5
             if jamb_w > 0.05:
-                # Left wall segment
                 lx = -door_w * 0.5 - jamb_w * 0.5
                 create_box(bm, (jamb_w, wall_th, height), (lx, -mid_dist, z0 + height * 0.5),
                            rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD)
-                # Right wall segment
                 rx = door_w * 0.5 + jamb_w * 0.5
                 create_box(bm, (jamb_w, wall_th, height), (rx, -mid_dist, z0 + height * 0.5),
                            rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD)
 
-            # Lintel segment above door up to eave
             lintel_h = height - door_h
             if lintel_h > 0.05:
                 create_box(bm, (door_w, wall_th, lintel_h),
@@ -737,29 +970,26 @@ def _build_hajfin_round_hut(bm, props, diameter=7.5, height=3.8, found_h=0.8):
                            rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD)
 
             # Threshold sill beam at bottom
-            create_box(bm, (door_w + 0.20, wall_th + 0.08, 0.12), (0.0, -facet_dist_bot, z0 - 0.05),
+            create_box(bm, (door_w + 0.30, wall_th + 0.10, 0.14), (0.0, -facet_dist_bot, z0 - 0.05),
                        mat_index=MAT_INDEX_FLOOR)
 
-            # Carved bone shark fin emblem plaque above door header (Image 2)
+            # Carved bone shark fin emblem plaque above door header
             emblem_z = z0 + door_h + 0.45
-            create_box(bm, (0.65, 0.06, 0.45),
+            create_box(bm, (0.75, 0.06, 0.50),
                        (0.0, -mid_dist - (emblem_z - z0 - height * 0.5) * math.tan(lean_pitch) - 0.05, emblem_z),
                        rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_BONE)
-            create_cone(bm, radius1=0.22, radius2=0.03, height=0.38, segments=4,
+            create_cone(bm, radius1=0.25, radius2=0.03, height=0.45, segments=4,
                         location=(0.0, -mid_dist - (emblem_z - z0 - height * 0.5) * math.tan(lean_pitch) - 0.12, emblem_z + 0.05),
                         rotation=(math.pi * 0.5 - lean_pitch, 0.2, 0), mat_index=MAT_INDEX_BONE)
 
-            # Optional recessed door leaf (ONLY if include_leaves is True!)
             if include_leaves:
                 create_box(bm, (door_w * 0.90, 0.08, door_h * 0.96),
                            (0.0, -mid_dist + 0.10, z0 + door_h * 0.48),
                            rotation=(-lean_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD)
 
-            # Shark jaw bone archway framing the opening
+            # Giant Shark jaw bone archway framing the opening
             _build_shark_jaw_arch(bm, 0.0, -facet_dist_bot, z0, rot_z=0.0, width=door_w * 1.15, height=door_h * 1.05)
         else:
-            # Solid tapered wall panel for other 7 facets
-            # Positioned at facet center with inward lean
             fc_x = math.cos(ac) * mid_dist
             fc_y = math.sin(ac) * mid_dist
             p_rot = (lean_pitch * math.sin(ac), -lean_pitch * math.cos(ac), ac - math.pi * 0.5)
@@ -768,8 +998,7 @@ def _build_hajfin_round_hut(bm, props, diameter=7.5, height=3.8, found_h=0.8):
                        rotation=p_rot, mat_index=MAT_INDEX_DRIFTWOOD)
 
     # 3. Perimeter Timber Corner Posts at Vertex Junctions
-    # Placed at vertex angles so they flank each facet (and flank the door!)
-    col_size = 0.38
+    col_size = 0.44
     for i in range(num_facets):
         v_ang = (i - 0.5) * (2.0 * math.pi / num_facets)
         bx = math.cos(v_ang) * r_base
@@ -780,12 +1009,12 @@ def _build_hajfin_round_hut(bm, props, diameter=7.5, height=3.8, found_h=0.8):
 
         mid_x = (bx + tx) * 0.5
         mid_y = (by + ty) * 0.5
-        create_box(bm, (col_size, col_size, height + 0.35), (mid_x, mid_y, z0 + height * 0.5),
+        create_box(bm, (col_size, col_size, height + 0.40), (mid_x, mid_y, z0 + height * 0.5),
                    rotation=post_rot, mat_index=MAT_INDEX_DRIFTWOOD)
 
-        create_box(bm, (col_size + 0.04, col_size + 0.04, 0.22), (bx, by, z0 + 0.2),
+        create_box(bm, (col_size + 0.05, col_size + 0.05, 0.24), (bx, by, z0 + 0.2),
                    rotation=post_rot, mat_index=MAT_INDEX_IRON)
-        create_box(bm, (col_size + 0.04, col_size + 0.04, 0.22), (tx, ty, z1 - 0.2),
+        create_box(bm, (col_size + 0.05, col_size + 0.05, 0.24), (tx, ty, z1 - 0.2),
                    rotation=post_rot, mat_index=MAT_INDEX_IRON)
 
     # 4. Rear Whale Spine Buttress (North, ang = +pi/2)
@@ -795,24 +1024,50 @@ def _build_hajfin_round_hut(bm, props, diameter=7.5, height=3.8, found_h=0.8):
     for ang in (-math.pi * 0.75, -math.pi * 0.25):
         wx = math.cos(ang) * (r_base * 0.6 + r_top * 0.4)
         wy = math.sin(ang) * (r_base * 0.6 + r_top * 0.4)
-        _build_bone_window(bm, wx, wy, z0 + height * 0.55, rot_z=ang + math.pi * 0.5, w=0.68, h=0.68)
+        _build_bone_window(bm, wx, wy, z0 + height * 0.45, rot_z=ang + math.pi * 0.5, w=0.85, h=0.85)
+
+    # 6. Accessible Mezzanine Loft & Interior Staircase (if num_floors >= 2 or height >= 5.5)
+    if num_fl >= 2 or height >= 5.5:
+        z_mez = z0 + 3.8
+        mez_w = r_top * 1.85
+        mez_d = r_top * 0.92
+        # Mezzanine floor deck spanning rear half (y > 0)
+        create_box(bm, (mez_w, mez_d, 0.16), (0.0, r_top * 0.46, z_mez - 0.08), mat_index=MAT_INDEX_FLOOR)
+        # Heavy supporting cross-beam underneath mezzanine front edge
+        create_box(bm, (mez_w * 1.02, 0.26, 0.30), (0.0, 0.0, z_mez - 0.23), mat_index=MAT_INDEX_DRIFTWOOD)
+
+        # Protective timber balustrade along mezzanine front edge overlooking ground floor
+        _build_railing_segment(bm, -mez_w * 0.5 + 1.8, mez_w * 0.5, 0.0, 0.0, z_mez, height=1.0)
+
+        # Wide timber staircase along west wall up to mezzanine
+        stair_x = -r_base * 0.42
+        _build_hajfin_interior_staircase(bm, x0=stair_x, y0=-1.8, z0=z0,
+                                         x1=stair_x, y1=1.4, z1=z_mez, width=1.60)
+
+        # Upper bone windows on northwest and northeast upper walls
+        for u_ang in (math.pi * 0.25, math.pi * 0.75):
+            uwx = math.cos(u_ang) * (r_top * 0.92)
+            uwy = math.sin(u_ang) * (r_top * 0.92)
+            _build_bone_window(bm, uwx, uwy, z_mez + 1.2, rot_z=u_ang + math.pi * 0.5, w=0.75, h=0.75)
 
     # 7. Conical Bone Scale Roof with Solid Deck
-    roof_h = 3.2
+    roof_h = max(3.5, diameter * 0.35)
     _build_bone_scale_roof_conical(bm, 0.0, 0.0, z1, radius=r_top * 1.25, height=roof_h,
-                                   fin_scale=1.5, num_spears=4)
+                                   fin_scale=1.6, num_spears=4)
 
 
-def _build_hajfin_crate_blockhouse(bm, props, width=7.0, depth=7.0, height=5.5, found_h=0.8):
+def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, found_h=1.0):
     """The Heavy Timber Crate Blockhouse (Image 5):
-    Solid cubic timber fortress shack with heavy square framing, bolted iron corner plates,
-    flat planked deck roof with heavy beam rims, shark jaw doorway with real opening, and bone-framed windows."""
+    Two full accessible stories scaled for 2-3m tall Hajfin characters.
+    Solid cubic timber fortress with interior timber staircase, upper floor deck with stairwell cutout,
+    heavy square framing, bolted iron plates, open shark jaw doorway, and bone-framed windows."""
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
     z1 = z0 + height
     wall_th = 0.26
-    mid_z = z0 + height * 0.5
+    story_h = height * 0.5
+    z_mid = z0 + story_h
 
     # 1. Foundation base
     if getattr(props, 'found_type', 'STONE') == 'WOOD' or found_h >= 1.0:
@@ -821,65 +1076,101 @@ def _build_hajfin_crate_blockhouse(bm, props, width=7.0, depth=7.0, height=5.5, 
         create_box(bm, (width + 0.3, depth + 0.3, found_h + 0.1), (0.0, 0.0, found_h * 0.5),
                    mat_index=MAT_INDEX_ROUGH_STONE)
 
-    # 2. Walls with Real Cut Openings
+    # Ground floor slab
+    create_box(bm, (width - wall_th * 2, depth - wall_th * 2, 0.14),
+               (0.0, 0.0, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
+
+    # 2. Ground Floor Walls with Real Cut Openings
+    door_w = float(getattr(props, 'door_width', 1.85))
+    door_h = min(float(getattr(props, 'door_height', 3.50)), story_h * 0.85)
+
     # Left & Right walls with bone windows
-    _build_wall_with_window(bm, -hd, hd, -hw + wall_th * 0.5, z0, z1,
-                            win_cx=0.0, win_cz=z0 + height * 0.72,
-                            win_w=0.72, win_h=0.72, wall_th=wall_th, rot_z=-math.pi * 0.5)
-    _build_wall_with_window(bm, -hd, hd, hw - wall_th * 0.5, z0, z1,
-                            win_cx=0.0, win_cz=z0 + height * 0.72,
-                            win_w=0.72, win_h=0.72, wall_th=wall_th, rot_z=math.pi * 0.5)
+    _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z_mid,
+                              win_cy=hd * 0.25, win_cz=z0 + story_h * 0.52,
+                              win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=False)
+    _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
+                              win_cy=0.0, win_cz=z0 + story_h * 0.52,
+                              win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=True)
 
     # Rear wall
-    create_box(bm, (width - wall_th * 2, wall_th, height),
-               (0.0, hd - wall_th * 0.5, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (width - wall_th * 2, wall_th, story_h),
+               (0.0, hd - wall_th * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # Front wall with real door cutout (No door leaf by default for UE export)
-    door_w = 1.45
-    door_h = 2.45
+    # Front wall with real door cutout
     _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
-                                  z0, z1, door_cx=0.0, door_w=door_w, door_h=door_h,
+                                  z0, z_mid, door_cx=0.0, door_w=door_w, door_h=door_h,
                                   wall_th=wall_th, rot_z=0.0,
                                   include_leaf=getattr(props, 'include_door_leaves', False))
 
-    # Upper front windows
-    for sgn_x in (-1.0, 1.0):
-        _build_bone_window(bm, sgn_x * (hw * 0.5), -hd, z0 + height * 0.74, rot_z=0.0, w=0.70, h=0.70)
+    # 3. Interior Staircase & Upper Floor Deck with Stairwell Cutout
+    stair_w = 1.60
+    stair_x0 = -hw + wall_th + 0.2
+    stair_x1 = -hw + wall_th + stair_w + 0.2
+    stair_y0 = -hd + 1.8
+    stair_y1 = -hd + 5.8
+    _build_hajfin_floor_slab_with_stairwell(bm, -hw + wall_th, hw - wall_th, -hd + wall_th, hd - wall_th,
+                                            z_mid, stair_x0, stair_x1, stair_y0, stair_y1,
+                                            open_exit_side='NORTH')
+    _build_hajfin_interior_staircase(bm, x0=(stair_x0 + stair_x1) * 0.5, y0=stair_y0 + 0.2, z0=z0,
+                                     x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1 - 0.4, z1=z_mid,
+                                     width=stair_w)
 
-    # 3. Massive Square Corner Columns with L-Brackets
-    col_size = 0.48
+    # 4. Upper Floor Hollow Walls with Bone Windows
+    _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
+                              win_cy=hd * 0.25, win_cz=z_mid + story_h * 0.52,
+                              win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=False)
+    _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
+                              win_cy=0.0, win_cz=z_mid + story_h * 0.52,
+                              win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=True)
+    create_box(bm, (width - wall_th * 2, wall_th, story_h),
+               (0.0, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # Upper front wall with windows
+    for sgn_x in (-1.0, 1.0):
+        _build_bone_window(bm, sgn_x * (hw * 0.45), -hd, z_mid + story_h * 0.52, rot_z=0.0, w=0.85, h=0.85)
+
+    # 5. Massive Square Corner Columns with L-Brackets
+    col_size = 0.50
     for cx in (-hw, hw):
         for cy in (-hd, hd):
-            create_box(bm, (col_size, col_size, height + 0.25), (cx, cy, z0 + height * 0.5 + 0.125),
+            create_box(bm, (col_size, col_size, height + 0.35), (cx, cy, z0 + height * 0.5 + 0.175),
                        mat_index=MAT_INDEX_DRIFTWOOD)
-            for bz in (z0 + 0.25, mid_z, z1):
+            for bz in (z0 + 0.25, z_mid, z1):
                 create_box(bm, (col_size + 0.05, col_size + 0.05, 0.32), (cx, cy, bz),
                            mat_index=MAT_INDEX_IRON)
 
-    # 4. Dense Bone Scale Roof with solid gable triangle walls
-    roof_h = max(2.8, width * 0.45)
+    # 6. Dense Bone Scale Roof with solid gable triangle walls
+    roof_h = max(3.4, width * 0.42)
     peak_z = z1 + roof_h
     _build_gable_triangle_wall(bm, -hw, hw, -hd, z1, peak_z, wall_th=wall_th)
     _build_gable_triangle_wall(bm, -hw, hw, hd, z1, peak_z, wall_th=wall_th)
     _build_bone_scale_roof_gable(bm, -hw, hw, -hd, hd, z1, roof_h,
                                  overhang_x=0.55, overhang_y=0.55, fin_scale=1.5, num_ridge_teeth=6)
-
-
-def _build_hajfin_bone_shop(bm, props, width=9.5, depth=8.5, height=6.8, found_h=0.9):
+def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found_h=1.0):
     """The Bone & Drift Trading Post (Image 3):
-    Two-storey trading depot with open barter stall counter, flip-up plank awning,
-    flanking wooden dock platforms, second-level lookout room, giant mounted shark skull,
-    solid roof decks with bone-scale shingles, ladder, and trade sign."""
+    Scaled for 2-3m tall Hajfin characters with accessible two-storey interior.
+    Open barter stall counter, flip-up timber awning, flanking pier dock platforms,
+    internal timber staircase connecting ground floor trade room to the upper lookout room,
+    hollow upper room with bone windows, giant mounted shark skull, dual dock access ladder,
+    and multi-tier bone scale roofs with ridge crests."""
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
-    g_h = 3.4
-    u_h = 3.0
+    g_h = 4.6
+    u_h = 4.2
     z_mid = z0 + g_h
     z_top = z_mid + u_h
     wall_th = 0.26
 
-    # 1. Ground Floor Shell with Open Barter Counter & Side Door
+    # 1. Foundation stilts/piers
+    if found_h > 0.2:
+        _build_stilt_substructure(bm, -hw, hw, -hd, hd, found_h)
+
+    # 2. Ground Floor Slab (Walkable trade room interior)
+    create_box(bm, (width - wall_th * 2, depth - wall_th * 2, 0.14),
+               (0.0, 0.0, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
+
+    # 3. Ground Floor Walls with Open Barter Counter & Side Door
     create_box(bm, (width - wall_th * 2, wall_th, g_h), (0.0, hd - wall_th * 0.5, z0 + g_h * 0.5),
                mat_index=MAT_INDEX_DRIFTWOOD)
     create_box(bm, (wall_th, depth - wall_th * 2, g_h), (-hw + wall_th * 0.5, 0.0, z0 + g_h * 0.5),
@@ -887,160 +1178,231 @@ def _build_hajfin_bone_shop(bm, props, width=9.5, depth=8.5, height=6.8, found_h
     create_box(bm, (wall_th, depth - wall_th * 2, g_h), (hw - wall_th * 0.5, 0.0, z0 + g_h * 0.5),
                mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 2. Massive Ground Floor Corner Columns
-    col_size = 0.44
+    # Massive Ground Floor Corner Columns
+    col_size = 0.48
     for cx in (-hw, hw):
         for cy in (-hd, hd):
-            _build_chunky_corner_column(bm, cx, cy, z0, z_mid, size=col_size, extend_top=0.2)
+            _build_chunky_corner_column(bm, cx, cy, z0, z_mid, size=col_size, extend_top=0.25)
 
-    # 3. Open Barter Trade Counter with Flip-Up Awning
-    counter_w = 3.6
-    counter_d = 1.1
-    counter_h = 1.0
+    # Open Barter Trade Counter with Flip-Up Awning (scaled for 2-3m tall Hajfin)
+    counter_w = 4.4
+    counter_d = 1.3
+    counter_h = 1.2
     create_box(bm, (counter_w, counter_d, counter_h), (0.0, -hd - counter_d * 0.3, z0 + counter_h * 0.5),
                mat_index=MAT_INDEX_DRIFTWOOD)
-    create_box(bm, (counter_w * 0.95, 0.2, 1.4), (0.0, -hd, z0 + counter_h + 0.7), mat_index=MAT_INDEX_GLASS)
+    create_box(bm, (counter_w * 0.95, 0.25, 1.8), (0.0, -hd, z0 + counter_h + 0.9), mat_index=MAT_INDEX_GLASS)
 
     awning_w = counter_w * 1.15
-    awning_d = 1.4
-    create_box(bm, (awning_w, awning_d, 0.08), (0.0, -hd - awning_d * 0.45, z0 + counter_h + 1.55),
+    awning_d = 1.6
+    create_box(bm, (awning_w, awning_d, 0.09), (0.0, -hd - awning_d * 0.45, z0 + counter_h + 1.95),
                rotation=(0.32, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (3.8, 0.08, 0.65), (0.0, -hd - 0.15, z0 + counter_h + 2.35), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    create_box(bm, (3.2, 0.08, 0.55), (0.0, -hd - 0.15, z0 + counter_h + 1.95), mat_index=MAT_INDEX_DRIFTWOOD)
-
-    # Ground floor side entrance door (No door leaf by default for UE export)
+    # Ground floor side entrance door
+    door_w = float(getattr(props, 'door_width', 1.80))
+    door_h = min(float(getattr(props, 'door_height', 3.50)), g_h * 0.85)
     _build_wall_with_door_opening(bm, -hw + wall_th, -counter_w * 0.5 - 0.2, -hd + wall_th * 0.5,
-                                  z0, z_mid, door_cx=-hw * 0.65, door_w=1.2, door_h=2.2,
+                                  z0, z_mid, door_cx=-hw * 0.65, door_w=door_w, door_h=door_h,
                                   wall_th=wall_th, rot_z=0.0,
                                   include_leaf=getattr(props, 'include_door_leaves', False))
 
     # 4. Flanking Wooden Dock / Pier Platforms
     for sgn_x in (-1.0, 1.0):
-        plat_w = 1.5
-        plat_d = depth * 0.8
+        plat_w = 1.8
+        plat_d = depth * 0.85
         px = sgn_x * (hw + plat_w * 0.5)
-        create_box(bm, (plat_w, plat_d, 0.12), (px, 0.0, z0 + 1.2), mat_index=MAT_INDEX_FLOOR)
+        create_box(bm, (plat_w, plat_d, 0.14), (px, 0.0, z0 + 1.2), mat_index=MAT_INDEX_FLOOR)
         for py in (-plat_d * 0.4, 0.0, plat_d * 0.4):
-            create_cylinder(bm, radius=0.12, height=z0 + 1.2, segments=6,
+            create_cylinder(bm, radius=0.15, height=z0 + 1.2, segments=7,
                             location=(px, py, (z0 + 1.2) * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 5. Second-Level Central Lookout Tower / Room
-    u_w = width * 0.58
+    # 5. Accessible Internal Timber Staircase & Upper Floor Deck
+    u_w = width * 0.60
     u_d = depth * 0.72
-    create_box(bm, (u_w, u_d, u_h), (0.0, 0.0, z_mid + u_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    u_hw = u_w * 0.5
+    u_hd = u_d * 0.5
 
-    for cx in (-u_w * 0.5, u_w * 0.5):
-        for cy in (-u_d * 0.5, u_d * 0.5):
-            _build_chunky_corner_column(bm, cx, cy, z_mid, z_top, size=0.36, extend_top=0.3)
+    stair_w = 1.60
+    stair_x0 = u_hw - stair_w - 0.2
+    stair_x1 = u_hw - 0.2
+    stair_y0 = -u_hd + 1.8
+    stair_y1 = -u_hd + 5.8
+    _build_hajfin_floor_slab_with_stairwell(bm, -hw + wall_th, hw - wall_th, -hd + wall_th, hd - wall_th,
+                                            z_mid, stair_x0, stair_x1, stair_y0, stair_y1,
+                                            open_exit_side='NORTH')
+    _build_hajfin_interior_staircase(bm, x0=(stair_x0 + stair_x1) * 0.5, y0=stair_y0 + 0.2, z0=z0,
+                                     x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1 - 0.4, z1=z_mid,
+                                     width=stair_w)
 
-    # 6. Giant Open Shark Skull mounted on upper front facade
-    _build_shark_skull_mount(bm, u_w * 0.28, -u_d * 0.5, z_mid + u_h * 0.62, rot_z=0.0, scale=1.1)
+    # 6. Accessible Second-Level Central Lookout Room (HOLLOW!)
+    # Rear wall of upper room
+    create_box(bm, (u_w, wall_th, u_h), (0.0, u_hd - wall_th * 0.5, z_mid + u_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    # Left & Right walls with bone windows
+    _build_wall_with_window_y(bm, -u_hd + wall_th, u_hd - wall_th, -u_hw + wall_th * 0.5, z_mid, z_top,
+                              win_cy=0.0, win_cz=z_mid + u_h * 0.52, win_w=0.85, win_h=0.85,
+                              wall_th=wall_th, facing_east=False)
+    _build_wall_with_window_y(bm, -u_hd + wall_th, u_hd - wall_th, u_hw - wall_th * 0.5, z_mid, z_top,
+                              win_cy=0.0, win_cz=z_mid + u_h * 0.52, win_w=0.85, win_h=0.85,
+                              wall_th=wall_th, facing_east=True)
+    # Front wall of upper room with window and hatch/door
+    _build_wall_with_window_x(bm, -u_hw + wall_th, u_hw - wall_th, -u_hd + wall_th * 0.5, z_mid, z_top,
+                              win_cx=-u_hw * 0.45, win_cz=z_mid + u_h * 0.52, win_w=0.85, win_h=0.85,
+                              wall_th=wall_th, facing_north=False)
 
-    # 7. Exterior Wooden Ladder
+    # Upper corner columns
+    for cx in (-u_hw, u_hw):
+        for cy in (-u_hd, u_hd):
+            _build_chunky_corner_column(bm, cx, cy, z_mid, z_top, size=0.40, extend_top=0.35)
+
+    # 7. Giant Open Shark Skull mounted on upper front facade
+    _build_shark_skull_mount(bm, u_w * 0.28, -u_hd, z_mid + u_h * 0.62, rot_z=0.0, scale=1.2)
+
+    # 8. Exterior Wooden Ladder
     lad_x = u_w * 0.42
     lad_y = -hd - 0.25
     lad_len = g_h * 1.15
     lad_pitch = 0.22
-    for sgn_rail in (-0.25, 0.25):
-        create_cylinder(bm, radius=0.035, height=lad_len, segments=6,
+    for sgn_rail in (-0.28, 0.28):
+        create_cylinder(bm, radius=0.045, height=lad_len, segments=6,
                         location=(lad_x + sgn_rail, lad_y + lad_pitch * g_h * 0.5, z0 + g_h * 0.5),
                         rotation=(lad_pitch, 0, 0), mat_index=MAT_INDEX_DRIFTWOOD)
-    for r_i in range(8):
-        rz = z0 + 0.35 + r_i * (g_h * 0.95 / 8)
+    for r_i in range(10):
+        rz = z0 + 0.35 + r_i * (g_h * 0.95 / 10)
         ry = lad_y + (rz - z0) * math.tan(lad_pitch)
-        create_box(bm, (0.50, 0.06, 0.06), (lad_x, ry, rz), mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (0.56, 0.07, 0.07), (lad_x, ry, rz), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 8. Whale Ribs lashed along the corner post
-    for ri in range(4):
-        rib_z = z0 + 0.8 + ri * 0.32
-        create_cylinder(bm, radius=0.045, height=0.65, segments=5,
-                        location=(hw * 0.55, -u_d * 0.5 - 0.08, rib_z),
+    # 9. Whale Ribs lashed along corner post
+    for ri in range(5):
+        rib_z = z0 + 0.8 + ri * 0.40
+        create_cylinder(bm, radius=0.05, height=0.80, segments=6,
+                        location=(hw * 0.55, -u_hd - 0.10, rib_z),
                         rotation=(0, 0.85, 0), mat_index=MAT_INDEX_BONE)
 
-    # 9. Multi-Tier Bone Scale Roofs with Full Solid Gable Triangles
+    # 10. Multi-Tier Bone Scale Roofs with Full Solid Gable Triangles
     # Lower flanking roofs
     for sgn_x in (-1.0, 1.0):
         lx0 = sgn_x * hw
-        lx1 = sgn_x * (u_w * 0.5)
+        lx1 = sgn_x * u_hw
         fl_x0 = min(lx0, lx1)
         fl_x1 = max(lx0, lx1)
-        _build_gable_triangle_wall(bm, fl_x0, fl_x1, -hd, z_mid, z_mid + 1.8, wall_th=wall_th)
-        _build_gable_triangle_wall(bm, fl_x0, fl_x1, hd, z_mid, z_mid + 1.8, wall_th=wall_th)
-        _build_bone_scale_roof_gable(bm, fl_x0, fl_x1, -hd, hd, z_mid, 1.8,
-                                     overhang_x=0.35, overhang_y=0.35, fin_scale=1.1, num_ridge_teeth=4)
+        _build_gable_triangle_wall(bm, fl_x0, fl_x1, -hd, z_mid, z_mid + 2.2, wall_th=wall_th)
+        _build_gable_triangle_wall(bm, fl_x0, fl_x1, hd, z_mid, z_mid + 2.2, wall_th=wall_th)
+        _build_bone_scale_roof_gable(bm, fl_x0, fl_x1, -hd, hd, z_mid, 2.2,
+                                     overhang_x=0.40, overhang_y=0.40, fin_scale=1.2, num_ridge_teeth=5)
 
     # Upper Tower Main Roof with full gable triangles
-    u_peak_z = z_top + 2.8
-    _build_gable_triangle_wall(bm, -u_w * 0.5, u_w * 0.5, -u_d * 0.5, z_top, u_peak_z, wall_th=wall_th)
-    _build_gable_triangle_wall(bm, -u_w * 0.5, u_w * 0.5, u_d * 0.5, z_top, u_peak_z, wall_th=wall_th)
-    _build_bone_scale_roof_gable(bm, -u_w * 0.5, u_w * 0.5, -u_d * 0.5, u_d * 0.5, z_top, 2.8,
-                                 overhang_x=0.45, overhang_y=0.45, fin_scale=1.6, num_ridge_teeth=6)
+    u_peak_z = z_top + 3.2
+    _build_gable_triangle_wall(bm, -u_hw, u_hw, -u_hd, z_top, u_peak_z, wall_th=wall_th)
+    _build_gable_triangle_wall(bm, -u_hw, u_hw, u_hd, z_top, u_peak_z, wall_th=wall_th)
+    _build_bone_scale_roof_gable(bm, -u_hw, u_hw, -u_hd, u_hd, z_top, 3.2,
+                                 overhang_x=0.50, overhang_y=0.50, fin_scale=1.7, num_ridge_teeth=7)
 
 
-def _build_hajfin_chieftain_hall(bm, props, width=12.0, depth=16.0, height=5.2, found_h=1.4):
+def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, found_h=1.5):
     """The Chieftain Great Fin Hall (Image 4):
-    Grand multi-tier staggered longhouse, continuous ridge spine of giant curved bone horns
-    leading to a soaring forward-curving horn/tusk, projecting whale rib cage tunnel entrance,
-    solid gable triangle walls, and flanking tribal totem posts."""
+    Grand multi-tier staggered longhouse scaled for 2-3m tall Hajfin characters with accessible interior.
+    Soaring vaulted central nave, projecting whale rib cage tunnel entrance, full ground floor deck,
+    raised Chieftain throne dais with steps, accessible 2nd-level mezzanine galleries along side walls
+    with twin internal timber stairs, continuous ridge spine of giant curved bone horns leading to
+    a soaring forward-curving horn/tusk, solid gable triangle walls, and flanking tribal totem posts."""
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
     wall_th = 0.28
-
-    # 1. Elevated Reef Stone Foundation
-    create_box(bm, (width + 0.4, depth + 0.4, found_h + 0.1), (0.0, 0.0, found_h * 0.5),
-               mat_index=MAT_INDEX_ROUGH_STONE)
-
-    # 2. Central High Nave (Hollow walls with real cut door opening)
     nave_w = width * 0.60
     nave_h = height
-    nave_peak_z = z0 + nave_h + 4.4
-    # Rear wall
+    nave_peak_z = z0 + nave_h + 4.8
+
+    # 1. Elevated Reef Stone Foundation
+    create_box(bm, (width + 0.5, depth + 0.5, found_h + 0.1), (0.0, 0.0, found_h * 0.5),
+               mat_index=MAT_INDEX_ROUGH_STONE)
+
+    # Full Interior Ground Floor Slab
+    create_box(bm, (width - wall_th * 2, depth - wall_th * 2, 0.16),
+               (0.0, 0.0, z0 + 0.08), mat_index=MAT_INDEX_FLOOR)
+
+    # 2. Central High Nave Walls
     create_box(bm, (nave_w, wall_th, nave_h), (0.0, hd - wall_th * 0.5, z0 + nave_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    # Side walls
     create_box(bm, (wall_th, depth - wall_th * 2, nave_h), (-nave_w * 0.5 + wall_th * 0.5, 0.0, z0 + nave_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
     create_box(bm, (wall_th, depth - wall_th * 2, nave_h), (nave_w * 0.5 - wall_th * 0.5, 0.0, z0 + nave_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    # Front wall with real cut door opening inside rib tunnel (No door leaf by default for UE export)
-    door_w = 1.75
-    door_h = min(3.0, nave_h * 0.75)
+
+    # Front wall with real cut door opening inside rib tunnel
+    door_w = float(getattr(props, 'door_width', 2.20))
+    door_h = min(float(getattr(props, 'door_height', 3.60)), nave_h * 0.65)
     _build_wall_with_door_opening(bm, -nave_w * 0.5 + wall_th, nave_w * 0.5 - wall_th, -hd + wall_th * 0.5,
                                   z0, z0 + nave_h, door_cx=0.0, door_w=door_w, door_h=door_h,
                                   wall_th=wall_th, rot_z=0.0,
                                   include_leaf=getattr(props, 'include_door_leaves', False))
 
-    # 3. Flanking Lower Side Aisles
+    # 3. Raised Chieftain Dais / Throne Platform at Rear
+    dais_w = 5.2
+    dais_d = 4.0
+    dais_h = 1.2
+    dais_y = hd - dais_d * 0.6
+    create_box(bm, (dais_w, dais_d, dais_h), (0.0, dais_y, z0 + dais_h * 0.5), mat_index=MAT_INDEX_FLOOR)
+    num_dais_steps = 4
+    for dsi in range(num_dais_steps):
+        ds_z = z0 + (dsi + 0.5) * (dais_h / num_dais_steps)
+        ds_y = (dais_y - dais_d * 0.5) - (num_dais_steps - dsi) * 0.40
+        create_box(bm, (dais_w * 0.85, 0.42, 0.12), (0.0, ds_y, ds_z), mat_index=MAT_INDEX_FLOOR)
+
+    # 4. Flanking Lower Side Aisles
     side_w = (width - nave_w) * 0.5
-    side_h = height * 0.65
-    side_peak_z = z0 + side_h + 2.0
+    side_h = height * 0.62
+    side_peak_z = z0 + side_h + 2.2
     for sgn_x in (-1.0, 1.0):
         sx = sgn_x * (nave_w * 0.5 + side_w * 0.5)
         create_box(bm, (side_w, depth * 0.85, side_h), (sx, 0.0, z0 + side_h * 0.5),
                    mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 4. Chunky Corner Columns on Nave and Aisles
+    # 5. Accessible 2nd-Level Mezzanine Galleries inside Nave
+    z_gal = z0 + 4.2
+    gal_w = 2.20
+    gal_y0 = -hd + 3.0
+    gal_y1 = hd - 2.5
+
+    # Left Mezzanine Gallery & Staircase
+    _build_hajfin_floor_slab_with_stairwell(bm, -nave_w * 0.5 + wall_th, -nave_w * 0.5 + wall_th + gal_w,
+                                            gal_y0, gal_y1, z_gal)
+    _build_railing_segment(bm, -nave_w * 0.5 + wall_th + gal_w, -nave_w * 0.5 + wall_th + gal_w,
+                           gal_y0 + 3.5, gal_y1, z_gal, height=1.0)
+    _build_hajfin_interior_staircase(bm, x0=-nave_w * 0.5 + wall_th + gal_w * 0.5, y0=gal_y0 + 0.2, z0=z0,
+                                     x1=-nave_w * 0.5 + wall_th + gal_w * 0.5, y1=gal_y0 + 3.4, z1=z_gal,
+                                     width=gal_w * 0.90)
+
+    # Right Mezzanine Gallery & Staircase
+    _build_hajfin_floor_slab_with_stairwell(bm, nave_w * 0.5 - wall_th - gal_w, nave_w * 0.5 - wall_th,
+                                            gal_y0, gal_y1, z_gal)
+    _build_railing_segment(bm, nave_w * 0.5 - wall_th - gal_w, nave_w * 0.5 - wall_th - gal_w,
+                           gal_y0 + 3.5, gal_y1, z_gal, height=1.0)
+    _build_hajfin_interior_staircase(bm, x0=nave_w * 0.5 - wall_th - gal_w * 0.5, y0=gal_y0 + 0.2, z0=z0,
+                                     x1=nave_w * 0.5 - wall_th - gal_w * 0.5, y1=gal_y0 + 3.4, z1=z_gal,
+                                     width=gal_w * 0.90)
+
+    # 6. Chunky Corner Columns on Nave and Aisles
     for cx in (-nave_w * 0.5, nave_w * 0.5):
         for cy in (-hd, hd):
-            _build_chunky_corner_column(bm, cx, cy, z0, z0 + nave_h, size=0.46, extend_top=0.35)
+            _build_chunky_corner_column(bm, cx, cy, z0, z0 + nave_h, size=0.48, extend_top=0.38)
     for sgn_x in (-1.0, 1.0):
         for cy in (-hd * 0.85, hd * 0.85):
-            _build_chunky_corner_column(bm, sgn_x * hw, cy, z0, z0 + side_h, size=0.38, extend_top=0.25)
+            _build_chunky_corner_column(bm, sgn_x * hw, cy, z0, z0 + side_h, size=0.40, extend_top=0.28)
 
-    # 5. Projecting Whale Rib Cage Tunnel Entrance (Image 4)
-    _build_whale_rib_tunnel_entrance(bm, 0.0, -hd, z0, rot_z=0.0, length=2.8, height=3.0, width=2.4, num_pairs=4)
+    # 7. Projecting Whale Rib Cage Tunnel Entrance (Image 4)
+    _build_whale_rib_tunnel_entrance(bm, 0.0, -hd, z0, rot_z=0.0, length=3.5, height=3.8, width=2.8, num_pairs=5)
 
     # Flanking Tribal Totem Posts at entrance
     for sgn_t in (-1.0, 1.0):
-        tx = sgn_t * 1.85
-        ty = -hd - 1.2
-        create_cylinder(bm, radius=0.18, height=3.0, segments=7,
-                        location=(tx, ty, z0 + 1.5), mat_index=MAT_INDEX_DRIFTWOOD)
-        create_cone(bm, radius1=0.22, radius2=0.03, height=0.6, segments=5,
-                    location=(tx, ty, z0 + 3.3), mat_index=MAT_INDEX_DRIFTWOOD)
-        create_box(bm, (0.7, 0.12, 0.16), (tx, ty, z0 + 2.4), mat_index=MAT_INDEX_DRIFTWOOD)
-        create_torus_ring(bm, (tx, ty, z0 + 1.8), major_radius=0.21, minor_radius=0.03, mat_index=MAT_INDEX_ROPE)
-        create_torus_ring(bm, (tx, ty, z0 + 2.2), major_radius=0.21, minor_radius=0.03, mat_index=MAT_INDEX_ROPE)
+        tx = sgn_t * 2.20
+        ty = -hd - 1.4
+        create_cylinder(bm, radius=0.22, height=3.6, segments=7,
+                        location=(tx, ty, z0 + 1.8), mat_index=MAT_INDEX_DRIFTWOOD)
+        create_cone(bm, radius1=0.26, radius2=0.03, height=0.75, segments=5,
+                    location=(tx, ty, z0 + 3.9), mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (0.85, 0.14, 0.20), (tx, ty, z0 + 2.8), mat_index=MAT_INDEX_DRIFTWOOD)
+        create_torus_ring(bm, (tx, ty, z0 + 2.1), major_radius=0.24, minor_radius=0.035, mat_index=MAT_INDEX_ROPE)
+        create_torus_ring(bm, (tx, ty, z0 + 2.6), major_radius=0.24, minor_radius=0.035, mat_index=MAT_INDEX_ROPE)
 
-    # 6. Solid Gable Triangle Walls (Zero gaps!)
+    # 8. Solid Gable Triangle Walls (Zero gaps!)
     _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, -hd, z0 + nave_h, nave_peak_z, wall_th=wall_th)
     _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, hd, z0 + nave_h, nave_peak_z, wall_th=wall_th)
 
@@ -1052,27 +1414,33 @@ def _build_hajfin_chieftain_hall(bm, props, width=12.0, depth=16.0, height=5.2, 
         _build_gable_triangle_wall(bm, fl_x0, fl_x1, -hd * 0.85, z0 + side_h, side_peak_z, wall_th=wall_th)
         _build_gable_triangle_wall(bm, fl_x0, fl_x1, hd * 0.85, z0 + side_h, side_peak_z, wall_th=wall_th)
 
-    # 7. Multi-Tier Dense Bone Scale Roofs
+    # 9. Multi-Tier Dense Bone Scale Roofs
     for sgn_x in (-1.0, 1.0):
         ax0 = sgn_x * (nave_w * 0.5)
         ax1 = sgn_x * hw
         fl_x0 = min(ax0, ax1)
         fl_x1 = max(ax0, ax1)
-        _build_bone_scale_roof_gable(bm, fl_x0, fl_x1, -hd * 0.85, hd * 0.85, z0 + side_h, 2.0,
-                                     overhang_x=0.35, overhang_y=0.35, fin_scale=1.1, num_ridge_teeth=5)
+        _build_bone_scale_roof_gable(bm, fl_x0, fl_x1, -hd * 0.85, hd * 0.85, z0 + side_h, 2.2,
+                                     overhang_x=0.40, overhang_y=0.40, fin_scale=1.2, num_ridge_teeth=5)
 
     # High Nave Central Roof with giant horn & continuous ridge spine
-    _build_bone_scale_roof_gable(bm, -nave_w * 0.5, nave_w * 0.5, -hd, hd, z0 + nave_h, 4.4,
-                                 overhang_x=0.55, overhang_y=0.55, fin_scale=2.2, num_ridge_teeth=10)
+    _build_bone_scale_roof_gable(bm, -nave_w * 0.5, nave_w * 0.5, -hd, hd, z0 + nave_h, 4.8,
+                                 overhang_x=0.60, overhang_y=0.60, fin_scale=2.4, num_ridge_teeth=12)
 
 
-def _build_hajfin_pirate_tavern(bm, props, width=11.0, depth=11.0, height=6.2, found_h=1.2):
+def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, found_h=1.2):
     """The Barnacle Bilge Pirate Tavern:
-    Multi-deck L-shaped pirate tavern with open-air stilt drinking veranda, grog barrels,
-    solid roof decks with bone scale shingles, shark jaw doorway, and dorsal fin ridge ornaments."""
+    Two full accessible stories scaled for 2-3m tall Hajfin characters.
+    Multi-deck L-shaped pirate tavern with open-air stilt drinking veranda, clustered grog barrels,
+    accessible ground floor taproom, internal timber staircase leading to upper pirate quarters,
+    second-level balcony overlooking the drinking deck, solid roof decks with bone scale shingles,
+    shark jaw doorway, and dorsal fin ridge ornaments."""
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
+    story_h = height * 0.5
+    z_mid = z0 + story_h
+    z1 = z0 + height
     wing_w = width * 0.52
     wing_d = depth * 0.48
     wall_th = 0.26
@@ -1080,64 +1448,114 @@ def _build_hajfin_pirate_tavern(bm, props, width=11.0, depth=11.0, height=6.2, f
     # 1. Stilt Pier Foundation
     _build_stilt_substructure(bm, -hw, hw, -hd, hd, found_h)
 
-    # 2. Main L-Shaped Building Walls (Hollow shells with door openings)
+    # 2. Full Interior Ground Floor Slab across main taproom and wing
     m_w = width
     m_d = depth - wing_d
     my = -hd + m_d * 0.5
-    # Rear wall of main block
-    create_box(bm, (m_w, wall_th, height), (0.0, -hd + m_d - wall_th * 0.5, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    # Side walls of main block
-    create_box(bm, (wall_th, m_d - wall_th * 2, height), (-hw + wall_th * 0.5, my, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    create_box(bm, (wall_th, m_d - wall_th * 2, height), (hw - wall_th * 0.5, my, z0 + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (m_w - wall_th * 2, m_d - wall_th * 2, 0.14),
+               (0.0, my, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
+    create_box(bm, (wing_w - wall_th * 2, wing_d - wall_th * 2, 0.14),
+               (hw - wing_w * 0.5, hd - wing_d * 0.5, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
 
-    # Wing block walls
-    create_box(bm, (wing_w, wing_d, height * 0.85), (hw - wing_w * 0.5, hd - wing_d * 0.5, z0 + height * 0.425),
-               mat_index=MAT_INDEX_DRIFTWOOD)
+    # 3. Ground Floor Walls (Hollow taproom rooms)
+    create_box(bm, (m_w - wing_w, wall_th, story_h),
+               (-hw + (m_w - wing_w) * 0.5, -hd + m_d - wall_th * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, m_d - wall_th * 2, story_h), (-hw + wall_th * 0.5, my, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, m_d - wall_th * 2, story_h), (hw - wall_th * 0.5, my, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 3. Open-Air Stilt Drinking Deck in L-cutout
+    # Wing block walls (Hollow!)
+    create_box(bm, (wing_w - wall_th * 2, wall_th, story_h),
+               (hw - wing_w * 0.5, hd - wall_th * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, wing_d - wall_th * 2, story_h),
+               (hw - wall_th * 0.5, hd - wing_d * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, wing_d - wall_th * 2, story_h),
+               (hw - wing_w + wall_th * 0.5, hd - wing_d * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 4. Open-Air Stilt Drinking Deck in L-cutout
     deck_w = width - wing_w
     deck_d = wing_d
     deck_x = -hw + deck_w * 0.5
     deck_y = hd - wing_d * 0.5
-    create_box(bm, (deck_w, deck_d, 0.15), (deck_x, deck_y, z0 + 0.1), mat_index=MAT_INDEX_FLOOR)
-    _build_timber_deck_railing(bm, deck_x, deck_y, z0 + 0.1, deck_w, deck_d)
+    create_box(bm, (deck_w, deck_d, 0.16), (deck_x, deck_y, z0 + 0.08), mat_index=MAT_INDEX_FLOOR)
+    _build_timber_deck_railing(bm, deck_x, deck_y, z0 + 0.08, deck_w, deck_d)
 
     # Clustered grog barrels on drinking deck
-    for bx, by in ((deck_x - 0.6, deck_y - 0.5), (deck_x + 0.5, deck_y - 0.4), (deck_x, deck_y + 0.6)):
-        create_cylinder(bm, radius=0.32, height=0.75, segments=8,
-                        location=(bx, by, z0 + 0.48), mat_index=MAT_INDEX_DRIFTWOOD)
-        create_torus_ring(bm, (bx, by, z0 + 0.35), major_radius=0.33, minor_radius=0.02, mat_index=MAT_INDEX_IRON)
-        create_torus_ring(bm, (bx, by, z0 + 0.65), major_radius=0.33, minor_radius=0.02, mat_index=MAT_INDEX_IRON)
+    for bx, by in ((deck_x - 0.8, deck_y - 0.6), (deck_x + 0.7, deck_y - 0.5), (deck_x, deck_y + 0.8)):
+        create_cylinder(bm, radius=0.38, height=0.90, segments=8,
+                        location=(bx, by, z0 + 0.55), mat_index=MAT_INDEX_DRIFTWOOD)
+        create_torus_ring(bm, (bx, by, z0 + 0.40), major_radius=0.40, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+        create_torus_ring(bm, (bx, by, z0 + 0.78), major_radius=0.40, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
 
-    # 4. Corner Columns
-    col_size = 0.42
-    for cx in (-hw, hw):
-        for cy in (-hd, my + m_d * 0.5):
-            _build_chunky_corner_column(bm, cx, cy, z0, z0 + height, size=col_size, extend_top=0.35)
+    # 5. Internal Timber Staircase & Upper Floor Deck
+    stair_w = 1.60
+    stair_x0 = -hw + wall_th + 0.2
+    stair_x1 = -hw + wall_th + stair_w + 0.2
+    stair_y0 = -hd + 1.8
+    stair_y1 = -hd + 5.8
+    _build_hajfin_floor_slab_with_stairwell(bm, -hw + wall_th, hw - wall_th, -hd + wall_th, -hd + m_d - wall_th,
+                                            z_mid, stair_x0, stair_x1, stair_y0, stair_y1,
+                                            open_exit_side='NORTH')
+    create_box(bm, (wing_w - wall_th * 2, wing_d - wall_th * 2, 0.16),
+               (hw - wing_w * 0.5, hd - wing_d * 0.5, z_mid - 0.08), mat_index=MAT_INDEX_FLOOR)
 
-    # 5. Shark Jaw Entrance Doorways (No door leaf by default for UE export)
+    _build_hajfin_interior_staircase(bm, x0=(stair_x0 + stair_x1) * 0.5, y0=stair_y0 + 0.2, z0=z0,
+                                     x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1 - 0.4, z1=z_mid,
+                                     width=stair_w)
+
+    # 6. Upper Floor Hollow Rooms (Crew Quarters & Lookout)
+    # Upper front wall with window
+    _build_wall_with_window_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
+                              z_mid, z1, win_cx=-hw * 0.4, win_cz=z_mid + story_h * 0.52,
+                              win_w=0.85, win_h=0.85, wall_th=wall_th, facing_north=False)
+    create_box(bm, (m_w - wing_w, wall_th, story_h),
+               (-hw + (m_w - wing_w) * 0.5, -hd + m_d - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, m_d - wall_th * 2, story_h), (-hw + wall_th * 0.5, my, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, m_d - wall_th * 2, story_h), (hw - wall_th * 0.5, my, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    create_box(bm, (wing_w - wall_th * 2, wall_th, story_h),
+               (hw - wing_w * 0.5, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, wing_d - wall_th * 2, story_h),
+               (hw - wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, wing_d - wall_th * 2, story_h),
+               (hw - wing_w + wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 7. Front Entrance Shark Jaw Doorway
+    door_w = float(getattr(props, 'door_width', 1.90))
+    door_h = min(float(getattr(props, 'door_height', 3.60)), story_h * 0.85)
     _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
-                                  z0, z0 + height * 0.5, door_cx=-0.6, door_w=1.55, door_h=2.55,
+                                  z0, z_mid, door_cx=-hw * 0.4, door_w=door_w, door_h=door_h,
                                   wall_th=wall_th, rot_z=0.0,
                                   include_leaf=getattr(props, 'include_door_leaves', False))
 
-    # 6. Bone-Framed Windows
+    # Upper Balcony Walkout Door in L-junction overlooking drinking deck
+    _build_wall_with_door_opening(bm, -hw + wall_th, hw - wing_w, -hd + m_d - wall_th * 0.5,
+                                  z_mid, z1, door_cx=-hw + deck_w * 0.5, door_w=1.60, door_h=3.20,
+                                  wall_th=wall_th, rot_z=0.0,
+                                  include_leaf=False)
+
+    # 8. Corner Columns
+    col_size = 0.46
+    for cx in (-hw, hw):
+        for cy in (-hd, my + m_d * 0.5):
+            _build_chunky_corner_column(bm, cx, cy, z0, z1, size=col_size, extend_top=0.35)
+
+    # 9. Bone-Framed Windows (Ground & Upper stories)
     for sgn_x in (-1.0, 1.0):
-        _build_bone_window(bm, sgn_x * hw, my, z0 + height * 0.45,
-                           rot_z=(math.pi * 0.5 if sgn_x > 0 else -math.pi * 0.5), w=0.75, h=0.75)
-        _build_bone_window(bm, sgn_x * hw, my, z0 + height * 0.80,
-                           rot_z=(math.pi * 0.5 if sgn_x > 0 else -math.pi * 0.5), w=0.75, h=0.75)
+        _build_bone_window(bm, sgn_x * hw, my, z0 + story_h * 0.50,
+                           rot_z=(math.pi * 0.5 if sgn_x > 0 else -math.pi * 0.5), w=0.85, h=0.85)
+        _build_bone_window(bm, sgn_x * hw, my, z_mid + story_h * 0.50,
+                           rot_z=(math.pi * 0.5 if sgn_x > 0 else -math.pi * 0.5), w=0.85, h=0.85)
 
-    # 7. Solid Gable Triangle Walls & Bone Scale Roofs
-    m_peak_z = z0 + height + 3.4
-    w_peak_z = z0 + height * 0.85 + 2.6
-    _build_gable_triangle_wall(bm, -hw, hw, -hd, z0 + height, m_peak_z, wall_th=wall_th)
-    _build_gable_triangle_wall(bm, -hw, hw, -hd + m_d, z0 + height, m_peak_z, wall_th=wall_th)
+    # 10. Solid Gable Triangle Walls & Bone Scale Roofs
+    m_peak_z = z1 + 3.8
+    w_peak_z = z1 + 3.0
+    _build_gable_triangle_wall(bm, -hw, hw, -hd, z1, m_peak_z, wall_th=wall_th)
+    _build_gable_triangle_wall(bm, -hw, hw, -hd + m_d, z1, m_peak_z, wall_th=wall_th)
 
-    _build_bone_scale_roof_gable(bm, -hw, hw, -hd, -hd + m_d, z0 + height, 3.4,
-                                 overhang_x=0.5, overhang_y=0.5, fin_scale=1.6, num_ridge_teeth=7)
-    _build_bone_scale_roof_gable(bm, hw - wing_w, hw, hd - wing_d, hd, z0 + height * 0.85, 2.6,
-                                 overhang_x=0.4, overhang_y=0.4, fin_scale=1.2, num_ridge_teeth=5)
+    _build_bone_scale_roof_gable(bm, -hw, hw, -hd, -hd + m_d, z1, 3.8,
+                                 overhang_x=0.55, overhang_y=0.55, fin_scale=1.7, num_ridge_teeth=8)
+    _build_bone_scale_roof_gable(bm, hw - wing_w, hw, hd - wing_d, hd, z1, 3.0,
+                                 overhang_x=0.45, overhang_y=0.45, fin_scale=1.3, num_ridge_teeth=6)
 
 
 # =============================================================================
@@ -1169,12 +1587,22 @@ def _build_stilt_substructure(bm, x0, x1, y0, y1, height):
 
     # Wooden access steps leading directly to front door threshold
     num_steps = max(2, int(height / 0.22))
-    step_w = 1.6
-    step_d = 0.35
+    step_w = 2.20
+    step_d = 0.38
+
+    # Angled heavy timber side stringers supporting the steps
+    for sgn_x in (-1.0, 1.0):
+        sx = sgn_x * (step_w * 0.5 - 0.08)
+        run_len = num_steps * step_d
+        str_len = math.hypot(run_len, height)
+        ang = math.atan2(height, run_len)
+        create_box(bm, (0.16, 0.22, str_len), (sx, y0 - run_len * 0.5, height * 0.5),
+                   rotation=(ang, 0.0, 0.0), mat_index=MAT_INDEX_DRIFTWOOD)
+
     for i in range(num_steps):
         sz = (i + 0.5) * (height / num_steps)
         sy = y0 - (num_steps - i) * step_d
-        create_box(bm, (step_w, step_d * 1.05, 0.12), (0.0, sy, sz), mat_index=MAT_INDEX_FLOOR)
+        create_box(bm, (step_w, step_d * 1.05, 0.12), (0.0, sy, sz), mat_index=MAT_INDEX_DRIFTWOOD)
 
 
 def _build_timber_deck_railing(bm, cx, cy, cz, w, d):
@@ -1227,8 +1655,8 @@ def build_hajfin_building(obj, bm, props):
         # Default iconic Shanty Shack (Image 6)
         _build_hajfin_shanty(bm, props, width=width, depth=depth, height=height, found_h=found_h)
 
-    # Box UV mapping at scale 3.5 so planks look chunky and hand-painted
-    apply_box_uvs(bm, scale=3.5)
+    # Box UV mapping at scale 0.28 so planks span full story heights with wide chunky timber boards
+    apply_box_uvs(bm, scale=0.28)
 
     # Write bmesh to obj
     bm.to_mesh(obj.data)
