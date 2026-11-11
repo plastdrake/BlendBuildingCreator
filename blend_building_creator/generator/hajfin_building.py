@@ -395,14 +395,15 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
     num_segs = 8  # 8-sided octagonal cross section for the bone tube
     uv_layer = bm.loops.layers.uv.verify()
 
-    apex_ring = None
+    # Build one continuous centreline from the left foot through the crown to
+    # the right foot. A single ring sequence gives the apex one clean mitre
+    # instead of two independent legs plus a loose bridge piece.
+    num_side_steps = 7
+    spine_pts = []
     for side_sgn in (-1.0, 1.0):
-        # 1. Generate smooth spine path from ground to apex
-        num_steps = 7
-        spine_pts = []
-        radii = []
-        for si in range(num_steps):
-            t = si / (num_steps - 1)
+        side_pts = []
+        for si in range(num_side_steps):
+            t = si / (num_side_steps - 1)
             if t <= 0.45:
                 st = t / 0.45
                 cur_z = base_lift + st * (z_spring - base_lift)
@@ -410,87 +411,45 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
             else:
                 st = (t - 0.45) / 0.55
                 cur_z = z_spring + st * (height - z_spring)
-                cur_x = side_sgn * ((d_half_w + bone_rad * 0.55) * (1.0 - (st ** 1.30)))
-            spine_pts.append(Vector((cur_x, y_off, cur_z)))
-            r = bone_rad * (1.25 - 0.35 * t)
-            radii.append(r)
+                cur_x = side_sgn * ((d_half_w + bone_rad * 0.55) * (1.0 - st ** 1.30))
+            side_pts.append(Vector((cur_x, y_off, cur_z)))
+        spine_pts.extend(side_pts if side_sgn < 0 else reversed(side_pts[1:]))
 
-        # 2. Build cross-section vertex rings along the spine
-        rings = []
-        for si in range(num_steps):
-            p = spine_pts[si]
-            if si == num_steps - 1:
-                # Both mandibles meet at the same apex. Reusing one ring
-                # welds the arch instead of leaving two coincident terminal
-                # rings that need a twisted bridge between them.
-                tang = Vector((0.0, 0.0, 1.0))
-            elif si == 0:
-                tang = (spine_pts[1] - spine_pts[0]).normalized()
-            elif si == num_steps - 1:
-                tang = (spine_pts[si] - spine_pts[si - 1]).normalized()
-            else:
-                tang = (spine_pts[si + 1] - spine_pts[si - 1]).normalized()
+    rings = []
+    for si, point in enumerate(spine_pts):
+        if si == 0:
+            tangent = spine_pts[1] - point
+        elif si == len(spine_pts) - 1:
+            tangent = point - spine_pts[si - 1]
+        else:
+            tangent = spine_pts[si + 1] - spine_pts[si - 1]
+        tangent.normalize()
+        norm_y = Vector((0.0, 1.0, 0.0))
+        norm_x = tangent.cross(norm_y).normalized()
+        norm_y = norm_x.cross(tangent).normalized()
+        t = min(si, len(spine_pts) - 1 - si) / max(1, num_side_steps - 1)
+        radius = bone_rad * (1.25 - 0.35 * min(1.0, t))
+        ring = []
+        for j in range(num_segs):
+            ang = j * (2.0 * math.pi / num_segs)
+            offset = norm_x * (math.cos(ang) * radius) + norm_y * (math.sin(ang) * radius * 1.18)
+            world_pt = rot_mat @ (point + offset) + Vector((cx, cy, cz))
+            if si in (0, len(spine_pts) - 1) and world_pt.z < base_z:
+                world_pt.z = base_z
+            ring.append(bm.verts.new(world_pt))
+        rings.append(ring)
 
-            norm_y = Vector((0.0, 1.0, 0.0))
-            norm_x = tang.cross(norm_y).normalized()
-            norm_y = norm_x.cross(tang).normalized()
-
-            r = radii[si]
-            if si == num_steps - 1 and apex_ring is not None:
-                v_ring = apex_ring
-            else:
-                v_ring = []
-                for j in range(num_segs):
-                    ang = j * (2.0 * math.pi / num_segs)
-                    offset = norm_x * (math.cos(ang) * r) + norm_y * (math.sin(ang) * r * 1.18)
-                    local_pt = p + offset
-                    w_pt = rot_mat @ local_pt + Vector((cx, cy, cz))
-                    # Faceted walls can tilt the local cross-section enough for
-                    # its lower edge to dip below the horizontal sill. Keep the
-                    # correction local to the arch base so the profile remains
-                    # unchanged everywhere else.
-                    if si < 2 and w_pt.z < base_z:
-                        w_pt.z = base_z
-                    v = bm.verts.new(w_pt)
-                    v_ring.append(v)
-                if si == num_steps - 1:
-                    apex_ring = v_ring
-            rings.append(v_ring)
-
-        # 3. Create continuous quad faces connecting adjacent rings
-        for si in range(num_steps - 1):
-            r0 = rings[si]
-            r1 = rings[si + 1]
-            u0 = si / (num_steps - 1)
-            u1 = (si + 1) / (num_steps - 1)
-            for j in range(num_segs):
-                j_next = (j + 1) % num_segs
-                f = bm.faces.new([r0[j], r0[j_next], r1[j_next], r1[j]])
-                f.material_index = MAT_INDEX_BONE
-                f.tag = True
-                v0 = j / num_segs
-                v1 = (j + 1) / num_segs
-                for loop in f.loops:
-                    if loop.vert == r0[j]:
-                        loop[uv_layer].uv = Vector((u0, v0))
-                    elif loop.vert == r0[j_next]:
-                        loop[uv_layer].uv = Vector((u0, v1))
-                    elif loop.vert == r1[j_next]:
-                        loop[uv_layer].uv = Vector((u1, v1))
-                    else:
-                        loop[uv_layer].uv = Vector((u1, v0))
-
-        # Base cap (knuckle condyle foot resting cleanly on ground/threshold)
-        f_base = bm.faces.new(list(reversed(rings[0])))
-        f_base.material_index = MAT_INDEX_BONE
-        f_base.tag = True
-
-        # NOTE: Obstructing sharp teeth cones are removed so walkthrough is 100% open and unobstructed!
-
-    # 4. Carved Bone Dorsal Fin Emblem firmly mounted directly atop the arch apex (no air gap)
-    emblem_loc = rot_mat @ Vector((0.0, 0.0, height + 0.02)) + Vector((cx, cy, cz))
-    rot_euler = rot_mat.to_euler()
-    _build_bone_fin_emblem(bm, emblem_loc.x, emblem_loc.y, emblem_loc.z, rot_euler.z, scale=0.85)
+    for si in range(len(rings) - 1):
+        for j in range(num_segs):
+            j_next = (j + 1) % num_segs
+            face = bm.faces.new((rings[si][j], rings[si][j_next],
+                                 rings[si + 1][j_next], rings[si + 1][j]))
+            face.material_index = MAT_INDEX_BONE
+            face.tag = True
+    for ring in (rings[0], rings[-1]):
+        face = bm.faces.new(list(reversed(ring)))
+        face.material_index = MAT_INDEX_BONE
+        face.tag = True
 
 
 def _build_bone_fin_emblem(bm, x, y, z, rot_z=0.0, scale=0.6):
