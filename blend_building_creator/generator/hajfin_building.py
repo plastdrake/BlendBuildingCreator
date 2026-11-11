@@ -519,16 +519,16 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
 
         # NOTE: Obstructing sharp teeth cones are removed so walkthrough is 100% open and unobstructed!
 
-    # 4. Seamless Apex Cap joining the left and right mandibles together cleanly
+    # 4. Seamless Apex Cap joining the left and right mandibles together.
+    # The two terminal rings are already mirrored by their opposing tangents.
+    # Reversing one ring here twists the quads into a detached-looking wedge;
+    # corresponding perimeter vertices must be paired directly.
     r_left = top_rings[-1.0]
     r_right = top_rings[1.0]
-    # Bridge the two top rings with continuous quad faces across the apex
     for j in range(num_segs):
         j_next = (j + 1) % num_segs
-        j_opp = (num_segs - 1 - j) % num_segs
-        j_opp_next = (num_segs - 1 - j_next) % num_segs
         try:
-            f_bridge = bm.faces.new([r_left[j], r_left[j_next], r_right[j_opp_next], r_right[j_opp]])
+            f_bridge = bm.faces.new([r_left[j], r_left[j_next], r_right[j_next], r_right[j]])
             f_bridge.material_index = MAT_INDEX_BONE
             f_bridge.tag = True
         except ValueError:
