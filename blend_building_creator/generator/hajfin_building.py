@@ -550,7 +550,11 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26):
     """Builds a solid triangular timber gable wall with vertical wood planks
     matching the lower wall siding orientation and continuous grain with zero stepped cuts."""
     roof_style = getattr(_HAJFIN_ROOF_PROPS, 'roof_style', 'SHINGLES') if _HAJFIN_ROOF_PROPS is not None else 'SHINGLES'
-    if roof_style in ('SWAY', 'TARP', 'PLANKS', 'FLAT'):
+    allow_bone_shop_gables = (
+        _HAJFIN_ROOF_PROPS is not None
+        and getattr(_HAJFIN_ROOF_PROPS, 'hajfin_style', '') == 'BONE_SHOP'
+    )
+    if roof_style in ('SWAY', 'TARP', 'PLANKS', 'FLAT') and not allow_bone_shop_gables:
         return
     min_x = min(x0, x1)
     max_x = max(x0, x1)
@@ -1476,41 +1480,24 @@ def _build_hajfin_cargo_stack(bm, x, y, z):
 
 
 def _build_hajfin_bone_shop_table(bm, x, y, z, width=3.8):
-    """Rough open display table for heavy scrimshaw and salvaged goods."""
-    table_d = 0.95
-    table_h = 1.18
-    top_th = 0.18
+    """Simple rough timber display table for heavy scrimshaw and salvaged goods."""
+    table_d = 0.78
+    table_h = 1.02
+    top_th = 0.16
     create_box(
         bm, (width, table_d, top_th),
-        (x, y, z + table_h), rotation=(0.0, 0.018, -0.012),
+        (x, y, z + table_h),
         mat_index=MAT_INDEX_TIMBER,
     )
-    # Uneven legs deliberately read as lashed driftwood, not a solid wall box.
-    for lx, ly, lean in (
-        (x - width * 0.42, y - table_d * 0.34, -0.035),
-        (x + width * 0.39, y - table_d * 0.30, 0.028),
-        (x - width * 0.36, y + table_d * 0.30, 0.022),
-        (x + width * 0.43, y + table_d * 0.28, -0.030),
-    ):
+    for lx in (x - width * 0.40, x + width * 0.40):
         create_box(
-            bm, (0.24, 0.24, table_h),
-            (lx, ly, z + table_h * 0.5),
-            rotation=(lean, -lean * 0.6, 0.0),
+            bm, (0.18, 0.18, table_h),
+            (lx, y - table_d * 0.28, z + table_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
         )
-    # Open lower rack for crates and bone stock; it stays visibly separate
-    # from the wall and leaves the floor readable beneath the table.
-    create_box(
-        bm, (width - 0.28, 0.70, 0.14),
-        (x, y + 0.02, z + 0.42),
-        rotation=(0.0, -0.012, 0.008),
-        mat_index=MAT_INDEX_TIMBER,
-    )
-    for sgn in (-1.0, 1.0):
         create_box(
-            bm, (0.16, 0.76, 0.48),
-            (x + sgn * (width * 0.5 - 0.16), y + 0.02, z + 0.66),
-            rotation=(0.0, sgn * 0.025, 0.0),
+            bm, (0.18, 0.18, table_h),
+            (lx, y + table_d * 0.28, z + table_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
         )
 
@@ -2012,7 +1999,11 @@ def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26):
     """Builds a gable triangle wall on the West or East side with VERTICAL wood planks
     matching the wall siding orientation and continuous grain with zero stepped cuts."""
     roof_style = getattr(_HAJFIN_ROOF_PROPS, 'roof_style', 'SHINGLES') if _HAJFIN_ROOF_PROPS is not None else 'SHINGLES'
-    if roof_style in ('SWAY', 'TARP', 'PLANKS', 'FLAT'):
+    allow_bone_shop_gables = (
+        _HAJFIN_ROOF_PROPS is not None
+        and getattr(_HAJFIN_ROOF_PROPS, 'hajfin_style', '') == 'BONE_SHOP'
+    )
+    if roof_style in ('SWAY', 'TARP', 'PLANKS', 'FLAT') and not allow_bone_shop_gables:
         return
     min_y = min(y0, y1)
     max_y = max(y0, y1)
@@ -2556,7 +2547,7 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
     col_size = 0.48
     for cx in (-hw, hw):
         for cy in (-hd, hd):
-            _build_chunky_corner_column(bm, cx, cy, z0, z_mid, size=col_size, extend_top=0.25)
+            _build_chunky_corner_column(bm, cx, cy, z0, z_mid - 0.30, size=col_size, extend_top=0.0)
 
     # 4. Solid Timber Awning Canopy (Framed with rafters, ledger, front fascia, and bargeboards)
     awning_ledger_z = open_top_z + lintel_h + 0.18
@@ -2772,7 +2763,7 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
     # Upper corner columns
     for cx in (-u_hw, u_hw):
         for cy in (u_y0, u_y1):
-            _build_chunky_corner_column(bm, cx, cy, z_mid, z_top, size=0.40, extend_top=0.0)
+            _build_chunky_corner_column(bm, cx, cy, z_mid, z_top - 0.08, size=0.40, extend_top=0.0)
 
     # 8. Interior Baseboard Skirting around upper room floor (seals wall-to-floor joints 100%)
     skirt_w = u_w - wall_th * 2.0
