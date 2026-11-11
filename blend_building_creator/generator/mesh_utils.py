@@ -134,34 +134,48 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
         if is_wall and mat_index == 11 and f_idx == 4:
             f.material_index = 1 # Keep interior room wall clean plaster
             
-        if is_wall:
-            # Wall unwrap: Continuous world-space UV coordinates across the facade.
-            # Avoids identical knot repetition across adjacent wall panels/planks.
-            # Staggers vertical texture offset so knots never align in horizontal rows.
+        if is_wall or mat_index == 53:
+            # Universal wall unwrap:
+            # Rotated walls (round hut facets, canted bays, angled dormers) use local coordinate projection
+            # so planks run 100% straight along local Z with zero twist and zero distortion.
+            # Unrotated walls (main building facades, gables) use world-space coordinates so adjacent
+            # wall boxes, gables, and infills share continuous vertical seams and identical scale.
             if mat_index in (0, 1, 8, 11):
                 su = 1.0
                 sv = 1.0
-                v_stagger = 0.0
             else:
-                su = 0.26
-                sv = 0.20
-                # Stagger vertical plank texture based on wall location
-                v_stagger = math.sin(location[0] * 3.17 + location[1] * 2.11) * 0.42
+                su = 0.70
+                sv = 0.40
 
-            for loop in f.loops:
-                co = loop.vert.co
-                fn = f.normal
-                fnx, fny, fnz = abs(fn.x), abs(fn.y), abs(fn.z)
-                if fnz >= fnx and fnz >= fny:
-                    u = co.x * su + u_offset
-                    v = co.y * sv + v_offset
-                elif fnx >= fny:
-                    u = co.y * su + u_offset
-                    v = (co.z + v_stagger) * sv + v_offset
-                else:
-                    u = co.x * su + u_offset
-                    v = (co.z + v_stagger) * sv + v_offset
-                loop[uv_layer].uv = Vector((u, v))
+            has_rot = (abs(rotation[0]) > 0.001 or abs(rotation[1]) > 0.001 or abs(rotation[2]) > 0.001 or transform_matrix is not None)
+            if has_rot:
+                for loop_idx, v_idx in enumerate(idxs):
+                    lv = verts[v_idx]
+                    if f_idx in (0, 1): # Top/Bottom
+                        u = (lv.x + sx) * su + u_offset
+                        v = (lv.y + sy) * su + v_offset
+                    elif f_idx in (2, 4): # Front/Back
+                        u = (lv.x + sx) * su + u_offset
+                        v = (lv.z + sz) * sv + v_offset
+                    else: # Left/Right
+                        u = (lv.y + sy) * su + u_offset
+                        v = (lv.z + sz) * sv + v_offset
+                    f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+            else:
+                for loop in f.loops:
+                    co = loop.vert.co
+                    fn = f.normal
+                    fnx, fny, fnz = abs(fn.x), abs(fn.y), abs(fn.z)
+                    if fnz >= fnx and fnz >= fny:
+                        u = co.x * su + u_offset
+                        v = co.y * su + v_offset
+                    elif fnx >= fny:
+                        u = co.y * su + u_offset
+                        v = co.z * sv + v_offset
+                    else:
+                        u = co.x * su + u_offset
+                        v = co.z * sv + v_offset
+                    loop[uv_layer].uv = Vector((u, v))
             f.tag = True
         elif mat_index in (0, 1, 3, 8, 11, 43, 44):
             # Masonry / stone / plaster / cut stone / floor / dungeon wall & floor box (foundations, steps, plinths, slabs, pillars, stone blocks):
@@ -183,7 +197,7 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                     v = (lv.z + sz) * scale + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
             f.tag = True
-        elif mat_index == 2 or (not is_wall and dims_sorted[2] >= 1.4 * dims_sorted[1] and dims_sorted[1] <= 1.25):
+        elif mat_index == 2 or (mat_index != 53 and not is_wall and dims_sorted[2] >= 1.5 * dims_sorted[1] and dims_sorted[1] <= 0.65):
             # True slender structural beam or column: V along longitudinal axis, U around perimeter
             if dz >= dx and dz >= dy:
                 # Vertical post / column: V along longitudinal Z axis, U around circumference
@@ -1196,20 +1210,37 @@ def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 
             continue
         nx, ny, nz = abs(normal.x), abs(normal.y), abs(normal.z)
         
+        # Material-specific calibrated world-space scale factors
+        if face.material_index == 53: # MAT_INDEX_DRIFTWOOD wall siding
+            u_s = 0.70
+            v_s = 0.40
+        elif face.material_index == 2: # MAT_INDEX_TIMBER structural beams
+            u_s = 0.40
+            v_s = 0.40
+        elif face.material_index == 3: # MAT_INDEX_FLOOR timber deck
+            u_s = 0.50
+            v_s = 0.50
+        elif face.material_index in (0, 8, 54): # Stone masonry / reef stone
+            u_s = 0.45
+            v_s = 0.45
+        else:
+            u_s = scale
+            v_s = scale
+
         for loop in face.loops:
             co = loop.vert.co
             if nz >= nx and nz >= ny:
                 # Top / bottom projection (XY)
-                u = co.x * scale
-                v = co.y * scale
+                u = co.x * u_s
+                v = co.y * u_s
             elif nx >= ny:
-                # Left / right projection (YZ)
-                u = co.y * scale
-                v = co.z * scale
+                # Left / right projection (YZ, vertical planks)
+                u = co.y * u_s
+                v = co.z * v_s
             else:
-                # Front / back projection (XZ)
-                u = co.x * scale
-                v = co.z * scale
+                # Front / back projection (XZ, vertical planks)
+                u = co.x * u_s
+                v = co.z * v_s
             loop[uv_layer].uv = Vector((u, v))
 
 def create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055, minor_radius=0.011, major_segments=16, minor_segments=8, mat_index=6):
