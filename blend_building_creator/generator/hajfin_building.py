@@ -781,9 +781,7 @@ def _build_whale_spine_buttress(bm, x, y, z0, rot_z=0.0, num_vertebrae=6, max_h=
 
 
 def _build_shark_skull_mount(bm, x, y, z, rot_z=0.0, scale=1.0):
-    """Stylized carved bone trophy crest mounted proudly on the building facade.
-    Features a diamond timber shield backing plate, twin crossed carved bone tusks forming a tribal X,
-    and a sculpted predatory bone jaw medallion with carved scrimshaw teeth."""
+    """Build a readable carved shark skull trophy on a timber wall plaque."""
     rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
     scale = max(0.5, float(scale))
 
@@ -798,41 +796,77 @@ def _build_shark_skull_mount(bm, x, y, z, rot_z=0.0, scale=1.0):
         create_box(bm, (0.06 * scale, 0.08 * scale, 0.92 * scale),
                    (rim_pos.x, rim_pos.y, rim_pos.z), rotation=(0, 0, rot_z), mat_index=MAT_INDEX_IRON)
 
-    # 2. Twin Crossed Carved Bone Harpoons / Tusks forming a proud tribal X emblem
-    p0_a = rot_mat @ Vector((-0.48 * scale, 0.09 * scale, -0.48 * scale)) + Vector((x, y, z))
-    p1_a = rot_mat @ Vector((0.48 * scale, 0.09 * scale, 0.48 * scale)) + Vector((x, y, z))
-    _create_oriented_beam(bm, p0_a, p1_a, width=0.10 * scale, depth=0.10 * scale, mat_index=MAT_INDEX_BONE)
+    # 2. Complete skull: broad cranium, cheek plates, open jaw, and individual teeth.
+    def _local(p):
+        return rot_mat @ Vector(p) + Vector((x, y, z))
 
-    p0_b = rot_mat @ Vector((0.48 * scale, 0.09 * scale, -0.48 * scale)) + Vector((x, y, z))
-    p1_b = rot_mat @ Vector((-0.48 * scale, 0.09 * scale, 0.48 * scale)) + Vector((x, y, z))
-    _create_oriented_beam(bm, p0_b, p1_b, width=0.10 * scale, depth=0.10 * scale, mat_index=MAT_INDEX_BONE)
+    cranium = _local((0.0, 0.14 * scale, 0.13 * scale))
+    create_cylinder(bm, radius=0.30 * scale, height=0.20 * scale, segments=14,
+                    location=cranium, rotation=(math.pi * 0.5, 0, rot_z),
+                    mat_index=MAT_INDEX_BONE, smooth=True)
+    for sx in (-1.0, 1.0):
+        cheek = _local((sx * 0.24 * scale, 0.16 * scale, -0.03 * scale))
+        create_beveled_box(bm, (0.18 * scale, 0.16 * scale, 0.42 * scale),
+                           cheek, rotation=(0.0, sx * 0.20, rot_z),
+                           mat_index=MAT_INDEX_BONE, bevel_amount=0.035 * scale)
 
-    # Sharpened conical tips on the 4 bone tusk ends
-    for t_pt in ((-0.52, -0.52), (0.52, 0.52), (0.52, -0.52), (-0.52, 0.52)):
-        tip_pos = rot_mat @ Vector((t_pt[0] * scale, 0.09 * scale, t_pt[1] * scale)) + Vector((x, y, z))
-        create_cone(bm, radius1=0.055 * scale, radius2=0.008 * scale, height=0.16 * scale, segments=5,
-                    location=(tip_pos.x, tip_pos.y, tip_pos.z),
-                    rotation=(0, 0, rot_z), mat_index=MAT_INDEX_BONE)
+    jaw = _local((0.0, 0.18 * scale, -0.22 * scale))
+    create_beveled_box(bm, (0.48 * scale, 0.14 * scale, 0.12 * scale), jaw,
+                       rotation=(0.0, 0.0, rot_z),
+                       mat_index=MAT_INDEX_BONE, bevel_amount=0.025 * scale)
+    for sx in (-1.0, 1.0):
+        jaw_arm = _local((sx * 0.20 * scale, 0.15 * scale, -0.12 * scale))
+        create_beveled_box(bm, (0.10 * scale, 0.13 * scale, 0.26 * scale),
+                           jaw_arm, rotation=(0.0, sx * 0.35, rot_z),
+                           mat_index=MAT_INDEX_BONE, bevel_amount=0.018 * scale)
 
-    # 3. Central Sculpted Predatory Megalodon Jaw Medallion
-    m_pos = rot_mat @ Vector((0.0, 0.14 * scale, 0.0)) + Vector((x, y, z))
-    create_cylinder(bm, radius=0.28 * scale, height=0.10 * scale, segments=8,
-                    location=(m_pos.x, m_pos.y, m_pos.z),
-                    rotation=(math.pi * 0.5, 0, rot_z), mat_index=MAT_INDEX_BONE)
+    # Dark iron eye sockets give the otherwise pale skull a clear face.
+    for sx in (-1.0, 1.0):
+        eye = _local((sx * 0.12 * scale, 0.245 * scale, 0.13 * scale))
+        create_cylinder(bm, radius=0.075 * scale, height=0.018 * scale, segments=12,
+                        location=eye, rotation=(math.pi * 0.5, 0, rot_z),
+                        mat_index=MAT_INDEX_IRON)
 
-    # Sculpted bone dorsal tooth / horn curving forward & upward from the medallion center
-    f_pos = rot_mat @ Vector((0.0, 0.20 * scale, 0.06 * scale)) + Vector((x, y, z))
-    create_cone(bm, radius1=0.16 * scale, radius2=0.02 * scale, height=0.45 * scale, segments=6,
-                location=(f_pos.x, f_pos.y, f_pos.z),
+    for i in range(5):
+        tx = (-0.20 + i * 0.10) * scale
+        tooth = _local((tx, 0.25 * scale, -0.27 * scale))
+        create_cone(bm, radius1=0.035 * scale, radius2=0.004 * scale,
+                    height=(0.18 if i % 2 else 0.14) * scale, segments=6,
+                    location=tooth, rotation=(math.pi, 0, rot_z),
+                    mat_index=MAT_INDEX_BONE)
+
+    brow = _local((0.0, 0.20 * scale, 0.34 * scale))
+    create_cone(bm, radius1=0.11 * scale, radius2=0.015 * scale,
+                height=0.36 * scale, segments=8, location=brow,
                 rotation=(0.35, 0, rot_z), mat_index=MAT_INDEX_BONE)
 
-    # Carved sharp scrimshaw teeth along bottom edge of medallion
-    for i in range(4):
-        tx = (-0.15 + i * 0.10) * scale
-        t_loc = rot_mat @ Vector((tx, 0.18 * scale, -0.22 * scale)) + Vector((x, y, z))
-        create_cone(bm, radius1=0.035 * scale, radius2=0.005 * scale, height=0.14 * scale, segments=4,
-                    location=(t_loc.x, t_loc.y, t_loc.z),
-                    rotation=(math.pi, 0, rot_z), mat_index=MAT_INDEX_BONE)
+
+def _build_continuous_bone_arc(bm, points, base_radius=0.20, mat_index=MAT_INDEX_BONE):
+    """Create one uninterrupted tapered bone tube along a curved centreline."""
+    if len(points) < 2:
+        return
+    sides = 10
+    rings = []
+    for i, point in enumerate(points):
+        tangent = (points[min(i + 1, len(points) - 1)] -
+                   points[max(0, i - 1)]).normalized()
+        radial = Vector((point.x, point.y, 0.0))
+        if radial.length < 1e-5:
+            radial = Vector((1.0, 0.0, 0.0))
+        radial.normalize()
+        across = tangent.cross(radial).normalized()
+        radius = base_radius * (1.0 - 0.30 * i / max(1, len(points) - 1))
+        rings.append([
+            bm.verts.new(point + radial * (math.cos(a) * radius) +
+                         across * (math.sin(a) * radius))
+            for a in (2.0 * math.pi * j / sides for j in range(sides))
+        ])
+    for ri in range(len(rings) - 1):
+        for si in range(sides):
+            bm.faces.new((rings[ri][si], rings[ri][(si + 1) % sides],
+                          rings[ri + 1][(si + 1) % sides], rings[ri + 1][si])).material_index = mat_index
+    bm.faces.new(list(reversed(rings[0]))).material_index = mat_index
+    bm.faces.new(rings[-1]).material_index = mat_index
 
 
 def _build_whale_rib_tunnel_entrance(bm, entrance_x, entrance_y, z0, rot_z=0.0,
@@ -3409,7 +3443,7 @@ def _build_hajfin_shaman_shrine(bm, props, diameter=11.0, height=7.5, found_h=0.
     num_ribs = 6
     arch_r = r_base * 0.70
     dome_h = height
-    n_rib_segs = 8
+    n_rib_segs = 18
     for i in range(num_ribs):
         ang = i * (2.0 * math.pi / num_ribs)
         cos_a = math.cos(ang)
@@ -3422,15 +3456,9 @@ def _build_hajfin_shaman_shrine(bm, props, diameter=11.0, height=7.5, found_h=0.
             z_cur = z0 + (math.sin(t * math.pi * 0.5) ** 0.85) * dome_h
             rib_pts.append(Vector((cos_a * r_cur, sin_a * r_cur, z_cur)))
 
-        for s_idx in range(n_rib_segs):
-            t_mid = (s_idx + 0.5) / n_rib_segs
-            w_cur = 0.38 * (1.0 - t_mid * 0.55)
-            d_cur = 0.30 * (1.0 - t_mid * 0.55)
-            _create_oriented_beam(bm, rib_pts[s_idx], rib_pts[s_idx + 1],
-                                  width=w_cur, depth=d_cur, mat_index=MAT_INDEX_BONE)
-
-        create_torus_ring(bm, (cos_a * arch_r, sin_a * arch_r, z0 + 0.45),
-                          major_radius=0.26, minor_radius=0.035, mat_index=MAT_INDEX_ROPE)
+        _build_continuous_bone_arc(
+            bm, rib_pts, base_radius=0.22, mat_index=MAT_INDEX_BONE
+        )
 
     # 3. Apex Sculpted Bone Crown with 4 Curved Horn Finials
     create_cylinder(bm, radius=0.45, height=0.35, segments=8,
@@ -3479,7 +3507,6 @@ def _build_hajfin_shaman_shrine(bm, props, diameter=11.0, height=7.5, found_h=0.
                     location=(0.0, ty, z0 + totem_h + 0.25), mat_index=MAT_INDEX_DRIFTWOOD)
         _build_shark_skull_mount(bm, -0.15, ty, z0 + totem_h * 0.75,
                                  rot_z=math.pi * 0.5, scale=0.95)
-        create_torus_ring(bm, (0.0, ty, z0 + totem_h * 0.75), major_radius=0.22, minor_radius=0.025, mat_index=MAT_INDEX_ROPE)
 
 
 # =============================================================================
