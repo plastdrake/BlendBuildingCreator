@@ -511,9 +511,9 @@ def _build_wall_with_window_x(bm, x0, x1, y, z0, z1, win_cx, win_cz, win_w=0.75,
         create_box(bm, (right_w, wall_th, z1 - z0), (win_cx + w_half_w + right_w * 0.5, y, z0 + (z1 - z0) * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
     # 5. Window Frame & Iron Bars inside opening
-    frame_y = y + (wall_th * 0.45 if facing_north else -wall_th * 0.45)
+    frame_y = y + (wall_th * 0.5 if facing_north else -wall_th * 0.5)
     rot_z = math.pi if facing_north else 0.0
-    _build_bone_window(bm, win_cx, frame_y, win_cz, rot_z=rot_z, w=win_w, h=win_h)
+    _build_bone_window(bm, win_cx, frame_y, win_cz, rot_z=rot_z, w=win_w, h=win_h, wall_th=wall_th)
 
 
 def _build_wall_with_2_windows_x(bm, x0, x1, y, z0, z1, win1_cx, win2_cx, win_cz,
@@ -554,10 +554,10 @@ def _build_wall_with_2_windows_x(bm, x0, x1, y, z0, z1, win1_cx, win2_cx, win_cz
         create_box(bm, (w_right, wall_th, z1 - z0), (win2_cx + w_half_w + w_right * 0.5, y, z0 + (z1 - z0) * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
     # 6. Bone windows
-    frame_y = y + (wall_th * 0.45 if facing_north else -wall_th * 0.45)
+    frame_y = y + (wall_th * 0.5 if facing_north else -wall_th * 0.5)
     rot_z = math.pi if facing_north else 0.0
-    _build_bone_window(bm, win1_cx, frame_y, win_cz, rot_z=rot_z, w=win_w, h=win_h)
-    _build_bone_window(bm, win2_cx, frame_y, win_cz, rot_z=rot_z, w=win_w, h=win_h)
+    _build_bone_window(bm, win1_cx, frame_y, win_cz, rot_z=rot_z, w=win_w, h=win_h, wall_th=wall_th)
+    _build_bone_window(bm, win2_cx, frame_y, win_cz, rot_z=rot_z, w=win_w, h=win_h, wall_th=wall_th)
 
 
 def _build_wall_with_window_y(bm, y0, y1, x, z0, z1, win_cy, win_cz, win_w=0.75, win_h=0.75,
@@ -587,52 +587,99 @@ def _build_wall_with_window_y(bm, y0, y1, x, z0, z1, win_cy, win_cz, win_w=0.75,
         create_box(bm, (wall_th, back_w, z1 - z0), (x, win_cy + w_half_w + back_w * 0.5, z0 + (z1 - z0) * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
     # 5. Window Frame & Iron Bars inside opening
-    frame_x = x + (wall_th * 0.45 if facing_east else -wall_th * 0.45)
+    frame_x = x + (wall_th * 0.5 if facing_east else -wall_th * 0.5)
     rot_z = math.pi * 0.5 if facing_east else -math.pi * 0.5
-    _build_bone_window(bm, frame_x, win_cy, win_cz, rot_z=rot_z, w=win_w, h=win_h)
+    _build_bone_window(bm, frame_x, win_cy, win_cz, rot_z=rot_z, w=win_w, h=win_h, wall_th=wall_th)
 
 
-def _build_bone_window(bm, x, y, z, rot_z=0.0, pitch=0.0, w=0.75, h=0.75):
-    """Window framed with 4 carved bone segments and vertical iron security bars.
-    Fully supports 3D wall pitch/lean angles for tapered and slanted walls."""
+def _build_bone_window(bm, x, y, z, rot_z=0.0, pitch=0.0, w=0.75, h=0.75, wall_th=0.26):
+    """Complete, weather-tight stylized window assembly for Hajfin buildings.
+    Fully covers and seals the entire wall cutout hole on BOTH exterior and interior:
+    - Full-depth timber jamb liners encasing the cutout through the entire wall thickness.
+    - Prominent carved bone exterior casing frame overlapping the wall planks by ~10cm on all sides.
+    - Interior timber window casing trim framing the opening inside the room.
+    - Vertical iron security bars and recessed glass pane.
+    - Zero visible cut gaps, zero see-through cracks, zero unfinished wall guts."""
     rot_mat = Matrix.Rotation(rot_z, 4, 'Z') @ Matrix.Rotation(pitch, 4, 'X')
-    bone_r = 0.065
+    rot_euler = rot_mat.to_euler()
     hw = w * 0.5
     hh = h * 0.5
 
-    # 4 Bone frame segments along the 4 edges
-    p_bl = rot_mat @ Vector((-hw, 0.0, -hh)) + Vector((x, y, z))
-    p_br = rot_mat @ Vector((hw, 0.0, -hh)) + Vector((x, y, z))
-    p_tl = rot_mat @ Vector((-hw, 0.0, hh)) + Vector((x, y, z))
-    p_tr = rot_mat @ Vector((hw, 0.0, hh)) + Vector((x, y, z))
+    def _add_local_box(size, local_pos, mat_idx, is_wall=False):
+        w_pos = rot_mat @ Vector(local_pos) + Vector((x, y, z))
+        create_box(bm, size, (w_pos.x, w_pos.y, w_pos.z),
+                   rotation=(rot_euler.x, rot_euler.y, rot_euler.z),
+                   mat_index=mat_idx, is_wall=is_wall)
 
-    # Bottom sill bone
-    _create_oriented_beam(bm, p_bl, p_br, width=bone_r * 2.0, depth=bone_r * 2.0, mat_index=MAT_INDEX_BONE)
-    # Top lintel bone
-    _create_oriented_beam(bm, p_tl, p_tr, width=bone_r * 2.0, depth=bone_r * 2.0, mat_index=MAT_INDEX_BONE)
-    # Left jamb bone
-    _create_oriented_beam(bm, p_bl, p_tl, width=bone_r * 2.0, depth=bone_r * 2.0, mat_index=MAT_INDEX_BONE)
-    # Right jamb bone
-    _create_oriented_beam(bm, p_br, p_tr, width=bone_r * 2.0, depth=bone_r * 2.0, mat_index=MAT_INDEX_BONE)
+    # 1. Full-Depth Cutout Liners (Encase the wall opening through the full wall thickness)
+    liner_th = 0.045
+    liner_depth = wall_th + 0.02
+    liner_y = wall_th * 0.5
 
-    # 4 Corner joint condyle spheres/cylinders
-    for p_corner in (p_bl, p_br, p_tl, p_tr):
-        create_cylinder(bm, radius=bone_r * 1.3, height=bone_r * 1.4, segments=6,
-                        location=(p_corner.x, p_corner.y, p_corner.z), mat_index=MAT_INDEX_BONE)
+    # Bottom sill liner
+    _add_local_box((w, liner_depth, liner_th), (0.0, liner_y, -hh + liner_th * 0.5), MAT_INDEX_TIMBER)
+    # Top lintel liner
+    _add_local_box((w, liner_depth, liner_th), (0.0, liner_y, hh - liner_th * 0.5), MAT_INDEX_TIMBER)
+    # Left jamb liner
+    _add_local_box((liner_th, liner_depth, h - liner_th * 2.0), (-hw + liner_th * 0.5, liner_y, 0.0), MAT_INDEX_TIMBER)
+    # Right jamb liner
+    _add_local_box((liner_th, liner_depth, h - liner_th * 2.0), (hw - liner_th * 0.5, liner_y, 0.0), MAT_INDEX_TIMBER)
 
-    # 3 Vertical iron security bars
+    # 2. Exterior Carved Bone Casing Frame (Firmly overlaps the wood wall planks on all sides)
+    casing_w = 0.12
+    casing_th = 0.055
+    ext_y = -casing_th * 0.5
+
+    # Bottom sill casing (extends slightly past jambs with decorative fantasy horn ears)
+    sill_w = w + casing_w * 2.0 + 0.10
+    _add_local_box((sill_w, casing_th, casing_w), (0.0, ext_y, -hh - casing_w * 0.5 + 0.025), MAT_INDEX_BONE)
+
+    # Top lintel casing
+    lintel_w = w + casing_w * 2.0 + 0.10
+    _add_local_box((lintel_w, casing_th, casing_w), (0.0, ext_y, hh + casing_w * 0.5 - 0.025), MAT_INDEX_BONE)
+
+    # Left and Right side jamb casings
+    jamb_h = h + casing_w * 0.5
+    _add_local_box((casing_w, casing_th, jamb_h), (-hw - casing_w * 0.5 + 0.025, ext_y, 0.0), MAT_INDEX_BONE)
+    _add_local_box((casing_w, casing_th, jamb_h), (hw + casing_w * 0.5 - 0.025, ext_y, 0.0), MAT_INDEX_BONE)
+
+    # 4 Carved bone knuckle condyles at exterior frame corners
+    for sgn_cx in (-1.0, 1.0):
+        for sgn_cz in (-1.0, 1.0):
+            corner_x = sgn_cx * (hw + casing_w * 0.5)
+            corner_z = sgn_cz * (hh + casing_w * 0.5)
+            c_pos = rot_mat @ Vector((corner_x, ext_y - 0.01, corner_z)) + Vector((x, y, z))
+            create_cylinder(bm, radius=0.065, height=0.07, segments=6,
+                            location=(c_pos.x, c_pos.y, c_pos.z),
+                            rotation=(rot_euler.x + math.pi * 0.5, rot_euler.y, rot_euler.z),
+                            mat_index=MAT_INDEX_BONE)
+
+    # 3. Interior Timber Window Trim (Covers the cutout on the INSIDE room face)
+    in_casing_w = 0.085
+    in_casing_th = 0.035
+    in_y = wall_th + in_casing_th * 0.5
+
+    # Interior bottom sill apron
+    _add_local_box((w + in_casing_w * 2.0 + 0.06, in_casing_th, in_casing_w),
+                   (0.0, in_y, -hh - in_casing_w * 0.5 + 0.02), MAT_INDEX_TIMBER)
+    # Interior top lintel casing
+    _add_local_box((w + in_casing_w * 2.0 + 0.06, in_casing_th, in_casing_w),
+                   (0.0, in_y, hh + in_casing_w * 0.5 - 0.02), MAT_INDEX_TIMBER)
+    # Interior left & right jamb casings
+    _add_local_box((in_casing_w, in_casing_th, h),
+                   (-hw - in_casing_w * 0.5 + 0.02, in_y, 0.0), MAT_INDEX_TIMBER)
+    _add_local_box((in_casing_w, in_casing_th, h),
+                   (hw + in_casing_w * 0.5 - 0.02, in_y, 0.0), MAT_INDEX_TIMBER)
+
+    # 4. Iron Security Bars & Weather-Sealed Glass Pane
     num_bars = 3
+    bar_clear_h = h - liner_th * 2.0
     for i in range(num_bars):
-        bx = -w * 0.30 + i * (w * 0.60 / max(1, num_bars - 1))
-        b_bot = rot_mat @ Vector((bx, 0.04, -hh * 0.88)) + Vector((x, y, z))
-        b_top = rot_mat @ Vector((bx, 0.04, hh * 0.88)) + Vector((x, y, z))
-        _create_oriented_beam(bm, b_bot, b_top, width=0.035, depth=0.035, mat_index=MAT_INDEX_IRON)
+        bx = -w * 0.28 + i * (w * 0.56 / max(1, num_bars - 1))
+        _add_local_box((0.035, 0.035, bar_clear_h), (bx, 0.02, 0.0), MAT_INDEX_IRON)
 
-    # Dark recessed backing
-    back_loc = rot_mat @ Vector((0.0, 0.10, 0.0)) + Vector((x, y, z))
-    rot_euler = rot_mat.to_euler()
-    create_box(bm, (w * 0.88, 0.04, h * 0.88), (back_loc.x, back_loc.y, back_loc.z),
-               rotation=(rot_euler.x, rot_euler.y, rot_euler.z), mat_index=MAT_INDEX_GLASS)
+    # Recessed glass pane firmly seated inside the liner frame
+    _add_local_box((w - liner_th * 0.8, 0.03, h - liner_th * 0.8), (0.0, 0.06, 0.0), MAT_INDEX_GLASS)
 
 
 def _build_whale_spine_buttress(bm, x, y, z0, rot_z=0.0, num_vertebrae=6, max_h=2.8):
