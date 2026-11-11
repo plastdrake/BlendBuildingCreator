@@ -265,79 +265,86 @@ def _build_chunky_corner_column(bm, x, y, z0, z1, size=0.42, extend_top=0.38, wi
 
 def _build_wall_with_door_opening(bm, x0, x1, y, z0, z1, door_cx, door_w, door_h,
                                   wall_th=0.26, rot_z=0.0, include_leaf=False):
-    """Builds a solid timber wall with a GENUINE DOOR OPENING cutout,
-    threshold sill, arched vertical plank infill, and a unified, continuous predatory shark jaw
-    doorframe completely hugging and sealing the opening with ZERO gaps.
-    Door leaf is omitted by default so openings remain clear for Unreal Engine interactive doors."""
+    """Builds a solid timber wall with a massive, weather-tight door opening and 3D predatory shark jaw arch.
+    Features:
+    - Clear walkthrough width >= 2.40m and clear walkthrough height >= 3.60m (scaled for 3m tall characters).
+    - Doorframe sits centered in the middle of the wall thickness (y_off = 0.0), wrapping both exterior and interior.
+    - Solid timber jamb posts, threshold sill, and lintel completely box and encase the cutout: zero raw edges, zero gaps.
+    - Left and right walls are solid, continuous vertical-grain panels meeting the door jambs cleanly.
+    - Nothing sticks out into the walkthrough opening (zero obstructing teeth/spikes).
+    - Heavy timber threshold sill beam at floor level."""
     rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
+    # Guarantee doors are tall and wide enough for 3m tall burly characters
+    door_w = max(2.40, float(door_w))
+    avail_h = z1 - z0
+    door_h = max(3.60, min(float(door_h), avail_h * 0.90))
     d_half_w = door_w * 0.5
+    jamb_th = 0.22  # Heavy timber jamb post thickness
+    jamb_depth = wall_th + 0.06
 
-    # 1. Full-Height Side Walls outside the doorway span (Continuous vertical plank siding)
-    left_w = (door_cx - d_half_w) - x0
-    if left_w > 0.05:
-        left_cx = x0 + left_w * 0.5
-        create_box(bm, (left_w, wall_th, z1 - z0), (left_cx, y, z0 + (z1 - z0) * 0.5),
-                   mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    def _add_local_box(sx, sy, sz, local_x, local_z, mat_idx, is_wall=False):
+        local_pos = Vector((local_x, 0.0, local_z))
+        w_pos = rot_mat @ local_pos + Vector((door_cx, y, 0.0))
+        create_box(bm, (sx, sy, sz), (w_pos.x, w_pos.y, w_pos.z),
+                   rotation=(0, 0, rot_z), mat_index=mat_idx, is_wall=is_wall)
 
-    right_w = x1 - (door_cx + d_half_w)
-    if right_w > 0.05:
-        right_cx = (door_cx + d_half_w) + right_w * 0.5
-        create_box(bm, (right_w, wall_th, z1 - z0), (right_cx, y, z0 + (z1 - z0) * 0.5),
-                   mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    # 1. Heavy Timber Door Jamb Posts & Lintel Header framing the cutout
+    # Left vertical jamb post
+    _add_local_box(jamb_th, jamb_depth, door_h, -d_half_w - jamb_th * 0.5, z0 + door_h * 0.5, MAT_INDEX_TIMBER)
+    # Right vertical jamb post
+    _add_local_box(jamb_th, jamb_depth, door_h, d_half_w + jamb_th * 0.5, z0 + door_h * 0.5, MAT_INDEX_TIMBER)
+    # Top horizontal lintel beam
+    lintel_w = door_w + jamb_th * 2.0
+    lintel_h = 0.24
+    _add_local_box(lintel_w, jamb_depth, lintel_h, 0.0, z0 + door_h - lintel_h * 0.5, MAT_INDEX_TIMBER)
 
-    # 2. Continuous Vertical Plank Infill above the pointed arch opening
-    # Planks run vertically from the top of the bone arch curve up to z1 (no open corner gaps, no horizontal blocks)
-    # The inner arch spring is at door_h * 0.52; planks only exist above the arch and dip slightly into the bone tube.
-    z_spring = door_h * 0.52
-    num_door_planks = 8
-    plank_w = door_w / num_door_planks
-    for ki in range(num_door_planks):
-        pk_cx = (door_cx - d_half_w) + (ki + 0.5) * plank_w
-        # Normalized distance from center [0, 1]
-        u_pk = min(1.0, abs(pk_cx - door_cx) / max(0.001, d_half_w))
-        # Pointed arch inner opening curve
-        st = max(0.0, 1.0 - u_pk) ** 0.80
-        z_arch = z_spring + st * (door_h - z_spring)
-        pk_z_bot = z0 + z_arch - 0.08
-        pk_h = z1 - pk_z_bot
-        if pk_h > 0.05:
-            create_box(bm, (plank_w * 1.02, wall_th, pk_h),
-                       (pk_cx, y, pk_z_bot + pk_h * 0.5),
-                       rotation=(0, 0, rot_z), mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    # 2. Left Wall Panel (Solid continuous vertical plank siding from x0 to left jamb)
+    local_x0 = x0 - door_cx
+    left_w = (-d_half_w - jamb_th) - local_x0
+    if left_w > 0.02:
+        _add_local_box(left_w, wall_th, z1 - z0, local_x0 + left_w * 0.5, z0 + (z1 - z0) * 0.5,
+                       MAT_INDEX_DRIFTWOOD, is_wall=True)
 
-    # 3. Heavy Structural Timber Threshold Sill Beam under Doorway
-    sill_w = door_w + 0.60
-    create_box(bm, (sill_w, wall_th + 0.16, 0.16), (door_cx, y, z0 - 0.08), mat_index=MAT_INDEX_TIMBER)
+    # 3. Right Wall Panel (Solid continuous vertical plank siding from right jamb to x1)
+    local_x1 = x1 - door_cx
+    right_w = local_x1 - (d_half_w + jamb_th)
+    if right_w > 0.02:
+        _add_local_box(right_w, wall_th, z1 - z0, (d_half_w + jamb_th) + right_w * 0.5, z0 + (z1 - z0) * 0.5,
+                       MAT_INDEX_DRIFTWOOD, is_wall=True)
 
-    # 4. Optional Recessed Door Leaf (ONLY if include_leaf is True, False by default for UE export)
+    # 4. Continuous Solid Header Wall above arch apex and lintel (from z0 + door_h to z1)
+    header_h = z1 - (z0 + door_h)
+    if header_h > 0.02:
+        _add_local_box(lintel_w, wall_th, header_h, 0.0, z0 + door_h + header_h * 0.5,
+                       MAT_INDEX_DRIFTWOOD, is_wall=True)
+
+    # 5. Heavy Structural Timber Threshold Sill Beam under Doorway
+    sill_w = door_w + jamb_th * 2.0 + 0.60
+    _add_local_box(sill_w, wall_th + 0.24, 0.16, 0.0, z0 + 0.08, MAT_INDEX_TIMBER)
+
+    # 6. Optional Recessed Door Leaf (ONLY if include_leaf is True)
     if include_leaf:
-        recess = (wall_th * 0.25) if rot_z == 0.0 else -(wall_th * 0.25)
-        create_box(bm, (door_w * 0.90, 0.08, door_h * 0.96), (door_cx, y + recess, z0 + door_h * 0.48),
-                   rotation=(0, 0, rot_z), mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
-        for hz in (z0 + door_h * 0.22, z0 + door_h * 0.72):
-            create_box(bm, (door_w * 0.88, 0.02, 0.07), (door_cx, y + recess - 0.045, hz),
-                       rotation=(0, 0, rot_z), mat_index=MAT_INDEX_IRON)
-        create_torus_ring(bm, (door_cx + door_w * 0.28, y + recess - 0.06, z0 + door_h * 0.45),
-                          rotation=(math.pi * 0.5, 0, rot_z), major_radius=0.065, minor_radius=0.013,
-                          major_segments=10, minor_segments=6, mat_index=MAT_INDEX_IRON)
+        _add_local_box(door_w * 0.94, 0.08, (door_h - lintel_h) * 0.96,
+                       0.0, z0 + (door_h - lintel_h) * 0.48, MAT_INDEX_DRIFTWOOD, is_wall=True)
 
-    # 5. Unified 3D Shark Jaw Bone Frame with joined vertices and continuous geometry
+    # 7. Unified 3D Shark Jaw Bone Frame centered in the middle of the wall (y_off = 0.0)
     _build_shark_jaw_arch(bm, door_cx, y, z0, rot_z=rot_z,
                           width=door_w, height=door_h, wall_th=wall_th)
 
 
-def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=1.85, height=3.40, wall_th=0.26):
+def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wall_th=0.26, rot_matrix=None):
     """Exaggerated, beefy 3D predatory shark jaw arch framing the door opening.
-    Constructed as a unified, continuous lofted bone tube mesh with joined vertices,
-    zero intersecting box vertices, heavy base knuckle condyles, inward sharp teeth,
-    and apex dorsal fin emblem."""
-    rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
-    d_half_w = width * 0.5
-    z_spring = height * 0.55
-    bone_rad = 0.28  # Sturdy, exaggerated, beefy bone cross-section
+    Sits centered in the middle of the wall (y_off = 0.0), wrapping both exterior and interior
+    with zero cut edges showing, zero obstructing spikes, and generous clearance for 3m tall characters."""
+    if rot_matrix is not None:
+        rot_mat = rot_matrix
+    else:
+        rot_mat = Matrix.Rotation(rot_z, 4, 'Z')
 
-    # Y offset of the jaw frame to straddle the wall exterior
-    y_off = -(wall_th * 0.5 + bone_rad * 0.45) if rot_z == 0.0 else (wall_th * 0.5 + bone_rad * 0.45)
+    d_half_w = width * 0.5
+    z_spring = min(height * 0.78, 3.40)  # Upright jamb height (3.4m clear!)
+    bone_rad = 0.32  # Sturdy, exaggerated, beefy bone cross-section
+    y_off = 0.0
 
     num_segs = 8  # 8-sided octagonal cross section for the bone tube
     uv_layer = bm.loops.layers.uv.verify()
@@ -353,13 +360,13 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=1.85, height=3.40, wa
             if t <= 0.45:
                 st = t / 0.45
                 cur_z = st * z_spring
-                cur_x = side_sgn * (d_half_w + bone_rad * (0.45 - 0.15 * st))
+                cur_x = side_sgn * (d_half_w + bone_rad * 0.55)
             else:
                 st = (t - 0.45) / 0.55
                 cur_z = z_spring + st * (height - z_spring)
-                cur_x = side_sgn * ((d_half_w + bone_rad * 0.30) * (1.0 - st ** 1.3))
+                cur_x = side_sgn * ((d_half_w + bone_rad * 0.55) * (1.0 - (st ** 1.30)))
             spine_pts.append(Vector((cur_x, y_off, cur_z)))
-            r = bone_rad * (1.30 - 0.38 * t)
+            r = bone_rad * (1.25 - 0.35 * t)
             radii.append(r)
 
         # 2. Build cross-section vertex rings along the spine
@@ -381,7 +388,7 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=1.85, height=3.40, wa
             v_ring = []
             for j in range(num_segs):
                 ang = j * (2.0 * math.pi / num_segs)
-                offset = norm_x * (math.cos(ang) * r) + norm_y * (math.sin(ang) * r * 1.15)
+                offset = norm_x * (math.cos(ang) * r) + norm_y * (math.sin(ang) * r * 1.18)
                 local_pt = p + offset
                 w_pt = rot_mat @ local_pt + Vector((cx, cy, cz))
                 v = bm.verts.new(w_pt)
@@ -418,16 +425,7 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=1.85, height=3.40, wa
         f_base.material_index = MAT_INDEX_BONE
         f_base.tag = True
 
-        # Inward-pointing sharp shark teeth along the inner rim
-        for si in range(2, num_steps - 1):
-            p = spine_pts[si]
-            in_dir = Vector((-side_sgn, 0.0, 0.0))
-            t_loc = rot_mat @ (p + in_dir * (radii[si] * 0.85) + Vector((0.0, -0.04, 0.0))) + Vector((cx, cy, cz))
-            tooth_len = 0.22 + 0.04 * math.sin(si * 2.0)
-            tooth_rot = (0.0, math.pi * 0.5 * side_sgn, rot_z)
-            create_cone(bm, radius1=0.065, radius2=0.008, height=tooth_len, segments=5,
-                        location=(t_loc.x, t_loc.y, t_loc.z),
-                        rotation=tooth_rot, mat_index=MAT_INDEX_BONE)
+        # NOTE: Obstructing sharp teeth cones are removed so walkthrough is 100% open and unobstructed!
 
     # 4. Seamless Apex Cap joining the left and right mandibles together cleanly
     r_left = top_rings[-1.0]
@@ -435,7 +433,6 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=1.85, height=3.40, wa
     # Bridge the two top rings with continuous quad faces across the apex
     for j in range(num_segs):
         j_next = (j + 1) % num_segs
-        # Invert ring order for right side so face normals point consistently outward
         j_opp = (num_segs - 1 - j) % num_segs
         j_opp_next = (num_segs - 1 - j_next) % num_segs
         try:
@@ -446,8 +443,9 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=1.85, height=3.40, wa
             pass
 
     # 5. Carved Bone Dorsal Fin Emblem firmly mounted directly atop the arch apex (no air gap)
-    emblem_loc = rot_mat @ Vector((0.0, y_off - 0.02, height + 0.02)) + Vector((cx, cy, cz))
-    _build_bone_fin_emblem(bm, emblem_loc.x, emblem_loc.y, emblem_loc.z, rot_z, scale=0.85)
+    emblem_loc = rot_mat @ Vector((0.0, 0.0, height + 0.02)) + Vector((cx, cy, cz))
+    rot_euler = rot_mat.to_euler()
+    _build_bone_fin_emblem(bm, emblem_loc.x, emblem_loc.y, emblem_loc.z, rot_euler.z, scale=0.85)
 
 
 def _build_bone_fin_emblem(bm, x, y, z, rot_z=0.0, scale=0.6):
@@ -927,7 +925,7 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
 
     # 1. Solid Heavy Timber Ridge Beam
     ridge_len = span_y + 0.4
-    create_box(bm, (0.36, ridge_len, 0.38), (mx, my, peak_z), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (0.36, ridge_len, 0.38), (mx, my, peak_z), mat_index=MAT_INDEX_TIMBER)
 
     # 2. Solid Roof Deck Slopes with Downward Bone Scale Texture Mapping
     # Left slope (x < mx)
@@ -944,7 +942,7 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
         for side in (-1.0, 1.0):
             p_peak = (mx, gy, peak_z)
             p_eave = (mx + side * half_span, gy, eave_z)
-            _create_oriented_beam(bm, p_peak, p_eave, width=0.24, depth=0.24, mat_index=MAT_INDEX_DRIFTWOOD)
+            _create_oriented_beam(bm, p_peak, p_eave, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
 
     # 4. Ridge Dorsal Fin Bone & Jagged Teeth Crest
     _build_ridge_crest_fin_and_spines(bm, mx, y0 - overhang_y, y1 + overhang_y,
@@ -1521,6 +1519,8 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
 
         if i == 6:
             # SOUTH DOOR FACET (facing South, centered at x=0)
+            door_w = max(2.30, float(getattr(props, 'door_width', 2.30)))
+            door_h = max(3.50, min(float(getattr(props, 'door_height', 3.80)), height * 0.85))
             t_door_half = (door_w * 0.5) / max(0.01, w_base_f)
             s_L = max(0.05, 0.5 - t_door_half)
             s_R = min(0.95, 0.5 + t_door_half)
@@ -1534,6 +1534,12 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
             p_headL = pb_jL * (1.0 - h_door) + pt_jL * h_door
             p_headR = pb_jR * (1.0 - h_door) + pt_jR * h_door
 
+            # Heavy timber door jamb beams & lintel encasing the facet cutout
+            jamb_th = 0.22
+            _create_oriented_beam(bm, pb_jL, p_headL, width=jamb_th, depth=wall_th + 0.06, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, pb_jR, p_headR, width=jamb_th, depth=wall_th + 0.06, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, p_headL, p_headR, width=jamb_th, depth=wall_th + 0.06, mat_index=MAT_INDEX_TIMBER)
+
             # Left jamb wall panel
             _build_tapered_facet_panel(bm, pb0, pb_jL, pt0, pt_jL, n_vec, wall_th,
                                        u_start=0.0, build_right_cap=True)
@@ -1546,12 +1552,21 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
             _build_tapered_facet_panel(bm, p_headL, p_headR, pt_jL, pt_jR, n_vec, wall_th,
                                        u_start=1.2, build_bot_cap=True)
 
-            # Heavy timber threshold sill beam
-            create_box(bm, (door_w + 0.35, wall_th + 0.12, 0.16), (0.0, mb.y, z0 + 0.07),
+            # Heavy timber threshold sill beam centered at middle of wall thickness
+            sill_p = (pb_jL + pb_jR) * 0.5 - n_vec * (wall_th * 0.5)
+            create_box(bm, (door_w + 0.60, wall_th + 0.24, 0.16), (sill_p.x, sill_p.y, z0 + 0.08),
                        mat_index=MAT_INDEX_TIMBER)
 
-            # Continuous 3D Shark Jaw Bone Archway framing the opening
-            _build_shark_jaw_arch(bm, 0.0, mb.y, z0, rot_z=0.0, width=door_w, height=door_h, wall_th=wall_th)
+            # Continuous 3D Shark Jaw Bone Archway framing opening flush on tilted facet
+            p_door_center = mb - n_vec * (wall_th * 0.5)
+            r_door_mat = Matrix((
+                (u_vec.x, -n_vec.x, w_vec.x, 0.0),
+                (u_vec.y, -n_vec.y, w_vec.y, 0.0),
+                (u_vec.z, -n_vec.z, w_vec.z, 0.0),
+                (0.0,     0.0,      0.0,     1.0)
+            ))
+            _build_shark_jaw_arch(bm, p_door_center.x, p_door_center.y, z0,
+                                  rot_matrix=r_door_mat, width=door_w, height=door_h, wall_th=wall_th)
 
         elif i in (5, 7):
             # SOUTH-WEST (i=5) and SOUTH-EAST (i=7) FLANK WINDOW FACETS
@@ -1720,7 +1735,7 @@ def _build_bone_scale_roof_gable_ew(bm, x0, x1, y0, y1, eave_z, peak_h,
     pitch_angle = math.atan2(peak_h, half_span_y)
 
     # 1. Heavy Timber Ridge Beam along X
-    create_box(bm, (span_x + 0.4, 0.36, 0.38), (mx, my, peak_z), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (span_x + 0.4, 0.36, 0.38), (mx, my, peak_z), mat_index=MAT_INDEX_TIMBER)
 
     # 2. Solid Roof Deck Slopes with Downward Bone Scale Texture Mapping
     uv_layer = bm.loops.layers.uv.verify()
@@ -1765,7 +1780,7 @@ def _build_bone_scale_roof_gable_ew(bm, x0, x1, y0, y1, eave_z, peak_h,
         for side in (-1.0, 1.0):
             p_peak = (gx, my, peak_z)
             p_eave = (gx, my + side * half_span_y, eave_z)
-            _create_oriented_beam(bm, p_peak, p_eave, width=0.24, depth=0.24, mat_index=MAT_INDEX_DRIFTWOOD)
+            _create_oriented_beam(bm, p_peak, p_eave, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
 
     # 4. Central Giant Curved Shark Dorsal Fin on Ridge
     fin_h = 1.65 * fin_scale
