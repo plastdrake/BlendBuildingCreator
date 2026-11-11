@@ -413,7 +413,7 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
                 cur_z = z_spring + st * (height - z_spring)
                 cur_x = side_sgn * ((d_half_w + bone_rad * 0.55) * (1.0 - st ** 1.30))
             side_pts.append(Vector((cur_x, y_off, cur_z)))
-        spine_pts.extend(side_pts if side_sgn < 0 else reversed(side_pts[1:]))
+        spine_pts.extend(side_pts if side_sgn < 0 else reversed(side_pts[:-1]))
 
     rings = []
     for si, point in enumerate(spine_pts):
@@ -446,10 +446,25 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
                                  rings[si + 1][j_next], rings[si + 1][j]))
             face.material_index = MAT_INDEX_BONE
             face.tag = True
+            u0 = si / max(1, len(rings) - 1)
+            u1 = (si + 1) / max(1, len(rings) - 1)
+            v0 = j / num_segs
+            v1 = (j + 1) / num_segs
+            for loop in face.loops:
+                if loop.vert == rings[si][j]:
+                    loop[uv_layer].uv = Vector((u0, v0))
+                elif loop.vert == rings[si][j_next]:
+                    loop[uv_layer].uv = Vector((u0, v1))
+                elif loop.vert == rings[si + 1][j_next]:
+                    loop[uv_layer].uv = Vector((u1, v1))
+                else:
+                    loop[uv_layer].uv = Vector((u1, v0))
     for ring in (rings[0], rings[-1]):
         face = bm.faces.new(list(reversed(ring)))
         face.material_index = MAT_INDEX_BONE
         face.tag = True
+        for j, loop in enumerate(face.loops):
+            loop[uv_layer].uv = Vector((0.0, j / num_segs))
 
 
 def _build_bone_fin_emblem(bm, x, y, z, rot_z=0.0, scale=0.6):
