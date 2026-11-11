@@ -162,7 +162,10 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base, effective_arche
     # -------------------------------------------------------------------------
     tarp_ratio = 0.58
     tarp_long_len = long_len * tarp_ratio + 0.15
-    cloth_t = 0.024
+    # Hajfin sailcloth is layered, salt-stiffened canvas rather than the thin
+    # human tarpaulin. Keep the human roof dimensions unchanged.
+    cloth_t = 0.045 if effective_archetype == 'HAJFIN' else 0.024
+    cloth_bevel = 0.005 if effective_archetype == 'HAJFIN' else 0.003
     roof_cz = z_base + ridge_rise * 0.5 + 0.03
 
     # Place canopy over the negative side (where saw/gear is)
@@ -174,7 +177,7 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base, effective_arche
             bm, size=(tarp_long_len, slope_len + 0.04, cloth_t),
             location=(tarp_cx, front_y_c, roof_cz),
             rotation=(pitch_angle, 0.0, 0.0),
-            mat_index=MAT_INDEX_TARP, bevel_amount=0.003
+            mat_index=MAT_INDEX_TARP, bevel_amount=cloth_bevel
         )
         map_planar_faces(bm, f_faces1, scale=0.8, axis=1)
 
@@ -184,7 +187,7 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base, effective_arche
         f_faces2 = create_beveled_box(
             bm, size=(tarp_long_len, cloth_t, 0.20),
             location=(tarp_cx, f_flap_y, f_flap_z),
-            mat_index=MAT_INDEX_TARP, bevel_amount=0.003
+            mat_index=MAT_INDEX_TARP, bevel_amount=cloth_bevel
         )
         map_planar_faces(bm, f_faces2, scale=0.8, axis=1)
 
@@ -194,7 +197,7 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base, effective_arche
             bm, size=(tarp_long_len, slope_len + 0.04, cloth_t),
             location=(tarp_cx, back_y_c, roof_cz),
             rotation=(-pitch_angle, 0.0, 0.0),
-            mat_index=MAT_INDEX_TARP, bevel_amount=0.003
+            mat_index=MAT_INDEX_TARP, bevel_amount=cloth_bevel
         )
         map_planar_faces(bm, b_faces1, scale=0.8, axis=1)
 
@@ -204,7 +207,7 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base, effective_arche
         b_faces2 = create_beveled_box(
             bm, size=(tarp_long_len, cloth_t, 0.20),
             location=(tarp_cx, b_flap_y, b_flap_z),
-            mat_index=MAT_INDEX_TARP, bevel_amount=0.003
+            mat_index=MAT_INDEX_TARP, bevel_amount=cloth_bevel
         )
         map_planar_faces(bm, b_faces2, scale=0.8, axis=1)
 
@@ -241,7 +244,7 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base, effective_arche
             bm, size=(slope_len + 0.04, tarp_long_len, cloth_t),
             location=(left_x_c, tarp_cy, roof_cz),
             rotation=(0.0, -pitch_angle, 0.0),
-            mat_index=MAT_INDEX_TARP, bevel_amount=0.003
+            mat_index=MAT_INDEX_TARP, bevel_amount=cloth_bevel
         )
         map_planar_faces(bm, f_faces1, scale=0.8, axis=0)
 
@@ -251,7 +254,7 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base, effective_arche
             bm, size=(slope_len + 0.04, tarp_long_len, cloth_t),
             location=(right_x_c, tarp_cy, roof_cz),
             rotation=(0.0, pitch_angle, 0.0),
-            mat_index=MAT_INDEX_TARP, bevel_amount=0.003
+            mat_index=MAT_INDEX_TARP, bevel_amount=cloth_bevel
         )
         map_planar_faces(bm, b_faces1, scale=0.8, axis=0)
 
