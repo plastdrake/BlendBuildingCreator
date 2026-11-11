@@ -2762,6 +2762,41 @@ def create_stylized_bone(name="M_Building_Bone", color=None):
     return mat
 
 
+def create_stylized_bone_shingles(name="M_Building_Bone_Shingles", color=None):
+    """Hand-painted stylized bone-scale / shark-scale roof shingles with moss accents in seams."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-1000)
+    tex_node = _load_image_texture(tree, "bone_scales_roof_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(1.0, 1.0, 1.0))
+    if tex_node is not None:
+        if color is not None:
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-350, 100)
+            tint.inputs["Factor"].default_value = 0.20
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = color
+            color_out = tint.outputs["Result"]
+        else:
+            color_out = tex_node.outputs["Color"]
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.06, scale=1.0)
+        _apply_ao(tree, bsdf, painted, strength=0.55, distance=0.20)
+        _setup_pbr(tree, bsdf, out, roughness=0.62, metallic=0.0)
+
+        bump = tree.nodes.new("ShaderNodeBump")
+        bump.location = (600, -210)
+        bump.inputs["Strength"].default_value = 0.28
+        bump.inputs["Distance"].default_value = 0.03
+        tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
+        tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", color or (0.85, 0.82, 0.74, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.65)
+    return mat
+
+
 # ---------------------------------------------------------------------------
 # Material slot setup
 # ---------------------------------------------------------------------------
@@ -2863,18 +2898,29 @@ def setup_building_material_slots(obj, props):
     clr_floor = getattr(props, 'color_floor', None) or (0.50, 0.35, 0.20, 1.0)
     mat_floor = getattr(props, 'custom_floor', None) or create_stylized_floorboards(f"{mat_prefix}Floor", color=clr_floor, tier=tier)
 
-    # 4. Shingles (thatch / wood shingles / terracotta / slate)
-    if eff_roof_mat == 'THATCH':
+    # 4. Shingles (thatch / wood shingles / terracotta / slate / bone shingles)
+    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+        mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_bone_shingles(
+            f"{mat_prefix}Bone_Shingles",
+            color=getattr(props, 'color_shingles', None)
+        )
+    elif eff_roof_mat == 'THATCH':
         shingle_mat_name = f"{mat_prefix}Thatch"
+        mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_shingles(
+            shingle_mat_name,
+            color=getattr(props, 'color_shingles', None),
+            tier=tier,
+            roof_mat=eff_roof_mat
+        )
     else:
         tier_sfx = 'T1' if tier in ('TIER_1', 1, '1') else ('T2' if tier in ('TIER_2', 2, '2') else 'T3')
         shingle_mat_name = f"{mat_prefix}Shingles_{tier_sfx}"
-    mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_shingles(
-        shingle_mat_name,
-        color=getattr(props, 'color_shingles', None),
-        tier=tier,
-        roof_mat=eff_roof_mat
-    )
+        mat_shingles = getattr(props, 'custom_shingles', None) or create_stylized_shingles(
+            shingle_mat_name,
+            color=getattr(props, 'color_shingles', None),
+            tier=tier,
+            roof_mat=eff_roof_mat
+        )
 
     # 5. Glass (procedural emissive glass)
     mat_glass = getattr(props, 'custom_glass', None) or create_stylized_glass(
@@ -3069,6 +3115,8 @@ def setup_building_material_slots(obj, props):
             mat_wood = mat_driftwood
         if not getattr(props, 'custom_timber_frame', None):
             mat_timber = mat_driftwood
+        if not getattr(props, 'custom_shingles', None):
+            mat_shingles = create_stylized_bone_shingles(f"{mat_prefix}Bone_Shingles", color=getattr(props, 'color_roof', None))
 
     # Assemble canonical slots in strict order
     required_mats = [

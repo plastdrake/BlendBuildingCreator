@@ -28,6 +28,7 @@ from .materials import (
     MAT_INDEX_LOG,
     MAT_INDEX_WOOD,
     MAT_INDEX_GLASS,
+    MAT_INDEX_SHINGLES,
 )
 from .mesh_utils import (
     create_box,
@@ -424,11 +425,72 @@ def _build_tribal_totem_post(bm, x, y, z0, height=2.4):
 # BONE SCALE ROOF GENERATORS (SOLID UNDERLAY + TIGHT TILES)
 # =============================================================================
 
+def _build_roof_slope_slab(bm, x_peak, x_eave, y0, y1, z_peak, z_eave, slab_th=0.14,
+                           u_scale=1.4, v_scale=1.4):
+    """Builds a solid roof slope deck with authentic UV-unwrapped bone scale shingles pointing downward."""
+    uv_layer = bm.loops.layers.uv.verify()
+    span_y = y1 - y0
+    half_span = abs(x_peak - x_eave)
+    peak_h = z_peak - z_eave
+    slope_len = math.hypot(half_span, peak_h)
+
+    dx = x_eave - x_peak
+    dz = z_eave - z_peak
+    s_len = math.hypot(dx, dz)
+    nx = -dz / s_len
+    nz = dx / s_len
+    if nz < 0:
+        nx, nz = -nx, -nz
+
+    v_top_rf = bm.verts.new(Vector((x_peak, y0, z_peak)))
+    v_top_rb = bm.verts.new(Vector((x_peak, y1, z_peak)))
+    v_top_eb = bm.verts.new(Vector((x_eave, y1, z_eave)))
+    v_top_ef = bm.verts.new(Vector((x_eave, y0, z_eave)))
+
+    off_x = -nx * slab_th
+    off_z = -nz * slab_th
+    v_bot_rf = bm.verts.new(Vector((x_peak + off_x, y0, z_peak + off_z)))
+    v_bot_rb = bm.verts.new(Vector((x_peak + off_x, y1, z_peak + off_z)))
+    v_bot_eb = bm.verts.new(Vector((x_eave + off_x, y1, z_eave + off_z)))
+    v_bot_ef = bm.verts.new(Vector((x_eave + off_x, y0, z_eave + off_z)))
+
+    if dx > 0:
+        f_top = bm.faces.new([v_top_rf, v_top_ef, v_top_eb, v_top_rb])
+    else:
+        f_top = bm.faces.new([v_top_rf, v_top_rb, v_top_eb, v_top_ef])
+    f_top.material_index = MAT_INDEX_SHINGLES
+
+    v_tiles = max(0.85, slope_len * v_scale)
+    u_tiles = max(1.0, span_y * u_scale)
+
+    for loop in f_top.loops:
+        v_co = loop.vert.co
+        u = (v_co.y - y0) * u_scale
+        v = ((v_co.z - z_eave) / max(0.1, peak_h)) * v_tiles
+        loop[uv_layer].uv = Vector((u, v))
+
+    if dx > 0:
+        f_bot = bm.faces.new([v_bot_rf, v_bot_rb, v_bot_eb, v_bot_ef])
+        f_eave = bm.faces.new([v_top_ef, v_bot_ef, v_bot_eb, v_top_eb])
+        f_ridge = bm.faces.new([v_top_rb, v_bot_rb, v_bot_rf, v_top_rf])
+        f_front = bm.faces.new([v_top_rf, v_bot_rf, v_bot_ef, v_top_ef])
+        f_back = bm.faces.new([v_top_eb, v_bot_eb, v_bot_rb, v_top_rb])
+    else:
+        f_bot = bm.faces.new([v_bot_rf, v_bot_ef, v_bot_eb, v_bot_rb])
+        f_eave = bm.faces.new([v_top_eb, v_bot_eb, v_bot_ef, v_top_ef])
+        f_ridge = bm.faces.new([v_top_rf, v_bot_rf, v_bot_rb, v_top_rb])
+        f_front = bm.faces.new([v_top_ef, v_bot_ef, v_bot_rf, v_top_rf])
+        f_back = bm.faces.new([v_top_rb, v_bot_rb, v_bot_eb, v_top_eb])
+
+    for f in (f_bot, f_eave, f_ridge, f_front, f_back):
+        f.material_index = MAT_INDEX_DRIFTWOOD
+
+
 def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
                                  overhang_x=0.55, overhang_y=0.55,
                                  fin_scale=1.5, num_ridge_teeth=8):
-    """Builds a 100% weather-tight gable roof with solid timber deck slabs underneath,
-    solid verge bargeboards, and tightly layered overlapping rounded bone scale tiles."""
+    """Builds an optimized, 100% weather-tight gable roof with textured bone scale shingles
+    pointing downward toward the eaves, heavy timber verge bargeboards, ridge beam, and dorsal fin crest."""
     mx = (x0 + x1) * 0.5
     half_span = (x1 - x0) * 0.5 + overhang_x
     span_y = (y1 - y0) + overhang_y * 2
@@ -439,56 +501,29 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
     pitch_angle = math.atan2(peak_h, half_span)
 
     # 1. Solid Heavy Timber Ridge Beam
-    ridge_len = span_y + 0.5
-    create_box(bm, (0.38, ridge_len, 0.40), (mx, my, peak_z), mat_index=MAT_INDEX_DRIFTWOOD)
+    ridge_len = span_y + 0.4
+    create_box(bm, (0.36, ridge_len, 0.38), (mx, my, peak_z), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 2. Solid Timber Roof Deck Slabs (Left & Right Slopes) - GUARANTEES ZERO GAPS
-    deck_th = 0.12
-    for side in (-1.0, 1.0):
-        # Center of the slope slab
-        dx = mx + side * (half_span * 0.5)
-        dz = eave_z + peak_h * 0.5
-        create_box(bm, (slope_len, span_y, deck_th), (dx, my, dz),
-                   rotation=(0, side * (math.pi * 0.5 - pitch_angle), 0),
-                   mat_index=MAT_INDEX_DRIFTWOOD)
+    # 2. Solid Roof Deck Slopes with Downward Bone Scale Texture Mapping
+    # Left slope (x < mx)
+    _build_roof_slope_slab(bm, x_peak=mx, x_eave=mx - half_span,
+                           y0=y0 - overhang_y, y1=y1 + overhang_y,
+                           z_peak=peak_z, z_eave=eave_z, slab_th=0.14, u_scale=0.25, v_scale=0.28)
+    # Right slope (x > mx)
+    _build_roof_slope_slab(bm, x_peak=mx, x_eave=mx + half_span,
+                           y0=y0 - overhang_y, y1=y1 + overhang_y,
+                           z_peak=peak_z, z_eave=eave_z, slab_th=0.14, u_scale=0.25, v_scale=0.28)
 
     # 3. Heavy Timber Verge Bargeboards on Front & Rear Gable Slopes
     for gy in (y0 - overhang_y, y1 + overhang_y):
         for side in (-1.0, 1.0):
             bx = mx + side * (half_span * 0.5)
             bz = eave_z + peak_h * 0.5
-            create_box(bm, (slope_len * 1.02, 0.28, 0.28), (bx, gy, bz),
+            create_box(bm, (slope_len * 1.02, 0.26, 0.26), (bx, gy, bz),
                        rotation=(0, side * (math.pi * 0.5 - pitch_angle), 0),
                        mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 4. Dense Overlapping 3D Rounded Bone Scale Shingles
-    num_rows = max(5, int(peak_h * 3.4))
-    scale_w = 0.55
-    scale_l = 0.65
-    scale_th = 0.06
-    num_cols = max(3, int(span_y / (scale_w * 0.72)))
-
-    for side in (-1.0, 1.0):
-        for row in range(num_rows):
-            t = (row + 0.5) / num_rows
-            row_x = mx + side * (half_span * (1.0 - t))
-            row_z = eave_z + peak_h * t + 0.06
-
-            stagger = (row % 2) * (scale_w * 0.36)
-            for col in range(num_cols + 1):
-                col_y = (y0 - overhang_y + 0.25) + col * (scale_w * 0.72) + stagger
-                if col_y > y1 + overhang_y - 0.15:
-                    continue
-
-                # Each scale is a wide rounded beveled plate lying flush on the roof deck
-                s_pos = (row_x, col_y, row_z)
-                tilt_pitch = side * (math.pi * 0.5 - pitch_angle)
-                create_cone(bm, radius1=scale_w * 0.5, radius2=scale_w * 0.25, height=scale_l, segments=6,
-                            location=s_pos,
-                            rotation=(math.pi * 0.5, tilt_pitch, 0),
-                            mat_index=MAT_INDEX_BONE)
-
-    # 5. Ridge Dorsal Fin Bone & Jagged Teeth Crest
+    # 4. Ridge Dorsal Fin Bone & Jagged Teeth Crest
     _build_ridge_crest_fin_and_spines(bm, mx, y0 - overhang_y, y1 + overhang_y,
                                       peak_z + 0.18, fin_scale=fin_scale, num_teeth=num_ridge_teeth)
 
@@ -519,49 +554,62 @@ def _build_ridge_crest_fin_and_spines(bm, rx, y_start, y_end, rz, fin_scale=1.5,
 
 def _build_bone_scale_roof_conical(bm, cx, cy, eave_z, radius, height,
                                    fin_scale=1.4, num_spears=4):
-    """Conical roof with a solid timber underlay deck and dense overlapping rounded bone scales."""
+    """Optimized conical roof with downward-pointing bone scale shingles, apex timber socket,
+    central giant shark fin, and miniature bone spears."""
     peak_z = eave_z + height
-
-    # 1. Solid Timber Underlay Cone Deck (GUARANTEES ZERO SKY GAPS)
-    create_cone(bm, radius1=radius * 1.02, radius2=0.20, height=height, segments=12,
-                location=(cx, cy, eave_z + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-
-    # 2. Overlapping Rounded Bone Scale Plates in Concentric Rings
-    num_rings = max(5, int(height * 2.8))
-    for ring in range(num_rings):
-        t = ring / num_rings
-        ring_r = radius * (1.0 - t * 0.90)
-        ring_z = eave_z + height * t + 0.04
-        circumference = 2.0 * math.pi * ring_r
-        num_scales = max(6, int(circumference / 0.52))
-
-        slope_pitch = math.atan2(height, radius)
-        stagger = (ring % 2) * (math.pi / max(1, num_scales))
-
-        for s in range(num_scales):
-            ang = s * (2.0 * math.pi / num_scales) + stagger
-            sx = cx + math.cos(ang) * ring_r
-            sy = cy + math.sin(ang) * ring_r
-
-            tile_w = 0.50 * (1.0 - t * 0.35)
-            tile_l = 0.58
-            create_cone(bm, radius1=tile_w * 0.5, radius2=tile_w * 0.25, height=tile_l, segments=6,
-                        location=(sx, sy, ring_z),
-                        rotation=(slope_pitch, 0, ang - math.pi * 0.5),
-                        mat_index=MAT_INDEX_BONE)
-
-    # 3. Solid Apex Timber Socket
     apex_z = peak_z + 0.08
+    uv_layer = bm.loops.layers.uv.verify()
+
+    # 1. Solid Conical Roof Slope with UV-unwrapped bone scales pointing downward
+    num_segs = 16
+    v_top = bm.verts.new(Vector((cx, cy, peak_z)))
+    v_bot_ring = []
+    for i in range(num_segs):
+        ang = i * (2.0 * math.pi / num_segs)
+        bx = cx + math.cos(ang) * radius
+        by = cy + math.sin(ang) * radius
+        v_bot_ring.append(bm.verts.new(Vector((bx, by, eave_z))))
+
+    # Sloped triangular faces
+    slope_len = math.hypot(radius, height)
+    v_tiles = max(0.85, slope_len * 0.28)
+    u_repeat = max(2.5, (2.0 * math.pi * radius) * 0.25)
+
+    for i in range(num_segs):
+        i_next = (i + 1) % num_segs
+        f = bm.faces.new([v_top, v_bot_ring[i], v_bot_ring[i_next]])
+        f.material_index = MAT_INDEX_SHINGLES
+
+        # UVs: apex is at top of texture (v=v_tiles), eave is at bottom (v=0, scalloped tips point down!)
+        u0 = (i / num_segs) * u_repeat
+        u1 = ((i + 1) / num_segs) * u_repeat
+        u_mid = (u0 + u1) * 0.5
+        for loop in f.loops:
+            if loop.vert == v_top:
+                loop[uv_layer].uv = Vector((u_mid, v_tiles))
+            elif loop.vert == v_bot_ring[i]:
+                loop[uv_layer].uv = Vector((u0, 0.0))
+            else:
+                loop[uv_layer].uv = Vector((u1, 0.0))
+
+    # Timber ceiling disk underneath
+    v_center_bot = bm.verts.new(Vector((cx, cy, eave_z)))
+    for i in range(num_segs):
+        i_next = (i + 1) % num_segs
+        f_under = bm.faces.new([v_center_bot, v_bot_ring[i_next], v_bot_ring[i]])
+        f_under.material_index = MAT_INDEX_DRIFTWOOD
+
+    # 2. Solid Apex Timber Socket
     create_cylinder(bm, radius=0.55, height=0.22, segments=10,
                     location=(cx, cy, apex_z), mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # Central giant shark fin
+    # 3. Central giant shark fin
     fin_h = 1.4 * fin_scale
     create_cone(bm, radius1=0.48, radius2=0.03, height=fin_h, segments=5,
                 location=(cx, cy, apex_z + fin_h * 0.45),
                 rotation=(0.25, 0, 0), mat_index=MAT_INDEX_BONE)
 
-    # Miniature bone spears planted around fin
+    # 4. Miniature bone spears planted around fin
     for i in range(num_spears):
         ang = i * (2.0 * math.pi / num_spears) + math.pi * 0.25
         sp_x = cx + math.cos(ang) * 0.35
