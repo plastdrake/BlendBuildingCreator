@@ -388,7 +388,7 @@ def _build_wall_with_door_opening(bm, x0, x1, y, z0, z1, door_cx, door_w, door_h
             for loop in f.loops:
                 lx = loop.vert.co.x
                 lz = loop.vert.co.z
-                loop[uv_layer].uv = Vector((lx * 0.70, lz * 0.40))
+                loop[uv_layer].uv = Vector((lx * 0.18, lz * 0.18))
 
     # 4. Heavy Structural Timber Threshold Sill Beam under Doorway
     sill_w = door_w + 0.60
@@ -597,11 +597,11 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26):
     for f in (f_front, f_back):
         for loop in f.loops:
             co = loop.vert.co
-            loop[uv_layer].uv = Vector((co.x * 0.50, co.z * 0.50))
+            loop[uv_layer].uv = Vector((co.x * 0.18, co.z * 0.18))
     for f in (f_sl, f_sr, f_bot):
         for loop in f.loops:
             co = loop.vert.co
-            loop[uv_layer].uv = Vector((co.y * 0.50, co.z * 0.50))
+            loop[uv_layer].uv = Vector((co.y * 0.18, co.z * 0.18))
 
 def _build_wall_with_window_x(bm, x0, x1, y, z0, z1, win_cx, win_cz, win_w=0.75, win_h=0.75,
                               wall_th=0.26, facing_north=False):
@@ -1550,7 +1550,7 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
 
 
 def _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
-                               u_start=0.0, v_start=0.0, u_scale=0.70, v_scale=0.40,
+                               u_start=0.0, v_start=0.0, u_scale=0.18, v_scale=0.18,
                                mat_index=MAT_INDEX_DRIFTWOOD,
                                build_left_cap=False, build_right_cap=False,
                                build_top_cap=True, build_bot_cap=True):
@@ -1757,8 +1757,8 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
             for f in (f_hf, f_hb):
                 for loop in f.loops:
                     v_rel = loop.vert.co - pb0
-                    u = v_rel.dot(u_vec) * 0.70
-                    v = v_rel.dot(w_vec) * 0.40
+                    u = v_rel.dot(u_vec) * 0.18
+                    v = v_rel.dot(w_vec) * 0.18
                     loop[uv_l].uv = Vector((u, v))
 
             # Heavy timber threshold sill beam centered at middle of wall thickness
@@ -1812,17 +1812,17 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
 
             # 2. Top Header Wall Panel (Full width above window, capped bottom lintel)
             _build_tapered_facet_panel(bm, p_edgeL_top, p_edgeR_top, pt0, pt1, n_vec, wall_th,
-                                       u_start=i * 2.8, v_start=w_top * 0.40, build_bot_cap=True)
+                                       u_start=i * 0.72, v_start=w_top * 0.18, build_bot_cap=True)
 
             # 3. Left Flank Wall Panel (Left of window cutout, capped right jamb)
             _build_tapered_facet_panel(bm, p_edgeL_bot, p_win_bl, p_edgeL_top, p_win_tl, n_vec, wall_th,
-                                       u_start=i * 2.8, v_start=w_bot * 0.40,
+                                       u_start=i * 0.72, v_start=w_bot * 0.18,
                                        build_right_cap=True, build_top_cap=False, build_bot_cap=False)
 
             # 4. Right Flank Wall Panel (Right of window cutout, capped left jamb)
-            u_flank_r = i * 2.8 + (p_win_br - pb0).dot(u_vec) * 0.70
+            u_flank_r = i * 0.72 + (p_win_br - pb0).dot(u_vec) * 0.18
             _build_tapered_facet_panel(bm, p_win_br, p_edgeR_bot, p_win_tr, p_edgeR_top, n_vec, wall_th,
-                                       u_start=u_flank_r, v_start=w_bot * 0.40,
+                                       u_start=u_flank_r, v_start=w_bot * 0.18,
                                        build_left_cap=True, build_top_cap=False, build_bot_cap=False)
 
             # 5. Carved bone window assembly flush in the cutout opening
@@ -1972,11 +1972,11 @@ def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26):
     for f in (f_front, f_back):
         for loop in f.loops:
             co = loop.vert.co
-            loop[uv_layer].uv = Vector((co.y * 0.50, co.z * 0.50))
+            loop[uv_layer].uv = Vector((co.y * 0.18, co.z * 0.18))
     for f in (f_sl, f_sr, f_bot):
         for loop in f.loops:
             co = loop.vert.co
-            loop[uv_layer].uv = Vector((co.x * 0.50, co.z * 0.50))
+            loop[uv_layer].uv = Vector((co.x * 0.18, co.z * 0.18))
 
 
 def _build_bone_scale_roof_gable_ew(bm, x0, x1, y0, y1, eave_z, peak_h,
@@ -3613,6 +3613,34 @@ def _build_timber_deck_railing(bm, x0, x1, y0, y1, z):
                         location=(px, y1, z + rail_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
 
+def _apply_hajfin_wall_uvs(bm, scale=0.18):
+    """Normalize every Hajfin siding face after all archetypes and props build.
+
+    Individual archetypes contain a mixture of boxes, gables, and tapered
+    panels. A final material-scoped pass keeps their board density identical
+    and prevents world elevation or a builder-specific offset from stretching
+    the wall atlas.
+    """
+    uv_layer = bm.loops.layers.uv.verify()
+    bm.normal_update()
+    for face in bm.faces:
+        if face.material_index != MAT_INDEX_DRIFTWOOD:
+            continue
+        normal = face.normal
+        if abs(normal.z) >= 0.25:
+            for loop in face.loops:
+                co = loop.vert.co
+                loop[uv_layer].uv = Vector((co.x * scale, co.y * scale))
+        elif abs(normal.x) >= abs(normal.y):
+            for loop in face.loops:
+                co = loop.vert.co
+                loop[uv_layer].uv = Vector((co.y * scale, co.z * scale))
+        else:
+            for loop in face.loops:
+                co = loop.vert.co
+                loop[uv_layer].uv = Vector((co.x * scale, co.z * scale))
+
+
 # =============================================================================
 # MAIN HAJFIN ENTRY POINT
 # =============================================================================
@@ -3661,7 +3689,11 @@ def build_hajfin_building(obj, bm, props):
         # Default iconic Shanty Shack (Image 6)
         _build_hajfin_shanty(bm, props, width=width, depth=depth, height=height, found_h=found_h)
 
-    # Box UV mapping at scale 0.18 so timber boards span large expanses without tight repetitive tiling
+    # Final material-scoped pass prevents any archetype-specific wall builder
+    # from reintroducing a different siding density.
+    _apply_hajfin_wall_uvs(bm)
+
+    # Box UV mapping preserves the specialized UVs above.
     apply_box_uvs(bm, scale=0.18)
 
     # Write bmesh to obj

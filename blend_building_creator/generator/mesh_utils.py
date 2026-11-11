@@ -145,8 +145,13 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                 su = 1.0
                 sv = 1.0
             else:
-                su = 0.50
-                sv = 0.50
+                # Hajfin's square texture contains a fixed set of broad
+                # vertical boards.  At 0.50 UV/m a normal 8-12m wall
+                # repeats the atlas dozens of times and reads as stretched
+                # pinstripes.  Keep the wall density consistent with the
+                # dedicated Hajfin panel unwrap.
+                su = 0.18 if mat_index == 53 else 0.50
+                sv = 0.18 if mat_index == 53 else 0.50
 
             has_rot = (abs(rotation[0]) > 0.001 or abs(rotation[1]) > 0.001 or abs(rotation[2]) > 0.001 or transform_matrix is not None)
             if has_rot:
