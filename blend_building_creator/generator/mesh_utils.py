@@ -212,6 +212,7 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                     u = (lv.y + sy) * su + u_offset
                     v = (lv.z + sz) * sv + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+            f.tag = True
         elif dx >= dy and dx >= dz:
             # Horizontal beam along X: V along longitudinal X axis, U around circumference
             su = scale * 1.2
@@ -228,6 +229,7 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                     u = (lv.z + sz) * su + u_offset
                     v = (lv.x + sx) * sv + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+            f.tag = True
         else:
             # Horizontal beam along Y: V along longitudinal Y axis, U around circumference
             su = scale * 1.2
@@ -244,6 +246,7 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                     u = (lv.z + sz) * su + u_offset
                     v = (lv.y + sy) * sv + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
+            f.tag = True
         
     return faces
 
