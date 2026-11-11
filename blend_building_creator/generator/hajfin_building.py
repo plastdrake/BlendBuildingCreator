@@ -2167,35 +2167,57 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
                                   include_leaf=getattr(props, 'include_door_leaves', False))
 
     # 3B. Center barter stall opening (open cutout with counter ledge, corbels, side posts, lintel)
+    counter_top_z = z0 + counter_h
+    open_top_z = counter_top_z + 2.05
+    stall_cx = 0.0
+    stall_y = -hd + wall_th * 0.5
+
     # Knee wall below counter
-    create_box(bm, (counter_w, wall_th, counter_h), (0.0, -hd + wall_th * 0.5, z0 + counter_h * 0.5),
-               mat_index=MAT_INDEX_DRIFTWOOD)
-    # Cantilevered trade counter shelf sill protruding forward
-    create_box(bm, (counter_w + 0.40, 0.90, 0.16), (0.0, -hd - 0.28, z0 + counter_h - 0.08),
-               mat_index=MAT_INDEX_TIMBER)
-    # 3 diagonal corbel brackets supporting the counter from underneath
-    for sgn_cb in (-1.2, 0.0, 1.2):
-        _create_oriented_beam(bm, (sgn_cb, -hd + 0.05, z0 + 0.25),
-                              (sgn_cb, -hd - 0.65, z0 + counter_h - 0.12),
-                              width=0.14, depth=0.16, mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (counter_w, wall_th, counter_h),
+               (stall_cx, stall_y, z0 + counter_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    # Heavy timber base sill beam under knee wall
+    create_box(bm, (counter_w + 0.30, wall_th + 0.12, 0.18),
+               (stall_cx, stall_y, z0 + 0.09), mat_index=MAT_INDEX_TIMBER)
+
+    # Massive cantilevered trade counter slab protruding forward
+    counter_depth = 0.92
+    counter_slab_th = 0.18
+    counter_cy = -hd - (counter_depth * 0.5 - wall_th)
+    create_box(bm, (counter_w + 0.44, counter_depth, counter_slab_th),
+               (stall_cx, counter_cy, counter_top_z - counter_slab_th * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # 3 heavy diagonal corbel brackets supporting the counter slab underneath
+    for sgn_cb in (-1.35, 0.0, 1.35):
+        p_corbel_bot = (sgn_cb, -hd + 0.04, z0 + 0.18)
+        p_corbel_top = (sgn_cb, -hd - counter_depth * 0.65, counter_top_z - counter_slab_th)
+        _create_oriented_beam(bm, p_corbel_bot, p_corbel_top, width=0.16, depth=0.18, mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.20, 0.12, 0.12), (sgn_cb, -hd + 0.02, z0 + 0.22), mat_index=MAT_INDEX_IRON)
+        create_box(bm, (0.20, 0.12, 0.12), (sgn_cb, -hd - counter_depth * 0.65, counter_top_z - counter_slab_th - 0.04), mat_index=MAT_INDEX_IRON)
 
     # Thick timber jamb posts flanking the barter window opening
-    open_top_z = z0 + counter_h + 2.0
+    jamb_w = 0.32
+    jamb_d = wall_th + 0.10
+    jamb_h = open_top_z - counter_top_z
     for sgn_jp in (-1.0, 1.0):
-        j_x = sgn_jp * (counter_w * 0.5 - 0.12)
-        create_box(bm, (0.24, wall_th + 0.08, 2.0), (j_x, -hd + wall_th * 0.5, z0 + counter_h + 1.0),
+        jx = sgn_jp * (counter_w * 0.5)
+        create_box(bm, (jamb_w, jamb_d, jamb_h + counter_slab_th),
+                   (jx, stall_y, counter_top_z - counter_slab_th + (jamb_h + counter_slab_th) * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (jamb_w + 0.04, jamb_d + 0.04, 0.16),
+                   (jx, stall_y, counter_top_z + 0.15), mat_index=MAT_INDEX_IRON)
 
     # Heavy lintel header beam spanning across the barter opening
-    create_box(bm, (counter_w + 0.40, wall_th + 0.10, 0.32),
-               (0.0, -hd + wall_th * 0.5, open_top_z + 0.16), mat_index=MAT_INDEX_TIMBER)
+    lintel_h = 0.34
+    lintel_w = counter_w + jamb_w * 2.0 + 0.20
+    create_box(bm, (lintel_w, jamb_d, lintel_h),
+               (stall_cx, stall_y, open_top_z + lintel_h * 0.5), mat_index=MAT_INDEX_TIMBER)
 
     # Solid wall above header up to z_mid
-    h_above = z_mid - (open_top_z + 0.32)
+    h_above = z_mid - (open_top_z + lintel_h)
     if h_above > 0.05:
         create_box(bm, (counter_w, wall_th, h_above),
-                   (0.0, -hd + wall_th * 0.5, open_top_z + 0.32 + h_above * 0.5),
-                   mat_index=MAT_INDEX_DRIFTWOOD)
+                   (stall_cx, stall_y, open_top_z + lintel_h + h_above * 0.5),
+                   mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
 
     # 3C. Right wall segment with bone barred window
     r_cx = (counter_w * 0.5 + hw - wall_th) * 0.5
@@ -2209,66 +2231,144 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
         for cy in (-hd, hd):
             _build_chunky_corner_column(bm, cx, cy, z0, z_mid, size=col_size, extend_top=0.25)
 
-    # 4. Flip-Up Timber Awning & Hanging Trade Sign
-    awning_w = counter_w + 0.80
-    awning_d = 1.90
-    awning_z = open_top_z + 0.45
-    # Angled plank deck
-    create_box(bm, (awning_w, awning_d, 0.10), (0.0, -hd - awning_d * 0.45, awning_z - 0.22),
-               rotation=(0.24, 0, 0), mat_index=MAT_INDEX_TIMBER)
-    # 3 Diagonal timber strut braces supporting the awning
-    for sgn_st in (-1.5, 0.0, 1.5):
-        _create_oriented_beam(bm, (sgn_st, -hd + 0.05, z0 + counter_h + 0.8),
-                              (sgn_st, -hd - 1.50, awning_z - 0.60),
-                              width=0.14, depth=0.14, mat_index=MAT_INDEX_TIMBER)
+    # 4. Solid Timber Awning Canopy (Framed with rafters, ledger, front fascia, and bargeboards)
+    awning_ledger_z = open_top_z + lintel_h + 0.18
+    create_box(bm, (lintel_w, 0.22, 0.20),
+               (stall_cx, -hd + 0.02, awning_ledger_z), mat_index=MAT_INDEX_TIMBER)
 
-    # Hanging Carved Wooden Trade Signboard: "BONE & DRIFT TRADING"
-    sign_z = open_top_z - 0.35
-    sign_y = -hd - 1.15
-    # Heavy timber sign backing board
-    create_box(bm, (2.4, 0.08, 0.55), (0.0, sign_y, sign_z), mat_index=MAT_INDEX_TIMBER)
-    # Iron reinforcement corner brackets
-    for sgn_sb in (-1.15, 1.15):
-        create_box(bm, (0.08, 0.10, 0.52), (sgn_sb, sign_y, sign_z), mat_index=MAT_INDEX_IRON)
-    # Carved bone fish-spine symbol relief plate mounted on signboard
-    create_box(bm, (1.6, 0.10, 0.30), (0.0, sign_y, sign_z), mat_index=MAT_INDEX_BONE)
-    # Iron hanging chains connecting from underside of awning down to signboard (NEVER poking through roof!)
-    for sgn_chain in (-0.85, 0.85):
-        create_cylinder(bm, radius=0.025, height=0.32, segments=5,
-                        location=(sgn_chain, sign_y, sign_z + 0.40), mat_index=MAT_INDEX_IRON)
-    # Carved bone talisman hanging neatly below the trade sign
-    create_box(bm, (0.24, 0.04, 0.28), (0.0, sign_y, sign_z - 0.38), mat_index=MAT_INDEX_BONE)
+    awning_span_w = counter_w + 1.10
+    awning_reach_d = 1.95
+    awning_drop_h = 0.65
+    front_eave_y = -hd - awning_reach_d
+    front_eave_z = awning_ledger_z - awning_drop_h
 
-    # Rich Barter Counter Trade Goods (Neatly arranged on the counter)
-    # 1. Carved Megalodon Scrimshaw Tooth resting proudly in a timber display cradle
-    create_box(bm, (0.28, 0.16, 0.07), (-1.25, -hd - 0.28, z0 + counter_h + 0.035), mat_index=MAT_INDEX_TIMBER)
-    create_cone(bm, radius1=0.08, radius2=0.015, height=0.36, segments=7,
-                location=(-1.25, -hd - 0.28, z0 + counter_h + 0.22),
-                rotation=(-0.10, 0, 0), mat_index=MAT_INDEX_BONE)
-    # 2. Stacks of polished bone currency tokens / discs
-    create_cylinder(bm, radius=0.08, height=0.14, segments=8,
-                    location=(-0.75, -hd - 0.24, z0 + counter_h + 0.07), mat_index=MAT_INDEX_BONE)
-    create_cylinder(bm, radius=0.07, height=0.08, segments=8,
-                    location=(-0.60, -hd - 0.32, z0 + counter_h + 0.04), mat_index=MAT_INDEX_BONE)
-    # 3. Carved bone merchant relic chest with iron bands
-    create_box(bm, (0.34, 0.24, 0.18), (-0.15, -hd - 0.28, z0 + counter_h + 0.09), mat_index=MAT_INDEX_BONE)
-    create_box(bm, (0.36, 0.06, 0.19), (-0.15, -hd - 0.28, z0 + counter_h + 0.095), mat_index=MAT_INDEX_IRON)
-    # 4. Merchant weighing scale with balanced pans
-    create_cylinder(bm, radius=0.09, height=0.025, segments=8,
-                    location=(0.40, -hd - 0.28, z0 + counter_h + 0.012), mat_index=MAT_INDEX_IRON)
-    create_cylinder(bm, radius=0.015, height=0.38, segments=6,
-                    location=(0.40, -hd - 0.28, z0 + counter_h + 0.19), mat_index=MAT_INDEX_IRON)
-    create_box(bm, (0.42, 0.02, 0.02), (0.40, -hd - 0.28, z0 + counter_h + 0.38), mat_index=MAT_INDEX_IRON)
-    create_cylinder(bm, radius=0.06, height=0.015, segments=7,
-                    location=(0.22, -hd - 0.28, z0 + counter_h + 0.14), mat_index=MAT_INDEX_IRON)
-    create_cylinder(bm, radius=0.06, height=0.015, segments=7,
-                    location=(0.58, -hd - 0.28, z0 + counter_h + 0.14), mat_index=MAT_INDEX_IRON)
-    # 5. Carved bone barter dagger lying flat on a leather mat
-    create_box(bm, (0.28, 0.22, 0.01), (0.95, -hd - 0.28, z0 + counter_h + 0.005), mat_index=MAT_INDEX_LEATHER)
-    create_box(bm, (0.05, 0.22, 0.025), (0.95, -hd - 0.28, z0 + counter_h + 0.02), mat_index=MAT_INDEX_BONE)
-    create_box(bm, (0.12, 0.04, 0.03), (0.95, -hd - 0.20, z0 + counter_h + 0.025), mat_index=MAT_INDEX_BONE)
-    # 6. Coiled hemp rope resting flat on counter
-    create_torus_ring(bm, (1.40, -hd - 0.28, z0 + counter_h + 0.04), major_radius=0.15, minor_radius=0.035, mat_index=MAT_INDEX_ROPE)
+    # 3 Heavy Sloped Timber Rafter Beams & Diagonal Struts
+    for sgn_raf in (-1.65, 0.0, 1.65):
+        p_raf_top = (sgn_raf, -hd + 0.02, awning_ledger_z)
+        p_raf_bot = (sgn_raf, front_eave_y, front_eave_z)
+        _create_oriented_beam(bm, p_raf_top, p_raf_bot, width=0.18, depth=0.20, mat_index=MAT_INDEX_TIMBER)
+        # Heavy diagonal strut brace from wall up to mid-rafter (completely anchored at both ends)
+        p_strut_wall = (sgn_raf, -hd + 0.02, counter_top_z + 0.90)
+        p_strut_raf = (sgn_raf, -hd - awning_reach_d * 0.65, awning_ledger_z - awning_drop_h * 0.65 - 0.08)
+        _create_oriented_beam(bm, p_strut_wall, p_strut_raf, width=0.14, depth=0.14, mat_index=MAT_INDEX_TIMBER)
+
+    # Front Fascia Beam connecting all rafter tips
+    create_box(bm, (awning_span_w + 0.20, 0.18, 0.22),
+               (stall_cx, front_eave_y, front_eave_z), mat_index=MAT_INDEX_TIMBER)
+
+    # Weathered Sloped Timber Plank Deck on top of rafters
+    slope_len = math.hypot(awning_reach_d, awning_drop_h) + 0.20
+    slope_ang = math.atan2(awning_drop_h, awning_reach_d)
+    deck_mid_y = -hd - awning_reach_d * 0.5
+    deck_mid_z = awning_ledger_z - awning_drop_h * 0.5 + 0.11
+    create_box(bm, (awning_span_w, slope_len, 0.12),
+               (stall_cx, deck_mid_y, deck_mid_z),
+               rotation=(slope_ang, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
+
+    # Side Bargeboards capping awning ends
+    for sgn_bg in (-1.0, 1.0):
+        bg_x = sgn_bg * (awning_span_w * 0.5)
+        create_box(bm, (0.08, slope_len, 0.22),
+                   (bg_x, deck_mid_y, deck_mid_z),
+                   rotation=(slope_ang, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
+
+    # Hanging Carved Wooden Trade Signboard: Suspended solidly below front fascia beam
+    sign_w = 2.40
+    sign_h = 0.60
+    sign_th = 0.08
+    sign_y = front_eave_y
+    sign_top_z = front_eave_z - 0.32
+    sign_cz = sign_top_z - sign_h * 0.5
+
+    create_box(bm, (sign_w, sign_th, sign_h), (stall_cx, sign_y, sign_cz), mat_index=MAT_INDEX_TIMBER)
+    for sgn_sb in (-sign_w * 0.5 + 0.08, sign_w * 0.5 - 0.08):
+        create_box(bm, (0.10, sign_th + 0.02, sign_h), (sgn_sb, sign_y, sign_cz), mat_index=MAT_INDEX_IRON)
+    create_box(bm, (1.60, sign_th + 0.03, 0.34), (stall_cx, sign_y, sign_cz), mat_index=MAT_INDEX_BONE)
+
+    # Sturdy forged iron hanging chains connecting fascia beam down to sign
+    for sgn_ch in (-sign_w * 0.35, sign_w * 0.35):
+        create_cylinder(bm, radius=0.035, height=0.06, segments=6,
+                        location=(sgn_ch, front_eave_y, front_eave_z - 0.12), mat_index=MAT_INDEX_IRON)
+        chain_len = (front_eave_z - 0.12) - sign_top_z
+        create_cylinder(bm, radius=0.022, height=chain_len, segments=6,
+                        location=(sgn_ch, front_eave_y, sign_top_z + chain_len * 0.5), mat_index=MAT_INDEX_IRON)
+        create_cylinder(bm, radius=0.035, height=0.06, segments=6,
+                        location=(sgn_ch, front_eave_y, sign_top_z), mat_index=MAT_INDEX_IRON)
+
+    # Rich Barter Counter Trade Goods (All 100% physically grounded at Z = counter_top_z)
+    prop_y = -hd - 0.30
+
+    # 1. Ornamental Scrimshaw Megalodon Tooth in Carved Timber Cradle Stand
+    tooth_cx = -1.30
+    cradle_h = 0.07
+    create_box(bm, (0.34, 0.20, cradle_h), (tooth_cx, prop_y, counter_top_z + cradle_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+    for sgn_cr in (-0.14, 0.14):
+        create_box(bm, (0.04, 0.21, cradle_h + 0.01), (tooth_cx + sgn_cr, prop_y, counter_top_z + cradle_h * 0.5), mat_index=MAT_INDEX_IRON)
+    tooth_h = 0.42
+    create_cone(bm, radius1=0.09, radius2=0.012, height=tooth_h, segments=7,
+                location=(tooth_cx, prop_y, counter_top_z + cradle_h + tooth_h * 0.5),
+                rotation=(-0.05, 0.0, 0.0), mat_index=MAT_INDEX_BONE)
+
+    # 2. Polished Bone Currency Token Stacks
+    tokens_cx = -0.75
+    create_cylinder(bm, radius=0.08, height=0.15, segments=8,
+                    location=(tokens_cx, prop_y + 0.05, counter_top_z + 0.075), mat_index=MAT_INDEX_BONE)
+    create_cylinder(bm, radius=0.075, height=0.09, segments=8,
+                    location=(tokens_cx + 0.14, prop_y - 0.04, counter_top_z + 0.045), mat_index=MAT_INDEX_BONE)
+    create_cylinder(bm, radius=0.07, height=0.05, segments=8,
+                    location=(tokens_cx - 0.12, prop_y - 0.04, counter_top_z + 0.025), mat_index=MAT_INDEX_BONE)
+
+    # 3. Carved Bone Merchant Relic Chest with Iron Straps
+    chest_cx = -0.15
+    chest_w = 0.38
+    chest_d = 0.25
+    chest_h = 0.20
+    create_box(bm, (chest_w, chest_d, chest_h),
+               (chest_cx, prop_y, counter_top_z + chest_h * 0.5), mat_index=MAT_INDEX_BONE)
+    create_box(bm, (chest_w + 0.015, 0.04, chest_h + 0.015),
+               (chest_cx, prop_y, counter_top_z + chest_h * 0.5), mat_index=MAT_INDEX_IRON)
+    create_box(bm, (0.04, chest_d + 0.015, chest_h + 0.015),
+               (chest_cx, prop_y, counter_top_z + chest_h * 0.5), mat_index=MAT_INDEX_IRON)
+
+    # 4. Merchant Weighing Balance Scale
+    scale_cx = 0.48
+    base_r = 0.12
+    base_h = 0.035
+    create_cylinder(bm, radius=base_r, height=base_h, segments=8,
+                    location=(scale_cx, prop_y, counter_top_z + base_h * 0.5), mat_index=MAT_INDEX_IRON)
+    post_h = 0.44
+    create_cylinder(bm, radius=0.018, height=post_h, segments=6,
+                    location=(scale_cx, prop_y, counter_top_z + base_h + post_h * 0.5), mat_index=MAT_INDEX_IRON)
+    beam_w = 0.46
+    create_box(bm, (beam_w, 0.025, 0.025),
+               (scale_cx, prop_y, counter_top_z + base_h + post_h), mat_index=MAT_INDEX_IRON)
+    for sgn_pan in (-1.0, 1.0):
+        pan_x = scale_cx + sgn_pan * (beam_w * 0.46)
+        rod_h = 0.22
+        create_cylinder(bm, radius=0.008, height=rod_h, segments=5,
+                        location=(pan_x, prop_y, counter_top_z + base_h + post_h - rod_h * 0.5), mat_index=MAT_INDEX_IRON)
+        create_cylinder(bm, radius=0.065, height=0.018, segments=8,
+                        location=(pan_x, prop_y, counter_top_z + base_h + post_h - rod_h), mat_index=MAT_INDEX_IRON)
+
+    # 5. Carved Bone Barter Dagger on Rolled Leather Mat
+    mat_cx = 1.0
+    mat_w = 0.28
+    mat_d = 0.22
+    mat_th = 0.018
+    create_box(bm, (mat_w, mat_d, mat_th),
+               (mat_cx, prop_y, counter_top_z + mat_th * 0.5), mat_index=MAT_INDEX_LEATHER)
+    create_box(bm, (0.045, 0.20, 0.02),
+               (mat_cx, prop_y, counter_top_z + mat_th + 0.01), mat_index=MAT_INDEX_BONE)
+    create_box(bm, (0.12, 0.035, 0.025),
+               (mat_cx, prop_y + 0.06, counter_top_z + mat_th + 0.012), mat_index=MAT_INDEX_TIMBER)
+    create_cylinder(bm, radius=0.018, height=0.09, segments=6,
+                    location=(mat_cx, prop_y + 0.11, counter_top_z + mat_th + 0.012),
+                    rotation=(math.pi * 0.5, 0, 0), mat_index=MAT_INDEX_BONE)
+
+    # 6. Coiled Hemp Rope
+    rope_cx = 1.50
+    create_torus_ring(bm, (rope_cx, prop_y, counter_top_z + 0.04),
+                      major_radius=0.15, minor_radius=0.038, mat_index=MAT_INDEX_ROPE)
 
     # 5. Flanking Wooden Dock / Pier Platforms with Cargo Stacks
     for sgn_x in (-1.0, 1.0):
