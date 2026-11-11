@@ -134,18 +134,19 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
         if is_wall and mat_index == 11 and f_idx == 4:
             f.material_index = 1 # Keep interior room wall clean plaster
             
-        if is_wall or mat_index == 53:
+        is_beam = (not is_wall) and (dims_sorted[2] >= 1.5 * dims_sorted[1]) and (dims_sorted[1] <= 0.70)
+        if (is_wall or mat_index == 53) and not is_beam:
             # Universal wall unwrap:
             # Rotated walls (round hut facets, canted bays, angled dormers) use local coordinate projection
             # so planks run 100% straight along local Z with zero twist and zero distortion.
             # Unrotated walls (main building facades, gables) use world-space coordinates so adjacent
-            # wall boxes, gables, and infills share continuous vertical seams and identical scale.
+            # wall boxes, gables, and infills share continuous vertical seams and identical isotropic 1:1 scale.
             if mat_index in (0, 1, 8, 11):
                 su = 1.0
                 sv = 1.0
             else:
-                su = 0.70
-                sv = 0.40
+                su = 0.50
+                sv = 0.50
 
             has_rot = (abs(rotation[0]) > 0.001 or abs(rotation[1]) > 0.001 or abs(rotation[2]) > 0.001 or transform_matrix is not None)
             if has_rot:
@@ -197,7 +198,7 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                     v = (lv.z + sz) * scale + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
             f.tag = True
-        elif mat_index == 2 or (mat_index != 53 and not is_wall and dims_sorted[2] >= 1.5 * dims_sorted[1] and dims_sorted[1] <= 0.65):
+        elif mat_index == 2 or is_beam or (not is_wall and dims_sorted[2] >= 1.5 * dims_sorted[1] and dims_sorted[1] <= 0.65):
             # True slender structural beam or column: V along longitudinal axis, U around perimeter
             if dz >= dx and dz >= dy:
                 # Vertical post / column: V along longitudinal Z axis, U around circumference
@@ -1210,9 +1211,9 @@ def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 
         nx, ny, nz = abs(normal.x), abs(normal.y), abs(normal.z)
         
         # Material-specific calibrated world-space scale factors
-        if face.material_index == 53: # MAT_INDEX_DRIFTWOOD wall siding
-            u_s = 0.70
-            v_s = 0.40
+        if face.material_index == 53: # MAT_INDEX_DRIFTWOOD wall siding (isotropic 1:1 plank aspect ratio)
+            u_s = 0.50
+            v_s = 0.50
         elif face.material_index == 2: # MAT_INDEX_TIMBER structural beams
             u_s = 0.40
             v_s = 0.40
