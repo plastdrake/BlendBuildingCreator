@@ -36,6 +36,8 @@ def _ensure_door_floor_clearance(props):
                 or getattr(props, 'has_back_portal', False))
     if not has_door:
         return
+    is_hajfin = getattr(props, 'faction', 'HUMAN') == 'HAJFIN'
+    has_upper_floor = int(getattr(props, 'num_floors', 1)) > 1
     door_h = float(getattr(props, 'door_height', 2.8))
     shape = getattr(props, 'door_shape', 'AUTO')
     tier = getattr(props, 'material_tier', 'TIER_3')
@@ -45,6 +47,10 @@ def _ensure_door_floor_clearance(props):
     crown = 0.41 if is_arched else 0.16
     # Crown trim + floor slab (0.15) + ceiling beams (0.18) + small air gap.
     needed = door_h + crown + 0.40
+    if is_hajfin and has_upper_floor:
+        # Hajfin upper decks use a full-height accessible storey. Keep the
+        # deck above the large shark-jaw portal instead of bisecting it.
+        needed = max(needed, 4.20)
     needed = min(8.0, max(2.4, needed))
     try:
         cur = float(getattr(props, 'floor_height', 3.6))

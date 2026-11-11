@@ -47,6 +47,8 @@ from .mesh_utils import (
     apply_box_uvs,
     transform_faces,
 )
+from .interior import build_straight_staircase
+from .railing import build_railing
 from .accessories.artisan_props import build_anvil, build_tool_rack
 
 
@@ -118,91 +120,39 @@ def _build_curved_bone_spine(bm, x, y, z, height=1.0, base_radius=0.14, rot_z=0.
         f.tag = True
 
 def _build_railing_segment(bm, x0, x1, y0, y1, z_base, height=1.0):
-    """Builds a sturdy timber railing line with end posts and top/mid rails."""
-    seg_len = math.hypot(x1 - x0, y1 - y0)
-    if seg_len < 0.2:
-        return
-    yaw = math.atan2(y1 - y0, x1 - x0)
-    mx = (x0 + x1) * 0.5
-    my = (y0 + y1) * 0.5
-
-    # Corner posts at each end
-    for px, py in ((x0, y0), (x1, y1)):
-        create_cylinder(bm, radius=0.08, height=height, segments=6,
-                        location=(px, py, z_base + height * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-
-    # Top rail
-    create_box(bm, (seg_len, 0.12, 0.08), (mx, my, z_base + height),
-               rotation=(0, 0, yaw), mat_index=MAT_INDEX_DRIFTWOOD)
-    # Mid rail
-    create_box(bm, (seg_len, 0.08, 0.06), (mx, my, z_base + height * 0.5),
-               rotation=(0, 0, yaw), mat_index=MAT_INDEX_DRIFTWOOD)
+    """Build a clean shared guard rail around a Hajfin stairwell."""
+    build_railing(
+        bm, (x0, y0), (x1, y1), z_base, height=height,
+        rail_mat=MAT_INDEX_DRIFTWOOD, baluster_mat=MAT_INDEX_DRIFTWOOD,
+        post_spacing=1.35, baluster_spacing=0.32,
+        braces=False, jankiness=0.0, has_sill=False,
+    )
 
 
 def _build_hajfin_interior_staircase(bm, x0, y0, z0, x1, y1, z1, width=1.60, with_railing=True):
-    """Builds a wide, chunky pirate timber staircase calibrated for 2-3m tall Hajfin characters.
-    Runs from (x0, y0, z0) at the bottom floor to (x1, y1, z1) at the upper floor landing.
-    Features heavy drift timber stringers, thick floor-plank treads, and a rough rope/timber handrail."""
+    """Build a Hajfin stair flight using the shared clean straight staircase."""
     dx = x1 - x0
     dy = y1 - y0
     dz = z1 - z0
     run_len = math.hypot(dx, dy)
-    yaw = math.atan2(dy, dx)
-    cos_yaw = dx / max(0.001, run_len)
-    sin_yaw = dy / max(0.001, run_len)
-
-    # Perpendicular unit vector (across stair width)
-    px = -sin_yaw
-    py = cos_yaw
-
-    num_steps = max(6, int(dz / 0.26))
-    step_dz = dz / num_steps
-    step_drun = run_len / num_steps
-
-    # 1. Thick Drift Plank Treads (UV aligned across step width)
-    uv_layer = bm.loops.layers.uv.verify()
-    for i in range(num_steps):
-        s_mid_run = (i + 0.5) * step_drun
-        sx = x0 + cos_yaw * s_mid_run
-        sy = y0 + sin_yaw * s_mid_run
-        sz = z0 + (i + 0.5) * step_dz
-        tread_faces = create_box(bm, (step_drun * 1.08, width, 0.12), (sx, sy, sz),
-                                 rotation=(0, 0, yaw), mat_index=MAT_INDEX_FLOOR)
-        for tf in tread_faces:
-            if tf.normal.z > 0.5:
-                # Top tread face: wood planks run horizontally across the step width
-                for loop in tf.loops:
-                    d_rel = loop.vert.co - Vector((sx, sy, sz))
-                    co_run = d_rel.x * cos_yaw + d_rel.y * sin_yaw
-                    co_width = -d_rel.x * sin_yaw + d_rel.y * cos_yaw
-                    loop[uv_layer].uv = Vector((co_run * 0.50, co_width * 0.50))
-            tf.tag = True
-
-    # 2. Heavy Timber Stringer Beams (Left & Right - longitudinal grain, zero tiger stripes)
-    for sgn_p in (-0.5, 0.5):
-        p_str_bot = Vector((x0 + px * (width * sgn_p), y0 + py * (width * sgn_p), z0 - 0.08))
-        p_str_top = Vector((x1 + px * (width * sgn_p), y1 + py * (width * sgn_p), z1 - 0.08))
-        _create_oriented_beam(bm, p_str_bot, p_str_top, width=0.18, depth=0.28, mat_index=MAT_INDEX_TIMBER)
-
-    # 3. Rough Timber & Rope Handrail on the inner room side
-    if with_railing:
-        rail_side = -0.5
-        num_posts = max(3, int(run_len / 1.5) + 1)
-        for pi in range(num_posts):
-            t_post = pi / max(1, num_posts - 1)
-            pos_x = x0 + dx * t_post + px * (width * rail_side)
-            pos_y = y0 + dy * t_post + py * (width * rail_side)
-            pos_z = z0 + dz * t_post + 0.50
-            create_cylinder(bm, radius=0.07, height=1.0, segments=6,
-                            location=(pos_x, pos_y, pos_z), mat_index=MAT_INDEX_DRIFTWOOD)
-            # Rope tie ring
-            create_torus_ring(bm, (pos_x, pos_y, pos_z + 0.42), major_radius=0.09, minor_radius=0.02,
-                              mat_index=MAT_INDEX_ROPE)
-
-        # Top handrail beam running along the slope
-        p_rail_bot = Vector((x0 + px * (width * rail_side), y0 + py * (width * rail_side), z0 + 0.95))
-        p_rail_top = Vector((x1 + px * (width * rail_side), y1 + py * (width * rail_side), z1 + 0.95))
-        _create_oriented_beam(bm, p_rail_bot, p_rail_top, width=0.10, depth=0.08, mat_index=MAT_INDEX_TIMBER)
+    if run_len < 0.5 or dz <= 0.05:
+        return
+    if abs(dx) > abs(dy):
+        build_straight_staircase(
+            bm, (x0, y0, z0), z1,
+            stair_width=width, stair_depth=run_len,
+            num_steps=max(10, int(dz / 0.22)),
+            axis='X', direction_x=1 if dx >= 0 else -1,
+            has_rail_left=with_railing, has_rail_right=False,
+        )
+    else:
+        build_straight_staircase(
+            bm, (x0, y0, z0), z1,
+            stair_width=width, stair_depth=run_len,
+            num_steps=max(10, int(dz / 0.22)),
+            axis='Y', direction_y=1 if dy >= 0 else -1,
+            has_rail_left=with_railing, has_rail_right=False,
+        )
 
 
 def _build_hajfin_floor_slab_with_stairwell(bm, x0, x1, y0, y1, z_floor,
