@@ -329,6 +329,21 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         update=on_faction_updated
     )
 
+    hajfin_style: EnumProperty(
+        name="Hajfin Architecture",
+        description="Architectural style and archetype for the Hajfin pirate faction",
+        items=[
+            ('SHANTY', "Shanty Shack", "Chunky gable timber shanty with oversized corner posts and bone-scale roof (Image 6)", 'HOME', 0),
+            ('ROUND_HUT', "Round Conical Hut", "Tapered round hut with conical scale roof, dorsal fin spear crown, and whale spine buttress (Image 2)", 'MATCLOTH', 1),
+            ('BONE_SHOP', "Bone Trading Post", "Two-storey barter shop with open counter, flip-up awning, shark skull mount, and ladder (Image 3)", 'ASSET_MANAGER', 2),
+            ('CHIEFTAIN_HALL', "Chieftain Great Hall", "Grand multi-tier staggered longhouse with whale rib tunnel entrance and continuous spine crest (Image 4)", 'COMMUNITY', 3),
+            ('BLOCKHOUSE', "Crate Blockhouse", "Heavy cubic timber blockhouse with flat plank deck roof, bone windows, and iron cuffs (Image 5)", 'MOD_OCEAN', 4),
+            ('TAVERN', "Pirate Tavern", "Sprawling multi-deck pirate haven with open drinking deck and grog barrels", 'COMMUNITY', 5),
+        ],
+        default='SHANTY',
+        update=on_property_updated
+    )
+
     seed: IntProperty(
         name="Seed",
         description="Random seed for building variation and wonkiness",

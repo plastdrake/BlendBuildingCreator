@@ -58,6 +58,8 @@ class VIEW3D_PT_fantasy_building_main(bpy.types.Panel):
         row_fac = box_fac.row(align=True)
         row_fac.scale_y = 1.35
         row_fac.prop(props, "faction", expand=True)
+        if getattr(props, "faction", "HUMAN") == 'HAJFIN':
+            box_fac.prop(props, "hajfin_style", text="Style")
 
         col = layout.column(align=True)
         col.scale_y = 1.4

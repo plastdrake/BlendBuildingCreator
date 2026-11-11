@@ -84,6 +84,13 @@ def generate_building(obj, props, extra_doorways=None, extra_window_exclusions=N
     mesh_utils.ENABLE_BEVELS = bool(getattr(props, 'enable_bevels', False))
     bm = bmesh.new()
 
+    if getattr(props, 'faction', 'HUMAN') == 'HAJFIN':
+        from .hajfin_building import build_hajfin_building
+        build_hajfin_building(obj, bm, props)
+        if _original_stair_side is not None:
+            props.stair_placement = _original_stair_side
+        return
+
     if (getattr(props, 'has_construction', False)
             and getattr(props, 'construction_mode', 'WRAP_BUILDING') == 'EMPTY_SITE'):
         _build_empty_construction_site(obj, bm, props)
