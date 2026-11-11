@@ -1206,6 +1206,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         items=[
             ('SWAY', 'Fairytale Sway Roof', 'Curved dipping ridge and flared eaves'),
             ('GABLE', 'Steep Medieval Gable', 'Classic high-pitch dramatic gable'),
+            ('TARP', 'Hajfin Tarp Roof', 'Low draped canvas roof on exposed timber rafters'),
+            ('PLANKS', 'Hajfin Rough Plank Roof', 'Shabby plank roof with visible irregular gaps'),
+            ('FLAT', 'Hajfin Flat Timber Roof', 'Low flat timber deck with perimeter beams'),
             ('TURRET', 'Wizard Turret', 'Faceted conical roof with finial spire'),
             ('NONE', 'No Roof (Open Yard)', 'Open-air footprint with no formal roof structure'),
             ('MAKESHIFT', 'Makeshift Planks & Cloth', 'Rough timber rafters with scattered loose planks and draped weather cloth'),

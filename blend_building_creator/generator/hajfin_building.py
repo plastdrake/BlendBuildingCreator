@@ -549,6 +549,9 @@ def _build_bone_fin_emblem(bm, x, y, z, rot_z=0.0, scale=0.6):
 def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26):
     """Builds a solid triangular timber gable wall with vertical wood planks
     matching the lower wall siding orientation and continuous grain with zero stepped cuts."""
+    roof_style = getattr(_HAJFIN_ROOF_PROPS, 'roof_style', 'SHINGLES') if _HAJFIN_ROOF_PROPS is not None else 'SHINGLES'
+    if roof_style in ('SWAY', 'TARP', 'PLANKS', 'FLAT'):
+        return
     min_x = min(x0, x1)
     max_x = max(x0, x1)
     mx = (min_x + max_x) * 0.5
@@ -840,6 +843,21 @@ def _build_shark_skull_mount(bm, x, y, z, rot_z=0.0, scale=1.0):
     create_cylinder(bm, radius=0.30 * scale, height=0.20 * scale, segments=14,
                     location=cranium, rotation=(math.pi * 0.5, 0, rot_z),
                     mat_index=MAT_INDEX_BONE, smooth=True)
+    # A shark skull reads through its long tapered snout rather than a human-like
+    # flat face. Keep the muzzle slightly proud of the cranium and leave a dark
+    # nasal opening between the upper plates.
+    muzzle = _local((0.0, 0.31 * scale, 0.01 * scale))
+    create_beveled_box(
+        bm, (0.34 * scale, 0.24 * scale, 0.20 * scale), muzzle,
+        rotation=(0.0, 0.0, rot_z), mat_index=MAT_INDEX_BONE,
+        bevel_amount=0.045 * scale,
+    )
+    nasal = _local((0.0, 0.445 * scale, 0.02 * scale))
+    create_cylinder(
+        bm, radius=0.052 * scale, height=0.018 * scale, segments=10,
+        location=nasal, rotation=(math.pi * 0.5, 0, rot_z),
+        mat_index=MAT_INDEX_IRON,
+    )
     for sx in (-1.0, 1.0):
         cheek = _local((sx * 0.24 * scale, 0.16 * scale, -0.03 * scale))
         create_beveled_box(bm, (0.18 * scale, 0.16 * scale, 0.42 * scale),
@@ -862,6 +880,14 @@ def _build_shark_skull_mount(bm, x, y, z, rot_z=0.0, scale=1.0):
         create_cylinder(bm, radius=0.075 * scale, height=0.018 * scale, segments=12,
                         location=eye, rotation=(math.pi * 0.5, 0, rot_z),
                         mat_index=MAT_INDEX_IRON)
+
+        # Thin brow fins give the eye sockets an aggressive shark silhouette.
+        brow_fin = _local((sx * 0.16 * scale, 0.27 * scale, 0.27 * scale))
+        create_cone(
+            bm, radius1=0.07 * scale, radius2=0.008 * scale,
+            height=0.22 * scale, segments=7, location=brow_fin,
+            rotation=(0.15, sx * 0.35, rot_z), mat_index=MAT_INDEX_BONE,
+        )
 
     for i in range(5):
         tx = (-0.20 + i * 0.10) * scale
@@ -1985,6 +2011,9 @@ def _build_carved_bone_lookout_frame(bm, cx, cy, cz, width=1.80, height=1.35):
 def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26):
     """Builds a gable triangle wall on the West or East side with VERTICAL wood planks
     matching the wall siding orientation and continuous grain with zero stepped cuts."""
+    roof_style = getattr(_HAJFIN_ROOF_PROPS, 'roof_style', 'SHINGLES') if _HAJFIN_ROOF_PROPS is not None else 'SHINGLES'
+    if roof_style in ('SWAY', 'TARP', 'PLANKS', 'FLAT'):
+        return
     min_y = min(y0, y1)
     max_y = max(y0, y1)
     my = (min_y + max_y) * 0.5
@@ -3690,6 +3719,27 @@ def _apply_hajfin_wall_uvs(bm, scale=0.18):
                 loop[uv_layer].uv = Vector((u, co.z * scale))
 
 
+def _fill_missing_hajfin_uvs(bm, scale=0.25):
+    """Give any untouched procedural face a stable planar UV instead of a zero map."""
+    uv_layer = bm.loops.layers.uv.verify()
+    bm.normal_update()
+    for face in bm.faces:
+        if not face.loops:
+            continue
+        if not all(loop[uv_layer].uv.length_squared < 1e-12 for loop in face.loops):
+            continue
+        normal = face.normal
+        if abs(normal.z) >= abs(normal.x) and abs(normal.z) >= abs(normal.y):
+            projection = lambda co: (co.x * scale, co.y * scale)
+        elif abs(normal.x) >= abs(normal.y):
+            projection = lambda co: (co.y * scale, co.z * scale)
+        else:
+            projection = lambda co: (co.x * scale, co.z * scale)
+        for loop in face.loops:
+            u, v = projection(loop.vert.co)
+            loop[uv_layer].uv = Vector((u, v))
+
+
 # =============================================================================
 # MAIN HAJFIN ENTRY POINT
 # =============================================================================
@@ -3745,6 +3795,7 @@ def build_hajfin_building(obj, bm, props):
 
     # Box UV mapping preserves the specialized UVs above.
     apply_box_uvs(bm, scale=0.18)
+    _fill_missing_hajfin_uvs(bm)
 
     # Write bmesh to obj
     bm.to_mesh(obj.data)
