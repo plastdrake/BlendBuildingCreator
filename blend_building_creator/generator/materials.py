@@ -2657,31 +2657,13 @@ def create_stylized_water(name="M_Water", color=(0.16, 0.38, 0.50, 1.0)):
 
 def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
     """Weathered, rich stylized pirate wood planks with warm amber/honey tones for Hajfin wall siding.
-    Features dual-sample anti-tiling texture blending with Perlin noise to eliminate repeating knots."""
+    Uses a crisp, single-sample diffuse map with painterly pass and subtle ambient occlusion."""
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-1200)
     tex_node = _load_image_texture(tree, "pirate_timber_diffuse.jpg", c, loc_x=-850, loc_y=200, scale=(1.0, 1.0, 1.0))
     if tex_node is not None:
-        # Sample B: offset and staggered to break up repetitive knots and horizontal lines
-        tex_node_b = _load_image_texture(tree, "pirate_timber_diffuse.jpg", c, loc_x=-850, loc_y=-150,
-                                         scale=(0.92, 0.88, 1.0))
-
-        # Anti-tiling smooth noise blend factor
-        noise = tree.nodes.new("ShaderNodeTexNoise")
-        noise.location = (-600, 30)
-        noise.inputs["Scale"].default_value = 0.45
-        noise.inputs["Detail"].default_value = 1.8
-        tree.links.new(c.outputs["UV"], noise.inputs["Vector"])
-
-        blend = tree.nodes.new("ShaderNodeMix")
-        blend.data_type = 'RGBA'
-        blend.blend_type = 'MIX'
-        blend.location = (-380, 100)
-        tree.links.new(noise.outputs["Fac"], blend.inputs["Factor"])
-        tree.links.new(tex_node.outputs["Color"], blend.inputs["A"])
-        tree.links.new(tex_node_b.outputs["Color"], blend.inputs["B"])
-        base_col = blend.outputs["Result"]
+        base_col = tex_node.outputs["Color"]
 
         if color is not None:
             tint = tree.nodes.new("ShaderNodeMix")

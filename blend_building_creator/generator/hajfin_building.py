@@ -340,7 +340,7 @@ def _build_wall_with_door_opening(bm, x0, x1, y, z0, z1, door_cx, door_w, door_h
             for loop in f.loops:
                 lx = loop.vert.co.x
                 lz = loop.vert.co.z
-                loop[uv_layer].uv = Vector((lx * 0.35, lz * 0.35))
+                loop[uv_layer].uv = Vector((lx * 0.70, lz * 0.40))
 
     # 4. Heavy Structural Timber Threshold Sill Beam under Doorway
     sill_w = door_w + 0.60
@@ -618,7 +618,7 @@ def _build_bone_window(bm, x, y, z, rot_z=0.0, pitch=0.0, w=0.75, h=0.75, wall_t
     """Complete, weather-tight stylized window assembly for Hajfin buildings.
     Fully covers and seals the entire wall cutout hole on BOTH exterior and interior:
     - Full-depth timber jamb liners encasing the cutout through the entire wall thickness.
-    - Prominent carved bone exterior casing frame overlapping the wall planks by ~10cm on all sides.
+    - Prominent carved bone exterior casing frame overlapping the wall planks by >= 15cm on all sides.
     - Interior timber window casing trim framing the opening inside the room.
     - Vertical iron security bars and recessed glass pane.
     - Zero visible cut gaps, zero see-through cracks, zero unfinished wall guts."""
@@ -626,19 +626,19 @@ def _build_bone_window(bm, x, y, z, rot_z=0.0, pitch=0.0, w=0.75, h=0.75, wall_t
         rot_mat = rot_matrix
     else:
         rot_mat = Matrix.Rotation(rot_z, 4, 'Z') @ Matrix.Rotation(pitch, 4, 'X')
-    rot_euler = rot_mat.to_euler()
     hw = w * 0.5
     hh = h * 0.5
 
+    tr_origin = Matrix.Translation(Vector((x, y, z))) @ rot_mat
+
     def _add_local_box(size, local_pos, mat_idx, is_wall=False):
-        w_pos = rot_mat @ Vector(local_pos) + Vector((x, y, z))
-        create_box(bm, size, (w_pos.x, w_pos.y, w_pos.z),
-                   rotation=(rot_euler.x, rot_euler.y, rot_euler.z),
+        create_box(bm, size, local_pos,
+                   transform_matrix=tr_origin,
                    mat_index=mat_idx, is_wall=is_wall)
 
     # 1. Full-Depth Cutout Liners (Encase the wall opening through the full wall thickness)
-    liner_th = 0.045
-    liner_depth = wall_th + 0.02
+    liner_th = 0.05
+    liner_depth = wall_th + 0.04
     liner_y = wall_th * 0.5
 
     # Bottom sill liner
@@ -651,50 +651,46 @@ def _build_bone_window(bm, x, y, z, rot_z=0.0, pitch=0.0, w=0.75, h=0.75, wall_t
     _add_local_box((liner_th, liner_depth, h - liner_th * 2.0), (hw - liner_th * 0.5, liner_y, 0.0), MAT_INDEX_TIMBER)
 
     # 2. Exterior Carved Bone Casing Frame (Firmly overlaps the wood wall planks on all sides)
-    casing_w = 0.12
-    casing_th = 0.055
+    casing_w = 0.16
+    casing_th = 0.065
     ext_y = -casing_th * 0.5
 
     # Bottom sill casing (extends slightly past jambs with decorative fantasy horn ears)
-    sill_w = w + casing_w * 2.0 + 0.10
-    _add_local_box((sill_w, casing_th, casing_w), (0.0, ext_y, -hh - casing_w * 0.5 + 0.025), MAT_INDEX_BONE)
+    sill_w = w + casing_w * 2.0 + 0.12
+    _add_local_box((sill_w, casing_th, casing_w), (0.0, ext_y, -hh - casing_w * 0.5 + 0.02), MAT_INDEX_BONE)
 
     # Top lintel casing
-    lintel_w = w + casing_w * 2.0 + 0.10
-    _add_local_box((lintel_w, casing_th, casing_w), (0.0, ext_y, hh + casing_w * 0.5 - 0.025), MAT_INDEX_BONE)
+    lintel_w = w + casing_w * 2.0 + 0.12
+    _add_local_box((lintel_w, casing_th, casing_w), (0.0, ext_y, hh + casing_w * 0.5 - 0.02), MAT_INDEX_BONE)
 
     # Left and Right side jamb casings
-    jamb_h = h + casing_w * 0.5
-    _add_local_box((casing_w, casing_th, jamb_h), (-hw - casing_w * 0.5 + 0.025, ext_y, 0.0), MAT_INDEX_BONE)
-    _add_local_box((casing_w, casing_th, jamb_h), (hw + casing_w * 0.5 - 0.025, ext_y, 0.0), MAT_INDEX_BONE)
+    jamb_h = h + casing_w * 0.6
+    _add_local_box((casing_w, casing_th, jamb_h), (-hw - casing_w * 0.5 + 0.02, ext_y, 0.0), MAT_INDEX_BONE)
+    _add_local_box((casing_w, casing_th, jamb_h), (hw + casing_w * 0.5 - 0.02, ext_y, 0.0), MAT_INDEX_BONE)
 
     # 4 Carved bone knuckle condyles at exterior frame corners
-    condyle_euler = (rot_mat @ Matrix.Rotation(math.pi * 0.5, 4, 'X')).to_euler()
     for sgn_cx in (-1.0, 1.0):
         for sgn_cz in (-1.0, 1.0):
             corner_x = sgn_cx * (hw + casing_w * 0.5)
             corner_z = sgn_cz * (hh + casing_w * 0.5)
-            c_pos = rot_mat @ Vector((corner_x, ext_y - 0.01, corner_z)) + Vector((x, y, z))
-            create_cylinder(bm, radius=0.065, height=0.07, segments=6,
-                            location=(c_pos.x, c_pos.y, c_pos.z),
-                            rotation=(condyle_euler.x, condyle_euler.y, condyle_euler.z),
-                            mat_index=MAT_INDEX_BONE)
+            _add_local_box((0.10, casing_th + 0.02, 0.10),
+                           (corner_x, ext_y - 0.01, corner_z), MAT_INDEX_BONE)
 
     # 3. Interior Timber Window Trim (Covers the cutout on the INSIDE room face)
-    in_casing_w = 0.085
-    in_casing_th = 0.035
+    in_casing_w = 0.14
+    in_casing_th = 0.045
     in_y = wall_th + in_casing_th * 0.5
 
     # Interior bottom sill apron
-    _add_local_box((w + in_casing_w * 2.0 + 0.06, in_casing_th, in_casing_w),
+    _add_local_box((w + in_casing_w * 2.0 + 0.08, in_casing_th, in_casing_w),
                    (0.0, in_y, -hh - in_casing_w * 0.5 + 0.02), MAT_INDEX_TIMBER)
     # Interior top lintel casing
-    _add_local_box((w + in_casing_w * 2.0 + 0.06, in_casing_th, in_casing_w),
+    _add_local_box((w + in_casing_w * 2.0 + 0.08, in_casing_th, in_casing_w),
                    (0.0, in_y, hh + in_casing_w * 0.5 - 0.02), MAT_INDEX_TIMBER)
     # Interior left & right jamb casings
-    _add_local_box((in_casing_w, in_casing_th, h),
+    _add_local_box((in_casing_w, in_casing_th, h + 0.04),
                    (-hw - in_casing_w * 0.5 + 0.02, in_y, 0.0), MAT_INDEX_TIMBER)
-    _add_local_box((in_casing_w, in_casing_th, h),
+    _add_local_box((in_casing_w, in_casing_th, h + 0.04),
                    (hw + in_casing_w * 0.5 - 0.02, in_y, 0.0), MAT_INDEX_TIMBER)
 
     # 4. Iron Security Bars & Weather-Sealed Glass Pane
@@ -1445,7 +1441,7 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
 
 
 def _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
-                               u_start=0.0, u_scale=0.70, v_scale=0.40,
+                               u_start=0.0, v_start=0.0, u_scale=0.70, v_scale=0.40,
                                mat_index=MAT_INDEX_DRIFTWOOD,
                                build_left_cap=False, build_right_cap=False,
                                build_top_cap=True, build_bot_cap=True):
@@ -1503,8 +1499,8 @@ def _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
     h_slope = ((pt0 - pb0).length + (pt1 - pb1).length) * 0.5
     u0 = u_start
     u1 = u_start + w_bot * u_scale
-    v0 = 0.0
-    v1 = h_slope * v_scale
+    v0 = v_start
+    v1 = v_start + h_slope * v_scale
 
     for loop in f_out.loops:
         if loop.vert == v_pb0: loop[uv_layer].uv = Vector((u0, v0))
@@ -1517,6 +1513,19 @@ def _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
         elif loop.vert == v_ipb0: loop[uv_layer].uv = Vector((u1, v0))
         elif loop.vert == v_ipt0: loop[uv_layer].uv = Vector((u1, v1))
         elif loop.vert == v_ipt1: loop[uv_layer].uv = Vector((u0, v1))
+
+    if build_top_cap:
+        for loop in f_top.loops:
+            loop[uv_layer].uv = Vector((loop.vert.co.x * u_scale, loop.vert.co.y * u_scale))
+    if build_bot_cap:
+        for loop in f_bot.loops:
+            loop[uv_layer].uv = Vector((loop.vert.co.x * u_scale, loop.vert.co.y * u_scale))
+    if build_left_cap:
+        for loop in f_left.loops:
+            loop[uv_layer].uv = Vector((u0, loop.vert.co.z * v_scale))
+    if build_right_cap:
+        for loop in f_right.loops:
+            loop[uv_layer].uv = Vector((u1, loop.vert.co.z * v_scale))
 
 
 def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
@@ -1635,7 +1644,10 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
             uv_l = bm.loops.layers.uv.verify()
             for f in (f_hf, f_hb):
                 for loop in f.loops:
-                    loop[uv_l].uv = Vector((loop.vert.co.x * 0.35, loop.vert.co.z * 0.35))
+                    v_rel = loop.vert.co - pb0
+                    u = v_rel.dot(u_vec) * 0.70
+                    v = v_rel.dot(w_vec) * 0.40
+                    loop[uv_l].uv = Vector((u, v))
 
             # Heavy timber threshold sill beam centered at middle of wall thickness
             sill_p = mb - n_vec * (wall_th * 0.5)
@@ -1659,43 +1671,50 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
             win_h = 0.85
             win_cz = z0 + height * 0.48
 
-            h_mid = (win_cz - z0) / height
-            w_mid_f = w_base_f * (1.0 - h_mid) + w_top_f * h_mid
-            t_win_half = (win_w * 0.5) / max(0.01, w_mid_f)
-            s_L = max(0.05, 0.5 - t_win_half)
-            s_R = min(0.95, 0.5 + t_win_half)
+            sin_pitch = max(0.1, w_vec.z)
+            facet_len = (mt - mb).length
+            w_mid = (win_cz - z0) / sin_pitch
+            w_bot = max(0.2, w_mid - win_h * 0.5)
+            w_top = min(facet_len - 0.2, w_mid + win_h * 0.5)
+            t_bot = w_bot / facet_len
+            t_top = w_top / facet_len
 
-            pb_wL = pb0 * (1.0 - s_L) + pb1 * s_L
-            pb_wR = pb0 * (1.0 - s_R) + pb1 * s_R
-            pt_wL = pt0 * (1.0 - s_L) + pt1 * s_L
-            pt_wR = pt0 * (1.0 - s_R) + pt1 * s_R
+            # Edge vertices along left and right facet boundaries
+            p_edgeL_bot = pb0 * (1.0 - t_bot) + pt0 * t_bot
+            p_edgeR_bot = pb1 * (1.0 - t_bot) + pt1 * t_bot
+            p_edgeL_top = pb0 * (1.0 - t_top) + pt0 * t_top
+            p_edgeR_top = pb1 * (1.0 - t_top) + pt1 * t_top
 
-            h_bot = max(0.05, (win_cz - win_h * 0.5 - z0) / height)
-            h_top = min(0.95, (win_cz + win_h * 0.5 - z0) / height)
+            # Cutout opening vertices (pure rectangular window hole along u_vec and w_vec)
+            u_hw = win_w * 0.5
+            p_mid_bot = mb * (1.0 - t_bot) + mt * t_bot
+            p_mid_top = mb * (1.0 - t_top) + mt * t_top
+            p_win_bl = p_mid_bot - u_vec * u_hw
+            p_win_br = p_mid_bot + u_vec * u_hw
+            p_win_tl = p_mid_top - u_vec * u_hw
+            p_win_tr = p_mid_top + u_vec * u_hw
 
-            p_sillL = pb_wL * (1.0 - h_bot) + pt_wL * h_bot
-            p_sillR = pb_wR * (1.0 - h_bot) + pt_wR * h_bot
-            p_headL = pb_wL * (1.0 - h_top) + pt_wL * h_top
-            p_headR = pb_wR * (1.0 - h_top) + pt_wR * h_top
+            # 1. Bottom Sill Wall Panel (Full width below window, capped top sill)
+            _build_tapered_facet_panel(bm, pb0, pb1, p_edgeL_bot, p_edgeR_bot, n_vec, wall_th,
+                                       u_start=i * 2.8, v_start=0.0, build_top_cap=True)
 
-            # 1. Left flank panel
-            _build_tapered_facet_panel(bm, pb0, pb_wL, pt0, pt_wL, n_vec, wall_th,
-                                       u_start=i * 2.8, build_right_cap=True)
+            # 2. Top Header Wall Panel (Full width above window, capped bottom lintel)
+            _build_tapered_facet_panel(bm, p_edgeL_top, p_edgeR_top, pt0, pt1, n_vec, wall_th,
+                                       u_start=i * 2.8, v_start=w_top * 0.40, build_bot_cap=True)
 
-            # 2. Right flank panel
-            _build_tapered_facet_panel(bm, pb_wR, pb1, pt_wR, pt1, n_vec, wall_th,
-                                       u_start=i * 2.8 + 2.0, build_left_cap=True)
+            # 3. Left Flank Wall Panel (Left of window cutout, capped right jamb)
+            _build_tapered_facet_panel(bm, p_edgeL_bot, p_win_bl, p_edgeL_top, p_win_tl, n_vec, wall_th,
+                                       u_start=i * 2.8, v_start=w_bot * 0.40,
+                                       build_right_cap=True, build_top_cap=False, build_bot_cap=False)
 
-            # 3. Bottom sill panel
-            _build_tapered_facet_panel(bm, pb_wL, pb_wR, p_sillL, p_sillR, n_vec, wall_th,
-                                       u_start=i * 2.8 + 1.0, build_top_cap=True)
-
-            # 4. Top header panel
-            _build_tapered_facet_panel(bm, p_headL, p_headR, pt_wL, pt_wR, n_vec, wall_th,
-                                       u_start=i * 2.8 + 1.0, build_bot_cap=True)
+            # 4. Right Flank Wall Panel (Right of window cutout, capped left jamb)
+            u_flank_r = i * 2.8 + (p_win_br - pb0).dot(u_vec) * 0.70
+            _build_tapered_facet_panel(bm, p_win_br, p_edgeR_bot, p_win_tr, p_edgeR_top, n_vec, wall_th,
+                                       u_start=u_flank_r, v_start=w_bot * 0.40,
+                                       build_left_cap=True, build_top_cap=False, build_bot_cap=False)
 
             # 5. Carved bone window assembly flush in the cutout opening
-            p_win_center = (p_sillL + p_sillR + p_headL + p_headR) * 0.25
+            p_win_center = (p_win_bl + p_win_br + p_win_tl + p_win_tr) * 0.25
             r_win_mat = Matrix((
                 (u_vec.x, -n_vec.x, w_vec.x, 0.0),
                 (u_vec.y, -n_vec.y, w_vec.y, 0.0),
@@ -1974,17 +1993,21 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
         _create_oriented_beam(bm, (h_wb, -h_db, z_bot + 0.15), (h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
         _create_oriented_beam(bm, (h_wb, h_db, z_bot + 0.15), (h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
 
-    # 5. Access Ladder (Centered on Front, climbing straight into the platform hatchway)
+    # 5. Access Ladder (Centered on Front, climbing straight into the open platform hatchway)
     lad_w = 0.90
     lad_x = 0.0
-    lad_y0 = -h_bd * 1.15
-    lad_y1 = -h_td + 0.15
-
-    # Deck dimensions
     deck_w = tw + 0.80
     deck_d = td + 0.80
     h_dw = deck_w * 0.5
     h_dd = deck_d * 0.5
+
+    hatch_hw = lad_w * 0.65
+    hatch_back_y = -h_td + 0.55
+
+    lad_y0 = -h_bd - 0.35
+    y_hatch_center = -(h_td + 0.15)
+    slope_dy = (y_hatch_center - lad_y0) / max(0.1, stilt_h)
+    lad_y1 = y_hatch_center + slope_dy * 1.10
 
     # Two heavy timber ladder stringers extending above deck to form grab rails:
     for sgn_lad in (-1.0, 1.0):
@@ -1992,33 +2015,39 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
         _create_oriented_beam(bm, (lx, lad_y0, 0.0), (lx, lad_y1, stilt_h + 1.10),
                               width=0.14, depth=0.16, mat_index=MAT_INDEX_TIMBER)
 
-    # Ladder rungs spaced vertically
+    # Ladder rungs spaced vertically up to floor level (none above floor to trip climbers)
     num_rungs = max(6, int(stilt_h / 0.35))
-    for i in range(1, num_rungs + 1):
-        rz = i * (stilt_h / (num_rungs + 1))
-        t_lad = rz / stilt_h
+    for i in range(1, num_rungs):
+        rz = i * (stilt_h / num_rungs)
+        if rz > stilt_h - 0.10:
+            continue
+        t_lad = rz / (stilt_h + 1.10)
         ry = lad_y0 * (1.0 - t_lad) + lad_y1 * t_lad
         _create_oriented_beam(bm, (lad_x - lad_w * 0.46, ry, rz), (lad_x + lad_w * 0.46, ry, rz),
                               width=0.10, depth=0.12, mat_index=MAT_INDEX_DRIFTWOOD)
 
     # 6. Elevated Platform Deck with Real Hatchway Opening
-    # Perimeter sill joists underneath deck
-    for sgn_y in (-1.0, 1.0):
-        create_box(bm, (deck_w, 0.30, 0.30), (0.0, sgn_y * (h_td + 0.15), stilt_h - 0.15), mat_index=MAT_INDEX_TIMBER)
+    # Perimeter sill joists underneath deck (Front joist is split flanking the hatch opening!)
+    w_front_bm = h_dw - hatch_hw
+    # Left front sill beam
+    create_box(bm, (w_front_bm, 0.30, 0.30),
+               ((-h_dw - hatch_hw) * 0.5, -(h_td + 0.15), stilt_h - 0.15), mat_index=MAT_INDEX_TIMBER)
+    # Right front sill beam
+    create_box(bm, (w_front_bm, 0.30, 0.30),
+               ((hatch_hw + h_dw) * 0.5, -(h_td + 0.15), stilt_h - 0.15), mat_index=MAT_INDEX_TIMBER)
+    # Rear perimeter joist
+    create_box(bm, (deck_w, 0.30, 0.30), (0.0, h_td + 0.15, stilt_h - 0.15), mat_index=MAT_INDEX_TIMBER)
+    # Left and right side joists
     for sgn_x in (-1.0, 1.0):
         create_box(bm, (0.30, deck_d, 0.30), (sgn_x * (h_tw + 0.15), 0.0, stilt_h - 0.15), mat_index=MAT_INDEX_TIMBER)
+    # Transverse header joist behind hatch
+    create_box(bm, (hatch_hw * 2.0, 0.22, 0.28), (0.0, hatch_back_y, stilt_h - 0.15), mat_index=MAT_INDEX_TIMBER)
 
-    # Walkable timber floor slabs around hatchway cutout [-hatch_hw, hatch_hw] x [-h_dd, -h_td + 0.85]
-    hatch_hw = lad_w * 0.60
-    hatch_back_y = -h_td + 0.85
-
-    # Left slab
+    # Walkable timber floor slabs around hatchway cutout [-hatch_hw, hatch_hw] x [-h_dd, hatch_back_y]
     w_left = (-hatch_hw) - (-h_dw)
     create_box(bm, (w_left, deck_d, 0.16), ((-h_dw - hatch_hw) * 0.5, 0.0, stilt_h + 0.08), mat_index=MAT_INDEX_FLOOR)
-    # Right slab
     w_right = h_dw - hatch_hw
     create_box(bm, (w_right, deck_d, 0.16), ((hatch_hw + h_dw) * 0.5, 0.0, stilt_h + 0.08), mat_index=MAT_INDEX_FLOOR)
-    # Rear slab behind hatchway
     d_rear = h_dd - hatch_back_y
     create_box(bm, (hatch_hw * 2.0, d_rear, 0.16), (0.0, hatch_back_y + d_rear * 0.5, stilt_h + 0.08), mat_index=MAT_INDEX_FLOOR)
 
@@ -2299,15 +2328,30 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
     front_eave_y = -hd - awning_reach_d
     front_eave_z = awning_ledger_z - awning_drop_h
 
-    # 3 Heavy Sloped Timber Rafter Beams & Diagonal Struts
-    for sgn_raf in (-1.65, 0.0, 1.65):
-        p_raf_top = (sgn_raf, -hd + 0.02, awning_ledger_z)
-        p_raf_bot = (sgn_raf, front_eave_y, front_eave_z)
+    # 3 Heavy Sloped Timber Rafter Beams
+    raf_xs = (-counter_w * 0.5 - 0.15, 0.0, counter_w * 0.5 + 0.15)
+    for rx in raf_xs:
+        p_raf_top = (rx, -hd + 0.02, awning_ledger_z)
+        p_raf_bot = (rx, front_eave_y, front_eave_z)
         _create_oriented_beam(bm, p_raf_top, p_raf_bot, width=0.18, depth=0.20, mat_index=MAT_INDEX_TIMBER)
-        # Heavy diagonal strut brace from wall up to mid-rafter (completely anchored at both ends)
-        p_strut_wall = (sgn_raf, -hd + 0.02, counter_top_z + 0.90)
-        p_strut_raf = (sgn_raf, -hd - awning_reach_d * 0.65, awning_ledger_z - awning_drop_h * 0.65 - 0.08)
+
+    # Sturdy diagonal struts anchored ONLY to solid structural jamb posts flanking the window (zero window clutter)
+    for sgn_strut in (-1.0, 1.0):
+        strut_base_x = sgn_strut * (counter_w * 0.5 + jamb_w * 0.5)
+        strut_raf_x = sgn_strut * (counter_w * 0.5 + 0.15)
+        p_strut_wall = (strut_base_x, -hd + 0.02, counter_top_z + 0.35)
+        p_strut_raf = (strut_raf_x, front_eave_y * 0.70 + (-hd) * 0.30,
+                       front_eave_z * 0.70 + awning_ledger_z * 0.30 - 0.06)
         _create_oriented_beam(bm, p_strut_wall, p_strut_raf, width=0.14, depth=0.14, mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.18, 0.12, 0.12), (strut_base_x, -hd + 0.04, counter_top_z + 0.35), mat_index=MAT_INDEX_IRON)
+
+    # Timber knee braces from header lintel beam down to outer rafters
+    for sgn_kb in (-1.0, 1.0):
+        kb_x = sgn_kb * (counter_w * 0.35)
+        p_kb_lintel = (kb_x, -hd + 0.02, open_top_z + lintel_h * 0.5)
+        p_kb_raf = (kb_x, front_eave_y * 0.35 + (-hd) * 0.65,
+                    front_eave_z * 0.35 + awning_ledger_z * 0.65 - 0.06)
+        _create_oriented_beam(bm, p_kb_lintel, p_kb_raf, width=0.12, depth=0.12, mat_index=MAT_INDEX_TIMBER)
 
     # Front Fascia Beam connecting all rafter tips
     create_box(bm, (awning_span_w + 0.20, 0.18, 0.22),
@@ -2489,31 +2533,43 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
         for cy in (u_y0, u_y1):
             _build_chunky_corner_column(bm, cx, cy, z_mid, z_top, size=0.40, extend_top=0.35)
 
-    # 8. Stylized Carved Bone Trophy Crest mounted on the upper front gable peak
-    _build_shark_skull_mount(bm, 0.0, u_y0 - 0.08, z_top + 1.20, rot_z=math.pi, scale=1.40)
+    # 8. Interior Baseboard Skirting around upper room floor (seals wall-to-floor joints 100%)
+    skirt_w = u_w - wall_th * 2.0
+    skirt_d = u_d - wall_th * 2.0
+    skirt_my = (u_y0 + wall_th + u_y1 - wall_th) * 0.5
+    for sgn_sk in (-1.0, 1.0):
+        create_box(bm, (0.10, skirt_d, 0.18),
+                   (sgn_sk * (skirt_w * 0.5 - 0.05), skirt_my, z_mid + 0.09), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (skirt_w, 0.10, 0.18),
+                   (0.0, skirt_my + sgn_sk * (skirt_d * 0.5 - 0.05), z_mid + 0.09), mat_index=MAT_INDEX_TIMBER)
 
     # 10. Interior Trade Room Furniture & Props
     _build_hajfin_counter_shelf(bm, 0.0, -hd + 3.2, z0, width=3.8, height=2.4)
     _build_hajfin_weapon_rack(bm, -hw + 1.2, 0.0, z0, rot_z=math.pi * 0.5)
 
     # 11. Multi-Tier Bone Scale Roofs with Full Solid Gable Triangles
-    # Lower flanking roofs (Asymmetric overhangs stop flush at tower exterior walls so ZERO shingles poke indoors)
+    # Lower flanking roofs (Eave sits 25cm below second floor level, sealed by exterior timber flashing ledgers)
+    fl_eave_z = z_mid - 0.25
     for sgn_x in (-1.0, 1.0):
         if sgn_x < 0:
             fl_x0 = -hw
-            fl_x1 = -u_hw - wall_th * 0.5
+            fl_x1 = -u_hw - wall_th - 0.06
             ov_l = 0.40
-            ov_r = 0.0  # Stops at exterior face of tower wall! ZERO shingles indoors!
+            ov_r = 0.0
         else:
-            fl_x0 = u_hw + wall_th * 0.5
+            fl_x0 = u_hw + wall_th + 0.06
             fl_x1 = hw
-            ov_l = 0.0  # Stops at exterior face of tower wall! ZERO shingles indoors!
+            ov_l = 0.0
             ov_r = 0.40
-        _build_gable_triangle_wall(bm, fl_x0, fl_x1, -hd, z_mid, z_mid + 2.2, wall_th=wall_th)
-        _build_gable_triangle_wall(bm, fl_x0, fl_x1, hd, z_mid, z_mid + 2.2, wall_th=wall_th)
-        _build_bone_scale_roof_gable(bm, fl_x0, fl_x1, -hd, hd, z_mid, 2.2,
+        _build_gable_triangle_wall(bm, fl_x0, fl_x1, -hd, fl_eave_z, fl_eave_z + 2.25, wall_th=wall_th)
+        _build_gable_triangle_wall(bm, fl_x0, fl_x1, hd, fl_eave_z, fl_eave_z + 2.25, wall_th=wall_th)
+        _build_bone_scale_roof_gable(bm, fl_x0, fl_x1, -hd, hd, fl_eave_z, 2.25,
                                      overhang_y=0.40, fin_scale=1.2, num_ridge_teeth=5,
                                      overhang_x_left=ov_l, overhang_x_right=ov_r)
+
+        # Exterior timber flashing ledger beam sealing the roof-to-tower junction
+        ledger_x = -u_hw - wall_th * 0.5 if sgn_x < 0 else u_hw + wall_th * 0.5
+        create_box(bm, (0.16, depth + 0.40, 0.22), (ledger_x, 0.0, z_mid - 0.12), mat_index=MAT_INDEX_TIMBER)
 
     # Upper Tower Main Roof with full gable triangles
     u_peak_z = z_top + 3.2
