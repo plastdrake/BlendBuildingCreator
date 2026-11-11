@@ -123,9 +123,9 @@ def _build_railing_segment(bm, x0, x1, y0, y1, z_base, height=1.0):
     """Build a clean shared guard rail around a Hajfin stairwell."""
     build_railing(
         bm, (x0, y0), (x1, y1), z_base, height=height,
-        rail_mat=MAT_INDEX_DRIFTWOOD, baluster_mat=MAT_INDEX_DRIFTWOOD,
-        post_spacing=1.35, baluster_spacing=0.32,
-        braces=False, jankiness=0.0, has_sill=False,
+        rail_mat=MAT_INDEX_TIMBER, baluster_mat=MAT_INDEX_TIMBER,
+        post_spacing=1.60, baluster_spacing=0.28,
+        braces=False, jankiness=0.06, has_sill=True,
     )
 
 
@@ -1019,11 +1019,11 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
     # Left slope (x < mx) terminates at x0 - ov_xl
     _build_roof_slope_slab(bm, x_peak=mx, x_eave=x0 - ov_xl,
                            y0=y0 - overhang_y, y1=y1 + overhang_y,
-                           z_peak=peak_z, z_eave=eave_z, slab_th=0.14, u_scale=0.25, v_scale=0.28)
+                           z_peak=peak_z, z_eave=eave_z, slab_th=0.14, u_scale=0.12, v_scale=0.14)
     # Right slope (x > mx) terminates at x1 + ov_xr
     _build_roof_slope_slab(bm, x_peak=mx, x_eave=x1 + ov_xr,
                            y0=y0 - overhang_y, y1=y1 + overhang_y,
-                           z_peak=peak_z, z_eave=eave_z, slab_th=0.14, u_scale=0.25, v_scale=0.28)
+                           z_peak=peak_z, z_eave=eave_z, slab_th=0.14, u_scale=0.12, v_scale=0.14)
 
     # 3. Heavy Timber Verge Bargeboards on Front & Rear Gable Slopes
     for gy in (y0 - overhang_y, y1 + overhang_y):
@@ -1124,8 +1124,8 @@ def _build_bone_scale_roof_conical(bm, cx, cy, eave_z, radius, height,
 
     # Sloped triangular faces
     slope_len = math.hypot(radius, height)
-    v_tiles = max(0.85, slope_len * 0.28)
-    u_repeat = max(2.5, (2.0 * math.pi * radius) * 0.25)
+    v_tiles = max(0.85, slope_len * 0.14)
+    u_repeat = max(2.5, (2.0 * math.pi * radius) * 0.14)
 
     for i in range(num_segs):
         i_next = (i + 1) % num_segs

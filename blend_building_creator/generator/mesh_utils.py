@@ -1245,8 +1245,8 @@ def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 
             u_s = 0.40
             v_s = 0.40
         elif face.material_index == 3: # MAT_INDEX_FLOOR timber deck
-            u_s = 0.50
-            v_s = 0.50
+            u_s = 0.25
+            v_s = 0.25
         elif face.material_index in (0, 8, 54): # Stone masonry / reef stone
             u_s = 0.45
             v_s = 0.45
