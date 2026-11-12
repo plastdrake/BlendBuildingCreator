@@ -56,6 +56,22 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
     z_bottom = z_level - thickness
     z_top = z_level
 
+    # Planks run along the LONGEST span of the overall room / slab (beams cross the shortest).
+    # In wood_planks_diffuse.jpg, planks run along V (the second UV component).
+    # Default unwrap (untagged) maps U along X and V along Y (planks run along Y).
+    # When X is the longest span (room_w > room_d), swap U and V so planks run along X.
+    room_w = x_max - x_min
+    room_d = y_max - y_min
+    swap_uv = (room_w > room_d)
+
+    # Calibrated world-space UV scale factor matching mesh_utils.apply_box_uvs
+    if mat_idx in (0, 8, 54):  # Stone masonry / reef stone
+        uv_scale = 0.45
+    elif mat_idx == 53:  # Driftwood
+        uv_scale = 0.50
+    else:  # MAT_INDEX_FLOOR (3) and other floorboards
+        uv_scale = 0.25
+
     def add_floor_region(rx_min, rx_max, ry_min, ry_max, region_seed):
         if rx_max - rx_min < 0.04 or ry_max - ry_min < 0.04:
             return
@@ -64,16 +80,24 @@ def build_floor_slab(bm, floor_idx, x_min, x_max, y_min, y_max, z_level, thickne
             location=((rx_min + rx_max) * 0.5, (ry_min + ry_max) * 0.5,
                       (z_bottom + z_top) * 0.5), mat_index=mat_idx
         )
-        if (rx_max - rx_min) < (ry_max - ry_min):
-            uv_layer = bm.loops.layers.uv.verify()
-            for f in faces:
-                zs = [loop.vert.co.z for loop in f.loops]
-                if max(zs) - min(zs) > 1e-6:
-                    continue
-                for loop in f.loops:
-                    co = loop.vert.co
-                    loop[uv_layer].uv = Vector((co.y, co.x))
+        uv_layer = bm.loops.layers.uv.verify()
+        for f in faces:
+            zs = [loop.vert.co.z for loop in f.loops]
+            if max(zs) - min(zs) < 1e-4:
+                # Horizontal top or bottom face of the floor slab:
+                # Continuous world-space UV mapping guarantees zero seams across decomposed regions!
+                if swap_uv:
+                    for loop in f.loops:
+                        co = loop.vert.co
+                        loop[uv_layer].uv = Vector((co.y * uv_scale, co.x * uv_scale))
+                else:
+                    for loop in f.loops:
+                        co = loop.vert.co
+                        loop[uv_layer].uv = Vector((co.x * uv_scale, co.y * uv_scale))
                 f.tag = True
+            else:
+                # Vertical side rim face: un-tag so apply_box_uvs unwraps the slab edges cleanly
+                f.tag = False
 
     holes = []
     if stair_hole is not None:
