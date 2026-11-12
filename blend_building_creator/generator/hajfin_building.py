@@ -83,19 +83,9 @@ def _build_hajfin_roof_variant(bm, x0, x1, y0, y1, eave_z, peak_h,
         return True
 
     if style == 'FLAT':
-        ox = max(0.35, overhang_x)
-        oy = max(0.35, overhang_y)
-        z = eave_z + 0.08
-        create_box(bm, (x1 - x0 + ox * 2.0, y1 - y0 + oy * 2.0, 0.18),
-                   ((x0 + x1) * 0.5, (y0 + y1) * 0.5, z),
-                   mat_index=MAT_INDEX_TIMBER)
-        for size, loc in (
-            ((x1 - x0 + ox * 2.0, 0.24, 0.28), ((x0 + x1) * 0.5, y0 - oy, z + 0.16)),
-            ((x1 - x0 + ox * 2.0, 0.24, 0.28), ((x0 + x1) * 0.5, y1 + oy, z + 0.16)),
-            ((0.24, y1 - y0 + oy * 2.0, 0.28), (x0 - ox, (y0 + y1) * 0.5, z + 0.16)),
-            ((0.24, y1 - y0 + oy * 2.0, 0.28), (x1 + ox, (y0 + y1) * 0.5, z + 0.16)),
-        ):
-            create_box(bm, size, loc, mat_index=MAT_INDEX_TIMBER)
+        ox = max(0.40, overhang_x)
+        oy = max(0.40, overhang_y)
+        _build_hajfin_flat_shingle_roof(bm, x0, x1, y0, y1, eave_z, peak_h, ox, oy)
         return True
 
     if style == 'PLANKS':
@@ -106,6 +96,113 @@ def _build_hajfin_roof_variant(bm, x0, x1, y0, y1, eave_z, peak_h,
         return True
 
     return False
+
+
+def _build_hajfin_flat_shingle_roof(bm, x0, x1, y0, y1, eave_z, peak_h,
+                                    overhang_x=0.55, overhang_y=0.55):
+    """Builds a low-profile scavenger blockhouse roof with framed perimeter timbers,
+    forged iron corner brackets, solid timber underside ceiling, and an inset subtly pitched
+    weather-tight bone scale shingle deck."""
+    ox = max(0.40, overhang_x)
+    oy = max(0.40, overhang_y)
+
+    x_min = x0 - ox
+    x_max = x1 + ox
+    y_min = y0 - oy
+    y_max = y1 + oy
+    w = x_max - x_min
+    d = y_max - y_min
+    cx = (x0 + x1) * 0.5
+    cy = (y0 + y1) * 0.5
+
+    # 1. Structural perimeter eave beams underneath
+    beam_w = 0.26
+    beam_h = 0.24
+    timber_box(bm, (w, beam_w, beam_h), (cx, y_min + beam_w * 0.5, eave_z - beam_h * 0.5 + 0.04),
+               mat_index=MAT_INDEX_TIMBER, long_axis=0)
+    timber_box(bm, (w, beam_w, beam_h), (cx, y_max - beam_w * 0.5, eave_z - beam_h * 0.5 + 0.04),
+               mat_index=MAT_INDEX_TIMBER, long_axis=0)
+    timber_box(bm, (beam_w, d - beam_w * 2, beam_h), (x_min + beam_w * 0.5, cy, eave_z - beam_h * 0.5 + 0.04),
+               mat_index=MAT_INDEX_TIMBER, long_axis=1)
+    timber_box(bm, (beam_w, d - beam_w * 2, beam_h), (x_max - beam_w * 0.5, cy, eave_z - beam_h * 0.5 + 0.04),
+               mat_index=MAT_INDEX_TIMBER, long_axis=1)
+
+    # Underside solid ceiling slab (seals building interior completely)
+    create_box(bm, (w - 0.2, d - 0.2, 0.12), (cx, cy, eave_z - 0.04), mat_index=MAT_INDEX_TIMBER)
+
+    # 2. Raised perimeter parapet / fascia rim beams
+    rim_th = 0.22
+    rim_h = 0.32
+    rim_cz = eave_z + 0.16
+    timber_box(bm, (w, rim_th, rim_h), (cx, y_min + rim_th * 0.5, rim_cz),
+               mat_index=MAT_INDEX_TIMBER, long_axis=0)
+    timber_box(bm, (w, rim_th, rim_h), (cx, y_max - rim_th * 0.5, rim_cz),
+               mat_index=MAT_INDEX_TIMBER, long_axis=0)
+    timber_box(bm, (rim_th, d - rim_th * 2, rim_h), (x_min + rim_th * 0.5, cy, rim_cz),
+               mat_index=MAT_INDEX_TIMBER, long_axis=1)
+    timber_box(bm, (rim_th, d - rim_th * 2, rim_h), (x_max - rim_th * 0.5, cy, rim_cz),
+               mat_index=MAT_INDEX_TIMBER, long_axis=1)
+
+    # Forged iron corner caps on the 4 roof rim corners
+    for sx, ex in ((-1, x_min + rim_th * 0.5), (1, x_max - rim_th * 0.5)):
+        for sy, ey in ((-1, y_min + rim_th * 0.5), (1, y_max - rim_th * 0.5)):
+            create_box(bm, (rim_th + 0.05, rim_th + 0.05, rim_h + 0.04), (ex, ey, rim_cz),
+                       mat_index=MAT_INDEX_IRON)
+
+    # 3. Inset roof deck with subtle pitch and bone scale roof shingles
+    ix0 = x_min + rim_th
+    ix1 = x_max - rim_th
+    iy0 = y_min + rim_th
+    iy1 = y_max - rim_th
+    span_x = ix1 - ix0
+    span_y = iy1 - iy0
+
+    crown_h = min(0.32, max(0.18, span_x * 0.038))
+    z_deck = eave_z + 0.08
+    z_ridge = z_deck + crown_h
+    mx = cx
+
+    uv_layer = bm.loops.layers.uv.verify()
+
+    # Left slope deck (ix0 to mx)
+    v_l_rf = bm.verts.new(Vector((mx, iy0, z_ridge)))
+    v_l_rb = bm.verts.new(Vector((mx, iy1, z_ridge)))
+    v_l_eb = bm.verts.new(Vector((ix0, iy1, z_deck)))
+    v_l_ef = bm.verts.new(Vector((ix0, iy0, z_deck)))
+
+    f_l = bm.faces.new([v_l_rf, v_l_ef, v_l_eb, v_l_rb])
+    f_l.material_index = MAT_INDEX_SHINGLES
+    f_l.tag = True
+
+    u_scale = 0.28
+    v_scale = 0.28
+    for loop in f_l.loops:
+        co = loop.vert.co
+        u = (co.y - iy0) * u_scale
+        dist_from_ridge = abs(mx - co.x)
+        v = dist_from_ridge * v_scale
+        loop[uv_layer].uv = Vector((u, v))
+
+    # Right slope deck (mx to ix1)
+    v_r_rf = bm.verts.new(Vector((mx, iy0, z_ridge)))
+    v_r_rb = bm.verts.new(Vector((mx, iy1, z_ridge)))
+    v_r_eb = bm.verts.new(Vector((ix1, iy1, z_deck)))
+    v_r_ef = bm.verts.new(Vector((ix1, iy0, z_deck)))
+
+    f_r = bm.faces.new([v_r_rf, v_r_rb, v_r_eb, v_r_ef])
+    f_r.material_index = MAT_INDEX_SHINGLES
+    f_r.tag = True
+
+    for loop in f_r.loops:
+        co = loop.vert.co
+        u = (co.y - iy0) * u_scale
+        dist_from_ridge = abs(co.x - mx)
+        v = dist_from_ridge * v_scale
+        loop[uv_layer].uv = Vector((u, v))
+
+    # Low central timber ridge cap
+    timber_box(bm, (0.24, span_y, 0.12), (mx, cy, z_ridge + 0.04),
+               mat_index=MAT_INDEX_TIMBER, long_axis=1)
 
 
 def _build_hajfin_supported_plank_roof(bm, x0, x1, y0, y1, eave_z, peak_h,
@@ -2452,14 +2549,16 @@ def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, 
                                  z_mid, z1, -hw * 0.45, hw * 0.45, z_mid + story_h * 0.52,
                                  win_w=0.85, win_h=0.85, wall_th=wall_th, facing_north=False)
 
-    # 5. Massive Square Corner Columns with L-Brackets
+    # 5. Massive Square Corner Columns with L-Brackets (spanning full height from z0 to z1)
     col_size = 0.50
+    col_h = z1 - z0
     for cx in (-hw, hw):
         for cy in (-hd, hd):
-            create_box(bm, (col_size, col_size, height + 0.35), (cx, cy, z0 + height * 0.5 + 0.175),
-                       mat_index=MAT_INDEX_DRIFTWOOD)
-            for bz in (z0 + 0.25, z_mid, z1):
-                create_box(bm, (col_size + 0.05, col_size + 0.05, 0.32), (cx, cy, bz),
+            timber_box(bm, (col_size, col_size, col_h), (cx, cy, (z0 + z1) * 0.5),
+                       mat_index=MAT_INDEX_TIMBER, bevel_amount=0.015, long_axis=2)
+            cuff_z_list = (z0 + 0.22, z_mid, z1 - 0.16) if col_h > 5.5 else (z0 + 0.22, z1 - 0.16)
+            for bz in cuff_z_list:
+                create_box(bm, (col_size + 0.06, col_size + 0.06, 0.30), (cx, cy, bz),
                            mat_index=MAT_INDEX_IRON)
 
     # 6. Dense Bone Scale Roof with solid gable triangle walls
