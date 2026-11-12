@@ -1588,7 +1588,8 @@ def _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
                                u_start=0.0, v_start=0.0, u_scale=0.18, v_scale=0.18,
                                mat_index=MAT_INDEX_DRIFTWOOD,
                                build_left_cap=False, build_right_cap=False,
-                               build_top_cap=True, build_bot_cap=True):
+                               build_top_cap=True, build_bot_cap=True,
+                               facet_origin=None, u_vec=None, w_vec=None):
     """Constructs a true planar trapezoidal wall panel with thickness and vertical plank UV unwrapping.
     Guarantees zero twist, zero clipping, zero diagonal stretching, and continuous vertical wood grain."""
     uv_layer = bm.loops.layers.uv.verify()
@@ -1638,38 +1639,76 @@ def _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
         f_right.material_index = mat_index
         f_right.tag = True
 
-    # Calibrated UV Unwrapping: vertical boards running straight along local height
-    w_bot = (pb1 - pb0).length
-    h_slope = ((pt0 - pb0).length + (pt1 - pb1).length) * 0.5
-    u0 = u_start
-    u1 = u_start + w_bot * u_scale
-    v0 = v_start
-    v1 = v_start + h_slope * v_scale
+    # Calibrated UV Unwrapping: vertical boards running straight along local facet height (w_vec)
+    if facet_origin is not None and u_vec is not None and w_vec is not None:
+        for loop in f_out.loops:
+            rel = loop.vert.co - facet_origin
+            u = rel.dot(u_vec) * u_scale + u_start
+            v = rel.dot(w_vec) * v_scale + v_start
+            loop[uv_layer].uv = Vector((u, v))
 
-    for loop in f_out.loops:
-        if loop.vert == v_pb0: loop[uv_layer].uv = Vector((u0, v0))
-        elif loop.vert == v_pb1: loop[uv_layer].uv = Vector((u1, v0))
-        elif loop.vert == v_pt1: loop[uv_layer].uv = Vector((u1, v1))
-        elif loop.vert == v_pt0: loop[uv_layer].uv = Vector((u0, v1))
+        for loop in f_in.loops:
+            rel = loop.vert.co - facet_origin
+            u = -rel.dot(u_vec) * u_scale + u_start
+            v = rel.dot(w_vec) * v_scale + v_start
+            loop[uv_layer].uv = Vector((u, v))
 
-    for loop in f_in.loops:
-        if loop.vert == v_ipb1: loop[uv_layer].uv = Vector((u0, v0))
-        elif loop.vert == v_ipb0: loop[uv_layer].uv = Vector((u1, v0))
-        elif loop.vert == v_ipt0: loop[uv_layer].uv = Vector((u1, v1))
-        elif loop.vert == v_ipt1: loop[uv_layer].uv = Vector((u0, v1))
+        if build_top_cap:
+            for loop in f_top.loops:
+                rel = loop.vert.co - facet_origin
+                u = rel.dot(u_vec) * u_scale + u_start
+                v = loop.vert.co.dot(n_vec) * v_scale
+                loop[uv_layer].uv = Vector((u, v))
+        if build_bot_cap:
+            for loop in f_bot.loops:
+                rel = loop.vert.co - facet_origin
+                u = rel.dot(u_vec) * u_scale + u_start
+                v = loop.vert.co.dot(n_vec) * v_scale
+                loop[uv_layer].uv = Vector((u, v))
+        if build_left_cap:
+            for loop in f_left.loops:
+                rel = loop.vert.co - facet_origin
+                u = loop.vert.co.dot(n_vec) * u_scale
+                v = rel.dot(w_vec) * v_scale + v_start
+                loop[uv_layer].uv = Vector((u, v))
+        if build_right_cap:
+            for loop in f_right.loops:
+                rel = loop.vert.co - facet_origin
+                u = loop.vert.co.dot(n_vec) * u_scale
+                v = rel.dot(w_vec) * v_scale + v_start
+                loop[uv_layer].uv = Vector((u, v))
+    else:
+        w_bot = (pb1 - pb0).length
+        h_slope = ((pt0 - pb0).length + (pt1 - pb1).length) * 0.5
+        u0 = u_start
+        u1 = u_start + w_bot * u_scale
+        v0 = v_start
+        v1 = v_start + h_slope * v_scale
 
-    if build_top_cap:
-        for loop in f_top.loops:
-            loop[uv_layer].uv = Vector((loop.vert.co.x * u_scale, loop.vert.co.y * u_scale))
-    if build_bot_cap:
-        for loop in f_bot.loops:
-            loop[uv_layer].uv = Vector((loop.vert.co.x * u_scale, loop.vert.co.y * u_scale))
-    if build_left_cap:
-        for loop in f_left.loops:
-            loop[uv_layer].uv = Vector((u0, loop.vert.co.z * v_scale))
-    if build_right_cap:
-        for loop in f_right.loops:
-            loop[uv_layer].uv = Vector((u1, loop.vert.co.z * v_scale))
+        for loop in f_out.loops:
+            if loop.vert == v_pb0: loop[uv_layer].uv = Vector((u0, v0))
+            elif loop.vert == v_pb1: loop[uv_layer].uv = Vector((u1, v0))
+            elif loop.vert == v_pt1: loop[uv_layer].uv = Vector((u1, v1))
+            elif loop.vert == v_pt0: loop[uv_layer].uv = Vector((u0, v1))
+
+        for loop in f_in.loops:
+            if loop.vert == v_ipb1: loop[uv_layer].uv = Vector((u0, v0))
+            elif loop.vert == v_ipb0: loop[uv_layer].uv = Vector((u1, v0))
+            elif loop.vert == v_ipt0: loop[uv_layer].uv = Vector((u1, v1))
+            elif loop.vert == v_ipt1: loop[uv_layer].uv = Vector((u0, v1))
+
+        if build_top_cap:
+            for loop in f_top.loops:
+                loop[uv_layer].uv = Vector((loop.vert.co.x * u_scale, loop.vert.co.y * u_scale))
+        if build_bot_cap:
+            for loop in f_bot.loops:
+                loop[uv_layer].uv = Vector((loop.vert.co.x * u_scale, loop.vert.co.y * u_scale))
+        if build_left_cap:
+            for loop in f_left.loops:
+                loop[uv_layer].uv = Vector((u0, loop.vert.co.z * v_scale))
+        if build_right_cap:
+            for loop in f_right.loops:
+                loop[uv_layer].uv = Vector((u1, loop.vert.co.z * v_scale))
 
 
 def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
@@ -1725,6 +1764,8 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         w_base_f = (pb1 - pb0).length
         w_top_f = (pt1 - pt0).length
 
+        facet_u_offset = (i - 6) * 1.7
+
         if i == 6:
             # SOUTH DOOR FACET (facing South, centered at x=0)
             door_w = min(float(getattr(props, 'door_width', 2.00)), w_top_f * 0.65)
@@ -1749,11 +1790,15 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
 
             # 1. Left jamb wall panel
             _build_tapered_facet_panel(bm, pb0, pb_jL, pt0, pt_jL, n_vec, wall_th,
-                                       u_start=0.0, build_right_cap=True)
+                                       u_scale=0.18, v_scale=0.18,
+                                       facet_origin=mb, u_vec=u_vec, w_vec=w_vec,
+                                       u_start=0.0, v_start=0.0, build_right_cap=True)
 
             # 2. Right jamb wall panel
             _build_tapered_facet_panel(bm, pb_jR, pb1, pt_jR, pt1, n_vec, wall_th,
-                                       u_start=2.5, build_left_cap=True)
+                                       u_scale=0.18, v_scale=0.18,
+                                       facet_origin=mb, u_vec=u_vec, w_vec=w_vec,
+                                       u_start=0.0, v_start=0.0, build_left_cap=True)
 
             # 3. Header wall panel above arch with pointed bottom matching the shark jaw arch apex
             v_hf0 = bm.verts.new(p_springL)
@@ -1791,10 +1836,23 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
             uv_l = bm.loops.layers.uv.verify()
             for f in (f_hf, f_hb):
                 for loop in f.loops:
-                    v_rel = loop.vert.co - pb0
-                    u = v_rel.dot(u_vec) * 0.18
-                    v = v_rel.dot(w_vec) * 0.18
+                    rel = loop.vert.co - mb
+                    if f == f_hf:
+                        u = rel.dot(u_vec) * 0.18
+                    else:
+                        u = -rel.dot(u_vec) * 0.18
+                    v = rel.dot(w_vec) * 0.18
                     loop[uv_l].uv = Vector((u, v))
+
+            for loop in f_htop.loops:
+                rel = loop.vert.co - mb
+                loop[uv_l].uv = Vector((rel.dot(u_vec) * 0.18, loop.vert.co.dot(n_vec) * 0.18))
+            for loop in f_hsL.loops:
+                rel = loop.vert.co - mb
+                loop[uv_l].uv = Vector((loop.vert.co.dot(n_vec) * 0.18, rel.dot(w_vec) * 0.18))
+            for loop in f_hsR.loops:
+                rel = loop.vert.co - mb
+                loop[uv_l].uv = Vector((loop.vert.co.dot(n_vec) * 0.18, rel.dot(w_vec) * 0.18))
 
             # Heavy timber threshold sill beam centered at middle of wall thickness
             sill_p = mb - n_vec * (wall_th * 0.5)
@@ -1843,21 +1901,28 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
 
             # 1. Bottom Sill Wall Panel (Full width below window, capped top sill)
             _build_tapered_facet_panel(bm, pb0, pb1, p_edgeL_bot, p_edgeR_bot, n_vec, wall_th,
-                                       u_start=i * 2.8, v_start=0.0, build_top_cap=True)
+                                       u_scale=0.18, v_scale=0.18,
+                                       facet_origin=mb, u_vec=u_vec, w_vec=w_vec,
+                                       u_start=facet_u_offset, v_start=0.0, build_top_cap=True)
 
             # 2. Top Header Wall Panel (Full width above window, capped bottom lintel)
             _build_tapered_facet_panel(bm, p_edgeL_top, p_edgeR_top, pt0, pt1, n_vec, wall_th,
-                                       u_start=i * 0.72, v_start=w_top * 0.18, build_bot_cap=True)
+                                       u_scale=0.18, v_scale=0.18,
+                                       facet_origin=mb, u_vec=u_vec, w_vec=w_vec,
+                                       u_start=facet_u_offset, v_start=0.0, build_bot_cap=True)
 
             # 3. Left Flank Wall Panel (Left of window cutout, capped right jamb)
             _build_tapered_facet_panel(bm, p_edgeL_bot, p_win_bl, p_edgeL_top, p_win_tl, n_vec, wall_th,
-                                       u_start=i * 0.72, v_start=w_bot * 0.18,
+                                       u_scale=0.18, v_scale=0.18,
+                                       facet_origin=mb, u_vec=u_vec, w_vec=w_vec,
+                                       u_start=facet_u_offset, v_start=0.0,
                                        build_right_cap=True, build_top_cap=False, build_bot_cap=False)
 
             # 4. Right Flank Wall Panel (Right of window cutout, capped left jamb)
-            u_flank_r = i * 0.72 + (p_win_br - pb0).dot(u_vec) * 0.18
             _build_tapered_facet_panel(bm, p_win_br, p_edgeR_bot, p_win_tr, p_edgeR_top, n_vec, wall_th,
-                                       u_start=u_flank_r, v_start=w_bot * 0.18,
+                                       u_scale=0.18, v_scale=0.18,
+                                       facet_origin=mb, u_vec=u_vec, w_vec=w_vec,
+                                       u_start=facet_u_offset, v_start=0.0,
                                        build_left_cap=True, build_top_cap=False, build_bot_cap=False)
 
             # 5. Carved bone window assembly flush in the cutout opening
@@ -1874,7 +1939,9 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         else:
             # SOLID WALL FACETS (i = 0, 1, 2, 3, 4)
             _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
-                                       u_start=i * 2.8)
+                                       u_scale=0.18, v_scale=0.18,
+                                       facet_origin=mb, u_vec=u_vec, w_vec=w_vec,
+                                       u_start=facet_u_offset, v_start=0.0)
 
     # 3. Perimeter Timber Corner Posts at All 8 Vertex Junctions
     col_size = 0.44
@@ -3672,6 +3739,8 @@ def _apply_hajfin_wall_uvs(bm, scale=0.18):
     uv_layer = bm.loops.layers.uv.verify()
     bm.normal_update()
     for face in bm.faces:
+        if face.tag:
+            continue
         if face.material_index != MAT_INDEX_DRIFTWOOD:
             continue
         normal = face.normal
