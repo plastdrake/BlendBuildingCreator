@@ -7174,6 +7174,24 @@ PRESETS = {
         'description': "Reinforced tribal bone bastion gate with flanking megalodon dorsal fin wedge.",
         'settings': _hajfin_settings(width=14.0, depth=4.5, num_floors=1, found_h=0.0, wonkiness=0.12, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=3.60, door_h=5.00, tier=2, hajfin_style='PALISADE_GATE'),
     },
+    'HAJFIN_PALISADE_WALL_T1': {
+        'category': 'SHANTIES',
+        'family': 'HAJFIN_PALISADE_WALL',
+        'tier': 1,
+        'name': "Shark-Bone Palisade Wall (Tier 1)",
+        'plot': "16m x 10m",
+        'description': "Continuous timber and bone palisade barrier fortified with outward-splaying curved whale ribs.",
+        'settings': _hajfin_settings(width=12.0, depth=4.0, num_floors=1, found_h=0.0, wonkiness=0.15, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=1, hajfin_style='PALISADE_WALL'),
+    },
+    'HAJFIN_PALISADE_WALL_T2': {
+        'category': 'SHANTIES',
+        'family': 'HAJFIN_PALISADE_WALL',
+        'tier': 2,
+        'name': "Shark-Bone Palisade Wall (Tier 2)",
+        'plot': "18m x 10m",
+        'description': "Reinforced modular bone palisade rampart with heavy diagonal timber buttresses.",
+        'settings': _hajfin_settings(width=14.0, depth=4.5, num_floors=1, found_h=0.0, wonkiness=0.12, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=2, hajfin_style='PALISADE_WALL'),
+    },
 
     # =========================================================================
     # HAJFIN: HARPOON SMITHY & FORGE
@@ -7831,6 +7849,20 @@ BUILDING_FAMILIES = [
         ],
     },
     {
+        'id': 'HAJFIN_PALISADE_WALL',
+        'faction': 'HAJFIN',
+        'name': "Shark-Bone Palisade Wall",
+        'category': 'SHANTIES',
+        'plot': "16m x 10m",
+        'shape': "Linear",
+        'icon': 'MOD_BUILD',
+        'description': "Continuous sharpened log palisade barrier fortified with outward-pointing curved whale ribs.",
+        'tiers': [
+            ("T1", 'HAJFIN_PALISADE_WALL_T1', "Continuous timber & bone palisade barrier segment"),
+            ("T2", 'HAJFIN_PALISADE_WALL_T2', "Reinforced tall stockade wall with heavy timber buttresses"),
+        ],
+    },
+    {
         'id': 'HAJFIN_FORGE',
         'faction': 'HAJFIN',
         'name': "Harpoon Smithy & Bone Forge",
@@ -7979,6 +8011,8 @@ ARCHETYPE_MAP = {
     'HAJFIN_STILT_SHACK_T2': 'NONE',
     'HAJFIN_BONE_GATE_T1': 'NONE',
     'HAJFIN_BONE_GATE_T2': 'NONE',
+    'HAJFIN_PALISADE_WALL_T1': 'NONE',
+    'HAJFIN_PALISADE_WALL_T2': 'NONE',
     'HAJFIN_FORGE_T1': 'BLACKSMITH',
     'HAJFIN_FORGE_T2': 'BLACKSMITH',
     'HAJFIN_FISH_DEPOT_T1': 'WAREHOUSE',

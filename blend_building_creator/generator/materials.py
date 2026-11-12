@@ -2155,6 +2155,24 @@ def create_stylized_banner(name="M_Building_Banner", color=(0.55, 0.12, 0.12, 1.
     return mat
 
 
+def create_stylized_hajfin_banner(name="M_Building_Banner", color=(0.15, 0.45, 0.55, 1.0)):
+    """Weathered tribal shark heraldic standard with hand-painted predatory shark emblem."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1000)
+    c = _coord(tree, loc_x=-1000)
+
+    tex_node = _load_image_texture(tree, "hajfin_banner_shark_diffuse.jpg", c, loc_x=-700, loc_y=120)
+    if tex_node is not None:
+        out_col = tex_node.outputs["Color"]
+        _apply_ao(tree, bsdf, out_col, strength=0.35, distance=0.15)
+        _setup_pbr(tree, bsdf, out, roughness=0.78, metallic=0.0)
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", color)
+    _setup_pbr(tree, bsdf, out, roughness=0.82, metallic=0.0)
+    return mat
+
+
 # ---------------------------------------------------------------------------
 # 10. Log Ends — Concentric tree rings with warm core & swirl
 # ---------------------------------------------------------------------------
@@ -2907,7 +2925,7 @@ def create_stylized_bone_shingles(name="M_Building_Bone_Shingles", color=None):
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-1000)
-    tex_node = _load_image_texture(tree, "bone_scales_roof_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(1.0, 1.0, 1.0))
+    tex_node = _load_image_texture(tree, "bone_scales_roof_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.42, 0.42, 1.0))
     if tex_node is not None:
         if color is not None:
             tint = tree.nodes.new("ShaderNodeMix")
@@ -3117,11 +3135,17 @@ def setup_building_material_slots(obj, props):
         glow=min(1.2, getattr(props, 'window_glow_strength', 0.0) * 0.25),
     )
 
-    # 13. Banner (heraldic painted-cloth standard)
-    mat_banner = getattr(props, 'custom_banner', None) or create_stylized_banner(
-        "M_Building_Banner",
-        color=getattr(props, 'color_banner', (0.55, 0.12, 0.12, 1.0)),
-    )
+    # 13. Banner (heraldic painted-cloth standard or tribal shark emblem)
+    if is_hajfin:
+        mat_banner = getattr(props, 'custom_banner', None) or create_stylized_hajfin_banner(
+            f"{mat_prefix}Banner" if mat_prefix else "M_Building_Banner",
+            color=getattr(props, 'color_banner', (0.15, 0.45, 0.55, 1.0)),
+        )
+    else:
+        mat_banner = getattr(props, 'custom_banner', None) or create_stylized_banner(
+            "M_Building_Banner",
+            color=getattr(props, 'color_banner', (0.55, 0.12, 0.12, 1.0)),
+        )
 
     # 14. Archery Target / Pell (painted concentric scoring rings)
     mat_target = getattr(props, 'custom_target', None) or create_stylized_target("M_Building_Target")

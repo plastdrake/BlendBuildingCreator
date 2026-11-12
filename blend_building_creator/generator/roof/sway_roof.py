@@ -217,17 +217,18 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
                         
                 f_top.material_index = MAT_INDEX_SHINGLES
                 f_bot.material_index = MAT_INDEX_TIMBER
+                uv_sc = 0.18 if roof_mat in ('WOOD_SHINGLES', 'SHINGLES') else 0.32
                 for loop in f_top.loops:
                     co = loop.vert.co
-                    u_uv = (co.y - ry_min) * 0.32
+                    u_uv = (co.y - ry_min) * uv_sc
                     s_dist = math.sqrt((co.x - cx) ** 2 + ((z_base + roof_height) - co.z) ** 2)
-                    v_uv = -s_dist * 0.32
+                    v_uv = -s_dist * uv_sc
                     loop[uv_layer].uv = Vector((u_uv, v_uv))
                 for loop in f_bot.loops:
                     co = loop.vert.co
-                    u_uv = (co.y - ry_min) * 0.32
+                    u_uv = (co.y - ry_min) * uv_sc
                     s_dist = math.sqrt((co.x - cx) ** 2 + ((z_base + roof_height) - co.z) ** 2)
-                    v_uv = -s_dist * 0.32
+                    v_uv = -s_dist * uv_sc
                     loop[uv_layer].uv = Vector((u_uv, v_uv))
                 for ef, kind, top_verts, _k, _j in edge_faces:
                     ef.material_index = edge_mat
