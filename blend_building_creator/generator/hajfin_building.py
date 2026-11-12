@@ -86,7 +86,7 @@ def _build_hajfin_roof_variant(bm, x0, x1, y0, y1, eave_z, peak_h,
     if style == 'FLAT':
         ox = max(0.40, overhang_x)
         oy = max(0.40, overhang_y)
-        _build_hajfin_flat_shingle_roof(bm, x0, x1, y0, y1, eave_z, peak_h, ox, oy)
+        _build_hajfin_flat_plank_roof(bm, x0, x1, y0, y1, eave_z, peak_h, ox, oy)
         return True
 
     if style == 'PLANKS':
@@ -99,11 +99,11 @@ def _build_hajfin_roof_variant(bm, x0, x1, y0, y1, eave_z, peak_h,
     return False
 
 
-def _build_hajfin_flat_shingle_roof(bm, x0, x1, y0, y1, eave_z, peak_h,
-                                    overhang_x=0.55, overhang_y=0.55):
-    """Builds a low-profile scavenger blockhouse roof with framed perimeter timbers,
-    forged iron corner brackets, solid timber underside ceiling, and an inset subtly pitched
-    weather-tight bone scale shingle deck."""
+def _build_hajfin_flat_plank_roof(bm, x0, x1, y0, y1, eave_z, peak_h,
+                                  overhang_x=0.55, overhang_y=0.55):
+    """Builds a low-profile scavenger blockhouse flat roof with framed perimeter timbers,
+    forged iron corner brackets, solid timber underside ceiling, and an inset flat
+    deck made of wide weathered driftwood planks (no ridge beam, no scale tiles)."""
     ox = max(0.40, overhang_x)
     oy = max(0.40, overhang_y)
 
@@ -150,60 +150,40 @@ def _build_hajfin_flat_shingle_roof(bm, x0, x1, y0, y1, eave_z, peak_h,
             create_box(bm, (rim_th + 0.05, rim_th + 0.05, rim_h + 0.04), (ex, ey, rim_cz),
                        mat_index=MAT_INDEX_IRON)
 
-    # 3. Inset roof deck with subtle pitch and bone scale roof shingles
+    # 3. Inset flat deck of wide weathered driftwood planks (NO ridge beam, NO scale tiles)
     ix0 = x_min + rim_th
     ix1 = x_max - rim_th
     iy0 = y_min + rim_th
     iy1 = y_max - rim_th
     span_x = ix1 - ix0
     span_y = iy1 - iy0
-
-    crown_h = min(0.32, max(0.18, span_x * 0.038))
     z_deck = eave_z + 0.08
-    z_ridge = z_deck + crown_h
-    mx = cx
 
+    # Lay wide planks along Y (across the X width)
+    board_width = 0.70
+    board_gap = 0.035
+    board_th = 0.10
+    board_count = max(3, int(span_x / (board_width + board_gap)))
+    actual_step = span_x / board_count
+    actual_w = actual_step - board_gap
     uv_layer = bm.loops.layers.uv.verify()
 
-    # Left slope deck (ix0 to mx)
-    v_l_rf = bm.verts.new(Vector((mx, iy0, z_ridge)))
-    v_l_rb = bm.verts.new(Vector((mx, iy1, z_ridge)))
-    v_l_eb = bm.verts.new(Vector((ix0, iy1, z_deck)))
-    v_l_ef = bm.verts.new(Vector((ix0, iy0, z_deck)))
+    for i in range(board_count):
+        bx = ix0 + (i + 0.5) * actual_step
+        b_loc = (bx, cy, z_deck)
+        b_size = (actual_w, span_y, board_th)
+        b_faces = create_beveled_box(bm, size=b_size, location=b_loc,
+                                     mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008)
+        for face in b_faces:
+            for loop in face.loops:
+                co = loop.vert.co
+                # Continuous natural driftwood plank texture coordinates
+                u = (co.x - ix0) * 0.35
+                v = (co.y - iy0) * 0.35
+                loop[uv_layer].uv = Vector((u, v))
 
-    f_l = bm.faces.new([v_l_rf, v_l_ef, v_l_eb, v_l_rb])
-    f_l.material_index = MAT_INDEX_SHINGLES
-    f_l.tag = True
-
-    u_scale = 0.28
-    v_scale = 0.28
-    for loop in f_l.loops:
-        co = loop.vert.co
-        u = (co.y - iy0) * u_scale
-        dist_from_ridge = abs(mx - co.x)
-        v = dist_from_ridge * v_scale
-        loop[uv_layer].uv = Vector((u, v))
-
-    # Right slope deck (mx to ix1)
-    v_r_rf = bm.verts.new(Vector((mx, iy0, z_ridge)))
-    v_r_rb = bm.verts.new(Vector((mx, iy1, z_ridge)))
-    v_r_eb = bm.verts.new(Vector((ix1, iy1, z_deck)))
-    v_r_ef = bm.verts.new(Vector((ix1, iy0, z_deck)))
-
-    f_r = bm.faces.new([v_r_rf, v_r_rb, v_r_eb, v_r_ef])
-    f_r.material_index = MAT_INDEX_SHINGLES
-    f_r.tag = True
-
-    for loop in f_r.loops:
-        co = loop.vert.co
-        u = (co.y - iy0) * u_scale
-        dist_from_ridge = abs(co.x - mx)
-        v = dist_from_ridge * v_scale
-        loop[uv_layer].uv = Vector((u, v))
-
-    # Low central timber ridge cap
-    timber_box(bm, (0.24, span_y, 0.12), (mx, cy, z_ridge + 0.04),
-               mat_index=MAT_INDEX_TIMBER, long_axis=1)
+# Alias for backwards compatibility
+_build_hajfin_flat_shingle_roof = _build_hajfin_flat_plank_roof
 
 
 def _build_hajfin_supported_plank_roof(bm, x0, x1, y0, y1, eave_z, peak_h,

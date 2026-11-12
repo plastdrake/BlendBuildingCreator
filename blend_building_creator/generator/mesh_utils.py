@@ -128,6 +128,7 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
     faces = []
     for f_idx, idxs in enumerate(face_indices):
         f = bm.faces.new([bm_verts[i] for i in idxs])
+        f.normal_update()
         f.material_index = mat_index
         faces.append(f)
         
