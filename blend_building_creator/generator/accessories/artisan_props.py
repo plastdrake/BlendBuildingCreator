@@ -888,15 +888,16 @@ def build_balance_scale(bm, x, y, z_ground=0.0, ang=0.0):
     return faces
 
 
-def build_anvil(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
+def build_anvil(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0, use_baked=True):
     """Smith's anvil on a log stump — the artist's Anvil_Tool.fbx (per-face
     iron/log materials), falling back to the stylized build if unbaked."""
-    try:
-        if _stamp_baked_tool(bm, None, 'anvil_tool', x, y, z_ground, ang,
-                             length=0.64 * scale, lay_flat=False, long='X'):
-            return True
-    except Exception:
-        pass
+    if use_baked:
+        try:
+            if _stamp_baked_tool(bm, None, 'anvil_tool', x, y, z_ground, ang,
+                                 length=0.64 * scale, lay_flat=False, long='X'):
+                return True
+        except Exception:
+            pass
     return _procedural_anvil(bm, x, y, z_ground, ang, scale)
 
 
@@ -1376,6 +1377,13 @@ def _stamp_baked_tool(bm, _faces, key, x, y, z_ground=0.0, ang=0.0,
             continue
         kf = tuple(sorted(idx))
         if kf in seen:
+            continue
+        points = [place @ (base @ _V(verts[i])) for i in idx]
+        area = sum(
+            (points[i] - points[0]).cross(points[i + 1] - points[0]).length
+            for i in range(1, len(points) - 1)
+        )
+        if area < 1e-8:
             continue
         seen.add(kf)
         f = bm.faces.new([remap[i] for i in idx])

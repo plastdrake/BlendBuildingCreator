@@ -3312,7 +3312,8 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     )
 
     # 4. Master Blacksmith Anvil from FBX (reusing artisan props builder)
-    build_anvil(bm, x=furnace_x + 2.4, y=furnace_y - 0.9, z_ground=z0 + 0.14, ang=0.4, scale=1.2)
+    build_anvil(bm, x=furnace_x + 2.4, y=furnace_y - 0.9, z_ground=z0 + 0.14,
+                ang=0.4, scale=1.2, use_baked=False)
 
     # 5. Hollow Timber Quenching Water Tub
     quench_x = furnace_x + 2.5
@@ -3712,6 +3713,24 @@ def _fill_missing_hajfin_uvs(bm, scale=0.25):
             loop[uv_layer].uv = Vector((u, v))
 
 
+def _remove_duplicate_hajfin_faces(bm):
+    """Remove repeated coplanar surfaces emitted by overlapping Hajfin parts."""
+    seen = set()
+    duplicates = []
+    for face in bm.faces:
+        coords = tuple(sorted(
+            (round(v.co.x, 6), round(v.co.y, 6), round(v.co.z, 6))
+            for v in face.verts
+        ))
+        if coords in seen:
+            duplicates.append(face)
+        else:
+            seen.add(coords)
+    for face in duplicates:
+        if face.is_valid:
+            bm.faces.remove(face)
+
+
 # =============================================================================
 # MAIN HAJFIN ENTRY POINT
 # =============================================================================
@@ -3768,6 +3787,7 @@ def build_hajfin_building(obj, bm, props):
     # Box UV mapping preserves the specialized UVs above.
     apply_box_uvs(bm, scale=0.18)
     _fill_missing_hajfin_uvs(bm)
+    _remove_duplicate_hajfin_faces(bm)
 
     # Write bmesh to obj
     bm.to_mesh(obj.data)
