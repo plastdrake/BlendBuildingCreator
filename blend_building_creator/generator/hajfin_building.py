@@ -287,8 +287,30 @@ def _create_oriented_beam(bm, p0, p1, width=0.30, depth=0.30, mat_index=MAT_INDE
         angle = up.angle(d_norm)
         rot_mat = Matrix.Rotation(angle, 4, axis.normalized())
     faces = create_box(bm, (width, depth, length), (0.0, 0.0, 0.0), mat_index=mat_index)
+    bm.normal_update()
+    uv_layer = bm.loops.layers.uv.verify()
+    su = 0.25
+    sv = 0.25
     for f in faces:
         f.tag = True
+        norm = f.normal
+        la = (abs(norm.x), abs(norm.y), abs(norm.z))
+        if la[2] >= la[0] and la[2] >= la[1]:
+            # End cap (local XY)
+            for loop in f.loops:
+                c = loop.vert.co
+                loop[uv_layer].uv = Vector((c.x * su, c.y * su))
+        elif la[0] >= la[1]:
+            # Normal along X (across is Y, along length is Z)
+            for loop in f.loops:
+                c = loop.vert.co
+                loop[uv_layer].uv = Vector((c.y * su, c.z * sv))
+        else:
+            # Normal along Y (across is X, along length is Z)
+            for loop in f.loops:
+                c = loop.vert.co
+                loop[uv_layer].uv = Vector((c.x * su, c.z * sv))
+
     tr = Matrix.Translation(mid) @ rot_mat
     transform_faces(faces, tr)
     return faces
@@ -2317,10 +2339,10 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
         c_hd = cur_d * 0.5
 
         # Horizontal ring tie-beams (Front, Back, Left, Right)
-        _create_oriented_beam(bm, (-c_hw, -c_hd, bz), (c_hw, -c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_DRIFTWOOD)
-        _create_oriented_beam(bm, (-c_hw, c_hd, bz), (c_hw, c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_DRIFTWOOD)
-        _create_oriented_beam(bm, (-c_hw, -c_hd, bz), (-c_hw, c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_DRIFTWOOD)
-        _create_oriented_beam(bm, (c_hw, -c_hd, bz), (c_hw, c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (-c_hw, -c_hd, bz), (c_hw, -c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_TIMBER)
+        _create_oriented_beam(bm, (-c_hw, c_hd, bz), (c_hw, c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_TIMBER)
+        _create_oriented_beam(bm, (-c_hw, -c_hd, bz), (-c_hw, c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_TIMBER)
+        _create_oriented_beam(bm, (c_hw, -c_hd, bz), (c_hw, c_hd, bz), width=0.28, depth=0.28, mat_index=MAT_INDEX_TIMBER)
 
         # Iron corner reinforcement plates at each joint
         for sgn_x, sgn_y in corner_signs:
@@ -2342,20 +2364,20 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
         h_wt, h_dt = wt * 0.5, dt * 0.5
 
         # Front (Y = -d): X-brace
-        _create_oriented_beam(bm, (-h_wb, -h_db, z_bot + 0.15), (h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
-        _create_oriented_beam(bm, (h_wb, -h_db, z_bot + 0.15), (-h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (-h_wb, -h_db, z_bot + 0.15), (h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_TIMBER)
+        _create_oriented_beam(bm, (h_wb, -h_db, z_bot + 0.15), (-h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_TIMBER)
 
         # Back (Y = +d): X-brace
-        _create_oriented_beam(bm, (-h_wb, h_db, z_bot + 0.15), (h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
-        _create_oriented_beam(bm, (h_wb, h_db, z_bot + 0.15), (-h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (-h_wb, h_db, z_bot + 0.15), (h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_TIMBER)
+        _create_oriented_beam(bm, (h_wb, h_db, z_bot + 0.15), (-h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_TIMBER)
 
         # Left (X = -w): X-brace
-        _create_oriented_beam(bm, (-h_wb, -h_db, z_bot + 0.15), (-h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
-        _create_oriented_beam(bm, (-h_wb, h_db, z_bot + 0.15), (-h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (-h_wb, -h_db, z_bot + 0.15), (-h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_TIMBER)
+        _create_oriented_beam(bm, (-h_wb, h_db, z_bot + 0.15), (-h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_TIMBER)
 
         # Right (X = +w): X-brace
-        _create_oriented_beam(bm, (h_wb, -h_db, z_bot + 0.15), (h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
-        _create_oriented_beam(bm, (h_wb, h_db, z_bot + 0.15), (h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_DRIFTWOOD)
+        _create_oriented_beam(bm, (h_wb, -h_db, z_bot + 0.15), (h_wt, h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_TIMBER)
+        _create_oriented_beam(bm, (h_wb, h_db, z_bot + 0.15), (h_wt, -h_dt, z_top - 0.15), width=0.20, depth=0.18, mat_index=MAT_INDEX_TIMBER)
 
     # 5. Access Ladder (Centered on Front, climbing straight into the open platform hatchway)
     lad_w = 0.90
@@ -2464,15 +2486,100 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
         _create_oriented_beam(bm, (cx, cy, stilt_h + cabin_h * 0.65),
                               (cx, cy - sgn_y * 0.85, eave_z - 0.13), width=0.14, depth=0.14, mat_index=MAT_INDEX_TIMBER)
 
-    # 9. Scalloped Bone Scale Gable Roof (East-West Ridge, Front slope over bone window)
-    # Match the gable footprint to the roof eaves so no daylight seam remains
-    # between the triangular wall and the sloped roof deck.
-    _build_gable_triangle_wall_ew(bm, -h_td - 0.25, h_td + 0.25, -h_tw - 0.25, eave_z, peak_z, wall_th=0.22)
-    _build_gable_triangle_wall_ew(bm, -h_td - 0.25, h_td + 0.25, h_tw + 0.25, eave_z, peak_z, wall_th=0.22)
+    # 9. Grounded Sentry Cabin Roof & Gable Truss
+    # Eliminates floating midair gaps: rafters seat directly on top header beams and posts,
+    # vertical timber king posts frame each gable with iron cuffs, diagonal collar struts,
+    # triangular vertical plank gable siding encloses each gable, and outrigger brackets support eaves.
+    _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_z - eave_z)
 
-    _build_bone_scale_roof_gable_ew(bm, -h_tw - 0.2, h_tw + 0.2, -h_td - 0.25, h_td + 0.25,
-                                    eave_z, peak_z - eave_z,
-                                    overhang_x=0.55, overhang_y=0.55, fin_scale=1.5, num_ridge_teeth=6)
+
+def _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_h):
+    """Builds a grounded, structurally anchored gable roof for the watchtower cabin.
+    Eliminates floating midair gaps:
+    - Vertical timber king posts with forged iron base shoes on front and rear gables.
+    - Diagonal collar struts connecting king posts to rafters.
+    - Triangular vertical plank gable walls enclosing front and rear gables completely.
+    - Overhang rafters seating directly on cabin corner posts and top plate beams.
+    - Outrigger timber knee brackets supporting overhanging eave beams.
+    - Planks or scalloped bone scale shingles with timber ridge beam and eave fascia beams.
+    """
+    overhang_x = 0.55
+    overhang_y = 0.55
+    ridge_z = eave_z + peak_h
+    roof_y0 = -h_td - overhang_y
+    roof_y1 = h_td + overhang_y
+    span_y = roof_y1 - roof_y0
+
+    slope = peak_h / max(0.1, h_tw)
+    eave_end_z = eave_z - overhang_x * (slope * 0.65)
+    left_eave = -h_tw - overhang_x
+    right_eave = h_tw + overhang_x
+
+    # 1. Structural King Posts & Collar Struts on Front and Rear Gables
+    for cy in (-h_td, h_td):
+        # Heavy central vertical king post connecting top header beam to ridge beam
+        _create_oriented_beam(bm, (0.0, cy, eave_z), (0.0, cy, ridge_z), width=0.28, depth=0.28, mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.34, 0.34, 0.22), (0.0, cy, eave_z + 0.11), mat_index=MAT_INDEX_IRON)
+        create_box(bm, (0.32, 0.32, 0.20), (0.0, cy, ridge_z - 0.10), mat_index=MAT_INDEX_IRON)
+
+        # Diagonal collar struts
+        for sgn_x in (-1.0, 1.0):
+            p_mid_king = (0.0, cy, eave_z + peak_h * 0.38)
+            p_strut_raf = (sgn_x * (h_tw * 0.62), cy, eave_z + peak_h * 0.58)
+            _create_oriented_beam(bm, p_mid_king, p_strut_raf, width=0.18, depth=0.18, mat_index=MAT_INDEX_TIMBER)
+
+        # Post-to-rafter iron shoe plate & outrigger knee brackets for eave overhang
+        for sgn_x in (-1.0, 1.0):
+            cx = sgn_x * h_tw
+            create_box(bm, (0.34, 0.34, 0.16), (cx, cy, eave_z + 0.08), mat_index=MAT_INDEX_IRON)
+            p_post_k = (cx, cy, eave_z - 0.55)
+            p_eave_k = (sgn_x * (h_tw + overhang_x * 0.85), cy, eave_end_z)
+            _create_oriented_beam(bm, p_post_k, p_eave_k, width=0.16, depth=0.16, mat_index=MAT_INDEX_TIMBER)
+
+    # 2. Triangular Gable Wall Plank Siding on Front and Rear
+    uv_layer = bm.loops.layers.uv.verify()
+    for cy, sgn_norm in ((-h_td, -1.0), (h_td, 1.0)):
+        v_l = bm.verts.new(Vector((-h_tw, cy, eave_z)))
+        v_r = bm.verts.new(Vector((h_tw, cy, eave_z)))
+        v_p = bm.verts.new(Vector((0.0, cy, ridge_z)))
+        f_tri = bm.faces.new([v_l, v_r, v_p] if sgn_norm < 0 else [v_l, v_p, v_r])
+        f_tri.material_index = MAT_INDEX_DRIFTWOOD
+        f_tri.tag = True
+        for loop in f_tri.loops:
+            c = loop.vert.co
+            loop[uv_layer].uv = Vector((c.x * 0.22, c.z * 0.22))
+
+    # 3. Ridge Beam, Side Eave Fascia Beams & Side Wall Plate Beams
+    timber_box(bm, size=(0.28, span_y + 0.20, 0.32), location=(0.0, 0.0, ridge_z), mat_index=MAT_INDEX_TIMBER, long_axis=1)
+    for bx in (left_eave, right_eave):
+        timber_box(bm, size=(0.22, span_y + 0.15, 0.24), location=(bx, 0.0, eave_end_z), mat_index=MAT_INDEX_TIMBER, long_axis=1)
+    for bx in (-h_tw, h_tw):
+        timber_box(bm, size=(0.26, h_td * 2.0 + 0.40, 0.22), location=(bx, 0.0, eave_z + 0.11), mat_index=MAT_INDEX_TIMBER, long_axis=1)
+
+    # 4. Sloped Rafters from ridge to eave ends
+    rafter_count = max(4, int(span_y / 1.25) + 1)
+    for i in range(rafter_count):
+        ty = roof_y0 + (roof_y1 - roof_y0) * i / max(1, rafter_count - 1)
+        _create_oriented_beam(bm, (0.0, ty, ridge_z - 0.02), (left_eave, ty, eave_end_z),
+                             width=0.18, depth=0.20, mat_index=MAT_INDEX_TIMBER)
+        _create_oriented_beam(bm, (0.0, ty, ridge_z - 0.02), (right_eave, ty, eave_end_z),
+                             width=0.18, depth=0.20, mat_index=MAT_INDEX_TIMBER)
+
+    # 5. Roof Plank Decking over rafters
+    slope_len = math.hypot(right_eave, ridge_z - eave_end_z)
+    pitch = math.atan2(ridge_z - eave_end_z, right_eave)
+    board_width = 0.28
+    board_gap = 0.04
+    board_count = max(3, int(span_y / (board_width + board_gap)))
+    for i in range(board_count):
+        ty = roof_y0 + (i + 0.5) * span_y / board_count
+        for side, eave_x in ((-1.0, left_eave), (1.0, right_eave)):
+            timber_box(
+                bm, size=(slope_len + 0.10, board_width, 0.08),
+                location=((0.0 + eave_x) * 0.5, ty, (ridge_z + eave_end_z) * 0.5 + 0.08),
+                rotation=(0.0, side * pitch, 0.0),
+                mat_index=MAT_INDEX_WOOD, bevel_amount=0.008, long_axis=0
+            )
 
 
 def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, found_h=1.0):
