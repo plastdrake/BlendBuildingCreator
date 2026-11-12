@@ -3312,8 +3312,7 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     )
 
     # 4. Master Blacksmith Anvil from FBX (reusing artisan props builder)
-    build_anvil(bm, x=furnace_x + 2.4, y=furnace_y - 0.9, z_ground=z0 + 0.14,
-                ang=0.4, scale=1.2, use_baked=False)
+    build_anvil(bm, x=furnace_x + 2.4, y=furnace_y - 0.9, z_ground=z0 + 0.14, ang=0.4, scale=1.2)
 
     # 5. Hollow Timber Quenching Water Tub
     quench_x = furnace_x + 2.5
@@ -3717,11 +3716,15 @@ def _remove_duplicate_hajfin_faces(bm):
     """Remove repeated coplanar surfaces emitted by overlapping Hajfin parts."""
     seen = set()
     duplicates = []
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
     for face in bm.faces:
         coords = tuple(sorted(
             (round(v.co.x, 6), round(v.co.y, 6), round(v.co.z, 6))
             for v in face.verts
         ))
+        if imported_layer is not None and face[imported_layer]:
+            seen.add(coords)
+            continue
         if coords in seen:
             duplicates.append(face)
         else:
