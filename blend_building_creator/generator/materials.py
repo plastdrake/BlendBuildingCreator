@@ -3167,7 +3167,7 @@ def setup_building_material_slots(obj, props):
     # 8. Cut Stone (steps, sills, door arches, thresholds)
     clr_cs = getattr(props, 'color_cut_stone', None) or (0.78, 0.74, 0.68, 1.0)
     if is_hajfin:
-        mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_rough_reef_stone(f"{mat_prefix}Cut_Stone", color=clr_cs)
+        mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone(f"{mat_prefix}Cut_Stone", color=clr_cs, tier='TIER_2')
     else:
         mat_cut_stone = getattr(props, 'custom_cut_stone', None) or create_stylized_cut_stone(f"{mat_prefix}Cut_Stone", color=clr_cs, tier=tier)
 
@@ -3359,8 +3359,6 @@ def setup_building_material_slots(obj, props):
             mat_log = mat_timber
         if not getattr(props, 'custom_log_end', None):
             mat_log_end = mat_timber
-        if not getattr(props, 'custom_stone', None):
-            mat_stone = mat_rough_stone
         if not getattr(props, 'custom_shingles', None):
             mat_shingles = create_stylized_bone_shingles(f"{mat_prefix}Bone_Shingles", color=getattr(props, 'color_roof', None))
         if not getattr(props, 'custom_floor', None):
