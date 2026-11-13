@@ -1387,19 +1387,26 @@ def _build_ridge_crest_fin_and_spines(bm, rx, y_start, y_end, rz, fin_scale=1.5,
 
 
 def _build_bone_scale_roof_conical(bm, cx, cy, eave_z, radius, height,
-                                   fin_scale=1.4, num_spears=4):
+                                   fin_scale=1.4, num_spears=4,
+                                   num_segs=8, theta_corners=None):
     """Optimized conical roof with downward-pointing bone scale shingles, apex timber socket,
-    central giant shark fin, and miniature bone spears."""
+    central giant shark fin, and miniature bone spears.
+    Segment count and angles align directly with the perimeter timber beams so UV seams
+    and polygon edges are concealed underneath the hip rafters."""
     peak_z = eave_z + height
     apex_z = peak_z + 0.08
     uv_layer = bm.loops.layers.uv.verify()
 
     # 1. Solid Conical Roof Slope with UV-unwrapped bone scales pointing downward
-    num_segs = 16
+    if theta_corners is not None and len(theta_corners) > 1:
+        num_segs = len(theta_corners) - 1
+        angles = theta_corners[:num_segs]
+    else:
+        angles = [(i - 0.5) * (2.0 * math.pi / num_segs) for i in range(num_segs)]
+
     v_top = bm.verts.new(Vector((cx, cy, peak_z)))
     v_bot_ring = []
-    for i in range(num_segs):
-        ang = i * (2.0 * math.pi / num_segs)
+    for ang in angles:
         bx = cx + math.cos(ang) * radius
         by = cy + math.sin(ang) * radius
         v_bot_ring.append(bm.verts.new(Vector((bx, by, eave_z))))
@@ -2274,18 +2281,19 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         _build_hajfin_interior_staircase(bm, x0=stair_x, y0=-1.8, z0=z0,
                                          x1=stair_x, y1=1.4, z1=z_mez, width=1.60)
 
-    # 5. Conical Bone Scale Roof with Tiered Timber Hub Cap & Forged Iron Boss (No weird bone stuff)
+    # 5. Conical Bone Scale Roof with Tiered Timber Hub Cap & Forged Iron Boss
     roof_h = max(3.5, diameter * 0.35)
     _build_bone_scale_roof_conical(bm, 0.0, 0.0, z1, radius=r_top * 1.25, height=roof_h,
-                                   fin_scale=0.0, num_spears=0)
+                                   fin_scale=0.0, num_spears=0,
+                                   num_segs=num_facets, theta_corners=theta_corners)
 
-    # 8 Heavy Timber Hip Ribs / Rafters separating the roof sectors
+    # 8 Heavy Timber Hip Ribs / Rafters separating the roof sectors and concealing the segment seams
     r_eave = r_top * 1.25
     p_peak = Vector((0.0, 0.0, z1 + roof_h + 0.05))
     for i in range(num_facets):
         th_hip = theta_corners[i]
-        p_eave = Vector((math.cos(th_hip) * r_eave, math.sin(th_hip) * r_eave, z1))
-        _create_oriented_beam(bm, p_eave, p_peak, width=0.22, depth=0.26, mat_index=MAT_INDEX_TIMBER)
+        p_eave = Vector((math.cos(th_hip) * r_eave, math.sin(th_hip) * r_eave, z1 + 0.02))
+        _create_oriented_beam(bm, p_eave, p_peak, width=0.24, depth=0.26, mat_index=MAT_INDEX_TIMBER)
 
 
 def _build_carved_bone_lookout_frame(bm, cx, cy, cz, width=1.80, height=1.35):
