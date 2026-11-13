@@ -699,7 +699,8 @@ def build_straight_staircase(
     stair_width=1.40, stair_depth=2.6, num_steps=14,
     direction_y=1, base_anchor=False, top_anchor=False,
     bounds=None, axis='Y', direction_x=1,
-    has_rail_left=None, has_rail_right=None
+    has_rail_left=None, has_rail_right=None,
+    tread_mat=None, stringer_mat=None,
 ):
     """
     Generates a wooden straight/run staircase with:
@@ -734,6 +735,9 @@ def build_straight_staircase(
     tread_w = stair_width - 2 * stringer_thick + 0.024
     riser_w = stair_width - 2 * stringer_thick + 0.012
 
+    t_mat = tread_mat if tread_mat is not None else MAT_INDEX_WOOD
+    s_mat = stringer_mat if stringer_mat is not None else MAT_INDEX_STAIRS
+
     for i in range(num_steps):
         # Embed riser top 2mm into underside of tread above to seal joint without protruding,
         # and embed riser bottom 2mm into tread below (or floor for i=0).
@@ -751,7 +755,7 @@ def build_straight_staircase(
             riser_loc = (x0 + ru + 0.015 * dir_run, y0, rz)
             riser_size = (0.035, riser_w, this_riser_h)
 
-        riser_faces = create_box(bm, size=riser_size, location=riser_loc, mat_index=MAT_INDEX_STAIRS)
+        riser_faces = create_box(bm, size=riser_size, location=riser_loc, mat_index=s_mat)
         for f in riser_faces:
             if not f.is_valid:
                 continue
@@ -778,7 +782,7 @@ def build_straight_staircase(
 
         tread_faces = create_beveled_box(
             bm, size=tread_size, location=tread_loc,
-            mat_index=MAT_INDEX_WOOD, bevel_amount=0.01
+            mat_index=t_mat, bevel_amount=0.01
         )
         for f in tread_faces:
             if not f.is_valid:
@@ -809,7 +813,7 @@ def build_straight_staircase(
 
         _build_stringer_prism(
             bm, p_s, p_e, z0, target_z, stringer_thick,
-            axis=axis, mat_index=MAT_INDEX_STAIRS,
+            axis=axis, mat_index=s_mat,
             trim_head_clearance=0.08, stringer_h=stringer_h
         )
 

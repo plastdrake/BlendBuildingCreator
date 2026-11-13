@@ -243,7 +243,7 @@ def _build_hajfin_supported_plank_roof(bm, x0, x1, y0, y1, eave_z, peak_h,
             b_rot = (0.0, side * pitch, 0.0)
             b_size = (slope_len + 0.14, actual_w, 0.10)
             b_faces = create_beveled_box(bm, size=b_size, location=b_loc, rotation=b_rot,
-                                         mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008)
+                                         mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
             eul = Euler(b_rot, 'XYZ')
             inv_m = (Matrix.Translation(Vector(b_loc)) @ eul.to_matrix().to_4x4()).inverted()
             for face in b_faces:
@@ -463,6 +463,7 @@ def _build_hajfin_interior_staircase(bm, x0, y0, z0, x1, y1, z1, width=1.60, wit
             num_steps=max(10, int(dz / 0.22)),
             axis='X', direction_x=1 if dx >= 0 else -1,
             has_rail_left=with_railing, has_rail_right=False,
+            tread_mat=MAT_INDEX_TIMBER, stringer_mat=MAT_INDEX_TIMBER,
         )
     else:
         build_straight_staircase(
@@ -471,6 +472,7 @@ def _build_hajfin_interior_staircase(bm, x0, y0, z0, x1, y1, z1, width=1.60, wit
             num_steps=max(10, int(dz / 0.22)),
             axis='Y', direction_y=1 if dy >= 0 else -1,
             has_rail_left=with_railing, has_rail_right=False,
+            tread_mat=MAT_INDEX_TIMBER, stringer_mat=MAT_INDEX_TIMBER,
         )
 
 
@@ -1192,11 +1194,11 @@ def _build_tribal_totem_post(bm, x, y, z0, height=2.4):
     post_r = 0.16
     cz = z0 + height * 0.5
     create_cylinder(bm, radius=post_r, height=height, segments=8,
-                    location=(x, y, cz), mat_index=MAT_INDEX_DRIFTWOOD)
+                    location=(x, y, cz), mat_index=MAT_INDEX_TIMBER)
 
     # Sharpened tip
     create_cone(bm, radius1=post_r, radius2=0.02, height=0.45, segments=8,
-                location=(x, y, z0 + height + 0.22), mat_index=MAT_INDEX_DRIFTWOOD)
+                location=(x, y, z0 + height + 0.22), mat_index=MAT_INDEX_TIMBER)
 
     # Rope coils
     for rz in (z0 + 0.6, z0 + 1.3, z0 + height - 0.2):
@@ -1204,7 +1206,7 @@ def _build_tribal_totem_post(bm, x, y, z0, height=2.4):
                         location=(x, y, rz), mat_index=MAT_INDEX_ROPE)
 
     # Cross arms
-    create_box(bm, (0.75, 0.12, 0.14), (x, y, z0 + height * 0.65), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (0.75, 0.12, 0.14), (x, y, z0 + height * 0.65), mat_index=MAT_INDEX_TIMBER)
 
 
 # =============================================================================
@@ -2031,9 +2033,10 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         p_sill1 = Vector((r_base * math.cos(thB), r_base * math.sin(thB), z0 + 0.10))
         _create_oriented_beam(bm, p_sill0, p_sill1, width=col_size * 0.75, depth=0.24, mat_index=MAT_INDEX_TIMBER)
 
-    # Interior wooden floor slab across circular ground floor
-    create_cylinder(bm, radius=r_base * 0.98, height=0.14, segments=num_facets,
-                    location=(0.0, 0.0, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
+    # Interior wooden floor slab across circular ground floor (inset inside walls, aligned with facets)
+    create_cylinder(bm, radius=r_base * 0.88, height=0.14, segments=num_facets,
+                    location=(0.0, 0.0, z0 + 0.07), rotation=(0.0, 0.0, math.pi / num_facets),
+                    mat_index=MAT_INDEX_TIMBER)
 
     # 2. Tapered 8-sided body shell (True planar trapezoidal facets, zero twist, zero clipping)
     door_w = float(getattr(props, 'door_width', 1.85))
@@ -2271,7 +2274,7 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         # Mezzanine floor deck spanning rear half (y > 0)
         create_box(bm, (mez_w, mez_d, 0.16), (0.0, r_top * 0.46, z_mez - 0.08), mat_index=MAT_INDEX_FLOOR)
         # Heavy supporting cross-beam underneath mezzanine front edge
-        create_box(bm, (mez_w * 1.02, 0.26, 0.30), (0.0, 0.0, z_mez - 0.23), mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (mez_w * 1.02, 0.26, 0.30), (0.0, 0.0, z_mez - 0.23), mat_index=MAT_INDEX_TIMBER)
 
         # Protective timber balustrade along mezzanine front edge overlooking ground floor
         _build_railing_segment(bm, -mez_w * 0.5 + 1.8, mez_w * 0.5, 0.0, 0.0, z_mez, height=1.0)
@@ -2437,7 +2440,7 @@ def _build_bone_scale_roof_gable_ew(bm, x0, x1, y0, y1, eave_z, peak_h,
         loop[uv_layer].uv = Vector((u, v))
 
     # Ceiling underlay boards
-    create_box(bm, (span_x, (half_span_y - 0.15) * 2, 0.12), (mx, my, eave_z + 0.06), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (span_x, (half_span_y - 0.15) * 2, 0.12), (mx, my, eave_z + 0.06), mat_index=MAT_INDEX_TIMBER)
 
     # 3. Verge Bargeboards on Left (x0) and Right (x1) Gable Slopes
     for gx in (x0 - overhang_x, x1 + overhang_x):
@@ -2462,7 +2465,7 @@ def _build_bone_scale_roof_gable_ew(bm, x0, x1, y0, y1, eave_z, peak_h,
                             rotation=(0, -sgn_rx * 0.18, 0), mat_index=MAT_INDEX_BONE)
 
 
-def _create_hajfin_balustrade(bm, size, location, mat_index=MAT_INDEX_DRIFTWOOD):
+def _create_hajfin_balustrade(bm, size, location, mat_index=MAT_INDEX_TIMBER):
     """Creates a low balustrade wall box with properly scaled, non-stretched vertical plank UVs."""
     dx, dy, dz = size
     faces = create_box(bm, size, location, mat_index=mat_index)
@@ -2615,7 +2618,7 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
         t_lad = rz / (stilt_h + 1.10)
         ry = lad_y0 * (1.0 - t_lad) + lad_y1 * t_lad
         _create_oriented_beam(bm, (lad_x - lad_w * 0.46, ry, rz), (lad_x + lad_w * 0.46, ry, rz),
-                              width=0.10, depth=0.12, mat_index=MAT_INDEX_DRIFTWOOD)
+                              width=0.10, depth=0.12, mat_index=MAT_INDEX_TIMBER)
 
     # 6. Elevated Platform Deck with Real Hatchway Opening
     # Perimeter sill joists underneath deck (Front joist is split flanking the hatch opening!)
@@ -2636,11 +2639,21 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
 
     # Walkable timber floor slabs around hatchway cutout [-hatch_hw, hatch_hw] x [-h_dd, hatch_back_y]
     w_left = (-hatch_hw) - (-h_dw)
-    create_box(bm, (w_left, deck_d, 0.16), ((-h_dw - hatch_hw) * 0.5, 0.0, stilt_h + 0.08), mat_index=MAT_INDEX_FLOOR)
+    create_box(bm, (w_left, deck_d, 0.16), ((-h_dw - hatch_hw) * 0.5, 0.0, stilt_h + 0.08), mat_index=MAT_INDEX_TIMBER)
     w_right = h_dw - hatch_hw
-    create_box(bm, (w_right, deck_d, 0.16), ((hatch_hw + h_dw) * 0.5, 0.0, stilt_h + 0.08), mat_index=MAT_INDEX_FLOOR)
+    create_box(bm, (w_right, deck_d, 0.16), ((hatch_hw + h_dw) * 0.5, 0.0, stilt_h + 0.08), mat_index=MAT_INDEX_TIMBER)
     d_rear = h_dd - hatch_back_y
-    create_box(bm, (hatch_hw * 2.0, d_rear, 0.16), (0.0, hatch_back_y + d_rear * 0.5, stilt_h + 0.08), mat_index=MAT_INDEX_FLOOR)
+    create_box(bm, (hatch_hw * 2.0, d_rear, 0.16), (0.0, hatch_back_y + d_rear * 0.5, stilt_h + 0.08), mat_index=MAT_INDEX_TIMBER)
+
+    # Outer perimeter rim fascia beams encasing the platform deck edges in dark timber:
+    rim_th = 0.20
+    rim_h = 0.26
+    rim_cz = stilt_h + 0.08
+    create_box(bm, (w_front_bm, rim_th, rim_h), ((-h_dw - hatch_hw) * 0.5, -h_dd + rim_th * 0.5, rim_cz), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (w_front_bm, rim_th, rim_h), ((hatch_hw + h_dw) * 0.5, -h_dd + rim_th * 0.5, rim_cz), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (deck_w, rim_th, rim_h), (0.0, h_dd - rim_th * 0.5, rim_cz), mat_index=MAT_INDEX_TIMBER)
+    for sgn_x in (-1.0, 1.0):
+        create_box(bm, (rim_th, deck_d - rim_th * 2, rim_h), (sgn_x * (h_dw - rim_th * 0.5), 0.0, rim_cz), mat_index=MAT_INDEX_TIMBER)
 
     # Hatchway trim kerb timber
     create_box(bm, (hatch_hw * 2.0 + 0.16, 0.14, 0.12), (0.0, hatch_back_y + 0.07, stilt_h + 0.14), mat_index=MAT_INDEX_TIMBER)
@@ -2657,15 +2670,15 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
     # Perimeter Balustrades around the lookout platform
     bal_h = 1.05
     # Left (West) balustrade:
-    _create_hajfin_balustrade(bm, (0.16, td, bal_h), (-h_tw, 0.0, stilt_h + bal_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    _create_hajfin_balustrade(bm, (0.16, td, bal_h), (-h_tw, 0.0, stilt_h + bal_h * 0.5), mat_index=MAT_INDEX_TIMBER)
     create_box(bm, (0.24, td + 0.1, 0.12), (-h_tw, 0.0, stilt_h + bal_h), mat_index=MAT_INDEX_TIMBER)
 
     # Rear (North) balustrade:
-    _create_hajfin_balustrade(bm, (tw, 0.16, bal_h), (0.0, h_td, stilt_h + bal_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    _create_hajfin_balustrade(bm, (tw, 0.16, bal_h), (0.0, h_td, stilt_h + bal_h * 0.5), mat_index=MAT_INDEX_TIMBER)
     create_box(bm, (tw + 0.1, 0.24, 0.12), (0.0, h_td, stilt_h + bal_h), mat_index=MAT_INDEX_TIMBER)
 
     # Right (East) balustrade:
-    _create_hajfin_balustrade(bm, (0.16, td, bal_h), (h_tw, 0.0, stilt_h + bal_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    _create_hajfin_balustrade(bm, (0.16, td, bal_h), (h_tw, 0.0, stilt_h + bal_h * 0.5), mat_index=MAT_INDEX_TIMBER)
     create_box(bm, (0.24, td + 0.1, 0.12), (h_tw, 0.0, stilt_h + bal_h), mat_index=MAT_INDEX_TIMBER)
 
     # Front balustrades flanking the ladder hatchway:
@@ -2673,7 +2686,7 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
     if front_flank_w > 0.1:
         for sgn_fb in (-1.0, 1.0):
             fb_cx = sgn_fb * (hatch_hw + front_flank_w * 0.5)
-            _create_hajfin_balustrade(bm, (front_flank_w, 0.16, bal_h), (fb_cx, -h_td, stilt_h + bal_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+            _create_hajfin_balustrade(bm, (front_flank_w, 0.16, bal_h), (fb_cx, -h_td, stilt_h + bal_h * 0.5), mat_index=MAT_INDEX_TIMBER)
             create_box(bm, (front_flank_w, 0.24, 0.12), (fb_cx, -h_td, stilt_h + bal_h), mat_index=MAT_INDEX_TIMBER)
             # Corner post framing the hatch opening so ends are cleanly finished timber:
             create_box(bm, (0.18, 0.22, bal_h + 0.06), (sgn_fb * hatch_hw, -h_td, stilt_h + bal_h * 0.5), mat_index=MAT_INDEX_TIMBER)
@@ -2750,7 +2763,7 @@ def _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_h):
         v_r = bm.verts.new(Vector((h_tw, cy, eave_z)))
         v_p = bm.verts.new(Vector((0.0, cy, ridge_z)))
         f_tri = bm.faces.new([v_l, v_r, v_p] if sgn_norm < 0 else [v_l, v_p, v_r])
-        f_tri.material_index = MAT_INDEX_DRIFTWOOD
+        f_tri.material_index = MAT_INDEX_TIMBER
         f_tri.tag = True
         for loop in f_tri.loops:
             c = loop.vert.co
@@ -2805,7 +2818,7 @@ def _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_h):
             b_rot = (0.0, side * pitch, 0.0)
             b_size = (slope_len + 0.16, actual_w, board_th)
             b_faces = create_beveled_box(bm, size=b_size, location=b_loc, rotation=b_rot,
-                                         mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008)
+                                         mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
             eul = Euler(b_rot, 'XYZ')
             inv_m = (Matrix.Translation(Vector(b_loc)) @ eul.to_matrix().to_4x4()).inverted()
             for face in b_faces:
@@ -4219,7 +4232,7 @@ def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_dept
     landing_d = 1.20
     landing_cy = y0 - landing_d * 0.5
     # Landing deck floor slab
-    create_box(bm, (landing_w, landing_d, 0.16), (door_cx, landing_cy, height - 0.08), mat_index=MAT_INDEX_FLOOR)
+    create_box(bm, (landing_w, landing_d, 0.16), (door_cx, landing_cy, height - 0.08), mat_index=MAT_INDEX_TIMBER)
     # Landing perimeter support joists
     landing_beam_z = height - 0.27
     timber_box(
@@ -4268,7 +4281,7 @@ def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_dept
     for i in range(num_steps):
         sz = (i + 0.5) * (height / num_steps)
         sy = y_stair_top - (num_steps - i - 0.5) * step_d
-        step_faces = create_box(bm, (step_w, step_d * 1.05, 0.12), (door_cx, sy, sz), mat_index=MAT_INDEX_FLOOR)
+        step_faces = create_box(bm, (step_w, step_d * 1.05, 0.12), (door_cx, sy, sz), mat_index=MAT_INDEX_TIMBER)
         for sf in step_faces:
             if sf.normal.z > 0.5:
                 for loop in sf.loops:
@@ -4284,20 +4297,20 @@ def _build_timber_deck_railing(bm, x0, x1, y0, y1, z):
     # West edge posts, pickets & top rail (at x=x0, y from y0 to y1)
     d = y1 - y0
     num_pickets = max(3, int(d / 0.65))
-    create_box(bm, (0.22, d + 0.15, 0.12), (x0, (y0 + y1) * 0.5, z + rail_h), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (0.22, d + 0.15, 0.12), (x0, (y0 + y1) * 0.5, z + rail_h), mat_index=MAT_INDEX_TIMBER)
     for i in range(num_pickets + 1):
         py = y0 + i * (d / num_pickets)
         create_cylinder(bm, radius=0.07, height=rail_h, segments=6,
-                        location=(x0, py, z + rail_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+                        location=(x0, py, z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
 
     # North edge posts, pickets & top rail (at y=y1, x from x0 to x1)
     w = x1 - x0
     num_pickets_w = max(3, int(w / 0.65))
-    create_box(bm, (w + 0.15, 0.22, 0.12), ((x0 + x1) * 0.5, y1, z + rail_h), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (w + 0.15, 0.22, 0.12), ((x0 + x1) * 0.5, y1, z + rail_h), mat_index=MAT_INDEX_TIMBER)
     for i in range(num_pickets_w + 1):
         px = x0 + i * (w / num_pickets_w)
         create_cylinder(bm, radius=0.07, height=rail_h, segments=6,
-                        location=(px, y1, z + rail_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+                        location=(px, y1, z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
 
 
 def _apply_hajfin_wall_uvs(bm, scale=0.18):

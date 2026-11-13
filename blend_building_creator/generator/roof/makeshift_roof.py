@@ -79,14 +79,10 @@ def _map_makeshift_roof_plank_uvs(bm, faces, size, location, rotation,
     bm.normal_update()
 
     if is_hajfin:
-        bands = HAJFIN_PLANK_BANDS
-        # Stagger bands using a coprime step of 5 so neighbouring planks look completely distinct
-        band_idx = (plank_idx * 5 + 3) % len(bands)
-        u0, u1 = bands[band_idx]
-        if plank_idx % 2 == 1:
-            u0, u1 = u1, u0
         v_offset = (plank_idx * 0.382 + (rng.random() * 0.25 if rng else 0.0)) % 1.0
+        u_shift = (plank_idx * 0.236 + (rng.random() * 0.15 if rng else 0.0)) % 0.55
         v_scale = 0.28
+        u_scale = 0.45
 
         for face in faces:
             ln = inv_rot @ face.normal
@@ -96,19 +92,15 @@ def _map_makeshift_roof_plank_uvs(bm, faces, size, location, rotation,
                 lc = inv_tr @ loop.vert.co
                 w_val = lc.x if is_x_long else lc.y
                 l_val = lc.y if is_x_long else lc.x
-                t_u = max(0.0, min(1.0, (w_val + width * 0.5) / max(0.0001, width)))
 
-                # Check if it's a side edge: align with the dark plank groove
-                if is_x_long and (lnx >= lny and lnx >= lnz):
-                    u = u1 if ln.x > 0 else u0
-                elif (not is_x_long) and (lny >= lnx and lny >= lnz):
-                    u = u1 if ln.y > 0 else u0
+                # Across plank width is U, along plank length is V:
+                if (is_x_long and lnx >= lny and lnx >= lnz) or ((not is_x_long) and lny >= lnx and lny >= lnz):
+                    u = (lc.z + thick * 0.5) * u_scale + u_shift
                 else:
-                    u = u0 + t_u * (u1 - u0)
+                    u = (w_val + width * 0.5) * u_scale + u_shift
 
-                # End cap or main face:
                 if (is_x_long and lny >= lnx and lny >= lnz) or ((not is_x_long) and lnx >= lny and lnx >= lnz):
-                    v = (lc.z + thick * 0.5) / max(0.0001, thick) * 0.04 + v_offset
+                    v = (lc.z + thick * 0.5) * 0.08 + v_offset
                 else:
                     v = (l_val + length * 0.5) * v_scale + v_offset
 
@@ -508,7 +500,7 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base,
                     bm, size=p_size,
                     location=p_loc,
                     rotation=p_rot,
-                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.005
+                    mat_index=MAT_INDEX_TIMBER if is_hajfin else MAT_INDEX_WOOD, bevel_amount=0.005
                 )
                 _map_makeshift_roof_plank_uvs(
                     bm, p_faces, p_size, p_loc, p_rot,
@@ -530,7 +522,7 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base,
                     bm, size=p_size,
                     location=p_loc,
                     rotation=p_rot,
-                    mat_index=MAT_INDEX_WOOD, bevel_amount=0.005
+                    mat_index=MAT_INDEX_TIMBER if is_hajfin else MAT_INDEX_WOOD, bevel_amount=0.005
                 )
                 _map_makeshift_roof_plank_uvs(
                     bm, p_faces, p_size, p_loc, p_rot,
