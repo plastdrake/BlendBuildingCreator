@@ -30,12 +30,14 @@ FBX_PROPS = {
     'cleaver': 'Cleaver.fbx',
     'hajfin_barrel': os.path.join('hajfin', 'Barrel.fbx'),
     'hajfin_skull': os.path.join('hajfin', 'Skull.fbx'),
+    'hajfin_crate': os.path.join('hajfin', 'Crate.fbx'),
 }
 
 # Canonical material slot indices (mirrors generator/materials.py). The artist
 # FBX reference our own material names, so each baked face keeps its slot.
 MAT_BY_NAME = {
     'M_Building_Stone': 0, 'M_Building_Plaster': 1, 'M_Building_Timber': 2,
+    'M_Building_Hajfin_Timber': 2,
     'M_Building_Floor': 3, 'M_Building_Shingles': 4, 'M_Building_Glass': 5,
     'M_Building_Iron': 6, 'M_Building_Wood': 7, 'M_Building_Cut_Stone': 8,
     'M_Building_Log': 9, 'M_Building_Log_End': 10,

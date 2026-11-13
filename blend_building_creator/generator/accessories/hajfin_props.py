@@ -832,3 +832,19 @@ def build_skull_totem_post(bm, x, y, z_ground=0.0, ang=0.0, height=2.8, scale=1.
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
+
+# ---------------------------------------------------------------------------
+# 12. Heavy Timber Cargo Crate
+# ---------------------------------------------------------------------------
+
+def build_single_hajfin_crate(bm, x, y, z_ground=0.0, ang=0.0, scale=0.75):
+    """
+    Weathered heavy timber cargo crate with iron/timber framing from artist's Crate.fbx.
+    """
+    faces = _stamp_meshdata(bm, 'hajfin_crate', 0.0, 0.0, 0.0, scale=scale, anchor='BASE', default_mat=MAT_INDEX_DRIFTWOOD)
+    if not faces:
+        sz = 1.20 * scale
+        faces = create_box(bm, (sz, sz, sz), (0.0, 0.0, sz * 0.5), mat_index=MAT_INDEX_TIMBER)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces

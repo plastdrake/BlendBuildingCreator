@@ -1304,6 +1304,61 @@ def _build_hajfin_skull(bm, x, y, z, yaw=0.0, pitch=0.0, roll=0.0, scale=1.0, an
     return True
 
 
+def _build_hajfin_crate(bm, x, y, z_ground, yaw=0.0, scale=0.75):
+    """Weathered heavy timber cargo crate with iron/timber framing from artist's Crate.fbx.
+    Uses the baked Crate.fbx mesh from PROP_MESHES['hajfin_crate']."""
+    from .accessories.artisan_meshdata import PROP_MESHES
+    it = PROP_MESHES.get('hajfin_crate')
+    if not it:
+        sz = 1.20 * scale
+        return create_box(bm, (sz, sz, sz), (x, y, z_ground + sz * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    verts = it['verts']
+    polys = it['polys']
+    poly_mats = it.get('poly_mats')
+    xs = [v[0] for v in verts]
+    ys = [v[1] for v in verts]
+    zs = [v[2] for v in verts]
+    cx = (min(xs) + max(xs)) * 0.5
+    cy = (min(ys) + max(ys)) * 0.5
+    cz = min(zs)
+
+    rot = Matrix.Rotation(yaw, 4, 'Z')
+    s_mat = Matrix.Diagonal((scale, scale, scale, 1.0))
+    trans = Matrix.Translation((x, y, z_ground))
+    base = Matrix.Translation((-cx, -cy, -cz))
+    M = trans @ rot @ s_mat @ base
+
+    uv_layer = bm.loops.layers.uv.verify()
+    used = set(vi for poly in polys for vi, _ in poly)
+    remap = {i: bm.verts.new(M @ Vector(verts[i])) for i in used}
+
+    seen = set()
+    for pi, poly in enumerate(polys):
+        idx = [vi for vi, _ in poly]
+        key_f = tuple(sorted(idx))
+        if key_f in seen:
+            continue
+        seen.add(key_f)
+        poly_verts = [remap[vi] for vi in idx]
+        if len(poly_verts) < 3 or len(set(poly_verts)) < 3:
+            continue
+        try:
+            f = bm.faces.new(poly_verts)
+        except ValueError:
+            continue
+        f.tag = True
+        _slot = poly_mats[pi] if poly_mats and pi < len(poly_mats) and poly_mats[pi] >= 0 else MAT_INDEX_DRIFTWOOD
+        f.material_index = _slot
+        uv_map = {vi: uv for vi, uv in poly}
+        for loop in f.loops:
+            for i in idx:
+                if remap[i] == loop.vert:
+                    loop[uv_layer].uv = uv_map[i]
+                    break
+    return True
+
+
 def _build_tribal_totem_post(bm, x, y, z0, height=2.4, with_skull=True, facing_dir=None):
     """Carved timber totem pole with rope coils, cross arms, and optional impaled monster beast skull."""
     post_r = 0.16
@@ -1860,21 +1915,19 @@ def _build_hajfin_weapon_rack(bm, x, y, z, rot_z=0.0):
 
 
 def _build_hajfin_cargo_stack(bm, x, y, z):
-    """Stacked trade crates, rum/oil barrels, and rope coils."""
-    # Bottom crates
-    create_box(bm, (0.95, 0.95, 0.75), (x - 0.45, y, z + 0.38), mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (0.85, 0.85, 0.70), (x + 0.48, y - 0.20, z + 0.35), mat_index=MAT_INDEX_TIMBER)
-    # Iron corner straps on crates
-    create_box(bm, (0.97, 0.97, 0.10), (x - 0.45, y, z + 0.38), mat_index=MAT_INDEX_IRON)
+    """Stacked authentic trade crates, rum/oil barrels, and rope coils."""
+    # Bottom trade crates from artist's Crate.fbx
+    _build_hajfin_crate(bm, x - 0.45, y, z_ground=z, yaw=0.15, scale=0.72)
+    _build_hajfin_crate(bm, x + 0.48, y - 0.15, z_ground=z, yaw=-0.28, scale=0.62)
 
     # Standing authentic handcrafted Hajfin barrel
-    _build_hajfin_barrel(bm, x + 0.48, y + 0.45, z_ground=z, ang=0.4, scale=0.55)
+    _build_hajfin_barrel(bm, x + 0.48, y + 0.48, z_ground=z, ang=0.4, scale=0.55)
 
-    # Barrel on side on top of crate
-    _build_hajfin_barrel(bm, x - 0.40, y, z_ground=z + 0.75, ang=0.3, scale=0.52, lying=True)
+    # Barrel on side on top of large crate (nestled slightly into crate rim)
+    _build_hajfin_barrel(bm, x - 0.45, y, z_ground=z + 0.835, ang=0.3, scale=0.52, lying=True)
 
-    # Rope coil
-    create_torus_ring(bm, (x + 0.48, y - 0.20, z + 0.70 + 0.08), major_radius=0.28, minor_radius=0.06, mat_index=MAT_INDEX_ROPE)
+    # Rope coil on top of smaller crate (top is z + 1.20 * 0.62 = z + 0.744)
+    create_torus_ring(bm, (x + 0.48, y - 0.15, z + 0.744 + 0.08), major_radius=0.26, minor_radius=0.055, mat_index=MAT_INDEX_ROPE)
 
 
 def _build_hajfin_bone_shop_table(bm, x, y, z, width=3.8):

@@ -312,6 +312,8 @@ for _s in (
           'hajfin_props', 'build_hajfin_beast_skull_prop', 0.60, scale=1.0),
     _spec('HAJFIN_SKULL_TOTEM', "Beast Skull Totem", 'HAJFIN', "Tribal timber totem post impaled with a massive sea-monster skull",
           'hajfin_props', 'build_skull_totem_post', 0.70, height=2.8),
+    _spec('HAJFIN_CRATE', "Hajfin Cargo Crate", 'HAJFIN', "Artist Crate.fbx heavy weathered timber trade crate with iron banding",
+          'hajfin_props', 'build_single_hajfin_crate', 0.85, scale=0.75),
 ):
     PROP_REGISTRY[_s.key] = _s
 
