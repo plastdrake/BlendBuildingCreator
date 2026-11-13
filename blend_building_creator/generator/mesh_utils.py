@@ -206,24 +206,35 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                     v = lv.z * sv + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
             f.tag = True
-        elif mat_index in (0, 1, 3, 8, 11, 43, 44):
-            # Masonry / stone / plaster / cut stone / floor / dungeon wall & floor box (foundations, steps, plinths, slabs, pillars, stone blocks):
-            # Normalized world-space meter scaling (1.0/m).
+        elif mat_index in (0, 1, 3, 8, 11, 43, 44, 54):
+            # Masonry / stone / plaster / cut stone / floor / dungeon wall & floor / rough stone box
+            # (foundations, steps, plinths, slabs, pillars, stone blocks):
+            # Continuous world-space meter scaling (isotropic 1:1 scale, no rotation or stretching).
             # Height is ALWAYS V (upward along Z axis).
             # Horizontal span is ALWAYS U (along X for front/back, along Y for left/right).
             # Top/bottom is U along X, V along Y.
             # Bricks and masonry courses are ALWAYS horizontal and never rotated or stretched!
+            m_scale = 0.45 if mat_index in (0, 8, 54) else scale
+            has_rot = (abs(rotation[0]) > 0.001 or abs(rotation[1]) > 0.001 or abs(rotation[2]) > 0.001 or transform_matrix is not None)
             for loop_idx, v_idx in enumerate(idxs):
-                lv = verts[v_idx]
+                if has_rot:
+                    cx = verts[v_idx].x + sx
+                    cy = verts[v_idx].y + sy
+                    cz = verts[v_idx].z + sz
+                else:
+                    co = bm_verts[v_idx].co
+                    cx = co.x
+                    cy = co.y
+                    cz = co.z
                 if f_idx in (0, 1): # Bottom (-Z), Top (+Z)
-                    u = (lv.x + sx) * scale + u_offset
-                    v = (lv.y + sy) * scale + v_offset
+                    u = cx * m_scale + u_offset
+                    v = cy * m_scale + v_offset
                 elif f_idx in (2, 4): # Front (-Y), Back (+Y)
-                    u = (lv.x + sx) * scale + u_offset
-                    v = (lv.z + sz) * scale + v_offset
+                    u = cx * m_scale + u_offset
+                    v = cz * m_scale + v_offset
                 else: # Right (+X), Left (-X)
-                    u = (lv.y + sy) * scale + u_offset
-                    v = (lv.z + sz) * scale + v_offset
+                    u = cy * m_scale + u_offset
+                    v = cz * m_scale + v_offset
                 f.loops[loop_idx][uv_layer].uv = Vector((u, v))
             f.tag = True
         elif mat_index == 2 or is_beam or (not is_wall and dims_sorted[2] >= 1.5 * dims_sorted[1] and dims_sorted[1] <= 0.65):

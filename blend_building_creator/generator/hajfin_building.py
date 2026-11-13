@@ -3345,11 +3345,18 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
     dais_h = 1.2
     dais_y = hd - dais_d * 0.6
     create_box(bm, (dais_w, dais_d, dais_h), (0.0, dais_y, z0 + dais_h * 0.5), mat_index=MAT_INDEX_FLOOR)
+    # Solid, grounded timber steps leading up to the Chieftain dais (no floating gaps)
     num_dais_steps = 4
+    dais_front_y = dais_y - dais_d * 0.5
+    dais_step_rise = dais_h / (num_dais_steps + 1)
+    dais_step_run = 0.42
     for dsi in range(num_dais_steps):
-        ds_z = z0 + (dsi + 0.5) * (dais_h / num_dais_steps)
-        ds_y = (dais_y - dais_d * 0.5) - (num_dais_steps - dsi) * 0.40
-        create_box(bm, (dais_w * 0.85, 0.42, 0.12), (0.0, ds_y, ds_z), mat_index=MAT_INDEX_FLOOR)
+        step_block_h = (dsi + 1) * dais_step_rise
+        ds_z = z0 + step_block_h * 0.5  # Solid block extending down to hall floor z0
+        ds_y = dais_front_y - (num_dais_steps - dsi - 0.5) * dais_step_run
+        # Slight pyramid widening for lower steps for monumental Chieftain aesthetic
+        sw = dais_w * (0.84 + (num_dais_steps - 1 - dsi) * 0.03)
+        create_box(bm, (sw, dais_step_run * 1.05, step_block_h), (0.0, ds_y, ds_z), mat_index=MAT_INDEX_TIMBER)
 
     # Chieftain Megalodon Throne mounted on dais facing forward toward the entrance
     _build_hajfin_throne(bm, 0.0, dais_y + 0.2, z0 + dais_h, rot_z=0.0)
@@ -3406,14 +3413,17 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
     # Solid reef stone terrace plinth
     if z0 > 0.05:
         create_box(bm, (terrace_w, terrace_d, z0), (0.0, terrace_cy, z0 * 0.5), mat_index=MAT_INDEX_ROUGH_STONE)
-        # Wide ceremonial stone steps leading from ground to terrace
+        # Wide ceremonial stone steps leading from ground to terrace (solid grounded blocks, no floating treads)
         num_steps = max(2, int(z0 / 0.22))
+        step_h = z0 / num_steps
         step_run = 0.44
         st_front_y = -hd - terrace_d
+        st_w = terrace_w + 0.40
         for si in range(num_steps):
-            sz = (si + 0.5) * (z0 / num_steps)
+            block_h = (si + 1) * step_h
+            sz = block_h * 0.5  # Solid block extending all the way down to ground z = 0.0
             sy = st_front_y - (num_steps - si - 0.5) * step_run
-            create_box(bm, (terrace_w + 0.40, step_run * 1.05, 0.18), (0.0, sy, sz), mat_index=MAT_INDEX_ROUGH_STONE)
+            create_box(bm, (st_w, step_run * 1.05, block_h), (0.0, sy, sz), mat_index=MAT_INDEX_ROUGH_STONE)
 
     # Walkable timber arrival deck on terrace
     create_box(bm, (terrace_w - 0.10, terrace_d - 0.10, 0.16), (0.0, terrace_cy, z0 + 0.08), mat_index=MAT_INDEX_FLOOR)
