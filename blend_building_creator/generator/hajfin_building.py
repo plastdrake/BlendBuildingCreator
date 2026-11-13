@@ -2231,10 +2231,13 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         p_sill1 = Vector((r_base * math.cos(thB), r_base * math.sin(thB), z0 + 0.10))
         _create_oriented_beam(bm, p_sill0, p_sill1, width=col_size * 0.75, depth=0.24, mat_index=MAT_INDEX_TIMBER)
 
-    # Interior wooden floor slab across circular ground floor (inset inside walls, aligned with facets)
-    create_cylinder(bm, radius=r_base * 0.88, height=0.14, segments=num_facets,
-                    location=(0.0, 0.0, z0 + 0.07), rotation=(0.0, 0.0, math.pi / num_facets),
-                    mat_index=MAT_INDEX_TIMBER)
+    # Interior wooden floor slab across circular ground floor:
+    # Radius extends into wall thickness (r_base - 0.06) to seal all perimeter gaps against the facets,
+    # aligned with the 8 facet corners.
+    r_floor_gnd = r_base - 0.06
+    create_cylinder(bm, radius=r_floor_gnd, height=0.18, segments=num_facets,
+                    location=(0.0, 0.0, z0 + 0.09), rotation=(0.0, 0.0, -math.pi / num_facets),
+                    mat_index=MAT_INDEX_FLOOR)
 
     # 2. Tapered 8-sided body shell (True planar trapezoidal facets, zero twist, zero clipping)
     door_w = float(getattr(props, 'door_width', 1.85))
@@ -2467,20 +2470,92 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
     # 4. Accessible Mezzanine Loft & Interior Staircase (if num_floors >= 2 or height >= 5.5)
     if num_fl >= 2 or height >= 5.5:
         z_mez = z0 + 3.8
-        mez_w = r_top * 1.85
-        mez_d = r_top * 0.92
-        # Mezzanine floor deck spanning rear half (y > 0)
-        create_box(bm, (mez_w, mez_d, 0.16), (0.0, r_top * 0.46, z_mez - 0.08), mat_index=MAT_INDEX_FLOOR)
-        # Heavy supporting cross-beam underneath mezzanine front edge
-        create_box(bm, (mez_w * 1.02, 0.26, 0.30), (0.0, 0.0, z_mez - 0.23), mat_index=MAT_INDEX_TIMBER)
+        t_mez = (z_mez - z0) / (z1 - z0)
+        r_mez = r_base + (r_top - r_base) * t_mez
+        r_f_mez = r_mez - 0.06
 
-        # Protective timber balustrade along mezzanine front edge overlooking ground floor
-        _build_railing_segment(bm, -mez_w * 0.5 + 1.8, mez_w * 0.5, 0.0, 0.0, z_mez, height=1.0)
+        c_pts = [Vector((r_f_mez * math.cos(th), r_f_mez * math.sin(th))) for th in theta_corners]
+        x_east = r_f_mez * math.cos(math.pi / 8)
+        x_west = -x_east
 
-        # Wide timber staircase along west wall up to mezzanine
+        stair_w = 1.60
         stair_x = -r_base * 0.42
-        _build_hajfin_interior_staircase(bm, x0=stair_x, y0=-1.8, z0=z0,
-                                         x1=stair_x, y1=1.4, z1=z_mez, width=1.60)
+        y0_stair = -2.4
+        y1_stair = 1.4
+        sx0 = stair_x - stair_w * 0.5 - 0.06
+        sx1 = stair_x + stair_w * 0.5 + 0.06
+        y_stair_top = y1_stair + 0.08
+
+        # Mezzanine floor polygon matching rear faceted walls with stairwell opening cutout
+        poly_2d = [
+            Vector((sx1, 0.0)),
+            Vector((x_east, 0.0)),
+            c_pts[1],  # Corner 1 (22.5 deg)
+            c_pts[2],  # Corner 2 (67.5 deg)
+            c_pts[3],  # Corner 3 (112.5 deg)
+            c_pts[4],  # Corner 4 (157.5 deg)
+            Vector((x_west, 0.0)),
+            Vector((sx0, 0.0)),
+            Vector((sx0, y_stair_top)),
+            Vector((sx1, y_stair_top)),
+        ]
+
+        # Build solid 3D mezzanine floor slab
+        slab_th = 0.16
+        z_top_slab = z_mez
+        z_bot_slab = z_mez - slab_th
+        top_verts = [bm.verts.new(Vector((p.x, p.y, z_top_slab))) for p in poly_2d]
+        bot_verts = [bm.verts.new(Vector((p.x, p.y, z_bot_slab))) for p in poly_2d]
+        uv_layer = bm.loops.layers.uv.verify()
+
+        n_poly = len(poly_2d)
+        for pi in range(n_poly):
+            pi_next = (pi + 1) % n_poly
+            f_side = bm.faces.new([top_verts[pi], top_verts[pi_next], bot_verts[pi_next], bot_verts[pi]])
+            f_side.material_index = MAT_INDEX_TIMBER
+            f_side.tag = True
+            u0 = poly_2d[pi].x
+            u1 = poly_2d[pi_next].x
+            f_side.loops[0][uv_layer].uv = Vector((u0, z_top_slab))
+            f_side.loops[1][uv_layer].uv = Vector((u1, z_top_slab))
+            f_side.loops[2][uv_layer].uv = Vector((u1, z_bot_slab))
+            f_side.loops[3][uv_layer].uv = Vector((u0, z_bot_slab))
+
+        top_face = bm.faces.new(top_verts)
+        top_face.material_index = MAT_INDEX_FLOOR
+        top_face.tag = True
+        bot_face = bm.faces.new(list(reversed(bot_verts)))
+        bot_face.material_index = MAT_INDEX_FLOOR
+        bot_face.tag = True
+
+        for loop in top_face.loops:
+            loop[uv_layer].uv = Vector((loop.vert.co.x, loop.vert.co.y))
+        for loop in bot_face.loops:
+            loop[uv_layer].uv = Vector((loop.vert.co.x, loop.vert.co.y))
+
+        bmesh.ops.triangulate(bm, faces=[top_face, bot_face])
+
+        # Supporting timber beams underneath mezzanine (staying safely CLEAR of stairwell)
+        # 1. Front east overlook header beam
+        create_box(bm, (x_east - sx1, 0.26, 0.30), ((sx1 + x_east) * 0.5, 0.0, z_mez - 0.23), mat_index=MAT_INDEX_TIMBER)
+        # 2. Front west flank header beam
+        create_box(bm, (sx0 - x_west, 0.26, 0.30), ((x_west + sx0) * 0.5, 0.0, z_mez - 0.23), mat_index=MAT_INDEX_TIMBER)
+        # 3. Stairwell side bearer beam along East edge of hole
+        create_box(bm, (0.22, y_stair_top, 0.26), (sx1, y_stair_top * 0.5, z_mez - 0.21), mat_index=MAT_INDEX_TIMBER)
+        # 4. Stairwell back landing trimmer beam
+        create_box(bm, (sx1 - sx0, 0.24, 0.26), ((sx0 + sx1) * 0.5, y_stair_top, z_mez - 0.21), mat_index=MAT_INDEX_TIMBER)
+
+        # Protective guard railings around mezzanine drop-offs
+        # 1. Front mezzanine overlook railing (East side)
+        _build_railing_segment(bm, sx1, x_east - 0.20, 0.0, 0.0, z_mez, height=1.0)
+        # 2. Stairwell right side guard railing
+        _build_railing_segment(bm, sx1, sx1, 0.0, y_stair_top, z_mez, height=1.0)
+        # 3. Front mezzanine overlook railing (West side)
+        _build_railing_segment(bm, x_west + 0.20, sx0, 0.0, 0.0, z_mez, height=1.0)
+
+        # Wide timber staircase climbing up from ground floor to mezzanine landing
+        _build_hajfin_interior_staircase(bm, x0=stair_x, y0=y0_stair, z0=z0,
+                                         x1=stair_x, y1=y1_stair, z1=z_mez, width=stair_w)
 
     # 5. Conical Bone Scale Roof with Tiered Timber Hub Cap & Forged Iron Boss
     roof_h = max(3.5, diameter * 0.35)
