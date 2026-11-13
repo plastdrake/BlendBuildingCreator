@@ -2403,6 +2403,94 @@ def create_stylized_tarp(name="M_Building_Tarp", color=(0.84, 0.76, 0.65, 1.0)):
     return mat
 
 
+def create_stylized_hajfin_tarp(name="M_Building_Hajfin_Tarp", color=None):
+    """Weathered Hajfin sailcloth with sea-dark dye, salt fade, and coarse canvas weave."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1400)
+    c = _coord(tree, loc_x=-1200)
+
+    # Use canvas.png for authentic coarse textile weave if present, otherwise procedural weave
+    tex_node = _load_image_texture(tree, "canvas.png", c, loc_x=-900, loc_y=120, scale=(1.4, 1.4, 1.4))
+
+    stain = tree.nodes.new("ShaderNodeTexNoise")
+    stain.location = (-900, -160)
+    stain.inputs["Scale"].default_value = 2.4
+    stain.inputs["Detail"].default_value = 3.5
+    stain.inputs["Roughness"].default_value = 0.78
+    tree.links.new(c.outputs["Generated"], stain.inputs["Vector"])
+
+    # Sea-weathered sailcloth gradient: dark salt-stained olive-slate to sun-bleached canvas
+    ramp = tree.nodes.new("ShaderNodeValToRGB")
+    ramp.location = (-620, 80)
+    ramp.color_ramp.interpolation = 'EASE'
+    default_c0 = (0.045, 0.085, 0.090, 1.0)
+    default_c1 = (0.28, 0.32, 0.29, 1.0)
+    if color is not None:
+        c0 = (color[0] * 0.35, color[1] * 0.35, color[2] * 0.35, 1.0)
+        c1 = (min(1.0, color[0] * 1.1), min(1.0, color[1] * 1.1), min(1.0, color[2] * 1.1), 1.0)
+    else:
+        c0, c1 = default_c0, default_c1
+    ramp.color_ramp.elements[0].color = c0
+    ramp.color_ramp.elements[1].color = c1
+    tree.links.new(stain.outputs["Fac"], ramp.inputs["Fac"])
+
+    if tex_node is not None:
+        mix = tree.nodes.new("ShaderNodeMix")
+        mix.data_type = 'RGBA'
+        mix.blend_type = 'MULTIPLY'
+        mix.location = (-260, 80)
+        mix.inputs["Factor"].default_value = 0.65
+        tree.links.new(ramp.outputs["Color"], mix.inputs["A"])
+        tree.links.new(tex_node.outputs["Color"], mix.inputs["B"])
+        base_color_out = mix.outputs["Result"]
+        height_src = tex_node.outputs["Color"]
+    else:
+        weave = tree.nodes.new("ShaderNodeTexNoise")
+        weave.location = (-900, 120)
+        weave.inputs["Scale"].default_value = 22.0
+        weave.inputs["Detail"].default_value = 2.0
+        weave.inputs["Roughness"].default_value = 0.72
+        tree.links.new(c.outputs["UV"], weave.inputs["Vector"])
+
+        mix = tree.nodes.new("ShaderNodeMix")
+        mix.data_type = 'RGBA'
+        mix.blend_type = 'MULTIPLY'
+        mix.location = (-260, 80)
+        mix.inputs["Factor"].default_value = 0.35
+        tree.links.new(ramp.outputs["Color"], mix.inputs["A"])
+        tree.links.new(weave.outputs["Fac"], mix.inputs["B"])
+        base_color_out = mix.outputs["Result"]
+        height_src = weave.outputs["Fac"]
+
+    # Pirate rust-red patched repair dye breakup
+    rust = tree.nodes.new("ShaderNodeValToRGB")
+    rust.location = (-620, -180)
+    rust.color_ramp.elements[0].color = (0.04, 0.07, 0.07, 1.0)
+    rust.color_ramp.elements[1].color = (0.28, 0.11, 0.06, 1.0)
+    tree.links.new(stain.outputs["Fac"], rust.inputs["Fac"])
+
+    patch_mix = tree.nodes.new("ShaderNodeMix")
+    patch_mix.data_type = 'RGBA'
+    patch_mix.blend_type = 'MIX'
+    patch_mix.location = (20, 80)
+    patch_mix.inputs["Factor"].default_value = 0.22
+    tree.links.new(base_color_out, patch_mix.inputs["A"])
+    tree.links.new(rust.outputs["Color"], patch_mix.inputs["B"])
+
+    painted = _warm_painterly_pass(tree, c, patch_mix.outputs["Result"], loc_x=280, loc_y=80, strength=0.06, scale=1.4)
+    _apply_ao(tree, bsdf, painted, strength=0.45, distance=0.20)
+
+    bump = tree.nodes.new("ShaderNodeBump")
+    bump.location = (680, -180)
+    bump.inputs["Strength"].default_value = 0.18
+    bump.inputs["Distance"].default_value = 0.04
+    tree.links.new(height_src, bump.inputs["Height"])
+    tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+
+    _setup_pbr(tree, bsdf, out, roughness=0.94, metallic=0.0)
+    return mat
+
+
 def create_stylized_clay(name="M_Building_Clay", color=(0.82, 0.52, 0.36, 1.0)):
     """
     Hand-painted warm terracotta / earthenware pottery material.
@@ -3169,8 +3257,13 @@ def setup_building_material_slots(obj, props):
                        "LanternEmissive",
                        glow_strength=max(3.0, getattr(props, 'window_glow_strength', 0.0) * 1.8)))
 
-    # 20. Tarp / Coarse Textile Fabric (tarp_fabric_diffuse.png)
-    mat_tarp = getattr(props, 'custom_tarp', None) or create_stylized_tarp("M_Building_Tarp")
+    # 20. Tarp / Coarse Textile Fabric (tarp_fabric_diffuse.png or Hajfin sailcloth)
+    if is_hajfin:
+        mat_tarp = getattr(props, 'custom_tarp', None) or create_stylized_hajfin_tarp(
+            f"{mat_prefix}Hajfin_Tarp", color=getattr(props, 'color_shingles', getattr(props, 'color_roof', None))
+        )
+    else:
+        mat_tarp = getattr(props, 'custom_tarp', None) or create_stylized_tarp("M_Building_Tarp")
 
     # 21. Clay / Terracotta (clay_diffuse.png) - earthenware jars, pots and urns
     mat_clay = getattr(props, 'custom_clay', None) or create_stylized_clay("M_Building_Clay")

@@ -83,6 +83,7 @@ def _build_hajfin_roof_variant(bm, x0, x1, y0, y1, eave_z, peak_h,
         build_makeshift_roof(
             bm, x0, x1, y0, y1, z_base=eave_z,
             effective_archetype='HAJFIN', seed=int(getattr(props, 'seed', 42)),
+            roof_height=peak_h,
         )
         return True
 
