@@ -7311,6 +7311,24 @@ PRESETS = {
         'description': "Terminal dock landing head with boat access ladder, cargo stack, coiled hemp ropes, and mooring cleats.",
         'settings': _hajfin_settings(width=7.0, depth=10.0, num_floors=1, found_h=1.6, wonkiness=0.10, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_LANDING'),
     },
+    'HAJFIN_PIER_PLATFORM': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "Large Harbor Wharf Platform",
+        'plot': "16m x 16m",
+        'description': "Expansive 16x16m open timber wharf platform on heavy stilt pilings with zero obstacles, ideal for building placement in Unreal Engine.",
+        'settings': _hajfin_settings(width=16.0, depth=16.0, num_floors=1, found_h=1.6, wonkiness=0.04, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_PLATFORM'),
+    },
+    'HAJFIN_PIER_HIGH_RAMP': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "Elevated Tier Pier & Ramp",
+        'plot': "6m x 18m",
+        'description': "Two-tier harbor dock connecting standard 1.6m elevation up to a 4.0m high observation overlook with non-slip incline ramp and railings.",
+        'settings': _hajfin_settings(width=6.0, depth=18.0, num_floors=1, found_h=1.6, wonkiness=0.06, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_HIGH_RAMP'),
+    },
 
 }
 
@@ -7972,6 +7990,8 @@ BUILDING_FAMILIES = [
             ("Corner 90°", 'HAJFIN_PIER_BEND', "90-degree corner elbow pier with reinforced corner dolphin post"),
             ("T-Junction", 'HAJFIN_PIER_TEE', "3-way dock intersection connecting main walkway to a branching finger pier"),
             ("Pier Head", 'HAJFIN_PIER_LANDING', "Wide boat berth landing with boat ladder, cargo stack, and mooring cleats"),
+            ("Wharf (16m)", 'HAJFIN_PIER_PLATFORM', "Expansive 16x16m open timber wharf platform with zero obstacles for building placement"),
+            ("Elevated Ramp", 'HAJFIN_PIER_HIGH_RAMP', "Two-tier dock with inclined ramp ascending to a 4m high observation deck"),
         ],
     },
 ]
@@ -8094,6 +8114,8 @@ ARCHETYPE_MAP = {
     'HAJFIN_PIER_BEND': 'HARBOR',
     'HAJFIN_PIER_TEE': 'HARBOR',
     'HAJFIN_PIER_LANDING': 'HARBOR',
+    'HAJFIN_PIER_PLATFORM': 'HARBOR',
+    'HAJFIN_PIER_HIGH_RAMP': 'HARBOR',
 }
 
 KIT_FOR_ARCHETYPE = {
