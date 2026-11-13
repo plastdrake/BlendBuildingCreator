@@ -829,12 +829,12 @@ def build_skull_totem_post(bm, x, y, z_ground=0.0, ang=0.0, height=2.8, scale=1.
     # Cross arms
     faces += create_box(bm, (0.75 * scale, 0.12 * scale, 0.14 * scale),
                         (0.0, 0.0, height * 0.65), mat_index=MAT_INDEX_TIMBER)
-    # Skull impaled at top
-    sk_z = height - 0.08 * scale
-    faces += _stamp_meshdata(bm, 'hajfin_skull', 0.0, 0.0, sk_z, scale=1.05 * scale, anchor='CENTER', default_mat=MAT_INDEX_BONE)
+    # Skull impaled at top (scaled up for imposing beast proportions)
+    sk_z = height - 0.15 * scale
+    faces += _stamp_meshdata(bm, 'hajfin_skull', 0.0, 0.0, sk_z, scale=2.1 * scale, anchor='CENTER', default_mat=MAT_INDEX_BONE)
     # Spike tip protruding out top
-    faces += create_cone(bm, radius1=0.08 * scale, radius2=0.02 * scale, height=0.48 * scale, segments=8,
-                         location=(0.0, 0.0, sk_z + 0.32 * scale), mat_index=MAT_INDEX_TIMBER)
+    faces += create_cone(bm, radius1=0.10 * scale, radius2=0.02 * scale, height=0.65 * scale, segments=8,
+                         location=(0.0, 0.0, sk_z + 0.72 * scale), mat_index=MAT_INDEX_TIMBER)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces

@@ -1376,16 +1376,16 @@ def _build_tribal_totem_post(bm, x, y, z0, height=2.4, with_skull=True, facing_d
     create_box(bm, (0.75, 0.12, 0.14), (x, y, z0 + height * 0.65), mat_index=MAT_INDEX_TIMBER)
 
     if with_skull:
-        # Menacing sea-monster skull mounted atop the totem pole
-        sk_scale = 1.05 if height >= 3.0 else 0.85
-        sk_z = z0 + height - 0.08
+        # Menacing sea-monster skull mounted atop the totem pole (scaled up for imposing beast proportions)
+        sk_scale = 2.2 if height >= 3.0 else 1.95
+        sk_z = z0 + height - 0.15
         if facing_dir is None:
             # Face outward away from building center or forward (-Y)
             facing_dir = (x, y) if math.hypot(x, y) > 0.5 else (0.0, -1.0)
         _build_hajfin_skull(bm, x, y, sk_z, scale=sk_scale, anchor='CENTER', facing_dir=facing_dir)
         # Sharpened spike tip impaling through and protruding above the skull
-        create_cone(bm, radius1=0.08, radius2=0.02, height=0.48, segments=8,
-                    location=(x, y, sk_z + 0.32), mat_index=MAT_INDEX_TIMBER)
+        create_cone(bm, radius1=0.10, radius2=0.02, height=0.65, segments=8,
+                    location=(x, y, sk_z + 0.72), mat_index=MAT_INDEX_TIMBER)
     else:
         # Sharpened tip
         create_cone(bm, radius1=post_r, radius2=0.02, height=0.45, segments=8,
@@ -1896,11 +1896,12 @@ def _build_hajfin_weapon_rack(bm, x, y, z, rot_z=0.0):
         create_box(bm, (rack_w, 0.10, 0.12), (0, 0, 0), transform_matrix=c_tr, mat_index=MAT_INDEX_TIMBER)
 
     # 3 Harpoons / Bone Spears firmly anchored and physically contiguous
+    # Tilted backward resting cleanly against the upper cross rail
     shaft_len = 2.15
     head_h = 0.38
     for i in range(3):
         sx = -0.45 + i * 0.45
-        spear_tr = rack_mat @ Matrix.Translation(Vector((sx, 0.08, 0.05))) @ Matrix.Rotation(-0.07, 4, 'X')
+        spear_tr = rack_mat @ Matrix.Translation(Vector((sx, 0.24, 0.05))) @ Matrix.Rotation(0.12, 4, 'X')
         # Wooden spear pole
         create_cylinder(bm, radius=0.032, height=shaft_len, segments=8,
                         location=(0, 0, shaft_len * 0.5),
@@ -2044,6 +2045,14 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
         _build_wall_with_window_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z_mid, z1,
                                   win_cx=0.0, win_cz=z_mid + story_h * 0.52,
                                   win_w=0.85, win_h=0.85, wall_th=wall_th, facing_north=False)
+
+        # Scarce interior furnishings (tucked along perimeter dead corners, 100% open walkways)
+        # Ground floor rear-left corner (clear of stairs on East wall and door at South)
+        _build_hajfin_crate(bm, -hw + wall_th + 0.85, hd - wall_th - 0.85, z_ground=z0 + 0.14, yaw=0.18, scale=0.65)
+        _build_hajfin_barrel(bm, -hw + wall_th + 1.65, hd - wall_th - 0.70, z_ground=z0 + 0.14, ang=0.4, scale=0.52)
+        # Upper floor front-left corner (clear of stair landing exit at East)
+        _build_hajfin_barrel(bm, -hw + wall_th + 0.75, -hd + wall_th + 0.75, z_ground=z_mid + 0.08, ang=1.1, scale=0.52)
+        _build_hajfin_crate(bm, -hw + wall_th + 0.85, -hd + wall_th + 1.55, z_ground=z_mid + 0.08, yaw=-0.22, scale=0.55)
     else:
         # SINGLE STORY VAULTED INTERIOR
         _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z1,
@@ -2062,6 +2071,11 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
         # Exposed heavy timber collar tie beams spanning across ceiling
         for ty in (-hd * 0.5, 0.0, hd * 0.5):
             create_box(bm, (width - wall_th * 2, 0.22, 0.26), (0.0, ty, z1 - 0.15), mat_index=MAT_INDEX_TIMBER)
+
+        # Scarce single-story interior furnishings (rear-left corner and rear-right corner)
+        _build_hajfin_crate(bm, -hw + wall_th + 0.85, hd - wall_th - 0.85, z_ground=z0 + 0.14, yaw=0.18, scale=0.68)
+        _build_hajfin_barrel(bm, -hw + wall_th + 1.65, hd - wall_th - 0.70, z_ground=z0 + 0.14, ang=0.4, scale=0.52)
+        _build_hajfin_barrel(bm, hw - wall_th - 0.80, hd - wall_th - 0.75, z_ground=z0 + 0.14, ang=2.2, scale=0.55)
 
     # 3. Solid Gable Triangle Walls (Front & Rear) - SEALS ROOF GAPS 100%
     _build_gable_triangle_wall(bm, -hw, hw, -hd + wall_th * 0.5, z1, peak_z, wall_th=wall_th)
@@ -2238,6 +2252,10 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
     create_cylinder(bm, radius=r_floor_gnd, height=0.18, segments=num_facets,
                     location=(0.0, 0.0, z0 + 0.09), rotation=(0.0, 0.0, -math.pi / num_facets),
                     mat_index=MAT_INDEX_FLOOR)
+
+    # Scarce ground floor furnishings (placed in North-East alcove against wall, clear of South door and West stairs)
+    _build_hajfin_crate(bm, r_base * 0.44, r_base * 0.38, z_ground=z0 + 0.18, yaw=0.25, scale=0.65)
+    _build_hajfin_barrel(bm, r_base * 0.58, r_base * 0.18, z_ground=z0 + 0.18, ang=1.3, scale=0.52)
 
     # 2. Tapered 8-sided body shell (True planar trapezoidal facets, zero twist, zero clipping)
     door_w = float(getattr(props, 'door_width', 1.85))
@@ -2554,8 +2572,13 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         _build_railing_segment(bm, x_west + 0.20, sx0, 0.0, 0.0, z_mez, height=1.0)
 
         # Wide timber staircase climbing up from ground floor to mezzanine landing
+        # Stair flight uses with_railing=False since mezzanine perimeter already has dedicated guard railings
         _build_hajfin_interior_staircase(bm, x0=stair_x, y0=y0_stair, z0=z0,
-                                         x1=stair_x, y1=y1_stair, z1=z_mez, width=stair_w)
+                                         x1=stair_x, y1=y1_stair, z1=z_mez, width=stair_w, with_railing=False)
+
+        # Scarce mezzanine furnishings (placed in rear-east corner of loft, clear of stair landing exit)
+        _build_hajfin_crate(bm, r_base * 0.36, r_base * 0.42, z_ground=z_mez, yaw=-0.15, scale=0.55)
+        _build_hajfin_barrel(bm, r_base * 0.48, r_base * 0.22, z_ground=z_mez, ang=0.7, scale=0.48)
 
     # 5. Conical Bone Scale Roof with Tiered Timber Hub Cap & Forged Iron Boss
     roof_h = max(3.5, diameter * 0.35)
@@ -3145,6 +3168,10 @@ def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, 
     create_box(bm, (width - wall_th * 2, wall_th, story_h),
                (0.0, hd - wall_th * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
+    # Scarce ground floor furnishings (rear-right corner, clear of west stairs and south entrance)
+    _build_hajfin_crate(bm, hw - wall_th - 0.85, hd - wall_th - 0.85, z_ground=z0 + 0.14, yaw=0.12, scale=0.68)
+    _build_hajfin_barrel(bm, hw - wall_th - 1.65, hd - wall_th - 0.70, z_ground=z0 + 0.14, ang=1.5, scale=0.52)
+
     # Front wall with real door cutout
     _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
                                   z0, z_mid, door_cx=0.0, door_w=door_w, door_h=door_h,
@@ -3173,6 +3200,10 @@ def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, 
                               win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=True)
     create_box(bm, (width - wall_th * 2, wall_th, story_h),
                (0.0, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # Scarce upper floor furnishings (front-right corner, clear of west stairwell landing)
+    _build_hajfin_barrel(bm, hw - wall_th - 0.80, -hd + wall_th + 0.80, z_ground=z_mid + 0.08, ang=0.6, scale=0.52)
+    _build_hajfin_crate(bm, hw - wall_th - 1.55, -hd + wall_th + 0.85, z_ground=z_mid + 0.08, yaw=-0.25, scale=0.55)
 
     # Upper front wall with 2 bone windows
     _build_wall_with_2_windows_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
@@ -3483,12 +3514,23 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
         plat_w = 2.4
         plat_d = depth * 0.85
         px = sgn_x * (hw + plat_w * 0.5)
-        # Deck floor slab
-        create_box(bm, (plat_w, plat_d, 0.16), (px, 0.0, z0 + 1.2), mat_index=MAT_INDEX_FLOOR)
-        # Perimeter timber rim joists underneath deck
-        create_box(bm, (plat_w, 0.20, 0.24), (px, -plat_d * 0.5 + 0.10, z0 + 1.04), mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (plat_w, 0.20, 0.24), (px, plat_d * 0.5 - 0.10, z0 + 1.04), mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (0.20, plat_d, 0.24), (px + sgn_x * (plat_w * 0.5 - 0.10), 0.0, z0 + 1.04), mat_index=MAT_INDEX_TIMBER)
+        fend_th = 0.20
+        fend_h = 0.36
+        fend_cz = z0 + 1.20
+        # Floor slab sits neatly inside the fascia framing beams (zero coplanar overlap)
+        create_box(bm, (plat_w - fend_th, plat_d - 2.0 * fend_th, 0.16),
+                   (px - sgn_x * (fend_th * 0.5), 0.0, z0 + 1.20 - 0.08), mat_index=MAT_INDEX_FLOOR)
+        # Outer fascia beam enclosing outer edge
+        create_box(bm, (fend_th, plat_d, fend_h),
+                   (px + sgn_x * (plat_w * 0.5 - fend_th * 0.5), 0.0, fend_cz), mat_index=MAT_INDEX_TIMBER)
+        # End header beams capping front and rear ends
+        create_box(bm, (plat_w, fend_th, fend_h),
+                   (px, -plat_d * 0.5 + fend_th * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (plat_w, fend_th, fend_h),
+                   (px, plat_d * 0.5 - fend_th * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
+        # Substructure bearers underneath
+        create_box(bm, (plat_w - 0.10, 0.20, 0.24), (px, -plat_d * 0.5 + 0.10, z0 + 0.98), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (plat_w - 0.10, 0.20, 0.24), (px, plat_d * 0.5 - 0.10, z0 + 0.98), mat_index=MAT_INDEX_TIMBER)
         # 6 deep stilt pilings (outer and inner edge, plunging 10m deep)
         tot_h = (z0 + 1.2) + 10.0
         post_z = (z0 + 1.2 - 10.0) * 0.5
@@ -3793,6 +3835,9 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                (0.0, my, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
     create_box(bm, (wing_w - wall_th * 2, wing_d - wall_th * 2, 0.14),
                (hw - wing_w * 0.5, hd - wing_d * 0.5, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
+    # Threshold floor slab bridging main taproom and wing (seals 52cm slit gap)
+    create_box(bm, (wing_w - wall_th * 2, wall_th * 2 + 0.06, 0.14),
+               (hw - wing_w * 0.5, -hd + m_d, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
 
     # 3. Ground Floor Walls (Hollow taproom rooms with real window cutouts)
     # Arched door opening leading from taproom out onto the stilt drinking deck
@@ -3853,6 +3898,9 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                                             open_exit_side='NORTH')
     create_box(bm, (wing_w - wall_th * 2, wing_d - wall_th * 2, 0.16),
                (hw - wing_w * 0.5, hd - wing_d * 0.5, z_mid - 0.08), mat_index=MAT_INDEX_FLOOR)
+    # Threshold floor slab bridging upper floor deck into wing room (seals 52cm slit gap)
+    create_box(bm, (wing_w - wall_th * 2, wall_th * 2 + 0.06, 0.16),
+               (hw - wing_w * 0.5, -hd + m_d, z_mid - 0.08), mat_index=MAT_INDEX_FLOOR)
 
     _build_hajfin_interior_staircase(bm, x0=(stair_x0 + stair_x1) * 0.5, y0=stair_y0 + 0.2, z0=z0,
                                      x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1 - 0.4, z1=z_mid,
@@ -4120,15 +4168,15 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     roof_h = max(3.0, width * 0.38)
     peak_z = z0 + height + roof_h
 
-    # 1. Rough Volcanic Reef Stone Foundation & Stone Working Floor (NO WOOD FLOOR)
-    create_box(bm, (width + 0.6, depth + 0.6, found_h), (0.0, 0.0, found_h * 0.5), mat_index=MAT_INDEX_ROUGH_STONE)
+    # 1. Dressed Stone Brick Foundation & Stone Working Floor (NO WOOD FLOOR)
+    create_box(bm, (width + 0.6, depth + 0.6, found_h), (0.0, 0.0, found_h * 0.5), mat_index=MAT_INDEX_CUT_STONE)
     # Scorched paving stone brick working floor (contrasting dressed stone)
     create_box(bm, (width + 0.1, depth + 0.1, 0.12), (0.0, 0.0, z0 + 0.06), mat_index=MAT_INDEX_STONE_BRICK)
 
-    # 2. Rugged Dry-Stack Stone Windbreak Walls (Sheltering rear and sides from ocean gales)
+    # 2. Dressed Stone Brick Windbreak Walls (Sheltering rear and sides from ocean gales)
     stone_wall_h = height * 0.55
     # Rear full stone wall
-    create_box(bm, (width, wall_th, stone_wall_h), (0.0, hd - wall_th * 0.5, z0 + stone_wall_h * 0.5), mat_index=MAT_INDEX_ROUGH_STONE)
+    create_box(bm, (width, wall_th, stone_wall_h), (0.0, hd - wall_th * 0.5, z0 + stone_wall_h * 0.5), mat_index=MAT_INDEX_CUT_STONE)
     # Rear wall timber coping beam
     create_box(bm, (width + 0.2, wall_th + 0.12, 0.14), (0.0, hd - wall_th * 0.5, z0 + stone_wall_h + 0.07), mat_index=MAT_INDEX_TIMBER)
 
@@ -4137,38 +4185,34 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     for sgn_w in (-1.0, 1.0):
         wx = sgn_w * (hw - wall_th * 0.5)
         wy = hd - wing_len * 0.5
-        create_box(bm, (wall_th, wing_len, stone_wall_h), (wx, wy, z0 + stone_wall_h * 0.5), mat_index=MAT_INDEX_ROUGH_STONE)
+        create_box(bm, (wall_th, wing_len, stone_wall_h), (wx, wy, z0 + stone_wall_h * 0.5), mat_index=MAT_INDEX_CUT_STONE)
         create_box(bm, (wall_th + 0.12, wing_len + 0.10, 0.14), (wx, wy, z0 + stone_wall_h + 0.07), mat_index=MAT_INDEX_TIMBER)
 
-    # 3. Gnarled Front Timber Posts (Open front workshop for monster warriors)
+    # 3. Gnarled Timber Columns (Front & Rear supporting roof solidly)
     post_r = 0.24
     for sgn_p in (-1.0, 1.0):
         px = sgn_p * (hw - 0.5)
-        py = -hd + 0.5
-        # Heavy timber column
+        # Front column
+        py_f = -hd + 0.5
         create_cylinder(bm, radius=post_r, height=height, segments=8,
-                        location=(px, py, z0 + height * 0.5), mat_index=MAT_INDEX_TIMBER)
-        # Iron collars & rope lashings
-        create_torus_ring(bm, (px, py, z0 + 0.4), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
-        create_torus_ring(bm, (px, py, z0 + height * 0.5), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_ROPE)
-        create_torus_ring(bm, (px, py, z0 + height - 0.3), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+                        location=(px, py_f, z0 + height * 0.5), mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (px, py_f, z0 + 0.4), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+        create_torus_ring(bm, (px, py_f, z0 + height * 0.5), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_ROPE)
+        create_torus_ring(bm, (px, py_f, z0 + height - 0.3), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
 
-    # Front header beam
+        # Rear column supporting back of roof
+        py_r = hd - 0.5
+        create_cylinder(bm, radius=post_r, height=height, segments=8,
+                        location=(px, py_r, z0 + height * 0.5), mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (px, py_r, z0 + 0.4), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+        create_torus_ring(bm, (px, py_r, z0 + height * 0.5), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_ROPE)
+        create_torus_ring(bm, (px, py_r, z0 + height - 0.3), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+
+    # Front and rear header beams supporting gable roof structure
     create_box(bm, (width, 0.34, 0.34), (0.0, -hd + 0.5, z0 + height - 0.17), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (width, 0.34, 0.34), (0.0, hd - 0.5, z0 + height - 0.17), mat_index=MAT_INDEX_TIMBER)
 
-    # 4. Monumental Arched Leviathan Rib Rafters (Overhead bone vaulting)
-    num_rib_pairs = 4
-    for i in range(num_rib_pairs):
-        ry = (hd - 0.4) - i * ((depth - 1.0) / (num_rib_pairs - 1))
-        for sgn_r in (-1.0, 1.0):
-            # Rib arcing from wall/eave toward central ridge apex
-            p_base = Vector((sgn_r * (hw - 0.3), ry, z0 + stone_wall_h * 0.8))
-            p_mid = Vector((sgn_r * (hw * 0.45), ry, z0 + height * 0.95))
-            p_apex = Vector((0.0, ry, z0 + height + roof_h * 0.85))
-            _create_oriented_beam(bm, p_base, p_mid, width=0.20, depth=0.20, mat_index=MAT_INDEX_BONE)
-            _create_oriented_beam(bm, p_mid, p_apex, width=0.18, depth=0.18, mat_index=MAT_INDEX_BONE)
-            # Rope lashing at joint
-            create_torus_ring(bm, (p_mid.x, p_mid.y, p_mid.z), major_radius=0.15, minor_radius=0.025, mat_index=MAT_INDEX_ROPE)
+    # 4. Clean open forge workshop (bone beams removed for clear workspace headroom)
 
     # 5. Massive Monster Smelting Hearth & Carved Chimney Flue
     hearth_w, hearth_d, hearth_h = 3.2, 2.4, 0.75
@@ -4188,16 +4232,16 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
         create_box(bm, (0.24, 0.14, 0.10), (cx, cy, z0 + hearth_h + 0.22),
                    rotation=(0, 0, ci * 0.4), mat_index=MAT_INDEX_IRON)
 
-    # Massive Stone Brick / Shark Jaw Chimney Hood
+    # Massive Stone Brick Chimney rising tall above the roof ridge
     chim_z = z0 + hearth_h + 0.20
-    chim_h = height - hearth_h + 1.8
+    chim_h = height - hearth_h + roof_h + 1.20
     create_box(bm, (1.8, 1.4, chim_h), (hearth_x, hearth_y + 0.2, chim_z + chim_h * 0.5), mat_index=MAT_INDEX_STONE_BRICK)
     # Flanking monster tusks guarding the chimney hood
     for sgn_t in (-1.0, 1.0):
         _build_curved_bone_spine(bm, hearth_x + sgn_t * 1.1, hearth_y - 0.4, chim_z,
                                  height=2.2, base_radius=0.14, sweep_y=-0.28)
 
-    # 6. Gigantic Tree-Trunk Anvil Station
+    # 6. Gigantic Tree-Trunk Anvil Station & Tool Rack
     stump_x = -1.3
     stump_y = -0.5
     stump_r = 0.52
@@ -4210,11 +4254,9 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     # Master Blacksmith Anvil on stump
     build_anvil(bm, x=stump_x, y=stump_y, z_ground=z0 + stump_h, ang=0.45, scale=1.35)
 
-    # Heavy bone-handled blacksmith sledgehammer leaning against stump
-    ham_head = Vector((stump_x + 0.62, stump_y - 0.35, z0 + 0.12))
-    ham_top = Vector((stump_x + 0.42, stump_y - 0.22, z0 + 0.95))
-    _create_oriented_beam(bm, ham_head, ham_top, width=0.08, depth=0.08, mat_index=MAT_INDEX_BONE)
-    create_box(bm, (0.32, 0.18, 0.18), (ham_head.x, ham_head.y, ham_head.z), mat_index=MAT_INDEX_IRON)
+    # Artisan smith tool rack with authentic forged tools
+    from .accessories.artisan_props import build_smith_tool_rack
+    build_smith_tool_rack(bm, stump_x + 1.6, stump_y + 0.35, z0 + 0.12, ang=0.0, width=1.22)
 
     # 7. Quenching Vat (Authentic wooden barrel with water and iron hoops, floor top is z0 + 0.12)
     quench_x = -hw + 1.25
@@ -4238,8 +4280,8 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     # 8. Tribal Monster Harpoon & Spear Weapon Rack
     _build_hajfin_weapon_rack(bm, hw - 1.1, -0.2, floor_z, rot_z=-math.pi * 0.5)
 
-    # Firewood log pile near furnace (authentic stacked timber logs from human generator)
-    build_log_pile(bm, hearth_x + 1.9, hearth_y - 0.5, floor_z, ang=0.15, length=1.5, radius=0.13, rows=3)
+    # Firewood log pile safely cleared from forge hearth
+    build_log_pile(bm, hearth_x + 2.85, hearth_y - 0.6, floor_z, ang=0.15, length=1.4, radius=0.13, rows=3)
 
     # 9. Big Bone Scale Vaulted Roof with Shark Dorsal Fin Crest
     _build_gable_triangle_wall(bm, -hw, hw, -hd + 0.5, z0 + height, peak_z, wall_th=0.28)
@@ -4365,15 +4407,21 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
     # Hoist cable dropping down through pulley toward the water (spiral-wrapped round cord)
     hoist_drop_z = z0 + 0.65
     _create_rope_cable(bm, (boom_tip.x, boom_tip.y, boom_tip.z - 0.30),
-                       (boom_tip.x, boom_tip.y, hoist_drop_z), radius=0.022)
+                       (boom_tip.x, boom_tip.y, hoist_drop_z + 0.10), radius=0.022)
+
+    # Forged iron shackle collar connecting hoist cable directly to grapple ring
+    create_cylinder(bm, radius=0.045, height=0.18, segments=8,
+                    location=(boom_tip.x, boom_tip.y, hoist_drop_z + 0.08), mat_index=MAT_INDEX_IRON)
+    create_torus_ring(bm, (boom_tip.x, boom_tip.y, hoist_drop_z + 0.16),
+                      major_radius=0.045, minor_radius=0.016, mat_index=MAT_INDEX_ROPE)
 
     # Forged iron 4-prong shark grapple / cargo hook
     create_torus_ring(bm, (boom_tip.x, boom_tip.y, hoist_drop_z),
                       major_radius=0.14, minor_radius=0.03, mat_index=MAT_INDEX_IRON)
     for gi in range(4):
         gang = gi * (math.pi * 0.5)
-        gx = boom_tip.x + math.cos(gang) * 0.16
-        gy = boom_tip.y + math.sin(gang) * 0.16
+        gx = boom_tip.x + math.cos(gang) * 0.14
+        gy = boom_tip.y + math.sin(gang) * 0.14
         create_cone(bm, radius1=0.035, radius2=0.008, height=0.28, segments=5,
                     location=(gx, gy, hoist_drop_z - 0.14),
                     rotation=(math.pi, 0, 0), mat_index=MAT_INDEX_IRON)
@@ -4390,9 +4438,14 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
 
     # 6. Fish Drying Racks & Barrels on Pier (pier deck top is z0 + 0.16)
     deck_top_z = z0 + 0.16
-    _build_hajfin_barrel(bm, c_hw + 1.55, c_y - 0.6, z_ground=deck_top_z, ang=0.4, scale=0.55)
+    # Placed safely clear of crane mast and knee brace
+    _build_hajfin_barrel(bm, c_hw + 1.15, c_y - 1.85, z_ground=deck_top_z, ang=0.4, scale=0.55)
     _build_hajfin_barrel(bm, c_hw + 1.15, c_y + 0.7, z_ground=deck_top_z, ang=1.2, scale=0.52)
     _build_hajfin_barrel(bm, -hw + 1.5, hd - 1.8, z_ground=deck_top_z, ang=2.1, scale=0.58)
+
+    # Scarce cabin interior furnishings (rear-left corner of cabin, clear of door thresholds)
+    _build_hajfin_crate(bm, -c_hw + wall_th + 0.75, c_y + c_hd - wall_th - 0.75, z_ground=z0 + 0.14, yaw=0.2, scale=0.62)
+    _build_hajfin_barrel(bm, -c_hw + wall_th + 1.45, c_y + c_hd - wall_th - 0.65, z_ground=z0 + 0.14, ang=1.8, scale=0.52)
 
     fr_x = -hw + 2.5
     fr_y = hd - 1.2
@@ -4463,14 +4516,20 @@ def _build_hajfin_pier_straight(bm, props, width=4.0, depth=12.0, found_h=1.6):
     fend_h = 0.38
     fend_cz = deck_z - 0.08
     deck_w = w - 2.0 * fend_th
+    deck_d = d - 2.0 * fend_th
 
-    # 4. Floor plank slab fitted cleanly between side bumper beams (zero coplanar overlap)
-    create_box(bm, (deck_w, d, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+    # 4. Floor plank slab fitted cleanly inside outer side and end fascia beams (zero coplanar overlap)
+    create_box(bm, (deck_w, deck_d, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
 
     # 5. Continuous Outer Fascia & Coaming Beams enclosing the deck slab on left and right
     for sgn_x in (-1.0, 1.0):
         fx = sgn_x * (hw - fend_th * 0.5)
         create_box(bm, (fend_th, d, fend_h), (fx, 0.0, fend_cz), mat_index=MAT_INDEX_TIMBER)
+
+    # 6. Transverse End Header / Separation Beams capping and covering plank ends at both module ends
+    for sgn_y in (-1.0, 1.0):
+        fy = sgn_y * (hd - fend_th * 0.5)
+        create_box(bm, (deck_w, fend_th, fend_h), (0.0, fy, fend_cz), mat_index=MAT_INDEX_TIMBER)
 
 
 def _build_hajfin_pier_ramp(bm, props, width=4.0, depth=14.0, found_h=1.6):
@@ -4488,15 +4547,16 @@ def _build_hajfin_pier_ramp(bm, props, width=4.0, depth=14.0, found_h=1.6):
 
     y_high = hd
     y_break = hd - 2.2
-    y_low = -hd + 0.6
+    y_low = -hd + 0.20
     y_ground = -hd
 
     fend_th = 0.22
     fend_h = 0.38
+    fend_cz = deck_z - 0.08
     deck_w = w - 2.0 * fend_th
 
-    trans_len = y_high - y_break
-    create_box(bm, (deck_w, trans_len, deck_th), (0.0, (y_high + y_break) * 0.5, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+    trans_len = (y_high - fend_th) - y_break
+    create_box(bm, (deck_w, trans_len, deck_th), (0.0, (y_high - fend_th + y_break) * 0.5, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
 
     ramp_len = math.hypot(y_break - y_low, deck_z - 0.06)
     ramp_pitch = math.atan2(deck_z - 0.06, y_break - y_low)
@@ -4506,7 +4566,8 @@ def _build_hajfin_pier_ramp(bm, props, width=4.0, depth=14.0, found_h=1.6):
     mid_ramp = (p_top_mid + p_bot_mid) * 0.5
     create_box(bm, (deck_w, ramp_len, deck_th), mid_ramp, rotation=(ramp_pitch, 0.0, 0.0), mat_index=MAT_INDEX_FLOOR)
 
-    create_box(bm, (w, 0.40, 0.24), (0.0, y_ground + 0.20, 0.10), mat_index=MAT_INDEX_TIMBER)
+    # Ground threshold sill beam meeting the ramp bottom flush with zero gap
+    create_box(bm, (w, 0.40, 0.24), (0.0, y_low, 0.10), mat_index=MAT_INDEX_TIMBER)
 
     num_battens = max(4, int(ramp_len / 0.65))
     bat_w = deck_w - 0.08
@@ -4522,9 +4583,12 @@ def _build_hajfin_pier_ramp(bm, props, width=4.0, depth=14.0, found_h=1.6):
     for sgn_x in (-1.0, 1.0):
         kx = sgn_x * (hw - fend_th * 0.5)
         # Heavy outer stringers & fascia timbers enclosing the deck slab
-        create_box(bm, (fend_th, trans_len, fend_h), (kx, (y_high + y_break) * 0.5, deck_z - 0.08), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (fend_th, trans_len + fend_th, fend_h), (kx, (y_high + y_break) * 0.5, deck_z - 0.08), mat_index=MAT_INDEX_TIMBER)
         k_side = Vector((kx, mid_ramp.y, mid_ramp.z - 0.08))
         create_box(bm, (fend_th, ramp_len, fend_h), k_side, rotation=(ramp_pitch, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
+
+    # Transverse End Header / Separation Beam capping high module connection
+    create_box(bm, (deck_w, fend_th, fend_h), (0.0, hd - fend_th * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
 
     post_xs = (-hw + 0.28, hw - 0.28)
     bent_ys = [y_high, y_break, y_break - (y_break - y_low) * 0.38, y_break - (y_break - y_low) * 0.75]
@@ -4567,16 +4631,20 @@ def _build_hajfin_pier_bend(bm, props, width=10.0, depth=10.0, found_h=1.6):
     fend_cz = deck_z - 0.08
     arm_w = walk_w - 2.0 * fend_th
 
-    arm1_len = size - walk_w
+    arm1_len = size - walk_w - fend_th
     arm1_cy = oy + walk_w + arm1_len * 0.5
     create_box(bm, (arm_w, arm1_len, deck_th), (ox + fend_th + arm_w * 0.5, arm1_cy, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
 
-    arm2_len = size - walk_w
+    arm2_len = size - walk_w - fend_th
     arm2_cx = ox + walk_w + arm2_len * 0.5
     create_box(bm, (arm2_len, arm_w, deck_th), (arm2_cx, oy + fend_th + arm_w * 0.5, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
 
     corner_deck_sz = walk_w - fend_th
     create_box(bm, (corner_deck_sz, corner_deck_sz, deck_th), (ox + fend_th + corner_deck_sz * 0.5, oy + fend_th + corner_deck_sz * 0.5, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    # Transverse End Header / Separation Beams capping both arm module ends
+    create_box(bm, (arm_w, fend_th, fend_h), (ox + fend_th + arm_w * 0.5, oy + size - fend_th * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (fend_th, arm_w, fend_h), (ox + size - fend_th * 0.5, oy + fend_th + arm_w * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
 
     cluster_pts = [
         Vector((ox + 0.35, oy + 0.35, 0.0)),
@@ -4635,15 +4703,21 @@ def _build_hajfin_pier_tee(bm, props, width=10.0, depth=14.0, found_h=1.6):
     fend_h = 0.38
     fend_cz = deck_z - 0.08
     deck_w = walk_w - 2.0 * fend_th
+    deck_d = d - 2.0 * fend_th
     flank_w = hw - walk_w * 0.5
 
-    # Main north-south through-walkway deck slab
-    create_box(bm, (deck_w, d, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+    # Main north-south through-walkway deck slab (fitted inside end fascia beams)
+    create_box(bm, (deck_w, deck_d, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
 
-    # East branch deck slab (connected seamlessly with zero coplanar overlap)
-    branch_deck_len = flank_w + fend_th
-    branch_deck_cx = (walk_w * 0.5 - fend_th + hw) * 0.5
+    # East branch deck slab (connected seamlessly, fitted inside east end fascia beam)
+    branch_deck_len = flank_w
+    branch_deck_cx = (walk_w * 0.5 - fend_th + hw - fend_th) * 0.5
     create_box(bm, (branch_deck_len, deck_w, deck_th), (branch_deck_cx, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    # Transverse End Header / Separation Beams capping through-walkway ends and branch end
+    for sgn_y in (-1.0, 1.0):
+        create_box(bm, (deck_w, fend_th, fend_h), (0.0, sgn_y * (hd - fend_th * 0.5), fend_cz), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (fend_th, deck_w, fend_h), (hw - fend_th * 0.5, 0.0, fend_cz), mat_index=MAT_INDEX_TIMBER)
 
     num_bents = max(3, int(round(d / 3.5)) + 1)
     dy = d / (num_bents - 1)
@@ -4709,9 +4783,12 @@ def _build_hajfin_pier_landing(bm, props, width=7.0, depth=10.0, found_h=1.6):
     fend_h = 0.38
     fend_cz = deck_z - 0.08
     deck_w = w - 2.0 * fend_th
-    deck_d = d - fend_th
+    deck_d = d - 2.0 * fend_th
 
-    create_box(bm, (deck_w, deck_d, deck_th), (0.0, -fend_th * 0.5, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+    create_box(bm, (deck_w, deck_d, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    # Transverse End Header / Separation Beam capping connecting module end
+    create_box(bm, (deck_w, fend_th, fend_h), (0.0, -hd + fend_th * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
 
     post_xs = (-hw + 0.35, 0.0, hw - 0.35)
     y_bents = [-hd + 0.35, -hd * 0.33, hd * 0.33, hd - 0.35]
@@ -4843,8 +4920,9 @@ def _build_hajfin_pier_platform(bm, props, width=16.0, depth=16.0, found_h=1.6):
     fend_h = 0.38
     fend_cz = deck_z - 0.08
     deck_w = w - 2.0 * fend_th
+    deck_d = d - 2.0 * fend_th
 
-    create_box(bm, (deck_w, d, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+    create_box(bm, (deck_w, deck_d, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
 
     # 2. Heavy Grid Stilt Substructure Underneath
     post_spacing = 3.6
@@ -4915,13 +4993,13 @@ def _build_hajfin_pier_high_ramp(bm, props, width=6.0, depth=18.0, found_h=1.6):
     fend_h = 0.38
     deck_w = w - 2.0 * fend_th
 
-    low_d = y_low_end - (-hd)
-    low_cy = (-hd + y_low_end) * 0.5
+    low_d = y_low_end - (-hd + fend_th)
+    low_cy = (-hd + fend_th + y_low_end) * 0.5
     create_box(bm, (deck_w, low_d, deck_th), (0.0, low_cy, z_low - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
 
     # 2. Upper Overlook Deck
-    high_d = hd - y_ramp_end
-    high_cy = (y_ramp_end + hd) * 0.5
+    high_d = (hd - fend_th) - y_ramp_end
+    high_cy = (y_ramp_end + hd - fend_th) * 0.5
     create_box(bm, (deck_w, high_d, deck_th), (0.0, high_cy, z_high - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
 
     # 3. Sloped Incline Ramp
@@ -4969,10 +5047,14 @@ def _build_hajfin_pier_high_ramp(bm, props, width=6.0, depth=18.0, found_h=1.6):
     # 5. Continuous Outer Fascia & Coaming Bumper Timbers
     for sgn_x in (-1.0, 1.0):
         kx = sgn_x * (hw - fend_th * 0.5)
-        create_box(bm, (fend_th, low_d, fend_h), (kx, low_cy, z_low - 0.08), mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (fend_th, high_d, fend_h), (kx, high_cy, z_high - 0.08), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (fend_th, low_d + fend_th, fend_h), (kx, low_cy, z_low - 0.08), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (fend_th, high_d + fend_th, fend_h), (kx, high_cy, z_high - 0.08), mat_index=MAT_INDEX_TIMBER)
         k_side = Vector((kx, mid_ramp.y, mid_ramp.z - 0.08))
         create_box(bm, (fend_th, ramp_len, fend_h), k_side, rotation=(ramp_pitch, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
+
+    # Transverse End Header / Separation Beams capping lower and upper module connections
+    create_box(bm, (deck_w, fend_th, fend_h), (0.0, -hd + fend_th * 0.5, z_low - 0.08), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (deck_w, fend_th, fend_h), (0.0, hd - fend_th * 0.5, z_high - 0.08), mat_index=MAT_INDEX_TIMBER)
 
 
 
