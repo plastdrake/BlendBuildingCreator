@@ -4336,6 +4336,344 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
                                      overhang_x=0.55, overhang_y=0.55, fin_scale=1.5, num_ridge_teeth=6)
 
 
+# =============================================================================
+# MODULAR HARBOR PIERS & BRIDGES
+# =============================================================================
+
+def _build_hajfin_pier_straight(bm, props, width=4.0, depth=12.0, found_h=1.6):
+    """Modular straight timber dock on deep stilt pilings with mooring bollards,
+    transverse bearers, X-bracing, grey deck planks, and harbor props."""
+    w = max(3.0, width)
+    d = max(6.0, depth)
+    deck_z = max(0.8, found_h)
+    water_depth = 8.0
+    post_r = 0.20
+    deck_th = 0.14
+
+    hw = w * 0.5
+    hd = d * 0.5
+
+    num_bents = max(2, int(round(d / 3.0)) + 1)
+    dy = d / (num_bents - 1)
+    y_bents = [-hd + i * dy for i in range(num_bents)]
+
+    post_xs = (-hw + 0.28, hw - 0.28)
+    total_post_h = deck_z + water_depth + 0.55
+    cz_post = (deck_z + 0.55) - total_post_h * 0.5
+
+    for y in y_bents:
+        create_box(bm, (w - 0.20, 0.26, 0.26), (0.0, y, deck_z - deck_th - 0.13), mat_index=MAT_INDEX_TIMBER)
+        for px in post_xs:
+            create_cylinder(bm, radius=post_r, height=total_post_h, segments=8,
+                            location=(px, y, cz_post), mat_index=MAT_INDEX_TIMBER)
+            create_torus_ring(bm, (px, y, deck_z + 0.38), major_radius=post_r + 0.02, minor_radius=0.025,
+                              mat_index=MAT_INDEX_IRON)
+
+    stringer_z = deck_z - deck_th - 0.13
+    for sx in (post_xs[0], 0.0, post_xs[1]):
+        create_box(bm, (0.20, d + 0.10, 0.24), (sx, 0.0, stringer_z), mat_index=MAT_INDEX_TIMBER)
+
+    for b in range(num_bents - 1):
+        y0 = y_bents[b]
+        y1 = y_bents[b + 1]
+        z_bot = deck_z - 1.20
+        z_top = deck_z - deck_th - 0.26
+        for px in post_xs:
+            _create_oriented_beam(bm, (px, y0, z_bot), (px, y1, z_top), width=0.14, depth=0.14, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (px, y0, z_top), (px, y1, z_bot), width=0.14, depth=0.14, mat_index=MAT_INDEX_TIMBER)
+
+    deck_w = w - 0.24
+    create_box(bm, (deck_w, d, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    rim_w = 0.16
+    rim_h = 0.22
+    for sgn_x in (-1.0, 1.0):
+        rx = sgn_x * (hw - rim_w * 0.5)
+        create_box(bm, (rim_w, d, rim_h), (rx, 0.0, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+
+    create_spiral_rope_coil(bm, location=(-hw * 0.38, hd * 0.32, deck_z), inner_radius=0.06, outer_radius=0.18, rope_radius=0.022, turns=2.6, mat_index=MAT_INDEX_ROPE)
+    _build_hajfin_barrel(bm, hw * 0.35, -hd * 0.30, z_ground=deck_z, ang=0.4, scale=0.48)
+
+
+def _build_hajfin_pier_ramp(bm, props, width=4.0, depth=14.0, found_h=1.6):
+    """Sloped timber ramp dock descending from pier elevation (found_h) down to ground level (z=0)
+    with non-slip grip battens, stilt pilings, and ground threshold sill."""
+    w = max(3.0, width)
+    d = max(8.0, depth)
+    deck_z = max(0.8, found_h)
+    water_depth = 6.0
+    post_r = 0.20
+    deck_th = 0.14
+
+    hw = w * 0.5
+    hd = d * 0.5
+
+    y_high = hd
+    y_break = hd - 2.2
+    y_low = -hd + 0.6
+    y_ground = -hd
+
+    trans_len = y_high - y_break
+    create_box(bm, (w - 0.24, trans_len, deck_th), (0.0, (y_high + y_break) * 0.5, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    ramp_len = math.hypot(y_break - y_low, deck_z - 0.06)
+    ramp_pitch = math.atan2(deck_z - 0.06, y_break - y_low)
+
+    p_top_mid = Vector((0.0, y_break, deck_z))
+    p_bot_mid = Vector((0.0, y_low, 0.06))
+    mid_ramp = (p_top_mid + p_bot_mid) * 0.5
+    create_box(bm, (w - 0.24, ramp_len, deck_th), mid_ramp, rotation=(ramp_pitch, 0.0, 0.0), mat_index=MAT_INDEX_FLOOR)
+
+    create_box(bm, (w + 0.2, 0.40, 0.24), (0.0, y_ground + 0.20, 0.10), mat_index=MAT_INDEX_TIMBER)
+
+    num_battens = max(4, int(ramp_len / 0.65))
+    bat_w = w - 0.32
+    bat_th = 0.08
+    bat_h = 0.06
+    for i in range(1, num_battens):
+        t = i / float(num_battens)
+        pt = p_top_mid * (1.0 - t) + p_bot_mid * t
+        up_norm = Vector((0.0, -math.sin(ramp_pitch), math.cos(ramp_pitch)))
+        bat_center = pt + up_norm * (deck_th * 0.5 + bat_h * 0.5)
+        create_box(bm, (bat_w, bat_th, bat_h), bat_center, rotation=(ramp_pitch, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
+
+    for sgn_x in (-1.0, 1.0):
+        kx = sgn_x * (hw - 0.08)
+        create_box(bm, (0.16, trans_len, 0.22), (kx, (y_high + y_break) * 0.5, deck_z + 0.07), mat_index=MAT_INDEX_TIMBER)
+        k_mid = Vector((kx, mid_ramp.y, mid_ramp.z + 0.07))
+        create_box(bm, (0.16, ramp_len, 0.22), k_mid, rotation=(ramp_pitch, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
+
+    post_xs = (-hw + 0.28, hw - 0.28)
+    bent_ys = [y_high, y_break, y_break - (y_break - y_low) * 0.38, y_break - (y_break - y_low) * 0.75]
+
+    for y in bent_ys:
+        if y >= y_break:
+            cur_z = deck_z
+        else:
+            t = (y_break - y) / (y_break - y_low)
+            cur_z = deck_z * (1.0 - t) + 0.06 * t
+
+        cur_post_h = cur_z + water_depth + 0.40
+        cz_post = (cur_z + 0.40) - cur_post_h * 0.5
+        create_box(bm, (w - 0.20, 0.24, 0.24), (0.0, y, cur_z - deck_th - 0.12), mat_index=MAT_INDEX_TIMBER)
+
+        for px in post_xs:
+            create_cylinder(bm, radius=post_r, height=cur_post_h, segments=8,
+                            location=(px, y, cz_post), mat_index=MAT_INDEX_TIMBER)
+            create_torus_ring(bm, (px, y, cur_z + 0.25), major_radius=post_r + 0.02, minor_radius=0.022,
+                              mat_index=MAT_INDEX_IRON)
+
+    create_spiral_rope_coil(bm, location=(-hw * 0.35, y_break + 0.70, deck_z), inner_radius=0.05, outer_radius=0.16, rope_radius=0.020, turns=2.4, mat_index=MAT_INDEX_ROPE)
+
+
+def _build_hajfin_pier_bend(bm, props, width=10.0, depth=10.0, found_h=1.6):
+    """90-degree corner elbow pier connecting 4m-wide walkways with heavy corner dolphin pile,
+    mitered joists, grey deck planks, and mooring bollards."""
+    size = max(8.0, min(width, depth))
+    deck_z = max(0.8, found_h)
+    water_depth = 8.0
+    walk_w = 4.0
+    post_r = 0.20
+    deck_th = 0.14
+
+    ox = -size * 0.5
+    oy = -size * 0.5
+
+    arm1_len = size - walk_w
+    arm1_cy = oy + walk_w + arm1_len * 0.5
+    create_box(bm, (walk_w - 0.24, arm1_len, deck_th), (ox + walk_w * 0.5, arm1_cy, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    arm2_len = size - walk_w
+    arm2_cx = ox + walk_w + arm2_len * 0.5
+    create_box(bm, (arm2_len, walk_w - 0.24, deck_th), (arm2_cx, oy + walk_w * 0.5, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    create_box(bm, (walk_w - 0.24, walk_w - 0.24, deck_th), (ox + walk_w * 0.5, oy + walk_w * 0.5, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    cluster_pts = [
+        Vector((ox + 0.35, oy + 0.35, 0.0)),
+        Vector((ox + 0.35 + post_r * 1.8, oy + 0.35, 0.0)),
+        Vector((ox + 0.35, oy + 0.35 + post_r * 1.8, 0.0)),
+    ]
+    total_post_h = deck_z + water_depth + 0.85
+    cz_post = (deck_z + 0.85) - total_post_h * 0.5
+    for cp in cluster_pts:
+        create_cylinder(bm, radius=post_r * 1.15, height=total_post_h, segments=9,
+                        location=(cp.x, cp.y, cz_post), mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (cp.x, cp.y, deck_z + 0.55), major_radius=post_r * 1.25, minor_radius=0.03, mat_index=MAT_INDEX_IRON)
+    cluster_mid = (cluster_pts[0] + cluster_pts[1] + cluster_pts[2]) / 3.0
+    create_torus_ring(bm, (cluster_mid.x, cluster_mid.y, deck_z + 0.45), major_radius=0.48, minor_radius=0.04, mat_index=MAT_INDEX_ROPE)
+
+    y_steps = [oy + walk_w, oy + walk_w + arm1_len * 0.5, oy + size]
+    for y in y_steps:
+        for x in (ox + 0.28, ox + walk_w - 0.28):
+            create_cylinder(bm, radius=post_r, height=deck_z + water_depth + 0.50, segments=8,
+                            location=(x, y, (deck_z + 0.50) - (deck_z + water_depth + 0.50) * 0.5), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (walk_w - 0.20, 0.26, 0.26), (ox + walk_w * 0.5, y, deck_z - deck_th - 0.13), mat_index=MAT_INDEX_TIMBER)
+
+    x_steps = [ox + walk_w + arm2_len * 0.5, ox + size]
+    for x in x_steps:
+        for y in (oy + 0.28, oy + walk_w - 0.28):
+            create_cylinder(bm, radius=post_r, height=deck_z + water_depth + 0.50, segments=8,
+                            location=(x, y, (deck_z + 0.50) - (deck_z + water_depth + 0.50) * 0.5), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.26, walk_w - 0.20, 0.26), (x, oy + walk_w * 0.5, deck_z - deck_th - 0.13), mat_index=MAT_INDEX_TIMBER)
+
+    create_cylinder(bm, radius=post_r, height=deck_z + water_depth + 0.55, segments=8,
+                    location=(ox + walk_w, oy + walk_w, (deck_z + 0.55) - (deck_z + water_depth + 0.55) * 0.5), mat_index=MAT_INDEX_TIMBER)
+    create_torus_ring(bm, (ox + walk_w, oy + walk_w, deck_z + 0.38), major_radius=post_r + 0.02, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+
+    rim_w = 0.16
+    rim_h = 0.22
+    create_box(bm, (rim_w, size, rim_h), (ox + rim_w * 0.5, oy + size * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (size, rim_w, rim_h), (ox + size * 0.5, oy + rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (rim_w, arm1_len, rim_h), (ox + walk_w - rim_w * 0.5, arm1_cy, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (arm2_len, rim_w, rim_h), (arm2_cx, oy + walk_w - rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+
+    create_spiral_rope_coil(bm, location=(ox + 1.25, oy + 1.25, deck_z), inner_radius=0.06, outer_radius=0.18, rope_radius=0.022, turns=2.6, mat_index=MAT_INDEX_ROPE)
+    _build_hajfin_barrel(bm, ox + 1.35, oy + 2.10, z_ground=deck_z, ang=0.6, scale=0.48)
+
+
+def _build_hajfin_pier_tee(bm, props, width=10.0, depth=14.0, found_h=1.6):
+    """3-way dock T-junction connecting main through-walkway to a perpendicular finger pier,
+    with stilt bents, deck planking, and mooring bollards."""
+    w = max(8.0, width)
+    d = max(10.0, depth)
+    deck_z = max(0.8, found_h)
+    water_depth = 8.0
+    walk_w = 4.0
+    post_r = 0.20
+    deck_th = 0.14
+
+    hw = w * 0.5
+    hd = d * 0.5
+
+    create_box(bm, (walk_w - 0.24, d, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    branch_len = hw - walk_w * 0.5
+    branch_cx = walk_w * 0.5 + branch_len * 0.5
+    create_box(bm, (branch_len, walk_w - 0.24, deck_th), (branch_cx, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    num_bents = max(3, int(round(d / 3.5)) + 1)
+    dy = d / (num_bents - 1)
+    y_bents = [-hd + i * dy for i in range(num_bents)]
+
+    post_h = deck_z + water_depth + 0.55
+    cz_p = (deck_z + 0.55) - post_h * 0.5
+
+    for y in y_bents:
+        create_box(bm, (walk_w - 0.20, 0.26, 0.26), (0.0, y, deck_z - deck_th - 0.13), mat_index=MAT_INDEX_TIMBER)
+        create_cylinder(bm, radius=post_r, height=post_h, segments=8,
+                        location=(-walk_w * 0.5 + 0.28, y, cz_p), mat_index=MAT_INDEX_TIMBER)
+        if abs(y) > walk_w * 0.45:
+            create_cylinder(bm, radius=post_r, height=post_h, segments=8,
+                            location=(walk_w * 0.5 - 0.28, y, cz_p), mat_index=MAT_INDEX_TIMBER)
+            create_torus_ring(bm, (walk_w * 0.5 - 0.28, y, deck_z + 0.38), major_radius=post_r + 0.02, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+        create_torus_ring(bm, (-walk_w * 0.5 + 0.28, y, deck_z + 0.38), major_radius=post_r + 0.02, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+
+    for sgn_y in (-1.0, 1.0):
+        jy = sgn_y * (walk_w * 0.5)
+        create_cylinder(bm, radius=post_r * 1.1, height=post_h + 0.10, segments=8,
+                        location=(walk_w * 0.5, jy, cz_p + 0.05), mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (walk_w * 0.5, jy, deck_z + 0.45), major_radius=post_r * 1.2, minor_radius=0.028, mat_index=MAT_INDEX_IRON)
+
+    bx_steps = [walk_w * 0.5 + branch_len * 0.5, hw]
+    for bx in bx_steps:
+        create_box(bm, (0.26, walk_w - 0.20, 0.26), (bx, 0.0, deck_z - deck_th - 0.13), mat_index=MAT_INDEX_TIMBER)
+        for sgn_y in (-1.0, 1.0):
+            create_cylinder(bm, radius=post_r, height=post_h, segments=8,
+                            location=(bx - 0.20, sgn_y * (walk_w * 0.5 - 0.28), cz_p), mat_index=MAT_INDEX_TIMBER)
+            create_torus_ring(bm, (bx - 0.20, sgn_y * (walk_w * 0.5 - 0.28), deck_z + 0.38), major_radius=post_r + 0.02, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+
+    rim_w = 0.16
+    rim_h = 0.22
+    create_box(bm, (rim_w, d, rim_h), (-walk_w * 0.5 + rim_w * 0.5, 0.0, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (walk_w, rim_w, rim_h), (0.0, -hd + rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (walk_w, rim_w, rim_h), (0.0, hd - rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    flank_w = hw - walk_w * 0.5
+    create_box(bm, (flank_w, rim_w, rim_h), (walk_w * 0.5 + flank_w * 0.5, -walk_w * 0.5 + rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (flank_w, rim_w, rim_h), (walk_w * 0.5 + flank_w * 0.5, walk_w * 0.5 - rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+
+    create_spiral_rope_coil(bm, location=(0.0, walk_w * 0.5 + 0.8, deck_z), inner_radius=0.06, outer_radius=0.18, rope_radius=0.022, turns=2.6, mat_index=MAT_INDEX_ROPE)
+    _build_hajfin_barrel(bm, -0.6, -walk_w * 0.5 - 0.8, z_ground=deck_z, ang=0.3, scale=0.48)
+
+
+def _build_hajfin_pier_landing(bm, props, width=7.0, depth=10.0, found_h=1.6):
+    """Terminal dock landing head and boat berth with boat access ladder down to water,
+    heavy mooring dolphin bollards, perimeter bumper timbers, cargo crate stack, and hoist davit."""
+    w = max(5.0, width)
+    d = max(7.0, depth)
+    deck_z = max(0.8, found_h)
+    water_depth = 8.0
+    post_r = 0.22
+    deck_th = 0.16
+
+    hw = w * 0.5
+    hd = d * 0.5
+
+    create_box(bm, (w - 0.24, d - 0.24, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    post_xs = (-hw + 0.35, 0.0, hw - 0.35)
+    y_bents = [-hd + 0.35, -hd * 0.33, hd * 0.33, hd - 0.35]
+
+    post_h = deck_z + water_depth + 0.65
+    cz_p = (deck_z + 0.65) - post_h * 0.5
+
+    for y in y_bents:
+        create_box(bm, (w - 0.30, 0.28, 0.28), (0.0, y, deck_z - deck_th - 0.14), mat_index=MAT_INDEX_TIMBER)
+        for px in post_xs:
+            create_cylinder(bm, radius=post_r, height=post_h, segments=9,
+                            location=(px, y, cz_p), mat_index=MAT_INDEX_TIMBER)
+            create_torus_ring(bm, (px, y, deck_z + 0.45), major_radius=post_r + 0.02, minor_radius=0.028, mat_index=MAT_INDEX_IRON)
+
+    fend_th = 0.18
+    fend_h = 0.32
+    for sgn_x in (-1.0, 1.0):
+        create_box(bm, (fend_th, d + 0.2, fend_h), (sgn_x * (hw - fend_th * 0.5), 0.0, deck_z - fend_h * 0.5 + 0.05), mat_index=MAT_INDEX_TIMBER)
+    for sgn_y in (-1.0, 1.0):
+        create_box(bm, (w + 0.2, fend_th, fend_h), (0.0, sgn_y * (hd - fend_th * 0.5), deck_z - fend_h * 0.5 + 0.05), mat_index=MAT_INDEX_TIMBER)
+
+    kick_w = 0.14
+    kick_h = 0.18
+    for sgn_x in (-1.0, 1.0):
+        create_box(bm, (kick_w, d - fend_th * 2, kick_h), (sgn_x * (hw - fend_th - kick_w * 0.5), 0.0, deck_z + kick_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    lad_x = hw + 0.08
+    lad_y0 = -1.0
+    lad_y1 = 1.0
+    lad_top_z = deck_z + 0.45
+    lad_bot_z = -0.60
+    lad_len_z = lad_top_z - lad_bot_z
+
+    for ly in (lad_y0, lad_y1):
+        create_box(bm, (0.12, 0.14, lad_len_z), (lad_x, ly, lad_bot_z + lad_len_z * 0.5), mat_index=MAT_INDEX_TIMBER)
+    num_rungs = max(4, int(lad_len_z / 0.30))
+    for r_idx in range(num_rungs):
+        rz = lad_bot_z + r_idx * 0.30
+        if rz <= deck_z + 0.05:
+            create_cylinder(bm, radius=0.028, height=lad_y1 - lad_y0, segments=6,
+                            location=(lad_x, (lad_y0 + lad_y1) * 0.5, rz),
+                            rotation=(math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
+
+    _build_hajfin_cargo_stack(bm, -hw * 0.38, hd * 0.30, deck_z)
+
+    davit_x = -hw + 0.90
+    davit_y = hd - 0.90
+    davit_mast_h = 3.4
+    create_cylinder(bm, radius=0.18, height=davit_mast_h, segments=8,
+                    location=(davit_x, davit_y, deck_z + davit_mast_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+    create_torus_ring(bm, (davit_x, davit_y, deck_z + 0.35), major_radius=0.20, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+    create_torus_ring(bm, (davit_x, davit_y, deck_z + davit_mast_h * 0.70), major_radius=0.20, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+
+    boom_top = Vector((davit_x - 1.8, davit_y, deck_z + davit_mast_h - 0.2))
+    boom_base = Vector((davit_x, davit_y, deck_z + davit_mast_h * 0.55))
+    _create_oriented_beam(bm, boom_base, boom_top, width=0.18, depth=0.18, mat_index=MAT_INDEX_TIMBER)
+    _create_oriented_beam(bm, (davit_x, davit_y, deck_z + davit_mast_h * 0.85),
+                         (davit_x - 0.9, davit_y, deck_z + davit_mast_h - 0.4),
+                         width=0.14, depth=0.14, mat_index=MAT_INDEX_TIMBER)
+    create_cylinder(bm, radius=0.016, height=1.6, segments=6,
+                    location=(boom_top.x, boom_top.y, boom_top.z - 0.8), mat_index=MAT_INDEX_ROPE)
+    create_torus_ring(bm, (boom_top.x, boom_top.y, boom_top.z - 1.6), major_radius=0.08, minor_radius=0.022, mat_index=MAT_INDEX_IRON)
+
+
 def _build_hajfin_shaman_shrine(bm, props, diameter=11.0, height=7.5, found_h=0.6):
     """The Leviathan Bone Shrine:
     - Sacred tribal megalodon ceremonial sanctuary.
@@ -4652,6 +4990,16 @@ def build_hajfin_building(obj, bm, props):
         _build_hajfin_palisade_wall(bm, props, width=max(10.0, width), depth=max(4.0, depth), height=max(4.5, height), found_h=0.0)
     elif style in ('FORGE', 'SMITHY') or arch in ('SMITHY', 'FORGE', 'BLACKSMITH'):
         _build_hajfin_forge(bm, props, width=max(9.0, width), depth=max(8.0, depth), height=height, found_h=found_h)
+    elif style == 'PIER_STRAIGHT':
+        _build_hajfin_pier_straight(bm, props, width=width, depth=depth, found_h=found_h)
+    elif style == 'PIER_RAMP':
+        _build_hajfin_pier_ramp(bm, props, width=width, depth=depth, found_h=found_h)
+    elif style == 'PIER_BEND':
+        _build_hajfin_pier_bend(bm, props, width=width, depth=depth, found_h=found_h)
+    elif style == 'PIER_TEE':
+        _build_hajfin_pier_tee(bm, props, width=width, depth=depth, found_h=found_h)
+    elif style == 'PIER_LANDING':
+        _build_hajfin_pier_landing(bm, props, width=width, depth=depth, found_h=found_h)
     elif style in ('FISH_DEPOT', 'DEPOT', 'PIER') or arch in ('WAREHOUSE', 'DEPOT', 'HARBOR'):
         _build_hajfin_fish_depot(bm, props, width=max(10.0, width), depth=max(12.0, depth), height=height, found_h=max(1.6, found_h))
     elif style in ('SHRINE', 'TEMPLE') or arch in ('TEMPLE', 'CHURCH', 'SHRINE'):

@@ -349,6 +349,11 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('FORGE', "Harpoon Smithy & Bone Forge", "Open-sided timber workshop with stone chimney, iron anvil, and weapon tool racks", 'MOD_BUILD', 8),
             ('FISH_DEPOT', "Fisher's Stilt Pier & Depot", "Tidal dock house with hanging net drying frames, fish curing racks, and cargo crane", 'HOOK', 9),
             ('SHRINE', "Leviathan Bone Shrine", "Sacred ceremonial ring with towering whale-rib arches, sacrificial bone altar, and smoking brazier", 'LIGHT_SUN', 10),
+            ('PIER_STRAIGHT', "Straight Pier Walkway", "Modular straight timber dock on stilt pilings with mooring bollards", 'SNAP_INCREMENT', 12),
+            ('PIER_RAMP', "Pier Beach Ramp", "Sloped timber ramp dock descending from pier elevation to ground level with grip battens", 'STYLUS_PRESSURE', 13),
+            ('PIER_BEND', "90° Corner Pier Elbow", "90-degree corner elbow pier with reinforced dolphin pile", 'DRIVER_ROTATIONAL_DIFFERENCE', 14),
+            ('PIER_TEE', "T-Junction Dock Hub", "3-way dock intersection connecting walkway to branching finger pier", 'ORIENTATION_GIMBAL', 15),
+            ('PIER_LANDING', "Boat Berth & Pier Head", "Terminal dock landing head with boat ladder, cargo stack, and mooring cleats", 'MATFLUID', 16),
         ],
         default='SHANTY',
         update=on_property_updated

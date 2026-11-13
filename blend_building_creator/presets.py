@@ -7263,6 +7263,55 @@ PRESETS = {
         'settings': _hajfin_settings(width=12.5, depth=12.5, num_floors=1, found_h=0.8, wonkiness=0.10, roof_h=2.5, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', tier=2, hajfin_style='SHRINE'),
     },
 
+    # =========================================================================
+    # HAJFIN: HARBOR PIERS & BRIDGES (MODULAR DOCK PARTS)
+    # =========================================================================
+    'HAJFIN_PIER_STRAIGHT': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "Straight Pier Walkway",
+        'plot': "4m x 12m",
+        'description': "12m straight timber dock walkway on deep stilt pilings with mooring bollards, X-bracing, and grey deck planks.",
+        'settings': _hajfin_settings(width=4.0, depth=12.0, num_floors=1, found_h=1.6, wonkiness=0.08, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_STRAIGHT'),
+    },
+    'HAJFIN_PIER_RAMP': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "Pier Beach Ramp",
+        'plot': "4m x 14m",
+        'description': "Sloped timber ramp dock descending from 1.6m pier deck to ground level with non-slip grip battens and ground threshold.",
+        'settings': _hajfin_settings(width=4.0, depth=14.0, num_floors=1, found_h=1.6, wonkiness=0.06, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_RAMP'),
+    },
+    'HAJFIN_PIER_BEND': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "90° Corner Pier Elbow",
+        'plot': "10m x 10m",
+        'description': "90-degree corner elbow pier connecting 4m walkways with reinforced triple-pile dolphin mooring post.",
+        'settings': _hajfin_settings(width=10.0, depth=10.0, num_floors=1, found_h=1.6, wonkiness=0.08, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_BEND'),
+    },
+    'HAJFIN_PIER_TEE': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "T-Junction Dock Hub",
+        'plot': "10m x 14m",
+        'description': "3-way dock intersection connecting a main thoroughfare to a perpendicular branching finger pier.",
+        'settings': _hajfin_settings(width=10.0, depth=14.0, num_floors=1, found_h=1.6, wonkiness=0.08, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_TEE'),
+    },
+    'HAJFIN_PIER_LANDING': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "Boat Berth & Pier Head",
+        'plot': "7m x 10m",
+        'description': "Terminal dock landing head with boat access ladder, cargo stack, coiled hemp ropes, and mooring cleats.",
+        'settings': _hajfin_settings(width=7.0, depth=10.0, num_floors=1, found_h=1.6, wonkiness=0.10, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_LANDING'),
+    },
+
 }
 
 BUILDING_FAMILIES = [
@@ -7908,6 +7957,23 @@ BUILDING_FAMILIES = [
             ("T2", 'HAJFIN_SHAMAN_SHRINE_T2', "Monumental megalodon sanctuary with ceremonial brazier and ribcage dome"),
         ],
     },
+    {
+        'id': 'HAJFIN_PIER',
+        'faction': 'HAJFIN',
+        'name': "Harbor Piers & Bridges",
+        'category': 'COMMERCE',
+        'plot': "Modular Dock Parts",
+        'shape': "Modular Pier",
+        'icon': 'MOD_OCEAN',
+        'description': "Modular pirate harbor piers, bridges, and dock segments with dark timber stilts, grey deck planks, and mooring posts.",
+        'tiers': [
+            ("Straight", 'HAJFIN_PIER_STRAIGHT', "12m straight pier walkway with stilt pilings and mooring bollards"),
+            ("Ramp", 'HAJFIN_PIER_RAMP', "Sloped ramp dock descending from pier deck to ground level with grip battens"),
+            ("Corner 90°", 'HAJFIN_PIER_BEND', "90-degree corner elbow pier with reinforced corner dolphin post"),
+            ("T-Junction", 'HAJFIN_PIER_TEE', "3-way dock intersection connecting main walkway to a branching finger pier"),
+            ("Pier Head", 'HAJFIN_PIER_LANDING', "Wide boat berth landing with boat ladder, cargo stack, and mooring cleats"),
+        ],
+    },
 ]
 
 ARCHETYPE_MAP = {
@@ -8023,6 +8089,11 @@ ARCHETYPE_MAP = {
     'HAJFIN_FISH_DEPOT_T2': 'WAREHOUSE',
     'HAJFIN_SHAMAN_SHRINE_T1': 'CHAPEL',
     'HAJFIN_SHAMAN_SHRINE_T2': 'CHAPEL',
+    'HAJFIN_PIER_STRAIGHT': 'HARBOR',
+    'HAJFIN_PIER_RAMP': 'HARBOR',
+    'HAJFIN_PIER_BEND': 'HARBOR',
+    'HAJFIN_PIER_TEE': 'HARBOR',
+    'HAJFIN_PIER_LANDING': 'HARBOR',
 }
 
 KIT_FOR_ARCHETYPE = {
