@@ -4385,11 +4385,19 @@ def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_dept
         (door_cx, y0 - landing_d + 0.11, landing_beam_z),
         mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012, long_axis=0,
     )
+    # Flanking joists span cleanly between the building sill beam and the front landing beam,
+    # avoiding any coplanar z-fighting or overlapping faces at both ends
+    sill_th = 0.28
+    front_beam_th = 0.22
+    y_front_inner = y0 - landing_d + front_beam_th
+    y_sill_outer = y0 - sill_th * 0.5
+    flank_d = max(0.20, y_sill_outer - y_front_inner)
+    flank_cy = (y_front_inner + y_sill_outer) * 0.5
     for sgn_lp in (-1.0, 1.0):
         # Flanking joists
         timber_box(
-            bm, (0.22, landing_d, 0.22),
-            (door_cx + sgn_lp * (landing_w * 0.5 - 0.11), landing_cy, landing_beam_z),
+            bm, (0.22, flank_d, 0.22),
+            (door_cx + sgn_lp * (landing_w * 0.5 - 0.11), flank_cy, landing_beam_z),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012, long_axis=1,
         )
         # 2 sturdy stilt posts extending 10m downwards under landing outer corners (capped cleanly under joists)
