@@ -1210,8 +1210,9 @@ def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 
     """
     uv_layer = bm.loops.layers.uv.verify()
     bm.normal_update()
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
     for face in bm.faces:
-        if face.tag:
+        if face.tag or (prop_layer is not None and face[prop_layer]):
             continue
         if skip_materials is not None and face.material_index in skip_materials:
             continue

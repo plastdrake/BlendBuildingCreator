@@ -62,6 +62,12 @@ def _stamp_meshdata(bm, key, x=0.0, y=0.0, z=0.0, scale=1.0, yaw=0.0, pitch=0.0,
     M = trans @ M_rot
 
     uv_layer = bm.loops.layers.uv.verify()
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    if prop_layer is None:
+        prop_layer = bm.faces.layers.int.new('bbc_is_prop')
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
+    if imported_layer is None:
+        imported_layer = bm.faces.layers.int.new('bbc_imported_asset')
     used = set(vi for poly in polys for vi, _ in poly)
     remap = {i: bm.verts.new(M @ Vector(verts[i])) for i in used}
 
@@ -78,6 +84,8 @@ def _stamp_meshdata(bm, key, x=0.0, y=0.0, z=0.0, scale=1.0, yaw=0.0, pitch=0.0,
         f.material_index = _slot
         f.smooth = True
         f.tag = True  # Protect atlas UVs
+        f[prop_layer] = 1
+        f[imported_layer] = 1
         uv_map = {vi: uv for vi, uv in poly}
         for loop in f.loops:
             for i in idx:

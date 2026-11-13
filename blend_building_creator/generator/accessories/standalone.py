@@ -16,7 +16,7 @@ def create_standalone_prop_mesh(obj, props, prop_key, scale=1.0, variant=''):
     keys are ignored so the UI never breaks.
     """
     from .prop_registry import build_prop
-    from ..mesh_utils import apply_box_uvs, apply_organic_shading
+    from ..mesh_utils import apply_organic_shading
     from ..materials import setup_building_material_slots, prune_material_slots_for_bmesh
 
     extra = _parse_variant(variant)
@@ -26,7 +26,7 @@ def create_standalone_prop_mesh(obj, props, prop_key, scale=1.0, variant=''):
         if abs(scale - 1.0) > 1e-6:
             for v in bm.verts:
                 v.co *= scale
-        apply_box_uvs(bm, scale=1.0)
+        # Keep existing custom & procedural unwrapping on props — do NOT re-unwrap
         setup_building_material_slots(obj, props)
         # Drop every material slot this prop never touches: fewer draw calls.
         prune_material_slots_for_bmesh(obj, bm)

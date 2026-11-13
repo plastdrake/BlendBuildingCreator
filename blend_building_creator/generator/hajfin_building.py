@@ -1225,6 +1225,12 @@ def _build_hajfin_barrel(bm, x, y, z_ground, ang=0.0, radius=0.32, height=0.72, 
         M = trans @ rot @ Matrix.Diagonal((s, s, s, 1.0)) @ Matrix.Translation((-cx, -cy, -cz))
 
     uv_layer = bm.loops.layers.uv.verify()
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    if prop_layer is None:
+        prop_layer = bm.faces.layers.int.new('bbc_is_prop')
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
+    if imported_layer is None:
+        imported_layer = bm.faces.layers.int.new('bbc_imported_asset')
     used = set(vi for poly in polys for vi, _ in poly)
     remap = {i: bm.verts.new(M @ Vector(verts[i])) for i in used}
 
@@ -1240,6 +1246,8 @@ def _build_hajfin_barrel(bm, x, y, z_ground, ang=0.0, radius=0.32, height=0.72, 
         f.material_index = _slot
         f.smooth = True
         f.tag = True  # Protect atlas UVs
+        f[prop_layer] = 1
+        f[imported_layer] = 1
         uv_map = {vi: uv for vi, uv in poly}
         for loop in f.loops:
             for i in idx:
@@ -1281,6 +1289,12 @@ def _build_hajfin_skull(bm, x, y, z, yaw=0.0, pitch=0.0, roll=0.0, scale=1.0, an
     M = trans @ rot @ s_mat @ base
 
     uv_layer = bm.loops.layers.uv.verify()
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    if prop_layer is None:
+        prop_layer = bm.faces.layers.int.new('bbc_is_prop')
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
+    if imported_layer is None:
+        imported_layer = bm.faces.layers.int.new('bbc_imported_asset')
     used = set(vi for poly in polys for vi, _ in poly)
     remap = {i: bm.verts.new(M @ Vector(verts[i])) for i in used}
 
@@ -1296,6 +1310,8 @@ def _build_hajfin_skull(bm, x, y, z, yaw=0.0, pitch=0.0, roll=0.0, scale=1.0, an
         f.material_index = _slot
         f.smooth = True
         f.tag = True  # Protect atlas UVs
+        f[prop_layer] = 1
+        f[imported_layer] = 1
         uv_map = {vi: uv for vi, uv in poly}
         for loop in f.loops:
             for i in idx:
@@ -1331,6 +1347,12 @@ def _build_hajfin_crate(bm, x, y, z_ground, yaw=0.0, scale=0.75):
     M = trans @ rot @ s_mat @ base
 
     uv_layer = bm.loops.layers.uv.verify()
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    if prop_layer is None:
+        prop_layer = bm.faces.layers.int.new('bbc_is_prop')
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
+    if imported_layer is None:
+        imported_layer = bm.faces.layers.int.new('bbc_imported_asset')
     used = set(vi for poly in polys for vi, _ in poly)
     remap = {i: bm.verts.new(M @ Vector(verts[i])) for i in used}
 
@@ -1349,6 +1371,8 @@ def _build_hajfin_crate(bm, x, y, z_ground, yaw=0.0, scale=0.75):
         except ValueError:
             continue
         f.tag = True
+        f[prop_layer] = 1
+        f[imported_layer] = 1
         _slot = poly_mats[pi] if poly_mats and pi < len(poly_mats) and poly_mats[pi] >= 0 else MAT_INDEX_DRIFTWOOD
         f.material_index = _slot
         uv_map = {vi: uv for vi, uv in poly}
@@ -5279,8 +5303,10 @@ def _apply_hajfin_wall_uvs(bm, scale=0.18):
     """
     uv_layer = bm.loops.layers.uv.verify()
     bm.normal_update()
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
     for face in bm.faces:
-        if face.tag:
+        if face.tag or (prop_layer is not None and face[prop_layer]) or (imported_layer is not None and face[imported_layer]):
             continue
         if face.material_index != MAT_INDEX_DRIFTWOOD:
             continue
@@ -5305,7 +5331,11 @@ def _fill_missing_hajfin_uvs(bm, scale=0.25):
     """Give any untouched procedural face a stable planar UV instead of a zero map."""
     uv_layer = bm.loops.layers.uv.verify()
     bm.normal_update()
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
     for face in bm.faces:
+        if face.tag or (prop_layer is not None and face[prop_layer]) or (imported_layer is not None and face[imported_layer]):
+            continue
         if not face.loops:
             continue
         if not all(loop[uv_layer].uv.length_squared < 1e-12 for loop in face.loops):
@@ -5327,12 +5357,13 @@ def _remove_duplicate_hajfin_faces(bm):
     seen = set()
     duplicates = []
     imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
     for face in bm.faces:
         coords = tuple(sorted(
             (round(v.co.x, 6), round(v.co.y, 6), round(v.co.z, 6))
             for v in face.verts
         ))
-        if imported_layer is not None and face[imported_layer]:
+        if (imported_layer is not None and face[imported_layer]) or (prop_layer is not None and face[prop_layer]):
             seen.add(coords)
             continue
         if coords in seen:

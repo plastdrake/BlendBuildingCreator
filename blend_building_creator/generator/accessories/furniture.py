@@ -33,6 +33,18 @@ def _place(x, y, z_ground=0.0, ang=0.0, extra=None):
     return mat
 
 
+def _tag_prop_faces(bm, faces):
+    """Preserve existing unwrap on prop faces: prevent downstream re-unwrapping."""
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    if prop_layer is None:
+        prop_layer = bm.faces.layers.int.new('bbc_is_prop')
+    for f in faces:
+        if f.is_valid:
+            f.tag = True
+            f[prop_layer] = 1
+    return faces
+
+
 def _rng(x, y, salt=0):
     return random.Random((int(abs(x) * 73856093) ^ int(abs(y) * 19349663) ^ int(salt * 83492791)) & 0x7FFFFFFF)
 
@@ -123,7 +135,7 @@ def build_barrel(bm, x, y, z_ground=0.0, ang=0.0, radius=0.34, height=0.74, lyin
         mat = _place(x, y, z_ground + h * 0.5, ang)
         transform_faces(faces, mat)
 
-    return faces
+    return _tag_prop_faces(bm, faces)
 
 
 def build_crate(bm, x, y, z_ground=0.0, ang=0.0, size=0.58, height=None, depth=None, brace_style='DIAGONAL'):
@@ -264,7 +276,7 @@ def build_crate(bm, x, y, z_ground=0.0, ang=0.0, size=0.58, height=None, depth=N
         )
 
     transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
+    return _tag_prop_faces(bm, faces)
 
 
 def build_clay_pot(bm, x, y, z_ground=0.0, ang=0.0, radius=0.22, height=0.48, pot_type='JAR'):
@@ -392,7 +404,7 @@ def build_clay_pot(bm, x, y, z_ground=0.0, ang=0.0, radius=0.22, height=0.48, po
             )
 
     transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
+    return _tag_prop_faces(bm, faces)
 
 
 def build_sack(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
@@ -465,7 +477,7 @@ def build_sack(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
                                major_segments=12, minor_segments=6,
                                mat_index=MAT_INDEX_ROPE)
     transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
+    return _tag_prop_faces(bm, faces)
 
 
 
@@ -504,7 +516,7 @@ def build_stool(bm, x, y, z_ground=0.0, ang=0.0, radius=0.22, height=0.48):
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.005)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
+    return _tag_prop_faces(bm, faces)
 
 
 def build_bench(bm, x, y, z_ground=0.0, ang=0.0, length=1.75, with_back=True):
@@ -560,7 +572,7 @@ def build_bench(bm, x, y, z_ground=0.0, ang=0.0, length=1.75, with_back=True):
                 mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
+    return _tag_prop_faces(bm, faces)
 
 
 def build_picnic_table(bm, x, y, z_ground=0.0, ang=0.0, length=2.05):
@@ -617,7 +629,7 @@ def build_picnic_table(bm, x, y, z_ground=0.0, ang=0.0, length=2.05):
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
+    return _tag_prop_faces(bm, faces)
 
 
 def build_hay_bale(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
@@ -656,7 +668,7 @@ def build_hay_bale(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
             mat_index=MAT_INDEX_ROPE, bevel_amount=0.004)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
+    return _tag_prop_faces(bm, faces)
 
 
 def build_hay_pile(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
@@ -725,7 +737,7 @@ def build_hay_pile(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
                                                   loop.vert.co.y / (radius * 2.0) + 0.5))
 
     transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
+    return _tag_prop_faces(bm, faces)
 
 
 def build_feed_trough(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
@@ -802,6 +814,6 @@ def build_feed_trough(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
         mat_index=MAT_INDEX_HAY, bevel_amount=0.025, bevel_segments=2)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
-    return faces
+    return _tag_prop_faces(bm, faces)
 
 

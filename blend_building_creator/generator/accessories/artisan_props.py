@@ -1372,6 +1372,9 @@ def _stamp_baked_tool(bm, _faces, key, x, y, z_ground=0.0, ang=0.0,
     imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
     if imported_layer is None:
         imported_layer = bm.faces.layers.int.new('bbc_imported_asset')
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    if prop_layer is None:
+        prop_layer = bm.faces.layers.int.new('bbc_is_prop')
     seen = set()
     for pi, poly in enumerate(it['polys']):
         idx = [vi for vi, _ in poly]
@@ -1383,6 +1386,7 @@ def _stamp_baked_tool(bm, _faces, key, x, y, z_ground=0.0, ang=0.0,
         seen.add(kf)
         f = bm.faces.new([remap[i] for i in idx])
         f[imported_layer] = 1
+        f[prop_layer] = 1
         f.material_index = (_pm[pi] if (_pm is not None and pi < len(_pm)
                                         and _pm[pi] >= 0) else MAT_INDEX_IRON)
         f.smooth = True

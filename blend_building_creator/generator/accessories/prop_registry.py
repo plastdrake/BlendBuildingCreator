@@ -354,6 +354,14 @@ def build_prop(bm, key: str, x: float = 0.0, y: float = 0.0,
     keys. ``ang`` is the yaw in every case: it is translated to each
     builder's own angle parameter name. Caller params override spec defaults.
     """
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    if prop_layer is None:
+        prop_layer = bm.faces.layers.int.new('bbc_is_prop')
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
+    if imported_layer is None:
+        imported_layer = bm.faces.layers.int.new('bbc_imported_asset')
+
+    n0 = len(bm.faces)
     spec = get_spec(key)
     fn = _resolve(spec)
     kwargs = dict(spec.defaults)
@@ -364,23 +372,33 @@ def build_prop(bm, key: str, x: float = 0.0, y: float = 0.0,
             return []
     if key == 'CHAIN_LANTERN':
         kwargs.pop('ang', None)
-        return fn(bm, x, y, z_ceiling=z, **kwargs)
-    if key == 'FISH_STRINGER':
+        res = fn(bm, x, y, z_ceiling=z, **kwargs)
+    elif key == 'FISH_STRINGER':
         kwargs.pop('ang', None)
-        return fn(bm, x, y, z_ceiling=z, **kwargs)
-    if key == 'CHANDELIER':
+        res = fn(bm, x, y, z_ceiling=z, **kwargs)
+    elif key == 'CHANDELIER':
         kwargs.pop('z_top', None)
-        return fn(bm, x, y, z_top=z, ang=ang, **kwargs)
-    if key == 'HANGING_LANTERN':
+        res = fn(bm, x, y, z_top=z, ang=ang, **kwargs)
+    elif key == 'HANGING_LANTERN':
         kwargs.pop('z_top', None)
-        return fn(bm, x, y, z_top=z + 2.1, arm_ang=ang, **kwargs)
-    if key == 'HANGING_SIGN':
+        res = fn(bm, x, y, z_top=z + 2.1, arm_ang=ang, **kwargs)
+    elif key == 'HANGING_SIGN':
         kwargs.pop('z_top', None)
-        return fn(bm, x, y, z_top=z + 2.6, run_ang=ang, **kwargs)
-    if key == 'AWNING':
+        res = fn(bm, x, y, z_top=z + 2.6, run_ang=ang, **kwargs)
+    elif key == 'AWNING':
         kwargs.pop('z_top', None)
-        return fn(bm, x, y, z_top=z + 2.4, ang=ang, **kwargs)
-    if key == 'FLOWER_BOX':
+        res = fn(bm, x, y, z_top=z + 2.4, ang=ang, **kwargs)
+    elif key == 'FLOWER_BOX':
         kwargs.pop('z_base', None)
-        return fn(bm, x, y, z_base=z + 0.8, ang=ang, **kwargs)
-    return fn(bm, x, y, z_ground=z, ang=ang, **kwargs)
+        res = fn(bm, x, y, z_base=z + 0.8, ang=ang, **kwargs)
+    else:
+        res = fn(bm, x, y, z_ground=z, ang=ang, **kwargs)
+
+    # Protect all newly built prop faces from downstream re-unwrapping passes
+    for f in list(bm.faces)[n0:]:
+        if f.is_valid:
+            f.tag = True
+            f[prop_layer] = 1
+            f[imported_layer] = 1
+
+    return res
