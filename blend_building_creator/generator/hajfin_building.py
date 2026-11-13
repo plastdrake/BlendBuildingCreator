@@ -3523,24 +3523,22 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
         # Outer fascia beam enclosing outer edge
         create_box(bm, (fend_th, plat_d, fend_h),
                    (px + sgn_x * (plat_w * 0.5 - fend_th * 0.5), 0.0, fend_cz), mat_index=MAT_INDEX_TIMBER)
-        # End header beams capping front and rear ends
-        create_box(bm, (plat_w, fend_th, fend_h),
-                   (px, -plat_d * 0.5 + fend_th * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (plat_w, fend_th, fend_h),
-                   (px, plat_d * 0.5 - fend_th * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
-        # Substructure bearers underneath
-        create_box(bm, (plat_w - 0.10, 0.20, 0.24), (px, -plat_d * 0.5 + 0.10, z0 + 0.98), mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (plat_w - 0.10, 0.20, 0.24), (px, plat_d * 0.5 - 0.10, z0 + 0.98), mat_index=MAT_INDEX_TIMBER)
-        # 6 deep stilt pilings (outer and inner edge, plunging 10m deep)
-        tot_h = (z0 + 1.2) + 10.0
-        post_z = (z0 + 1.2 - 10.0) * 0.5
+        # End header beams capping front and rear ends (fitted flush between wall and outer fascia beam)
+        create_box(bm, (plat_w - fend_th, fend_th, fend_h),
+                   (px - sgn_x * (fend_th * 0.5), -plat_d * 0.5 + fend_th * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (plat_w - fend_th, fend_th, fend_h),
+                   (px - sgn_x * (fend_th * 0.5), plat_d * 0.5 - fend_th * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
+        # 6 deep stilt pilings (outer and inner edge, plunging 10m deep, supporting platform from underside of floor)
+        post_top_z = z0 + 1.04  # Stops at underside of 0.16m floor slab (no floor clipping)
+        tot_h = post_top_z + 10.0
+        post_z = (post_top_z - 10.0) * 0.5
         for py in (-plat_d * 0.42, 0.0, plat_d * 0.42):
             create_cylinder(bm, radius=0.16, height=tot_h, segments=7,
                             location=(px + sgn_x * (plat_w * 0.5 - 0.18), py, post_z), mat_index=MAT_INDEX_TIMBER)
             create_cylinder(bm, radius=0.16, height=tot_h, segments=7,
                             location=(px - sgn_x * (plat_w * 0.5 - 0.35), py, post_z), mat_index=MAT_INDEX_TIMBER)
-        # Cargo stacks placed toward rear of pier (clear of side window, top of pier floor is z0 + 1.28)
-        _build_hajfin_cargo_stack(bm, px, plat_d * 0.28, z0 + 1.28)
+        # Cargo stacks placed toward rear of pier (clear of side window, top of pier floor is z0 + 1.20)
+        _build_hajfin_cargo_stack(bm, px, plat_d * 0.28, z0 + 1.20)
 
     # 6. Accessible Internal Timber Staircase & Upper Floor Deck
     u_w = width * 0.60
