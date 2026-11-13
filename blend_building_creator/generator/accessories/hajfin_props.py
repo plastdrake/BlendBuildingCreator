@@ -51,9 +51,15 @@ def _stamp_meshdata(bm, key, x=0.0, y=0.0, z=0.0, scale=1.0, yaw=0.0, pitch=0.0,
 
     rot = Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Rotation(pitch, 4, 'Y') @ Matrix.Rotation(roll, 4, 'X')
     s_mat = Matrix.Diagonal((scale, scale, scale, 1.0))
-    trans = Matrix.Translation((x, y, z))
     base = Matrix.Translation((-cx, -cy, -cz))
-    M = trans @ rot @ s_mat @ base
+    M_rot = rot @ s_mat @ base
+
+    if anchor == 'BASE':
+        min_post_z = min((M_rot @ Vector(v))[2] for v in verts)
+        trans = Matrix.Translation((x, y, z - min_post_z + 0.005))
+    else:
+        trans = Matrix.Translation((x, y, z))
+    M = trans @ M_rot
 
     uv_layer = bm.loops.layers.uv.verify()
     used = set(vi for poly in polys for vi, _ in poly)

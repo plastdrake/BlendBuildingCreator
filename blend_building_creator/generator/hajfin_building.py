@@ -1199,7 +1199,7 @@ def _build_hajfin_barrel(bm, x, y, z_ground, ang=0.0, radius=0.32, height=0.72, 
     it = PROP_MESHES.get('hajfin_barrel')
     if not it:
         from .accessories.furniture import build_barrel
-        return build_barrel(bm, x, y, z_ground, ang=ang, radius=radius, height=height, lying=lying)
+        return build_barrel(bm, x, y, z_ground + 0.005, ang=ang, radius=radius, height=height, lying=lying)
 
     verts = it['verts']
     polys = it['polys']
@@ -1217,11 +1217,11 @@ def _build_hajfin_barrel(bm, x, y, z_ground, ang=0.0, radius=0.32, height=0.72, 
     if lying:
         rot = Matrix.Rotation(ang, 4, 'Z') @ Matrix.Rotation(math.pi * 0.5, 4, 'Y')
         min_lying_z = min((rot @ (Matrix.Diagonal((s, s, s, 1.0)) @ Vector((v[0] - cx, v[1] - cy, v[2] - cz))))[2] for v in verts)
-        trans = Matrix.Translation((x, y, z_ground - min_lying_z))
+        trans = Matrix.Translation((x, y, z_ground - min_lying_z + 0.005))
         M = trans @ rot @ Matrix.Diagonal((s, s, s, 1.0)) @ Matrix.Translation((-cx, -cy, -cz))
     else:
         rot = Matrix.Rotation(ang, 4, 'Z')
-        trans = Matrix.Translation((x, y, z_ground))
+        trans = Matrix.Translation((x, y, z_ground + 0.005))
         M = trans @ rot @ Matrix.Diagonal((s, s, s, 1.0)) @ Matrix.Translation((-cx, -cy, -cz))
 
     uv_layer = bm.loops.layers.uv.verify()
@@ -1924,8 +1924,8 @@ def _build_hajfin_cargo_stack(bm, x, y, z):
     # Standing authentic handcrafted Hajfin barrel placed clear behind medium crate
     _build_hajfin_barrel(bm, x + 0.46, y + 0.58, z_ground=z, ang=0.4, scale=0.52)
 
-    # Barrel on side on top of large crate (nestled slightly into crate rim)
-    _build_hajfin_barrel(bm, x - 0.46, y, z_ground=z + 0.835, ang=0.3, scale=0.50, lying=True)
+    # Barrel on side on top of large crate (crate height is 1.20 * 0.72 = 0.864)
+    _build_hajfin_barrel(bm, x - 0.46, y, z_ground=z + 0.864, ang=0.3, scale=0.50, lying=True)
 
     # Authentic coiled hemp rope on top of medium crate (top is z + 1.20 * 0.60 = z + 0.72)
     create_spiral_rope_coil(
@@ -3422,8 +3422,8 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
                             location=(px + sgn_x * (plat_w * 0.5 - 0.18), py, post_z), mat_index=MAT_INDEX_TIMBER)
             create_cylinder(bm, radius=0.16, height=tot_h, segments=7,
                             location=(px - sgn_x * (plat_w * 0.5 - 0.35), py, post_z), mat_index=MAT_INDEX_TIMBER)
-        # Cargo stacks placed toward rear of pier (clear of side window)
-        _build_hajfin_cargo_stack(bm, px, plat_d * 0.28, z0 + 1.2)
+        # Cargo stacks placed toward rear of pier (clear of side window, top of pier floor is z0 + 1.28)
+        _build_hajfin_cargo_stack(bm, px, plat_d * 0.28, z0 + 1.28)
 
     # 6. Accessible Internal Timber Staircase & Upper Floor Deck
     u_w = width * 0.60
@@ -3475,9 +3475,9 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
         create_box(bm, (skirt_w, 0.10, 0.18),
                    (0.0, skirt_my + sgn_sk * (skirt_d * 0.5 - 0.05), z_mid + 0.09), mat_index=MAT_INDEX_TIMBER)
 
-    # 10. Interior Trade Room Furniture & Props (Safely cleared from stairwell path)
-    _build_hajfin_bone_shop_table(bm, -0.60, -hd + 3.2, z0, width=2.8)
-    _build_hajfin_weapon_rack(bm, -hw + 1.2, 0.0, z0, rot_z=-math.pi * 0.5)
+    # 10. Interior Trade Room Furniture & Props (Safely cleared from stairwell path, floor top is z0 + 0.14)
+    _build_hajfin_bone_shop_table(bm, -0.60, -hd + 3.2, z0 + 0.14, width=2.8)
+    _build_hajfin_weapon_rack(bm, -hw + 1.2, 0.0, z0 + 0.14, rot_z=-math.pi * 0.5)
 
     # 11. Multi-Tier Bone Scale Roofs with Full Solid Gable Triangles
     # Lower flanking roofs (Eave sits 25cm below second floor level, sealed by exterior timber flashing ledgers)
@@ -4141,29 +4141,30 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     _create_oriented_beam(bm, ham_head, ham_top, width=0.08, depth=0.08, mat_index=MAT_INDEX_BONE)
     create_box(bm, (0.32, 0.18, 0.18), (ham_head.x, ham_head.y, ham_head.z), mat_index=MAT_INDEX_IRON)
 
-    # 7. Quenching Vat (Authentic wooden barrel with water and iron hoops from blacksmith generator)
+    # 7. Quenching Vat (Authentic wooden barrel with water and iron hoops, floor top is z0 + 0.12)
     quench_x = -hw + 1.25
     quench_y = 0.60
     q_r, q_h = 0.40, 0.74
+    floor_z = z0 + 0.12
     create_hollow_cylinder(
         bm, radius=q_r, inner_radius=q_r - 0.04, height=q_h,
         inner_depth=q_h - 0.08, segments=16,
-        location=(quench_x, quench_y, z0 + q_h * 0.5),
+        location=(quench_x, quench_y, floor_z + q_h * 0.5),
         mat_index=MAT_INDEX_TIMBER,
         liquid_height=q_h - 0.16, liquid_mat_index=MAT_INDEX_WATER,
         smooth=True)
     for hz in (0.18, 0.54):
         create_torus_ring(
-            bm, location=(quench_x, quench_y, z0 + hz),
+            bm, location=(quench_x, quench_y, floor_z + hz),
             major_radius=q_r + 0.008, minor_radius=0.016,
             major_segments=16, minor_segments=6,
             mat_index=MAT_INDEX_IRON)
 
     # 8. Tribal Monster Harpoon & Spear Weapon Rack
-    _build_hajfin_weapon_rack(bm, hw - 1.1, -0.2, z0 + 0.08, rot_z=-math.pi * 0.5)
+    _build_hajfin_weapon_rack(bm, hw - 1.1, -0.2, floor_z, rot_z=-math.pi * 0.5)
 
     # Firewood log pile near furnace (authentic stacked timber logs from human generator)
-    build_log_pile(bm, hearth_x + 1.9, hearth_y - 0.5, z0, ang=0.15, length=1.5, radius=0.13, rows=3)
+    build_log_pile(bm, hearth_x + 1.9, hearth_y - 0.5, floor_z, ang=0.15, length=1.5, radius=0.13, rows=3)
 
     # 9. Big Bone Scale Vaulted Roof with Shark Dorsal Fin Crest
     _build_gable_triangle_wall(bm, -hw, hw, -hd + 0.5, z0 + height, peak_z, wall_th=0.28)
@@ -4312,17 +4313,18 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
                     rotation=(0, math.pi * 0.5, 0), mat_index=MAT_INDEX_ROPE,
                     u_repeats=3.0, v_scale=8.0)
 
-    # 6. Fish Drying Racks & Barrels on Pier (authentic handcrafted pirate barrels)
-    _build_hajfin_barrel(bm, c_hw + 1.55, c_y - 0.6, z_ground=z0 + 0.08, ang=0.4, scale=0.55)
-    _build_hajfin_barrel(bm, c_hw + 1.15, c_y + 0.7, z_ground=z0 + 0.08, ang=1.2, scale=0.52)
-    _build_hajfin_barrel(bm, -hw + 1.5, hd - 1.8, z_ground=z0 + 0.08, ang=2.1, scale=0.58)
+    # 6. Fish Drying Racks & Barrels on Pier (pier deck top is z0 + 0.16)
+    deck_top_z = z0 + 0.16
+    _build_hajfin_barrel(bm, c_hw + 1.55, c_y - 0.6, z_ground=deck_top_z, ang=0.4, scale=0.55)
+    _build_hajfin_barrel(bm, c_hw + 1.15, c_y + 0.7, z_ground=deck_top_z, ang=1.2, scale=0.52)
+    _build_hajfin_barrel(bm, -hw + 1.5, hd - 1.8, z_ground=deck_top_z, ang=2.1, scale=0.58)
 
     fr_x = -hw + 2.5
     fr_y = hd - 1.2
-    create_box(bm, (2.4, 0.12, 1.8), (fr_x, fr_y, z0 + 1.0), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (2.4, 0.12, 1.8), (fr_x, fr_y, deck_top_z + 0.90), mat_index=MAT_INDEX_DRIFTWOOD)
     for fi in range(4):
         create_cone(bm, radius1=0.12, radius2=0.02, height=0.55, segments=5,
-                    location=(fr_x - 0.75 + fi * 0.5, fr_y + 0.1, z0 + 0.85),
+                    location=(fr_x - 0.75 + fi * 0.5, fr_y + 0.1, deck_top_z + 0.75),
                     rotation=(math.pi, 0, 0), mat_index=MAT_INDEX_BONE)
 
     # 7. Bone Scale / Plank Gable Roof on Cabin with Solid Gables
