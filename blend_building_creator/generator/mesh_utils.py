@@ -1300,6 +1300,135 @@ def create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055
             f.loops[3][uv_layer].uv = Vector((u1, v0))
     return faces
 
+
+def create_spiral_rope_coil(bm, location=(0.0, 0.0, 0.0), inner_radius=0.07, outer_radius=0.20,
+                            rope_radius=0.024, turns=2.6, num_steps=64, tube_segments=10,
+                            rotation=(0.0, 0.0, 0.0), mat_index=18):
+    """
+    Creates a realistic coiled dock/ship rope lying flat with overlapping spiral winds
+    and an organic loose tail flick.
+    Generates proper longitudinal UVs (V flows along the rope tube matching twisted hemp fibers,
+    U wraps around the tube cross-section) and tags faces to preserve specialized UVs.
+    """
+    uv_layer = bm.loops.layers.uv.verify()
+    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
+    tr_mat = Matrix.Translation(Vector(location)) @ rot_mat
+
+    # Generate 3D spine points for the spiral coil
+    # Phase 1: Flat spiral winding outward on the ground/surface
+    path_pts = []
+    total_angle = turns * 2.0 * math.pi
+    for i in range(num_steps):
+        t = i / float(num_steps - 1)
+        ang = t * total_angle
+        r = inner_radius + t * (outer_radius - inner_radius)
+        # Slight organic height variation so inner coils sit snugly
+        z_offset = rope_radius + math.sin(t * math.pi * 3.0) * (rope_radius * 0.12)
+        px = r * math.cos(ang)
+        py = r * math.sin(ang)
+        path_pts.append(Vector((px, py, z_offset)))
+
+    # Phase 2: Overlapping coil winding back on top of inner turns
+    overlap_steps = 28
+    overlap_turns = 1.15
+    for i in range(overlap_steps):
+        t = (i + 1) / float(overlap_steps)
+        ang = total_angle + t * (overlap_turns * 2.0 * math.pi)
+        r = outer_radius * 0.88 - t * 0.05
+        # Lift up over bottom coil
+        z_lift = rope_radius * 1.85 + math.sin(t * math.pi) * (rope_radius * 0.35)
+        px = r * math.cos(ang)
+        py = r * math.sin(ang)
+        path_pts.append(Vector((px, py, z_lift)))
+
+    # Phase 3: Loose tail curl flicking outward and resting back onto surface
+    tail_steps = 14
+    last_pt = path_pts[-1]
+    tail_ang = math.atan2(last_pt.y, last_pt.x)
+    for i in range(tail_steps):
+        t = (i + 1) / float(tail_steps)
+        r_tail = (last_pt.length) + t * 0.10
+        cur_ang = tail_ang + t * 0.65
+        z_tail = (rope_radius * 1.85) * (1.0 - t) + rope_radius * t
+        px = r_tail * math.cos(cur_ang)
+        py = r_tail * math.sin(cur_ang)
+        path_pts.append(Vector((px, py, z_tail)))
+
+    # Build tube cross-sections along path_pts with parallel transport frame
+    rings = []
+    normal = Vector((0.0, 0.0, 1.0))
+
+    # Calculate arc length along the spine for texture tiling
+    arc_lengths = [0.0]
+    for i in range(1, len(path_pts)):
+        arc_lengths.append(arc_lengths[-1] + (path_pts[i] - path_pts[i-1]).length)
+
+    for i, pt in enumerate(path_pts):
+        if i == 0:
+            tangent = (path_pts[1] - path_pts[0]).normalized()
+        elif i == len(path_pts) - 1:
+            tangent = (path_pts[-1] - path_pts[-2]).normalized()
+        else:
+            tangent = (path_pts[i+1] - path_pts[i-1]).normalized()
+
+        binormal = tangent.cross(normal).normalized()
+        if binormal.length < 1e-4:
+            binormal = tangent.cross(Vector((1.0, 0.0, 0.0))).normalized()
+        cur_norm = binormal.cross(tangent).normalized()
+
+        ring_verts = []
+        for j in range(tube_segments):
+            theta = 2.0 * math.pi * (j / float(tube_segments))
+            offset = (binormal * math.cos(theta) + cur_norm * math.sin(theta)) * rope_radius
+            world_pos = tr_mat @ (pt + offset)
+            ring_verts.append(bm.verts.new(world_pos))
+        rings.append(ring_verts)
+
+    # End caps
+    # Start cap
+    start_center = bm.verts.new(tr_mat @ (path_pts[0] - (path_pts[1] - path_pts[0]).normalized() * (rope_radius * 0.4)))
+    for j in range(tube_segments):
+        nj = (j + 1) % tube_segments
+        f = bm.faces.new([start_center, rings[0][nj], rings[0][j]])
+        f.material_index = mat_index
+        f.smooth = True
+        f.tag = True
+
+    # End cap
+    end_center = bm.verts.new(tr_mat @ (path_pts[-1] + (path_pts[-1] - path_pts[-2]).normalized() * (rope_radius * 0.4)))
+    for j in range(tube_segments):
+        nj = (j + 1) % tube_segments
+        f = bm.faces.new([end_center, rings[-1][j], rings[-1][nj]])
+        f.material_index = mat_index
+        f.smooth = True
+        f.tag = True
+
+    # Generate quad faces along the tube with UVs
+    # In rope_diffuse.png, strands are laid diagonally across UV space (~45 deg).
+    # Setting v_scale ~ 14.0 gives ~14 helical rope fiber twists per meter of rope length.
+    v_scale = 14.0
+    u_scale = 1.0
+    faces = []
+
+    for i in range(len(rings) - 1):
+        v0 = arc_lengths[i] * v_scale
+        v1 = arc_lengths[i+1] * v_scale
+        for j in range(tube_segments):
+            nj = (j + 1) % tube_segments
+            u0 = (j / float(tube_segments)) * u_scale
+            u1 = ((j + 1) / float(tube_segments)) * u_scale
+            f = bm.faces.new([rings[i][j], rings[i+1][j], rings[i+1][nj], rings[i][nj]])
+            f.material_index = mat_index
+            f.smooth = True
+            f.tag = True
+            faces.append(f)
+            f.loops[0][uv_layer].uv = Vector((u0, v0))
+            f.loops[1][uv_layer].uv = Vector((u0, v1))
+            f.loops[2][uv_layer].uv = Vector((u1, v1))
+            f.loops[3][uv_layer].uv = Vector((u1, v0))
+
+    return faces
+
 def create_door_batten(bm, size, location, rotation=(0.0, 0.0, 0.0), mat_index=2, bevel_amount=0.004, bevel_segments=2):
     """
     Creates a horizontal door batten with UVs properly oriented so that wood grain

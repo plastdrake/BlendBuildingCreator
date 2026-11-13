@@ -46,6 +46,7 @@ from .mesh_utils import (
     create_cylinder,
     create_cone,
     create_torus_ring,
+    create_spiral_rope_coil,
     create_hollow_cylinder,
     apply_box_uvs,
     transform_faces,
@@ -1926,8 +1927,16 @@ def _build_hajfin_cargo_stack(bm, x, y, z):
     # Barrel on side on top of large crate (nestled slightly into crate rim)
     _build_hajfin_barrel(bm, x - 0.46, y, z_ground=z + 0.835, ang=0.3, scale=0.50, lying=True)
 
-    # Rope coil on top of medium crate (top is z + 1.20 * 0.60 = z + 0.72)
-    create_torus_ring(bm, (x + 0.46, y - 0.12, z + 0.72 + 0.06), major_radius=0.22, minor_radius=0.05, mat_index=MAT_INDEX_ROPE)
+    # Authentic coiled hemp rope on top of medium crate (top is z + 1.20 * 0.60 = z + 0.72)
+    create_spiral_rope_coil(
+        bm,
+        location=(x + 0.46, y - 0.12, z + 0.72),
+        inner_radius=0.06,
+        outer_radius=0.18,
+        rope_radius=0.022,
+        turns=2.6,
+        mat_index=MAT_INDEX_ROPE,
+    )
 
 
 def _build_hajfin_bone_shop_table(bm, x, y, z, width=3.8):
@@ -2900,8 +2909,8 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
 
     # 10. Ground Perimeter Fortifications & Watchtower Provisions
     # Placed with clean clearance from corner stilt pillars, X-braces, and the central access ladder
-    _build_hajfin_cargo_stack(bm, -h_wb * 0.55, -h_db - 1.25, 0.0)
-    _build_tribal_totem_post(bm, h_wb * 0.55, -h_db - 1.25, 0.0, height=2.8, with_skull=True)
+    _build_hajfin_cargo_stack(bm, -h_bw * 0.55, -h_bd - 1.25, 0.0)
+    _build_tribal_totem_post(bm, h_bw * 0.55, -h_bd - 1.25, 0.0, height=2.8, with_skull=True)
 
 
 def _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_h):
@@ -3384,8 +3393,15 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
 
     # 6. Coiled Hemp Rope
     rope_cx = 1.50
-    create_torus_ring(bm, (rope_cx, prop_y, counter_top_z + 0.04),
-                      major_radius=0.15, minor_radius=0.038, mat_index=MAT_INDEX_ROPE)
+    create_spiral_rope_coil(
+        bm,
+        location=(rope_cx, prop_y, counter_top_z),
+        inner_radius=0.05,
+        outer_radius=0.14,
+        rope_radius=0.018,
+        turns=2.5,
+        mat_index=MAT_INDEX_ROPE,
+    )
 
     # 5. Flanking Wooden Dock / Pier Platforms with Cargo Stacks
     for sgn_x in (-1.0, 1.0):
