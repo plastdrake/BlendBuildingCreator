@@ -13,7 +13,7 @@ Features stylized, fantasy-overexaggerated nautical and tribal pirate props:
 """
 
 import math
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone,
@@ -22,12 +22,64 @@ from ..mesh_utils import (
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON,
     MAT_INDEX_ROPE, MAT_INDEX_FISH,
-    MAT_INDEX_BONE, MAT_INDEX_DRIFTWOOD, MAT_INDEX_ROUGH_STONE
+    MAT_INDEX_BONE, MAT_INDEX_DRIFTWOOD, MAT_INDEX_ROUGH_STONE,
+    MAT_INDEX_SILVER
 )
 
 
 def _place(x, y, z_ground=0.0, ang=0.0):
     return Matrix.Translation((x, y, z_ground)) @ Matrix.Rotation(ang, 4, 'Z')
+
+
+def _stamp_meshdata(bm, key, x=0.0, y=0.0, z=0.0, scale=1.0, yaw=0.0, pitch=0.0, roll=0.0,
+                    anchor='BASE', default_mat=MAT_INDEX_BONE):
+    """Stamps an artist-crafted baked prop mesh into the bmesh preserving all material slots and UVs."""
+    from .artisan_meshdata import PROP_MESHES
+    it = PROP_MESHES.get(key)
+    if not it:
+        return []
+
+    verts = it['verts']
+    polys = it['polys']
+    poly_mats = it.get('poly_mats')
+    xs = [v[0] for v in verts]
+    ys = [v[1] for v in verts]
+    zs = [v[2] for v in verts]
+    cx = (min(xs) + max(xs)) * 0.5
+    cy = (min(ys) + max(ys)) * 0.5
+    cz = min(zs) if anchor == 'BASE' else (min(zs) + max(zs)) * 0.5
+
+    rot = Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Rotation(pitch, 4, 'Y') @ Matrix.Rotation(roll, 4, 'X')
+    s_mat = Matrix.Diagonal((scale, scale, scale, 1.0))
+    trans = Matrix.Translation((x, y, z))
+    base = Matrix.Translation((-cx, -cy, -cz))
+    M = trans @ rot @ s_mat @ base
+
+    uv_layer = bm.loops.layers.uv.verify()
+    used = set(vi for poly in polys for vi, _ in poly)
+    remap = {i: bm.verts.new(M @ Vector(verts[i])) for i in used}
+
+    new_faces = []
+    seen = set()
+    for pi, poly in enumerate(polys):
+        idx = [vi for vi, _ in poly]
+        key_f = tuple(sorted(idx))
+        if key_f in seen:
+            continue
+        seen.add(key_f)
+        f = bm.faces.new([remap[i] for i in idx])
+        _slot = poly_mats[pi] if poly_mats and pi < len(poly_mats) and poly_mats[pi] >= 0 else default_mat
+        f.material_index = _slot
+        f.smooth = True
+        f.tag = True  # Protect atlas UVs
+        uv_map = {vi: uv for vi, uv in poly}
+        for loop in f.loops:
+            for i in idx:
+                if remap[i] == loop.vert:
+                    loop[uv_layer].uv = uv_map[i]
+                    break
+        new_faces.append(f)
+    return new_faces
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +360,8 @@ def build_scrimshaw_bone_counter(bm, x, y, z_ground=0.0, ang=0.0, width=2.2, dep
         rotation=(0.0, 0.15, 0.0),
         mat_index=MAT_INDEX_DRIFTWOOD
     )
+    # D. Prized sea-monster beast skull displayed on the bone counter
+    faces += _stamp_meshdata(bm, 'hajfin_skull', x=-0.12, y=0.04, z=height, scale=0.88, yaw=0.35, anchor='BASE')
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
@@ -479,6 +533,7 @@ def build_pirate_grog_barrels(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
     """
     Cluster of 3 grog casks on a weathered timber pallet:
     Two standing casks with iron hoops and one on its side with a brass spigot tap.
+    Uses the artist's authentic Barrel.fbx mesh.
     """
     faces = []
     
@@ -488,7 +543,42 @@ def build_pirate_grog_barrels(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
         location=(0.0, 0.0, 0.05 * scale),
         mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.015 * scale
     )
-    
+
+    from .artisan_meshdata import PROP_MESHES
+    if 'hajfin_barrel' in PROP_MESHES:
+        faces += _stamp_meshdata(bm, 'hajfin_barrel', -0.25 * scale, -0.15 * scale, 0.10 * scale,
+                                 scale=0.58 * scale, yaw=0.4, default_mat=MAT_INDEX_DRIFTWOOD)
+        faces += _stamp_meshdata(bm, 'hajfin_barrel', 0.32 * scale, -0.18 * scale, 0.10 * scale,
+                                 scale=0.50 * scale, yaw=1.3, default_mat=MAT_INDEX_DRIFTWOOD)
+        faces += _stamp_meshdata(bm, 'hajfin_barrel', 0.02 * scale, 0.24 * scale, 0.10 * scale,
+                                 scale=0.48 * scale, yaw=0.2, pitch=math.pi * 0.5, anchor='BASE', default_mat=MAT_INDEX_DRIFTWOOD)
+        # Wedge chocks underneath
+        for sgn in (-1.0, 1.0):
+            faces += create_beveled_box(
+                bm, size=(0.10 * scale, 0.16 * scale, 0.08 * scale),
+                location=(sgn * 0.18 * scale, 0.24 * scale, 0.14 * scale),
+                mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008 * scale
+            )
+        # Iron tap spigot in barrel face
+        b3_h = 1.28 * 0.48 * scale
+        b3_cz = 0.10 * scale + (1.38 * 0.48 * scale) * 0.5
+        tap_x = 0.02 * scale + math.cos(0.2) * (b3_h * 0.5 + 0.04 * scale)
+        tap_y = 0.24 * scale + math.sin(0.2) * (b3_h * 0.5 + 0.04 * scale)
+        faces += create_cylinder(
+            bm, radius=0.018 * scale, height=0.10 * scale, segments=8,
+            location=(tap_x, tap_y, b3_cz),
+            rotation=(0.0, math.pi * 0.5, 0.2),
+            mat_index=MAT_INDEX_IRON
+        )
+        faces += create_cylinder(
+            bm, radius=0.014 * scale, height=0.08 * scale, segments=8,
+            location=(tap_x + 0.02 * scale, tap_y, b3_cz - 0.04 * scale),
+            mat_index=MAT_INDEX_IRON
+        )
+        transform_faces(faces, _place(x, y, z_ground, ang))
+        return faces
+
+    # Fallback procedural barrels if artist mesh unavailable
     # 2. Barrel 1 (Large upright grog cask)
     b1_r = 0.34 * scale
     b1_h = 0.78 * scale
@@ -678,6 +768,67 @@ def build_dorsal_fin_crest(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
         location=(0.0, 0.0, 0.14 * scale),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.005 * scale
     )
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+# ---------------------------------------------------------------------------
+# 9. Individual Hajfin Cask / Barrel
+# ---------------------------------------------------------------------------
+
+def build_single_hajfin_barrel(bm, x, y, z_ground=0.0, ang=0.0, scale=0.55):
+    """
+    Handcrafted authentic Hajfin timber & iron grog barrel from artist's Barrel.fbx.
+    """
+    faces = _stamp_meshdata(bm, 'hajfin_barrel', 0.0, 0.0, 0.0, scale=scale, default_mat=MAT_INDEX_DRIFTWOOD)
+    if not faces:
+        # Fallback procedural
+        h = 0.72 * (scale / 0.55)
+        r = 0.32 * (scale / 0.55)
+        faces += create_cylinder(bm, radius=r, height=h, segments=12, location=(0.0, 0.0, h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+# ---------------------------------------------------------------------------
+# 10. Sea-Monster Beast Skull Prop
+# ---------------------------------------------------------------------------
+
+def build_hajfin_beast_skull_prop(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
+    """
+    Menacing carved Hajfin shark / sea monster skull with jagged jaws from artist's Skull.fbx.
+    """
+    faces = _stamp_meshdata(bm, 'hajfin_skull', 0.0, 0.0, 0.0, scale=scale, anchor='BASE', default_mat=MAT_INDEX_BONE)
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+# ---------------------------------------------------------------------------
+# 11. Beast Skull Totem Post
+# ---------------------------------------------------------------------------
+
+def build_skull_totem_post(bm, x, y, z_ground=0.0, ang=0.0, height=2.8, scale=1.0):
+    """
+    Tribal carved timber post impaled with a massive sea-monster beast skull.
+    """
+    faces = []
+    post_r = 0.16 * scale
+    faces += create_cylinder(bm, radius=post_r, height=height, segments=8,
+                             location=(0.0, 0.0, height * 0.5), mat_index=MAT_INDEX_TIMBER)
+    # Rope coils
+    for rz in (0.6 * scale, 1.2 * scale, height * 0.65):
+        faces += create_cylinder(bm, radius=post_r + 0.035 * scale, height=0.15 * scale, segments=10,
+                                 location=(0.0, 0.0, rz), mat_index=MAT_INDEX_ROPE)
+    # Cross arms
+    faces += create_box(bm, (0.75 * scale, 0.12 * scale, 0.14 * scale),
+                        (0.0, 0.0, height * 0.65), mat_index=MAT_INDEX_TIMBER)
+    # Skull impaled at top
+    sk_z = height - 0.08 * scale
+    faces += _stamp_meshdata(bm, 'hajfin_skull', 0.0, 0.0, sk_z, scale=1.05 * scale, anchor='CENTER', default_mat=MAT_INDEX_BONE)
+    # Spike tip protruding out top
+    faces += create_cone(bm, radius1=0.08 * scale, radius2=0.02 * scale, height=0.48 * scale, segments=8,
+                         location=(0.0, 0.0, sk_z + 0.32 * scale), mat_index=MAT_INDEX_TIMBER)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces

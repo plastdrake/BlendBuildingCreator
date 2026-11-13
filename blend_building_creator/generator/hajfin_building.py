@@ -37,6 +37,7 @@ from .materials import (
     MAT_INDEX_CUT_STONE,
     MAT_INDEX_WATER,
     MAT_INDEX_STONE,
+    MAT_INDEX_SILVER,
 )
 MAT_INDEX_STONE_BRICK = MAT_INDEX_STONE
 from .mesh_utils import (
@@ -1189,24 +1190,150 @@ def _build_whale_rib_tunnel_entrance(bm, entrance_x, entrance_y, z0, rot_z=0.0,
         p_y = entrance_y + post_y
         _build_tribal_totem_post(bm, p_x, p_y, z0, height=3.4)
 
-def _build_tribal_totem_post(bm, x, y, z0, height=2.4):
-    """Carved timber totem pole with rope coils and cross arms."""
+def _build_hajfin_barrel(bm, x, y, z_ground, ang=0.0, radius=0.32, height=0.72, scale=None, lying=False):
+    """Authentic handcrafted Hajfin barrel with timber staves, forged iron hoops, and silver studs.
+    Uses the artist's baked Barrel.fbx mesh from PROP_MESHES['hajfin_barrel'].
+    Falls back to procedural furniture.build_barrel if the baked mesh is unavailable."""
+    from .accessories.artisan_meshdata import PROP_MESHES
+    it = PROP_MESHES.get('hajfin_barrel')
+    if not it:
+        from .accessories.furniture import build_barrel
+        return build_barrel(bm, x, y, z_ground, ang=ang, radius=radius, height=height, lying=lying)
+
+    verts = it['verts']
+    polys = it['polys']
+    poly_mats = it.get('poly_mats')
+    xs = [v[0] for v in verts]
+    ys = [v[1] for v in verts]
+    zs = [v[2] for v in verts]
+    cx = (min(xs) + max(xs)) * 0.5
+    cy = (min(ys) + max(ys)) * 0.5
+    cz = min(zs)
+    mesh_h = max(zs) - min(zs)
+
+    s = scale if scale is not None else (height / mesh_h if height is not None else 0.55)
+
+    if lying:
+        rot = Matrix.Rotation(ang, 4, 'Z') @ Matrix.Rotation(math.pi * 0.5, 4, 'Y')
+        min_lying_z = min((rot @ (Matrix.Diagonal((s, s, s, 1.0)) @ Vector((v[0] - cx, v[1] - cy, v[2] - cz))))[2] for v in verts)
+        trans = Matrix.Translation((x, y, z_ground - min_lying_z))
+        M = trans @ rot @ Matrix.Diagonal((s, s, s, 1.0)) @ Matrix.Translation((-cx, -cy, -cz))
+    else:
+        rot = Matrix.Rotation(ang, 4, 'Z')
+        trans = Matrix.Translation((x, y, z_ground))
+        M = trans @ rot @ Matrix.Diagonal((s, s, s, 1.0)) @ Matrix.Translation((-cx, -cy, -cz))
+
+    uv_layer = bm.loops.layers.uv.verify()
+    used = set(vi for poly in polys for vi, _ in poly)
+    remap = {i: bm.verts.new(M @ Vector(verts[i])) for i in used}
+
+    seen = set()
+    for pi, poly in enumerate(polys):
+        idx = [vi for vi, _ in poly]
+        key_f = tuple(sorted(idx))
+        if key_f in seen:
+            continue
+        seen.add(key_f)
+        f = bm.faces.new([remap[i] for i in idx])
+        _slot = poly_mats[pi] if poly_mats and pi < len(poly_mats) and poly_mats[pi] >= 0 else MAT_INDEX_DRIFTWOOD
+        f.material_index = _slot
+        f.smooth = True
+        f.tag = True  # Protect atlas UVs
+        uv_map = {vi: uv for vi, uv in poly}
+        for loop in f.loops:
+            for i in idx:
+                if remap[i] == loop.vert:
+                    loop[uv_layer].uv = uv_map[i]
+                    break
+    return True
+
+
+def _build_hajfin_skull(bm, x, y, z, yaw=0.0, pitch=0.0, roll=0.0, scale=1.0, anchor='BASE', facing_dir=None):
+    """Menacing carved Hajfin sea-monster / shark skull with jagged jaws and bone scrimshaw.
+    Uses the artist's baked Skull.fbx mesh from PROP_MESHES['hajfin_skull'].
+    Native length ~0.52m, height ~0.58m, width ~0.41m.
+    Snout/jaw faces +X in source geometry; yaw=0 faces +X.
+    If facing_dir is supplied (Vector or (dx, dy)), yaw is computed automatically."""
+    from .accessories.artisan_meshdata import PROP_MESHES
+    it = PROP_MESHES.get('hajfin_skull')
+    if not it:
+        return False
+
+    verts = it['verts']
+    polys = it['polys']
+    poly_mats = it.get('poly_mats')
+    xs = [v[0] for v in verts]
+    ys = [v[1] for v in verts]
+    zs = [v[2] for v in verts]
+    cx = (min(xs) + max(xs)) * 0.5
+    cy = (min(ys) + max(ys)) * 0.5
+    cz = min(zs) if anchor == 'BASE' else (min(zs) + max(zs)) * 0.5
+
+    if facing_dir is not None:
+        dx, dy = facing_dir[0], facing_dir[1]
+        yaw = math.atan2(dy, dx)
+
+    rot = Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Rotation(pitch, 4, 'Y') @ Matrix.Rotation(roll, 4, 'X')
+    s_mat = Matrix.Diagonal((scale, scale, scale, 1.0))
+    trans = Matrix.Translation((x, y, z))
+    base = Matrix.Translation((-cx, -cy, -cz))
+    M = trans @ rot @ s_mat @ base
+
+    uv_layer = bm.loops.layers.uv.verify()
+    used = set(vi for poly in polys for vi, _ in poly)
+    remap = {i: bm.verts.new(M @ Vector(verts[i])) for i in used}
+
+    seen = set()
+    for pi, poly in enumerate(polys):
+        idx = [vi for vi, _ in poly]
+        key_f = tuple(sorted(idx))
+        if key_f in seen:
+            continue
+        seen.add(key_f)
+        f = bm.faces.new([remap[i] for i in idx])
+        _slot = poly_mats[pi] if poly_mats and pi < len(poly_mats) and poly_mats[pi] >= 0 else MAT_INDEX_BONE
+        f.material_index = _slot
+        f.smooth = True
+        f.tag = True  # Protect atlas UVs
+        uv_map = {vi: uv for vi, uv in poly}
+        for loop in f.loops:
+            for i in idx:
+                if remap[i] == loop.vert:
+                    loop[uv_layer].uv = uv_map[i]
+                    break
+    return True
+
+
+def _build_tribal_totem_post(bm, x, y, z0, height=2.4, with_skull=True, facing_dir=None):
+    """Carved timber totem pole with rope coils, cross arms, and optional impaled monster beast skull."""
     post_r = 0.16
     cz = z0 + height * 0.5
     create_cylinder(bm, radius=post_r, height=height, segments=8,
                     location=(x, y, cz), mat_index=MAT_INDEX_TIMBER)
 
-    # Sharpened tip
-    create_cone(bm, radius1=post_r, radius2=0.02, height=0.45, segments=8,
-                location=(x, y, z0 + height + 0.22), mat_index=MAT_INDEX_TIMBER)
-
     # Rope coils
-    for rz in (z0 + 0.6, z0 + 1.3, z0 + height - 0.2):
+    for rz in (z0 + 0.6, z0 + 1.3, z0 + height * 0.62):
         create_cylinder(bm, radius=post_r + 0.035, height=0.16, segments=10,
                         location=(x, y, rz), mat_index=MAT_INDEX_ROPE)
 
     # Cross arms
     create_box(bm, (0.75, 0.12, 0.14), (x, y, z0 + height * 0.65), mat_index=MAT_INDEX_TIMBER)
+
+    if with_skull:
+        # Menacing sea-monster skull mounted atop the totem pole
+        sk_scale = 1.05 if height >= 3.0 else 0.85
+        sk_z = z0 + height - 0.08
+        if facing_dir is None:
+            # Face outward away from building center or forward (-Y)
+            facing_dir = (x, y) if math.hypot(x, y) > 0.5 else (0.0, -1.0)
+        _build_hajfin_skull(bm, x, y, sk_z, scale=sk_scale, anchor='CENTER', facing_dir=facing_dir)
+        # Sharpened spike tip impaling through and protruding above the skull
+        create_cone(bm, radius1=0.08, radius2=0.02, height=0.48, segments=8,
+                    location=(x, y, sk_z + 0.32), mat_index=MAT_INDEX_TIMBER)
+    else:
+        # Sharpened tip
+        create_cone(bm, radius1=post_r, radius2=0.02, height=0.45, segments=8,
+                    location=(x, y, z0 + height + 0.22), mat_index=MAT_INDEX_TIMBER)
 
 
 # =============================================================================
@@ -1525,6 +1652,12 @@ def _build_hajfin_throne(bm, x, y, z, rot_z=0.0):
         d_cap = rot_mat @ Vector((sgn_dx * 1.35, sgn_dy * 1.15, 0.20)) + Vector((x, y, z))
         create_box(bm, (0.16, 0.16, 0.42), (d_cap.x, d_cap.y, d_cap.z), rotation=(0, 0, rot_z), mat_index=MAT_INDEX_IRON)
 
+    # Flanking sea-monster trophy skulls mounted at front corners of the throne dais
+    for sgn_dx in (-1.0, 1.0):
+        sk_pos = rot_mat @ Vector((sgn_dx * 1.18, -1.02, 0.40)) + Vector((x, y, z))
+        sk_dir = rot_mat @ Vector((sgn_dx * 0.35, -1.0, 0.0))
+        _build_hajfin_skull(bm, sk_pos.x, sk_pos.y, sk_pos.z, scale=0.85, anchor='BASE', facing_dir=(sk_dir.x, sk_dir.y))
+
     # 2. Solid Carved Driftwood Seat Box Base (resting directly on dais from z+0.40 to z+0.95)
     s_base = rot_mat @ Vector((0.0, 0.05, 0.40 + 0.275)) + Vector((x, y, z))
     create_box(bm, (1.60, 1.40, 0.55), (s_base.x, s_base.y, s_base.z), rotation=(0, 0, rot_z), mat_index=MAT_INDEX_TIMBER)
@@ -1734,18 +1867,18 @@ def _build_hajfin_cargo_stack(bm, x, y, z):
     # Iron corner straps on crates
     create_box(bm, (0.97, 0.97, 0.10), (x - 0.45, y, z + 0.38), mat_index=MAT_INDEX_IRON)
 
-    # Standing authentic timber ale barrel
-    build_barrel(bm, x + 0.48, y + 0.45, z_ground=z, ang=0.4, radius=0.32, height=0.74)
+    # Standing authentic handcrafted Hajfin barrel
+    _build_hajfin_barrel(bm, x + 0.48, y + 0.45, z_ground=z, ang=0.4, scale=0.55)
 
     # Barrel on side on top of crate
-    build_barrel(bm, x - 0.40, y, z_ground=z + 0.75, ang=0.3, radius=0.30, height=0.70, lying=True)
+    _build_hajfin_barrel(bm, x - 0.40, y, z_ground=z + 0.75, ang=0.3, scale=0.52, lying=True)
 
     # Rope coil
     create_torus_ring(bm, (x + 0.48, y - 0.20, z + 0.70 + 0.08), major_radius=0.28, minor_radius=0.06, mat_index=MAT_INDEX_ROPE)
 
 
 def _build_hajfin_bone_shop_table(bm, x, y, z, width=3.8):
-    """Simple rough timber display table for heavy scrimshaw and salvaged goods."""
+    """Rough timber display table for heavy scrimshaw, monster beast skulls, and salvaged goods."""
     table_d = 0.78
     table_h = 1.02
     top_th = 0.16
@@ -1765,6 +1898,12 @@ def _build_hajfin_bone_shop_table(bm, x, y, z, width=3.8):
             (lx, y + table_d * 0.28, z + table_h * 0.5),
             mat_index=MAT_INDEX_TIMBER,
         )
+
+    # Prized sea-monster beast skull prominently displayed on the shop table
+    _build_hajfin_skull(bm, x - 0.35, y, z + table_h + top_th * 0.5, yaw=0.45, scale=1.10, anchor='BASE')
+
+    # Handcrafted grog / oil barrel standing beside the trading table
+    _build_hajfin_barrel(bm, x + width * 0.5 + 0.42, y, z_ground=z, ang=0.7, scale=0.55)
 
 
 # =============================================================================
@@ -2704,10 +2843,11 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
                               (cx, cy - sgn_y * 0.85, eave_z - 0.13), width=0.14, depth=0.14, mat_index=MAT_INDEX_TIMBER)
 
     # 9. Grounded Sentry Cabin Roof & Gable Truss
-    # Eliminates floating midair gaps: rafters seat directly on top header beams and posts,
-    # vertical timber king posts frame each gable with iron cuffs, diagonal collar struts,
-    # triangular vertical plank gable siding encloses each gable, and outrigger brackets support eaves.
     _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_z - eave_z)
+
+    # 10. Ground Perimeter Fortifications & Watchtower Provisions
+    _build_hajfin_cargo_stack(bm, -h_wb * 0.9, -h_db - 0.7, 0.0)
+    _build_tribal_totem_post(bm, h_wb * 0.9, -h_db - 0.7, 0.0, height=2.8, with_skull=True)
 
 
 def _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_h):
@@ -3550,13 +3690,12 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     create_box(bm, (deck_w, deck_d, 0.16), (deck_cx, deck_cy, z0 + 0.08), mat_index=MAT_INDEX_FLOOR)
     _build_timber_deck_railing(bm, deck_x0, deck_x1, deck_y0, deck_y1, z0 + 0.08)
 
-    # Clustered grog barrels on drinking deck (reusing authentic timber ale barrels)
-    from .accessories.furniture import build_barrel
+    # Clustered grog barrels on drinking deck (authentic handcrafted pirate barrels)
     deck_x = deck_cx
     deck_y = deck_cy
-    build_barrel(bm, deck_x - 0.7, deck_y - 0.5, z_ground=z0 + 0.16, ang=0.2, radius=0.32, height=0.72)
-    build_barrel(bm, deck_x + 0.6, deck_y - 0.4, z_ground=z0 + 0.16, ang=1.1, radius=0.30, height=0.68)
-    build_barrel(bm, deck_x - 0.1, deck_y + 0.6, z_ground=z0 + 0.16, ang=2.4, radius=0.34, height=0.75)
+    _build_hajfin_barrel(bm, deck_x - 0.7, deck_y - 0.5, z_ground=z0 + 0.16, ang=0.2, scale=0.55)
+    _build_hajfin_barrel(bm, deck_x + 0.6, deck_y - 0.4, z_ground=z0 + 0.16, ang=1.1, scale=0.52)
+    _build_hajfin_barrel(bm, deck_x - 0.1, deck_y + 0.6, z_ground=z0 + 0.16, ang=2.4, scale=0.58)
 
     # 5. Internal Timber Staircase & Upper Floor Deck
     stair_w = 1.60
@@ -4103,10 +4242,10 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
                     rotation=(0, math.pi * 0.5, 0), mat_index=MAT_INDEX_ROPE,
                     u_repeats=3.0, v_scale=8.0)
 
-    # 6. Fish Drying Racks & Barrels on Pier (Reusing authentic timber ale barrels, clear of fences)
-    build_barrel(bm, c_hw + 1.55, c_y - 0.6, z_ground=z0 + 0.08, ang=0.4, radius=0.32, height=0.72)
-    build_barrel(bm, c_hw + 1.15, c_y + 0.7, z_ground=z0 + 0.08, ang=1.2, radius=0.30, height=0.68)
-    build_barrel(bm, -hw + 1.5, hd - 1.8, z_ground=z0 + 0.08, ang=2.1, radius=0.34, height=0.75)
+    # 6. Fish Drying Racks & Barrels on Pier (authentic handcrafted pirate barrels)
+    _build_hajfin_barrel(bm, c_hw + 1.55, c_y - 0.6, z_ground=z0 + 0.08, ang=0.4, scale=0.55)
+    _build_hajfin_barrel(bm, c_hw + 1.15, c_y + 0.7, z_ground=z0 + 0.08, ang=1.2, scale=0.52)
+    _build_hajfin_barrel(bm, -hw + 1.5, hd - 1.8, z_ground=z0 + 0.08, ang=2.1, scale=0.58)
 
     fr_x = -hw + 2.5
     fr_y = hd - 1.2

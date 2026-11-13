@@ -306,6 +306,12 @@ for _s in (
           'hajfin_props', 'build_fish_hanging_rack', 1.10, width=1.8, height=1.65),
     _spec('HAJFIN_DORSAL_FIN_CREST', "Dorsal Fin Crest", 'HAJFIN', "Stylized shark dorsal fin roof ornament with scrimshaw bone trim",
           'hajfin_props', 'build_dorsal_fin_crest', 0.60, scale=1.0),
+    _spec('HAJFIN_BARREL', "Hajfin Grog Barrel", 'HAJFIN', "Artist Barrel.fbx with weathered timber staves, iron hoops, and silver studs",
+          'hajfin_props', 'build_single_hajfin_barrel', 0.65, scale=0.55),
+    _spec('HAJFIN_BEAST_SKULL', "Sea Monster Beast Skull", 'HAJFIN', "Artist Skull.fbx menacing carved shark skull with jagged jaws",
+          'hajfin_props', 'build_hajfin_beast_skull_prop', 0.60, scale=1.0),
+    _spec('HAJFIN_SKULL_TOTEM', "Beast Skull Totem", 'HAJFIN', "Tribal timber totem post impaled with a massive sea-monster skull",
+          'hajfin_props', 'build_skull_totem_post', 0.70, height=2.8),
 ):
     PROP_REGISTRY[_s.key] = _s
 

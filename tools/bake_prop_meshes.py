@@ -28,6 +28,8 @@ FBX_PROPS = {
     'pickaxe_tool': 'Pickaxe_Tool.fbx',
     'royal_throne': 'Throne.fbx',
     'cleaver': 'Cleaver.fbx',
+    'hajfin_barrel': os.path.join('hajfin', 'Barrel.fbx'),
+    'hajfin_skull': os.path.join('hajfin', 'Skull.fbx'),
 }
 
 # Canonical material slot indices (mirrors generator/materials.py). The artist
@@ -55,6 +57,9 @@ MAT_BY_NAME = {
     'M_Building_Fish': 47, 'M_Building_Meat': 48, 'M_Building_Bread_FBX': 49,
     'M_Building_Gold': 50, 'M_Building_Silver': 51,
     'M_Building_Terracotta_Brick': 52,
+    'M_Building_Driftwood': 53,
+    'M_Building_Rough_Stone': 54,
+    'M_Building_Bone': 55,
 }
 
 
@@ -161,6 +166,17 @@ lines.append('    PROP_MESHES["throne"] = PROP_MESHES["royal_throne"]')
 lines.append('if "cleaver" in PROP_MESHES:')
 lines.append('    PROP_MESHES["Cleaver"] = PROP_MESHES["cleaver"]')
 lines.append('    PROP_MESHES["cleaver.fbx"] = PROP_MESHES["cleaver"]')
+lines.append('if "hajfin_barrel" in PROP_MESHES:')
+lines.append('    PROP_MESHES["Barrel.fbx"] = PROP_MESHES["hajfin_barrel"]')
+lines.append('    PROP_MESHES["barrel.fbx"] = PROP_MESHES["hajfin_barrel"]')
+lines.append('    PROP_MESHES["Barrel"] = PROP_MESHES["hajfin_barrel"]')
+lines.append('    PROP_MESHES["hajfin_barrel.fbx"] = PROP_MESHES["hajfin_barrel"]')
+lines.append('if "hajfin_skull" in PROP_MESHES:')
+lines.append('    PROP_MESHES["Skull.fbx"] = PROP_MESHES["hajfin_skull"]')
+lines.append('    PROP_MESHES["skull.fbx"] = PROP_MESHES["hajfin_skull"]')
+lines.append('    PROP_MESHES["Skull"] = PROP_MESHES["hajfin_skull"]')
+lines.append('    PROP_MESHES["skull"] = PROP_MESHES["hajfin_skull"]')
+lines.append('    PROP_MESHES["hajfin_skull.fbx"] = PROP_MESHES["hajfin_skull"]')
 lines.append('')
 
 os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
