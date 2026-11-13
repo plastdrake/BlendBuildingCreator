@@ -4385,6 +4385,14 @@ def _build_hajfin_pier_straight(bm, props, width=4.0, depth=12.0, found_h=1.6):
     deck_w = w - 0.24
     create_box(bm, (deck_w, d, deck_th), (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
 
+    # 5. Continuous Outer Fascia & Fender Timbers enclosing the deck slab
+    fend_th = 0.18
+    fend_h = 0.32
+    for sgn_x in (-1.0, 1.0):
+        fx = sgn_x * (hw - fend_th * 0.5)
+        create_box(bm, (fend_th, d, fend_h), (fx, 0.0, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+
+    # 6. Raised Coaming / Top Curb Timbers along outer edges
     rim_w = 0.16
     rim_h = 0.22
     for sgn_x in (-1.0, 1.0):
@@ -4437,8 +4445,16 @@ def _build_hajfin_pier_ramp(bm, props, width=4.0, depth=14.0, found_h=1.6):
         bat_center = pt + up_norm * (deck_th * 0.5 + bat_h * 0.5)
         create_box(bm, (bat_w, bat_th, bat_h), bat_center, rotation=(ramp_pitch, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
 
+    fend_th = 0.18
+    fend_h = 0.32
     for sgn_x in (-1.0, 1.0):
-        kx = sgn_x * (hw - 0.08)
+        kx = sgn_x * (hw - fend_th * 0.5)
+        # Heavy outer stringers & fascia timbers enclosing the deck slab
+        create_box(bm, (fend_th, trans_len, fend_h), (kx, (y_high + y_break) * 0.5, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+        k_side = Vector((kx, mid_ramp.y, mid_ramp.z - fend_h * 0.5 + 0.04))
+        create_box(bm, (fend_th, ramp_len, fend_h), k_side, rotation=(ramp_pitch, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
+
+        # Raised coaming timbers along outer sides
         create_box(bm, (0.16, trans_len, 0.22), (kx, (y_high + y_break) * 0.5, deck_z + 0.07), mat_index=MAT_INDEX_TIMBER)
         k_mid = Vector((kx, mid_ramp.y, mid_ramp.z + 0.07))
         create_box(bm, (0.16, ramp_len, 0.22), k_mid, rotation=(ramp_pitch, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
@@ -4521,6 +4537,15 @@ def _build_hajfin_pier_bend(bm, props, width=10.0, depth=10.0, found_h=1.6):
                     location=(ox + walk_w, oy + walk_w, (deck_z + 0.55) - (deck_z + water_depth + 0.55) * 0.5), mat_index=MAT_INDEX_TIMBER)
     create_torus_ring(bm, (ox + walk_w, oy + walk_w, deck_z + 0.38), major_radius=post_r + 0.02, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
 
+    # Continuous Outer and Inner Fascia Bumper Timbers enclosing the deck slab
+    fend_th = 0.18
+    fend_h = 0.32
+    create_box(bm, (fend_th, size, fend_h), (ox + fend_th * 0.5, oy + size * 0.5, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (size, fend_th, fend_h), (ox + size * 0.5, oy + fend_th * 0.5, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (fend_th, arm1_len, fend_h), (ox + walk_w - fend_th * 0.5, arm1_cy, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (arm2_len, fend_th, fend_h), (arm2_cx, oy + walk_w - fend_th * 0.5, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+
+    # Raised coaming timbers along outer and inner corners
     rim_w = 0.16
     rim_h = 0.22
     create_box(bm, (rim_w, size, rim_h), (ox + rim_w * 0.5, oy + size * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
@@ -4583,14 +4608,35 @@ def _build_hajfin_pier_tee(bm, props, width=10.0, depth=14.0, found_h=1.6):
                             location=(bx - 0.20, sgn_y * (walk_w * 0.5 - 0.28), cz_p), mat_index=MAT_INDEX_TIMBER)
             create_torus_ring(bm, (bx - 0.20, sgn_y * (walk_w * 0.5 - 0.28), deck_z + 0.38), major_radius=post_r + 0.02, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
 
+    # Continuous Outer Fascia Bumper Timbers enclosing the deck slab
+    fend_th = 0.18
+    fend_h = 0.32
+    flank_w = hw - walk_w * 0.5
+    branch_cx = walk_w * 0.5 + flank_w * 0.5
+    flank_y_len = hd - walk_w * 0.5
+    flank_s_cy = (-hd - walk_w * 0.5) * 0.5
+    flank_n_cy = (walk_w * 0.5 + hd) * 0.5
+
+    # 1. West outer edge
+    create_box(bm, (fend_th, d, fend_h), (-walk_w * 0.5 + fend_th * 0.5, 0.0, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+    # 2. East flanks of main through-walkway
+    create_box(bm, (fend_th, flank_y_len, fend_h), (walk_w * 0.5 - fend_th * 0.5, flank_s_cy, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (fend_th, flank_y_len, fend_h), (walk_w * 0.5 - fend_th * 0.5, flank_n_cy, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+    # 3. Branch north and south edges
+    create_box(bm, (flank_w, fend_th, fend_h), (branch_cx, -walk_w * 0.5 + fend_th * 0.5, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (flank_w, fend_th, fend_h), (branch_cx, walk_w * 0.5 - fend_th * 0.5, deck_z - fend_h * 0.5 + 0.04), mat_index=MAT_INDEX_TIMBER)
+
+    # Raised coaming timbers along outer edges (keeping walkway passages completely clear)
     rim_w = 0.16
     rim_h = 0.22
+    # West continuous curb
     create_box(bm, (rim_w, d, rim_h), (-walk_w * 0.5 + rim_w * 0.5, 0.0, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (walk_w, rim_w, rim_h), (0.0, -hd + rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (walk_w, rim_w, rim_h), (0.0, hd - rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
-    flank_w = hw - walk_w * 0.5
-    create_box(bm, (flank_w, rim_w, rim_h), (walk_w * 0.5 + flank_w * 0.5, -walk_w * 0.5 + rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (flank_w, rim_w, rim_h), (walk_w * 0.5 + flank_w * 0.5, walk_w * 0.5 - rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    # East flanks curbs
+    create_box(bm, (rim_w, flank_y_len, rim_h), (walk_w * 0.5 - rim_w * 0.5, flank_s_cy, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (rim_w, flank_y_len, rim_h), (walk_w * 0.5 - rim_w * 0.5, flank_n_cy, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    # Branch north and south curbs
+    create_box(bm, (flank_w, rim_w, rim_h), (branch_cx, -walk_w * 0.5 + rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (flank_w, rim_w, rim_h), (branch_cx, walk_w * 0.5 - rim_w * 0.5, deck_z + rim_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
 
     create_spiral_rope_coil(bm, location=(0.0, walk_w * 0.5 + 0.8, deck_z), inner_radius=0.06, outer_radius=0.18, rope_radius=0.022, turns=2.6, mat_index=MAT_INDEX_ROPE)
     _build_hajfin_barrel(bm, -0.6, -walk_w * 0.5 - 0.8, z_ground=deck_z, ang=0.3, scale=0.48)
@@ -4624,17 +4670,33 @@ def _build_hajfin_pier_landing(bm, props, width=7.0, depth=10.0, found_h=1.6):
                             location=(px, y, cz_p), mat_index=MAT_INDEX_TIMBER)
             create_torus_ring(bm, (px, y, deck_z + 0.45), major_radius=post_r + 0.02, minor_radius=0.028, mat_index=MAT_INDEX_IRON)
 
+    # Continuous Outer Fascia & Fender Timbers enclosing the deck slab
     fend_th = 0.18
     fend_h = 0.32
+    # Left and right outer fenders
     for sgn_x in (-1.0, 1.0):
         create_box(bm, (fend_th, d + 0.2, fend_h), (sgn_x * (hw - fend_th * 0.5), 0.0, deck_z - fend_h * 0.5 + 0.05), mat_index=MAT_INDEX_TIMBER)
-    for sgn_y in (-1.0, 1.0):
-        create_box(bm, (w + 0.2, fend_th, fend_h), (0.0, sgn_y * (hd - fend_th * 0.5), deck_z - fend_h * 0.5 + 0.05), mat_index=MAT_INDEX_TIMBER)
+    # Seaward front fender at +hd
+    create_box(bm, (w + 0.2, fend_th, fend_h), (0.0, hd - fend_th * 0.5, deck_z - fend_h * 0.5 + 0.05), mat_index=MAT_INDEX_TIMBER)
+    # Rear shoulder fenders at -hd (outside the central 4m walkway entrance)
+    sh_w = hw - 2.0
+    if sh_w > 0.15:
+        for sgn_x in (-1.0, 1.0):
+            sh_cx = sgn_x * (2.0 + sh_w * 0.5)
+            create_box(bm, (sh_w, fend_th, fend_h), (sh_cx, -hd + fend_th * 0.5, deck_z - fend_h * 0.5 + 0.05), mat_index=MAT_INDEX_TIMBER)
 
-    kick_w = 0.14
-    kick_h = 0.18
+    # Raised coaming / top curb timbers along perimeter edges
+    kick_w = 0.16
+    kick_h = 0.22
     for sgn_x in (-1.0, 1.0):
-        create_box(bm, (kick_w, d - fend_th * 2, kick_h), (sgn_x * (hw - fend_th - kick_w * 0.5), 0.0, deck_z + kick_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (kick_w, d, kick_h), (sgn_x * (hw - kick_w * 0.5), 0.0, deck_z + kick_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    # Seaward front top curb
+    create_box(bm, (w, kick_w, kick_h), (0.0, hd - kick_w * 0.5, deck_z + kick_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
+    # Rear shoulder top curbs
+    if sh_w > 0.15:
+        for sgn_x in (-1.0, 1.0):
+            sh_cx = sgn_x * (2.0 + sh_w * 0.5)
+            create_box(bm, (sh_w, kick_w, kick_h), (sh_cx, -hd + kick_w * 0.5, deck_z + kick_h * 0.5 - 0.04), mat_index=MAT_INDEX_TIMBER)
 
     lad_x = hw + 0.08
     lad_y0 = -1.0
