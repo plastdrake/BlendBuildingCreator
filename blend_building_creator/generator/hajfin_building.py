@@ -4845,9 +4845,7 @@ def _build_hajfin_pier_high_ramp(bm, props, width=6.0, depth=18.0, found_h=1.6):
     # 2. Upper Overlook Deck
     high_d = hd - y_ramp_end
     high_cy = (y_ramp_end + hd) * 0.5
-    high_deck_d = high_d - fend_th
-    high_deck_cy = y_ramp_end + high_deck_d * 0.5
-    create_box(bm, (deck_w, high_deck_d, deck_th), (0.0, high_deck_cy, z_high - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+    create_box(bm, (deck_w, high_d, deck_th), (0.0, high_cy, z_high - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
 
     # 3. Sloped Incline Ramp
     ramp_dy = y_ramp_end - y_low_end
@@ -4899,14 +4897,7 @@ def _build_hajfin_pier_high_ramp(bm, props, width=6.0, depth=18.0, found_h=1.6):
         k_side = Vector((kx, mid_ramp.y, mid_ramp.z - 0.08))
         create_box(bm, (fend_th, ramp_len, fend_h), k_side, rotation=(ramp_pitch, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
 
-    # Upper end fascia timber enclosing the high observation deck at +hd
-    create_box(bm, (deck_w, fend_th, fend_h), (0.0, hd - fend_th * 0.5, z_high - 0.08), mat_index=MAT_INDEX_TIMBER)
 
-    # 6. Safety Railings around the High Observation Deck
-    rail_h = 1.05
-    _build_railing_segment(bm, -hw, -hw, y_ramp_end, hd, z_high, height=rail_h)
-    _build_railing_segment(bm, hw, hw, y_ramp_end, hd, z_high, height=rail_h)
-    _build_railing_segment(bm, -hw, hw, hd, hd, z_high, height=rail_h)
 
 
 def _build_hajfin_shaman_shrine(bm, props, diameter=11.0, height=7.5, found_h=0.6):
