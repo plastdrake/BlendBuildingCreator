@@ -2821,39 +2821,39 @@ def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
 
 def create_stylized_hajfin_timber(name="M_Building_Timber", color=None):
     """Heavy structural driftwood timber beam material for Hajfin posts, beams, rafters, and stilts.
-    Features continuous rugged wood grain flowing along the beam with chisel marks, knotholes,
-    and warm golden amber/honey tones that contrast with the plank siding."""
+    Features continuous rugged dark timber wood grain flowing along the beam with chisel marks, knotholes,
+    and deep rich dark espresso/chocolate tones matching the stairs and structural framing."""
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-1000)
     tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(1.0, 0.40, 1.0))
     if tex_node is not None:
-        default_clr = (0.36, 0.22, 0.12, 1.0)
+        default_clr = (0.15, 0.09, 0.05, 1.0)
         c_use = color or default_clr
         tint = tree.nodes.new("ShaderNodeMix")
         tint.data_type = 'RGBA'
         tint.blend_type = 'MULTIPLY'
         tint.location = (-350, 100)
-        tint.inputs["Factor"].default_value = 0.25
+        tint.inputs["Factor"].default_value = 0.70
         tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
         tint.inputs["B"].default_value = c_use
         color_out = tint.outputs["Result"]
 
-        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.08, scale=0.85)
-        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.10, scale=0.28)
-        _apply_ao(tree, bsdf, macro, strength=0.55, distance=0.25)
-        _setup_pbr(tree, bsdf, out, roughness=0.74, metallic=0.0)
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.06, scale=0.85)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.08, scale=0.28)
+        _apply_ao(tree, bsdf, macro, strength=0.65, distance=0.25)
+        _setup_pbr(tree, bsdf, out, roughness=0.82, metallic=0.0)
 
         bump = tree.nodes.new("ShaderNodeBump")
         bump.location = (600, -210)
-        bump.inputs["Strength"].default_value = 0.25
+        bump.inputs["Strength"].default_value = 0.30
         bump.inputs["Distance"].default_value = 0.04
         tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
         tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
         return mat
 
-    _set_bsdf_input(bsdf, "Base Color", color or (0.34, 0.20, 0.12, 1.0))
-    _setup_pbr(tree, bsdf, out, roughness=0.74)
+    _set_bsdf_input(bsdf, "Base Color", color or (0.15, 0.09, 0.05, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.82)
     return mat
 
 
@@ -2863,7 +2863,7 @@ def create_stylized_hajfin_deck(name="M_Building_Floor", color=None):
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-1000)
-    tex_node = _load_image_texture(tree, "hajfin_floor_planks_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.75, 0.75, 1.0))
+    tex_node = _load_image_texture(tree, "hajfin_floor_planks_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(0.22, 0.22, 1.0))
     if tex_node is not None:
         default_clr = (0.28, 0.28, 0.29, 1.0)
         c_use = color or default_clr
@@ -2871,7 +2871,7 @@ def create_stylized_hajfin_deck(name="M_Building_Floor", color=None):
         tint.data_type = 'RGBA'
         tint.blend_type = 'MULTIPLY'
         tint.location = (-350, 100)
-        tint.inputs["Factor"].default_value = 0.25
+        tint.inputs["Factor"].default_value = 0.20
         tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
         tint.inputs["B"].default_value = c_use
         color_out = tint.outputs["Result"]
@@ -2883,8 +2883,8 @@ def create_stylized_hajfin_deck(name="M_Building_Floor", color=None):
 
         bump = tree.nodes.new("ShaderNodeBump")
         bump.location = (600, -210)
-        bump.inputs["Strength"].default_value = 0.24
-        bump.inputs["Distance"].default_value = 0.03
+        bump.inputs["Strength"].default_value = 0.28
+        bump.inputs["Distance"].default_value = 0.04
         tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
         tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
         return mat
@@ -3341,10 +3341,10 @@ def setup_building_material_slots(obj, props):
                 or create_stylized_bone(f"{mat_prefix}Bone"))
 
     if is_hajfin:
-        if not getattr(props, 'custom_timber', None):
-            mat_wood = mat_driftwood
         if not getattr(props, 'custom_timber_frame', None):
             mat_timber = create_stylized_hajfin_timber(f"{mat_prefix}Hajfin_Timber", color=getattr(props, 'color_timber_frame', None))
+        if not getattr(props, 'custom_timber', None):
+            mat_wood = mat_timber
         if not getattr(props, 'custom_shingles', None):
             mat_shingles = create_stylized_bone_shingles(f"{mat_prefix}Bone_Shingles", color=getattr(props, 'color_roof', None))
         if not getattr(props, 'custom_floor', None):

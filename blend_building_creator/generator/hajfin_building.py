@@ -178,7 +178,7 @@ def _build_hajfin_flat_plank_roof(bm, x0, x1, y0, y1, eave_z, peak_h,
         b_loc = (bx, cy, z_deck)
         b_size = (actual_w, span_y, board_th)
         b_faces = create_beveled_box(bm, size=b_size, location=b_loc,
-                                     mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008)
+                                     mat_index=MAT_INDEX_TIMBER, bevel_amount=0.008)
         for face in b_faces:
             for loop in face.loops:
                 co = loop.vert.co
