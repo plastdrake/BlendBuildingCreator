@@ -448,11 +448,13 @@ def create_flared_post(bm, size=(0.28, 0.28, 3.0), location=(0.0, 0.0, 0.0), rot
 
     return faces
 
-def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, transform_matrix=None, u_repeats=None, smooth=False):
+def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, transform_matrix=None, u_repeats=None, smooth=False, u_offset=0.0, v_offset=0.0, v_scale=1.0):
     """Creates a stylized faceted cylinder with end caps.
 
     ``smooth`` shades the side wall smoothly (used by rounded furniture and
     turned legs); caps stay flat so discs keep a crisp rim.
+    ``u_offset``, ``v_offset``, and ``v_scale`` allow procedural randomization
+    and scaling of the cylindrical texture mapping across modular logs and posts.
     """
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
@@ -487,12 +489,14 @@ def create_cylinder(bm, radius=0.5, height=1.0, segments=8, location=(0.0, 0.0, 
         if smooth:
             f.smooth = True
         faces.append(f)
-        u0 = total_u * i / segments
-        u1 = total_u * (i + 1) / segments
-        f.loops[0][uv_layer].uv = Vector((u0, 0.0))
-        f.loops[1][uv_layer].uv = Vector((u1, 0.0))
-        f.loops[2][uv_layer].uv = Vector((u1, height))
-        f.loops[3][uv_layer].uv = Vector((u0, height))
+        u0 = total_u * i / segments + u_offset
+        u1 = total_u * (i + 1) / segments + u_offset
+        v0 = v_offset
+        v1 = height * v_scale + v_offset
+        f.loops[0][uv_layer].uv = Vector((u0, v0))
+        f.loops[1][uv_layer].uv = Vector((u1, v0))
+        f.loops[2][uv_layer].uv = Vector((u1, v1))
+        f.loops[3][uv_layer].uv = Vector((u0, v1))
 
     # Caps (planar projection oriented to the cylinder axis, so a disc facing
     # any direction gets a real 2D unwrap instead of a collapsed line).
@@ -940,7 +944,8 @@ def create_bread_boule(bm, radius=0.065, height=0.045, segments=18, rings=8,
 
 def create_cone(bm, radius1=0.5, radius2=0.0, height=1.0, segments=8,
                 location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0),
-                mat_index=0, transform_matrix=None):
+                mat_index=0, transform_matrix=None,
+                u_offset=0.0, v_offset=0.0, v_scale=1.0):
     """Creates a stylized truncated or pointed cone with end caps and cylindrical UVs."""
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
@@ -971,11 +976,13 @@ def create_cone(bm, radius1=0.5, radius2=0.0, height=1.0, segments=8,
             f.material_index = mat_index
             f.tag = True
             faces.append(f)
-            u0 = i / segments
-            u1 = (i + 1) / segments
-            f.loops[0][uv_layer].uv = Vector((u0, 0.0))
-            f.loops[1][uv_layer].uv = Vector((u1, 0.0))
-            f.loops[2][uv_layer].uv = Vector(((u0 + u1) * 0.5, height))
+            u0 = i / segments + u_offset
+            u1 = (i + 1) / segments + u_offset
+            v0 = v_offset
+            v1 = height * v_scale + v_offset
+            f.loops[0][uv_layer].uv = Vector((u0, v0))
+            f.loops[1][uv_layer].uv = Vector((u1, v0))
+            f.loops[2][uv_layer].uv = Vector(((u0 + u1) * 0.5, v1))
     else:
         for i in range(segments):
             nxt = (i + 1) % segments
@@ -983,12 +990,14 @@ def create_cone(bm, radius1=0.5, radius2=0.0, height=1.0, segments=8,
             f.material_index = mat_index
             f.tag = True
             faces.append(f)
-            u0 = i / segments
-            u1 = (i + 1) / segments
-            f.loops[0][uv_layer].uv = Vector((u0, 0.0))
-            f.loops[1][uv_layer].uv = Vector((u1, 0.0))
-            f.loops[2][uv_layer].uv = Vector((u1, height))
-            f.loops[3][uv_layer].uv = Vector((u0, height))
+            u0 = i / segments + u_offset
+            u1 = (i + 1) / segments + u_offset
+            v0 = v_offset
+            v1 = height * v_scale + v_offset
+            f.loops[0][uv_layer].uv = Vector((u0, v0))
+            f.loops[1][uv_layer].uv = Vector((u1, v0))
+            f.loops[2][uv_layer].uv = Vector((u1, v1))
+            f.loops[3][uv_layer].uv = Vector((u0, v1))
 
     # Bottom cap
     f_bot = bm.faces.new(list(reversed(bottom_verts)))
@@ -1155,44 +1164,6 @@ def create_horizontal_cylinder(bm, radius_y=0.12, radius_z=0.12, length=1.0, seg
     
     return faces
 
-def create_cone(bm, radius1=0.5, radius2=0.05, height=1.5, segments=8, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), mat_index=0, transform_matrix=None):
-    """Creates a cone/frustum for turrets and chimneys."""
-    rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
-    loc_mat = Matrix.Translation(Vector(location))
-    tr_mat = loc_mat @ rot_mat
-    if transform_matrix is not None:
-        tr_mat = transform_matrix @ tr_mat
-    
-    half_h = height * 0.5
-    bottom_verts = []
-    top_verts = []
-    
-    for i in range(segments):
-        angle = (2.0 * math.pi * i) / segments
-        x1 = radius1 * math.cos(angle)
-        y1 = radius1 * math.sin(angle)
-        x2 = radius2 * math.cos(angle)
-        y2 = radius2 * math.sin(angle)
-        bottom_verts.append(bm.verts.new(tr_mat @ Vector((x1, y1, -half_h))))
-        top_verts.append(bm.verts.new(tr_mat @ Vector((x2, y2, half_h))))
-        
-    faces = []
-    for i in range(segments):
-        nxt = (i + 1) % segments
-        f = bm.faces.new([bottom_verts[i], bottom_verts[nxt], top_verts[nxt], top_verts[i]])
-        f.material_index = mat_index
-        faces.append(f)
-        
-    f_bot = bm.faces.new(list(reversed(bottom_verts)))
-    f_bot.material_index = mat_index
-    faces.append(f_bot)
-    
-    if radius2 > 0.001:
-        f_top = bm.faces.new(top_verts)
-        f_top.material_index = mat_index
-        faces.append(f_top)
-        
-    return faces
 
 def recalc_face_normals_safe(bm, faces):
     """Recalculate face normals without poisoning the UV pipeline.

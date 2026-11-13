@@ -345,6 +345,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('TAVERN', "Pirate Tavern", "Sprawling multi-deck pirate haven with open drinking deck and grog barrels", 'COMMUNITY', 5),
             ('WATCHTOWER', "Rickety Watchtower", "Tall stilt watchtower with X-bracing, timber ladder, sentry cabin, and carved bone window", 'OUTLINER_OB_LIGHTPROBE', 6),
             ('PALISADE_GATE', "Shark-Bone Palisade Gate", "Sharpened timber palisade with curved whale ribs and teeth garlands (Image 1)", 'SELECT_SET', 7),
+            ('PALISADE_WALL', "Shark-Bone Palisade Wall", "Continuous timber and bone palisade barrier fortified with outward-splaying curved whale ribs", 'SNAP_FACE', 11),
             ('FORGE', "Harpoon Smithy & Bone Forge", "Open-sided timber workshop with stone chimney, iron anvil, and weapon tool racks", 'MOD_BUILD', 8),
             ('FISH_DEPOT', "Fisher's Stilt Pier & Depot", "Tidal dock house with hanging net drying frames, fish curing racks, and cargo crane", 'HOOK', 9),
             ('SHRINE', "Leviathan Bone Shrine", "Sacred ceremonial ring with towering whale-rib arches, sacrificial bone altar, and smoking brazier", 'LIGHT_SUN', 10),

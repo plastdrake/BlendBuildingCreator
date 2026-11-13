@@ -2170,8 +2170,20 @@ def create_stylized_hajfin_banner(name="M_Building_Banner", color=(0.15, 0.45, 0
     tex_node = _load_image_texture(tree, "hajfin_banner_shark_diffuse.png", c, loc_x=-700, loc_y=120)
     if tex_node is not None:
         out_col = tex_node.outputs["Color"]
-        _apply_ao(tree, bsdf, out_col, strength=0.35, distance=0.15)
+        _apply_ao(tree, bsdf, out_col, strength=0.25, distance=0.15)
+        if "Alpha" in bsdf.inputs and "Alpha" in tex_node.outputs:
+            tree.links.new(tex_node.outputs["Alpha"], bsdf.inputs["Alpha"])
         _setup_pbr(tree, bsdf, out, roughness=0.78, metallic=0.0)
+        for attr, val in (("blend_method", 'CLIP'), ("shadow_method", 'CLIP'),
+                          ("surface_render_method", 'DITHERED')):
+            try:
+                setattr(mat, attr, val)
+            except Exception:
+                pass
+        try:
+            mat.clip_threshold = 0.20
+        except Exception:
+            pass
         return mat
 
     _set_bsdf_input(bsdf, "Base Color", color)
@@ -2958,18 +2970,15 @@ def setup_building_material_slots(obj, props):
     mat_prefix = "M_Building_"
 
     # 0. Stone (stone_wall_diffuse.jpg / mud_fieldstone / squared_fieldstone / ashlar_stone / rough reef stone)
-    if is_hajfin:
-        mat_stone = getattr(props, 'custom_stone', None) or create_stylized_rough_reef_stone(f"{mat_prefix}Stone", color=getattr(props, 'color_stone', None))
-    else:
-        stone_tier = tier
-        if tier == 'TIER_2' and (getattr(props, 'has_castle_citadel', False) or 
-                                 getattr(props, 'has_curtain_wall', False) or 
-                                 getattr(props, 'castle_tier', '') in ('TIER_2', 'TIER_3') or
-                                 getattr(props, 'archetype', '') == 'CASTLE' or
-                                 getattr(props, 'building_archetype', '') == 'CASTLE' or
-                                 getattr(props, 'preset_name', '') in ('LORD_NASHERS_MANOR', 'CASTLE')):
-            stone_tier = 'TIER_3'
-        mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone(f"{mat_prefix}Stone", color=getattr(props, 'color_stone', (0.6, 0.6, 0.6, 1.0)), tier=stone_tier)
+    stone_tier = 'TIER_2' if is_hajfin else tier
+    if not is_hajfin and tier == 'TIER_2' and (getattr(props, 'has_castle_citadel', False) or 
+                             getattr(props, 'has_curtain_wall', False) or 
+                             getattr(props, 'castle_tier', '') in ('TIER_2', 'TIER_3') or
+                             getattr(props, 'archetype', '') == 'CASTLE' or
+                             getattr(props, 'building_archetype', '') == 'CASTLE' or
+                             getattr(props, 'preset_name', '') in ('LORD_NASHERS_MANOR', 'CASTLE')):
+        stone_tier = 'TIER_3'
+    mat_stone = getattr(props, 'custom_stone', None) or create_stylized_stone(f"{mat_prefix}Stone", color=getattr(props, 'color_stone', (0.6, 0.6, 0.6, 1.0)), tier=stone_tier)
 
     # 1. Plaster (wattle_daub / stucco_plaster / smooth_ivory_stucco)
     clr_wall = getattr(props, 'color_wall_ext', (0.85, 0.82, 0.76, 1.0))
@@ -3237,8 +3246,6 @@ def setup_building_material_slots(obj, props):
                 or create_stylized_bone(f"{mat_prefix}Bone"))
 
     if is_hajfin:
-        if not getattr(props, 'custom_stone', None):
-            mat_stone = mat_rough_stone
         if not getattr(props, 'custom_timber', None):
             mat_wood = mat_driftwood
         if not getattr(props, 'custom_timber_frame', None):
