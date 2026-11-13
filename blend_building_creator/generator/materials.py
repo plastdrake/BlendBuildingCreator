@@ -1193,7 +1193,9 @@ def create_stylized_timber(name="M_Building_Timber", color=None, tier='TIER_3'):
     elif tier == 'TIER_2':
         default_clr = (0.20, 0.12, 0.08, 1.0)
         c_use = color or default_clr
-        tex_node = _load_image_texture(tree, "fachwerk_timber_diffuse.png", c, loc_x=-800, loc_y=120, scale=(1.0, 0.40, 1.0))
+        tex_node = _load_image_texture(tree, "dark_timber_beam_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.40, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "fachwerk_timber_diffuse.png", c, loc_x=-800, loc_y=120, scale=(1.0, 0.40, 1.0))
         if tex_node is None:
             tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.40, 1.0))
         rough = 0.72
@@ -1723,7 +1725,7 @@ def create_stylized_door(name="M_Building_Door", color=None, tier='TIER_2'):
     elif tier == 'TIER_2':
         default_clr = (0.24, 0.14, 0.08, 1.0)
         c_use = color or default_clr
-        tex_file = "fachwerk_timber_diffuse.png"
+        tex_file = "dark_timber_beam_diffuse.jpg"
     else:
         default_clr = (0.16, 0.11, 0.08, 1.0)
         c_use = color or default_clr
@@ -2823,35 +2825,38 @@ def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
 
 def create_stylized_hajfin_timber(name="M_Building_Timber", color=None):
     """Heavy structural driftwood timber beam material for Hajfin posts, beams, rafters, and stilts.
-    Uses the dark fachwerk timber texture with deep rich dark espresso/chocolate tones,
-    flowing wood grain, chisel marks, and subtle edge wear."""
+    Uses the dark timber beam texture with deep rich dark espresso/chocolate tones,
+    flowing vertical wood grain, subtle chisel marks, and edge wear matching authentic fachwerk framing."""
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-1000)
-    tex_node = _load_image_texture(tree, "fachwerk_timber_diffuse.png", c, loc_x=-720, loc_y=100, scale=(1.0, 0.40, 1.0))
+    tex_node = _load_image_texture(tree, "dark_timber_beam_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(1.0, 0.40, 1.0))
+    if tex_node is None:
+        tex_node = _load_image_texture(tree, "fachwerk_timber_diffuse.png", c, loc_x=-720, loc_y=100, scale=(1.0, 0.40, 1.0))
     if tex_node is None:
         tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(1.0, 0.40, 1.0))
     if tex_node is not None:
-        default_clr = (0.15, 0.09, 0.05, 1.0)
-        c_use = color or default_clr
-        tint = tree.nodes.new("ShaderNodeMix")
-        tint.data_type = 'RGBA'
-        tint.blend_type = 'MULTIPLY'
-        tint.location = (-350, 100)
-        tint.inputs["Factor"].default_value = 0.50
-        tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
-        tint.inputs["B"].default_value = c_use
-        color_out = tint.outputs["Result"]
+        if color is not None and color != (0.15, 0.09, 0.05, 1.0):
+            tint = tree.nodes.new("ShaderNodeMix")
+            tint.data_type = 'RGBA'
+            tint.blend_type = 'MULTIPLY'
+            tint.location = (-350, 100)
+            tint.inputs["Factor"].default_value = 0.25
+            tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
+            tint.inputs["B"].default_value = color
+            color_out = tint.outputs["Result"]
+        else:
+            color_out = tex_node.outputs["Color"]
 
-        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.04, scale=0.85)
-        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.05, scale=0.28)
-        _apply_ao(tree, bsdf, macro, strength=0.65, distance=0.25)
-        _setup_pbr(tree, bsdf, out, roughness=0.82, metallic=0.0)
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.03, scale=0.85)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.04, scale=0.28)
+        _apply_ao(tree, bsdf, macro, strength=0.60, distance=0.25)
+        _setup_pbr(tree, bsdf, out, roughness=0.80, metallic=0.0)
 
         bump = tree.nodes.new("ShaderNodeBump")
         bump.location = (600, -210)
-        bump.inputs["Strength"].default_value = 0.30
-        bump.inputs["Distance"].default_value = 0.04
+        bump.inputs["Strength"].default_value = 0.25
+        bump.inputs["Distance"].default_value = 0.03
         tree.links.new(tex_node.outputs["Color"], bump.inputs["Height"])
         tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
         return mat
