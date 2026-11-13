@@ -1193,7 +1193,9 @@ def create_stylized_timber(name="M_Building_Timber", color=None, tier='TIER_3'):
     elif tier == 'TIER_2':
         default_clr = (0.20, 0.12, 0.08, 1.0)
         c_use = color or default_clr
-        tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.40, 1.0))
+        tex_node = _load_image_texture(tree, "fachwerk_timber_diffuse.png", c, loc_x=-800, loc_y=120, scale=(1.0, 0.40, 1.0))
+        if tex_node is None:
+            tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-800, loc_y=120, scale=(1.0, 0.40, 1.0))
         rough = 0.72
         spec = 0.38
         ao_str = 0.35
@@ -1721,7 +1723,7 @@ def create_stylized_door(name="M_Building_Door", color=None, tier='TIER_2'):
     elif tier == 'TIER_2':
         default_clr = (0.24, 0.14, 0.08, 1.0)
         c_use = color or default_clr
-        tex_file = "timber_beam_diffuse.jpg"
+        tex_file = "fachwerk_timber_diffuse.png"
     else:
         default_clr = (0.16, 0.11, 0.08, 1.0)
         c_use = color or default_clr
@@ -2821,12 +2823,14 @@ def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
 
 def create_stylized_hajfin_timber(name="M_Building_Timber", color=None):
     """Heavy structural driftwood timber beam material for Hajfin posts, beams, rafters, and stilts.
-    Features continuous rugged dark timber wood grain flowing along the beam with chisel marks, knotholes,
-    and deep rich dark espresso/chocolate tones matching the stairs and structural framing."""
+    Uses the dark fachwerk timber texture with deep rich dark espresso/chocolate tones,
+    flowing wood grain, chisel marks, and subtle edge wear."""
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
     c = _coord(tree, loc_x=-1000)
-    tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(1.0, 0.40, 1.0))
+    tex_node = _load_image_texture(tree, "fachwerk_timber_diffuse.png", c, loc_x=-720, loc_y=100, scale=(1.0, 0.40, 1.0))
+    if tex_node is None:
+        tex_node = _load_image_texture(tree, "timber_beam_diffuse.jpg", c, loc_x=-720, loc_y=100, scale=(1.0, 0.40, 1.0))
     if tex_node is not None:
         default_clr = (0.15, 0.09, 0.05, 1.0)
         c_use = color or default_clr
@@ -2834,13 +2838,13 @@ def create_stylized_hajfin_timber(name="M_Building_Timber", color=None):
         tint.data_type = 'RGBA'
         tint.blend_type = 'MULTIPLY'
         tint.location = (-350, 100)
-        tint.inputs["Factor"].default_value = 0.70
+        tint.inputs["Factor"].default_value = 0.50
         tree.links.new(tex_node.outputs["Color"], tint.inputs["A"])
         tint.inputs["B"].default_value = c_use
         color_out = tint.outputs["Result"]
 
-        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.06, scale=0.85)
-        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.08, scale=0.28)
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-100, loc_y=-210, strength=0.04, scale=0.85)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.05, scale=0.28)
         _apply_ao(tree, bsdf, macro, strength=0.65, distance=0.25)
         _setup_pbr(tree, bsdf, out, roughness=0.82, metallic=0.0)
 
@@ -3093,7 +3097,8 @@ def setup_building_material_slots(obj, props):
                            create_stylized_plaster(f"{mat_prefix}Plaster", color=clr_wall, is_interior=False, tier=tier))
 
     # 2. Timber (fachwerk_timber / oiled_timber / timber_beam / driftwood)
-    clr_tf = getattr(props, 'color_timber_frame', None) or (0.24, 0.14, 0.08, 1.0)
+    default_tf_clr = (0.15, 0.09, 0.05, 1.0) if is_hajfin else (0.24, 0.14, 0.08, 1.0)
+    clr_tf = getattr(props, 'color_timber_frame', None) or default_tf_clr
     custom_tf = (getattr(props, 'custom_timber_frame', None) or 
                  getattr(props, 'custom_door', None) or 
                  getattr(props, 'custom_stairs', None) or 
