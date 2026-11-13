@@ -3345,6 +3345,12 @@ def setup_building_material_slots(obj, props):
             mat_timber = create_stylized_hajfin_timber(f"{mat_prefix}Hajfin_Timber", color=getattr(props, 'color_timber_frame', None))
         if not getattr(props, 'custom_timber', None):
             mat_wood = mat_timber
+        if not getattr(props, 'custom_log', None):
+            mat_log = mat_timber
+        if not getattr(props, 'custom_log_end', None):
+            mat_log_end = mat_timber
+        if not getattr(props, 'custom_stone', None):
+            mat_stone = mat_rough_stone
         if not getattr(props, 'custom_shingles', None):
             mat_shingles = create_stylized_bone_shingles(f"{mat_prefix}Bone_Shingles", color=getattr(props, 'color_roof', None))
         if not getattr(props, 'custom_floor', None):

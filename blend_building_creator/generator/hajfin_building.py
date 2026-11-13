@@ -3876,10 +3876,10 @@ def _build_hajfin_bone_gate(bm, props, width=12.0, depth=4.0, height=4.5, found_
             v_off = ((i * 1.618) % 1.0)
             v_sc = 0.28
             create_cylinder(bm, radius=post_r, height=cur_post_h, segments=8,
-                            location=(px, 0.0, cur_post_h * 0.5), mat_index=MAT_INDEX_LOG,
+                            location=(px, 0.0, cur_post_h * 0.5), mat_index=MAT_INDEX_TIMBER,
                             u_offset=u_off, v_offset=v_off, v_scale=v_sc)
             create_cone(bm, radius1=post_r, radius2=0.02, height=0.65, segments=8,
-                        location=(px, 0.0, cur_post_h + 0.30), mat_index=MAT_INDEX_LOG,
+                        location=(px, 0.0, cur_post_h + 0.30), mat_index=MAT_INDEX_TIMBER,
                         u_offset=u_off, v_offset=cur_post_h * v_sc + v_off, v_scale=v_sc)
             # Rope bindings around horizontal rails
             for rz in (0.95, 2.25):
@@ -3915,10 +3915,10 @@ def _build_hajfin_bone_gate(bm, props, width=12.0, depth=4.0, height=4.5, found_
         g_u = 0.45 if sgn_gx > 0 else 0.85
         g_v = 0.20 if sgn_gx > 0 else 0.70
         create_cylinder(bm, radius=gate_post_r, height=gate_post_h, segments=10,
-                        location=(gpx, 0.0, gate_post_h * 0.5), mat_index=MAT_INDEX_LOG,
+                        location=(gpx, 0.0, gate_post_h * 0.5), mat_index=MAT_INDEX_TIMBER,
                         u_offset=g_u, v_offset=g_v, v_scale=0.25)
         create_cone(bm, radius1=gate_post_r, radius2=0.03, height=0.85, segments=10,
-                    location=(gpx, 0.0, gate_post_h + 0.40), mat_index=MAT_INDEX_LOG,
+                    location=(gpx, 0.0, gate_post_h + 0.40), mat_index=MAT_INDEX_TIMBER,
                     u_offset=g_u, v_offset=gate_post_h * 0.25 + g_v, v_scale=0.25)
         for rz in (1.0, 2.3, 3.6, gate_post_h * 0.85):
             create_torus_ring(bm, (gpx, 0.0, rz), major_radius=gate_post_r + 0.04, minor_radius=0.03,
@@ -3995,10 +3995,10 @@ def _build_hajfin_palisade_wall(bm, props, width=12.0, depth=4.0, height=4.5, fo
         v_off = ((i * 1.618) % 1.0)
         v_sc = 0.28
         create_cylinder(bm, radius=cur_r, height=cur_post_h, segments=8,
-                        location=(px, 0.0, cur_post_h * 0.5), mat_index=MAT_INDEX_LOG,
+                        location=(px, 0.0, cur_post_h * 0.5), mat_index=MAT_INDEX_TIMBER,
                         u_offset=u_off, v_offset=v_off, v_scale=v_sc)
         create_cone(bm, radius1=cur_r, radius2=0.02, height=0.65, segments=8,
-                    location=(px, 0.0, cur_post_h + 0.30), mat_index=MAT_INDEX_LOG,
+                    location=(px, 0.0, cur_post_h + 0.30), mat_index=MAT_INDEX_TIMBER,
                     u_offset=u_off, v_offset=cur_post_h * v_sc + v_off, v_scale=v_sc)
 
         # Rope bindings around horizontal rails
@@ -4070,9 +4070,9 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     for sgn_p in (-1.0, 1.0):
         px = sgn_p * (hw - 0.5)
         py = -hd + 0.5
-        # Heavy log column
+        # Heavy timber column
         create_cylinder(bm, radius=post_r, height=height, segments=8,
-                        location=(px, py, z0 + height * 0.5), mat_index=MAT_INDEX_LOG)
+                        location=(px, py, z0 + height * 0.5), mat_index=MAT_INDEX_TIMBER)
         # Iron collars & rope lashings
         create_torus_ring(bm, (px, py, z0 + 0.4), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
         create_torus_ring(bm, (px, py, z0 + height * 0.5), major_radius=post_r + 0.03, minor_radius=0.025, mat_index=MAT_INDEX_ROPE)
@@ -4128,7 +4128,7 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     stump_r = 0.52
     stump_h = 0.72
     create_cylinder(bm, radius=stump_r, height=stump_h, segments=10,
-                    location=(stump_x, stump_y, z0 + stump_h * 0.5), mat_index=MAT_INDEX_LOG)
+                    location=(stump_x, stump_y, z0 + stump_h * 0.5), mat_index=MAT_INDEX_TIMBER)
     # Spiked iron bands around stump
     for sz in (z0 + 0.18, z0 + stump_h - 0.12):
         create_torus_ring(bm, (stump_x, stump_y, sz), major_radius=stump_r + 0.02, minor_radius=0.025, mat_index=MAT_INDEX_IRON)
