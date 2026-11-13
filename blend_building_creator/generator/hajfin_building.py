@@ -38,6 +38,8 @@ from .materials import (
     MAT_INDEX_WATER,
     MAT_INDEX_STONE,
     MAT_INDEX_SILVER,
+    MAT_INDEX_FISH,
+    MAT_INDEX_MEAT,
 )
 MAT_INDEX_STONE_BRICK = MAT_INDEX_STONE
 from .mesh_utils import (
@@ -536,6 +538,11 @@ def _build_hajfin_floor_slab_with_stairwell(bm, x0, x1, y0, y1, z_floor,
         create_box(bm, (sx1 - sx0, d_d, slab_th), ((sx0 + sx1) * 0.5, sy1 + d_d * 0.5, z_floor - slab_th * 0.5),
                    mat_index=MAT_INDEX_FLOOR)
 
+    # Supporting header trimmer beam under floor edge at stairwell exit threshold
+    create_box(bm, (sx1 - sx0 + 0.12, 0.24, 0.28),
+               ((sx0 + sx1) * 0.5, sy1 + 0.10, z_floor - slab_th - 0.14),
+               mat_index=MAT_INDEX_TIMBER)
+
     # 3. Protective Railings around the stairwell opening on the upper floor
     if with_railing:
         rail_h = 1.0
@@ -547,6 +554,62 @@ def _build_hajfin_floor_slab_with_stairwell(bm, x0, x1, y0, y1, z_floor,
             _build_railing_segment(bm, sx0, sx0, sy0, sy1, z_floor, rail_h)
         if open_exit_side != 'EAST' and sx1 < x1 - 0.2:
             _build_railing_segment(bm, sx1, sx1, sy0, sy1, z_floor, rail_h)
+
+
+def _build_hajfin_hanging_prize_fish(bm, x, y, hook_z, length=2.4, yaw=0.0):
+    """Giant sea-monster / trophy fish suspended vertically from the davit crane hook.
+    Uses artist's fish.fbx mesh from PROP_MESHES, preserving UVs and MAT_INDEX_FISH."""
+    from .accessories.artisan_meshdata import PROP_MESHES
+    it = PROP_MESHES.get('fish')
+    if not it:
+        return False
+    verts = it['verts']
+    polys = it['polys']
+    xs = [v[0] for v in verts]
+    span = max(xs) - min(xs)
+    s = length / (span or 1.0)
+    snout_x = max(xs)
+
+    # Snout at hook_z, tail hanging down (-Z)
+    rot = Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Rotation(-math.pi * 0.5, 4, 'Y')
+    trans = Matrix.Translation((x, y, hook_z - 0.08))
+    base = Matrix.Translation((-snout_x, 0.0, 0.0))
+    M = trans @ rot @ Matrix.Diagonal((s, s, s, 1.0)) @ base
+
+    uv_layer = bm.loops.layers.uv.verify()
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    if prop_layer is None:
+        prop_layer = bm.faces.layers.int.new('bbc_is_prop')
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
+    if imported_layer is None:
+        imported_layer = bm.faces.layers.int.new('bbc_imported_asset')
+    used = set(vi for poly in polys for vi, _ in poly)
+    remap = {i: bm.verts.new(M @ Vector(verts[i])) for i in used}
+
+    seen = set()
+    for pi, poly in enumerate(polys):
+        idx = [vi for vi, _ in poly]
+        key_f = tuple(sorted(idx))
+        if key_f in seen:
+            continue
+        seen.add(key_f)
+        f = bm.faces.new([remap[i] for i in idx])
+        f.material_index = MAT_INDEX_FISH
+        f.smooth = True
+        f.tag = True
+        f[prop_layer] = 1
+        f[imported_layer] = 1
+        uv_map = {vi: uv for vi, uv in poly}
+        for loop in f.loops:
+            for i in idx:
+                if remap[i] == loop.vert:
+                    loop[uv_layer].uv = uv_map[i]
+                    break
+
+    # Heavy iron shackle wrapping around the snout and hook
+    create_torus_ring(bm, (x, y, hook_z - 0.06), major_radius=0.10 * (length / 2.0),
+                      minor_radius=0.02, mat_index=MAT_INDEX_IRON)
+    return True
 
 
 def _build_chunky_corner_column(bm, x, y, z0, z1, size=0.42, extend_top=0.0, with_spikes=False):
@@ -822,13 +885,18 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26, forc
     half_th = wall_th * 0.5
     uv_layer = bm.loops.layers.uv.verify()
 
-    v_fl = bm.verts.new(Vector((min_x, y - half_th, z_eave)))
-    v_fr = bm.verts.new(Vector((max_x, y - half_th, z_eave)))
-    v_fp = bm.verts.new(Vector((mx, y - half_th, z_peak)))
+    # Tuck top sloped edges slightly (0.06m) below roof shingles into roof slab soffit
+    # to eliminate coplanar z-fighting with the roof shingles while ensuring zero gap.
+    tuck_z = 0.06
+    z_peak_w = z_peak - tuck_z
+    z_eave_w = z_eave - tuck_z
+    v_fl = bm.verts.new(Vector((min_x, y - half_th, z_eave_w)))
+    v_fr = bm.verts.new(Vector((max_x, y - half_th, z_eave_w)))
+    v_fp = bm.verts.new(Vector((mx, y - half_th, z_peak_w)))
 
-    v_bl = bm.verts.new(Vector((min_x, y + half_th, z_eave)))
-    v_br = bm.verts.new(Vector((max_x, y + half_th, z_eave)))
-    v_bp = bm.verts.new(Vector((mx, y + half_th, z_peak)))
+    v_bl = bm.verts.new(Vector((min_x, y + half_th, z_eave_w)))
+    v_br = bm.verts.new(Vector((max_x, y + half_th, z_eave_w)))
+    v_bp = bm.verts.new(Vector((mx, y + half_th, z_peak_w)))
 
     f_front = bm.faces.new([v_fl, v_fr, v_fp])
     f_front.material_index = MAT_INDEX_DRIFTWOOD
@@ -1515,19 +1583,22 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
     # Left slope (x < mx) terminates at x0 - ov_xl with uniform pitch
     _build_roof_slope_slab(bm, x_peak=mx, x_eave=x0 - ov_xl,
                            y0=y0 - overhang_y, y1=y1 + overhang_y,
-                           z_peak=peak_z, z_eave=z_eave_l, slab_th=0.14, u_scale=0.12, v_scale=0.14)
+                           z_peak=peak_z, z_eave=z_eave_l, slab_th=0.14, u_scale=0.36, v_scale=0.36)
     # Right slope (x > mx) terminates at x1 + ov_xr with uniform pitch
     _build_roof_slope_slab(bm, x_peak=mx, x_eave=x1 + ov_xr,
                            y0=y0 - overhang_y, y1=y1 + overhang_y,
-                           z_peak=peak_z, z_eave=z_eave_r, slab_th=0.14, u_scale=0.12, v_scale=0.14)
+                           z_peak=peak_z, z_eave=z_eave_r, slab_th=0.14, u_scale=0.36, v_scale=0.36)
 
     # 3. Heavy Timber Verge Bargeboards on Front & Rear Gable Slopes
+    # Only place bargeboards on exposed verges (overhang > 0.05m), NOT against abutting walls!
     for gy in (y0 - overhang_y, y1 + overhang_y):
         p_peak = (mx, gy, peak_z)
-        p_eave_l = (x0 - ov_xl, gy, z_eave_l)
-        _create_oriented_beam(bm, p_peak, p_eave_l, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
-        p_eave_r = (x1 + ov_xr, gy, z_eave_r)
-        _create_oriented_beam(bm, p_peak, p_eave_r, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
+        if ov_xl > 0.05:
+            p_eave_l = (x0 - ov_xl, gy, z_eave_l)
+            _create_oriented_beam(bm, p_peak, p_eave_l, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
+        if ov_xr > 0.05:
+            p_eave_r = (x1 + ov_xr, gy, z_eave_r)
+            _create_oriented_beam(bm, p_peak, p_eave_r, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
 
     # 4. Ridge Dorsal Fin Bone & Jagged Teeth Crest
     _build_ridge_crest_fin_and_spines(bm, mx, y0 - overhang_y, y1 + overhang_y,
@@ -2059,7 +2130,7 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
                                                 z_mid, stair_x0, stair_x1, stair_y0, stair_y1,
                                                 open_exit_side='NORTH')
         _build_hajfin_interior_staircase(bm, x0=(stair_x0 + stair_x1) * 0.5, y0=stair_y0 + 0.2, z0=z0,
-                                         x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1 - 0.4, z1=z_mid,
+                                         x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1, z1=z_mid,
                                          width=stair_w)
 
         # UPPER FLOOR WALLS
@@ -2672,13 +2743,18 @@ def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26):
     half_th = wall_th * 0.5
     uv_layer = bm.loops.layers.uv.verify()
 
-    v_fl = bm.verts.new(Vector((x - half_th, min_y, z_eave)))
-    v_fr = bm.verts.new(Vector((x - half_th, max_y, z_eave)))
-    v_fp = bm.verts.new(Vector((x - half_th, my, z_peak)))
+    # Tuck top sloped edges slightly (0.06m) below roof shingles into roof slab soffit
+    # to eliminate coplanar z-fighting with the roof shingles while ensuring zero gap.
+    tuck_z = 0.06
+    z_peak_w = z_peak - tuck_z
+    z_eave_w = z_eave - tuck_z
+    v_fl = bm.verts.new(Vector((x - half_th, min_y, z_eave_w)))
+    v_fr = bm.verts.new(Vector((x - half_th, max_y, z_eave_w)))
+    v_fp = bm.verts.new(Vector((x - half_th, my, z_peak_w)))
 
-    v_bl = bm.verts.new(Vector((x + half_th, min_y, z_eave)))
-    v_br = bm.verts.new(Vector((x + half_th, max_y, z_eave)))
-    v_bp = bm.verts.new(Vector((x + half_th, my, z_peak)))
+    v_bl = bm.verts.new(Vector((x + half_th, min_y, z_eave_w)))
+    v_br = bm.verts.new(Vector((x + half_th, max_y, z_eave_w)))
+    v_bp = bm.verts.new(Vector((x + half_th, my, z_peak_w)))
 
     f_front = bm.faces.new([v_fl, v_fr, v_fp])
     f_front.material_index = MAT_INDEX_DRIFTWOOD
@@ -3201,6 +3277,9 @@ def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, 
     # Scarce ground floor furnishings (rear-right corner, clear of west stairs and south entrance)
     _build_hajfin_crate(bm, hw - wall_th - 0.85, hd - wall_th - 0.85, z_ground=z0 + 0.14, yaw=0.12, scale=0.68)
     _build_hajfin_barrel(bm, hw - wall_th - 1.65, hd - wall_th - 0.70, z_ground=z0 + 0.14, ang=1.5, scale=0.52)
+    from .accessories.artisan_props import build_axe, build_pickaxe
+    build_pickaxe(bm, hw - wall_th - 2.30, hd - wall_th - 0.70, z_ground=z0 + 0.14, ang=0.45, length=0.72)
+    build_axe(bm, hw - wall_th - 0.35, hd - wall_th - 1.55, z_ground=z0 + 0.14, ang=-0.65, length=0.68)
 
     # Front wall with real door cutout
     _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
@@ -3218,7 +3297,7 @@ def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, 
                                             z_mid, stair_x0, stair_x1, stair_y0, stair_y1,
                                             open_exit_side='NORTH')
     _build_hajfin_interior_staircase(bm, x0=(stair_x0 + stair_x1) * 0.5, y0=stair_y0 + 0.2, z0=z0,
-                                     x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1 - 0.4, z1=z_mid,
+                                     x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1, z1=z_mid,
                                      width=stair_w)
 
     # 4. Upper Floor Hollow Walls with Bone Windows
@@ -3373,10 +3452,16 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
                               wall_th=wall_th, facing_north=False)
 
     # Massive Ground Floor Corner Columns
+    # Flanking roof eaves drop below z_mid at the outer corners; columns must terminate
+    # neatly below the roof soffit with zero shingle penetration.
     col_size = 0.48
+    fl_roof_h = 2.25
+    half_fl_w = (hw - width * 0.60 * 0.5) * 0.5
+    fl_slope = fl_roof_h / max(0.5, half_fl_w)
+    col_top_z = z_mid - fl_slope * (col_size * 0.5) - 0.16
     for cx in (-hw, hw):
         for cy in (-hd, hd):
-            _build_chunky_corner_column(bm, cx, cy, z0, z_mid, size=col_size, extend_top=0.0)
+            _build_chunky_corner_column(bm, cx, cy, z0, col_top_z, size=col_size, extend_top=0.0)
 
     # 4. Solid Timber Awning Canopy (Framed with rafters, ledger, front fascia, and bargeboards)
     awning_ledger_z = open_top_z + lintel_h + 0.18
@@ -3587,7 +3672,7 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
                                             z_mid, stair_x0, stair_x1, stair_y0, stair_y1,
                                             open_exit_side='NORTH')
     _build_hajfin_interior_staircase(bm, x0=(stair_x0 + stair_x1) * 0.5, y0=stair_y0 + 0.2, z0=z0,
-                                     x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1 - 0.4, z1=z_mid,
+                                     x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1, z1=z_mid,
                                      width=stair_w)
 
     # 7. Accessible Second-Level Central Lookout Room (HOLLOW & FRONT-ALIGNED!)
@@ -3624,6 +3709,14 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
     _build_hajfin_bone_shop_table(bm, -0.60, -hd + 3.2, z0 + 0.14, width=2.8)
     _build_hajfin_weapon_rack(bm, -hw + 1.2, 0.0, z0 + 0.14, rot_z=-math.pi * 0.5)
 
+    from .accessories.artisan_props import build_cleaver, build_meat, build_axe, build_pickaxe
+    # Trade table goods: butcher cleaver and cured beast meat cuts
+    build_cleaver(bm, -0.30, -hd + 3.2, z_ground=z0 + 0.14 + 1.02, ang=0.20, stuck=False)
+    build_meat(bm, 0.20, -hd + 3.2, z_ground=z0 + 0.14 + 1.02, ang=-0.45, length=0.32, variant=0)
+    # Leaning woodcutter axe and heavy mining pickaxe near the salvage and weapons area
+    build_axe(bm, -hw + 1.7, -0.55, z_ground=z0 + 0.14, ang=0.75, length=0.68)
+    build_pickaxe(bm, -hw + 1.7, 0.55, z_ground=z0 + 0.14, ang=-0.40, length=0.72)
+
     # 11. Multi-Tier Bone Scale Roofs with Full Solid Gable Triangles
     # Lower flanking roofs (Eaves sit at z_mid meeting the ground floor walls, sealed by exterior timber flashing ledgers)
     fl_eave_z = z_mid
@@ -3645,7 +3738,7 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
                                      overhang_x_left=ov_l, overhang_x_right=ov_r)
 
         # Exterior timber flashing ledger beam sealing the roof-to-tower junction
-        ledger_x = -u_hw if sgn_x < 0 else u_hw
+        ledger_x = (-u_hw - 0.09) if sgn_x < 0 else (u_hw + 0.09)
         create_box(bm, (0.18, depth + 0.40, 0.24), (ledger_x, 0.0, z_mid + 0.12), mat_index=MAT_INDEX_TIMBER)
 
     # Upper Tower Main Roof with full gable triangles
@@ -3931,7 +4024,7 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                (hw - wing_w * 0.5, -hd + m_d, z_mid - 0.08), mat_index=MAT_INDEX_FLOOR)
 
     _build_hajfin_interior_staircase(bm, x0=(stair_x0 + stair_x1) * 0.5, y0=stair_y0 + 0.2, z0=z0,
-                                     x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1 - 0.4, z1=z_mid,
+                                     x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1, z1=z_mid,
                                      width=stair_w)
 
     # 6. Upper Floor Hollow Rooms (Crew Quarters & Lookout)
@@ -4311,6 +4404,11 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     # Firewood log pile safely cleared from forge hearth
     build_log_pile(bm, hearth_x + 2.85, hearth_y - 0.6, floor_z, ang=0.15, length=1.4, radius=0.13, rows=3)
 
+    # Heavy blacksmith pickaxe and woodcutter splitting axe
+    from .accessories.artisan_props import build_axe, build_pickaxe
+    build_axe(bm, hearth_x + 2.1, hearth_y - 0.7, floor_z, ang=0.45, length=0.68)
+    build_pickaxe(bm, -hw + 1.65, -0.60, floor_z, ang=-0.35, length=0.72)
+
     # 9. Big Bone Scale Vaulted Roof with Shark Dorsal Fin Crest
     _build_gable_triangle_wall(bm, -hw, hw, -hd + 0.5, z0 + height, peak_z, wall_th=0.28)
     _build_gable_triangle_wall(bm, -hw, hw, hd, z0 + height, peak_z, wall_th=0.28)
@@ -4461,6 +4559,9 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
                     location=(gx, gy, hoist_drop_z - 0.14),
                     rotation=(math.pi, 0, 0), mat_index=MAT_INDEX_IRON)
 
+    # Giant prize monster trophy fish suspended vertically from the 4-prong grapple hook
+    _build_hajfin_hanging_prize_fish(bm, boom_tip.x, boom_tip.y, hoist_drop_z - 0.14, length=2.20, yaw=0.35)
+
     # Winch drum with crank handle mounted at waist height on mast
     winch_z = z0 + 1.15
     create_cylinder(bm, radius=0.12, height=0.45, segments=8,
@@ -4482,13 +4583,23 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
     _build_hajfin_crate(bm, -c_hw + wall_th + 0.75, c_y + c_hd - wall_th - 0.75, z_ground=z0 + 0.14, yaw=0.2, scale=0.62)
     _build_hajfin_barrel(bm, -c_hw + wall_th + 1.45, c_y + c_hd - wall_th - 0.65, z_ground=z0 + 0.14, ang=1.8, scale=0.52)
 
-    fr_x = -hw + 2.5
-    fr_y = hd - 1.2
-    create_box(bm, (2.4, 0.12, 1.8), (fr_x, fr_y, deck_top_z + 0.90), mat_index=MAT_INDEX_DRIFTWOOD)
-    for fi in range(4):
-        create_cone(bm, radius1=0.12, radius2=0.02, height=0.55, segments=5,
-                    location=(fr_x - 0.75 + fi * 0.5, fr_y + 0.1, deck_top_z + 0.75),
-                    rotation=(math.pi, 0, 0), mat_index=MAT_INDEX_BONE)
+    # Authentic double-row timber fish drying rack with artist's hanging smoked fish
+    from .accessories.artisan_props import (
+        build_fish_drying_rack, build_cleaver, build_fish, build_meat, build_axe, build_pickaxe
+    )
+    fr_x = -hw + 2.6
+    fr_y = hd - 1.4
+    build_fish_drying_rack(bm, fr_x, fr_y, z_ground=deck_top_z, ang=0.10, width=2.20)
+
+    # Fish filleting and preparation block on the pier deck
+    prep_x = -hw + 2.4
+    prep_y = c_y - 0.5
+    create_box(bm, (1.60, 0.80, 0.80), (prep_x, prep_y, deck_top_z + 0.40), mat_index=MAT_INDEX_TIMBER)
+    build_cleaver(bm, prep_x - 0.30, prep_y, z_ground=deck_top_z + 0.80, ang=0.40, stuck=True)
+    build_fish(bm, prep_x + 0.15, prep_y - 0.10, z_ground=deck_top_z + 0.80, ang=-0.25, length=0.40)
+    build_meat(bm, prep_x + 0.40, prep_y + 0.08, z_ground=deck_top_z + 0.80, ang=0.55, length=0.30, variant=1)
+    # Woodcutter splitting axe resting by the barrel
+    build_axe(bm, -hw + 1.2, hd - 2.4, z_ground=deck_top_z, ang=1.15, length=0.68)
 
     # 7. Bone Scale / Plank Gable Roof on Cabin with Solid Gables
     _build_gable_triangle_wall(bm, -c_hw, c_hw, -hd, z1, peak_z, wall_th=wall_th)
@@ -4935,6 +5046,28 @@ def _build_hajfin_pier_landing(bm, props, width=7.0, depth=10.0, found_h=1.6):
         pr_y = p_boom_tip.y + math.sin(ang) * 0.12
         _create_oriented_beam(bm, (p_boom_tip.x, p_boom_tip.y, hook_z - 0.08),
                               (pr_x, pr_y, hook_z + 0.06), width=0.04, depth=0.04, mat_index=MAT_INDEX_IRON)
+
+    # Giant prize monster catch suspended vertically from the davit crane hook
+    _build_hajfin_hanging_prize_fish(bm, p_boom_tip.x, p_boom_tip.y, hook_z, length=2.40, yaw=0.35)
+
+    # 6. Outdoor Fishery Workstation: Fish Drying Rack, Fillet Table with Cleaver, Fish, Meats & Woodcutter Axe
+    from .accessories.artisan_props import (
+        build_fish_drying_rack, build_cleaver, build_fish, build_meat, build_axe, build_pickaxe
+    )
+    # Double-row fish drying rack on the open timber wharf
+    build_fish_drying_rack(bm, hw * 0.35, -hd * 0.30, z_ground=deck_z, ang=0.15, width=2.20)
+
+    # Fish filleting / cleaning preparation bench
+    prep_x = hw * 0.35
+    prep_y = hd * 0.28
+    create_box(bm, (1.80, 0.85, 0.82), (prep_x, prep_y, deck_z + 0.41), mat_index=MAT_INDEX_TIMBER)
+    # Heavy butcher cleaver chopped down into the wooden filleting table
+    build_cleaver(bm, prep_x - 0.35, prep_y, z_ground=deck_z + 0.82, ang=0.45, stuck=True)
+    # Freshly caught fish and meat fillets on the cleaning block
+    build_fish(bm, prep_x + 0.15, prep_y - 0.10, z_ground=deck_z + 0.82, ang=-0.30, length=0.42)
+    build_meat(bm, prep_x + 0.45, prep_y + 0.08, z_ground=deck_z + 0.82, ang=0.60, length=0.32, variant=1)
+    # Woodcutter axe resting near the cargo crate stack
+    build_axe(bm, -hw * 0.35, -hd * 0.30, z_ground=deck_z, ang=1.20, length=0.65)
 
 
 def _build_hajfin_pier_platform(bm, props, width=16.0, depth=16.0, found_h=1.6):
