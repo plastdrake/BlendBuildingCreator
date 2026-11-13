@@ -1916,18 +1916,18 @@ def _build_hajfin_weapon_rack(bm, x, y, z, rot_z=0.0):
 
 def _build_hajfin_cargo_stack(bm, x, y, z):
     """Stacked authentic trade crates, rum/oil barrels, and rope coils."""
-    # Bottom trade crates from artist's Crate.fbx
-    _build_hajfin_crate(bm, x - 0.45, y, z_ground=z, yaw=0.15, scale=0.72)
-    _build_hajfin_crate(bm, x + 0.48, y - 0.15, z_ground=z, yaw=-0.28, scale=0.62)
+    # Bottom trade crates from artist's Crate.fbx with clean spacing
+    _build_hajfin_crate(bm, x - 0.46, y, z_ground=z, yaw=0.15, scale=0.72)
+    _build_hajfin_crate(bm, x + 0.46, y - 0.12, z_ground=z, yaw=-0.28, scale=0.60)
 
-    # Standing authentic handcrafted Hajfin barrel
-    _build_hajfin_barrel(bm, x + 0.48, y + 0.48, z_ground=z, ang=0.4, scale=0.55)
+    # Standing authentic handcrafted Hajfin barrel placed clear behind medium crate
+    _build_hajfin_barrel(bm, x + 0.46, y + 0.58, z_ground=z, ang=0.4, scale=0.52)
 
     # Barrel on side on top of large crate (nestled slightly into crate rim)
-    _build_hajfin_barrel(bm, x - 0.45, y, z_ground=z + 0.835, ang=0.3, scale=0.52, lying=True)
+    _build_hajfin_barrel(bm, x - 0.46, y, z_ground=z + 0.835, ang=0.3, scale=0.50, lying=True)
 
-    # Rope coil on top of smaller crate (top is z + 1.20 * 0.62 = z + 0.744)
-    create_torus_ring(bm, (x + 0.48, y - 0.15, z + 0.744 + 0.08), major_radius=0.26, minor_radius=0.055, mat_index=MAT_INDEX_ROPE)
+    # Rope coil on top of medium crate (top is z + 1.20 * 0.60 = z + 0.72)
+    create_torus_ring(bm, (x + 0.46, y - 0.12, z + 0.72 + 0.06), major_radius=0.22, minor_radius=0.05, mat_index=MAT_INDEX_ROPE)
 
 
 def _build_hajfin_bone_shop_table(bm, x, y, z, width=3.8):
@@ -2899,8 +2899,9 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
     _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_z - eave_z)
 
     # 10. Ground Perimeter Fortifications & Watchtower Provisions
-    _build_hajfin_cargo_stack(bm, -h_wb * 0.9, -h_db - 0.7, 0.0)
-    _build_tribal_totem_post(bm, h_wb * 0.9, -h_db - 0.7, 0.0, height=2.8, with_skull=True)
+    # Placed with clean clearance from corner stilt pillars, X-braces, and the central access ladder
+    _build_hajfin_cargo_stack(bm, -h_wb * 0.55, -h_db - 1.25, 0.0)
+    _build_tribal_totem_post(bm, h_wb * 0.55, -h_db - 1.25, 0.0, height=2.8, with_skull=True)
 
 
 def _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_h):
