@@ -4692,6 +4692,8 @@ def _build_hajfin_pier_straight(bm, props, width=4.0, depth=12.0, found_h=1.6):
             _create_oriented_beam(bm, (px, y0, z_top), (px, y1, z_bot), width=0.14, depth=0.14, mat_index=MAT_INDEX_TIMBER)
 
     fend_th = 0.24
+    fend_h = 0.38
+    fend_cz = deck_z - 0.08
     sep_th = 0.30
     sep_h = 0.44
     sep_cz = deck_z - 0.16
@@ -4730,6 +4732,8 @@ def _build_hajfin_pier_ramp(bm, props, width=4.0, depth=14.0, found_h=1.6):
     y_low = -hd + 0.20
 
     fend_th = 0.24
+    fend_h = 0.38
+    fend_cz = deck_z - 0.08
     sep_th = 0.30
     sep_h = 0.44
     sep_cz = deck_z - 0.16
@@ -4809,6 +4813,8 @@ def _build_hajfin_pier_bend(bm, props, width=10.0, depth=10.0, found_h=1.6):
     oy = -size * 0.5
 
     fend_th = 0.24
+    fend_h = 0.38
+    fend_cz = deck_z - 0.08
     sep_th = 0.30
     sep_h = 0.44
     sep_cz = deck_z - 0.16
@@ -4883,6 +4889,8 @@ def _build_hajfin_pier_tee(bm, props, width=10.0, depth=14.0, found_h=1.6):
     hd = d * 0.5
 
     fend_th = 0.24
+    fend_h = 0.38
+    fend_cz = deck_z - 0.08
     sep_th = 0.30
     sep_h = 0.44
     sep_cz = deck_z - 0.16
@@ -4964,6 +4972,8 @@ def _build_hajfin_pier_landing(bm, props, width=7.0, depth=10.0, found_h=1.6):
     hd = d * 0.5
 
     fend_th = 0.24
+    fend_h = 0.38
+    fend_cz = deck_z - 0.08
     sep_th = 0.30
     sep_h = 0.44
     sep_cz = deck_z - 0.16
