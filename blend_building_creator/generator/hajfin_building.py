@@ -1309,15 +1309,12 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
                            z_peak=peak_z, z_eave=eave_z, slab_th=0.14, u_scale=0.12, v_scale=0.14)
 
     # 3. Heavy Timber Verge Bargeboards on Front & Rear Gable Slopes
-    # Only generated on open overhang verges; abutting walls (ov == 0.0) are sealed by flashing ledgers
     for gy in (y0 - overhang_y, y1 + overhang_y):
         p_peak = (mx, gy, peak_z)
-        if ov_xl > 0.05:
-            p_eave_l = (x0 - ov_xl, gy, eave_z)
-            _create_oriented_beam(bm, p_peak, p_eave_l, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
-        if ov_xr > 0.05:
-            p_eave_r = (x1 + ov_xr, gy, eave_z)
-            _create_oriented_beam(bm, p_peak, p_eave_r, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
+        p_eave_l = (x0 - ov_xl, gy, eave_z)
+        _create_oriented_beam(bm, p_peak, p_eave_l, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
+        p_eave_r = (x1 + ov_xr, gy, eave_z)
+        _create_oriented_beam(bm, p_peak, p_eave_r, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
 
     # 4. Ridge Dorsal Fin Bone & Jagged Teeth Crest
     _build_ridge_crest_fin_and_spines(bm, mx, y0 - overhang_y, y1 + overhang_y,
@@ -3298,8 +3295,8 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
 
     # Upper Tower Main Roof with full gable triangles
     u_peak_z = z_top + 3.2
-    _build_gable_triangle_wall(bm, -u_hw, u_hw, u_y0, z_top, u_peak_z, wall_th=wall_th, force=True)
-    _build_gable_triangle_wall(bm, -u_hw, u_hw, u_y1, z_top, u_peak_z, wall_th=wall_th, force=True)
+    _build_gable_triangle_wall(bm, -u_hw, u_hw, u_y0, z_top, u_peak_z, wall_th=wall_th)
+    _build_gable_triangle_wall(bm, -u_hw, u_hw, u_y1, z_top, u_peak_z, wall_th=wall_th)
     _build_bone_scale_roof_gable(bm, -u_hw, u_hw, u_y0, u_y1, z_top, 3.2,
                                  overhang_x=0.50, overhang_y=0.50, fin_scale=1.7, num_ridge_teeth=7)
 
@@ -3450,9 +3447,9 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
         ban_z = z0 + nave_h * 0.44
         _build_hajfin_hanging_banner(bm, ban_x, -hd - 0.12, ban_z, width=1.75, height=1.90, facing_y=-1.0)
 
-    # 8. Solid Gable Triangle Walls (Zero gaps!)
-    _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, -hd, z0 + nave_h, nave_peak_z, wall_th=wall_th, force=True)
-    _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, hd, z0 + nave_h, nave_peak_z, wall_th=wall_th, force=True)
+    # 8. Solid Gable Triangle Walls (Zero gaps for standard gables; sway roofs build curved gables)
+    _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, -hd, z0 + nave_h, nave_peak_z, wall_th=wall_th)
+    _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, hd, z0 + nave_h, nave_peak_z, wall_th=wall_th)
 
     for sgn_x in (-1.0, 1.0):
         ax0 = sgn_x * (nave_w * 0.5)
@@ -3960,11 +3957,10 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     build_log_pile(bm, hearth_x + 1.9, hearth_y - 0.5, z0, ang=0.15, length=1.5, radius=0.13, rows=3)
 
     # 9. Big Bone Scale Vaulted Roof with Shark Dorsal Fin Crest
-    _build_gable_triangle_wall(bm, -hw, hw, -hd + 0.5, z0 + height, peak_z, wall_th=0.28, force=True)
-    _build_gable_triangle_wall(bm, -hw, hw, hd, z0 + height, peak_z, wall_th=0.28, force=True)
+    _build_gable_triangle_wall(bm, -hw, hw, -hd + 0.5, z0 + height, peak_z, wall_th=0.28)
+    _build_gable_triangle_wall(bm, -hw, hw, hd, z0 + height, peak_z, wall_th=0.28)
     _build_bone_scale_roof_gable(bm, -hw, hw, -hd + 0.5, hd, z0 + height, roof_h,
-                                 overhang_x=0.55, overhang_y=0.55, fin_scale=1.6, num_ridge_teeth=7,
-                                 overhang_x_left=0.55, overhang_x_right=0.55)
+                                 overhang_x=0.55, overhang_y=0.55, fin_scale=1.6, num_ridge_teeth=7)
 
 
 def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, found_h=1.6):
