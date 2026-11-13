@@ -17,13 +17,14 @@ from mathutils import Matrix, Vector
 
 from ..mesh_utils import (
     create_box, create_beveled_box, create_cylinder, create_cone,
-    create_torus_ring, transform_faces
+    create_torus_ring, create_oriented_beam, transform_faces
 )
 from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON,
     MAT_INDEX_ROPE, MAT_INDEX_FISH,
     MAT_INDEX_BONE, MAT_INDEX_DRIFTWOOD, MAT_INDEX_ROUGH_STONE,
-    MAT_INDEX_SILVER
+    MAT_INDEX_SILVER, MAT_INDEX_FLOOR, MAT_INDEX_LEATHER,
+    MAT_INDEX_LANTERN
 )
 
 
@@ -862,3 +863,469 @@ def build_single_hajfin_crate(bm, x, y, z_ground=0.0, ang=0.0, scale=0.75):
         faces = create_box(bm, (sz, sz, sz), (0.0, 0.0, sz * 0.5), mat_index=MAT_INDEX_TIMBER)
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
+
+
+# ---------------------------------------------------------------------------
+# 13. Admiralty Ship Anchor (Booty Bay Nautical Feature)
+# ---------------------------------------------------------------------------
+
+def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0.0, scale=1.0):
+    """
+    Beautiful handcrafted Admiralty ship anchor:
+    - Central tapered rectangular iron shank with forged eyelet at top
+    - Shackle ring passing through the eyelet in the YZ plane
+    - Tapered cross-stock with end spheres and mounting collars
+    - Solid crown transitioning smoothly into curved forged arms
+    - Broad, pointed triangular flukes seamlessly welded to arm ends
+    - Authentic nautical hawser rope knotted through the top ring, spiraling
+      gracefully down the shank, and pooling in a rope coil at the base.
+    """
+    rot = Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Rotation(pitch, 4, 'Y') @ Matrix.Rotation(roll, 4, 'X')
+    trans = Matrix.Translation((x, y, z_ground))
+    M = trans @ rot @ Matrix.Diagonal((scale, scale, scale, 1.0))
+
+    def _box(sx, sy, sz, lx, ly, lz, mat):
+        v_min = (lx - sx * 0.5, ly - sy * 0.5, lz - sz * 0.5)
+        v_max = (lx + sx * 0.5, ly + sy * 0.5, lz + sz * 0.5)
+        c = [
+            Vector((v_min[0], v_min[1], v_min[2])),
+            Vector((v_max[0], v_min[1], v_min[2])),
+            Vector((v_max[0], v_max[1], v_min[2])),
+            Vector((v_min[0], v_max[1], v_min[2])),
+            Vector((v_min[0], v_min[1], v_max[2])),
+            Vector((v_max[0], v_min[1], v_max[2])),
+            Vector((v_max[0], v_max[1], v_max[2])),
+            Vector((v_min[0], v_max[1], v_max[2])),
+        ]
+        tc = [M @ pt for pt in c]
+        verts = [bm.verts.new(pt) for pt in tc]
+        faces = [
+            bm.faces.new([verts[0], verts[1], verts[2], verts[3]]),
+            bm.faces.new([verts[7], verts[6], verts[5], verts[4]]),
+            bm.faces.new([verts[0], verts[4], verts[5], verts[1]]),
+            bm.faces.new([verts[1], verts[5], verts[6], verts[2]]),
+            bm.faces.new([verts[2], verts[6], verts[7], verts[3]]),
+            bm.faces.new([verts[3], verts[7], verts[4], verts[0]]),
+        ]
+        for f in faces:
+            f.material_index = mat
+            f.tag = True
+        return faces
+
+    shank_h = 2.45
+    shank_w = 0.18
+    shank_d = 0.18
+
+    # 1. Central Iron Shank
+    _box(shank_w, shank_d, shank_h, 0.0, 0.0, shank_h * 0.5, MAT_INDEX_IRON)
+
+    # 2. Lower Crown
+    crown_h = 0.35
+    crown_w = shank_w * 1.5
+    crown_d = shank_d * 1.3
+    _box(crown_w, crown_d, crown_h, 0.0, 0.0, crown_h * 0.5, MAT_INDEX_IRON)
+    create_cylinder(bm, radius=crown_d * 0.65, height=crown_w, segments=8,
+                    location=M @ Vector((0.0, 0.0, 0.05)),
+                    rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_IRON)
+
+    # 3. Curved Arms & Flukes (continuous seamless bridged geometry)
+    arm_span = 1.05
+    arm_height = 1.05
+    num_arm_segs = 8
+    arm_r = 0.078
+
+    for sgn_a in (-1.0, 1.0):
+        pts = []
+        for i in range(num_arm_segs + 1):
+            t = i / num_arm_segs
+            ang = t * (math.pi * 0.44)
+            ax = sgn_a * math.sin(ang) * (arm_span * 1.05)
+            az = 0.12 + (1.0 - math.cos(ang)) * arm_height
+            pts.append(Vector((ax, 0.0, az)))
+
+        rings = []
+        for idx, pt in enumerate(pts):
+            if idx == 0:
+                tangent = (pts[1] - pts[0]).normalized()
+            elif idx == len(pts) - 1:
+                tangent = (pts[-1] - pts[-2]).normalized()
+            else:
+                tangent = (pts[idx + 1] - pts[idx - 1]).normalized()
+
+            normal = Vector((0.0, 1.0, 0.0))
+            binormal = tangent.cross(normal).normalized()
+
+            r_scale = 1.0 - 0.20 * (idx / num_arm_segs)
+            r_curr = arm_r * r_scale
+
+            ring_verts = []
+            for k in range(4):
+                ang_r = k * (math.pi * 0.5) + math.pi * 0.25
+                cos_a = math.cos(ang_r) * r_curr
+                sin_a = math.sin(ang_r) * r_curr
+                offset = normal * cos_a + binormal * sin_a
+                ring_verts.append(bm.verts.new(M @ (pt + offset)))
+            rings.append(ring_verts)
+
+        for i in range(len(rings) - 1):
+            r0 = rings[i]
+            r1 = rings[i + 1]
+            for k in range(4):
+                kn = (k + 1) % 4
+                f = bm.faces.new([r0[k], r1[k], r1[kn], r0[kn]])
+                f.material_index = MAT_INDEX_IRON
+                f.tag = True
+
+        tip_pt = pts[-1]
+        tip_tangent = (pts[-1] - pts[-2]).normalized()
+        fluke_len = 0.52
+        fluke_w = 0.38
+
+        p_fluke_tip = tip_pt + tip_tangent * fluke_len + Vector((-sgn_a * 0.06, 0.0, 0.0))
+        wing_fwd = tip_tangent * (fluke_len * 0.35)
+        p_fluke_l = tip_pt + wing_fwd + Vector((0.0, -fluke_w * 0.5, 0.0))
+        p_fluke_r = tip_pt + wing_fwd + Vector((0.0, fluke_w * 0.5, 0.0))
+
+        v_ftip = bm.verts.new(M @ p_fluke_tip)
+        v_fl = bm.verts.new(M @ p_fluke_l)
+        v_fr = bm.verts.new(M @ p_fluke_r)
+
+        r_last = rings[-1]
+        for tri in (
+            [r_last[0], r_last[1], v_fl],
+            [r_last[1], v_ftip, v_fl],
+            [r_last[2], r_last[3], v_fr],
+            [r_last[3], v_fr, v_ftip],
+            [r_last[1], r_last[2], v_ftip],
+            [r_last[0], v_fl, r_last[3]],
+            [r_last[3], v_fl, v_ftip],
+            [r_last[3], v_ftip, v_fr],
+        ):
+            try:
+                f = bm.faces.new(tri)
+                f.material_index = MAT_INDEX_IRON
+                f.tag = True
+            except ValueError:
+                pass
+
+    # 4. Cross-Stock
+    stock_z = shank_h - 0.42
+    stock_len = 2.05
+    stock_w = 0.13
+    stock_d = 0.13
+    p_st_a = M @ Vector((0.0, -stock_len * 0.5, stock_z))
+    p_st_b = M @ Vector((0.0, stock_len * 0.5, stock_z))
+    create_oriented_beam(bm, p_st_a, p_st_b, width=stock_w * scale, depth=stock_d * scale, mat_index=MAT_INDEX_IRON)
+
+    for sgn_s in (-1.0, 1.0):
+        ball_pos = M @ Vector((0.0, sgn_s * (stock_len * 0.5 + 0.07), stock_z))
+        create_cylinder(bm, radius=0.10 * scale, height=0.14 * scale, segments=8,
+                        location=ball_pos, rotation=(math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_IRON)
+        _box(shank_w * 1.35, shank_d * 1.35, 0.14, 0.0, 0.0, stock_z, MAT_INDEX_IRON)
+
+    # 5. Top Eyelet & Shackle Ring
+    eye_z = shank_h + 0.08
+    _box(shank_w * 1.3, shank_d * 1.2, 0.22, 0.0, 0.0, eye_z - 0.08, MAT_INDEX_IRON)
+    create_torus_ring(bm, location=(0.0, 0.0, eye_z + 0.14), rotation=(math.pi * 0.5, 0.0, 0.0),
+                      major_radius=0.20 * scale, minor_radius=0.040 * scale,
+                      major_segments=16, minor_segments=8, mat_index=MAT_INDEX_IRON,
+                      transform_matrix=M)
+
+    # 6. Natural Nautical Hawser Rope (knotted in ring & spiraling down shank)
+    create_torus_ring(bm, location=(0.0, 0.0, eye_z + 0.14), rotation=(0.0, math.pi * 0.5, 0.0),
+                      major_radius=0.12 * scale, minor_radius=0.026 * scale,
+                      major_segments=12, minor_segments=6, mat_index=MAT_INDEX_ROPE,
+                      transform_matrix=M)
+
+    num_rope_turns = 3.0
+    rope_z_top = stock_z - 0.12
+    rope_z_bot = 0.08
+    rope_pts_count = 32
+    rope_r = (shank_w * 0.707 + 0.034)
+
+    prev_rp = None
+    last_pt = None
+    for i in range(rope_pts_count + 1):
+        t = i / rope_pts_count
+        rz = rope_z_top * (1.0 - t) + rope_z_bot * t
+        ang = t * (math.pi * 2.0 * num_rope_turns)
+        rx = math.cos(ang) * rope_r
+        ry = math.sin(ang) * rope_r
+        curr_rp = M @ Vector((rx, ry, rz))
+        if prev_rp is not None:
+            create_oriented_beam(bm, prev_rp, curr_rp, width=0.055 * scale, depth=0.055 * scale, mat_index=MAT_INDEX_ROPE)
+        prev_rp = curr_rp
+        last_pt = Vector((rx, ry, rz))
+
+    pool_center = M @ Vector((last_pt.x + 0.12, last_pt.y + 0.12, 0.03))
+    create_cylinder(bm, radius=0.28 * scale, height=0.06 * scale, segments=12,
+                    location=pool_center, mat_index=MAT_INDEX_ROPE)
+    create_torus_ring(bm, location=pool_center, rotation=(0.0, 0.0, 0.0),
+                      major_radius=0.26 * scale, minor_radius=0.028 * scale,
+                      major_segments=14, minor_segments=6, mat_index=MAT_INDEX_ROPE)
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# 14. Salvaged Ship Mast with Crow's Nest & Rigging
+# ---------------------------------------------------------------------------
+
+def build_ship_mast_with_crows_nest(bm, x=0.0, y=0.0, z_base=0.0, height=9.5,
+                                     mast_radius=0.28, rot_z=0.0,
+                                     with_ratlines=True, with_yardarm=True,
+                                     with_lantern=True, scale=1.0):
+    """
+    Salvaged pirate ship mainmast with circular/octagonal crow's nest lookout basket,
+    yardarm cross-spar with furled sail canvas bundle, standing rigging shrouds & ratlines,
+    iron reinforcement collars, and hanging nautical lantern.
+    """
+    h = height * scale
+    r_bot = mast_radius * scale
+    r_top = mast_radius * 0.68 * scale
+    M_base = Matrix.Translation((x, y, z_base)) @ Matrix.Rotation(rot_z, 4, 'Z')
+
+    # 1. Main Tapered Timber Mast
+    create_cone(bm, radius1=r_bot, radius2=r_top, height=h, segments=10,
+                location=M_base @ Vector((0.0, 0.0, h * 0.5)), mat_index=MAT_INDEX_TIMBER)
+
+    # Iron reinforcement bands at intervals
+    for r_frac in (0.22, 0.45, 0.68, 0.88):
+        bz = h * r_frac
+        curr_r = r_bot + (r_top - r_bot) * r_frac
+        create_cylinder(bm, radius=curr_r + 0.03 * scale, height=0.14 * scale, segments=10,
+                        location=M_base @ Vector((0.0, 0.0, bz)), mat_index=MAT_INDEX_IRON)
+
+    # 2. Topmast Trestletrees & Crow's Nest Platform
+    nest_z = h * 0.76
+    nest_r = 1.15 * scale  # outer radius of crow's nest (~2.3m diameter)
+    nest_h = 1.05 * scale  # basket height
+
+    # Under-floor heavy cross timbers (trestletrees)
+    t_len = nest_r * 2.15
+    create_box(bm, (t_len, 0.22 * scale, 0.20 * scale),
+               M_base @ Vector((0.0, 0.0, nest_z - 0.10 * scale)), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.22 * scale, t_len, 0.20 * scale),
+               M_base @ Vector((0.0, 0.0, nest_z - 0.10 * scale)), mat_index=MAT_INDEX_TIMBER)
+
+    # 4 Diagonal knee struts (hounds) supporting platform floor from mast
+    strut_bot_z = nest_z - 1.30 * scale
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        p_strut_bot = M_base @ Vector((sx * 0.12 * scale, sy * 0.12 * scale, strut_bot_z))
+        p_strut_top = M_base @ Vector((sx * (nest_r * 0.72), sy * (nest_r * 0.72), nest_z - 0.08 * scale))
+        create_oriented_beam(bm, p_strut_bot, p_strut_top, width=0.16 * scale, depth=0.16 * scale, mat_index=MAT_INDEX_TIMBER)
+
+    # Crow's Nest Floor Slab (thick octagonal timber floor)
+    create_cylinder(bm, radius=nest_r, height=0.14 * scale, segments=12,
+                    location=M_base @ Vector((0.0, 0.0, nest_z + 0.07 * scale)), mat_index=MAT_INDEX_FLOOR)
+
+    # Crow's Nest Basket Balustrade: 12 vertical timber staves
+    num_staves = 12
+    stave_h = nest_h
+    for i in range(num_staves):
+        ang = (2.0 * math.pi * i) / num_staves
+        cx = math.cos(ang) * (nest_r - 0.08 * scale)
+        cy = math.sin(ang) * (nest_r - 0.08 * scale)
+        p_stave = M_base @ Vector((cx, cy, nest_z + 0.07 * scale + stave_h * 0.5))
+        create_box(bm, (0.16 * scale, 0.08 * scale, stave_h), p_stave, mat_index=MAT_INDEX_TIMBER)
+
+    # Basket Heavy Top Rail Rim (torus)
+    create_torus_ring(bm, location=(0.0, 0.0, nest_z + 0.07 * scale + stave_h),
+                      major_radius=nest_r - 0.08 * scale, minor_radius=0.065 * scale,
+                      major_segments=16, minor_segments=8, mat_index=MAT_INDEX_TIMBER,
+                      transform_matrix=M_base)
+
+    # Iron rim bands around outer basket
+    create_torus_ring(bm, location=(0.0, 0.0, nest_z + 0.25 * scale),
+                      major_radius=nest_r - 0.04 * scale, minor_radius=0.035 * scale,
+                      major_segments=16, minor_segments=6, mat_index=MAT_INDEX_IRON,
+                      transform_matrix=M_base)
+    create_torus_ring(bm, location=(0.0, 0.0, nest_z + stave_h * 0.75),
+                      major_radius=nest_r - 0.04 * scale, minor_radius=0.035 * scale,
+                      major_segments=16, minor_segments=6, mat_index=MAT_INDEX_IRON,
+                      transform_matrix=M_base)
+
+    # 3. Horizontal Yardarm Cross-Spar with Furled Sail Canvas Bundle
+    if with_yardarm:
+        yard_z = nest_z - 0.40 * scale
+        yard_span = 5.2 * scale
+        p_yard_l = M_base @ Vector((-yard_span * 0.5, 0.0, yard_z))
+        p_yard_r = M_base @ Vector((yard_span * 0.5, 0.0, yard_z))
+        create_oriented_beam(bm, p_yard_l, p_yard_r, width=0.20 * scale, depth=0.20 * scale, mat_index=MAT_INDEX_TIMBER)
+
+        # Furled canvas sail bundle hanging slung beneath the yardarm
+        sail_len = yard_span * 0.86
+        create_cylinder(bm, radius=0.16 * scale, height=sail_len, segments=8,
+                        location=M_base @ Vector((0.0, 0.0, yard_z - 0.16 * scale)),
+                        rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_LEATHER)
+
+        # Rope tie bands lashed around sail bundle
+        for sx in (-0.38, -0.22, -0.08, 0.08, 0.22, 0.38):
+            create_torus_ring(bm, location=(sx * yard_span, 0.0, yard_z - 0.16 * scale),
+                              rotation=(0.0, math.pi * 0.5, 0.0),
+                              major_radius=0.19 * scale, minor_radius=0.025 * scale,
+                              mat_index=MAT_INDEX_ROPE, transform_matrix=M_base)
+
+        # Lift line halyards from yardarm tips to masthead
+        mast_truck_p = M_base @ Vector((0.0, 0.0, h - 0.15 * scale))
+        create_oriented_beam(bm, p_yard_l, mast_truck_p, width=0.045 * scale, depth=0.045 * scale, mat_index=MAT_INDEX_ROPE)
+        create_oriented_beam(bm, p_yard_r, mast_truck_p, width=0.045 * scale, depth=0.045 * scale, mat_index=MAT_INDEX_ROPE)
+
+        # 4. Hanging Nautical Lantern swinging from yardarm end
+        if with_lantern:
+            p_lant_hook = M_base @ Vector((yard_span * 0.44, 0.0, yard_z - 0.10 * scale))
+            p_lant_drop = M_base @ Vector((yard_span * 0.44, 0.0, yard_z - 0.65 * scale))
+            create_oriented_beam(bm, p_lant_hook, p_lant_drop, width=0.035 * scale, depth=0.035 * scale, mat_index=MAT_INDEX_ROPE)
+            create_box(bm, (0.24 * scale, 0.24 * scale, 0.34 * scale),
+                       M_base @ Vector((yard_span * 0.44, 0.0, yard_z - 0.82 * scale)), mat_index=MAT_INDEX_IRON)
+            create_box(bm, (0.16 * scale, 0.16 * scale, 0.22 * scale),
+                       M_base @ Vector((yard_span * 0.44, 0.0, yard_z - 0.82 * scale)), mat_index=MAT_INDEX_LANTERN)
+
+    # 5. Shrouds and Ratlines (Climbing Rope Ladder)
+    if with_ratlines:
+        spread_x = 1.35 * scale
+        spread_y = 0.55 * scale
+        shroud_top_l = M_base @ Vector((-spread_x * 0.4, 0.0, nest_z))
+        shroud_top_r = M_base @ Vector((spread_x * 0.4, 0.0, nest_z))
+        shroud_bot_l = M_base @ Vector((-spread_x, -spread_y, 0.0))
+        shroud_bot_r = M_base @ Vector((spread_x, -spread_y, 0.0))
+
+        create_oriented_beam(bm, shroud_bot_l, shroud_top_l, width=0.06 * scale, depth=0.06 * scale, mat_index=MAT_INDEX_ROPE)
+        create_oriented_beam(bm, shroud_bot_r, shroud_top_r, width=0.06 * scale, depth=0.06 * scale, mat_index=MAT_INDEX_ROPE)
+
+        num_rungs = max(4, int(nest_z / (0.38 * scale)))
+        for i in range(1, num_rungs):
+            t = i / num_rungs
+            p_rung_l = shroud_bot_l.lerp(shroud_top_l, t)
+            p_rung_r = shroud_bot_r.lerp(shroud_top_r, t)
+            create_oriented_beam(bm, p_rung_l, p_rung_r, width=0.038 * scale, depth=0.038 * scale, mat_index=MAT_INDEX_ROPE)
+
+    # 6. Masthead Truck & Finial
+    create_cylinder(bm, radius=r_top * 1.3, height=0.18 * scale, segments=10,
+                    location=M_base @ Vector((0.0, 0.0, h + 0.09 * scale)), mat_index=MAT_INDEX_TIMBER)
+    create_cone(bm, radius1=r_top * 0.9, radius2=0.02 * scale, height=0.45 * scale, segments=8,
+                location=M_base @ Vector((0.0, 0.0, h + 0.40 * scale)), mat_index=MAT_INDEX_BONE)
+
+    return True
+
+
+# ---------------------------------------------------------------------------
+# 15. Suspended Catenary Rope Bridge (Booty Bay Walkway)
+# ---------------------------------------------------------------------------
+
+def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
+                                plank_spacing=0.28, plank_width=0.22,
+                                plank_th=0.08, with_pylons=True,
+                                post_height=1.35, mat_planks=MAT_INDEX_FLOOR,
+                                mat_rope=MAT_INDEX_ROPE, mat_pylons=MAT_INDEX_TIMBER):
+    """
+    World of Warcraft / Booty Bay style authentic suspended catenary rope bridge:
+    - Sagging catenary curve between endpoints p0 and p1
+    - Heavy under-deck dual suspension cables
+    - Handcrafted weathered timber walkway planks with organic angle and width jitter
+    - Upper rope handrails suspended above deck
+    - Vertical rope hanger drops connecting handrails to deck cables
+    - Stout bridgehead anchor timber pylons with wrapped rope lashings
+    """
+    v0 = Vector(p0)
+    v1 = Vector(p1)
+    span_v = v1 - v0
+    L = span_v.length
+    if L < 0.6:
+        return False
+
+    fwd_h = Vector((span_v.x, span_v.y, 0.0))
+    if fwd_h.length < 1e-4:
+        right = Vector((1.0, 0.0, 0.0))
+    else:
+        fwd_norm = fwd_h.normalized()
+        right = Vector((-fwd_norm.y, fwd_norm.x, 0.0))
+
+    def _cat_pt(t):
+        p_lin = v0.lerp(v1, t)
+        sag_z = -4.0 * sag * t * (1.0 - t)
+        return p_lin + Vector((0.0, 0.0, sag_z))
+
+    # 1. Main Under-Deck Suspension Ropes (Left and Right)
+    cable_r_off = width * 0.44
+    cable_z_off = -plank_th * 0.5 - 0.04
+    num_cable_segs = max(12, int(L / 0.45))
+
+    for sgn_side in (-1.0, 1.0):
+        prev_cp = None
+        for i in range(num_cable_segs + 1):
+            t = i / num_cable_segs
+            cp = _cat_pt(t) + right * (sgn_side * cable_r_off) + Vector((0.0, 0.0, cable_z_off))
+            if prev_cp is not None:
+                create_oriented_beam(bm, prev_cp, cp, width=0.075, depth=0.075, mat_index=mat_rope)
+            prev_cp = cp
+
+    # 2. Weathered Timber Walkway Planks
+    num_planks = max(4, int(L / plank_spacing))
+    for i in range(num_planks + 1):
+        t = i / num_planks
+        p_c = _cat_pt(t)
+
+        d_sag_dt = -4.0 * sag * (1.0 - 2.0 * t)
+        tan_v = (span_v + Vector((0.0, 0.0, d_sag_dt))).normalized()
+
+        jitter_yaw = ((i * 137.5) % 8.0 - 4.0) * (math.pi / 180.0)
+        p_width = width * (0.92 + 0.16 * ((i * 73.1) % 1.0))
+        p_len = plank_width * (0.85 + 0.30 * ((i * 41.3) % 1.0))
+
+        cos_j = math.cos(jitter_yaw)
+        sin_j = math.sin(jitter_yaw)
+        p_right = (right * cos_j + tan_v * sin_j).normalized()
+        p_tan = (tan_v * cos_j - right * sin_j).normalized()
+        p_up = p_right.cross(p_tan).normalized()
+
+        M_plank = Matrix((
+            [p_right.x, p_tan.x, p_up.x, p_c.x],
+            [p_right.y, p_tan.y, p_up.y, p_c.y],
+            [p_right.z, p_tan.z, p_up.z, p_c.z],
+            [0.0,       0.0,     0.0,    1.0  ]
+        ))
+        plank_faces = create_box(bm, (p_width, p_len, plank_th), (0.0, 0.0, 0.0), mat_index=mat_planks)
+        transform_faces(plank_faces, M_plank)
+
+    # 3. Suspended Rope Handrails (running post_height above deck)
+    rail_r_off = width * 0.50
+    rail_z_off = post_height
+
+    for sgn_side in (-1.0, 1.0):
+        prev_hp = None
+        for i in range(num_cable_segs + 1):
+            t = i / num_cable_segs
+            hp = _cat_pt(t) + right * (sgn_side * rail_r_off) + Vector((0.0, 0.0, rail_z_off))
+            if prev_hp is not None:
+                create_oriented_beam(bm, prev_hp, hp, width=0.065, depth=0.065, mat_index=mat_rope)
+            prev_hp = hp
+
+    # 4. Vertical Rope Hanger Drops
+    num_hangers = max(3, int(L / 0.65))
+    for i in range(1, num_hangers):
+        t = i / num_hangers
+        p_base = _cat_pt(t)
+        for sgn_side in (-1.0, 1.0):
+            p_top = p_base + right * (sgn_side * rail_r_off) + Vector((0.0, 0.0, rail_z_off))
+            p_bot = p_base + right * (sgn_side * cable_r_off) + Vector((0.0, 0.0, cable_z_off))
+            create_oriented_beam(bm, p_bot, p_top, width=0.045, depth=0.045, mat_index=mat_rope)
+
+    # 5. Stout Bridgehead Anchor Pylons (flanking the walkway entrance, open clearance!)
+    if with_pylons:
+        pylon_r = 0.16
+        for ep in (v0, v1):
+            for sgn_side in (-1.0, 1.0):
+                p_pylon_bot = ep + right * (sgn_side * (width * 0.54)) - Vector((0.0, 0.0, 0.80))
+                p_pylon_top = ep + right * (sgn_side * (width * 0.54)) + Vector((0.0, 0.0, post_height + 0.15))
+                create_oriented_beam(bm, p_pylon_bot, p_pylon_top, width=pylon_r * 2, depth=pylon_r * 2, mat_index=mat_pylons)
+                # Rope lashing coil around top of post
+                create_torus_ring(bm, location=ep + right * (sgn_side * (width * 0.54)) + Vector((0.0, 0.0, post_height)),
+                                  major_radius=pylon_r + 0.03, minor_radius=0.028, mat_index=mat_rope)
+                # Beveled timber post cap
+                create_cone(bm, radius1=pylon_r * 1.15, radius2=0.04, height=0.22, segments=8,
+                            location=ep + right * (sgn_side * (width * 0.54)) + Vector((0.0, 0.0, post_height + 0.22)),
+                            mat_index=mat_pylons)
+
+    return True
+

@@ -52,12 +52,18 @@ from .mesh_utils import (
     create_hollow_cylinder,
     apply_box_uvs,
     transform_faces,
+    create_oriented_beam,
 )
 from .interior import build_straight_staircase
 from .railing import build_railing
 from .accessories.artisan_props import build_anvil, build_tool_rack
 from .accessories.furniture import build_barrel
 from .accessories.interior_furniture import build_log_pile
+from .accessories.hajfin_props import (
+    build_ship_anchor,
+    build_ship_mast_with_crows_nest,
+    build_suspended_rope_bridge,
+)
 from .uv_utils import timber_box
 
 _HAJFIN_ROOF_PROPS = None
@@ -280,49 +286,7 @@ def _hajfin_roof_props(props):
 def _create_oriented_beam(bm, p0, p1, width=0.30, depth=0.30, mat_index=MAT_INDEX_TIMBER):
     """Creates a rectangular timber beam connecting any two 3D points p0 and p1
     with longitudinal wood grain unwrapped along its length."""
-    v0 = Vector(p0)
-    v1 = Vector(p1)
-    v_dir = v1 - v0
-    length = v_dir.length
-    if length < 1e-4:
-        return []
-    mid = (v0 + v1) * 0.5
-    up = Vector((0.0, 0.0, 1.0))
-    d_norm = v_dir.normalized()
-    axis = up.cross(d_norm)
-    if axis.length < 1e-4:
-        rot_mat = Matrix.Identity(4) if d_norm.z > 0 else Matrix.Rotation(math.pi, 4, 'X')
-    else:
-        angle = up.angle(d_norm)
-        rot_mat = Matrix.Rotation(angle, 4, axis.normalized())
-    faces = create_box(bm, (width, depth, length), (0.0, 0.0, 0.0), mat_index=mat_index)
-    bm.normal_update()
-    uv_layer = bm.loops.layers.uv.verify()
-    su = 0.25
-    sv = 0.25
-    for f in faces:
-        f.tag = True
-        norm = f.normal
-        la = (abs(norm.x), abs(norm.y), abs(norm.z))
-        if la[2] >= la[0] and la[2] >= la[1]:
-            # End cap (local XY)
-            for loop in f.loops:
-                c = loop.vert.co
-                loop[uv_layer].uv = Vector((c.x * su, c.y * su))
-        elif la[0] >= la[1]:
-            # Normal along X (across is Y, along length is Z)
-            for loop in f.loops:
-                c = loop.vert.co
-                loop[uv_layer].uv = Vector((c.y * su, c.z * sv))
-        else:
-            # Normal along Y (across is X, along length is Z)
-            for loop in f.loops:
-                c = loop.vert.co
-                loop[uv_layer].uv = Vector((c.x * su, c.z * sv))
-
-    tr = Matrix.Translation(mid) @ rot_mat
-    transform_faces(faces, tr)
-    return faces
+    return create_oriented_beam(bm, p0, p1, width=width, depth=depth, mat_index=mat_index)
 
 def _build_curved_bone_spine(bm, x, y, z, height=1.0, base_radius=0.14, rot_z=0.0, sweep_y=-0.25):
     """Builds a smooth, volumetric sculpted bone tusk / spine with graceful backward curve and oval cross section."""
@@ -4033,10 +3997,13 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                               z_mid, z1, win_cx=-hw * 0.4, win_cz=z_mid + story_h * 0.52,
                               win_w=0.85, win_h=0.85, wall_th=wall_th, facing_north=False)
 
-    # Upper rear wall overlooking drinking deck with bone window (extended to seal inner corner)
-    _build_wall_with_window_x(bm, -hw + wall_th, hw - wing_w + wall_th * 0.5, -hd + m_d - wall_th * 0.5,
-                              z_mid, z1, win_cx=-hw + deck_w * 0.5, win_cz=z_mid + story_h * 0.52,
-                              win_w=0.85, win_h=0.85, wall_th=wall_th, facing_north=True)
+    # Upper rear wall with open doorway leading out onto the elevated pirate terrace
+    door_w = float(getattr(props, 'door_width', 1.80))
+    door_h = min(float(getattr(props, 'door_height', 3.60)), story_h * 0.85)
+    _build_wall_with_door_opening(bm, -hw + wall_th, hw - wing_w + wall_th * 0.5, -hd + m_d - wall_th * 0.5,
+                                  z_mid, z1, door_cx=-hw + deck_w * 0.5, door_w=door_w, door_h=door_h,
+                                  wall_th=wall_th, rot_z=math.pi,
+                                  include_leaf=getattr(props, 'include_door_leaves', False))
 
     # Flanking upper side walls with real window cutouts
     _build_wall_with_window_y(bm, -hd + wall_th, -hd + m_d - wall_th, -hw + wall_th * 0.5,
@@ -4081,6 +4048,70 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                                  overhang_x=0.55, overhang_y=0.55, fin_scale=1.7, num_ridge_teeth=8)
     _build_bone_scale_roof_gable(bm, hw - wing_w, hw, hd - wing_d, hd, z1, 3.0,
                                  overhang_x=0.45, overhang_y=0.45, fin_scale=1.3, num_ridge_teeth=6)
+
+    # 10. Booty Bay Nautical Features: Outrigger Lookout Turret, Suspended Rope Bridge, Mast & Anchor
+    turret_w = 3.6
+    turret_d = 3.6
+    turret_cx = -hw - 4.8
+    turret_cy = deck_cy
+    turret_z = z_mid
+    h_tw = turret_w * 0.5
+    h_td = turret_d * 0.5
+
+    # Turret floor deck
+    create_box(bm, (turret_w, turret_d, 0.20), (turret_cx, turret_cy, turret_z + 0.10), mat_index=MAT_INDEX_FLOOR)
+
+    # 4 Heavy corner stilt legs from ground (0.0) up to turret deck
+    for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+        lx = turret_cx + sx * (h_tw - 0.25)
+        ly = turret_cy + sy * (h_td - 0.25)
+        create_box(bm, (0.38, 0.38, turret_z + 0.10), (lx, ly, (turret_z + 0.10) * 0.5), mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (lx, ly, turret_z * 0.5), major_radius=0.22, minor_radius=0.035, mat_index=MAT_INDEX_ROPE)
+
+    # Diagonal timber X-bracing
+    create_oriented_beam(bm, (turret_cx - h_tw + 0.25, turret_cy - h_td + 0.25, 0.3),
+                         (turret_cx + h_tw - 0.25, turret_cy - h_td + 0.25, turret_z), width=0.20, depth=0.20, mat_index=MAT_INDEX_TIMBER)
+    create_oriented_beam(bm, (turret_cx - h_tw + 0.25, turret_cy - h_td + 0.25, turret_z),
+                         (turret_cx + h_tw - 0.25, turret_cy - h_td + 0.25, 0.3), width=0.20, depth=0.20, mat_index=MAT_INDEX_TIMBER)
+
+    # Perimeter railing around North, South, and West sides of turret (East side left open for rope bridge!)
+    rail_h = 1.05
+    create_box(bm, (0.16, turret_d, 0.14), (turret_cx - h_tw + 0.08, turret_cy, turret_z + 0.20 + rail_h), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (turret_w, 0.16, 0.14), (turret_cx, turret_cy + h_td - 0.08, turret_z + 0.20 + rail_h), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (turret_w, 0.16, 0.14), (turret_cx, turret_cy - h_td + 0.08, turret_z + 0.20 + rail_h), mat_index=MAT_INDEX_TIMBER)
+    for bx in (-h_tw + 0.08, 0.0, h_tw - 0.08):
+        create_box(bm, (0.14, 0.14, rail_h), (turret_cx + bx, turret_cy + h_td - 0.08, turret_z + 0.20 + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.14, 0.14, rail_h), (turret_cx + bx, turret_cy - h_td + 0.08, turret_z + 0.20 + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.14, 0.14, rail_h), (turret_cx - h_tw + 0.08, turret_cy, turret_z + 0.20 + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # Salvaged Ship Mainmast with Crow's Nest stepped into the outrigger turret
+    build_ship_mast_with_crows_nest(bm, x=turret_cx, y=turret_cy, z_base=turret_z + 0.20,
+                                     height=8.5, mast_radius=0.26, rot_z=0.35, with_lantern=True)
+
+    # Upper Exterior Lookout Terrace at z_mid (spans upper floor out to bridgehead)
+    create_box(bm, (deck_w, deck_d, 0.16), (deck_cx, deck_cy, z_mid + 0.08), mat_index=MAT_INDEX_FLOOR)
+    t_supp_h = (z_mid + 0.08) - (z0 + 0.16)
+    t_supp_cz = (z0 + 0.16) + t_supp_h * 0.5
+    for sx, sy in ((deck_x0 + 0.25, deck_y1 - 0.25), (deck_x1 - 0.25, deck_y1 - 0.25)):
+        create_box(bm, (0.32, 0.32, t_supp_h), (sx, sy, t_supp_cz), mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (sx, sy, z_mid), major_radius=0.20, minor_radius=0.03, mat_index=MAT_INDEX_IRON)
+
+    create_box(bm, (deck_w, 0.14, 0.12), (deck_cx, deck_y1 - 0.07, z_mid + 0.16 + rail_h), mat_index=MAT_INDEX_TIMBER)
+    w_len_s = (deck_cy - 0.70) - deck_y0
+    if w_len_s > 0.2:
+        create_box(bm, (0.14, w_len_s, 0.12), (deck_x0 + 0.07, deck_y0 + w_len_s * 0.5, z_mid + 0.16 + rail_h), mat_index=MAT_INDEX_TIMBER)
+    w_len_n = deck_y1 - (deck_cy + 0.70)
+    if w_len_n > 0.2:
+        create_box(bm, (0.14, w_len_n, 0.12), (deck_x0 + 0.07, deck_y1 - w_len_n * 0.5, z_mid + 0.16 + rail_h), mat_index=MAT_INDEX_TIMBER)
+
+    # Suspended Catenary Rope Bridge spanning tavern upper deck to turret platform (completely unblocked passage!)
+    bridge_p0 = (deck_x0, deck_cy, z_mid + 0.08)
+    bridge_p1 = (turret_cx + h_tw, deck_cy, turret_z + 0.10)
+    build_suspended_rope_bridge(bm, bridge_p0, bridge_p1, width=1.30, sag=0.36, with_pylons=True)
+
+    # Heavy Forged Iron Ship Anchor leaning at front tavern pier entrance
+    build_ship_anchor(bm, x=-hw * 0.4 + 1.9, y=-hd - 0.40, z_ground=z0, yaw=-0.40, pitch=-0.28, scale=1.05)
+
 
 
 def _build_hajfin_bone_gate(bm, props, width=12.0, depth=4.0, height=4.5, found_h=0.0):
@@ -4600,6 +4631,8 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
     build_meat(bm, prep_x + 0.40, prep_y + 0.08, z_ground=deck_top_z + 0.80, ang=0.55, length=0.30, variant=1)
     # Woodcutter splitting axe resting by the barrel
     build_axe(bm, -hw + 1.2, hd - 2.4, z_ground=deck_top_z, ang=1.15, length=0.68)
+    # Admiralty ship anchor leaning against outer pier stilt corner
+    build_ship_anchor(bm, x=c_hw + 1.6, y=hd - 1.2, z_ground=deck_top_z, yaw=-0.45, pitch=-0.28, scale=1.0)
 
     # 7. Bone Scale / Plank Gable Roof on Cabin with Solid Gables
     _build_gable_triangle_wall(bm, -c_hw, c_hw, -hd, z1, peak_z, wall_th=wall_th)
@@ -4991,6 +5024,7 @@ def _build_hajfin_pier_landing(bm, props, width=7.0, depth=10.0, found_h=1.6):
                             rotation=(math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
 
     _build_hajfin_cargo_stack(bm, -hw * 0.38, hd * 0.30, deck_z)
+    build_ship_anchor(bm, x=hw - 1.2, y=-hd + 1.8, z_ground=deck_z, yaw=-0.50, pitch=-0.28, scale=0.95)
 
     # 5. Heavy Timber Shipyard Davit Crane
     davit_x = -hw + 1.10
@@ -5222,6 +5256,64 @@ def _build_hajfin_pier_high_ramp(bm, props, width=6.0, depth=18.0, found_h=1.6):
     # Transverse End Header / Separation Beams capping lower and upper module connections
     create_box(bm, (deck_w, sep_th, sep_h), (0.0, -hd + sep_th * 0.5, sep_cz_low), mat_index=MAT_INDEX_TIMBER)
     create_box(bm, (deck_w, sep_th, sep_h), (0.0, hd - sep_th * 0.5, sep_cz_high), mat_index=MAT_INDEX_TIMBER)
+
+
+def _build_hajfin_pier_rope_bridge(bm, props, width=4.0, depth=16.0, found_h=1.6):
+    """Booty Bay Suspended Rope Bridge Module:
+    16m catenary suspension bridge connecting two stilted lookout pier abutments.
+    - South Abutment (Pier Head): Stilt pilings, deck platform, heavy Admiralty anchor, grog barrels.
+    - North Abutment (Lookout Tower): Stilt pilings, observation deck, salvaged ship mainmast with crow's nest & lantern.
+    - Central Suspension Rope Bridge: Sagging catenary curve across the water gap, weathered timber planks,
+      upper rope handrails, vertical rope baluster hangers, and flanking bridgehead pylons with 100% open unblocked passage.
+    """
+    w = max(3.8, width)
+    d = max(14.0, depth)
+    hw = w * 0.5
+    hd = d * 0.5
+    deck_z = max(0.8, found_h)
+    abut_len = 3.6
+    water_depth = 8.0
+    post_r = 0.22
+    deck_th = 0.16
+
+    # 1. South Abutment Platform
+    s_cy = -hd + abut_len * 0.5
+    create_box(bm, (w, abut_len, deck_th), (0.0, s_cy, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+    for px in (-hw + 0.35, hw - 0.35):
+        for py in (-hd + 0.35, -hd + abut_len - 0.35):
+            p_h = deck_z + water_depth + 0.65
+            cz = (deck_z + 0.65) - p_h * 0.5
+            create_cylinder(bm, radius=post_r, height=p_h, segments=8, location=(px, py, cz), mat_index=MAT_INDEX_TIMBER)
+            create_torus_ring(bm, (px, py, deck_z + 0.45), major_radius=post_r + 0.02, minor_radius=0.028, mat_index=MAT_INDEX_IRON)
+    create_box(bm, (w, 0.18, 0.16), (0.0, -hd + 0.09, deck_z + 0.85), mat_index=MAT_INDEX_TIMBER)
+
+    # South props: Admiralty Anchor & Grog barrels
+    build_ship_anchor(bm, x=hw - 0.9, y=-hd + 1.2, z_ground=deck_z, yaw=-0.4, pitch=-0.26, scale=1.0)
+    _build_hajfin_barrel(bm, -hw + 0.9, -hd + 1.1, z_ground=deck_z, ang=0.3, scale=0.55)
+    _build_hajfin_barrel(bm, -hw + 1.3, -hd + 1.6, z_ground=deck_z, ang=1.2, scale=0.50)
+
+    # 2. North Abutment Platform (Lookout Tower)
+    n_deck_z = deck_z + 0.50
+    n_cy = hd - abut_len * 0.5
+    create_box(bm, (w, abut_len, deck_th), (0.0, n_cy, n_deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+    for px in (-hw + 0.35, hw - 0.35):
+        for py in (hd - abut_len + 0.35, hd - 0.35):
+            p_h = n_deck_z + water_depth + 0.65
+            cz = (n_deck_z + 0.65) - p_h * 0.5
+            create_cylinder(bm, radius=post_r, height=p_h, segments=8, location=(px, py, cz), mat_index=MAT_INDEX_TIMBER)
+            create_torus_ring(bm, (px, py, n_deck_z + 0.45), major_radius=post_r + 0.02, minor_radius=0.028, mat_index=MAT_INDEX_IRON)
+    create_box(bm, (w, 0.18, 0.16), (0.0, hd - 0.09, n_deck_z + 0.85), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.18, abut_len, 0.16), (hw - 0.09, n_cy, n_deck_z + 0.85), mat_index=MAT_INDEX_TIMBER)
+
+    # North mast with crow's nest & lantern
+    build_ship_mast_with_crows_nest(bm, x=0.0, y=hd - 1.4, z_base=n_deck_z, height=8.8,
+                                     mast_radius=0.25, rot_z=0.2, with_lantern=True)
+
+    # 3. Central Catenary Rope Bridge (100% open passage between pylons)
+    p0 = (0.0, -hd + abut_len, deck_z)
+    p1 = (0.0, hd - abut_len, n_deck_z)
+    build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.52, with_pylons=True)
+
 
 
 
@@ -5563,6 +5655,8 @@ def build_hajfin_building(obj, bm, props):
         _build_hajfin_pier_platform(bm, props, width=width, depth=depth, found_h=found_h)
     elif style == 'PIER_HIGH_RAMP':
         _build_hajfin_pier_high_ramp(bm, props, width=width, depth=depth, found_h=found_h)
+    elif style in ('PIER_ROPE_BRIDGE', 'ROPE_BRIDGE'):
+        _build_hajfin_pier_rope_bridge(bm, props, width=width, depth=depth, found_h=found_h)
     elif style in ('FISH_DEPOT', 'DEPOT', 'PIER') or arch in ('WAREHOUSE', 'DEPOT', 'HARBOR'):
         _build_hajfin_fish_depot(bm, props, width=max(10.0, width), depth=max(12.0, depth), height=height, found_h=max(1.6, found_h))
     elif style in ('SHRINE', 'TEMPLE') or arch in ('TEMPLE', 'CHURCH', 'SHRINE'):

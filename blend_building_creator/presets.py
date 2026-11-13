@@ -7329,6 +7329,15 @@ PRESETS = {
         'description': "Two-tier harbor dock connecting standard 1.6m elevation up to a 4.0m high observation overlook with non-slip incline ramp and railings.",
         'settings': _hajfin_settings(width=6.0, depth=18.0, num_floors=1, found_h=1.6, wonkiness=0.06, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_HIGH_RAMP'),
     },
+    'HAJFIN_PIER_ROPE_BRIDGE': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "Suspended Rope Bridge",
+        'plot': "4m x 16m",
+        'description': "Booty Bay style 16m suspended catenary rope bridge spanning between two stilted lookout pier abutments with weathered walkway planks, rope handrails, salvaged ship mast, and leaning anchor.",
+        'settings': _hajfin_settings(width=4.0, depth=16.0, num_floors=1, found_h=1.6, wonkiness=0.08, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_ROPE_BRIDGE'),
+    },
 
 }
 
@@ -7992,6 +8001,7 @@ BUILDING_FAMILIES = [
             ("Pier Head", 'HAJFIN_PIER_LANDING', "Wide boat berth landing with boat ladder, cargo stack, and mooring cleats"),
             ("Wharf (16m)", 'HAJFIN_PIER_PLATFORM', "Expansive 16x16m open timber wharf platform with zero obstacles for building placement"),
             ("Elevated Ramp", 'HAJFIN_PIER_HIGH_RAMP', "Two-tier dock with inclined ramp ascending to a 4m high observation deck"),
+            ("Rope Bridge", 'HAJFIN_PIER_ROPE_BRIDGE', "16m suspended catenary rope bridge spanning two stilted pier abutments with ship mast and anchor"),
         ],
     },
 ]
@@ -8116,6 +8126,7 @@ ARCHETYPE_MAP = {
     'HAJFIN_PIER_LANDING': 'HARBOR',
     'HAJFIN_PIER_PLATFORM': 'HARBOR',
     'HAJFIN_PIER_HIGH_RAMP': 'HARBOR',
+    'HAJFIN_PIER_ROPE_BRIDGE': 'HARBOR',
 }
 
 KIT_FOR_ARCHETYPE = {

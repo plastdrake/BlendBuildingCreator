@@ -1254,11 +1254,13 @@ def apply_box_uvs(bm, scale=1.0, skip_materials=(2, 4, 6, 7, 9, 10, 12, 13, 14, 
                 v = co.z * v_s
             loop[uv_layer].uv = Vector((u, v))
 
-def create_torus_ring(bm, location, rotation=(0.0, 0.0, 0.0), major_radius=0.055, minor_radius=0.011, major_segments=16, minor_segments=8, mat_index=6):
+def create_torus_ring(bm, location=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0), major_radius=0.055, minor_radius=0.011, major_segments=16, minor_segments=8, mat_index=6, transform_matrix=None):
     """Generates a smooth torus ring for door pull rings and fantasy iron hardware."""
     rot_mat = Euler(rotation, 'XYZ').to_matrix().to_4x4()
     loc_mat = Matrix.Translation(Vector(location))
     tr_mat = loc_mat @ rot_mat
+    if transform_matrix is not None:
+        tr_mat = transform_matrix @ tr_mat
     verts = []
     for i in range(major_segments):
         a = 2.0 * math.pi * i / major_segments
@@ -1538,3 +1540,50 @@ def add_wonkiness(bm, z_min, z_max, amount=0.08, seed=0):
         wave = math.sin(v.co.z * 1.2 + seed) * (amount * 0.45)
         v.co.x += wave
         v.co.y += wave * 0.65
+
+
+def create_oriented_beam(bm, p0, p1, width=0.30, depth=0.30, mat_index=0, su=0.25, sv=0.25):
+    """Creates a rectangular beam connecting any two 3D points p0 and p1
+    with longitudinal texture coordinates unwrapped along its length."""
+    v0 = Vector(p0)
+    v1 = Vector(p1)
+    v_dir = v1 - v0
+    length = v_dir.length
+    if length < 1e-4:
+        return []
+    mid = (v0 + v1) * 0.5
+    up = Vector((0.0, 0.0, 1.0))
+    d_norm = v_dir.normalized()
+    axis = up.cross(d_norm)
+    if axis.length < 1e-4:
+        rot_mat = Matrix.Identity(4) if d_norm.z > 0 else Matrix.Rotation(math.pi, 4, 'X')
+    else:
+        angle = up.angle(d_norm)
+        rot_mat = Matrix.Rotation(angle, 4, axis.normalized())
+    faces = create_box(bm, (width, depth, length), (0.0, 0.0, 0.0), mat_index=mat_index)
+    bm.normal_update()
+    uv_layer = bm.loops.layers.uv.verify()
+    for f in faces:
+        f.tag = True
+        norm = f.normal
+        la = (abs(norm.x), abs(norm.y), abs(norm.z))
+        if la[2] >= la[0] and la[2] >= la[1]:
+            # End cap (local XY)
+            for loop in f.loops:
+                c = loop.vert.co
+                loop[uv_layer].uv = Vector((c.x * su, c.y * su))
+        elif la[0] >= la[1]:
+            # Normal along X (across is Y, along length is Z)
+            for loop in f.loops:
+                c = loop.vert.co
+                loop[uv_layer].uv = Vector((c.y * su, c.z * sv))
+        else:
+            # Normal along Y (across is X, along length is Z)
+            for loop in f.loops:
+                c = loop.vert.co
+                loop[uv_layer].uv = Vector((c.x * su, c.z * sv))
+
+    tr = Matrix.Translation(mid) @ rot_mat
+    transform_faces(faces, tr)
+    return faces
+

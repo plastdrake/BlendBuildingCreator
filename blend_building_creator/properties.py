@@ -356,6 +356,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('PIER_LANDING', "Boat Berth & Pier Head", "Terminal dock landing head with boat ladder, cargo stack, and mooring cleats", 'MATFLUID', 16),
             ('PIER_PLATFORM', "Large Harbor Wharf Platform", "Expansive 16x16m open timber wharf platform on heavy stilt pilings with zero obstacles", 'MOD_LATTICE', 17),
             ('PIER_HIGH_RAMP', "Elevated Tier Pier & Ramp", "Two-tier harbor dock with an inclined ramp ascending to a high observation overlook", 'EMPTY_SINGLE_ARROW', 18),
+            ('PIER_ROPE_BRIDGE', "Suspended Rope Bridge", "16m suspended catenary rope bridge spanning two stilted pier abutments with ship mast and anchor", 'MOD_OCEAN', 19),
         ],
         default='SHANTY',
         update=on_property_updated
