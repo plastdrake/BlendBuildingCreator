@@ -7036,6 +7036,24 @@ PRESETS = {
         'description': "Two-storey stilt shack with interior stairs, upper deck, copper nails, and extended roof overhang.",
         'settings': _hajfin_settings(width=9.5, depth=11.0, num_floors=2, found_h=1.4, wonkiness=0.22, roof_h=4.0, roof_mat='WOOD_SHINGLES', tier=2, hajfin_style='SHANTY'),
     },
+    'HAJFIN_HULL_SHELTER_T1': {
+        'category': 'SHANTIES',
+        'family': 'HAJFIN_HULL_SHELTER',
+        'tier': 1,
+        'name': "Upturned Hull Shelter",
+        'plot': "8m x 8m",
+        'description': "A broken ship's boat turned keel-up on the beach: heavy inside ribs, torn plank edge and an open arched shelter.",
+        'settings': _hajfin_settings(width=8.0, depth=9.0, num_floors=1, found_h=0.0, wonkiness=0.10, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=1, hajfin_style='HULL_SHELTER'),
+    },
+    'HAJFIN_SHIP_TAVERN_T1': {
+        'category': 'HOSPITALITY',
+        'family': 'HAJFIN_SHIP_TAVERN',
+        'tier': 1,
+        'name': "The Beached Galleon",
+        'plot': "30m x 30m",
+        'description': "Tavern built into a beached pirate ship: planked hull hall with a pointed prow and gunwale beams, upper lodging storey, bone-scale roof and the salvaged mainmast.",
+        'settings': _hajfin_settings(width=12.5, depth=16.0, num_floors=2, found_h=1.2, wonkiness=0.16, has_pillared=True, pillars=4, has_trade_sign=True, sign_icon='tavern_sign.png', roof_h=4.6, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.90, door_h=3.60, tier=1, hajfin_style='SHIP_TAVERN'),
+    },
     'HAJFIN_NET_HUT_T1': {
         'category': 'SHANTIES',
         'family': 'HAJFIN_NET_HUT',
@@ -7865,6 +7883,32 @@ BUILDING_FAMILIES = [
         'tiers': [
             ("T1", 'HAJFIN_STILT_SHACK_T1', "Ramshackle drift shanty with crooked lean-to roof"),
             ("T2", 'HAJFIN_STILT_SHACK_T2', "Reinforced stilt shack with patched sailcloth"),
+        ],
+    },
+    {
+        'id': 'HAJFIN_HULL_SHELTER',
+        'faction': 'HAJFIN',
+        'name': "Upturned Hull Shelter",
+        'category': 'SHANTIES',
+        'plot': "8m x 8m",
+        'shape': "Inverted Hull",
+        'icon': 'MOD_OCEAN',
+        'description': "A broken ship's boat turned upside down on the sand as a simple storm shelter.",
+        'tiers': [
+            ("Standalone", 'HAJFIN_HULL_SHELTER_T1', "Keel-up boat shelter with exposed ribs and torn plank edge"),
+        ],
+    },
+    {
+        'id': 'HAJFIN_SHIP_TAVERN',
+        'faction': 'HAJFIN',
+        'name': "The Beached Galleon",
+        'category': 'HOSPITALITY',
+        'plot': "30m x 30m",
+        'shape': "Hull",
+        'icon': 'COMMUNITY',
+        'description': "Tavern and inn built into a beached pirate ship, complete with prow, gunwales, mainmast and a bone-scale roof.",
+        'tiers': [
+            ("Standalone", 'HAJFIN_SHIP_TAVERN_T1', "Two-storey hull tavern with prow deck, mast and crow's nest"),
         ],
     },
     {
