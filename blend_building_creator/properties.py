@@ -385,6 +385,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('PIER_PLATFORM', "Large Harbor Wharf Platform", "Expansive 16x16m open timber wharf platform on heavy stilt pilings with zero obstacles", 'MOD_LATTICE', 17),
             ('PIER_HIGH_RAMP', "Elevated Tier Pier & Ramp", "Two-tier harbor dock with an inclined ramp ascending to a high observation overlook", 'EMPTY_SINGLE_ARROW', 18),
             ('PIER_ROPE_BRIDGE', "Suspended Rope Bridge", "16m suspended catenary rope bridge spanning two stilted pier abutments with ship mast and anchor", 'MOD_OCEAN', 19),
+            ('FEATURE_ROPE_BRIDGE', "Rope Bridge Feature", "Standalone suspended rope bridge with cross-plank walkway, handrail ropes and lashed pylons", 'MOD_OCEAN', 20),
+            ('FEATURE_CROWS_NEST', "Crow's Nest Mast Feature", "Standalone ship mainmast with crow's nest lookout, yardarm, furled sail and ratline ladder", 'OUTLINER_OB_LIGHTPROBE', 21),
+            ('FEATURE_SHIP_ANCHOR', "Ship Anchor Feature", "Standalone salvaged anchor with spiralled hawser and rope coil", 'SNAP_FACE', 22),
         ],
         default='SHANTY',
         update=on_property_updated

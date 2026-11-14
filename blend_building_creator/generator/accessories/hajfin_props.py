@@ -1393,27 +1393,28 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
         plank_faces = create_box(bm, (p_width, p_len, plank_th), (0.0, 0.0, 0.0), mat_index=mat_planks)
         # Map each board to exactly ONE plank band of the deck atlas, and slide it
         # along the atlas per board so no two planks are carbon copies.
-        # Sample one WHOLE plank row of the deck atlas, and slide along it per
-        # board.  A tiny UV patch (the old 0.15 x 0.10 window) sampled a flat
-        # gradient and read as blurry low-res; a full row keeps the grain crisp.
+        # One plank row of the deck atlas per board.  The row's dark seam bands are
+        # excluded (they showed as black blobs across the boards) and the grain is
+        # mapped ALONG the board's width - these are cross-planks, so that is the
+        # direction the timber grain actually runs.
         rows = 12.0
         row_h = 1.0 / rows
-        v_base = (i % int(rows)) * row_h
-        v_span = row_h
-        u_off = ((i * 0.23) % 0.5)
-        u_len = 0.5
+        v_base = (i % int(rows)) * row_h + row_h * 0.09
+        v_span = row_h * 0.82
+        u_off = ((i * 0.19) % 0.14)
+        u_len = 0.86
         for f in plank_faces:
             fn = f.normal
             for loop in f.loops:
                 lc = loop.vert.co
                 if abs(fn.z) > 0.5:
-                    u = u_off + (lc.y / p_len + 0.5) * u_len
-                    v = v_base + (lc.x / p_width + 0.5) * v_span
-                elif abs(fn.x) >= abs(fn.y):
-                    u = u_off + (lc.y / p_len + 0.5) * u_len
-                    v = v_base + (lc.z / plank_th + 0.5) * v_span
-                else:
                     u = u_off + (lc.x / p_width + 0.5) * u_len
+                    v = v_base + (lc.y / p_len + 0.5) * v_span
+                elif abs(fn.x) >= abs(fn.y):
+                    u = u_off + (lc.z / plank_th + 0.5) * u_len
+                    v = v_base + (lc.y / p_len + 0.5) * v_span
+                else:
+                    u = u_off + (lc.y / p_len + 0.5) * u_len
                     v = v_base + (lc.z / plank_th + 0.5) * v_span
                 loop[uv_layer_planks].uv = Vector((u, v))
         transform_faces(plank_faces, M_plank)

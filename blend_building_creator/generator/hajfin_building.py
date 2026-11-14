@@ -6620,6 +6620,19 @@ def build_hajfin_building(obj, bm, props):
         _build_hajfin_pier_platform(bm, props, width=width, depth=depth, found_h=found_h)
     elif style == 'PIER_HIGH_RAMP':
         _build_hajfin_pier_high_ramp(bm, props, width=width, depth=depth, found_h=found_h)
+    elif style in ('FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE'):
+        # Free-standing suspended rope bridge: the span runs along Y so the preset
+        # is easy to place and export on its own.
+        span = max(4.0, min(width, 24.0))
+        build_suspended_rope_bridge(
+            bm, (0.0, -span * 0.5, 0.0), (0.0, span * 0.5, 0.0),
+            width=1.35, sag=max(0.30, span * 0.06), with_pylons=True, post_height=1.35)
+    elif style in ('FEATURE_CROWS_NEST', 'FEATURE_NEST'):
+        build_ship_mast_with_crows_nest(
+            bm, 0.0, 0.0, 0.0, height=9.5, mast_radius=0.26, rot_z=0.0,
+            with_ratlines=True, with_yardarm=True, with_lantern=True)
+    elif style in ('FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR'):
+        build_ship_anchor(bm, 0.0, 0.0, 0.0, yaw=0.0, pitch=-0.20, scale=1.0)
     elif style in ('PIER_ROPE_BRIDGE', 'ROPE_BRIDGE'):
         _build_hajfin_pier_rope_bridge(bm, props, width=width, depth=depth, found_h=found_h)
     elif style in ('FISH_DEPOT', 'DEPOT', 'PIER') or arch in ('WAREHOUSE', 'DEPOT', 'HARBOR'):
@@ -6634,6 +6647,12 @@ def build_hajfin_building(obj, bm, props):
 
     # Final material-scoped pass prevents any archetype-specific wall builder
     # from reintroducing a different siding density.
+    if style in ('FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
+                 'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR'):
+        # Standalone features bring their own unwrap - keep the box-UV pass off them.
+        for _f in bm.faces:
+            _f.tag = True
+
     _apply_hajfin_wall_uvs(bm)
     _rescale_baked_atlas_uvs(bm)
 
