@@ -6582,14 +6582,11 @@ def _cylindrical_round_hut_uvs(bm, u_scale=0.18, v_scale=0.18):
 # automatic gable placement.
 _HAJFIN_BANNER_TWEAKS = {
     # keep it clear of the shark-jaw doorway below
-    'HAJFIN_STILT_SHACK_T1': (-1.15, 0.0, 0.05, 0.0),
-    'HAJFIN_STILT_SHACK_T2': (1.25, 0.0, 0.05, 0.0),
     # the round hut's raycast lands in the attic; drop it onto the wall band
     'HAJFIN_NET_HUT_T1': (0.0, 0.0, -0.35, 0.0),
     # tapered shell: stand it further off the wall so it does not clip in
     'HAJFIN_NET_HUT_T2': (0.0, 0.16, -0.55, 0.0),
     # clear of the watchtower ladder entrance
-    'HAJFIN_LOOKOUT_HUT_T1': (1.15, 0.0, 0.0, 0.0),
     # clear of the mezzanine / gallery beams
     'HAJFIN_CHIEFTAIN_HUT_T1': (0.0, 0.0, 0.45, 0.06),
     # hang it from the gable beam, nudged toward the gable centre
@@ -6616,6 +6613,7 @@ def _attach_faction_banner(bm, props, style):
         return
     if not bm.verts:
         return
+    bm.normal_update()
     xs = [v.co.x for v in bm.verts]
     ys = [v.co.y for v in bm.verts]
     zs = [v.co.z for v in bm.verts]
@@ -6647,31 +6645,41 @@ def _attach_faction_banner(bm, props, style):
     tweak = _HAJFIN_BANNER_TWEAKS.get(getattr(props, 'preset_name', ''))
     tdx, tdy, tdz, tfrac = tweak if tweak else (0.0, 0.0, 0.0, 0.0)
 
-    # ------------------------------------------------------ 2. front wall panel --
-    # Door and window holes split the facade into separate panels, so taking the
-    # largest front-facing panel naturally lands on the clear wall beside them.
-    panels = []
-    for f in bm.faces:
-        n = f.normal
-        if n.y > -0.7 or abs(n.z) > 0.35:
-            continue
-        area = f.calc_area()
-        if area < 1.2:
-            continue
-        c = f.calc_center_median()
-        if c.z < z_min + 1.4:
-            continue
-        fz = [v.co.z for v in f.verts]
-        panels.append((c.y, -area, c.x, min(fz), max(fz)))
+    # ------------------------------------------------------ 2. front wall mount --
+    # Probe columns across the facade with a forward ray and keep the hits whose
+    # surface is a wall (not a roof slope or a door leaf).  Then centre the banner
+    # on the span of the columns that reach the tallest wall height, so it lands on
+    # the main gable / top wall band rather than on a side wing.
+    from mathutils.bvhtree import BVHTree
+    tree = BVHTree.FromBMesh(bm)
+    wall_mats = (MAT_INDEX_DRIFTWOOD, MAT_INDEX_PAINTED_PLANKS,
+                 MAT_INDEX_PAINTED_PLANKS_BLUE, MAT_INDEX_SALVAGED_PLANKS,
+                 MAT_INDEX_FLOOR, MAT_INDEX_PLASTER, MAT_INDEX_WOOD,
+                 MAT_INDEX_TIMBER)
+    faces = list(bm.faces)
+    cols = []
+    for xi in range(13):
+        px = min(xs) + (max(xs) - min(xs)) * (xi + 0.5) / 13.0
+        for frac in (0.72, 0.64, 0.56, 0.48, 0.40, 0.32, 0.24):
+            probe_z = z_min + span * frac
+            hit, nrm, fidx, _d = tree.ray_cast(
+                Vector((px, front_y - 2.5, probe_z)), Vector((0.0, 1.0, 0.0)))
+            if hit is None or abs(nrm.z) > 0.40:
+                continue
+            if 0 <= fidx < len(faces) and faces[fidx].material_index not in wall_mats:
+                continue
+            cols.append((px, hit.y, probe_z))
+            break
 
-    if panels:
-        panels.sort()
-        hy, _neg_area, px, pz0, pz1 = panels[0]
-        if pz1 - pz0 > banner_h * 1.05:
-            pz = pz0 + (pz1 - pz0) * 0.58
-            _build_hajfin_hanging_banner(bm, px + tdx, hy - 0.06 + tdy, pz + tdz,
-                                         width=banner_w, height=banner_h, facing_y=-1.0)
-            return
+    if cols:
+        top_z = max(c[2] for c in cols)
+        tall = [c for c in cols if c[2] > top_z - 0.55]
+        px = (min(c[0] for c in tall) + max(c[0] for c in tall)) * 0.5
+        hy = tall[len(tall) // 2][1]
+        pz = top_z
+        _build_hajfin_hanging_banner(bm, px + tdx, hy - 0.06 + tdy, pz + tdz,
+                                     width=banner_w, height=banner_h, facing_y=-1.0)
+        return
 
     # -------------------------------------------------- 3. pole at the roof edge
     from mathutils.bvhtree import BVHTree
