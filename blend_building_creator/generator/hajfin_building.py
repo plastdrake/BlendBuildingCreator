@@ -6652,17 +6652,36 @@ def _attach_faction_banner(bm, props, style):
             break
     if not cols:
         # No usable wall at banner height (open-sided buildings, deep verandas,
-        # towers on stilts).  Plant a banner pole beside the entrance instead, so
-        # every building still shows its faction.
-        px = cx + max(1.35, banner_w * 1.15)
-        py = front_y + 0.45
-        pole_h = banner_h + 0.80
-        create_box(bm, (0.12, 0.12, pole_h), (px, py, z_min + pole_h * 0.5),
+        # towers on stilts).  Plant a pole ON the roof instead of beside the door:
+        # many of these buildings stand over open water, so a ground-mounted pole
+        # would hang in mid air.  A downward ray finds the roof deck the pole will
+        # actually stand on.
+        best_roof = None
+        for xi, yf in ((0.0, 0.50), (0.0, 0.38), (0.15, 0.50), (-0.15, 0.50),
+                       (0.30, 0.50), (-0.30, 0.50), (0.0, 0.62), (0.0, 0.26)):
+            px = x_lo + (x_hi - x_lo) * (0.5 + xi)
+            py = front_y + (max(ys) - front_y) * yf
+            hit, nrm, _i, _d = tree.ray_cast(
+                Vector((px, py, z_max + 2.5)), Vector((0.0, 0.0, -1.0)))
+            if hit is None or nrm.z < 0.30:
+                continue
+            if best_roof is None or hit.z > best_roof[2]:
+                best_roof = (px, py, hit.z)
+        if best_roof is None:
+            return
+        px, py, base_z = best_roof
+        pole_h = banner_h + 0.85
+        # Pole stands on the roof surface and runs all the way down to it.
+        create_box(bm, (0.12, 0.12, pole_h + 0.10),
+                   (px, py, base_z + (pole_h - 0.10) * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-        create_torus_ring(bm, (px, py, z_min + pole_h * 0.35),
+        # Base plate so it reads as bolted to the roof rather than skewered into it
+        create_box(bm, (0.30, 0.30, 0.06), (px, py, base_z + 0.03),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (px, py, base_z + pole_h * 0.45),
                           major_radius=0.10, minor_radius=0.022, mat_index=MAT_INDEX_IRON)
         _build_hajfin_hanging_banner(bm, px, py - 0.075,
-                                     z_min + pole_h - 0.48 - banner_h * 0.5,
+                                     base_z + pole_h - 0.48 - banner_h * 0.5,
                                      width=banner_w, height=banner_h, facing_y=-1.0)
         return
     top_z = max(c[2] for c in cols)
