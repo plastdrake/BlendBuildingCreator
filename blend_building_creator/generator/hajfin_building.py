@@ -2995,6 +2995,10 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
     _build_hajfin_barrel(bm, r_base * 0.58, r_base * 0.18, z_ground=z0 + 0.18, ang=1.3, scale=0.52)
 
     # 2. Tapered 8-sided body shell (True planar trapezoidal facets, zero twist, zero clipping)
+    # Board phase is accumulated around the perimeter so the plank rhythm carries on
+    # from one facet to the next instead of restarting at a random offset on every
+    # facet (which made the seams jump at each corner post).
+    perimeter_u = 0.0
     door_w = float(getattr(props, 'door_width', 1.85))
     door_h = min(float(getattr(props, 'door_height', 3.50)), height * 0.82)
 
@@ -3017,7 +3021,7 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         w_base_f = (pb1 - pb0).length
         w_top_f = (pt1 - pt0).length
 
-        facet_u_offset = (i - 6) * 1.7
+        facet_u_offset = perimeter_u
 
         if i == 6:
             # SOUTH DOOR FACET (facing South, centered at x=0)
@@ -3195,6 +3199,9 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
                                        u_scale=0.18, v_scale=0.18,
                                        facet_origin=mb, u_vec=u_vec, w_vec=w_vec,
                                        u_start=facet_u_offset, v_start=0.0)
+
+        # Carry the board phase around to the next facet
+        perimeter_u += w_base_f * 0.18
 
     # 3. Perimeter Timber Corner Posts at All 8 Vertex Junctions
     col_size = 0.44
