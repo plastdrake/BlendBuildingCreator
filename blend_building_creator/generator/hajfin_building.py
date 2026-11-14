@@ -6595,9 +6595,17 @@ _HAJFIN_BANNER_TWEAKS = {
     'HAJFIN_LOOKOUT_HUT_T1': (0.0, 0.0, 1.25, 0.0),
     'HAJFIN_CHIEFTAIN_HUT_T1': (0.0, 0.0, 0.45, 0.06),
     # hang it from the gable beam, nudged toward the gable centre
-    'HAJFIN_PIRATE_TAVERN_T1': (-0.55, 0.0, -0.25, -0.03),
+    'HAJFIN_PIRATE_TAVERN_T1': (0.0, 0.0, -0.25, -0.03),
     # clear of the upper-storey window
     'HAJFIN_FISH_DEPOT_T1': (0.0, 0.0, -1.25, 0.0),
+}
+
+
+# Absolute banner X (building-local).  Used where the facade heuristic cannot find
+# the gable centre - on an L-shaped plan the tallest-wall columns are all on one
+# wing, so the midpoint lands off-centre.
+_HAJFIN_BANNER_X = {
+    'HAJFIN_PIRATE_TAVERN_T1': 0.0,
 }
 
 
@@ -6693,6 +6701,9 @@ def _attach_faction_banner(bm, props, style):
         px = (min(c[0] for c in tall) + max(c[0] for c in tall)) * 0.5
         hy = tall[len(tall) // 2][1]
         pz = top_z
+        _abs_x = _HAJFIN_BANNER_X.get(_preset)
+        if _abs_x is not None:
+            px = _abs_x
         _build_hajfin_hanging_banner(bm, px + tdx, hy - 0.06 + tdy, pz + tdz,
                                      width=banner_w, height=banner_h, facing_y=-1.0)
         return
