@@ -6572,8 +6572,8 @@ def _cylindrical_round_hut_uvs(bm, u_scale=0.18, v_scale=0.18):
 # automatic gable placement.
 _HAJFIN_BANNER_TWEAKS = {
     # keep it clear of the shark-jaw doorway below
-    'HAJFIN_STILT_SHACK_T1': (0.0, 0.0, 0.42, 0.05),
-    'HAJFIN_STILT_SHACK_T2': (-0.55, 0.0, 0.20, 0.04),
+    'HAJFIN_STILT_SHACK_T1': (-1.15, 0.0, 0.05, 0.0),
+    'HAJFIN_STILT_SHACK_T2': (1.25, 0.0, 0.05, 0.0),
     # the round hut's raycast lands in the attic; drop it onto the wall band
     'HAJFIN_NET_HUT_T1': (0.0, 0.0, -0.35, 0.0),
     # tapered shell: stand it further off the wall so it does not clip in
@@ -6657,12 +6657,27 @@ def _attach_faction_banner(bm, props, style):
     px = (min(c[0] for c in tall) + max(c[0] for c in tall)) * 0.5
     hy = tall[len(tall) // 2][1]
     pz = top_z
+    if style in ('ROUND_HUT',):
+        # Round huts have no gable to hang a banner on, so it flies from a short
+        # pole planted in the roof apex instead (both tiers).
+        peak_z = z_max
+        pole_h = 1.15
+        create_box(bm, (0.11, 0.11, pole_h), (0.0, 0.0, peak_z + pole_h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (0.0, 0.0, peak_z + pole_h * 0.55),
+                          major_radius=0.10, minor_radius=0.022, mat_index=MAT_INDEX_IRON)
+        _build_hajfin_hanging_banner(bm, 0.0, -0.055, peak_z + pole_h + banner_h * 0.5,
+                                     width=banner_w, height=banner_h, facing_y=-1.0)
+        return
+
     tweak = _HAJFIN_BANNER_TWEAKS.get(getattr(props, 'preset_name', ''))
     if tweak:
         dx, dy, dz, dfrac = tweak
         px += dx
         hy += dy
         pz += dz + span * dfrac
+    # Never let the cloth ride up past the wall head into the roof volume.
+    pz = min(pz, top_z + 0.12)
     # cz is the banner's CENTRE, so pass the probe height directly: adding half a
     # banner height pushed the cloth up inside the wall/roof.
     _build_hajfin_hanging_banner(bm, px, hy - 0.06, pz,
