@@ -7862,26 +7862,20 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                          (1.0, 1.0), (0.0, 1.0))):
         loop[uv_layer].uv = Vector(uv)
 
-    # Two faction banners hung from the dark porch posts, at the inner edge of
-    # each banner so the pole never runs through the middle of the cloth.
-    for bx in (-4.35, 4.35):
-        pole_x = -3.86 if bx < 0 else 3.86
-        by = -hd - porch_d - 0.13
-        bz = 4.85
-        pole_base = z0 + 0.44
-        pole_top = 5.60
-        create_box(bm, (0.30, 0.30, 0.20),
-                   (pole_x, by - 0.04, z0 + 0.34),
-                   mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (0.16, 0.16, pole_top - pole_base),
-                   (pole_x, by - 0.04, (pole_base + pole_top) * 0.5),
-                   mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (0.18, 0.12, 0.10),
-                   (pole_x, by - 0.02, bz + 0.675),
+    # Hang the banners directly on the two inner dark porch posts, with the
+    # bone hanger centred on each post and the cloth pushed forward so it is
+    # not embedded in the timber.
+    for bx in (-2.88, 2.88):
+        post_top = _porch_z(bx, porch_post_y, 4.55) - 0.08
+        bar_z = max(floor_z + 2.60, post_top - 0.12)
+        bz = bar_z - 0.675
+        by = porch_post_y - 0.27
+        create_box(bm, (0.18, 0.16, 0.10),
+                   (bx, porch_post_y - 0.21, bar_z),
                    mat_index=MAT_INDEX_TIMBER)
         _build_hajfin_hanging_banner(bm, bx, by, bz,
                                      width=1.05, height=1.35, facing_y=-1.0)
-        create_torus_ring(bm, (pole_x, by - 0.04, pole_base + 0.55),
+        create_torus_ring(bm, (bx, porch_post_y - 0.17, floor_z + 0.75),
                           major_radius=0.15, minor_radius=0.025,
                           mat_index=MAT_INDEX_ROPE)
 
