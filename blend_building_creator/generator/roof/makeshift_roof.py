@@ -305,6 +305,15 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base,
                 location=(cx, py, pz),
                 mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.006
             )
+            # Eave purlin: without it the weatherboards end in mid air over the
+            # overhang, because nothing carries their lower edge.
+            ey = cy + sgn * (half_cross - 0.10)
+            ez = z_base + ridge_rise * (0.10 / max(0.1, half_cross)) - 0.035
+            create_beveled_box(
+                bm, size=(p_len, purlin_w, purlin_h),
+                location=(cx, ey, ez),
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.006
+            )
     else:
         create_beveled_box(
             bm, size=(purlin_w, p_len, purlin_h),
@@ -317,6 +326,14 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base,
             create_beveled_box(
                 bm, size=(purlin_w, p_len, purlin_h),
                 location=(px, cy, pz),
+                mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.006
+            )
+            # Eave purlin so the board ends are carried over the overhang
+            ex = cx + sgn * (half_cross - 0.10)
+            ez = z_base + ridge_rise * (0.10 / max(0.1, half_cross)) - 0.035
+            create_beveled_box(
+                bm, size=(purlin_w, p_len, purlin_h),
+                location=(ex, cy, ez),
                 mat_index=MAT_INDEX_TIMBER_FRAME, bevel_amount=0.006
             )
 
@@ -474,12 +491,14 @@ def build_makeshift_roof(bm, x_min, x_max, y_min, y_max, z_base,
     for pi in range(n_plank_rows):
         p_offset = plank_section_start + (pi + 0.5) * actual_step
 
-        # Random slight length stagger (+/- 0.08m)
-        p_len_var = (rng.random() - 0.5) * 0.16
-        cur_plank_len = max(0.8, slope_len + p_len_var - 0.06)
+        # Boards are cut slightly long so they always reach both the ridge purlin
+        # and the new eave purlin - a short board would hang in mid air.
+        p_len_var = (rng.random() - 0.5) * 0.04
+        cur_plank_len = max(0.8, slope_len + p_len_var + 0.02)
 
-        # Occasional missing plank for rustic open look
-        if rng.random() < (0.10 if is_hajfin else 0.15):
+        # Only the human shacks get the odd missing board; the Hajfin plank roof
+        # needs to stay weather-tight.
+        if (not is_hajfin) and rng.random() < 0.15:
             continue
 
         jank_yaw = (rng.random() - 0.5) * 0.02

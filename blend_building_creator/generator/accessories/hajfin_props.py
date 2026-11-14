@@ -16,6 +16,7 @@ import math
 from mathutils import Matrix, Vector
 
 from ..mesh_utils import (
+    create_spiral_rope_coil,
     create_box, create_beveled_box, create_cylinder, create_cone,
     create_torus_ring, create_oriented_beam, transform_faces
 )
@@ -23,7 +24,7 @@ from ..materials import (
     MAT_INDEX_TIMBER, MAT_INDEX_WOOD, MAT_INDEX_IRON,
     MAT_INDEX_ROPE, MAT_INDEX_FISH,
     MAT_INDEX_BONE, MAT_INDEX_DRIFTWOOD, MAT_INDEX_ROUGH_STONE,
-    MAT_INDEX_SILVER, MAT_INDEX_FLOOR, MAT_INDEX_LEATHER,
+    MAT_INDEX_SILVER, MAT_INDEX_FLOOR, MAT_INDEX_LEATHER, MAT_INDEX_FABRIC_WHITE,
     MAT_INDEX_LANTERN
 )
 
@@ -869,6 +870,76 @@ def build_single_hajfin_crate(bm, x, y, z_ground=0.0, ang=0.0, scale=0.75):
 # 13. Admiralty Ship Anchor (Booty Bay Nautical Feature)
 # ---------------------------------------------------------------------------
 
+def _build_rope_tube(bm, points, radius=0.03, sides=8, mat_index=None,
+                     u_tiles=1.0, v_per_metre=3.0):
+    """Continuous, smooth rope tube through a list of 3D points.
+
+    A single welded tube (instead of a chain of little beam boxes) reads as one
+    solid hawser, and getting the UVs right matters: U wraps around the tube
+    cross-section while V runs along its length, which is what makes the hemp
+    twist sit at the correct scale instead of smearing.
+    """
+    if mat_index is None:
+        mat_index = MAT_INDEX_ROPE
+    pts = [Vector(p) for p in points]
+    if len(pts) < 2:
+        return
+    uv_layer = bm.loops.layers.uv.verify()
+    up_ref = Vector((0.0, 0.0, 1.0))
+    rings = []
+    travelled = 0.0
+
+    for idx, p in enumerate(pts):
+        if idx == 0:
+            tangent = (pts[1] - pts[0])
+        elif idx == len(pts) - 1:
+            tangent = (pts[-1] - pts[-2])
+        else:
+            tangent = (pts[idx + 1] - pts[idx - 1])
+        if tangent.length < 1e-6:
+            tangent = Vector((0.0, 0.0, 1.0))
+        tangent.normalize()
+
+        ref = up_ref if abs(tangent.dot(up_ref)) < 0.95 else Vector((1.0, 0.0, 0.0))
+        n1 = tangent.cross(ref).normalized()
+        n2 = tangent.cross(n1).normalized()
+
+        if idx > 0:
+            travelled += (p - pts[idx - 1]).length
+
+        ring = []
+        for k in range(sides):
+            ang = 2.0 * math.pi * k / sides
+            off = n1 * (math.cos(ang) * radius) + n2 * (math.sin(ang) * radius)
+            ring.append(bm.verts.new(p + off))
+        rings.append(ring)
+
+    seg_len = 1.0 / max(len(pts) - 1, 1)
+    for i in range(len(rings) - 1):
+        v0 = (i * seg_len) * (v_per_metre * (pts[-1] - pts[0]).length)
+        v1 = ((i + 1) * seg_len) * (v_per_metre * (pts[-1] - pts[0]).length)
+        for k in range(sides):
+            kn = (k + 1) % sides
+            f = bm.faces.new([rings[i][k], rings[i + 1][k], rings[i + 1][kn], rings[i][kn]])
+            f.material_index = mat_index
+            f.tag = True
+            u0 = (k / float(sides)) * u_tiles
+            u1 = ((k + 1) / float(sides)) * u_tiles
+            f.loops[0][uv_layer].uv = Vector((u0, v0))
+            f.loops[1][uv_layer].uv = Vector((u0, v1))
+            f.loops[2][uv_layer].uv = Vector((u1, v1))
+            f.loops[3][uv_layer].uv = Vector((u1, v0))
+
+    # Simple end caps
+    for ring, flip in ((rings[0], True), (rings[-1], False)):
+        try:
+            f = bm.faces.new(list(reversed(ring)) if flip else list(ring))
+            f.material_index = mat_index
+            f.tag = True
+        except ValueError:
+            pass
+
+
 def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0.0, scale=1.0):
     """
     Beautiful handcrafted Admiralty ship anchor:
@@ -1052,38 +1123,33 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
                       major_segments=16, minor_segments=8, mat_index=MAT_INDEX_IRON,
                       transform_matrix=M)
 
-    # 6. Natural Nautical Hawser Rope (knotted in ring & spiraling down shank)
-    create_torus_ring(bm, location=(0.0, 0.0, eye_z + 0.14), rotation=(0.0, math.pi * 0.5, 0.0),
-                      major_radius=0.12 * scale, minor_radius=0.026 * scale,
-                      major_segments=12, minor_segments=6, mat_index=MAT_INDEX_ROPE,
-                      transform_matrix=M)
-
-    num_rope_turns = 3.0
+    # 6. Natural Nautical Hawser Rope spiraling down the shank
+    num_rope_turns = 5.0
     rope_z_top = stock_z - 0.12
-    rope_z_bot = 0.08
-    rope_pts_count = 32
-    rope_r = (shank_w * 0.707 + 0.034)
+    rope_z_bot = 0.10
+    rope_pts_count = 110
+    rope_r = (shank_w * 0.75 + 0.030)
 
-    prev_rp = None
-    last_pt = None
+    spiral_pts = []
     for i in range(rope_pts_count + 1):
-        t = i / rope_pts_count
+        t = i / float(rope_pts_count)
         rz = rope_z_top * (1.0 - t) + rope_z_bot * t
         ang = t * (math.pi * 2.0 * num_rope_turns)
         rx = math.cos(ang) * rope_r
         ry = math.sin(ang) * rope_r
-        curr_rp = M @ Vector((rx, ry, rz))
-        if prev_rp is not None:
-            create_oriented_beam(bm, prev_rp, curr_rp, width=0.055 * scale, depth=0.055 * scale, mat_index=MAT_INDEX_ROPE)
-        prev_rp = curr_rp
-        last_pt = Vector((rx, ry, rz))
+        spiral_pts.append(M @ Vector((rx, ry, rz)))
 
-    pool_center = M @ Vector((last_pt.x + 0.12, last_pt.y + 0.12, 0.03))
-    create_cylinder(bm, radius=0.28 * scale, height=0.06 * scale, segments=12,
-                    location=pool_center, mat_index=MAT_INDEX_ROPE)
-    create_torus_ring(bm, location=pool_center, rotation=(0.0, 0.0, 0.0),
-                      major_radius=0.26 * scale, minor_radius=0.028 * scale,
-                      major_segments=14, minor_segments=6, mat_index=MAT_INDEX_ROPE)
+    _build_rope_tube(bm, spiral_pts, radius=0.030 * scale, sides=8,
+                     mat_index=MAT_INDEX_ROPE, u_tiles=1.0, v_per_metre=9.0)
+
+    # Loose hawser coiled on the deck at the foot of the anchor
+    pool_center = M @ Vector((spiral_pts[-1].x * 0.0 + 0.30 * scale, 0.30 * scale, 0.0))
+    create_spiral_rope_coil(
+        bm, location=(pool_center.x, pool_center.y, z_ground + 0.012),
+        inner_radius=0.075 * scale, outer_radius=0.26 * scale,
+        rope_radius=0.030 * scale, turns=2.6, num_steps=72, tube_segments=8,
+        mat_index=MAT_INDEX_ROPE,
+    )
 
     return True
 
@@ -1133,7 +1199,9 @@ def build_ship_mast_with_crows_nest(bm, x=0.0, y=0.0, z_base=0.0, height=9.5,
     strut_bot_z = nest_z - 1.30 * scale
     for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
         p_strut_bot = M_base @ Vector((sx * 0.12 * scale, sy * 0.12 * scale, strut_bot_z))
-        p_strut_top = M_base @ Vector((sx * (nest_r * 0.72), sy * (nest_r * 0.72), nest_z - 0.08 * scale))
+        # Land the strut head inside the trestle beams / floor slab so the brace is
+        # visibly carrying the platform instead of stopping just short of it.
+        p_strut_top = M_base @ Vector((sx * (nest_r * 0.72), sy * (nest_r * 0.72), nest_z + 0.03 * scale))
         create_oriented_beam(bm, p_strut_bot, p_strut_top, width=0.16 * scale, depth=0.16 * scale, mat_index=MAT_INDEX_TIMBER)
 
     # Crow's Nest Floor Slab (thick octagonal timber floor)
@@ -1174,17 +1242,28 @@ def build_ship_mast_with_crows_nest(bm, x=0.0, y=0.0, z_base=0.0, height=9.5,
         p_yard_r = M_base @ Vector((yard_span * 0.5, 0.0, yard_z))
         create_oriented_beam(bm, p_yard_l, p_yard_r, width=0.20 * scale, depth=0.20 * scale, mat_index=MAT_INDEX_TIMBER)
 
-        # Furled canvas sail bundle hanging slung beneath the yardarm
-        sail_len = yard_span * 0.86
-        create_cylinder(bm, radius=0.16 * scale, height=sail_len, segments=8,
-                        location=M_base @ Vector((0.0, 0.0, yard_z - 0.16 * scale)),
-                        rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_LEATHER)
+        # Furled sail bundle of white canvas, slung directly under the yardarm so
+        # the lashings grab both the spar and the bundle.
+        sail_len = yard_span * 0.84
+        sail_r = 0.20 * scale
+        sail_z = yard_z - 0.26 * scale
+        create_cylinder(bm, radius=sail_r, height=sail_len, segments=10,
+                        location=M_base @ Vector((0.0, 0.0, sail_z)),
+                        rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_FABRIC_WHITE)
+        # Bulked-out canvas rolls at each end so it reads as a rolled sail
+        for sgn_roll in (-1.0, 1.0):
+            create_cylinder(bm, radius=sail_r * 1.12, height=0.16 * scale, segments=10,
+                            location=M_base @ Vector((sgn_roll * (sail_len * 0.5 - 0.08 * scale), 0.0, sail_z)),
+                            rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_FABRIC_WHITE)
 
-        # Rope tie bands lashed around sail bundle
-        for sx in (-0.38, -0.22, -0.08, 0.08, 0.22, 0.38):
-            create_torus_ring(bm, location=(sx * yard_span, 0.0, yard_z - 0.16 * scale),
+        # Rope gaskets lashed around BOTH the yardarm and the furled canvas
+        gasket_z = (yard_z + sail_z) * 0.5
+        gasket_r = math.hypot(0.10 * scale, (yard_z - gasket_z)) + 0.12 * scale
+        for sx in (-0.40, -0.24, -0.08, 0.08, 0.24, 0.40):
+            create_torus_ring(bm, location=(sx * yard_span, 0.0, gasket_z),
                               rotation=(0.0, math.pi * 0.5, 0.0),
-                              major_radius=0.19 * scale, minor_radius=0.025 * scale,
+                              major_radius=gasket_r, minor_radius=0.026 * scale,
+                              major_segments=14, minor_segments=6,
                               mat_index=MAT_INDEX_ROPE, transform_matrix=M_base)
 
         # Lift line halyards from yardarm tips to masthead

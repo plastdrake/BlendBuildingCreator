@@ -1147,9 +1147,61 @@ def _hajfin_rect_subtract(base, holes):
     return rects
 
 
+def _hajfin_effective_door(door_w, door_h, z0, z1):
+    """Mirror the clamping done by _build_wall_with_door_opening so a facade panel
+    cuts exactly the same doorway (width, height, spring line) as the wall behind."""
+    avail_h = max(0.4, z1 - z0)
+    w = max(2.40, float(door_w))
+    h = max(3.60, min(float(door_h), avail_h * 0.90))
+    z_spring = min(h * 0.78, 3.40, avail_h * 0.75)
+    return w, h, z_spring
+
+
+def _hajfin_panel_poly(bm, pts, c_cross, thick, mat_index, along_y, outward=1.0):
+    """Extrude a 2D (u, z) polygon into a thin facade panel.
+
+    along_y=True  -> u is world X and the panel is extruded along Y (X-running wall)
+    along_y=False -> u is world Y and the panel is extruded along X (Y-running wall)
+
+    Used for the pointed infill above a shark-jaw doorway: a rectangular hole in the
+    siding panel would leave the bare wall showing in the two corners beside the arch.
+    """
+    half = thick * 0.5
+    front, back = [], []
+    for (u, z) in pts:
+        if along_y:
+            front.append(bm.verts.new(Vector((u, c_cross + half, z))))
+            back.append(bm.verts.new(Vector((u, c_cross - half, z))))
+        else:
+            front.append(bm.verts.new(Vector((c_cross + half, u, z))))
+            back.append(bm.verts.new(Vector((c_cross - half, u, z))))
+
+    want = Vector((0.0, outward, 0.0)) if along_y else Vector((outward, 0.0, 0.0))
+    f_front = bm.faces.new(front)
+    f_front.normal_update()
+    if f_front.normal.dot(want) < 0.0:
+        f_front.normal_flip()
+    f_front.material_index = mat_index
+    f_front.tag = True
+
+    f_back = bm.faces.new(list(reversed(back)))
+    f_back.normal_update()
+    if f_back.normal.dot(want) > 0.0:
+        f_back.normal_flip()
+    f_back.material_index = mat_index
+    f_back.tag = True
+
+    n = len(pts)
+    for i in range(n):
+        j = (i + 1) % n
+        f_side = bm.faces.new([front[i], front[j], back[j], back[i]])
+        f_side.material_index = mat_index
+        f_side.tag = True
+
+
 def _build_hajfin_wall_panel_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
                                mat_index=MAT_INDEX_DRIFTWOOD, openings=None, proud=0.055,
-                               top_clear=0.0):
+                               top_clear=0.0, arches=None):
     """Lays a panel of alternate boarding over a wall running along the X axis.
 
     The panel is applied slightly proud of the wall face (and sunk a couple of
@@ -1171,10 +1223,18 @@ def _build_hajfin_wall_panel_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
         create_box(bm, (w, panel_th, h), ((rx0 + rx1) * 0.5, cy, (rz0 + rz1) * 0.5),
                    mat_index=mat_index, is_wall=True)
 
+    # Pointed infill above each doorway so the siding follows the shark-jaw arch
+    for (acx, ahalf, z_spr, z_apex) in (arches or []):
+        if z_apex >= panel_top - 0.06:
+            continue
+        pts = [(acx - ahalf, z_spr), (acx, z_apex), (acx + ahalf, z_spr),
+               (acx + ahalf, panel_top), (acx - ahalf, panel_top)]
+        _hajfin_panel_poly(bm, pts, cy, panel_th, mat_index, along_y=True, outward=sgn_y)
+
 
 def _build_hajfin_wall_panel_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0,
                                mat_index=MAT_INDEX_DRIFTWOOD, openings=None, proud=0.055,
-                               top_clear=0.0):
+                               top_clear=0.0, arches=None):
     """Y-axis twin of :func:`_build_hajfin_wall_panel_x`."""
     face_x = x + sgn_x * (wall_th * 0.5)
     panel_th = proud + 0.03
@@ -1189,6 +1249,14 @@ def _build_hajfin_wall_panel_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0,
             continue
         create_box(bm, (panel_th, w, h), (cx, (ry0 + ry1) * 0.5, (rz0 + rz1) * 0.5),
                    mat_index=mat_index, is_wall=True)
+
+    # Pointed infill above each doorway so the siding follows the shark-jaw arch
+    for (acy, ahalf, z_spr, z_apex) in (arches or []):
+        if z_apex >= panel_top - 0.06:
+            continue
+        pts = [(acy - ahalf, z_spr), (acy, z_apex), (acy + ahalf, z_spr),
+               (acy + ahalf, panel_top), (acy - ahalf, panel_top)]
+        _hajfin_panel_poly(bm, pts, cx, panel_th, mat_index, along_y=False, outward=sgn_x)
 
 
 def _build_hajfin_wall_frame_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
@@ -1364,17 +1432,27 @@ def _hajfin_opening_y(cy, cz, w, h):
 
 
 def _build_hajfin_wall_dressing_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
-                                   variant='BRACED', openings=None, top_clear=0.0):
-    """Dress an X-running Hajfin wall with patchwork boarding and timber framing."""
+                                   variant='BRACED', openings=None, top_clear=0.0,
+                                   door_openings=None):
+    """Dress an X-running Hajfin wall with patchwork boarding and timber framing.
+
+    ``door_openings`` takes (centre, width, height) triples of shark-jaw doorways;
+    they are cut with the pointed arch profile so the siding meets the bone arch
+    instead of leaving bare wall exposed in the corners above its shoulders."""
     ax0, ax1 = min(x0, x1), max(x0, x1)
     if ax1 - ax0 < 0.8 or z1 - z0 < 0.8:
         return
     holes = list(openings or [])
+    arches = []
+    for (dcx, dw, dh) in (door_openings or []):
+        w_eff, h_eff, z_spr = _hajfin_effective_door(dw, dh, z0, z1)
+        holes.append((dcx - w_eff * 0.5, dcx + w_eff * 0.5, z0, z0 + z_spr))
+        arches.append((dcx, w_eff * 0.5, z0 + z_spr, z0 + h_eff))
 
     if variant == 'FACHWERK':
         _build_hajfin_wall_panel_x(bm, ax0, ax1, y, z0, z1, wall_th=wall_th, sgn_y=sgn_y,
                                    mat_index=MAT_INDEX_FLOOR, openings=holes, proud=0.045,
-                                   top_clear=top_clear)
+                                   top_clear=top_clear, arches=arches)
         _build_fachwerk_bracing_x(bm, ax0, ax1, y, z0, z1 - top_clear, wall_th=wall_th,
                                   pattern='X_BRACE', sgn_y=sgn_y, openings=holes)
         return
@@ -1382,23 +1460,33 @@ def _build_hajfin_wall_dressing_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0
     mat_index = _HAJFIN_WALL_VARIANT_MATS.get(variant)
     if mat_index is not None:
         _build_hajfin_wall_panel_x(bm, ax0, ax1, y, z0, z1, wall_th=wall_th, sgn_y=sgn_y,
-                                   mat_index=mat_index, openings=holes, top_clear=top_clear)
+                                   mat_index=mat_index, openings=holes, top_clear=top_clear,
+                                   arches=arches)
     _build_hajfin_wall_frame_x(bm, ax0, ax1, y, z0, z1, wall_th=wall_th, sgn_y=sgn_y,
                                top_clear=top_clear, openings=holes)
 
 
 def _build_hajfin_wall_dressing_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0,
-                                   variant='BRACED', openings=None, top_clear=0.0):
-    """Dress a Y-running Hajfin wall with patchwork boarding and timber framing."""
+                                   variant='BRACED', openings=None, top_clear=0.0,
+                                   door_openings=None):
+    """Dress a Y-running Hajfin wall with patchwork boarding and timber framing.
+
+    ``door_openings`` takes (centre, width, height) triples of shark-jaw doorways
+    and cuts them with the pointed arch profile."""
     ay0, ay1 = min(y0, y1), max(y0, y1)
     if ay1 - ay0 < 0.8 or z1 - z0 < 0.8:
         return
     holes = list(openings or [])
+    arches = []
+    for (dcy, dw, dh) in (door_openings or []):
+        w_eff, h_eff, z_spr = _hajfin_effective_door(dw, dh, z0, z1)
+        holes.append((dcy - w_eff * 0.5, dcy + w_eff * 0.5, z0, z0 + z_spr))
+        arches.append((dcy, w_eff * 0.5, z0 + z_spr, z0 + h_eff))
 
     if variant == 'FACHWERK':
         _build_hajfin_wall_panel_y(bm, ay0, ay1, x, z0, z1, wall_th=wall_th, sgn_x=sgn_x,
                                    mat_index=MAT_INDEX_FLOOR, openings=holes, proud=0.045,
-                                   top_clear=top_clear)
+                                   top_clear=top_clear, arches=arches)
         _build_fachwerk_bracing_y(bm, ay0, ay1, x, z0, z1 - top_clear, wall_th=wall_th,
                                   pattern='X_BRACE', sgn_x=sgn_x, openings=holes)
         return
@@ -1406,7 +1494,8 @@ def _build_hajfin_wall_dressing_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0
     mat_index = _HAJFIN_WALL_VARIANT_MATS.get(variant)
     if mat_index is not None:
         _build_hajfin_wall_panel_y(bm, ay0, ay1, x, z0, z1, wall_th=wall_th, sgn_x=sgn_x,
-                                   mat_index=mat_index, openings=holes, top_clear=top_clear)
+                                   mat_index=mat_index, openings=holes, top_clear=top_clear,
+                                   arches=arches)
     _build_hajfin_wall_frame_y(bm, ay0, ay1, x, z0, z1, wall_th=wall_th, sgn_x=sgn_x,
                                top_clear=top_clear, openings=holes)
 
@@ -1745,12 +1834,16 @@ def _build_whale_rib_tunnel_entrance(bm, entrance_x, entrance_y, z0, rot_z=0.0,
 def _build_hajfin_barrel(bm, x, y, z_ground, ang=0.0, radius=0.32, height=0.72, scale=None, lying=False):
     """Authentic handcrafted Hajfin barrel with timber staves, forged iron hoops, and silver studs.
     Uses the artist's baked Barrel.fbx mesh from PROP_MESHES['hajfin_barrel'].
-    Falls back to procedural furniture.build_barrel if the baked mesh is unavailable."""
+    Falls back to procedural furniture.build_barrel if the baked mesh is unavailable.
+
+    ``lying`` is accepted for backwards compatibility but deliberately ignored:
+    Hajfin barrels always stand upright (a tipped barrel reads as clutter)."""
+    lying = False
     from .accessories.artisan_meshdata import PROP_MESHES
     it = PROP_MESHES.get('hajfin_barrel')
     if not it:
         from .accessories.furniture import build_barrel
-        return build_barrel(bm, x, y, z_ground + 0.005, ang=ang, radius=radius, height=height, lying=lying)
+        return build_barrel(bm, x, y, z_ground + 0.005, ang=ang, radius=radius, height=height, lying=False)
 
     verts = it['verts']
     polys = it['polys']
@@ -2523,8 +2616,8 @@ def _build_hajfin_cargo_stack(bm, x, y, z):
     # Standing authentic handcrafted Hajfin barrel placed clear behind medium crate
     _build_hajfin_barrel(bm, x + 0.46, y + 0.58, z_ground=z, ang=0.4, scale=0.52)
 
-    # Barrel on side on top of large crate (crate height is 1.20 * 0.72 = 0.864)
-    _build_hajfin_barrel(bm, x - 0.46, y, z_ground=z + 0.864, ang=0.3, scale=0.50, lying=True)
+    # Upright barrel tucked between the crates (crate footprint is ~0.86m wide)
+    _build_hajfin_barrel(bm, x - 0.02, y - 0.78, z_ground=z, ang=0.3, scale=0.50)
 
     # Authentic coiled hemp rope on top of medium crate (top is z + 1.20 * 0.60 = z + 0.72)
     create_spiral_rope_coil(
@@ -2665,7 +2758,7 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
                                        wall_th=wall_th, sgn_y=1.0, variant='SALVAGED')
         _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
                                        wall_th=wall_th, sgn_y=-1.0, variant='FACHWERK',
-                                       openings=[_hajfin_opening_x(0.0, z0 + door_h * 0.5, door_w, door_h)])
+                                       door_openings=[(0.0, door_w, door_h)])
 
         # Upper storey gets its own patchwork so the tower never reads as one big slab.
         _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
@@ -2715,7 +2808,7 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
                                        wall_th=wall_th, sgn_y=1.0, variant='PAINTED_RED', top_clear=0.30)
         _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z0, z1,
                                        wall_th=wall_th, sgn_y=-1.0, variant='DECK', top_clear=0.30,
-                                       openings=[_hajfin_opening_x(0.0, z0 + door_h * 0.5, door_w, door_h)])
+                                       door_openings=[(0.0, door_w, door_h)])
 
     # 3. Solid Gable Triangle Walls (Front & Rear) - SEALS ROOF GAPS 100%
     _build_gable_triangle_wall(bm, -hw, hw, -hd + wall_th * 0.5, z1, peak_z, wall_th=wall_th, style='FACHWERK')
@@ -2813,16 +2906,18 @@ def _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
                 u = rel.dot(u_vec) * u_scale + u_start
                 v = loop.vert.co.dot(n_vec) * v_scale
                 loop[uv_layer].uv = Vector((u, v))
+        # Jamb reveals share the wall's own U so the vertical boards run straight
+        # around the corner instead of showing a misaligned sliver beside the window.
         if build_left_cap:
             for loop in f_left.loops:
                 rel = loop.vert.co - facet_origin
-                u = loop.vert.co.dot(n_vec) * u_scale
+                u = rel.dot(u_vec) * u_scale + u_start
                 v = rel.dot(w_vec) * v_scale + v_start
                 loop[uv_layer].uv = Vector((u, v))
         if build_right_cap:
             for loop in f_right.loops:
                 rel = loop.vert.co - facet_origin
-                u = loop.vert.co.dot(n_vec) * u_scale
+                u = rel.dot(u_vec) * u_scale + u_start
                 v = rel.dot(w_vec) * v_scale + v_start
                 loop[uv_layer].uv = Vector((u, v))
     else:
@@ -3272,6 +3367,15 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         th_hip = theta_corners[i]
         p_eave = Vector((math.cos(th_hip) * r_eave, math.sin(th_hip) * r_eave, z1 + 0.02))
         _create_oriented_beam(bm, p_eave, p_peak, width=0.24, depth=0.26, mat_index=MAT_INDEX_TIMBER)
+
+    # Continuous timber eave collar wrapping the whole rim so the raw shingle edge
+    # of the cone is capped by a beam instead of showing as a sharp cut.
+    for i in range(num_facets):
+        th_a = theta_corners[i]
+        th_b = theta_corners[i + 1]
+        p_a = Vector((math.cos(th_a) * (r_eave + 0.03), math.sin(th_a) * (r_eave + 0.03), z1 - 0.03))
+        p_b = Vector((math.cos(th_b) * (r_eave + 0.03), math.sin(th_b) * (r_eave + 0.03), z1 - 0.03))
+        _create_oriented_beam(bm, p_a, p_b, width=0.22, depth=0.22, mat_index=MAT_INDEX_TIMBER)
 
 
 def _build_carved_bone_lookout_frame(bm, cx, cy, cz, width=1.80, height=1.35):
@@ -3930,7 +4034,7 @@ def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, 
                                    wall_th=wall_th, sgn_y=1.0, variant='DECK')
     _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
                                    wall_th=wall_th, sgn_y=-1.0, variant='PAINTED_RED',
-                                   openings=[_hajfin_opening_x(0.0, z0 + door_h * 0.5, door_w, door_h)])
+                                   door_openings=[(0.0, door_w, door_h)])
     _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
                                    wall_th=wall_th, sgn_x=-1.0, variant='PAINTED_BLUE', top_clear=0.30,
                                    openings=[_hajfin_opening_y(hd * 0.25, z_mid + story_h * 0.52, 0.85, 0.85)])
@@ -4093,7 +4197,7 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
                                    wall_th=wall_th, sgn_y=1.0, variant='FACHWERK', top_clear=0.45)
     _build_hajfin_wall_dressing_x(bm, -hw + wall_th, -counter_w * 0.5, -hd + wall_th * 0.5, z0, z_mid,
                                    wall_th=wall_th, sgn_y=-1.0, variant='SALVAGED', top_clear=0.45,
-                                   openings=[_hajfin_opening_x(door_cx, z0 + door_h * 0.5, door_w, door_h)])
+                                   door_openings=[(door_cx, door_w, door_h)])
     _build_hajfin_wall_dressing_x(bm, counter_w * 0.5, hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
                                    wall_th=wall_th, sgn_y=-1.0, variant='DECK', top_clear=0.45,
                                    openings=[_hajfin_opening_x(r_cx, z0 + 2.1, 0.85, 0.85)])
@@ -4461,7 +4565,7 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
                                    wall_th=wall_th, sgn_x=1.0, variant='PAINTED_RED', top_clear=0.30)
     _build_hajfin_wall_dressing_x(bm, -nave_w * 0.5 + wall_th, nave_w * 0.5 - wall_th, -hd + wall_th * 0.5, z0, z0 + nave_h,
                                    wall_th=wall_th, sgn_y=-1.0, variant='SALVAGED', top_clear=0.30,
-                                   openings=[_hajfin_opening_x(0.0, z0 + door_h * 0.5, door_w, door_h)])
+                                   door_openings=[(0.0, door_w, door_h)])
 
     # 3. Raised Chieftain Dais / Throne Platform at Rear with Megalodon Throne
     dais_w = 5.2
@@ -4799,10 +4903,14 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                                    openings=[_hajfin_opening_y(hd - wing_d * 0.5, z0 + story_h * 0.52, 0.85, 0.85)])
     _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wing_w + wall_th * 0.5, -hd + m_d - wall_th * 0.5, z0, z_mid,
                                    wall_th=wall_th, sgn_y=-1.0, variant='BRACED',
-                                   openings=[_hajfin_opening_x((tap_x0 + tap_x1) * 0.5, z0 + tap_door_h * 0.5, tap_door_w, tap_door_h)])
+                                   door_openings=[((tap_x0 + tap_x1) * 0.5, tap_door_w, tap_door_h)])
     _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z_mid, z1,
                                    wall_th=wall_th, sgn_y=-1.0, variant='FACHWERK', top_clear=0.30,
                                    openings=[_hajfin_opening_x(-hw * 0.4, z_mid + story_h * 0.52, 0.85, 0.85)])
+    # Ground-floor front facade (the entrance wall) with the shark-jaw doorway cut out
+    _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_y=-1.0, variant='BRACED',
+                                   door_openings=[(-hw * 0.4, door_w, door_h)])
 
     # 9. Solid Gable Triangle Walls & Bone Scale Roofs (Zero sky gaps!)
     m_peak_z = z1 + 3.8
@@ -5302,7 +5410,7 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
                                    openings=[_hajfin_opening_y(c_y, z0 + story_h * 0.52, 0.85, 0.85)])
     _build_hajfin_wall_dressing_x(bm, -c_hw + wall_th, c_hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
                                    wall_th=wall_th, sgn_y=-1.0, variant='SALVAGED',
-                                   openings=[_hajfin_opening_x(0.0, z0 + door_h * 0.5, door_w, door_h)])
+                                   door_openings=[(0.0, door_w, door_h)])
     _build_hajfin_wall_dressing_x(bm, -c_hw + wall_th, c_hw - wall_th, -hd + wall_th * 0.5, z_mid, z1,
                                    wall_th=wall_th, sgn_y=-1.0, variant='PAINTED_BLUE', top_clear=0.30,
                                    openings=[_hajfin_opening_x(0.0, z_mid + story_h * 0.52, 0.85, 0.85)])
@@ -5409,12 +5517,14 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
     build_fish_drying_rack(bm, fr_x, fr_y, z_ground=deck_top_z, ang=0.10, width=2.20)
 
     # Fish filleting and preparation block on the pier deck
-    prep_x = -hw + 2.4
+    # Fillet bench set PARALLEL to the cabin's side wall (it used to be turned 90
+    # degrees and spear straight through it).
+    prep_x = -c_hw + 0.55
     prep_y = c_y - 0.5
-    create_box(bm, (1.60, 0.80, 0.80), (prep_x, prep_y, deck_top_z + 0.40), mat_index=MAT_INDEX_TIMBER)
-    build_cleaver(bm, prep_x - 0.30, prep_y, z_ground=deck_top_z + 0.80, ang=0.40, stuck=True)
-    build_fish(bm, prep_x + 0.15, prep_y - 0.10, z_ground=deck_top_z + 0.80, ang=-0.25, length=0.40)
-    build_meat(bm, prep_x + 0.40, prep_y + 0.08, z_ground=deck_top_z + 0.80, ang=0.55, length=0.30, variant=1)
+    create_box(bm, (0.80, 1.60, 0.80), (prep_x, prep_y, deck_top_z + 0.40), mat_index=MAT_INDEX_TIMBER)
+    build_cleaver(bm, prep_x, prep_y - 0.34, z_ground=deck_top_z + 0.80, ang=0.40, stuck=True)
+    build_fish(bm, prep_x - 0.10, prep_y + 0.12, z_ground=deck_top_z + 0.80, ang=-0.25, length=0.40)
+    build_meat(bm, prep_x + 0.08, prep_y + 0.42, z_ground=deck_top_z + 0.80, ang=0.55, length=0.30, variant=1)
     # Woodcutter splitting axe leaning by the barrel
     build_axe(bm, -hw + 2.05, hd - 4.55, z_ground=deck_top_z, ang=1.15, length=0.68)
     # Admiralty ship anchor at the rear-left deck corner, clear of the drying rack
