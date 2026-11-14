@@ -14,8 +14,10 @@ Completely distinct procedural geometry pipeline for the Hajfin shark-humanoid p
 """
 
 import math
+import os
 import random
 import bmesh
+import bpy
 from mathutils import Vector, Matrix, Euler
 from .materials import (
     setup_building_material_slots,
@@ -7084,6 +7086,148 @@ def _build_hajfin_hull_shelter(bm, props, width=4.4, depth=7.5, height=2.7, foun
 
 
 def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, found_h=0.0):
+    """Turn the artist-provided Nasher hull into a rough beached pub."""
+    fbx_path = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', 'props', 'hajfin', 'Nasher_Ship_Hull.fbx'))
+    if not os.path.isfile(fbx_path):
+        raise FileNotFoundError(f"Nasher ship hull asset is missing: {fbx_path}")
+
+    before = set(bpy.context.scene.objects)
+    bpy.ops.import_scene.fbx(filepath=fbx_path, use_custom_normals=True)
+    imported = [obj for obj in bpy.context.selected_objects
+                if obj.type == 'MESH' and obj not in before]
+    if not imported:
+        raise RuntimeError(f"Nasher ship hull asset contained no mesh: {fbx_path}")
+    source = imported[0]
+    mesh = source.data
+    source_positions = [source.matrix_world @ vertex.co for vertex in mesh.vertices]
+    min_v = Vector((min(v.x for v in source_positions),
+                    min(v.y for v in source_positions),
+                    min(v.z for v in source_positions)))
+    max_v = Vector((max(v.x for v in source_positions),
+                    max(v.y for v in source_positions),
+                    max(v.z for v in source_positions)))
+    center = (min_v + max_v) * 0.5
+    source_length = max_v.x - min_v.x
+    source_width = max_v.y - min_v.y
+    source_height = max_v.z - min_v.z
+    if min(source_length, source_width, source_height) <= 0.001:
+        raise RuntimeError("Nasher ship hull asset has invalid dimensions")
+
+    # Keep the hull and lower structural bands; upper deck islands become the
+    # salvage used by the pub instead of cluttering the inverted silhouette.
+    cut_z = center.z + source_height * 0.10
+    sx = depth / source_length
+    sy = width / source_width
+    sz = min(depth / source_length, height / source_height) * 1.25
+
+    def _converted(point):
+        local = point - center
+        # Source length is X; building length is Y. The negative Z makes the
+        # ship keel-up while the translation below puts its lowest edge down.
+        return Vector((local.y * sy, local.x * sx, -local.z * sz))
+
+    kept_faces = []
+    converted_z = []
+    for polygon in mesh.polygons:
+        points = [source_positions[index] for index in polygon.vertices]
+        if len(points) < 3 or any(point.z > cut_z for point in points):
+            continue
+        converted = [_converted(point) for point in points]
+        if len({(round(point.x, 5), round(point.y, 5), round(point.z, 5))
+                for point in converted}) < 3:
+            continue
+        kept_faces.append((converted, polygon.material_index))
+        converted_z.extend(point.z for point in converted)
+    if not kept_faces:
+        raise RuntimeError("Nasher ship hull asset had no usable lower-hull faces")
+
+    z_shift = found_h + 0.18 - min(converted_z)
+    for points, source_material in kept_faces:
+        verts = [bm.verts.new((point.x, point.y, point.z + z_shift))
+                 for point in points]
+        face = bm.faces.new(verts)
+        if source_material == 1:
+            face.material_index = MAT_INDEX_IRON
+        elif source_material == 6:
+            face.material_index = MAT_INDEX_ROPE
+        elif source_material in (3, 4, 5):
+            face.material_index = MAT_INDEX_TIMBER
+        else:
+            face.material_index = MAT_INDEX_DRIFTWOOD
+        face.tag = True
+
+    bpy.data.objects.remove(source, do_unlink=True)
+
+    hull_top = found_h + 0.18 + (max(converted_z) - min(converted_z)) + 0.25
+    floor_z = found_h + 0.42
+    body_w = width * 0.64
+    body_d = depth * 0.58
+    wall_h = min(height * 0.62, hull_top - floor_z - 0.35)
+    wall_h = max(2.4, wall_h)
+
+    # Rebuilt tavern core: deliberately uneven timber walls under the inverted
+    # hull, with open ends so the ship remains the dominant silhouette.
+    create_box(bm, (body_w, body_d, 0.24),
+               (0.0, 0.0, floor_z), mat_index=MAT_INDEX_FLOOR)
+    for x, y, h, w in (
+        (-body_w * 0.48, -body_d * 0.48, wall_h * 0.92, 0.28),
+        (body_w * 0.48, -body_d * 0.48, wall_h * 1.08, 0.32),
+        (-body_w * 0.48, body_d * 0.48, wall_h * 1.06, 0.30),
+        (body_w * 0.48, body_d * 0.48, wall_h * 0.88, 0.26),
+    ):
+        create_box(bm, (w, w, h), (x, y, floor_z + h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (body_w, 0.20, wall_h * 0.62),
+               (0.0, -body_d * 0.48, floor_z + wall_h * 0.37),
+               mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (body_w * 0.72, 0.20, wall_h * 0.48),
+               (body_w * 0.08, body_d * 0.48, floor_z + wall_h * 0.29),
+               mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # Janky side lean-to and a small upper bow balcony.
+    lean_x = body_w * 0.62
+    create_box(bm, (body_w * 0.34, body_d * 0.34, 0.20),
+               (lean_x, -body_d * 0.08, floor_z + 0.10),
+               mat_index=MAT_INDEX_FLOOR)
+    for y in (-body_d * 0.24, body_d * 0.16):
+        create_box(bm, (0.22, 0.22, wall_h * 0.72),
+                   (lean_x, y, floor_z + wall_h * 0.36),
+                   mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (body_w * 0.34, body_d * 0.34, 0.18),
+               (lean_x, -body_d * 0.08, floor_z + wall_h * 0.74),
+               mat_index=MAT_INDEX_DRIFTWOOD)
+
+    balcony_y = -body_d * 0.58
+    balcony_z = floor_z + wall_h * 0.72
+    create_box(bm, (body_w * 0.58, body_d * 0.28, 0.18),
+               (0.0, balcony_y, balcony_z), mat_index=MAT_INDEX_FLOOR)
+    for x in (-body_w * 0.28, body_w * 0.28):
+        create_box(bm, (0.20, 0.20, wall_h * 0.64),
+                   (x, balcony_y, floor_z + wall_h * 0.34),
+                   mat_index=MAT_INDEX_TIMBER)
+    _build_timber_deck_railing(
+        bm, -body_w * 0.31, body_w * 0.31,
+        balcony_y - body_d * 0.13, balcony_y + body_d * 0.13,
+        balcony_z + 0.08)
+    build_straight_staircase(
+        bm, start_pos=(0.0, balcony_y + body_d * 0.58, floor_z),
+        target_z=balcony_z, stair_width=body_w * 0.30,
+        stair_depth=body_d * 0.58, num_steps=9, direction_y=-1,
+        has_rail_left=True, has_rail_right=True,
+        tread_mat=MAT_INDEX_FLOOR, stringer_mat=MAT_INDEX_TIMBER)
+
+    # A crooked pub sign is the only deliberate ornament on the rebuilt core.
+    sign_y = balcony_y - body_d * 0.18
+    create_box(bm, (body_w * 0.38, 0.16, 0.72),
+               (0.0, sign_y, balcony_z + 0.82), mat_index=MAT_INDEX_SIGN)
+    _create_oriented_beam(
+        bm, (-body_w * 0.26, sign_y, balcony_z + 0.42),
+        (body_w * 0.26, sign_y, balcony_z + 1.12),
+        width=0.16, depth=0.16, mat_index=MAT_INDEX_TIMBER)
+
+
+def _build_hajfin_ship_tavern_legacy(bm, props, width=14.0, depth=20.0, height=5.6, found_h=0.0):
     """The Beached Galleon.
 
     A big upturned hull sprawls on the beach, its planked bottom the roof of a hall
