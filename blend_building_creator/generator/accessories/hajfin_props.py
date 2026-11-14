@@ -1410,13 +1410,13 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
             for loop in f.loops:
                 lc = loop.vert.co
                 if abs(fn.z) > 0.5:
-                    u = u_off + (lc.x / p_width + 0.5) * u_len
-                    v = v_off + (lc.y / p_len + 0.5) * v_len
-                elif abs(fn.x) >= abs(fn.y):
-                    u = u_off + (lc.z / plank_th + 0.5) * u_len
-                    v = v_off + (lc.y / p_len + 0.5) * v_len
-                else:
                     u = u_off + (lc.y / p_len + 0.5) * u_len
+                    v = v_off + (lc.x / p_width + 0.5) * v_len
+                elif abs(fn.x) >= abs(fn.y):
+                    u = u_off + (lc.y / p_len + 0.5) * u_len
+                    v = v_off + (lc.z / plank_th + 0.5) * v_len
+                else:
+                    u = u_off + (lc.x / p_width + 0.5) * u_len
                     v = v_off + (lc.z / plank_th + 0.5) * v_len
                 loop[uv_layer_planks].uv = Vector((u, v))
         transform_faces(plank_faces, M_plank)

@@ -6541,7 +6541,7 @@ def _attach_faction_banner(bm, props, style):
     """
     skip = ('PIER_STRAIGHT', 'PIER_RAMP', 'PIER_BEND', 'PIER_TEE', 'PIER_LANDING',
             'PIER_PLATFORM', 'PIER_HIGH_RAMP', 'PIER_ROPE_BRIDGE', 'ROPE_BRIDGE',
-            'PALISADE_WALL', 'WALL', 'FENCE', 'PALISADE_GATE', 'GATE',
+            'PALISADE_WALL', 'WALL', 'FENCE', 'SHRINE', 'TEMPLE',
             'FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
             'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR')
     if style in skip:
@@ -6553,6 +6553,8 @@ def _attach_faction_banner(bm, props, style):
     zs = [v.co.z for v in bm.verts]
     if not xs:
         return
+    from mathutils.bvhtree import BVHTree
+
     cx = (min(xs) + max(xs)) * 0.5
     front_y = min(ys)
     # Measure from the floor up, not from the bottom of the stilts (which plunge
@@ -6563,8 +6565,22 @@ def _attach_faction_banner(bm, props, style):
     banner_h = max(1.3, min(2.3, span * 0.17))
     banner_w = banner_h * 0.92
     z_top = z_min + span * 0.80
-    _build_hajfin_hanging_banner(bm, cx, front_y - 0.07, z_top,
-                                 width=banner_w, height=banner_h, facing_y=-1.0)
+
+    # The building's frontmost point is usually the roof overhang, so hanging the
+    # banner on min(y) left it floating in mid air.  Raycast inward at banner
+    # height and hang it off the first surface we actually hit (gable wall, eave
+    # board, palisade...).  Structures that are open at that height (the bone
+    # shrine rib dome) simply get no banner.
+    tree = BVHTree.FromBMesh(bm)
+    z_mid = z_top - banner_h * 0.5
+    for probe_z in (z_mid, z_mid - banner_h * 0.35, z_mid + banner_h * 0.30):
+        hit, _nrm, _idx, _dst = tree.ray_cast(
+            Vector((cx, front_y - 2.5, probe_z)), Vector((0.0, 1.0, 0.0)))
+        if hit is None:
+            continue
+        _build_hajfin_hanging_banner(bm, cx, hit.y - 0.06, z_top,
+                                     width=banner_w, height=banner_h, facing_y=-1.0)
+        return
 
 
 def _apply_hajfin_wall_uvs(bm, scale=0.18):
