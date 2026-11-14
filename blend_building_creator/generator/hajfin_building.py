@@ -5389,11 +5389,18 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     build_axe(bm, hearth_x + 2.1, hearth_y - 0.7, floor_z, ang=0.45, length=0.68)
     build_pickaxe(bm, -hw + 1.65, -0.60, floor_z, ang=-0.35, length=0.72)
 
-    # 9. Big Bone Scale Vaulted Roof with Shark Dorsal Fin Crest
-    _build_gable_triangle_wall(bm, -hw, hw, -hd + 0.5, z0 + height, peak_z, wall_th=0.28)
-    _build_gable_triangle_wall(bm, -hw, hw, hd, z0 + height, peak_z, wall_th=0.28)
+    # 9. Gable Roof
+    # The plank roof's deck does not reach eave_z at the wall line: its pitch is
+    # set by (half-span + overhang), so the gable triangles must start at the height
+    # the roof actually has where it passes over the wall.  Using eave_z here left a
+    # wedge-shaped gap between each gable edge and the roof slope.
+    ox = 0.55
+    _roof_slope = roof_h / max(0.1, hw + ox)
+    gable_eave_z = z0 + height + _roof_slope * ox
+    _build_gable_triangle_wall(bm, -hw, hw, -hd + 0.5, gable_eave_z, peak_z, wall_th=0.28)
+    _build_gable_triangle_wall(bm, -hw, hw, hd, gable_eave_z, peak_z, wall_th=0.28)
     _build_bone_scale_roof_gable(bm, -hw, hw, -hd + 0.5, hd, z0 + height, roof_h,
-                                 overhang_x=0.55, overhang_y=0.55, fin_scale=1.6, num_ridge_teeth=7)
+                                 overhang_x=ox, overhang_y=0.55, fin_scale=1.6, num_ridge_teeth=7)
 
 
 def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, found_h=1.6):
@@ -6525,6 +6532,41 @@ def _rescale_baked_atlas_uvs(bm):
             loop[uv_layer].uv = Vector((uv.x * su, uv.y * sv))
 
 
+def _attach_faction_banner(bm, props, style):
+    """Hang the faction war banner on the front gable of every gabled Hajfin building.
+
+    Reads the finished mesh bounds so it works for every archetype without each
+    builder having to know about banners: the banner hangs on the front facade at
+    the height of the gable, centred on the building's X.
+    """
+    skip = ('PIER_STRAIGHT', 'PIER_RAMP', 'PIER_BEND', 'PIER_TEE', 'PIER_LANDING',
+            'PIER_PLATFORM', 'PIER_HIGH_RAMP', 'PIER_ROPE_BRIDGE', 'ROPE_BRIDGE',
+            'PALISADE_WALL', 'WALL', 'FENCE', 'PALISADE_GATE', 'GATE',
+            'FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
+            'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR')
+    if style in skip:
+        return
+    if not bm.verts:
+        return
+    xs = [v.co.x for v in bm.verts]
+    ys = [v.co.y for v in bm.verts]
+    zs = [v.co.z for v in bm.verts]
+    if not xs:
+        return
+    cx = (min(xs) + max(xs)) * 0.5
+    front_y = min(ys)
+    # Measure from the floor up, not from the bottom of the stilts (which plunge
+    # 10m into the water), otherwise the banner ends up hanging by the doorway.
+    z_min = float(getattr(props, 'foundation_height', 0.0) or 0.0)
+    z_max = max(zs)
+    span = max(2.0, z_max - z_min)
+    banner_h = max(1.3, min(2.3, span * 0.17))
+    banner_w = banner_h * 0.92
+    z_top = z_min + span * 0.80
+    _build_hajfin_hanging_banner(bm, cx, front_y - 0.07, z_top,
+                                 width=banner_w, height=banner_h, facing_y=-1.0)
+
+
 def _apply_hajfin_wall_uvs(bm, scale=0.18):
     """Normalize every Hajfin siding face after all archetypes and props build.
 
@@ -6694,6 +6736,8 @@ def build_hajfin_building(obj, bm, props):
         # Standalone features bring their own unwrap - keep the box-UV pass off them.
         for _f in bm.faces:
             _f.tag = True
+
+    _attach_faction_banner(bm, props, style)
 
     _apply_hajfin_wall_uvs(bm)
     _rescale_baked_atlas_uvs(bm)
