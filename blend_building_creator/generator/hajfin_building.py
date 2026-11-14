@@ -6633,7 +6633,7 @@ def _attach_faction_banner(bm, props, style):
             'PIER_PLATFORM', 'PIER_HIGH_RAMP', 'PIER_ROPE_BRIDGE', 'ROPE_BRIDGE',
             'PALISADE_WALL', 'WALL', 'FENCE', 'SHRINE', 'TEMPLE',
             'FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
-            'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR')
+            'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR', 'HULL_SHELTER')
     if style in skip:
         return
     if not bm.verts:
@@ -6831,78 +6831,122 @@ def _remove_duplicate_hajfin_faces(bm):
 # SALVAGED HULL STRUCTURES
 # =============================================================================
 
-def _build_hajfin_hull_shelter(bm, props, width=3.6, depth=6.4, height=2.1, found_h=0.0):
+def _build_hajfin_hull_shelter(bm, props, width=3.8, depth=6.6, height=2.6, found_h=0.0):
     """An upturned broken ship's boat used as a beach shelter.
 
-    The hull lies keel-up with the gunwales on the ground and one end torn off, so
-    the arched interior is open to walk into.  Built as a swept inverted-U shell of
-    overlapping planks over heavy inside ribs, with a keel beam along the crown.
+    The hull lies keel-up with the gunwales on the ground.  The stern end is closed
+    with a raked transom, the bow end is torn open to walk in, and the shell carries
+    real thickness (inner + outer planking joined at the rims).  A deterministic
+    per-vertex wobble roughens the planking so it reads as wreck salvage rather than
+    a clean mould.
     """
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
     uv_layer = bm.loops.layers.uv.verify()
-    arc_n = 10
-    stations = max(6, int(depth / 0.72))
+    arc_n = 12
+    stations = max(7, int(depth / 0.60))
+    thick = 0.10
+    rake = 0.55          # how far the stern leans back
 
-    def _arc(y, shrink=1.0, dz=0.0):
+    # Deterministic surface wobble per (station, column)
+    wob = {}
+    for i in range(stations + 1):
+        for k in range(arc_n + 1):
+            h = math.sin(i * 12.9898 + k * 78.233) * 43758.5453
+            wob[(i, k)] = ((h - math.floor(h)) - 0.5) * 0.055
+
+    def _arc(y, k_jit=0.0):
         pts = []
         for k in range(arc_n + 1):
             th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
-            pts.append(Vector((math.sin(th) * hw * shrink, y,
-                               z0 + dz + math.cos(th) * height * shrink)))
+            d = Vector((math.sin(th), 0.0, math.cos(th)))
+            j = wob.get((0, k), 0.0) if k_jit else 0.0
+            pts.append(Vector((d.x * (hw + j), y, z0 + d.z * (height + j))))
         return pts
 
-    # 1. Inverted hull skin (outer planking) swept along Y
-    prev = None
+    # 1. Outer + inner shells, joined at both bottom rims and the torn bow edge
+    outer_prev = inner_prev = None
     for i in range(stations + 1):
         t = i / float(stations)
+        # jagged, torn bow: the first station's Y wanders per column
         y = -hd + depth * t
-        # jagged torn front edge
-        if i == 0:
-            prev = None
-            cur = _arc(y)
-        else:
-            cur = _arc(y)
-        if prev is not None:
+        o_pts, i_pts = [], []
+        for k in range(arc_n + 1):
+            th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
+            d = Vector((math.sin(th), 0.0, math.cos(th)))
+            j = wob[(i, k)]
+            jy = (wob[(i, k)] * 2.0) if i == 0 else 0.0
+            o_pts.append(Vector((d.x * (hw + j), y + jy, z0 + d.z * (height + j))))
+            i_pts.append(Vector((d.x * (hw + j - thick), y + jy + 0.02,
+                                 z0 + d.z * (height + j - thick))))
+        if outer_prev is not None:
             for k in range(arc_n):
-                a0, a1 = prev[k], prev[k + 1]
-                b0, b1 = cur[k], cur[k + 1]
-                quad = [bm.verts.new(a0), bm.verts.new(b0), bm.verts.new(b1), bm.verts.new(a1)]
-                f = bm.faces.new(quad)
-                f.material_index = MAT_INDEX_DRIFTWOOD
-                f.tag = True
-                for loop, (u, v) in zip(f.loops, ((k, i), (k, i + 1), (k + 1, i + 1), (k + 1, i))):
-                    loop[uv_layer].uv = Vector((u * 0.30, v * 0.30))
-        prev = cur
+                for (a, b, layer) in ((o_pts, outer_prev, 0), (i_pts, inner_prev, 1)):
+                    quad = [bm.verts.new(b[k]), bm.verts.new(a[k]),
+                            bm.verts.new(a[k + 1]), bm.verts.new(b[k + 1])]
+                    if layer == 1:
+                        quad.reverse()
+                    try:
+                        f = bm.faces.new(quad)
+                    except ValueError:
+                        continue
+                    f.material_index = MAT_INDEX_DRIFTWOOD
+                    f.tag = True
+                    for loop, (u, v) in zip(f.loops, ((k, i - 1), (k, i), (k + 1, i), (k + 1, i - 1))):
+                        loop[uv_layer].uv = Vector((u * 0.30, v * 0.30))
+        outer_prev, inner_prev = o_pts, i_pts
 
-    # 2. Heavy inside ribs
-    for i in range(1, stations, 2):
-        y = -hd + depth * (i / float(stations))
-        pts = _arc(y, shrink=0.93, dz=-0.04)
-        for k in range(arc_n):
-            _create_oriented_beam(bm, pts[k], pts[k + 1], width=0.14, depth=0.12,
-                                  mat_index=MAT_INDEX_TIMBER)
+    # 2. Rim ring around the torn bow opening (outer to inner)
+    for k in range(arc_n):
+        a0 = Vector(((math.sin(-math.pi * 0.5 + math.pi * (k / float(arc_n)))) * hw,
+                     -hd + wob[(0, k)] * 2.0,
+                     z0 + math.cos(-math.pi * 0.5 + math.pi * (k / float(arc_n))) * height))
+        a1 = Vector(((math.sin(-math.pi * 0.5 + math.pi * ((k + 1) / float(arc_n)))) * hw,
+                     -hd + wob[(0, k + 1)] * 2.0,
+                     z0 + math.cos(-math.pi * 0.5 + math.pi * ((k + 1) / float(arc_n))) * height))
+        b0 = Vector((a0.x * (1.0 - thick / max(0.1, hw)), a0.y + 0.02,
+                     z0 + (a0.z - z0) * (1.0 - thick / max(0.1, height))))
+        b1 = Vector((a1.x * (1.0 - thick / max(0.1, hw)), a1.y + 0.02,
+                     z0 + (a1.z - z0) * (1.0 - thick / max(0.1, height))))
+        try:
+            f = bm.faces.new([bm.verts.new(a0), bm.verts.new(a1),
+                              bm.verts.new(b1), bm.verts.new(b0)])
+            f.material_index = MAT_INDEX_TIMBER
+            f.tag = True
+        except ValueError:
+            pass
 
-    # 3. Keel beam along the crown and gunwale rails on the ground
-    create_box(bm, (0.26, depth - 0.35, 0.22), (0.0, 0.0, z0 + height - 0.04),
+    # 3. Closed stern: a raked rounded transom
+    stern_outer = []
+    stern_inner = []
+    for k in range(arc_n + 1):
+        th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
+        d = Vector((math.sin(th), 0.0, math.cos(th)))
+        stern_outer.append(bm.verts.new(Vector((d.x * hw * 0.80, hd + rake,
+                                                z0 + d.z * height * 0.94))))
+        stern_inner.append(bm.verts.new(Vector((d.x * hw * 0.80 * 0.86, hd + rake + 0.10,
+                                                z0 + d.z * height * 0.94 * 0.86))))
+    back_o = [bm.verts.new(Vector(((math.sin(-math.pi * 0.5 + math.pi * (k / float(arc_n)))) * hw,
+                                   hd, z0 + math.cos(-math.pi * 0.5 + math.pi * (k / float(arc_n))) * height)))
+              for k in range(arc_n + 1)]
+    for k in range(arc_n):
+        try:
+            f = bm.faces.new([back_o[k], back_o[k + 1], stern_outer[k + 1], stern_outer[k]])
+            f.material_index = MAT_INDEX_DRIFTWOOD
+            f.tag = True
+            f2 = bm.faces.new([stern_inner[k], stern_inner[k + 1], stern_outer[k + 1], stern_outer[k]])
+            f2.material_index = MAT_INDEX_DRIFTWOOD
+            f2.tag = True
+        except ValueError:
+            pass
+
+    # 4. Keel beam along the crown and gunwale rails on the ground
+    create_box(bm, (0.28, depth - 0.30, 0.24), (0.0, 0.10, z0 + height - 0.05),
                mat_index=MAT_INDEX_TIMBER)
     for sgn in (-1.0, 1.0):
-        create_box(bm, (0.20, depth - 0.30, 0.20), (sgn * (hw - 0.09), 0.0, z0 + 0.10),
+        create_box(bm, (0.22, depth - 0.20, 0.22), (sgn * (hw - 0.08), 0.05, z0 + 0.11),
                    mat_index=MAT_INDEX_TIMBER)
-
-    # 4. Torn plank stubs on the open end
-    for k in range(0, arc_n, 2):
-        th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
-        px = math.sin(th) * hw * 0.94
-        pz = z0 + math.cos(th) * height * 0.94
-        ln = 0.22 + 0.16 * ((k * 37) % 5) / 5.0
-        _create_oriented_beam(bm, (px, -hd, pz), (px, -hd - ln, pz - 0.05),
-                              width=0.24, depth=0.07, mat_index=MAT_INDEX_DRIFTWOOD)
-
-    # 5. Dry plank floor inside
-    create_box(bm, (width - 0.34, depth - 0.30, 0.12), (0.0, 0.05, z0 + 0.06),
-               mat_index=MAT_INDEX_FLOOR)
 
 
 def _build_hajfin_ship_tavern(bm, props, width=12.5, depth=16.0, height=8.2, found_h=1.2):
@@ -7052,7 +7096,7 @@ def build_hajfin_building(obj, bm, props):
     elif style in ('HULL_SHELTER', 'BOAT_SHELTER'):
         _build_hajfin_hull_shelter(bm, props, width=max(2.6, width * 0.42),
                                    depth=max(4.5, depth * 0.68),
-                                   height=max(1.9, height * 0.5), found_h=found_h)
+                                   height=max(2.4, height * 0.60), found_h=found_h)
     elif style in ('SHIP_TAVERN', 'SHIP_HOUSE'):
         _build_hajfin_ship_tavern(bm, props, width=max(10.0, width), depth=max(13.0, depth),
                                   height=max(7.4, height), found_h=found_h)
@@ -7084,7 +7128,7 @@ def build_hajfin_building(obj, bm, props):
     # Final material-scoped pass prevents any archetype-specific wall builder
     # from reintroducing a different siding density.
     if style in ('FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
-                 'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR'):
+                 'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR', 'HULL_SHELTER'):
         # Standalone features bring their own unwrap - keep the box-UV pass off them.
         for _f in bm.faces:
             _f.tag = True
