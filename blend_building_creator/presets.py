@@ -7864,7 +7864,6 @@ BUILDING_FAMILIES = [
         'description': "Elevated single-room driftwood shanty on crooked pier stilts with gangplank.",
         'tiers': [
             ("T1", 'HAJFIN_STILT_SHACK_T1', "Ramshackle drift shanty with crooked lean-to roof"),
-            ("T2", 'HAJFIN_STILT_SHACK_T2', "Reinforced stilt shack with patched sailcloth"),
         ],
     },
     {
@@ -7878,7 +7877,6 @@ BUILDING_FAMILIES = [
         'description': "Squat fisherman shack with open porch for hanging nets and drying frames.",
         'tiers': [
             ("T1", 'HAJFIN_NET_HUT_T1', "Low squat hut with open drying deck"),
-            ("T2", 'HAJFIN_NET_HUT_T2', "Master fisher's stilt hut with deep sheltered porch"),
         ],
     },
     {
@@ -7892,7 +7890,6 @@ BUILDING_FAMILIES = [
         'description': "Pirate hovel built around salvaged ship timbers and an overturned cutter hull roof.",
         'tiers': [
             ("T1", 'HAJFIN_HULL_SHACK_T1', "Overturned cutter hull roof and scrap timber walls"),
-            ("T2", 'HAJFIN_HULL_SHACK_T2', "Reinforced hull depot with deck plank siding"),
         ],
     },
     {
@@ -7906,7 +7903,6 @@ BUILDING_FAMILIES = [
         'description': "Tall rickety timber stilt watchtower with X-braced legs, climbing ladder, sentry cabin, and carved bone window.",
         'tiers': [
             ("T1", 'HAJFIN_LOOKOUT_HUT_T1', "Rickety stilt watchtower with ladder and bone lookout"),
-            ("T2", 'HAJFIN_LOOKOUT_HUT_T2', "Reinforced tall pirate watchtower with panoramic sentry platform"),
         ],
     },
     {
@@ -7920,7 +7916,6 @@ BUILDING_FAMILIES = [
         'description': "Open-front pirate barter bazaar trading in whale ribs, shark teeth, and scrimshaw charms.",
         'tiers': [
             ("T1", 'HAJFIN_BONE_SHOP_T1', "Pillared open trading counter and bone charm displays"),
-            ("T2", 'HAJFIN_BONE_SHOP_T2', "Grand Scrimshaw Emporium with vaulted bone entrance"),
         ],
     },
     {
@@ -7934,7 +7929,6 @@ BUILDING_FAMILIES = [
         'description': "Grand elevated timber longhouse with soaring whale-rib rafters, dorsal fin crest, and war banners.",
         'tiers': [
             ("T1", 'HAJFIN_CHIEFTAIN_HUT_T1', "Elevated rib longhouse with dorsal crest and banners"),
-            ("T2", 'HAJFIN_CHIEFTAIN_HUT_T2', "Grand Chieftain Citadel with vaulted hall and dais"),
         ],
     },
     {
@@ -7948,7 +7942,6 @@ BUILDING_FAMILIES = [
         'description': "Sprawling two-storey seaside pirate tavern with open-air stilt drinking deck and grog casks.",
         'tiers': [
             ("T1", 'HAJFIN_PIRATE_TAVERN_T1', "Open drinking deck, stilt footing, and grog barrels"),
-            ("T2", 'HAJFIN_PIRATE_TAVERN_T2', "The Salty Megalodon Taproom: multi-deck pirate haven"),
         ],
     },
     {
@@ -7962,7 +7955,6 @@ BUILDING_FAMILIES = [
         'description': "Sharpened timber palisade gate fortified with curved whale ribs and tooth garlands.",
         'tiers': [
             ("T1", 'HAJFIN_BONE_GATE_T1', "Timber & bone palisade fence with curved whale ribs"),
-            ("T2", 'HAJFIN_BONE_GATE_T2', "Reinforced tribal bone bastion gate with flanking dorsal fin"),
         ],
     },
     {
@@ -7976,7 +7968,6 @@ BUILDING_FAMILIES = [
         'description': "Continuous sharpened log palisade barrier fortified with outward-pointing curved whale ribs.",
         'tiers': [
             ("T1", 'HAJFIN_PALISADE_WALL_T1', "Continuous timber & bone palisade barrier segment"),
-            ("T2", 'HAJFIN_PALISADE_WALL_T2', "Reinforced tall stockade wall with heavy timber buttresses"),
         ],
     },
     {
@@ -7990,7 +7981,6 @@ BUILDING_FAMILIES = [
         'description': "Open timber blacksmith forge with coral-stone smelting hearth, heavy iron anvil, quenching vat, and harpoon racks.",
         'tiers': [
             ("T1", 'HAJFIN_FORGE_T1', "Open-air smithy with stone hearth and scrap anvil"),
-            ("T2", 'HAJFIN_FORGE_T2', "Master harpoon forge with dual weapon racks and high stone flue"),
         ],
     },
     {
@@ -8004,7 +7994,6 @@ BUILDING_FAMILIES = [
         'description': "Tidal stilt pier house with cargo boom hoist crane, net drying racks, cured fish stores, and salting cabin.",
         'tiers': [
             ("T1", 'HAJFIN_FISH_DEPOT_T1', "Stilted fish curing shack with pier dock and cargo hoist"),
-            ("T2", 'HAJFIN_FISH_DEPOT_T2', "Grand tidal depot with multi-tier pier and heavy boom crane"),
         ],
     },
     {
@@ -8018,7 +8007,6 @@ BUILDING_FAMILIES = [
         'description': "Sacred stepped reef-stone dais crowned by soaring whale-rib arches and central megalodon jawbone altar.",
         'tiers': [
             ("T1", 'HAJFIN_SHAMAN_SHRINE_T1', "Circular stone dais with ribcage dome and jaw altar"),
-            ("T2", 'HAJFIN_SHAMAN_SHRINE_T2', "Monumental megalodon sanctuary with ceremonial brazier and ribcage dome"),
         ],
     },
     {
@@ -8032,7 +8020,6 @@ BUILDING_FAMILIES = [
         'description': "Free-standing rope bridge with cross-plank walkway, handrail ropes and lashed pylons - drop it into any gap in the world.",
         'tiers': [
             ("Short (8m)", 'HAJFIN_ROPE_BRIDGE_T1', "8m catenary rope bridge with four pylons"),
-            ("Long (14m)", 'HAJFIN_ROPE_BRIDGE_T2', "14m long-span rope bridge"),
         ],
     },
     {
