@@ -6831,204 +6831,173 @@ def _remove_duplicate_hajfin_faces(bm):
 # SALVAGED HULL STRUCTURES
 # =============================================================================
 
-def _build_hajfin_hull_shelter(bm, props, width=3.8, depth=6.6, height=2.6, found_h=0.0):
+def _build_hajfin_hull_shelter(bm, props, width=4.0, depth=7.0, height=2.8, found_h=0.0):
     """An upturned broken ship's boat used as a beach shelter.
 
-    The hull lies keel-up with the gunwales on the ground.  The stern end is closed
-    with a raked transom, the bow end is torn open to walk in, and the shell carries
-    real thickness (inner + outer planking joined at the rims).  A deterministic
-    per-vertex wobble roughens the planking so it reads as wreck salvage rather than
-    a clean mould.
-    """
-    hw = width * 0.5
-    hd = depth * 0.5
-    z0 = found_h
-    uv_layer = bm.loops.layers.uv.verify()
-    arc_n = 12
-    stations = max(7, int(depth / 0.60))
-    thick = 0.10
-    rake = 0.55          # how far the stern leans back
-
-    # Deterministic surface wobble per (station, column)
-    wob = {}
-    for i in range(stations + 1):
-        for k in range(arc_n + 1):
-            h = math.sin(i * 12.9898 + k * 78.233) * 43758.5453
-            wob[(i, k)] = ((h - math.floor(h)) - 0.5) * 0.016
-
-    def _arc(y, k_jit=0.0):
-        pts = []
-        for k in range(arc_n + 1):
-            th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
-            d = Vector((math.sin(th), 0.0, math.cos(th)))
-            j = wob.get((0, k), 0.0) if k_jit else 0.0
-            pts.append(Vector((d.x * (hw + j), y, z0 + d.z * (height + j))))
-        return pts
-
-    # 1. Outer + inner shells, joined at both bottom rims and the torn bow edge
-    outer_prev = inner_prev = None
-    for i in range(stations + 1):
-        t = i / float(stations)
-        # jagged, torn bow: the first station's Y wanders per column
-        y = -hd + depth * t
-        o_pts, i_pts = [], []
-        for k in range(arc_n + 1):
-            th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
-            d = Vector((math.sin(th), 0.0, math.cos(th)))
-            j = wob[(i, k)]
-            jy = (wob[(i, k)] * 2.0) if i == 0 else 0.0
-            o_pts.append(Vector((d.x * (hw + j), y + jy, z0 + d.z * (height + j))))
-            i_pts.append(Vector((d.x * (hw + j - thick), y + jy + 0.02,
-                                 z0 + d.z * (height + j - thick))))
-        if outer_prev is not None:
-            for k in range(arc_n):
-                for (a, b, layer) in ((o_pts, outer_prev, 0), (i_pts, inner_prev, 1)):
-                    quad = [bm.verts.new(b[k]), bm.verts.new(a[k]),
-                            bm.verts.new(a[k + 1]), bm.verts.new(b[k + 1])]
-                    if layer == 1:
-                        quad.reverse()
-                    try:
-                        f = bm.faces.new(quad)
-                    except ValueError:
-                        continue
-                    f.material_index = MAT_INDEX_DRIFTWOOD
-                    f.tag = True
-                    for loop, (ku, vi) in zip(f.loops, ((k, i - 1), (k, i), (k + 1, i), (k + 1, i - 1))):
-                        # one strake per board: U steps with the column, V runs with
-                        # the hull length so the planking keeps an even width
-                        loop[uv_layer].uv = Vector((ku / float(arc_n) * 2.6,
-                                                    (vi / float(stations)) * (depth * 0.40)))
-        outer_prev, inner_prev = o_pts, i_pts
-
-    # 2. Rim ring around the torn bow opening (outer to inner)
-    for k in range(arc_n):
-        a0 = Vector(((math.sin(-math.pi * 0.5 + math.pi * (k / float(arc_n)))) * hw,
-                     -hd + wob[(0, k)] * 2.0,
-                     z0 + math.cos(-math.pi * 0.5 + math.pi * (k / float(arc_n))) * height))
-        a1 = Vector(((math.sin(-math.pi * 0.5 + math.pi * ((k + 1) / float(arc_n)))) * hw,
-                     -hd + wob[(0, k + 1)] * 2.0,
-                     z0 + math.cos(-math.pi * 0.5 + math.pi * ((k + 1) / float(arc_n))) * height))
-        b0 = Vector((a0.x * (1.0 - thick / max(0.1, hw)), a0.y + 0.02,
-                     z0 + (a0.z - z0) * (1.0 - thick / max(0.1, height))))
-        b1 = Vector((a1.x * (1.0 - thick / max(0.1, hw)), a1.y + 0.02,
-                     z0 + (a1.z - z0) * (1.0 - thick / max(0.1, height))))
-        try:
-            f = bm.faces.new([bm.verts.new(a0), bm.verts.new(a1),
-                              bm.verts.new(b1), bm.verts.new(b0)])
-            f.material_index = MAT_INDEX_TIMBER
-            f.tag = True
-        except ValueError:
-            pass
-
-    # 3. Closed stern: a raked rounded transom
-    stern_outer = []
-    stern_inner = []
-    for k in range(arc_n + 1):
-        th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
-        d = Vector((math.sin(th), 0.0, math.cos(th)))
-        stern_outer.append(bm.verts.new(Vector((d.x * hw * 0.80, hd + rake,
-                                                z0 + d.z * height * 0.94))))
-        stern_inner.append(bm.verts.new(Vector((d.x * hw * 0.80 * 0.86, hd + rake + 0.10,
-                                                z0 + d.z * height * 0.94 * 0.86))))
-    back_o = [bm.verts.new(Vector(((math.sin(-math.pi * 0.5 + math.pi * (k / float(arc_n)))) * hw,
-                                   hd, z0 + math.cos(-math.pi * 0.5 + math.pi * (k / float(arc_n))) * height)))
-              for k in range(arc_n + 1)]
-    for k in range(arc_n):
-        try:
-            f = bm.faces.new([back_o[k], back_o[k + 1], stern_outer[k + 1], stern_outer[k]])
-            f.material_index = MAT_INDEX_DRIFTWOOD
-            f.tag = True
-            f2 = bm.faces.new([stern_inner[k], stern_inner[k + 1], stern_outer[k + 1], stern_outer[k]])
-            f2.material_index = MAT_INDEX_DRIFTWOOD
-            f2.tag = True
-        except ValueError:
-            pass
-
-    # 4. Heavy keel beam along the crown (the boat's spine, now on top), plus a
-    # stem post at the bow and a stern post where the strakes converge.
-    create_box(bm, (0.40, depth - 0.10, 0.34), (0.0, 0.10, z0 + height - 0.10),
-               mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (0.34, 0.42, height * 0.80), (0.0, -hd + 0.18, z0 + height * 0.55),
-               mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (0.34, 0.42, height * 0.62), (0.0, hd + rake * 0.7, z0 + height * 0.42),
-               mat_index=MAT_INDEX_TIMBER)
-    for sgn in (-1.0, 1.0):
-        create_box(bm, (0.22, depth - 0.20, 0.22), (sgn * (hw - 0.08), 0.05, z0 + 0.11),
-                   mat_index=MAT_INDEX_TIMBER)
-
-
-def _build_hajfin_ship_tavern(bm, props, width=13.0, depth=19.0, height=5.6, found_h=0.0):
-    """The Beached Galleon.
-
-    A huge upturned hull sits flat on the beach with its planked bottom as the roof.
-    Inside there is a boarded floor, plank partitions and a shark-jaw doorway in the
-    torn bow.  Scavenged additions hang off it - a second-storey balcony across the
-    bow, a lean-to, a flank balcony reached by a rope bridge from a ground post, and
-    a rooftop walkway carrying the salvaged mainmast.  Iron ring portholes are cut
-    through the shell as real windows.
+    Boat-shaped in plan (widest amidships, tapered and joined at the stern, torn at
+    the bow), with even planked strakes, a heavy keel beam along the crown and stem
+    and stern posts where the boards converge.  The hull carries real thickness.
     """
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
     uv_layer = bm.loops.layers.uv.verify()
     arc_n = 14
-    stations = max(10, int(depth / 0.60))
-    thick = 0.16
-    rake = 1.4
+    stations = max(9, int(depth / 0.55))
+    thick = 0.11
+    rake = 0.6
 
     wob = {}
-    for i in range(stations + 1):
-        for k in range(arc_n + 1):
-            h = math.sin(i * 12.9898 + k * 78.233) * 43758.5453
-            wob[(i, k)] = ((h - math.floor(h)) - 0.5) * 0.11
+    for k in range(arc_n + 1):
+        h = math.sin(k * 78.233) * 43758.5453
+        wob[k] = ((h - math.floor(h)) - 0.5)
 
     def _plan(i):
         t = min(1.0, max(0.0, i / float(stations)))
-        return 0.58 + 0.42 * math.sin(math.pi * (t ** 0.88))
+        return 0.50 + 0.50 * (math.sin(math.pi * (0.5 + 0.5 * t)) ** 0.6)
 
     def _normal(k):
         th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
         return Vector((math.sin(th), 0.0, math.cos(th)))
 
-    def _fac(i, k, y, inflate):
+    def _fac(i, k, y, inflate=0.0):
         d = _normal(k)
-        j = wob[(i, k)]
         ps = _plan(i)
-        jy = (wob[(i, k)] * 9.0) if i == 0 else 0.0
-        return Vector((d.x * (hw * ps + j - inflate), y + jy - inflate * 0.5,
-                       z0 + d.z * (height * (0.62 + 0.38 * ps) + j - inflate)))
+        jy = (wob[k] * 1.1) if i == 0 else 0.0
+        jz = (wob[k] * 0.35) if i == 0 else 0.0
+        return Vector((d.x * (hw * ps - inflate), y + jy - inflate * 0.5,
+                       z0 + d.z * (height * (0.55 + 0.45 * ps) - inflate) + jz))
 
-    # Porthole windows: (station, column) patch centres; the skin quads there are
-    # skipped so the iron ring frames a real opening.
-    win_cells = {(3, 4), (3, 10), (6, 4), (6, 10), (8, 4), (8, 10)}
-
-    # 1. Hull shell with real thickness and porthole cut-outs
+    # 1. Hull shell (outer + inner, torn bow, even strakes)
     outer_prev = inner_prev = None
     for i in range(stations + 1):
         y = -hd + depth * (i / float(stations))
-        o_pts = [_fac(i, k, y, 0.0) for k in range(arc_n + 1)]
-        i_pts = [_fac(i, k, y, thick) for k in range(arc_n + 1)]
+        o = [_fac(i, k, y) for k in range(arc_n + 1)]
+        inn = [_fac(i, k, y, inflate=thick) for k in range(arc_n + 1)]
         if outer_prev is not None:
             for k in range(arc_n):
-                if (i, k) in win_cells or (i - 1, k) in win_cells:
-                    continue
-                for (cur, prev, flip, ii) in ((o_pts, outer_prev, False, i), (i_pts, inner_prev, True, i)):
-                    quad = [bm.verts.new(prev[k]), bm.verts.new(cur[k]),
-                            bm.verts.new(cur[k + 1]), bm.verts.new(prev[k + 1])]
+                for (cur, prev, flip, ii) in ((o, outer_prev, False, i), (inn, inner_prev, True, i)):
+                    q = [bm.verts.new(prev[k]), bm.verts.new(cur[k]),
+                         bm.verts.new(cur[k + 1]), bm.verts.new(prev[k + 1])]
                     if flip:
-                        quad.reverse()
+                        q.reverse()
                     try:
-                        f = bm.faces.new(quad)
+                        f = bm.faces.new(q)
                     except ValueError:
                         continue
                     f.material_index = MAT_INDEX_DRIFTWOOD
                     f.tag = True
-                    for loop, (u, v) in zip(f.loops, ((k, ii - 1), (k, ii), (k + 1, ii), (k + 1, ii - 1))):
-                        loop[uv_layer].uv = Vector((u * 0.30, v * 0.30))
+                    for loop, (ku, vi) in zip(f.loops, ((k, ii - 1), (k, ii), (k + 1, ii), (k + 1, ii - 1))):
+                        loop[uv_layer].uv = Vector((ku / float(arc_n) * 2.4,
+                                                    vi / float(stations) * depth * 0.34))
+        outer_prev, inner_prev = o, inn
+
+    # 2. Torn bow rim band
+    for k in range(arc_n):
+        a0 = _fac(0, k, -hd)
+        a1 = _fac(0, k + 1, -hd)
+        b0 = _fac(0, k, -hd, inflate=thick)
+        b1 = _fac(0, k + 1, -hd, inflate=thick)
+        try:
+            f = bm.faces.new([bm.verts.new(a0), bm.verts.new(a1), bm.verts.new(b1), bm.verts.new(b0)])
+            f.material_index = MAT_INDEX_TIMBER
+            f.tag = True
+        except ValueError:
+            pass
+
+    # 3. Joined stern transom
+    back_o = [_fac(stations, k, hd) for k in range(arc_n + 1)]
+    sten = []
+    for k in range(arc_n + 1):
+        d = _normal(k)
+        sten.append(bm.verts.new(Vector((d.x * hw * 0.22, hd + rake, z0 + d.z * height * 0.42))))
+    bo = [bm.verts.new(p) for p in back_o]
+    for k in range(arc_n):
+        try:
+            f = bm.faces.new([bo[k], bo[k + 1], sten[k + 1], sten[k]])
+            f.material_index = MAT_INDEX_DRIFTWOOD
+            f.tag = True
+        except ValueError:
+            pass
+
+    # 4. Heavy keel beam + stem/stern posts + ground gunwale rails
+    create_box(bm, (0.40, depth - 0.2, 0.34), (0.0, 0.12, z0 + height - 0.12),
+               mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.34, 0.44, height * 0.9), (0.0, -hd + 0.2, z0 + height * 0.55),
+               mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.34, 0.44, height * 0.55), (0.0, hd + rake * 0.7, z0 + height * 0.40),
+               mat_index=MAT_INDEX_TIMBER)
+    for sgn in (-1.0, 1.0):
+        create_box(bm, (0.24, depth - 0.25, 0.24), (sgn * (hw - 0.10), -0.05, z0 + 0.12),
+                   mat_index=MAT_INDEX_TIMBER)
+
+
+def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, found_h=0.0):
+    """The Beached Galleon.
+
+    A big upturned hull sprawls on the beach, its planked bottom the roof of a hall
+    with a boarded floor, an upper gallery and a second floor.  Scavenged additions
+    hang off it: a cut-off spiky bow turned into a high balcony, two little shacks,
+    an upper deck hugging the crown with wrapping beams, spread-out iron portholes,
+    the mainmast and a rope bridge to a mooring post.
+    """
+    hw = width * 0.5
+    hd = depth * 0.5
+    z0 = found_h
+    uv_layer = bm.loops.layers.uv.verify()
+    arc_n = 16
+    stations = max(12, int(depth / 0.55))
+    thick = 0.16
+    rake = 1.4
+
+    def _plan(i):
+        t = min(1.0, max(0.0, i / float(stations)))
+        # pointy bow at t=0, rounded stern at t=1, wide amidships
+        return 0.30 + 0.70 * (math.sin(math.pi * (0.5 + 0.5 * t)) ** 0.7)
+
+    def _normal(k):
+        th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
+        return Vector((math.sin(th), 0.0, math.cos(th)))
+
+    def _fac(i, k, y, inflate=0.0, jitter=0.0):
+        d = _normal(k)
+        ps = _plan(i)
+        return Vector((d.x * (hw * ps + jitter - inflate), y + jitter * 3.0 - inflate * 0.5,
+                       z0 + d.z * (height * (0.62 + 0.38 * ps) + jitter - inflate)))
+
+    # --- 1. Hull shell (even loft), with porthole cut-outs spread over both flanks
+    portholes = set()
+    for wi in (2, 5, 8, 11):
+        portholes.add((wi, 3))
+        portholes.add((wi, 12))
+
+    outer_prev = inner_prev = None
+    for i in range(stations + 1):
+        y = -hd + depth * (i / float(stations))
+        o_pts = [_fac(i, k, y) for k in range(arc_n + 1)]
+        i_pts = [_fac(i, k, y, inflate=thick) for k in range(arc_n + 1)]
+        if outer_prev is not None:
+            for k in range(arc_n):
+                if (i, k) in portholes or (i - 1, k) in portholes:
+                    continue
+                for (cur, prev, flip, ii) in ((o_pts, outer_prev, False, i), (i_pts, inner_prev, True, i)):
+                    q = [bm.verts.new(prev[k]), bm.verts.new(cur[k]),
+                         bm.verts.new(cur[k + 1]), bm.verts.new(prev[k + 1])]
+                    if flip:
+                        q.reverse()
+                    try:
+                        f = bm.faces.new(q)
+                    except ValueError:
+                        continue
+                    f.material_index = MAT_INDEX_DRIFTWOOD
+                    f.tag = True
+                    for loop, (ku, vi) in zip(f.loops, ((k, ii - 1), (k, ii), (k + 1, ii), (k + 1, ii - 1))):
+                        loop[uv_layer].uv = Vector((ku / float(arc_n) * 3.0,
+                                                    vi / float(stations) * depth * 0.38))
         outer_prev, inner_prev = o_pts, i_pts
 
-    # 2. Iron ring portholes, aligned to the hull surface, with a dark pane behind
-    for (wi, wk) in sorted(win_cells):
+    # --- 2. Iron portholes aligned to the hull, one on every spread position
+    for (wi, wk) in sorted(portholes):
         py = -hd + depth * (wi / float(stations))
         d = _normal(wk + 0.5)
         ps = _plan(wi)
@@ -7039,137 +7008,109 @@ def _build_hajfin_ship_tavern(bm, props, width=13.0, depth=19.0, height=5.6, fou
             xax = Vector((1.0, 0.0, 0.0))
         xax.normalize()
         yax = zax.cross(xax)
-        orient = Matrix(((xax.x, yax.x, zax.x, 0.0),
-                         (xax.y, yax.y, zax.y, 0.0),
-                         (xax.z, yax.z, zax.z, 0.0),
-                         (0.0, 0.0, 0.0, 1.0)))
-        create_torus_ring(bm, location=(0.0, 0.0, 0.0), major_radius=0.40, minor_radius=0.075,
+        orient = Matrix(((xax.x, yax.x, zax.x, 0.0), (xax.y, yax.y, zax.y, 0.0),
+                         (xax.z, yax.z, zax.z, 0.0), (0.0, 0.0, 0.0, 1.0)))
+        create_torus_ring(bm, location=(0.0, 0.0, 0.0), major_radius=0.38, minor_radius=0.07,
                           major_segments=14, minor_segments=6, mat_index=MAT_INDEX_IRON,
                           transform_matrix=Matrix.Translation(pos) @ orient)
-        create_box(bm, (0.86, 0.86, 0.05), (pos.x - d.x * 0.12, pos.y, pos.z - d.z * 0.12),
+        create_box(bm, (0.80, 0.80, 0.05), (pos.x - d.x * 0.10, pos.y, pos.z - d.z * 0.10),
                    mat_index=MAT_INDEX_GLASS)
 
-    # 3. Ribs
-    for i in range(1, stations, 2):
+    # --- 3. Wrapping ribs (they rise over the hull and tie into the keel)
+    for i in range(0, stations + 1, 2):
         y = -hd + depth * (i / float(stations))
-        pts = [_fac(i, k, y, thick + 0.10) for k in range(arc_n + 1)]
+        pts = [_fac(i, k, y, inflate=-0.10) for k in range(arc_n + 1)]
         for k in range(arc_n):
-            _create_oriented_beam(bm, pts[k], pts[k + 1], width=0.26, depth=0.22,
+            _create_oriented_beam(bm, pts[k], pts[k + 1], width=0.24, depth=0.20,
                                   mat_index=MAT_INDEX_TIMBER)
 
-    # 4. Bow rim band and raked stern transom (closed end)
-    for k in range(arc_n):
-        a0 = _fac(0, k, -hd, 0.0)
-        a1 = _fac(0, k + 1, -hd, 0.0)
-        b0 = _fac(0, k, -hd, thick)
-        b1 = _fac(0, k + 1, -hd, thick)
-        try:
-            f = bm.faces.new([bm.verts.new(a0), bm.verts.new(a1),
-                              bm.verts.new(b1), bm.verts.new(b0)])
-            f.material_index = MAT_INDEX_TIMBER
-            f.tag = True
-        except ValueError:
-            pass
-
-    back_o = [_fac(stations, k, hd, 0.0) for k in range(arc_n + 1)]
-    sten_o = []
+    # --- 4. Closed stern transom
+    back_o = [_fac(stations, k, hd) for k in range(arc_n + 1)]
+    sten = []
     for k in range(arc_n + 1):
         d = _normal(k)
-        sten_o.append(bm.verts.new(Vector((d.x * hw * 0.30, hd + rake,
-                                           z0 + d.z * height * 0.60))))
+        sten.append(bm.verts.new(Vector((d.x * hw * 0.34, hd + rake, z0 + d.z * height * 0.58))))
     bo = [bm.verts.new(p) for p in back_o]
     for k in range(arc_n):
         try:
-            f = bm.faces.new([bo[k], bo[k + 1], sten_o[k + 1], sten_o[k]])
+            f = bm.faces.new([bo[k], bo[k + 1], sten[k + 1], sten[k]])
             f.material_index = MAT_INDEX_DRIFTWOOD
             f.tag = True
         except ValueError:
             pass
 
-    # 5. Interior floor, partitions and doorway
+    # --- 5. Keel spine, stem and stern posts
+    create_box(bm, (0.44, depth - 0.2, 0.36), (0.0, 0.15, z0 + height - 0.12),
+               mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.36, 0.5, height * 0.9), (0.0, -hd + 0.22, z0 + height * 0.52),
+               mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.36, 0.5, height * 0.6), (0.0, hd + rake * 0.7, z0 + height * 0.42),
+               mat_index=MAT_INDEX_TIMBER)
+    for sgn in (-1.0, 1.0):
+        create_box(bm, (0.34, depth - 0.3, 0.38), (sgn * (hw - 0.13), -0.10, z0 + 0.19),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # --- 6. Interior: boarded floor, upper gallery and stair
     create_box(bm, (width * 0.72, depth - 1.4, 0.16), (0.0, 0.2, z0 + 0.14),
                mat_index=MAT_INDEX_FLOOR)
-    # Rear partition wall with a door-sized opening
-    _build_wall_with_door_opening(bm, -width * 0.30, width * 0.30, hd - 4.2,
-                                  z0 + 0.22, z0 + height * 0.72,
-                                  door_cx=0.0, door_w=1.6, door_h=2.4,
-                                  wall_th=0.20, rot_z=0.0)
-    # Bow doorway frame under the arch
-    create_box(bm, (3.4, 0.34, 0.30), (0.0, -hd + 0.30, z0 + 2.55), mat_index=MAT_INDEX_TIMBER)
+    gal_z = z0 + 2.7
+    create_box(bm, (width * 0.62, depth * 0.55, 0.16), (0.0, -2.0, gal_z),
+               mat_index=MAT_INDEX_FLOOR)
     for sgn in (-1.0, 1.0):
-        create_box(bm, (0.26, 0.34, 2.55), (sgn * 1.55, -hd + 0.30, z0 + 1.30),
+        _build_timber_deck_railing(bm, sgn * width * 0.31, sgn * width * 0.31,
+                                   -2.0 - depth * 0.275, -2.0 + depth * 0.275, gal_z + 0.06)
+    for st in range(10):
+        sy = -hd + 1.0 + st * 0.40
+        create_box(bm, (1.4, 0.4, 0.16), (-width * 0.20, sy, z0 + 0.18 + st * 0.27),
                    mat_index=MAT_INDEX_TIMBER)
 
-    # 6. Keel beam and gunwale rails on the ground
-    create_box(bm, (0.42, depth - 0.4, 0.34), (0.0, 0.20, z0 + height - 0.12),
+    # --- 7. Upper deck platform hugging the crown, with rails + a cabin box
+    deck_y0 = -hd + 4.0
+    deck_y1 = hd - 1.4
+    create_box(bm, (width * 0.58, deck_y1 - deck_y0, 0.16),
+               (0.0, (deck_y0 + deck_y1) * 0.5, z0 + height + 0.12), mat_index=MAT_INDEX_FLOOR)
+    for sgn in (-1.0, 1.0):
+        _build_timber_deck_railing(bm, sgn * width * 0.29, sgn * width * 0.29,
+                                   deck_y0, deck_y1, z0 + height + 0.20)
+    # a small windowed cabin on the upper deck
+    create_box(bm, (width * 0.42, 3.6, 2.6), (0.0, hd - 3.6, z0 + height + 1.5),
+               mat_index=MAT_INDEX_DRIFTWOOD)
+    _build_wall_with_window_x(bm, -width * 0.21, width * 0.21, hd - 3.6 - 1.8,
+                              z0 + height + 0.3, z0 + height + 2.7,
+                              win_cx=0.0, win_cz=z0 + height + 1.5, win_w=0.9, win_h=0.9,
+                              wall_th=0.20, facing_north=True)
+    _build_hajfin_supported_plank_roof(bm, -width * 0.22, width * 0.22, hd - 5.6, hd - 1.6,
+                                       z0 + height + 2.7, 1.0, overhang_x=0.3, overhang_y=0.3)
+
+    # --- 8. Cut-off spiky bow as a high balcony
+    bow_z = z0 + 4.3
+    create_box(bm, (width * 0.34, 2.6, 0.16), (0.0, -hd - 1.4, bow_z), mat_index=MAT_INDEX_FLOOR)
+    _build_timber_deck_railing(bm, -width * 0.17, width * 0.17, -hd - 2.6, -hd - 0.2, bow_z + 0.06)
+    for sgn in (-1.0, 1.0):
+        create_box(bm, (0.24, 0.24, bow_z - z0), (sgn * width * 0.16, -hd - 2.3, z0 + (bow_z - z0) * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # --- 9. Two little shacks on the flanks
+    for side, sx in ((1.0, hw + 1.6), (-1.0, -hw - 1.6)):
+        sh_y = -4.0 if side > 0 else 1.5
+        for (px, py) in ((sx - 1.1, sh_y), (sx - 1.1, sh_y + 2.8), (sx + 1.1, sh_y), (sx + 1.1, sh_y + 2.8)):
+            create_box(bm, (0.22, 0.22, 2.9), (px, py, z0 + 1.45), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (2.2, 2.8, 2.0), (sx, sh_y + 1.4, z0 + 1.4), mat_index=MAT_INDEX_DRIFTWOOD)
+        _build_hajfin_supported_plank_roof(bm, sx - 1.2, sx + 1.2, sh_y, sh_y + 2.8,
+                                           z0 + 2.6, 0.9, overhang_x=0.25, overhang_y=0.25)
+
+    # --- 10. Mainmast on the upper deck
+    build_ship_mast_with_crows_nest(bm, 0.0, hd - 4.6, z0 + height + 0.18,
+                                    height=7.0, mast_radius=0.26, rot_z=0.5, with_lantern=True)
+
+    # --- 11. Rope bridge from the bow balcony to a ground mooring post
+    moor_x = -hw - 8.5
+    create_box(bm, (1.1, 1.1, 0.30), (moor_x, -hd - 1.0, z0 + 0.15), mat_index=MAT_INDEX_ROUGH_STONE)
+    create_box(bm, (0.34, 0.34, bow_z + 1.2), (moor_x, -hd - 1.0, z0 + (bow_z + 1.2) * 0.5),
                mat_index=MAT_INDEX_TIMBER)
-    for sgn in (-1.0, 1.0):
-        create_box(bm, (0.34, depth - 0.3, 0.36), (sgn * (hw - 0.12), -0.10, z0 + 0.18),
-                   mat_index=MAT_INDEX_TIMBER)
-
-    # 7. Second-storey bow balcony, built out over the entrance on posts
-    bal_y0 = -hd - 2.6
-    bal_y1 = -hd + 2.2
-    bal_z = z0 + 3.05
-    create_box(bm, (width * 0.86, bal_y1 - bal_y0, 0.16),
-               (0.0, (bal_y0 + bal_y1) * 0.5, bal_z), mat_index=MAT_INDEX_FLOOR)
-    for sgn in (-1.0, 1.0):
-        for py in (bal_y0 + 0.4, bal_y1 - 0.5):
-            px = sgn * (width * 0.40)
-            create_box(bm, (0.26, 0.26, bal_z - z0), (px, py, z0 + (bal_z - z0) * 0.5),
-                       mat_index=MAT_INDEX_TIMBER)
-            _create_oriented_beam(bm, (px, py, z0 + 1.2), (px, py, bal_z - 0.1),
-                                  width=0.18, depth=0.18, mat_index=MAT_INDEX_TIMBER)
-    _build_timber_deck_railing(bm, -width * 0.43, width * 0.43, bal_y0 + 0.1, bal_y0 + 0.25, bal_z + 0.08)
-    for sgn in (-1.0, 1.0):
-        _build_timber_deck_railing(bm, sgn * width * 0.43, sgn * width * 0.43,
-                                   bal_y0 + 0.1, bal_y1 - 0.1, bal_z + 0.08)
-    # Exterior steps from the ground up to the bow balcony
-    for st in range(9):
-        sz = z0 + 0.18 + st * (bal_z - z0) * 0.105
-        sy = bal_y0 - 0.4 - st * 0.42
-        create_box(bm, (2.0, 0.44, 0.16), (0.0, sy, sz), mat_index=MAT_INDEX_TIMBER)
-
-    # 8. Rooftop walkway on the crown, with rails
-    walk_w = 2.8
-    walk_y0 = -hd + 3.0
-    walk_y1 = hd - 1.2
-    create_box(bm, (walk_w, walk_y1 - walk_y0, 0.16),
-               (0.0, (walk_y0 + walk_y1) * 0.5, z0 + height + 0.10), mat_index=MAT_INDEX_FLOOR)
-    for sgn in (-1.0, 1.0):
-        _build_timber_deck_railing(bm, sgn * walk_w * 0.5, sgn * walk_w * 0.5,
-                                   walk_y0, walk_y1, z0 + height + 0.18)
-
-    # 9. Mainmast planted on the crown deck
-    build_ship_mast_with_crows_nest(bm, 0.0, hd - 3.2, z0 + height + 0.14,
-                                    height=7.4, mast_radius=0.26, rot_z=0.5,
-                                    with_lantern=True)
-
-    # 10. Lean-to shack on the starboard flank, standing on the ground
-    lean_x = hw + 1.5
-    for (px, py) in ((hw + 0.30, 0.4), (hw + 0.30, 4.2), (lean_x + 0.6, 0.4), (lean_x + 0.6, 4.2)):
-        create_box(bm, (0.24, 0.24, 2.9), (px, py, z0 + 1.45), mat_index=MAT_INDEX_TIMBER)
-    _build_hajfin_supported_plank_roof(bm, hw + 0.2, lean_x + 0.7, 0.2, 4.4,
-                                       z0 + 2.90, 1.0, overhang_x=0.25, overhang_y=0.25)
-
-    # 11. Port-flank balcony reached by a rope bridge from a ground mooring post
-    bal2_x = -hw - 1.4
-    bal2_z = z0 + 2.4
-    create_box(bm, (2.4, 4.0, 0.16), (bal2_x, 2.0, bal2_z), mat_index=MAT_INDEX_FLOOR)
-    for py in (0.4, 3.6):
-        create_box(bm, (0.24, 0.24, bal2_z - z0), (bal2_x - 0.9, py, z0 + (bal2_z - z0) * 0.5),
-                   mat_index=MAT_INDEX_TIMBER)
-    _build_timber_deck_railing(bm, bal2_x - 1.1, bal2_x + 1.0, 0.2, 3.8, bal2_z + 0.08)
-    # Mooring mast on the ground, with its own base and a rope bridge to the balcony
-    moor_x = -hw - 7.0
-    create_box(bm, (1.0, 1.0, 0.30), (moor_x, 2.0, z0 + 0.15), mat_index=MAT_INDEX_ROUGH_STONE)
-    create_box(bm, (0.34, 0.34, bal2_z + 1.4), (moor_x, 2.0, z0 + (bal2_z + 1.4) * 0.5),
-               mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (1.6, 1.6, 0.14), (moor_x, 2.0, bal2_z), mat_index=MAT_INDEX_FLOOR)
-    _build_timber_deck_railing(bm, moor_x - 0.8, moor_x + 0.8, 1.2, 2.8, bal2_z + 0.06)
-    build_suspended_rope_bridge(bm, (bal2_x - 1.05, 2.0, bal2_z + 0.12),
-                                (moor_x + 0.75, 2.0, bal2_z + 0.12),
-                                width=1.2, sag=0.30, with_pylons=False)
+    build_suspended_rope_bridge(bm, (0.0, -hd - 2.4, bow_z + 0.12),
+                                (moor_x + 0.75, -hd - 1.0, bow_z + 0.12),
+                                width=1.1, sag=0.3, with_pylons=False)
 
 
 def build_hajfin_building(obj, bm, props):
