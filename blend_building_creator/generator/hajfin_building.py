@@ -5395,11 +5395,15 @@ def _build_hajfin_forge(bm, props, width=10.0, depth=9.0, height=7.2, found_h=0.
     # the roof actually has where it passes over the wall.  Using eave_z here left a
     # wedge-shaped gap between each gable edge and the roof slope.
     ox = 0.55
+    # Seat the roof down onto the header beams: with the boards and eave beams
+    # floated at z0+height the whole roof read as hovering above the posts.
+    roof_base_z = z0 + height - 0.26
     _roof_slope = roof_h / max(0.1, hw + ox)
-    gable_eave_z = z0 + height + _roof_slope * ox
+    gable_eave_z = roof_base_z + _roof_slope * ox
+    peak_z = roof_base_z + roof_h
     _build_gable_triangle_wall(bm, -hw, hw, -hd + 0.5, gable_eave_z, peak_z, wall_th=0.28)
     _build_gable_triangle_wall(bm, -hw, hw, hd, gable_eave_z, peak_z, wall_th=0.28)
-    _build_bone_scale_roof_gable(bm, -hw, hw, -hd + 0.5, hd, z0 + height, roof_h,
+    _build_bone_scale_roof_gable(bm, -hw, hw, -hd + 0.5, hd, roof_base_z, roof_h,
                                  overhang_x=ox, overhang_y=0.55, fin_scale=1.6, num_ridge_teeth=7)
 
 
@@ -6602,20 +6606,35 @@ def _attach_faction_banner(bm, props, style):
     # board, palisade...).  Structures that are open at that height (the bone
     # shrine rib dome) simply get no banner.
     tree = BVHTree.FromBMesh(bm)
-    for frac in (0.78, 0.68, 0.58, 0.48, 0.38):
-        probe_z = z_min + span * frac
-        hit, nrm, _idx, _dst = tree.ray_cast(
-            Vector((cx, front_y - 2.5, probe_z)), Vector((0.0, 1.0, 0.0)))
-        if hit is None:
-            continue
-        # Only hang it off a roughly vertical surface (a wall).  Hitting a sloping
-        # roof deck leaves the banner stuck to the shingles at an angle, which is
-        # what happened on the conical net-mender roof.
-        if abs(nrm.z) > 0.45:
-            continue
-        _build_hajfin_hanging_banner(bm, cx, hit.y - 0.06, probe_z + banner_h * 0.5,
-                                     width=banner_w, height=banner_h, facing_y=-1.0)
+    x_lo, x_hi = min(xs), max(xs)
+    # Probe a few columns across the facade and keep the one whose wall reaches
+    # highest: that centres the banner under the tallest gable (the tower on the
+    # trading post, the main block on the L-shaped tavern) instead of under the
+    # building's bounding-box centre.
+    # Probe columns across the facade; remember the best wall hit per column so we
+    # can centre the banner on the wall span that actually reaches gable height.
+    cols = []
+    for xi in range(9):
+        px = x_lo + (x_hi - x_lo) * (xi + 0.5) / 9.0
+        for frac in (0.60, 0.52, 0.44, 0.36, 0.28):
+            probe_z = z_min + span * frac
+            hit, nrm, _fidx, _dst = tree.ray_cast(
+                Vector((px, front_y - 2.5, probe_z)), Vector((0.0, 1.0, 0.0)))
+            if hit is None or abs(nrm.z) > 0.45:
+                continue
+            cols.append((px, hit.y, probe_z))
+            break
+    if not cols:
         return
+    top_z = max(c[2] for c in cols)
+    tall = [c for c in cols if c[2] > top_z - 0.45]
+    px = (min(c[0] for c in tall) + max(c[0] for c in tall)) * 0.5
+    hy = tall[len(tall) // 2][1]
+    pz = top_z
+    # cz is the banner's CENTRE, so pass the probe height directly: adding half a
+    # banner height pushed the cloth up inside the wall/roof.
+    _build_hajfin_hanging_banner(bm, px, hy - 0.06, pz,
+                                 width=banner_w, height=banner_h, facing_y=-1.0)
 
 
 def _apply_hajfin_wall_uvs(bm, scale=0.18):
