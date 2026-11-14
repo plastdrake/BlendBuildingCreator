@@ -7546,59 +7546,90 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         _create_oriented_beam(bm, p0, p1, width=0.18, depth=0.18,
                               mat_index=MAT_INDEX_TIMBER)
 
-    # 4. Large salvage / paint panels in the wall bays between the openings.
-    #    The old small patches were placed on a fixed grid and ended up across
-    #    the window cut-outs.  These panels are sized to the actual bays so
-    #    every window and the front door stay completely clear.
-    panel_z0 = floor_z + 0.55
-    panel_z1 = floor_z + 3.45
-    panel_cz = (panel_z0 + panel_z1) * 0.5
-    panel_h = panel_z1 - panel_z0
+    # 4. Large salvage / paint panels in the actual wall bays, with varied
+    #    heights and widths.  None of these overlap a window or the doorway.
+    fz = floor_z
 
-    def _panel_x(cx, width, y, mat):
-        create_box(bm, (width, 0.08, panel_h), (cx, y, panel_cz),
+    def _panel_x(cx, width, y, mat, z0, z1):
+        create_box(bm, (width, 0.08, z1 - z0), (cx, y, (z0 + z1) * 0.5),
                    mat_index=mat, is_wall=True)
 
-    def _panel_y(cy, width, x, mat):
-        create_box(bm, (0.08, width, panel_h), (x, cy, panel_cz),
+    def _panel_y(cy, width, x, mat, z0, z1):
+        create_box(bm, (0.08, width, z1 - z0), (x, cy, (z0 + z1) * 0.5),
                    mat_index=mat, is_wall=True)
 
-    for y_side in (-1.0, 1.0):
-        if y_side < 0.0:
-            _panel_x(-4.35, 3.00, y_side * (hd + 0.14),
-                     MAT_INDEX_PAINTED_PLANKS)
-            _panel_x(4.35, 3.00, y_side * (hd + 0.14),
-                     MAT_INDEX_PAINTED_PLANKS_BLUE)
-        else:
-            _panel_x(-5.15, 1.90, y_side * (hd + 0.14),
-                     MAT_INDEX_PAINTED_PLANKS)
-            _panel_x(0.0, 3.20, y_side * (hd + 0.14),
-                     MAT_INDEX_PAINTED_PLANKS_BLUE)
-            _panel_x(5.15, 1.90, y_side * (hd + 0.14),
-                     MAT_INDEX_PAINTED_PLANKS)
-    _panel_y(-5.15, 1.90, -(hw + 0.14), MAT_INDEX_PAINTED_PLANKS_BLUE)
-    _panel_y(0.0, 3.20, -(hw + 0.14), MAT_INDEX_PAINTED_PLANKS)
-    _panel_y(5.15, 1.90, -(hw + 0.14), MAT_INDEX_PAINTED_PLANKS_BLUE)
+    # Front wall (door in the middle): no pink here.
+    _panel_x(-4.55, 2.35, -(hd + 0.14), MAT_INDEX_SALVAGED_PLANKS,
+             fz + 0.55, fz + 3.35)
+    _panel_x(4.55, 2.55, -(hd + 0.14), MAT_INDEX_PAINTED_PLANKS_BLUE,
+             fz + 0.85, fz + 3.55)
+    # Rear wall: the bottle shelves sit in front of the two centre panels.
+    _panel_x(-5.30, 1.55, hd + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE,
+             fz + 0.50, fz + 3.20)
+    _panel_x(-0.70, 1.45, hd + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE,
+             fz + 0.60, fz + 3.35)
+    _panel_x(0.95, 1.45, hd + 0.14, MAT_INDEX_SALVAGED_PLANKS,
+             fz + 1.00, fz + 3.15)
+    _panel_x(5.30, 1.55, hd + 0.14, MAT_INDEX_SALVAGED_PLANKS,
+             fz + 0.75, fz + 3.45)
+    # West wall: the centre bay is deliberately left as a damaged, patched
+    # opening (built below); the flanking bays get different sized panels.
+    _panel_y(-5.30, 1.65, -(hw + 0.14), MAT_INDEX_PAINTED_PLANKS_BLUE,
+             fz + 0.65, fz + 3.25)
+    _panel_y(5.25, 1.75, -(hw + 0.14), MAT_INDEX_PAINTED_PLANKS,
+             fz + 0.85, fz + 3.50)
 
-    # Interior bays get the same large painted sections so the taproom does not
-    # read as an unbroken orange box.  They sit in the spaces between windows
-    # and around the doorway, never over an opening.
-    _panel_x(-4.35, 3.00, -hd + 0.14, MAT_INDEX_PAINTED_PLANKS)
-    _panel_x(4.35, 3.00, -hd + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE)
-    _panel_x(0.0, 3.20, hd - 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE)
-    _panel_y(0.0, 3.20, -hw + 0.14, MAT_INDEX_PAINTED_PLANKS)
-    _panel_y(-5.15, 1.90, -hw + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE)
-    _panel_y(5.15, 1.90, -hw + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE)
+    # Interior bays: varied too, but no pink visible from the entrance.
+    _panel_x(-4.50, 2.45, -hd + 0.14, MAT_INDEX_SALVAGED_PLANKS,
+             fz + 0.50, fz + 3.30)
+    _panel_x(4.50, 2.35, -hd + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE,
+             fz + 0.70, fz + 3.15)
+    _panel_x(0.0, 3.15, hd - 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE,
+             fz + 0.55, fz + 3.35)
+    _panel_y(0.0, 3.15, -hw + 0.14, MAT_INDEX_SALVAGED_PLANKS,
+             fz + 0.50, fz + 3.30)
+    _panel_y(-5.20, 1.60, -hw + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE,
+             fz + 0.65, fz + 3.20)
+    _panel_y(5.20, 1.70, -hw + 0.14, MAT_INDEX_SALVAGED_PLANKS,
+             fz + 0.85, fz + 3.50)
 
-    # A few iron straps across the outermost panels (never over an opening).
-    for y_side in (-1.0, 1.0):
-        for cx in (-5.15, 5.15) if y_side > 0.0 else (-4.35, 4.35):
-            create_box(bm, (1.65, 0.045, 0.09),
-                       (cx, y_side * (hd + 0.20), panel_cz + 0.55),
-                       mat_index=MAT_INDEX_IRON)
-    for cy in (-5.15, 5.15):
-        create_box(bm, (0.045, 1.65, 0.09),
-                   (-(hw + 0.20), cy, panel_cz - 0.45),
+    # A couple of iron straps, each kept inside its own panel.
+    create_box(bm, (1.70, 0.045, 0.09),
+               (-4.55, -(hd + 0.20), fz + 2.15), mat_index=MAT_INDEX_IRON)
+    create_box(bm, (1.70, 0.045, 0.09),
+               (5.30, hd + 0.20, fz + 2.35), mat_index=MAT_INDEX_IRON)
+
+    # 4b. Damaged breach in the west wall centre bay, boarded over with a few
+    #     uneven salvage planks.  The dark recess shows through the gaps.
+    breach_x = -(hw + 0.155)
+    create_box(bm, (0.05, 2.40, 1.80), (breach_x, 0.0, fz + 2.15),
+               mat_index=MAT_INDEX_TIMBER)
+    # Rough frame around the opening.
+    for (fy, fz0, fw, fh) in ((0.0, fz + 1.22, 2.64, 0.13),
+                              (0.0, fz + 3.08, 2.64, 0.13)):
+        create_box(bm, (0.10, fw, fh), (-(hw + 0.19), fy, fz0),
+                   mat_index=MAT_INDEX_TIMBER)
+    for fy in (-1.27, 1.27):
+        create_box(bm, (0.10, 0.13, 1.99), (-(hw + 0.19), fy, fz + 2.15),
+                   mat_index=MAT_INDEX_TIMBER)
+    # Sparse planks, each slightly crooked and a different length, with gaps
+    # wide enough to show the dark hole behind.
+    plank_specs = (
+        (-0.10, fz + 1.54, 2.25, 0.17, 4.0, MAT_INDEX_SALVAGED_PLANKS),
+        (0.25, fz + 2.08, 1.45, 0.15, -7.0, MAT_INDEX_DRIFTWOOD),
+        (-0.05, fz + 2.64, 2.10, 0.16, 3.0, MAT_INDEX_SALVAGED_PLANKS),
+        (-0.78, fz + 2.42, 0.85, 0.14, -12.0, MAT_INDEX_DRIFTWOOD),
+    )
+    for py, pz, plen, pth, tilt, pmat in plank_specs:
+        create_box(bm, (0.08, plen, pth), (-(hw + 0.23), py, pz),
+                   rotation=(math.radians(tilt), 0.0, 0.0),
+                   mat_index=pmat)
+    create_box(bm, (0.08, 0.16, 1.70), (-(hw + 0.23), 0.68, fz + 2.10),
+               rotation=(math.radians(18.0), 0.0, 0.0),
+               mat_index=MAT_INDEX_DRIFTWOOD)
+    for (nx, nz) in ((-0.90, fz + 1.54), (0.95, fz + 1.54),
+                     (-0.60, fz + 2.64), (0.60, fz + 2.64)):
+        create_box(bm, (0.05, 0.05, 0.05), (-(hw + 0.27), nx, nz),
                    mat_index=MAT_INDEX_IRON)
 
     # 5. Slice the artist's galleon into three reusable hull pieces.
@@ -7754,15 +7785,20 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                             (sign_x, sign_y - 0.055, sign_z),
                             size=0.38, line_spacing=0.90)
 
-    # Bowsprit, tattered pennant and side stay.
+    # Two faction banners flank the name board, hung from the bow canopy.
+    for bx in (-3.15, 3.15):
+        _build_hajfin_hanging_banner(bm, bx, -hd - porch_d - 0.02, 4.85,
+                                     width=1.05, height=1.35, facing_y=-1.0)
+        create_box(bm, (0.10, 0.34, 0.10),
+                   (bx, -hd - porch_d + 0.12, 5.58),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # Bowsprit.
     bow_tip_y = -hd - porch_d
     _create_oriented_beam(
         bm, (0.0, bow_tip_y + 0.80, porch_base + 1.35),
         (0.0, bow_tip_y - 2.15, porch_base + 2.55),
         width=0.20, depth=0.20, mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (0.05, 0.90, 0.55),
-               (0.0, bow_tip_y - 1.55, porch_base + 2.28),
-               mat_index=MAT_INDEX_PAINTED_PLANKS)
 
     # 8. The stern becomes an open side kitchen under its own hull slice.
     annex_base = z0 + 3.45
@@ -7811,7 +7847,9 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                    mat_index=MAT_INDEX_TIMBER)
         _create_oriented_beam(
             bm, (annex_outer - 0.40, post_y, floor_z + 1.10),
-            (annex_inner + 0.60, annex_center_y, annex_base - 0.25),
+            (annex_inner + 0.22,
+             annex_center_y + sy * annex_d * 0.26,
+             annex_base - 0.30),
             width=0.15, depth=0.15, mat_index=MAT_INDEX_TIMBER)
     build_railing(bm, (annex_outer - 0.12, annex_center_y - annex_d * 0.5 + 0.15),
                   (annex_outer - 0.12, annex_center_y + annex_d * 0.5 - 0.15),
@@ -7826,31 +7864,29 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                annex_inner + 1.35, annex_center_y - 1.30, floor_z,
                ang=math.pi * 0.5, width=2.1, height=1.75)
     build_prop(bm, 'HAJFIN_GROG_BARRELS',
-               annex_outer - 1.25, annex_center_y + 1.55, floor_z,
-               ang=0.4, scale=1.05)
+               9.85, 4.75, floor_z, ang=0.4, scale=1.05)
     build_prop(bm, 'HAJFIN_CRATE',
-               annex_outer - 1.35, annex_center_y - 2.05, floor_z,
-               ang=0.3, scale=0.85)
-    build_prop(bm, 'HAJFIN_HARPOON_RACK',
-               annex_inner + 1.15, annex_center_y + 2.05, floor_z,
-               ang=math.pi * 0.5)
+               9.55, 1.35, floor_z, ang=0.3, scale=0.85)
     build_prop(bm, 'CHAIN_LANTERN', annex_center_x, annex_center_y,
                annex_lantern_z)
 
-    # 9. Salvaged mast, anchor, outdoor clutter and taproom furniture.
+    # 9. Salvaged mast, anchor, porch fish rack and outdoor clutter.
     build_ship_mast_with_crows_nest(
         bm, -hw - 2.75, -hd + 1.10, z0, height=10.5,
         mast_radius=0.28, rot_z=0.35, with_ratlines=True,
         with_yardarm=True, with_lantern=True)
     build_ship_anchor(bm, -hw - 1.30, -hd - 4.60, z0, yaw=0.45,
                       pitch=-0.18, scale=1.10)
-    for (px, py, ang) in ((-3.35, -hd - 4.80, 0.3),
-                          (3.30, -hd - 1.45, 1.1)):
+    build_prop(bm, 'HAJFIN_FISH_DRYING_RACK',
+               3.00, -hd - 2.70, floor_z, ang=math.pi * 0.5,
+               width=1.90, height=1.70)
+    for (px, py, ang) in ((-2.80, -hd - 2.45, 0.3),
+                          (2.20, -hd - 0.95, 1.1)):
         build_prop(bm, 'HAJFIN_BARREL', px, py, floor_z, ang=ang)
-    build_prop(bm, 'HAJFIN_CRATE', 3.55, -hd - 4.90, floor_z, ang=-0.4)
-    build_prop(bm, 'POST_LANTERN', -1.95, -hd - porch_d + 0.35, floor_z,
+    build_prop(bm, 'HAJFIN_CRATE', 1.80, -hd - 3.85, floor_z, ang=-0.4)
+    build_prop(bm, 'POST_LANTERN', -1.95, -hd - porch_d + 0.55, floor_z,
                ang=math.pi * 0.5, scale=1.30)
-    build_prop(bm, 'POST_LANTERN', 1.95, -hd - porch_d + 0.35, floor_z,
+    build_prop(bm, 'POST_LANTERN', 1.95, -hd - porch_d + 0.55, floor_z,
                ang=math.pi * 0.5, scale=1.30)
     _place_hajfin_hull_furniture(bm, floor_z, hall_w, hall_d,
                                  lantern_heights=lantern_heights)

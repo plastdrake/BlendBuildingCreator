@@ -7042,7 +7042,7 @@ PRESETS = {
         'tier': 1,
         'name': "The Beached Galleon",
         'plot': "34m x 34m",
-        'description': "A pirate pub rebuilt from three sawn pieces of a beached galleon: the midship hull is the taproom roof, the bow forms the entrance porch complete with bowsprit, and the stern covers an open kitchen deck. Rope lashings, iron straps, a salvaged mast and a painted name board bolt the wreck together.",
+        'description': "A pirate pub rebuilt from three sawn pieces of a beached galleon: the midship hull is the taproom roof, the bow forms the entrance porch complete with bowsprit, and the stern covers an open kitchen deck. Rope lashings, iron straps, a salvaged mast, two war banners and a painted name board bolt the wreck together, while a storm breach in the west wall is boarded over with sparse salvage planks.",
         'settings': _hajfin_settings(width=15.0, depth=21.0, num_floors=1, found_h=0.0, wonkiness=0.20, has_pillared=True, pillars=4, has_trade_sign=True, sign_icon='tavern_sign.png', roof_h=4.6, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=2.60, door_h=3.60, tier=1, hajfin_style='SHIP_TAVERN'),
     },
     'HAJFIN_NET_HUT_T1': {
@@ -7884,7 +7884,7 @@ BUILDING_FAMILIES = [
         'plot': "34m x 34m",
         'shape': "Salvaged Hull Pub",
         'icon': 'COMMUNITY',
-        'description': "A pirate pub pieced back together from three sawn sections of a beached galleon, with a bow porch, stern kitchen deck, mast and painted name board.",
+        'description': "A pirate pub pieced back together from three sawn sections of a beached galleon, with a bow porch, stern kitchen deck, mast, war banners and painted name board.",
         'tiers': [
             ("Standalone", 'HAJFIN_SHIP_TAVERN_T1', "Three-piece hull tavern with bow porch, side kitchen and salvaged mast"),
         ],
