@@ -4777,8 +4777,9 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     # Wing block walls (Hollow!) with window overlooking drinking deck
     create_box(bm, (wing_w - wall_th * 2, wall_th, story_h),
                (hw - wing_w * 0.5, hd - wall_th * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    create_box(bm, (wall_th, wing_d - wall_th * 2, story_h),
-               (hw - wall_th * 0.5, hd - wing_d * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, wing_d, story_h),
+               (hw - wall_th * 0.5, hd - wing_d * 0.5 - wall_th * 0.5, z0 + story_h * 0.5),
+               mat_index=MAT_INDEX_DRIFTWOOD)
     _build_wall_with_window_y(bm, hd - wing_d - wall_th * 0.5, hd - wall_th, hw - wing_w + wall_th * 0.5,
                               z0, z_mid, win_cy=hd - wing_d * 0.5, win_cz=z0 + story_h * 0.52,
                               win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=False)
@@ -4849,8 +4850,9 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     # reads as the same patched-up building as the main block.
     create_box(bm, (wing_w - wall_th * 2, wall_th, story_h),
                (hw - wing_w * 0.5, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    create_box(bm, (wall_th, wing_d - wall_th * 2, story_h),
-               (hw - wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, wing_d, story_h),
+               (hw - wall_th * 0.5, hd - wing_d * 0.5 - wall_th * 0.5, z_mid + story_h * 0.5),
+               mat_index=MAT_INDEX_DRIFTWOOD)
     create_box(bm, (wall_th, wing_d, story_h),
                (hw - wing_w + wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
@@ -4859,12 +4861,14 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                                    wall_th=wall_th, sgn_y=1.0, variant='BRACED')
     _build_hajfin_wall_dressing_x(bm, hw - wing_w + wall_th, hw - wall_th, hd - wall_th * 0.5, z_mid, z1,
                                    wall_th=wall_th, sgn_y=1.0, variant='PAINTED_RED', top_clear=0.30)
-    _build_hajfin_wall_dressing_y(bm, hd - wing_d + wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
+    _build_hajfin_wall_dressing_y(bm, hd - wing_d - wall_th * 0.5, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
                                    wall_th=wall_th, sgn_x=1.0, variant='BRACED')
-    _build_hajfin_wall_dressing_y(bm, hd - wing_d + wall_th, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
+    _build_hajfin_wall_dressing_y(bm, hd - wing_d - wall_th * 0.5, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
                                    wall_th=wall_th, sgn_x=1.0, variant='PAINTED_RED', top_clear=0.30)
     _build_hajfin_wall_dressing_y(bm, hd - wing_d, hd, hw - wing_w + wall_th * 0.5, z0, z_mid,
-                                   wall_th=wall_th, sgn_x=-1.0, variant='SALVAGED')
+                                   wall_th=wall_th, sgn_x=-1.0, variant='SALVAGED',
+                                   openings=[_hajfin_opening_y(hd - wing_d * 0.5,
+                                                               z0 + story_h * 0.52, 0.85, 0.85)])
     _build_hajfin_wall_dressing_y(bm, hd - wing_d, hd, hw - wing_w + wall_th * 0.5, z_mid, z1,
                                    wall_th=wall_th, sgn_x=-1.0, variant='SALVAGED', top_clear=0.30)
 
@@ -4898,9 +4902,6 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     _build_hajfin_wall_dressing_y(bm, -hd + wall_th, -hd + m_d - wall_th, hw - wall_th * 0.5, z_mid, z1,
                                    wall_th=wall_th, sgn_x=1.0, variant='PAINTED_BLUE', top_clear=0.30,
                                    openings=[_hajfin_opening_y(my, z_mid + story_h * 0.52, 0.85, 0.85)])
-    _build_hajfin_wall_dressing_y(bm, hd - wing_d - wall_th * 0.5, hd - wall_th, hw - wing_w + wall_th * 0.5, z0, z_mid,
-                                   wall_th=wall_th, sgn_x=-1.0, variant='BRACED',
-                                   openings=[_hajfin_opening_y(hd - wing_d * 0.5, z0 + story_h * 0.52, 0.85, 0.85)])
     _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wing_w + wall_th * 0.5, -hd + m_d - wall_th * 0.5, z0, z_mid,
                                    wall_th=wall_th, sgn_y=-1.0, variant='BRACED',
                                    door_openings=[((tap_x0 + tap_x1) * 0.5, tap_door_w, tap_door_h)])
@@ -4981,6 +4982,22 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     w_len_n = deck_y1 - (deck_cy + 0.70)
     if w_len_n > 0.2:
         create_box(bm, (0.14, w_len_n, 0.12), (deck_x0 + 0.07, deck_y1 - w_len_n * 0.5, z_mid + 0.16 + rail_h), mat_index=MAT_INDEX_TIMBER)
+
+    # Balusters under the upper terrace rails (the top rail used to float with
+    # nothing carrying it).
+    post_gap = 0.95
+    post_z = z_mid + 0.16 + rail_h * 0.5
+    n_posts = max(2, int(deck_w / post_gap))
+    for pi in range(n_posts + 1):
+        px = deck_x0 + 0.07 + (deck_w - 0.14) * pi / n_posts
+        create_box(bm, (0.11, 0.11, rail_h), (px, deck_y1 - 0.07, post_z), mat_index=MAT_INDEX_TIMBER)
+    for y0r, y1r in ((deck_y0, deck_cy - 0.70), (deck_cy + 0.70, deck_y1)):
+        if y1r - y0r < 0.30:
+            continue
+        n_side = max(2, int((y1r - y0r) / post_gap))
+        for pi in range(n_side + 1):
+            py = y0r + (y1r - y0r) * pi / n_side
+            create_box(bm, (0.11, 0.11, rail_h), (deck_x0 + 0.07, py, post_z), mat_index=MAT_INDEX_TIMBER)
 
     # Suspended Catenary Rope Bridge spanning tavern upper deck to turret platform (completely unblocked passage!)
     bridge_p0 = (deck_x0, deck_cy, z_mid + 0.08)

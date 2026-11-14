@@ -1247,14 +1247,13 @@ def build_ship_mast_with_crows_nest(bm, x=0.0, y=0.0, z_base=0.0, height=9.5,
         sail_len = yard_span * 0.84
         sail_r = 0.20 * scale
         sail_z = yard_z - 0.26 * scale
-        create_cylinder(bm, radius=sail_r, height=sail_len, segments=10,
-                        location=M_base @ Vector((0.0, 0.0, sail_z)),
-                        rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_FABRIC_WHITE)
-        # Bulked-out canvas rolls at each end so it reads as a rolled sail
-        for sgn_roll in (-1.0, 1.0):
-            create_cylinder(bm, radius=sail_r * 1.12, height=0.16 * scale, segments=10,
-                            location=M_base @ Vector((sgn_roll * (sail_len * 0.5 - 0.08 * scale), 0.0, sail_z)),
-                            rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_FABRIC_WHITE)
+        # Built through M_base so the roll's axis follows the yardarm's yaw, and
+        # shaded smooth so the canvas reads as a rounded bundle.
+        create_cylinder(bm, radius=sail_r, height=sail_len, segments=18,
+                        location=(0.0, 0.0, sail_z),
+                        rotation=(0.0, math.pi * 0.5, 0.0),
+                        mat_index=MAT_INDEX_FABRIC_WHITE,
+                        transform_matrix=M_base, smooth=True)
 
         # Rope gaskets lashed around BOTH the yardarm and the furled canvas
         gasket_z = (yard_z + sail_z) * 0.5
@@ -1268,14 +1267,17 @@ def build_ship_mast_with_crows_nest(bm, x=0.0, y=0.0, z_base=0.0, height=9.5,
 
         # Lift line halyards from yardarm tips to masthead
         mast_truck_p = M_base @ Vector((0.0, 0.0, h - 0.15 * scale))
-        create_oriented_beam(bm, p_yard_l, mast_truck_p, width=0.045 * scale, depth=0.045 * scale, mat_index=MAT_INDEX_ROPE)
-        create_oriented_beam(bm, p_yard_r, mast_truck_p, width=0.045 * scale, depth=0.045 * scale, mat_index=MAT_INDEX_ROPE)
+        _build_rope_tube(bm, [p_yard_l, mast_truck_p], radius=0.022 * scale, sides=6,
+                         mat_index=MAT_INDEX_ROPE, u_tiles=1.0, v_per_metre=16.0)
+        _build_rope_tube(bm, [p_yard_r, mast_truck_p], radius=0.022 * scale, sides=6,
+                         mat_index=MAT_INDEX_ROPE, u_tiles=1.0, v_per_metre=16.0)
 
         # 4. Hanging Nautical Lantern swinging from yardarm end
         if with_lantern:
             p_lant_hook = M_base @ Vector((yard_span * 0.44, 0.0, yard_z - 0.10 * scale))
             p_lant_drop = M_base @ Vector((yard_span * 0.44, 0.0, yard_z - 0.65 * scale))
-            create_oriented_beam(bm, p_lant_hook, p_lant_drop, width=0.035 * scale, depth=0.035 * scale, mat_index=MAT_INDEX_ROPE)
+            _build_rope_tube(bm, [p_lant_hook, p_lant_drop], radius=0.017 * scale, sides=6,
+                             mat_index=MAT_INDEX_ROPE, u_tiles=1.0, v_per_metre=16.0)
             create_box(bm, (0.24 * scale, 0.24 * scale, 0.34 * scale),
                        M_base @ Vector((yard_span * 0.44, 0.0, yard_z - 0.82 * scale)), mat_index=MAT_INDEX_IRON)
             create_box(bm, (0.16 * scale, 0.16 * scale, 0.22 * scale),
@@ -1290,15 +1292,18 @@ def build_ship_mast_with_crows_nest(bm, x=0.0, y=0.0, z_base=0.0, height=9.5,
         shroud_bot_l = M_base @ Vector((-spread_x, -spread_y, 0.0))
         shroud_bot_r = M_base @ Vector((spread_x, -spread_y, 0.0))
 
-        create_oriented_beam(bm, shroud_bot_l, shroud_top_l, width=0.06 * scale, depth=0.06 * scale, mat_index=MAT_INDEX_ROPE)
-        create_oriented_beam(bm, shroud_bot_r, shroud_top_r, width=0.06 * scale, depth=0.06 * scale, mat_index=MAT_INDEX_ROPE)
+        _build_rope_tube(bm, [shroud_bot_l, shroud_top_l], radius=0.030 * scale, sides=6,
+                         mat_index=MAT_INDEX_ROPE, u_tiles=1.0, v_per_metre=13.0)
+        _build_rope_tube(bm, [shroud_bot_r, shroud_top_r], radius=0.030 * scale, sides=6,
+                         mat_index=MAT_INDEX_ROPE, u_tiles=1.0, v_per_metre=13.0)
 
         num_rungs = max(4, int(nest_z / (0.38 * scale)))
         for i in range(1, num_rungs):
             t = i / num_rungs
             p_rung_l = shroud_bot_l.lerp(shroud_top_l, t)
             p_rung_r = shroud_bot_r.lerp(shroud_top_r, t)
-            create_oriented_beam(bm, p_rung_l, p_rung_r, width=0.038 * scale, depth=0.038 * scale, mat_index=MAT_INDEX_ROPE)
+            _build_rope_tube(bm, [p_rung_l, p_rung_r], radius=0.019 * scale, sides=6,
+                             mat_index=MAT_INDEX_ROPE, u_tiles=1.0, v_per_metre=15.0)
 
     # 6. Masthead Truck & Finial
     create_cylinder(bm, radius=r_top * 1.3, height=0.18 * scale, segments=10,
@@ -1352,15 +1357,15 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
     num_cable_segs = max(12, int(L / 0.45))
 
     for sgn_side in (-1.0, 1.0):
-        prev_cp = None
+        path = []
         for i in range(num_cable_segs + 1):
             t = i / num_cable_segs
-            cp = _cat_pt(t) + right * (sgn_side * cable_r_off) + Vector((0.0, 0.0, cable_z_off))
-            if prev_cp is not None:
-                create_oriented_beam(bm, prev_cp, cp, width=0.075, depth=0.075, mat_index=mat_rope)
-            prev_cp = cp
+            path.append(_cat_pt(t) + right * (sgn_side * cable_r_off) + Vector((0.0, 0.0, cable_z_off)))
+        _build_rope_tube(bm, path, radius=0.038, sides=6, mat_index=mat_rope,
+                         u_tiles=1.0, v_per_metre=12.0)
 
     # 2. Weathered Timber Walkway Planks
+    uv_layer_planks = bm.loops.layers.uv.verify()
     num_planks = max(4, int(L / plank_spacing))
     for i in range(num_planks + 1):
         t = i / num_planks
@@ -1386,6 +1391,29 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
             [0.0,       0.0,     0.0,    1.0  ]
         ))
         plank_faces = create_box(bm, (p_width, p_len, plank_th), (0.0, 0.0, 0.0), mat_index=mat_planks)
+        # Map each board to exactly ONE plank band of the deck atlas, and slide it
+        # along the atlas per board so no two planks are carbon copies.
+        # Sample a small patch out of the middle of the deck atlas: each board gets
+        # a single plank face with the grain running along its length, and a
+        # per-board U slide keeps them from being carbon copies.
+        v_base = 0.44
+        v_span = 0.10
+        u_off = ((i * 0.37) % 0.72)
+        u_len = 0.15
+        for f in plank_faces:
+            fn = f.normal
+            for loop in f.loops:
+                lc = loop.vert.co
+                if abs(fn.z) > 0.5:
+                    u = 0.05 + u_off + (lc.y / p_len + 0.5) * u_len
+                    v = v_base + (lc.x / p_width + 0.5) * v_span
+                elif abs(fn.x) >= abs(fn.y):
+                    u = 0.05 + u_off + (lc.y / p_len + 0.5) * u_len
+                    v = v_base + (lc.z / plank_th + 0.5) * v_span
+                else:
+                    u = 0.05 + u_off + (lc.x / p_width + 0.5) * u_len
+                    v = v_base + (lc.z / plank_th + 0.5) * v_span
+                loop[uv_layer_planks].uv = Vector((u, v))
         transform_faces(plank_faces, M_plank)
 
     # 3. Suspended Rope Handrails (running post_height above deck)
@@ -1393,13 +1421,12 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
     rail_z_off = post_height
 
     for sgn_side in (-1.0, 1.0):
-        prev_hp = None
+        path = []
         for i in range(num_cable_segs + 1):
             t = i / num_cable_segs
-            hp = _cat_pt(t) + right * (sgn_side * rail_r_off) + Vector((0.0, 0.0, rail_z_off))
-            if prev_hp is not None:
-                create_oriented_beam(bm, prev_hp, hp, width=0.065, depth=0.065, mat_index=mat_rope)
-            prev_hp = hp
+            path.append(_cat_pt(t) + right * (sgn_side * rail_r_off) + Vector((0.0, 0.0, rail_z_off)))
+        _build_rope_tube(bm, path, radius=0.033, sides=6, mat_index=mat_rope,
+                         u_tiles=1.0, v_per_metre=12.0)
 
     # 4. Vertical Rope Hanger Drops
     num_hangers = max(3, int(L / 0.65))
@@ -1409,14 +1436,16 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
         for sgn_side in (-1.0, 1.0):
             p_top = p_base + right * (sgn_side * rail_r_off) + Vector((0.0, 0.0, rail_z_off))
             p_bot = p_base + right * (sgn_side * cable_r_off) + Vector((0.0, 0.0, cable_z_off))
-            create_oriented_beam(bm, p_bot, p_top, width=0.045, depth=0.045, mat_index=mat_rope)
+            _build_rope_tube(bm, [p_bot, p_top], radius=0.022, sides=6, mat_index=mat_rope,
+                             u_tiles=1.0, v_per_metre=14.0)
 
     # 5. Stout Bridgehead Anchor Pylons (flanking the walkway entrance, open clearance!)
     if with_pylons:
         pylon_r = 0.16
         for ep in (v0, v1):
             for sgn_side in (-1.0, 1.0):
-                p_pylon_bot = ep + right * (sgn_side * (width * 0.54)) - Vector((0.0, 0.0, 0.80))
+                # Stand the pylons ON the deck instead of driving them through it
+                p_pylon_bot = ep + right * (sgn_side * (width * 0.54)) - Vector((0.0, 0.0, 0.05))
                 p_pylon_top = ep + right * (sgn_side * (width * 0.54)) + Vector((0.0, 0.0, post_height + 0.15))
                 create_oriented_beam(bm, p_pylon_bot, p_pylon_top, width=pylon_r * 2, depth=pylon_r * 2, mat_index=mat_pylons)
                 # Rope lashing coil around top of post
