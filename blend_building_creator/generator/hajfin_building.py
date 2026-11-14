@@ -1772,6 +1772,34 @@ def _build_continuous_bone_arc(bm, points, base_radius=0.20, mat_index=MAT_INDEX
     bm.faces.new(rings[-1]).material_index = mat_index
 
 
+def _build_continuous_timber_arc(bm, points, radius=0.22, mat_index=MAT_INDEX_TIMBER):
+    """Create one solid bent timber following an X/Z hull section."""
+    if len(points) < 2:
+        return
+    sides = 8
+    rings = []
+    side_axis = Vector((0.0, 1.0, 0.0))
+    for i, point in enumerate(points):
+        tangent = (points[min(i + 1, len(points) - 1)] -
+                   points[max(0, i - 1)]).normalized()
+        normal = side_axis.cross(tangent).normalized()
+        rings.append([
+            bm.verts.new(
+                point + side_axis * (math.cos(a) * radius) +
+                normal * (math.sin(a) * radius)
+            )
+            for a in (2.0 * math.pi * j / sides for j in range(sides))
+        ])
+    for ri in range(len(rings) - 1):
+        for si in range(sides):
+            bm.faces.new((
+                rings[ri][si], rings[ri][(si + 1) % sides],
+                rings[ri + 1][(si + 1) % sides], rings[ri + 1][si]
+            )).material_index = mat_index
+    bm.faces.new(list(reversed(rings[0]))).material_index = mat_index
+    bm.faces.new(rings[-1]).material_index = mat_index
+
+
 def _build_whale_rib_tunnel_entrance(bm, entrance_x, entrance_y, z0, rot_z=0.0,
                                      length=3.8, height=4.4, width=3.6, num_pairs=5):
     """Projecting whale rib cage tunnel entrance extending OUTWARD from the main door.
@@ -6847,14 +6875,10 @@ def _build_hajfin_hull_shelter(bm, props, width=4.4, depth=7.5, height=2.7, foun
     stations = max(11, int(depth / 0.5))
     thick = 0.12
     rake = 0.7
-    break_start = int(stations * 0.43)
-    break_end = int(stations * 0.58)
 
     def _plan(i):
         t = i / float(stations)
-        if t < 0.5:
-            return 0.26 + 0.74 * ((t * 2.0) ** 1.15)
-        return 1.0 - 0.42 * (((t - 0.5) * 2.0) ** 1.7)
+        return 0.26 + 0.74 * (t ** 1.15)
 
     # torn bow jitter per column
     torn = {}
@@ -6880,8 +6904,6 @@ def _build_hajfin_hull_shelter(bm, props, width=4.4, depth=7.5, height=2.7, foun
         inn = [_pt(i, k, y, inflate=thick) for k in range(arc_n + 1)]
         if outer_prev is not None:
             for k in range(arc_n):
-                if i > break_start and i <= break_end:
-                    continue
                 for (cur, prev, flip, ii) in ((o, outer_prev, False, i), (inn, inner_prev, True, i)):
                     q = [bm.verts.new(prev[k]), bm.verts.new(cur[k]),
                          bm.verts.new(cur[k + 1]), bm.verts.new(prev[k + 1])]
@@ -6898,27 +6920,22 @@ def _build_hajfin_hull_shelter(bm, props, width=4.4, depth=7.5, height=2.7, foun
                                                     vi / float(stations) * depth * 0.32))
         outer_prev, inner_prev = o, inn
 
-    # 2. Frames (ribs) every station, clearly wrapping from keel to gunwale
-    for i in range(stations + 1):
-        if break_start < i < break_end:
-            continue
+    # 2. Continuous inner ribs; the planked hull remains clean on the outside.
+    for i in range(2, stations, 3):
         y = -hd + depth * (i / float(stations))
-        pts = [_pt(i, k, y, inflate=-0.06) for k in range(arc_n + 1)]
-        for k in range(arc_n):
-            _create_oriented_beam(bm, pts[k], pts[k + 1], width=0.22, depth=0.18,
-                                  mat_index=MAT_INDEX_TIMBER)
+        _build_continuous_timber_arc(
+            bm, [_pt(i, k, y, inflate=0.38) for k in range(arc_n + 1)],
+            radius=0.22)
 
-    # Jagged frame ends make the midships break read as a real wreck, not a
-    # clean boolean cut.  They also keep the two surviving hull halves rigid.
-    for i in (break_start, break_end):
-        y = -hd + depth * (i / float(stations))
-        pts = [_pt(i, k, y, inflate=-0.08) for k in range(arc_n + 1)]
-        for k in range(0, arc_n, 2):
-            _create_oriented_beam(
-                bm, pts[k], pts[min(k + 1, arc_n)], width=0.24, depth=0.20,
-                mat_index=MAT_INDEX_TIMBER)
+    # 3. Jagged broken transom at the cut end; the opposite end stays pointed.
+    y = hd
+    pts = [_pt(stations, k, y, inflate=-0.05) for k in range(arc_n + 1)]
+    for k in range(0, arc_n, 2):
+        _create_oriented_beam(bm, pts[k], pts[min(k + 1, arc_n)],
+                              width=0.26, depth=0.20,
+                              mat_index=MAT_INDEX_TIMBER)
 
-    # 3. Torn bow rim band
+    # 4. Torn bow rim band
     for k in range(arc_n):
         a0 = _pt(0, k, -hd)
         a1 = _pt(0, k + 1, -hd)
@@ -6931,32 +6948,13 @@ def _build_hajfin_hull_shelter(bm, props, width=4.4, depth=7.5, height=2.7, foun
         except ValueError:
             pass
 
-    # 4. Joined, rounded stern transom
-    back_o = [_pt(stations, k, hd) for k in range(arc_n + 1)]
-    sten = []
-    for k in range(arc_n + 1):
-        th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
-        sten.append(bm.verts.new(Vector((math.sin(th) * hw * 0.30, hd + rake,
-                                         z0 + math.cos(th) * height * 0.46))))
-    bo = [bm.verts.new(p) for p in back_o]
-    for k in range(arc_n):
-        try:
-            f = bm.faces.new([bo[k], bo[k + 1], sten[k + 1], sten[k]])
-            f.material_index = MAT_INDEX_DRIFTWOOD
-            f.tag = True
-        except ValueError:
-            pass
-
-    # 5. Heavy keel beam, stem + stern posts, ground gunwale rails
-    create_box(bm, (0.48, depth - 0.25, 0.40), (0.0, 0.15, z0 + height - 0.16),
-               mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (0.36, 0.46, height * 0.95), (0.0, -hd + 0.2, z0 + height * 0.52),
-               mat_index=MAT_INDEX_TIMBER)
+    # 5. Stem post and ground gunwale rails
+    _create_oriented_beam(
+        bm, (0.0, -hd + 0.02, z0 + height * 0.26),
+        (0.0, -hd + 0.72, z0 + height * 0.78),
+        width=0.32, depth=0.36, mat_index=MAT_INDEX_TIMBER)
     create_box(bm, (0.36, 0.46, height * 0.5), (0.0, hd + rake * 0.7, z0 + height * 0.34),
                mat_index=MAT_INDEX_TIMBER)
-    for sgn in (-1.0, 1.0):
-        create_box(bm, (0.26, depth - 0.3, 0.26), (sgn * (hw - 0.11), -0.05, z0 + 0.13),
-                   mat_index=MAT_INDEX_TIMBER)
 
 
 def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, found_h=0.0):
@@ -6980,7 +6978,7 @@ def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, fou
     def _plan(i):
         t = min(1.0, max(0.0, i / float(stations)))
         # pointy bow at t=0, rounded stern at t=1, wide amidships
-        return 0.30 + 0.70 * (math.sin(math.pi * (0.5 + 0.5 * t)) ** 0.7)
+        return 0.08 + 0.92 * (t ** 0.72)
 
     def _normal(k):
         th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
@@ -7046,13 +7044,12 @@ def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, fou
             location=(pos.x - d.x * 0.12, pos.y, pos.z - d.z * 0.12),
             rotation=(0.0, glass_rot, 0.0), mat_index=MAT_INDEX_GLASS)
 
-    # --- 3. Wrapping ribs (they rise over the hull and tie into the keel)
-    for i in range(0, stations + 1, 2):
+    # --- 3. Interior ribs: continuous bent timbers, never exterior cladding.
+    for i in range(2, stations, 3):
         y = -hd + depth * (i / float(stations))
-        pts = [_fac(i, k, y, inflate=-0.04) for k in range(arc_n + 1)]
-        for k in range(arc_n):
-            _create_oriented_beam(bm, pts[k], pts[k + 1], width=0.18, depth=0.16,
-                                  mat_index=MAT_INDEX_TIMBER)
+        _build_continuous_timber_arc(
+            bm, [_fac(i, k, y, inflate=0.42) for k in range(arc_n + 1)],
+            radius=0.24)
 
     # --- 4. Closed stern transom
     back_o = [_fac(stations, k, hd) for k in range(arc_n + 1)]
@@ -7098,16 +7095,13 @@ def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, fou
         for gy in (gallery_y0, gallery_y1):
             create_box(bm, (0.24, 0.24, gal_z - z0), (gx, gy, z0 + (gal_z - z0) * 0.5),
                        mat_index=MAT_INDEX_TIMBER)
-    for sgn in (-1.0, 1.0):
-        _build_timber_deck_railing(bm, sgn * width * 0.31, sgn * width * 0.31,
-                                   -2.0 - depth * 0.275, -2.0 + depth * 0.275, gal_z + 0.06)
     for st in range(10):
         sy = -hd + 1.0 + st * 0.40
         create_box(bm, (1.4, 0.4, 0.16), (-width * 0.20, sy, z0 + 0.18 + st * 0.27),
                    mat_index=MAT_INDEX_TIMBER)
 
     # --- 7. Upper deck platform hugging the crown, with rails + a cabin box
-    deck_y0 = -hd + 4.0
+    deck_y0 = hd - 8.0
     deck_y1 = hd - 1.4
     create_box(bm, (width * 0.58, deck_y1 - deck_y0, 0.16),
                (0.0, (deck_y0 + deck_y1) * 0.5, z0 + height + 0.12), mat_index=MAT_INDEX_FLOOR)
