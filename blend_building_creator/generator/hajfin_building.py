@@ -6949,97 +6949,160 @@ def _build_hajfin_hull_shelter(bm, props, width=3.8, depth=6.6, height=2.6, foun
                    mat_index=MAT_INDEX_TIMBER)
 
 
-def _build_hajfin_ship_tavern(bm, props, width=12.5, depth=16.0, height=8.2, found_h=1.2):
-    """A tavern built out of a beached pirate ship.
+def _build_hajfin_ship_tavern(bm, props, width=12.0, depth=18.0, height=5.2, found_h=1.0):
+    """The Beached Galleon: a huge upturned ship hull with a tavern built into it.
 
-    A planked hull forms the lower hall (bulged skirt, gunwale beams, pointed prow
-    and a raked stern transom) with the upper storey carried above it, a bone-scale
-    gable roof, an open front deck with railings and the salvaged mainmast.
+    The hull lies keel-up so its planked BOTTOM forms the roof over the tavern hall.
+    The bow is torn open as the main entrance, the stern is closed with a raked
+    transom, and a pile of scavenged additions cling to the outside: a rooftop
+    walkway with rails and the salvaged mainmast, a lean-to shack bolted to one
+    flank, a cantilevered balcony with steps on the other, and a rope bridge running
+    off the balcony to a mooring post.
     """
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
-    story_h = height * 0.5
-    z_mid = z0 + story_h
-    z1 = z0 + height
-    wall_th = 0.26
-    roof_h = max(3.6, width * 0.40)
-    peak_z = z1 + roof_h
+    uv_layer = bm.loops.layers.uv.verify()
+    arc_n = 14
+    stations = max(9, int(depth / 0.62))
+    thick = 0.14
+    rake = 1.5
 
-    # 1. Foundation
-    if found_h > 0.2:
-        _build_stilt_substructure(bm, -hw, hw, -hd, hd, found_h, door_cx=0.0)
-    create_box(bm, (width - wall_th * 2, depth - wall_th * 2, 0.14),
-               (0.0, 0.0, z0 + 0.07), mat_index=MAT_INDEX_FLOOR)
+    wob = {}
+    for i in range(stations + 1):
+        for k in range(arc_n + 1):
+            h = math.sin(i * 12.9898 + k * 78.233) * 43758.5453
+            wob[(i, k)] = ((h - math.floor(h)) - 0.5) * 0.11
 
-    # 2. Lower hall: hull skirt bulging outward around the waterline
-    skirt_h = min(1.4, story_h * 0.42)
-    for sgn in (-1.0, 1.0):
-        create_box(bm, (0.30, depth - 0.6, skirt_h),
-                   (sgn * (hw + 0.10), 0.0, z0 + skirt_h * 0.5),
-                   rotation=(0.0, sgn * -0.16, 0.0), mat_index=MAT_INDEX_DRIFTWOOD)
-        create_box(bm, (width - 0.6, 0.30, skirt_h),
-                   (0.0, sgn * (hd + 0.10), z0 + skirt_h * 0.5),
-                   rotation=(sgn * 0.16, 0.0, 0.0), mat_index=MAT_INDEX_DRIFTWOOD)
+    def _fac(i, k, y, inflate):
+        th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
+        d = Vector((math.sin(th), 0.0, math.cos(th)))
+        j = wob[(i, k)]
+        jy = (wob[(i, k)] * 3.0) if i == 0 else 0.0
+        return Vector((d.x * (hw + j - inflate), y + jy - inflate * 0.5,
+                       z0 + d.z * (height + j - inflate)))
 
-    # 3. Lower hull walls
-    create_box(bm, (width - wall_th * 2, wall_th, story_h),
-               (0.0, hd - wall_th * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z_mid,
-                              win_cy=-1.2, win_cz=z0 + story_h * 0.55, win_w=0.9, win_h=0.9,
-                              wall_th=wall_th, facing_east=False)
-    _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
-                              win_cy=1.2, win_cz=z0 + story_h * 0.55, win_w=0.9, win_h=0.9,
-                              wall_th=wall_th, facing_east=True)
-    _build_wall_with_door_opening(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5,
-                                  z0, z_mid, door_cx=0.0, door_w=1.9, door_h=story_h * 0.8,
-                                  wall_th=wall_th, rot_z=0.0,
-                                  include_leaf=getattr(props, 'include_door_leaves', False))
+    # 1. Hull shell with real thickness
+    outer_prev = inner_prev = None
+    for i in range(stations + 1):
+        y = -hd + depth * (i / float(stations))
+        o_pts = [_fac(i, k, y, 0.0) for k in range(arc_n + 1)]
+        i_pts = [_fac(i, k, y, thick) for k in range(arc_n + 1)]
+        if outer_prev is not None:
+            for k in range(arc_n):
+                for (cur, prev, flip, ii) in ((o_pts, outer_prev, False, i), (i_pts, inner_prev, True, i)):
+                    quad = [bm.verts.new(prev[k]), bm.verts.new(cur[k]),
+                            bm.verts.new(cur[k + 1]), bm.verts.new(prev[k + 1])]
+                    if flip:
+                        quad.reverse()
+                    try:
+                        f = bm.faces.new(quad)
+                    except ValueError:
+                        continue
+                    f.material_index = MAT_INDEX_DRIFTWOOD
+                    f.tag = True
+                    for loop, (u, v) in zip(f.loops, ((k, ii - 1), (k, ii), (k + 1, ii), (k + 1, ii - 1))):
+                        loop[uv_layer].uv = Vector((u * 0.30, v * 0.30))
+        outer_prev, inner_prev = o_pts, i_pts
 
-    # 4. Gunwale beam band at the top of the hull
-    for sgn in (-1.0, 1.0):
-        create_box(bm, (0.34, depth + 0.30, 0.30), (sgn * (hw + 0.06), 0.0, z_mid),
-                   mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (width + 0.30, 0.34, 0.30), (0.0, sgn * (hd + 0.06), z_mid),
-                   mat_index=MAT_INDEX_TIMBER)
+    # 2. Ribs inside the hall
+    for i in range(1, stations, 2):
+        y = -hd + depth * (i / float(stations))
+        pts = [_fac(i, k, y, thick + 0.10) for k in range(arc_n + 1)]
+        for k in range(arc_n):
+            _create_oriented_beam(bm, pts[k], pts[k + 1], width=0.26, depth=0.22,
+                                  mat_index=MAT_INDEX_TIMBER)
 
-    # 5. Prow: a low angled bow board wrapping the front of the hull
-    create_box(bm, (width + 0.20, 0.26, 0.34), (0.0, -hd - 0.02, z_mid + 0.08),
+    # 3. Torn bow rim band
+    for k in range(arc_n):
+        a0 = _fac(0, k, -hd, 0.0)
+        a1 = _fac(0, k + 1, -hd, 0.0)
+        b0 = _fac(0, k, -hd, thick)
+        b1 = _fac(0, k + 1, -hd, thick)
+        try:
+            f = bm.faces.new([bm.verts.new(a0), bm.verts.new(a1),
+                              bm.verts.new(b1), bm.verts.new(b0)])
+            f.material_index = MAT_INDEX_TIMBER
+            f.tag = True
+        except ValueError:
+            pass
+
+    # 4. Raked stern transom
+    back_o = [_fac(stations, k, hd, 0.0) for k in range(arc_n + 1)]
+    sten_o, sten_i = [], []
+    for k in range(arc_n + 1):
+        th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
+        d = Vector((math.sin(th), 0.0, math.cos(th)))
+        sten_o.append(bm.verts.new(Vector((d.x * hw * 0.86, hd + rake, z0 + d.z * height * 0.94))))
+        sten_i.append(bm.verts.new(Vector((d.x * hw * 0.86, hd + rake, z0 + d.z * (height * 0.94 - thick)))))
+    bo = [bm.verts.new(p) for p in back_o]
+    for k in range(arc_n):
+        try:
+            f = bm.faces.new([bo[k], bo[k + 1], sten_o[k + 1], sten_o[k]])
+            f.material_index = MAT_INDEX_DRIFTWOOD
+            f.tag = True
+        except ValueError:
+            pass
+
+    # 5. Keel beam and ground gunwale rails
+    create_box(bm, (0.40, depth - 0.4, 0.34), (0.0, 0.20, z0 + height - 0.10),
                mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (0.26, 2.0, 0.22), (0.0, -hd - 0.85, z0 + story_h * 0.42),
+    for sgn in (-1.0, 1.0):
+        create_box(bm, (0.34, depth - 0.3, 0.34), (sgn * (hw - 0.10), -0.10, z0 + 0.17),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # 6. Shark-jaw arch at the torn bow entrance
+    create_box(bm, (3.6, 0.5, 0.30), (0.0, -hd - 0.1, z0 + 2.9), mat_index=MAT_INDEX_TIMBER)
+
+    # 7. Rooftop walkway along the crown, with rails
+    walk_w = 2.6
+    walk_y0 = -hd + 2.6
+    walk_y1 = hd - 1.0
+    create_box(bm, (walk_w, walk_y1 - walk_y0, 0.16),
+               (0.0, (walk_y0 + walk_y1) * 0.5, z0 + height + 0.10), mat_index=MAT_INDEX_FLOOR)
+    for sgn in (-1.0, 1.0):
+        _build_timber_deck_railing(bm, sgn * walk_w * 0.5, sgn * walk_w * 0.5,
+                                   walk_y0, walk_y1, z0 + height + 0.18)
+    create_box(bm, (walk_w, 0.16, 1.05), (0.0, walk_y0, z0 + height + 0.70),
                mat_index=MAT_INDEX_TIMBER)
 
-    # 6. Upper storey
-    _build_wall_with_window_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z_mid, z1,
-                              win_cx=0.0, win_cz=z_mid + story_h * 0.52, win_w=0.9, win_h=0.9,
-                              wall_th=wall_th, facing_north=False)
-    _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
-                              win_cy=0.0, win_cz=z_mid + story_h * 0.52, win_w=0.9, win_h=0.9,
-                              wall_th=wall_th, facing_east=False)
-    _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
-                              win_cy=0.0, win_cz=z_mid + story_h * 0.52, win_w=0.9, win_h=0.9,
-                              wall_th=wall_th, facing_east=True)
-    create_box(bm, (width - wall_th * 2, wall_th, story_h),
-               (0.0, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-
-    # 7. Corner columns (posts run the full height)
-    for cx in (-hw, hw):
-        for cy in (-hd, hd):
-            _build_chunky_corner_column(bm, cx, cy, z0, z1, size=0.46, extend_top=0.0)
-
-    # 8. Roof and gables
-    _build_gable_triangle_wall(bm, -hw, hw, -hd, z1, peak_z, wall_th=wall_th, style='FACHWERK')
-    _build_gable_triangle_wall(bm, -hw, hw, hd, z1, peak_z, wall_th=wall_th, style='PAINTED')
-    _build_bone_scale_roof_gable(bm, -hw, hw, -hd, hd, z1, roof_h,
-                                 overhang_x=0.55, overhang_y=0.55, fin_scale=1.7, num_ridge_teeth=8)
-
-    # 9. Salvaged mainmast stepped behind the hall, with its crow's nest
-    build_ship_mast_with_crows_nest(bm, hw - 1.4, hd - 1.6, z1 - 0.2,
-                                    height=7.2, mast_radius=0.24, rot_z=0.4,
+    # 8. Salvaged mainmast planted on the crown deck
+    build_ship_mast_with_crows_nest(bm, 0.0, hd - 2.4, z0 + height + 0.14,
+                                    height=7.6, mast_radius=0.26, rot_z=0.5,
                                     with_lantern=True)
 
-    # 10. Front deck railing
-    _build_timber_deck_railing(bm, -hw + 0.4, hw - 0.4, -hd - 0.4, -hd + 0.5, z_mid + 0.1)
+    # 9. Lean-to shack bolted to the +X flank
+    lean_x = hw + 1.3
+    lean_y = 1.2
+    lean_z = z0 + 1.5
+    for (px, py) in ((-hw - 0.2, 1.0), (-hw - 0.2, 4.4)):
+        pass
+    for (px, py) in ((hw + 0.1, -0.6), (hw + 0.1, 3.0), (lean_x + 0.7, -0.6), (lean_x + 0.7, 3.0)):
+        create_box(bm, (0.22, 0.22, 2.6), (px, py, z0 + 1.3), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (2.0, 3.6, 0.16), (lean_x - 0.3, 1.2, z0 + 2.62), mat_index=MAT_INDEX_FLOOR)
+    _build_hajfin_supported_plank_roof(bm, lean_x - 1.35, lean_x + 0.75, 0.0, 3.2,
+                                       z0 + 2.70, 1.1, overhang_x=0.25, overhang_y=0.25)
+
+    # 10. Cantilevered balcony on the -X flank with steps and a rope bridge
+    bal_x = -hw - 1.5
+    create_box(bm, (2.6, 4.2, 0.16), (bal_x, 2.0, z0 + 3.1), mat_index=MAT_INDEX_FLOOR)
+    for (px, py) in ((bal_x - 1.1, 0.2), (bal_x - 1.1, 3.8)):
+        create_box(bm, (0.20, 0.20, 3.1), (px, py, z0 + 1.55), mat_index=MAT_INDEX_TIMBER)
+        _create_oriented_beam(bm, (px + 0.1, py, 1.0), (bal_x - 0.1, py, z0 + 3.05),
+                              width=0.18, depth=0.18, mat_index=MAT_INDEX_TIMBER)
+    _build_timber_deck_railing(bm, bal_x - 1.3, bal_x + 1.1, 0.2, 3.8, z0 + 3.18)
+    mast_post = (-hw - 6.2, 2.0)
+    create_box(bm, (0.30, 0.30, 5.2), (mast_post[0], mast_post[1], z0 + 2.6),
+               mat_index=MAT_INDEX_TIMBER)
+    build_suspended_rope_bridge(bm, (bal_x - 1.25, 2.0, z0 + 3.2),
+                                (mast_post[0] + 0.2, mast_post[1], z0 + 4.6),
+                                width=1.2, sag=0.35, with_pylons=True)
+
+    # 11. Bone porthole rings along the hull flank
+    for py in (-6.0, -2.0, 2.0, 6.0):
+        create_torus_ring(bm, (-hw + 0.10, py, z0 + 2.2),
+                          major_radius=0.42, minor_radius=0.07, rotation=(0.0, math.pi * 0.5, 0.0),
+                          mat_index=MAT_INDEX_BONE)
 
 
 def build_hajfin_building(obj, bm, props):
@@ -7098,8 +7161,9 @@ def build_hajfin_building(obj, bm, props):
                                    depth=max(4.5, depth * 0.68),
                                    height=max(2.4, height * 0.60), found_h=found_h)
     elif style in ('SHIP_TAVERN', 'SHIP_HOUSE'):
-        _build_hajfin_ship_tavern(bm, props, width=max(10.0, width), depth=max(13.0, depth),
-                                  height=max(7.4, height), found_h=found_h)
+        _build_hajfin_ship_tavern(bm, props, width=max(10.0, width * 0.86),
+                                  depth=max(14.0, depth), height=max(5.0, height * 0.62),
+                                  found_h=found_h)
     elif style in ('FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE'):
         # Free-standing suspended rope bridge: the span runs along Y so the preset
         # is easy to place and export on its own.
