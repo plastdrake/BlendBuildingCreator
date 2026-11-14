@@ -1072,28 +1072,37 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
         fluke_len = 0.52
         fluke_w = 0.38
 
-        p_fluke_tip = tip_pt + tip_tangent * fluke_len + Vector((-sgn_a * 0.06, 0.0, 0.0))
-        wing_fwd = tip_tangent * (fluke_len * 0.35)
-        p_fluke_l = tip_pt + wing_fwd + Vector((0.0, -fluke_w * 0.5, 0.0))
-        p_fluke_r = tip_pt + wing_fwd + Vector((0.0, fluke_w * 0.5, 0.0))
-
-        v_ftip = bm.verts.new(M @ p_fluke_tip)
-        v_fl = bm.verts.new(M @ p_fluke_l)
-        v_fr = bm.verts.new(M @ p_fluke_r)
-
+        # Fluke blade: a flared quad ring tapering cleanly to a single tip.
+        # (The old version fanned 8 triangles from the arm ring into one long
+        # point, which gave the mangled stretched edge flow seen in the viewport.)
         r_last = rings[-1]
-        for tri in (
-            [r_last[0], r_last[1], v_fl],
-            [r_last[1], v_ftip, v_fl],
-            [r_last[2], r_last[3], v_fr],
-            [r_last[3], v_fr, v_ftip],
-            [r_last[1], r_last[2], v_ftip],
-            [r_last[0], v_fl, r_last[3]],
-            [r_last[3], v_fl, v_ftip],
-            [r_last[3], v_ftip, v_fr],
-        ):
+        fl_tip_p = tip_pt + tip_tangent * fluke_len
+        across = Vector((0.0, 1.0, 0.0))
+        perp = tip_tangent.cross(across)
+        if perp.length < 1e-5:
+            perp = Vector((1.0, 0.0, 0.0))
+        perp.normalize()
+        mid_c = tip_pt + tip_tangent * (fluke_len * 0.40)
+        mid_w = fluke_w * 0.52
+        mid_th = max(0.020, arm_r * 0.52)
+        ring_mid = []
+        for k in range(4):
+            ang_r = k * (math.pi * 0.5) + math.pi * 0.25
+            off = across * (math.cos(ang_r) * mid_w) + perp * (math.sin(ang_r) * mid_th)
+            ring_mid.append(bm.verts.new(M @ (mid_c + off)))
+
+        v_tip = bm.verts.new(M @ fl_tip_p)
+        for i in range(4):
+            j = (i + 1) % 4
             try:
-                f = bm.faces.new(tri)
+                f = bm.faces.new([r_last[i], r_last[j], ring_mid[j], ring_mid[i]])
+                f.material_index = MAT_INDEX_IRON
+                f.tag = True
+                _uv([f])
+            except ValueError:
+                pass
+            try:
+                f = bm.faces.new([ring_mid[i], ring_mid[j], v_tip])
                 f.material_index = MAT_INDEX_IRON
                 f.tag = True
                 _uv([f])
@@ -1124,30 +1133,47 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
                       transform_matrix=M)
 
     # 6. Natural Nautical Hawser Rope spiraling down the shank
-    num_rope_turns = 5.0
-    rope_z_top = stock_z - 0.12
+    num_rope_turns = 5.5
+    # Run the hawser from the deck coil all the way up the shank and tuck its end
+    # inside the shackle ring at the top, so no loose end is visible.
+    rope_z_top = eye_z + 0.16
     rope_z_bot = 0.10
-    rope_pts_count = 110
+    rope_pts_count = 120
     rope_r = (shank_w * 0.75 + 0.030)
+    rope_rad = 0.032 * scale
 
     spiral_pts = []
     for i in range(rope_pts_count + 1):
         t = i / float(rope_pts_count)
         rz = rope_z_top * (1.0 - t) + rope_z_bot * t
-        ang = t * (math.pi * 2.0 * num_rope_turns)
+        ang = t * (math.pi * 2.0 * num_rope_turns) + math.pi * 0.5
         rx = math.cos(ang) * rope_r
         ry = math.sin(ang) * rope_r
         spiral_pts.append(M @ Vector((rx, ry, rz)))
 
-    _build_rope_tube(bm, spiral_pts, radius=0.030 * scale, sides=8,
+    # Tail curving off the bottom of the shank into the coil so the two read as
+    # one continuous hawser instead of a spiral plus a separate rope donut.
+    coil_off = Vector((0.34 * scale, 0.30 * scale, 0.0))
+    coil_centre = M @ coil_off
+    coil_start = Vector((coil_centre.x, coil_centre.y, z_ground + rope_rad + 0.012))
+    last = spiral_pts[-1]
+    control = Vector(((last.x + coil_start.x) * 0.5, (last.y + coil_start.y) * 0.5,
+                      z_ground + rope_rad + 0.055))
+    for si in range(1, 9):
+        t = si / 8.0
+        a = last.lerp(control, t)
+        b = control.lerp(coil_start, t)
+        spiral_pts.append(a.lerp(b, t))
+
+    _build_rope_tube(bm, spiral_pts, radius=rope_rad, sides=8,
                      mat_index=MAT_INDEX_ROPE, u_tiles=1.0, v_per_metre=9.0)
 
-    # Loose hawser coiled on the deck at the foot of the anchor
-    pool_center = M @ Vector((spiral_pts[-1].x * 0.0 + 0.30 * scale, 0.30 * scale, 0.0))
+    # Loose hawser coiled on the deck at the foot of the anchor (matched to the
+    # same rope thickness as the wrap up the shank)
     create_spiral_rope_coil(
-        bm, location=(pool_center.x, pool_center.y, z_ground + 0.012),
-        inner_radius=0.075 * scale, outer_radius=0.26 * scale,
-        rope_radius=0.030 * scale, turns=2.6, num_steps=72, tube_segments=8,
+        bm, location=(coil_start.x, coil_start.y, z_ground + 0.012),
+        inner_radius=0.085 * scale, outer_radius=0.34 * scale,
+        rope_radius=rope_rad * 1.05, turns=2.8, num_steps=80, tube_segments=8,
         mat_index=MAT_INDEX_ROPE,
     )
 
