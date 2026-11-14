@@ -7478,11 +7478,25 @@ def _build_hajfin_painted_breach_wall(bm, x, y0, y1, z0, z1, wall_th=0.30,
         (0.45, z0 + 2.15, 3.90, 0.14, 0.32, -2.0, MAT_INDEX_DRIFTWOOD),
         (0.25, z0 + 2.75, 3.80, 0.14, 0.32, 2.0, MAT_INDEX_SALVAGED_PLANKS),
     )
+    uv_layer = bm.loops.layers.uv.verify()
     for (py, pz, plen, pth, pheight, tilt, pmat) in plank_specs:
-        create_box(bm, (pth, plen, pheight), (px, py, pz),
-                   rotation=(math.radians(tilt), 0.0, 0.0),
-                   mat_index=pmat)
-        for dy in (-(plen * 0.5 - 0.22), 0.0, plen * 0.5 - 0.22):
+        plank_faces = create_box(bm, (pth, plen, pheight), (px, py, pz),
+                                 rotation=(math.radians(tilt), 0.0, 0.0),
+                                 mat_index=pmat)
+        bm.normal_update()
+        for face in (plank_faces or []):
+            face.tag = True
+            n = face.normal
+            for loop in face.loops:
+                co = loop.vert.co
+                if abs(n.x) >= abs(n.y) and abs(n.x) >= abs(n.z):
+                    u, v = co.z * 0.30, co.y * 0.30
+                elif abs(n.z) >= abs(n.x) and abs(n.z) >= abs(n.y):
+                    u, v = co.x * 0.30, co.y * 0.30
+                else:
+                    u, v = co.x * 0.30, co.z * 0.30
+                loop[uv_layer].uv = Vector((u, v))
+        for dy in (-(plen * 0.5 - 0.22), plen * 0.5 - 0.22):
             ny = py + dy
             nz = pz + math.sin(math.radians(tilt)) * dy
             create_box(bm, (0.06, 0.06, 0.06),
@@ -7794,26 +7808,26 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                             (sign_x, sign_y - 0.055, sign_z),
                             size=0.38, line_spacing=0.90)
 
-    # Two faction banners on proper timber poles flanking the name board.
-    # The poles stand on the stone porch plinth, outside the deck/railing, and
-    # the banners hang in front of the bow canopy.
+    # Two faction banners hung from the dark porch posts, at the inner edge of
+    # each banner so the pole never runs through the middle of the cloth.
     for bx in (-3.45, 3.45):
+        pole_x = -2.88 if bx < 0 else 2.88
         by = -hd - porch_d - 0.13
         bz = 4.85
         pole_base = z0 + 0.44
         pole_top = 5.60
         create_box(bm, (0.30, 0.30, 0.20),
-                   (bx, by - 0.04, z0 + 0.34),
+                   (pole_x, by - 0.04, z0 + 0.34),
                    mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (0.14, 0.14, pole_top - pole_base),
-                   (bx, by - 0.04, (pole_base + pole_top) * 0.5),
-                   mat_index=MAT_INDEX_DRIFTWOOD)
-        create_box(bm, (0.14, 0.12, 0.10),
-                   (bx, by - 0.02, bz + 0.675),
-                   mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (0.16, 0.16, pole_top - pole_base),
+                   (pole_x, by - 0.04, (pole_base + pole_top) * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.18, 0.12, 0.10),
+                   (pole_x, by - 0.02, bz + 0.675),
+                   mat_index=MAT_INDEX_TIMBER)
         _build_hajfin_hanging_banner(bm, bx, by, bz,
                                      width=1.05, height=1.35, facing_y=-1.0)
-        create_torus_ring(bm, (bx, by - 0.04, pole_base + 0.55),
+        create_torus_ring(bm, (pole_x, by - 0.04, pole_base + 0.55),
                           major_radius=0.15, minor_radius=0.025,
                           mat_index=MAT_INDEX_ROPE)
 
