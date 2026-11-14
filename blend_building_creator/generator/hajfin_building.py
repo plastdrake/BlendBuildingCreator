@@ -7504,8 +7504,45 @@ def _build_hajfin_painted_breach_wall(bm, x, y0, y1, z0, z1, wall_th=0.30,
                        mat_index=MAT_INDEX_IRON)
 
 
+def _hajfin_beached_sign_material_index(obj):
+    """Create/reuse the painted name-board material and append it to obj."""
+    import bpy
+    name = "M_Building_BeachedGalleonSign"
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        path = os.path.abspath(os.path.join(
+            os.path.dirname(__file__), '..', 'textures',
+            'thebeachedgalleon.png'))
+        image = bpy.data.images.load(path, check_existing=True)
+        mat = bpy.data.materials.new(name)
+        mat.use_nodes = True
+        tree = mat.node_tree
+        bsdf = tree.nodes.get("Principled BSDF")
+        tex = tree.nodes.new("ShaderNodeTexImage")
+        tex.image = image
+        tex.location = (-400, 200)
+        tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+        tree.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+        bsdf.inputs["Roughness"].default_value = 0.82
+        for attr, value in (("blend_method", 'CLIP'),
+                            ("shadow_method", 'CLIP'),
+                            ("alpha_threshold", 0.5),
+                            ("use_backface_culling", False)):
+            try:
+                setattr(mat, attr, value)
+            except Exception:
+                pass
+    if obj is not None:
+        for index, slot in enumerate(obj.data.materials):
+            if slot is not None and slot.name == name:
+                return index
+        obj.data.materials.append(mat)
+        return len(obj.data.materials) - 1
+    return 0
+
+
 def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
-                              height=5.6, found_h=0.0):
+                              height=5.6, found_h=0.0, obj=None):
     """The Beached Galleon: a pirate pub built from pieces of the Nasher hull.
 
     The artist's galleon is sliced into a midship roof, a bow porch and a stern
@@ -7515,6 +7552,7 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     projecting bowsprit; the stern becomes the open-air kitchen deck.
     """
     from .accessories.prop_registry import build_prop
+    sign_mat_index = _hajfin_beached_sign_material_index(obj)
     z0 = float(found_h)
     hall_w = max(11.0, float(width) * 0.87)
     hall_d = max(12.0, float(depth) * 0.66)
@@ -7804,14 +7842,30 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
             create_box(bm, (0.10, 0.08, 0.10),
                        (sign_x + bx, sign_y - 0.06, sign_z + bz),
                        mat_index=MAT_INDEX_IRON)
-    _build_hajfin_sign_text(bm, "The\nBeached\nGalleon",
-                            (sign_x, sign_y - 0.055, sign_z),
-                            size=0.38, line_spacing=0.90)
+    # Painted name-board decal using the artist texture (transparent PNG).
+    uv_layer = bm.loops.layers.uv.verify()
+    sw, sh = 2.50, 1.44
+    sx0, sx1 = sign_x - sw * 0.5, sign_x + sw * 0.5
+    sz0, sz1 = sign_z - sh * 0.5, sign_z + sh * 0.5
+    sy = sign_y - 0.055
+    sign_verts = [
+        bm.verts.new(Vector((sx0, sy, sz0))),
+        bm.verts.new(Vector((sx1, sy, sz0))),
+        bm.verts.new(Vector((sx1, sy, sz1))),
+        bm.verts.new(Vector((sx0, sy, sz1))),
+    ]
+    sign_face = bm.faces.new(sign_verts)
+    sign_face.material_index = sign_mat_index
+    sign_face.tag = True
+    for loop, uv in zip(sign_face.loops,
+                        ((0.0, 0.0), (1.0, 0.0),
+                         (1.0, 1.0), (0.0, 1.0))):
+        loop[uv_layer].uv = Vector(uv)
 
     # Two faction banners hung from the dark porch posts, at the inner edge of
     # each banner so the pole never runs through the middle of the cloth.
-    for bx in (-3.45, 3.45):
-        pole_x = -2.88 if bx < 0 else 2.88
+    for bx in (-4.35, 4.35):
+        pole_x = -3.86 if bx < 0 else 3.86
         by = -hd - porch_d - 0.13
         bz = 4.85
         pole_base = z0 + 0.44
@@ -7977,7 +8031,8 @@ def build_hajfin_building(obj, bm, props):
         _build_hajfin_pier_high_ramp(bm, props, width=width, depth=depth, found_h=found_h)
     elif style in ('SHIP_TAVERN', 'SHIP_HOUSE'):
         _build_hajfin_ship_tavern(bm, props, width=max(13.0, width),
-                                  depth=max(18.0, depth), found_h=found_h)
+                                  depth=max(18.0, depth), found_h=found_h,
+                                  obj=obj)
     elif style in ('FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE'):
         # Free-standing suspended rope bridge: the span runs along Y so the preset
         # is easy to place and export on its own.
