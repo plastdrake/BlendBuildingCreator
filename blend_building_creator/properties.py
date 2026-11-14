@@ -353,6 +353,12 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         default=True
     )
     
+    preset_name: StringProperty(
+        name="Preset",
+        description="Key of the last applied preset (used by material and banner variants)",
+        default="",
+    )
+
     faction: EnumProperty(
         name="Faction",
         description="Select civilization / faction architecture and style",

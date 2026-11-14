@@ -8329,6 +8329,8 @@ def apply_preset(props, preset_key):
         return
         
     data = PRESETS[preset_key]['settings']
+    if hasattr(props, 'preset_name'):
+        props.preset_name = preset_key
     # Temporarily disable auto_update during batch assignment to avoid multiple regenerations
     old_auto = getattr(props, 'auto_update', True)
     if hasattr(props, 'auto_update'):
