@@ -7045,6 +7045,15 @@ PRESETS = {
         'description': "A broken ship's boat turned keel-up on the beach: heavy inside ribs, torn plank edge and an open arched shelter.",
         'settings': _hajfin_settings(width=9.0, depth=10.0, num_floors=1, found_h=0.0, wonkiness=0.14, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=1, hajfin_style='HULL_SHELTER'),
     },
+    'HAJFIN_ROWBOAT_T1': {
+        'category': 'SHANTIES',
+        'family': 'HAJFIN_ROWBOAT',
+        'tier': 1,
+        'name': "Small Wooden Rowboat",
+        'plot': "10m x 14m",
+        'description': "A simple right-side-up wooden rowboat with a pointed bow, squared stern, open interior, continuous ribs, gunwales and two plain benches.",
+        'settings': _hajfin_settings(width=7.5, depth=11.0, num_floors=1, found_h=0.0, wonkiness=0.04, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=1, hajfin_style='ROWBOAT'),
+    },
     'HAJFIN_SHIP_TAVERN_T1': {
         'category': 'HOSPITALITY',
         'family': 'HAJFIN_SHIP_TAVERN',
@@ -7896,6 +7905,19 @@ BUILDING_FAMILIES = [
         'description': "A broken ship's boat turned upside down on the sand as a simple storm shelter.",
         'tiers': [
             ("Standalone", 'HAJFIN_HULL_SHELTER_T1', "Keel-up boat shelter with exposed ribs and torn plank edge"),
+        ],
+    },
+    {
+        'id': 'HAJFIN_ROWBOAT',
+        'faction': 'HAJFIN',
+        'name': "Small Wooden Rowboat",
+        'category': 'SHANTIES',
+        'plot': "10m x 14m",
+        'shape': "Boat",
+        'icon': 'MOD_OCEAN',
+        'description': "A simple right-side-up open wooden boat for the Hajfin shore.",
+        'tiers': [
+            ("Standalone", 'HAJFIN_ROWBOAT_T1', "Pointed bow, squared stern, inner ribs, gunwales and two benches"),
         ],
     },
     {

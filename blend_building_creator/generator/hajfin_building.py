@@ -6859,6 +6859,118 @@ def _remove_duplicate_hajfin_faces(bm):
 # SALVAGED HULL STRUCTURES
 # =============================================================================
 
+def _build_hajfin_rowboat(bm, props, width=4.2, depth=8.0, height=2.2, found_h=0.0):
+    """A clean, right-side-up open wooden rowboat."""
+    hw = width * 0.5
+    hd = depth * 0.5
+    z0 = found_h
+    arc_n = 12
+    stations = max(10, int(depth / 0.55))
+    shell_th = 0.14
+    bottom_z = z0 + 0.32
+    gunwale_z = z0 + height
+
+    def _plan(i):
+        t = i / float(stations)
+        return 0.10 + 0.90 * (t ** 0.72)
+
+    def _section(i, y, inner=False):
+        scale = _plan(i)
+        half = hw * scale
+        if inner:
+            half = max(0.18, half - shell_th)
+        low = bottom_z + (shell_th if inner else 0.0)
+        high = gunwale_z - (shell_th if inner else 0.0)
+        pts = []
+        for k in range(arc_n + 1):
+            theta = -math.pi * 0.5 + math.pi * k / float(arc_n)
+            x = math.sin(theta) * half
+            z = low + (high - low) * (1.0 - math.cos(theta))
+            pts.append(Vector((x, y, z)))
+        return pts
+
+    uv_layer = bm.loops.layers.uv.verify()
+    outer_prev = inner_prev = None
+    for i in range(stations + 1):
+        y = -hd + depth * i / float(stations)
+        outer = _section(i, y)
+        inner = _section(i, y, inner=True)
+        if outer_prev is not None:
+            for current, previous, flip in (
+                (outer, outer_prev, False), (inner, inner_prev, True)
+            ):
+                for k in range(arc_n):
+                    verts = [
+                        bm.verts.new(previous[k]), bm.verts.new(current[k]),
+                        bm.verts.new(current[k + 1]), bm.verts.new(previous[k + 1])
+                    ]
+                    if flip:
+                        verts.reverse()
+                    face = bm.faces.new(verts)
+                    face.material_index = MAT_INDEX_DRIFTWOOD
+                    face.tag = True
+                    for loop, (u, v) in zip(
+                        face.loops,
+                        ((k, i - 1), (k, i), (k + 1, i), (k + 1, i - 1))
+                    ):
+                        loop[uv_layer].uv = Vector((u * 0.35, v * 0.28))
+        outer_prev, inner_prev = outer, inner
+
+    # Close the pointed bow and squared transom with thick end boards.
+    for k in range(arc_n):
+        for a, b, c, d in (
+            (outer_prev[k], outer_prev[k + 1], inner_prev[k + 1], inner_prev[k]),
+        ):
+            face = bm.faces.new([
+                bm.verts.new(a), bm.verts.new(b), bm.verts.new(c), bm.verts.new(d)
+            ])
+            face.material_index = MAT_INDEX_TIMBER
+
+    bow_outer = _section(0, -hd)
+    bow_inner = _section(0, -hd - 0.10, inner=True)
+    for k in range(arc_n):
+        face = bm.faces.new([
+            bm.verts.new(bow_outer[k]), bm.verts.new(bow_outer[k + 1]),
+            bm.verts.new(bow_inner[k + 1]), bm.verts.new(bow_inner[k])
+        ])
+        face.material_index = MAT_INDEX_TIMBER
+
+    # Continuous ribs sit on the inside of the planking.
+    for i in range(2, stations, 3):
+        y = -hd + depth * i / float(stations)
+        rib_points = _section(i, y, inner=True)[1:-1]
+        _build_continuous_timber_arc(bm, rib_points, radius=0.09)
+
+    # Gunwales follow both sheer lines in short, joined timber sections.
+    for side in (-1.0, 1.0):
+        for i in range(stations):
+            a = _section(i, -hd + depth * i / float(stations))[-1 if side > 0 else 0]
+            b = _section(i + 1, -hd + depth * (i + 1) / float(stations))[-1 if side > 0 else 0]
+            _create_oriented_beam(bm, a, b, width=0.18, depth=0.18,
+                                  mat_index=MAT_INDEX_TIMBER)
+
+    # Stem and stern posts keep the pointed bow and transom visually legible.
+    _create_oriented_beam(
+        bm, (0.0, -hd - 0.12, bottom_z), (0.0, -hd + 0.18, gunwale_z + 0.22),
+        width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.24, 0.24, gunwale_z - bottom_z + 0.18),
+               (0.0, hd + 0.03, (bottom_z + gunwale_z) * 0.5),
+               mat_index=MAT_INDEX_TIMBER)
+
+    # Two plain benches span the open interior.
+    for y in (-depth * 0.18, depth * 0.20):
+        i = min(stations, max(0, int((y + hd) / depth * stations)))
+        seat_w = max(0.9, _plan(i) * width * 0.62)
+        create_box(bm, (seat_w, 0.42, 0.14), (0.0, y, z0 + height * 0.58),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.18, 0.34, 0.30),
+                   (-seat_w * 0.34, y, z0 + height * 0.58 - 0.19),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.18, 0.34, 0.30),
+                   (seat_w * 0.34, y, z0 + height * 0.58 - 0.19),
+                   mat_index=MAT_INDEX_TIMBER)
+
+
 def _build_hajfin_hull_shelter(bm, props, width=4.4, depth=7.5, height=2.7, found_h=0.0):
     """An upturned broken ship's boat used as a beach shelter.
 
@@ -7208,6 +7320,11 @@ def build_hajfin_building(obj, bm, props):
         _build_hajfin_pier_platform(bm, props, width=width, depth=depth, found_h=found_h)
     elif style == 'PIER_HIGH_RAMP':
         _build_hajfin_pier_high_ramp(bm, props, width=width, depth=depth, found_h=found_h)
+    elif style == 'ROWBOAT':
+        _build_hajfin_rowboat(
+            bm, props, width=max(3.2, width * 0.55),
+            depth=max(6.0, depth * 0.75),
+            height=max(1.8, height * 0.60), found_h=found_h)
     elif style in ('HULL_SHELTER', 'BOAT_SHELTER'):
         _build_hajfin_hull_shelter(bm, props, width=max(2.6, width * 0.42),
                                    depth=max(4.5, depth * 0.68),
@@ -7249,7 +7366,8 @@ def build_hajfin_building(obj, bm, props):
         for _f in bm.faces:
             _f.tag = True
 
-    _attach_faction_banner(bm, props, style)
+    if style != 'ROWBOAT':
+        _attach_faction_banner(bm, props, style)
 
     _apply_hajfin_wall_uvs(bm)
     _rescale_baked_atlas_uvs(bm)

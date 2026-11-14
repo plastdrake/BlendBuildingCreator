@@ -396,6 +396,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('FEATURE_SHIP_ANCHOR', "Ship Anchor Feature", "Standalone salvaged anchor with spiralled hawser and rope coil", 'SNAP_FACE', 22),
             ('HULL_SHELTER', "Upturned Hull Shelter", "Broken ship's boat turned keel-up as a beach shelter with exposed ribs", 'MOD_OCEAN', 23),
             ('SHIP_TAVERN', "Beached Galleon Tavern", "Tavern and inn built into a beached pirate ship with prow, gunwales and mainmast", 'COMMUNITY', 24),
+            ('ROWBOAT', "Small Wooden Rowboat", "Simple right-side-up open boat with planked hull, ribs, gunwales and benches", 'MOD_OCEAN', 25),
         ],
         default='SHANTY',
         update=on_property_updated
