@@ -7383,8 +7383,7 @@ def _place_hajfin_hull_furniture(bm, z_floor, width, depth, ceiling_z=8.25,
                top_mat=MAT_INDEX_FLOOR,
                trim_mat=MAT_INDEX_DRIFTWOOD)
 
-    table_specs = ((-1.4, -3.6, 0.18), (2.9, -2.6, -0.14),
-                   (1.7, 2.8, 0.32))
+    table_specs = ((-4.25, -2.60, 0.16), (4.25, -2.00, -0.16))
     for tx, ty, tang in table_specs:
         rot = _build_hajfin_pub_table(bm, tx, ty, z_floor, ang=tang)
         for lx, ly in ((0.0, 1.00), (0.0, -1.00), (1.48, 0.0), (-1.48, 0.0)):
@@ -7392,12 +7391,12 @@ def _place_hajfin_hull_furniture(bm, z_floor, width, depth, ceiling_z=8.25,
             _build_hajfin_pub_stool(bm, tx + off.x, ty + off.y, z_floor,
                                     ang=tang)
 
-    for bx, by in ((-width * 0.40, -2.4), (-width * 0.34, -3.3),
-                   (-width * 0.40, 4.2), (width * 0.34, 4.7)):
+    for bx, by in ((-5.55, 4.70), (-4.95, 5.45),
+                   (5.55, 4.70), (4.95, 5.45)):
         build_prop(bm, 'HAJFIN_BARREL', bx, by, z_floor,
                    ang=random.uniform(0.0, 3.14))
-    for cx, cy, ca in ((width * 0.38, -5.2, 0.25),
-                       (width * 0.36, 5.4, -0.3)):
+    for cx, cy, ca in ((-5.60, -5.20, 0.25),
+                       (5.60, -5.20, -0.3)):
         build_prop(bm, 'HAJFIN_CRATE', cx, cy, z_floor, ang=ca)
     for index, (lx, ly) in enumerate(((-2.2, 0.0), (2.6, 3.2),
                                       (-1.0, -4.2))):
@@ -7472,26 +7471,23 @@ def _build_hajfin_painted_breach_wall(bm, x, y0, y1, z0, z1, wall_th=0.30,
         _build_bone_window(bm, frame_x, cy, cz, rot_z=-math.pi * 0.5,
                            w=w, h=h, wall_th=wall_th)
 
-    # Sparse planks nailed over the breach, with deliberate gaps.
+    # Sparse, thicker planks nailed over the breach with deliberate gaps.
     px = x - wall_th * 0.5 - 0.06
     plank_specs = (
-        (0.30, z0 + 1.45, 4.00, 0.18, 4.0, MAT_INDEX_SALVAGED_PLANKS),
-        (0.30, z0 + 2.05, 3.90, 0.16, -8.0, MAT_INDEX_DRIFTWOOD),
-        (0.30, z0 + 2.60, 3.70, 0.17, 5.0, MAT_INDEX_SALVAGED_PLANKS),
-        (0.30, z0 + 2.30, 3.80, 0.15, -10.0, MAT_INDEX_DRIFTWOOD),
+        (0.15, z0 + 1.55, 4.00, 0.14, 0.32, 2.0, MAT_INDEX_SALVAGED_PLANKS),
+        (0.45, z0 + 2.15, 3.90, 0.14, 0.32, -2.0, MAT_INDEX_DRIFTWOOD),
+        (0.25, z0 + 2.75, 3.80, 0.14, 0.32, 2.0, MAT_INDEX_SALVAGED_PLANKS),
     )
-    for (py, pz, plen, pth, tilt, pmat) in plank_specs:
-        create_box(bm, (0.08, plen, pth), (px, py, pz),
+    for (py, pz, plen, pth, pheight, tilt, pmat) in plank_specs:
+        create_box(bm, (pth, plen, pheight), (px, py, pz),
                    rotation=(math.radians(tilt), 0.0, 0.0),
                    mat_index=pmat)
-    create_box(bm, (0.08, 0.18, 1.20), (px, -1.55, z0 + 2.00),
-               rotation=(math.radians(15.0), 0.0, 0.0),
-               mat_index=MAT_INDEX_DRIFTWOOD)
-    for (ny, nz) in ((-1.55, z0 + 1.45), (2.15, z0 + 1.45),
-                     (-1.55, z0 + 2.05), (2.15, z0 + 2.05),
-                     (-1.50, z0 + 2.60), (2.10, z0 + 2.60)):
-        create_box(bm, (0.05, 0.05, 0.05), (px - 0.06, ny, nz),
-                   mat_index=MAT_INDEX_IRON)
+        for dy in (-(plen * 0.5 - 0.22), 0.0, plen * 0.5 - 0.22):
+            ny = py + dy
+            nz = pz + math.sin(math.radians(tilt)) * dy
+            create_box(bm, (0.06, 0.06, 0.06),
+                       (px - pth * 0.5 - 0.03, ny, nz),
+                       mat_index=MAT_INDEX_IRON)
 
 
 def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
@@ -7544,9 +7540,19 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     create_box(bm, (porch_w, porch_d, deck_th),
                (0.0, porch_center_y, floor_z - deck_th * 0.5),
                mat_index=MAT_INDEX_FLOOR)
+    # Timber threshold along the porch/hall seam, just outside the front wall.
+    create_box(bm, (porch_w, 0.30, 0.08),
+               (0.0, -hd - 0.16, floor_z + 0.04),
+               mat_index=MAT_INDEX_TIMBER)
     create_box(bm, (annex_w, annex_d, deck_th),
                (annex_center_x, annex_center_y, floor_z - deck_th * 0.5),
                mat_index=MAT_INDEX_FLOOR)
+
+    # Timber threshold covers the narrow gap between the hall wall and the
+    # annex deck and gives the east opening a raised sill.
+    create_box(bm, (0.42, annex_d - 0.20, 0.08),
+               (hw + 0.06, annex_center_y, floor_z + 0.04),
+               mat_index=MAT_INDEX_TIMBER)
 
     # Wide stone steps down from the porch onto the sand.  The tallest tread
     # sits against the deck; heights step down away from the building.
@@ -7612,22 +7618,10 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         for sy in (-1.0, 1.0):
             _build_chunky_corner_column(bm, sx * hw, sy * hd, floor_z,
                                         wall_top, size=0.52)
-    belt_z = floor_z + 2.55
-    # No continuous belt beam: at this height it would cut straight through
-    # the window openings and the front doorway.  The top plates, corner
-    # columns and corner braces provide the visible timber framing instead.
-    brace_pairs = (
-        ((-hw + 0.50, -hd - 0.10, belt_z), (-hw + 2.10, -hd - 0.10, wall_top)),
-        ((hw - 0.50, -hd - 0.10, belt_z), (hw - 2.10, -hd - 0.10, wall_top)),
-        ((-hw + 0.50, hd + 0.10, belt_z), (-hw + 2.10, hd + 0.10, wall_top)),
-        ((hw - 0.50, hd + 0.10, belt_z), (hw - 2.10, hd + 0.10, wall_top)),
-        ((-hw - 0.10, -hd + 0.50, belt_z), (-hw - 0.10, -hd + 2.10, wall_top)),
-        ((-hw - 0.10, hd - 0.50, belt_z), (-hw - 0.10, hd - 2.10, wall_top)),
-        ((hw + 0.10, -hd + 0.50, belt_z), (hw + 0.10, -hd + 2.10, wall_top)),
-    )
-    for p0, p1 in brace_pairs:
-        _create_oriented_beam(bm, p0, p1, width=0.18, depth=0.18,
-                              mat_index=MAT_INDEX_TIMBER)
+    # No continuous belt beam or long exterior diagonal braces: at this height
+    # they would cut through the window openings/doorway, and the porch/annex
+    # diagonals read as floating beams.  The corner columns, top plates and the
+    # vertical porch/annex posts carry the visible structure instead.
 
     # 4. The west wall is built as one continuous red-painted plank wall
     #    with a real jagged breach (see the wall builder below).  No small
@@ -7728,12 +7722,8 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     porch_post_y = porch_center_y - porch_d * 0.34
     porch_points = []
     for sx in (-1.0, 1.0):
-        fx = sx * porch_w * 0.35
-        rx = sx * porch_w * 0.47
-        porch_points.extend(((fx, porch_post_y),
-                             (fx * 0.78, porch_post_y),
-                             (rx, -hd - 0.20),
-                             (rx * 0.85, -hd - 0.20)))
+        porch_points.extend(((sx * porch_w * 0.35, porch_post_y),
+                             (sx * porch_w * 0.47, -hd - 0.20)))
     porch_roof_z = {}
     for px, py in porch_points:
         height = _hajfin_hull_height_at(bow_piece, px, py, tol=1.4)
@@ -7749,7 +7739,7 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                        planar_uv=(0.22, 0.50))
     bow_piece.free()
 
-    # Porch posts with knee braces that land on the actual canopy underside.
+    # Porch posts sized to meet the actual canopy underside.
     for sx in (-1.0, 1.0):
         fx = sx * porch_w * 0.35
         fy = porch_post_y
@@ -7757,11 +7747,6 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         create_box(bm, (0.30, 0.30, f_top - floor_z),
                    (fx, fy, (floor_z + f_top) * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-        f_bx = fx * 0.78
-        f_bz = max(f_top, _porch_z(f_bx, fy, f_top + 0.2) - 0.12)
-        _create_oriented_beam(
-            bm, (fx, fy, floor_z + 2.35), (f_bx, fy, f_bz),
-            width=0.16, depth=0.16, mat_index=MAT_INDEX_TIMBER)
 
         rx = sx * porch_w * 0.47
         ry = -hd - 0.20
@@ -7769,11 +7754,6 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         create_box(bm, (0.28, 0.28, r_top - floor_z),
                    (rx, ry, (floor_z + r_top) * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-        r_bx = rx * 0.85
-        r_bz = max(r_top, _porch_z(r_bx, ry, r_top + 0.2) - 0.12)
-        _create_oriented_beam(
-            bm, (rx, ry, floor_z + 2.45), (r_bx, ry, r_bz),
-            width=0.15, depth=0.15, mat_index=MAT_INDEX_TIMBER)
         create_torus_ring(bm, (fx, fy, floor_z + 0.65),
                           major_radius=0.20, minor_radius=0.030,
                           mat_index=MAT_INDEX_ROPE)
@@ -7814,13 +7794,28 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                             (sign_x, sign_y - 0.055, sign_z),
                             size=0.38, line_spacing=0.90)
 
-    # Two faction banners flank the name board, hung from the bow canopy.
-    for bx in (-3.15, 3.15):
-        _build_hajfin_hanging_banner(bm, bx, -hd - porch_d - 0.02, 4.85,
-                                     width=1.05, height=1.35, facing_y=-1.0)
-        create_box(bm, (0.10, 0.34, 0.10),
-                   (bx, -hd - porch_d + 0.12, 5.58),
+    # Two faction banners on proper timber poles flanking the name board.
+    # The poles stand on the stone porch plinth, outside the deck/railing, and
+    # the banners hang in front of the bow canopy.
+    for bx in (-3.45, 3.45):
+        by = -hd - porch_d - 0.13
+        bz = 4.85
+        pole_base = z0 + 0.44
+        pole_top = 5.60
+        create_box(bm, (0.30, 0.30, 0.20),
+                   (bx, by - 0.04, z0 + 0.34),
                    mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.14, 0.14, pole_top - pole_base),
+                   (bx, by - 0.04, (pole_base + pole_top) * 0.5),
+                   mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (0.14, 0.12, 0.10),
+                   (bx, by - 0.02, bz + 0.675),
+                   mat_index=MAT_INDEX_DRIFTWOOD)
+        _build_hajfin_hanging_banner(bm, bx, by, bz,
+                                     width=1.05, height=1.35, facing_y=-1.0)
+        create_torus_ring(bm, (bx, by - 0.04, pole_base + 0.55),
+                          major_radius=0.15, minor_radius=0.025,
+                          mat_index=MAT_INDEX_ROPE)
 
     # Bowsprit.
     bow_tip_y = -hd - porch_d
@@ -7874,12 +7869,6 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                    (annex_outer - 0.40, post_y,
                     (floor_z + annex_base + 0.20) * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-        _create_oriented_beam(
-            bm, (annex_outer - 0.40, post_y, floor_z + 1.10),
-            (annex_inner + 0.22,
-             annex_center_y + sy * annex_d * 0.26,
-             annex_base - 0.30),
-            width=0.15, depth=0.15, mat_index=MAT_INDEX_TIMBER)
     build_railing(bm, (annex_outer - 0.12, annex_center_y - annex_d * 0.5 + 0.15),
                   (annex_outer - 0.12, annex_center_y + annex_d * 0.5 - 0.15),
                   floor_z, height=1.05, jankiness=0.12)
@@ -7914,9 +7903,9 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         build_prop(bm, 'HAJFIN_BARREL', px, py, floor_z, ang=ang)
     build_prop(bm, 'HAJFIN_CRATE', 1.80, -hd - 3.85, floor_z, ang=-0.4)
     build_prop(bm, 'POST_LANTERN', -1.95, -hd - porch_d + 0.55, floor_z,
-               ang=math.pi * 0.5, scale=1.30)
+               ang=-math.pi * 0.5, scale=1.30)
     build_prop(bm, 'POST_LANTERN', 1.95, -hd - porch_d + 0.55, floor_z,
-               ang=math.pi * 0.5, scale=1.30)
+               ang=-math.pi * 0.5, scale=1.30)
     _place_hajfin_hull_furniture(bm, floor_z, hall_w, hall_d,
                                  lantern_heights=lantern_heights)
 
