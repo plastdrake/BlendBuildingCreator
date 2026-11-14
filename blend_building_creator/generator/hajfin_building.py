@@ -6561,7 +6561,10 @@ def _cylindrical_round_hut_uvs(bm, u_scale=0.18, v_scale=0.18):
     imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
     bm.normal_update()
     for f in bm.faces:
-        if f.material_index != MAT_INDEX_DRIFTWOOD:
+        if f.material_index not in (MAT_INDEX_DRIFTWOOD, MAT_INDEX_PAINTED_PLANKS,
+                                    MAT_INDEX_PAINTED_PLANKS_BLUE,
+                                    MAT_INDEX_SALVAGED_PLANKS, MAT_INDEX_PLASTER,
+                                    MAT_INDEX_FLOOR, MAT_INDEX_WOOD):
             continue
         if prop_layer is not None and f[prop_layer]:
             continue
@@ -6588,6 +6591,8 @@ _HAJFIN_BANNER_TWEAKS = {
     'HAJFIN_NET_HUT_T2': (0.0, 0.16, -0.55, 0.0),
     # clear of the watchtower ladder entrance
     # clear of the mezzanine / gallery beams
+    'HAJFIN_FORGE_T1': (0.0, 0.0, -0.50, 0.0),
+    'HAJFIN_LOOKOUT_HUT_T1': (0.0, 0.0, 0.50, 0.0),
     'HAJFIN_CHIEFTAIN_HUT_T1': (0.0, 0.0, 0.45, 0.06),
     # hang it from the gable beam, nudged toward the gable centre
     'HAJFIN_PIRATE_TAVERN_T1': (-0.55, 0.0, -0.25, -0.03),
@@ -6877,9 +6882,6 @@ def build_hajfin_building(obj, bm, props):
         for _f in bm.faces:
             _f.tag = True
 
-    if style in ('ROUND_HUT',):
-        _cylindrical_round_hut_uvs(bm)
-
     _attach_faction_banner(bm, props, style)
 
     _apply_hajfin_wall_uvs(bm)
@@ -6888,6 +6890,13 @@ def build_hajfin_building(obj, bm, props):
     # Box UV mapping preserves the specialized UVs above.
     apply_box_uvs(bm, scale=0.18)
     _fill_missing_hajfin_uvs(bm)
+
+    # Round hut: force the single continuous cylindrical wall projection as the very
+    # LAST UV step, otherwise the generic box unwrap or the missing-UV filler
+    # re-stamps some facet panels and they end up diagonal while their neighbours
+    # stay vertical.
+    if style in ('ROUND_HUT',):
+        _cylindrical_round_hut_uvs(bm)
     _remove_duplicate_hajfin_faces(bm)
 
     # Write bmesh to obj
