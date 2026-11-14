@@ -931,7 +931,9 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26, forc
         for sgn_y in (-1.0, 1.0):
             fy = y + sgn_y * (half_th + 0.02)
             # Base horizontal tie beam
-            create_box(bm, (max_x - min_x + 0.10, beam_d, beam_w), (mx, fy, z_eave + beam_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+            # Sit the base tie beam across the gable/wall joint so no strip of the
+            # gable boarding is left showing above the wall head.
+            create_box(bm, (max_x - min_x + 0.10, beam_d, 0.26), (mx, fy, z_eave + 0.02), mat_index=MAT_INDEX_TIMBER)
             # Sloped verge timbers
             _create_oriented_beam(bm, (min_x, fy, z_eave + beam_w), (mx, fy, z_peak - 0.05), width=beam_w, depth=beam_d, mat_index=MAT_INDEX_TIMBER)
             _create_oriented_beam(bm, (max_x, fy, z_eave + beam_w), (mx, fy, z_peak - 0.05), width=beam_w, depth=beam_d, mat_index=MAT_INDEX_TIMBER)
@@ -3486,7 +3488,7 @@ def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26, f
         for sgn_x in (-1.0, 1.0):
             fx = x + sgn_x * (half_th + 0.02)
             # Base horizontal tie beam
-            create_box(bm, (beam_d, max_y - min_y + 0.10, beam_w), (fx, my, z_eave + beam_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+            create_box(bm, (beam_d, max_y - min_y + 0.10, 0.26), (fx, my, z_eave + 0.02), mat_index=MAT_INDEX_TIMBER)
             # Sloped verge timbers
             _create_oriented_beam(bm, (fx, min_y, z_eave + beam_w), (fx, my, z_peak - 0.05), width=beam_d, depth=beam_w, mat_index=MAT_INDEX_TIMBER)
             _create_oriented_beam(bm, (fx, max_y, z_eave + beam_w), (fx, my, z_peak - 0.05), width=beam_d, depth=beam_w, mat_index=MAT_INDEX_TIMBER)
@@ -4919,8 +4921,9 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     _build_gable_triangle_wall(bm, -hw, hw, -hd, z1, m_peak_z, wall_th=wall_th, style='FACHWERK')
     _build_gable_triangle_wall(bm, -hw, hw, -hd + m_d, z1, m_peak_z, wall_th=wall_th, style='FACHWERK')
 
-    # Gable walls sealing both ends of the wing roof (solves open hole)
-    _build_gable_triangle_wall(bm, hw - wing_w, hw, hd - wing_d, z1, w_peak_z, wall_th=wall_th, style='PAINTED')
+    # Gable wall sealing the seaward end of the wing roof.  The landward end needs
+    # no second gable: the main block's rear gable sits in the same plane and is
+    # taller, so it already closes it (two overlapping gables used to interpenetrate).
     _build_gable_triangle_wall(bm, hw - wing_w, hw, hd, z1, w_peak_z, wall_th=wall_th, style='PAINTED')
 
     _build_bone_scale_roof_gable(bm, -hw, hw, -hd, -hd + m_d, z1, 3.8,
