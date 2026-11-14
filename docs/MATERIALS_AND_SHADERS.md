@@ -144,3 +144,14 @@ blender --factory-startup --background --python tools/bake_hajfin_textures.py --
 
 The procedural originals are retained as `_procedural_*` functions and are used
 automatically if a baked texture is missing.
+
+### Seamless tiling
+
+The bake tool neutralises every source `Mapping` node, so each baked tile holds
+exactly one full source tile and therefore repeats without a seam.  The world
+scale of the old cropped shaders is restored on the mesh instead:
+`_rescale_baked_atlas_uvs()` in `hajfin_building.py` multiplies the UVs of the
+baked-atlas materials (`_HAJFIN_BAKED_UV_SCALE`) by the crop factor the material
+used to apply, so boards, shingles and stone keep their original size on screen.
+Noise washes used inside these shaders are 4D torus-wrapped (`_tileable_noise`)
+for the same reason.

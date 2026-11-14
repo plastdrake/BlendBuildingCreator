@@ -42,6 +42,7 @@ from .materials import (
     MAT_INDEX_MEAT,
     MAT_INDEX_PAINTED_PLANKS,
     MAT_INDEX_PAINTED_PLANKS_BLUE,
+    MAT_INDEX_SALVAGED_PLANKS,
     MAT_INDEX_PLASTER,
 )
 MAT_INDEX_STONE_BRICK = MAT_INDEX_STONE
@@ -880,7 +881,7 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26, forc
 
     # Pick face material. Never plaster / stucco: the Hajfin gables are boarded.
     if style == 'FACHWERK':
-        face_mat = MAT_INDEX_WOOD
+        face_mat = MAT_INDEX_SALVAGED_PLANKS
     elif style == 'PAINTED':
         face_mat = MAT_INDEX_PAINTED_PLANKS
     else:
@@ -1116,7 +1117,7 @@ _HAJFIN_WALL_VARIANT_MATS = {
     'PAINTED_RED': MAT_INDEX_PAINTED_PLANKS,
     'PAINTED_BLUE': MAT_INDEX_PAINTED_PLANKS_BLUE,
     'DECK': MAT_INDEX_FLOOR,
-    'SALVAGED': MAT_INDEX_WOOD,
+    'SALVAGED': MAT_INDEX_SALVAGED_PLANKS,
     'FACHWERK': MAT_INDEX_FLOOR,
 }
 
@@ -3331,7 +3332,7 @@ def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26, f
 
     # Boarded gable faces only - never plaster / stucco on a Hajfin wall.
     if style == 'FACHWERK':
-        face_mat = MAT_INDEX_WOOD
+        face_mat = MAT_INDEX_SALVAGED_PLANKS
     elif style == 'PAINTED':
         face_mat = MAT_INDEX_PAINTED_PLANKS
     else:
@@ -4666,7 +4667,7 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                               z0, z_mid, win_cy=my, win_cz=z0 + story_h * 0.52,
                               win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=False)
     _build_wall_with_window_y(bm, -hd + wall_th, -hd + m_d - wall_th, hw - wall_th * 0.5,
-                              z0, z_mid, win_cy=my, win_cz=z0 + story_h * 0.52,
+                              z0, z_mid, win_cy=-hd + 1.5, win_cz=z0 + story_h * 0.52,
                               win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=True)
 
     # Wing block walls (Hollow!) with window overlooking drinking deck
@@ -4698,9 +4699,11 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     _build_hajfin_barrel(bm, deck_x - 0.1, deck_y + 0.6, z_ground=z0 + 0.16, ang=2.4, scale=0.58)
 
     # 5. Internal Timber Staircase & Upper Floor Deck
+    # The flight sits against the east (right) wall instead of the west one, so it
+    # no longer crowds the front-left corner next to the doorway.
     stair_w = 1.60
-    stair_x0 = -hw + wall_th + 0.2
-    stair_x1 = -hw + wall_th + stair_w + 0.2
+    stair_x1 = hw - wall_th - 0.35
+    stair_x0 = stair_x1 - stair_w
     stair_y0 = -hd + 1.8
     stair_y1 = -hd + 5.8
     _build_hajfin_floor_slab_with_stairwell(bm, -hw + wall_th, hw - wall_th, -hd + wall_th, -hd + m_d - wall_th,
@@ -4738,12 +4741,28 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                               z_mid, z1, win_cy=my, win_cz=z_mid + story_h * 0.52,
                               win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=True)
 
+    # Wing block walls stay driftwood behind the dressing panels so the L-addition
+    # reads as the same patched-up building as the main block.
     create_box(bm, (wing_w - wall_th * 2, wall_th, story_h),
-               (hw - wing_w * 0.5, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_PAINTED_PLANKS, is_wall=True)
+               (hw - wing_w * 0.5, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
     create_box(bm, (wall_th, wing_d - wall_th * 2, story_h),
-               (hw - wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_PAINTED_PLANKS, is_wall=True)
+               (hw - wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
     create_box(bm, (wall_th, wing_d, story_h),
-               (hw - wing_w + wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_PAINTED_PLANKS, is_wall=True)
+               (hw - wing_w + wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # L-wing facade patchwork (same treatment family as the main block)
+    _build_hajfin_wall_dressing_x(bm, hw - wing_w + wall_th, hw - wall_th, hd - wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_y=1.0, variant='BRACED')
+    _build_hajfin_wall_dressing_x(bm, hw - wing_w + wall_th, hw - wall_th, hd - wall_th * 0.5, z_mid, z1,
+                                   wall_th=wall_th, sgn_y=1.0, variant='PAINTED_RED', top_clear=0.30)
+    _build_hajfin_wall_dressing_y(bm, hd - wing_d + wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=1.0, variant='BRACED')
+    _build_hajfin_wall_dressing_y(bm, hd - wing_d + wall_th, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
+                                   wall_th=wall_th, sgn_x=1.0, variant='PAINTED_RED', top_clear=0.30)
+    _build_hajfin_wall_dressing_y(bm, hd - wing_d, hd, hw - wing_w + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='SALVAGED')
+    _build_hajfin_wall_dressing_y(bm, hd - wing_d, hd, hw - wing_w + wall_th * 0.5, z_mid, z1,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='SALVAGED', top_clear=0.30)
 
     # 7. Front Entrance Shark Jaw Doorway
     door_w = float(getattr(props, 'door_width', 1.90))
@@ -4776,7 +4795,7 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                                    wall_th=wall_th, sgn_x=1.0, variant='PAINTED_BLUE', top_clear=0.30,
                                    openings=[_hajfin_opening_y(my, z_mid + story_h * 0.52, 0.85, 0.85)])
     _build_hajfin_wall_dressing_y(bm, hd - wing_d - wall_th * 0.5, hd - wall_th, hw - wing_w + wall_th * 0.5, z0, z_mid,
-                                   wall_th=wall_th, sgn_x=-1.0, variant='DECK',
+                                   wall_th=wall_th, sgn_x=-1.0, variant='BRACED',
                                    openings=[_hajfin_opening_y(hd - wing_d * 0.5, z0 + story_h * 0.52, 0.85, 0.85)])
     _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wing_w + wall_th * 0.5, -hd + m_d - wall_th * 0.5, z0, z_mid,
                                    wall_th=wall_th, sgn_y=-1.0, variant='BRACED',
@@ -5375,7 +5394,7 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
     # Placed safely clear of crane mast and knee brace
     _build_hajfin_barrel(bm, c_hw + 1.15, c_y - 2.8, z_ground=deck_top_z, ang=0.4, scale=0.55)
     _build_hajfin_barrel(bm, c_hw + 0.85, c_y + 2.4, z_ground=deck_top_z, ang=1.2, scale=0.52)
-    _build_hajfin_barrel(bm, -hw + 1.5, hd - 1.8, z_ground=deck_top_z, ang=2.1, scale=0.58)
+    _build_hajfin_barrel(bm, -hw + 1.35, hd - 4.3, z_ground=deck_top_z, ang=2.1, scale=0.58)
 
     # Scarce cabin interior furnishings (rear-left corner of cabin, clear of door thresholds)
     _build_hajfin_crate(bm, -c_hw + wall_th + 0.75, c_y + c_hd - wall_th - 0.75, z_ground=z0 + 0.14, yaw=0.2, scale=0.62)
@@ -5385,8 +5404,8 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
     from .accessories.artisan_props import (
         build_fish_drying_rack, build_cleaver, build_fish, build_meat, build_axe, build_pickaxe
     )
-    fr_x = -hw + 2.6
-    fr_y = hd - 1.4
+    fr_x = c_hw - 0.4
+    fr_y = hd - 1.5
     build_fish_drying_rack(bm, fr_x, fr_y, z_ground=deck_top_z, ang=0.10, width=2.20)
 
     # Fish filleting and preparation block on the pier deck
@@ -5396,10 +5415,10 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
     build_cleaver(bm, prep_x - 0.30, prep_y, z_ground=deck_top_z + 0.80, ang=0.40, stuck=True)
     build_fish(bm, prep_x + 0.15, prep_y - 0.10, z_ground=deck_top_z + 0.80, ang=-0.25, length=0.40)
     build_meat(bm, prep_x + 0.40, prep_y + 0.08, z_ground=deck_top_z + 0.80, ang=0.55, length=0.30, variant=1)
-    # Woodcutter splitting axe resting by the barrel
-    build_axe(bm, -hw + 1.2, hd - 2.4, z_ground=deck_top_z, ang=1.15, length=0.68)
-    # Admiralty ship anchor leaning against outer pier stilt corner
-    build_ship_anchor(bm, x=-c_hw - 0.6, y=hd - 1.6, z_ground=deck_top_z,
+    # Woodcutter splitting axe leaning by the barrel
+    build_axe(bm, -hw + 2.05, hd - 4.55, z_ground=deck_top_z, ang=1.15, length=0.68)
+    # Admiralty ship anchor at the rear-left deck corner, clear of the drying rack
+    build_ship_anchor(bm, x=-hw + 1.55, y=hd - 1.55, z_ground=deck_top_z,
                       yaw=0.50, pitch=-0.22, scale=1.0)
 
     # 7. Bone Scale / Plank Gable Roof on Cabin with Solid Gables
@@ -6298,6 +6317,35 @@ def _build_timber_deck_railing(bm, x0, x1, y0, y1, z):
                         location=(px, y1, z + rail_h * 0.5), mat_index=MAT_INDEX_TIMBER)
 
 
+# The baked Hajfin atlases are 1:1 (exactly one full source tile per tile) so they
+# repeat seamlessly.  The old procedural shaders cropped the atlas with a Mapping
+# node, so these factors restore the original world-space board scale on top of the
+# baked texture.
+_HAJFIN_BAKED_UV_SCALE = {
+    MAT_INDEX_TIMBER: (1.0, 0.40),
+    MAT_INDEX_FLOOR: (0.22, 0.22),
+    MAT_INDEX_SHINGLES: (0.42, 0.42),
+    MAT_INDEX_ROUGH_STONE: (0.60, 0.60),
+    MAT_INDEX_BONE: (0.80, 0.80),
+}
+
+
+def _rescale_baked_atlas_uvs(bm):
+    """Apply the per-material atlas crop factor that the baked textures no longer
+    carry, keeping the original board/stone/shingle scale on screen."""
+    uv_layer = bm.loops.layers.uv.verify()
+    for face in bm.faces:
+        pair = _HAJFIN_BAKED_UV_SCALE.get(face.material_index)
+        if pair is None:
+            continue
+        su, sv = pair
+        if su == 1.0 and sv == 1.0:
+            continue
+        for loop in face.loops:
+            uv = loop[uv_layer].uv
+            loop[uv_layer].uv = Vector((uv.x * su, uv.y * sv))
+
+
 def _apply_hajfin_wall_uvs(bm, scale=0.18):
     """Normalize every Hajfin siding face after all archetypes and props build.
 
@@ -6450,6 +6498,7 @@ def build_hajfin_building(obj, bm, props):
     # Final material-scoped pass prevents any archetype-specific wall builder
     # from reintroducing a different siding density.
     _apply_hajfin_wall_uvs(bm)
+    _rescale_baked_atlas_uvs(bm)
 
     # Box UV mapping preserves the specialized UVs above.
     apply_box_uvs(bm, scale=0.18)

@@ -214,6 +214,19 @@ def main():
         plane.data.materials.clear()
         plane.data.materials.append(mat)
 
+        # Neutralise every Mapping node before baking: sampling a partial crop of
+        # the atlas produces a texture whose borders cannot line up, which shows up
+        # as hard seams on flat decks and roofs.  The generator compensates the
+        # world-space board size again via _rescale_baked_atlas_uvs().
+        for node in mat.node_tree.nodes:
+            if node.type == 'MAPPING':
+                try:
+                    node.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
+                    node.inputs["Rotation"].default_value = (0.0, 0.0, 0.0)
+                    node.inputs["Location"].default_value = (0.0, 0.0, 0.0)
+                except Exception:
+                    pass
+
         size = args.size
         diffuse = bpy.data.images.new(key + "_diffuse", width=size, height=size, alpha=False)
 

@@ -2689,6 +2689,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     custom_bone: PointerProperty(type=bpy.types.Material, name="Bone Mat", update=on_property_updated)
     custom_painted_planks: PointerProperty(type=bpy.types.Material, name="Painted Planks Mat", update=on_property_updated)
     custom_painted_planks_blue: PointerProperty(type=bpy.types.Material, name="Painted Planks (Blue) Mat", update=on_property_updated)
+    custom_salvaged_planks: PointerProperty(type=bpy.types.Material, name="Salvaged Planks Mat", update=on_property_updated)
 
     # --- Interior furnishing (whole-building, one click) + standalone props ---
     has_interior_furnishing: BoolProperty(

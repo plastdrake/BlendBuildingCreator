@@ -21,6 +21,7 @@ Key fixes:
 """
 
 import os
+import math
 import bpy
 
 def _get_texture_path(filename):
@@ -133,6 +134,7 @@ MAT_INDEX_ROUGH_STONE   = 54
 MAT_INDEX_BONE          = 55
 MAT_INDEX_PAINTED_PLANKS = 56
 MAT_INDEX_PAINTED_PLANKS_BLUE = 57
+MAT_INDEX_SALVAGED_PLANKS = 58
 
 
 # ---------------------------------------------------------------------------
@@ -199,18 +201,85 @@ def _setup_pbr(tree, bsdf, out, roughness=1.0, metallic=0.0):
     tree.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
 
 
-def _warm_painterly_pass(tree, coord, color_socket, loc_x=460, loc_y=-260,
-                         strength=0.16, scale=1.25):
-    """Add broad, warm brush-like color variation without photoreal speckling."""
-    wash = tree.nodes.new("ShaderNodeTexNoise")
-    wash.location = (loc_x, loc_y)
-    wash.inputs["Scale"].default_value = scale
-    wash.inputs["Detail"].default_value = 2.0
+
+def _tileable_noise(tree, coord, scale=4.0, detail=2.0, roughness=0.55, loc=(0, 0)):
+    """Noise sampled on a UV torus so the pattern wraps perfectly at u/v = 0/1.
+
+    Baking a normal 2D/3D noise into a texture leaves a hard seam where the tile
+    repeats, which is very obvious on flat deck and wall surfaces.  Mapping the
+    UV pair onto a 4D torus (cos/sin of both axes) makes the noise periodic in
+    both directions, so the baked texture tiles seamlessly.
+    """
+    R = 1.0 / (2.0 * math.pi)
+    sep = tree.nodes.new("ShaderNodeSeparateXYZ")
+    sep.location = (loc[0], loc[1])
+    tree.links.new(coord.outputs["UV"], sep.inputs["Vector"])
+
+    def _mul(x, y, x_off):
+        n = tree.nodes.new("ShaderNodeMath")
+        n.operation = 'MULTIPLY'
+        n.location = (x_off, loc[1] - 60 * y)
+        if y == 0:
+            tree.links.new(sep.outputs["X"], n.inputs[0])
+        else:
+            tree.links.new(sep.outputs["Y"], n.inputs[0])
+        n.inputs[1].default_value = 2.0 * math.pi
+        return n
+
+    u_ang = _mul(None, 0, loc[0] + 160)
+    v_ang = _mul(None, 1, loc[0] + 160)
+
+    def _trig(node_in, op, x_off, y_off):
+        n = tree.nodes.new("ShaderNodeMath")
+        n.operation = op
+        n.location = (x_off, y_off)
+        tree.links.new(node_in.outputs[0], n.inputs[0])
+        return n
+
+    u_sin = _trig(u_ang, 'SINE', loc[0] + 320, loc[1] - 40)
+    u_cos = _trig(u_ang, 'COSINE', loc[0] + 320, loc[1] + 60)
+    v_sin = _trig(v_ang, 'SINE', loc[0] + 320, loc[1] - 220)
+    v_cos = _trig(v_ang, 'COSINE', loc[0] + 320, loc[1] - 120)
+
+    def _radius(node_io, x_off, y_off):
+        n = tree.nodes.new("ShaderNodeMath")
+        n.operation = 'MULTIPLY'
+        n.location = (x_off, y_off)
+        tree.links.new(node_io.outputs[0], n.inputs[0])
+        n.inputs[1].default_value = R
+        return n
+
+    x_c = _radius(u_cos, loc[0] + 480, loc[1] + 60)
+    y_c = _radius(u_sin, loc[0] + 480, loc[1] - 40)
+    z_c = _radius(v_cos, loc[0] + 480, loc[1] - 120)
+    w_c = _radius(v_sin, loc[0] + 480, loc[1] - 220)
+
+    comb = tree.nodes.new("ShaderNodeCombineXYZ")
+    comb.location = (loc[0] + 640, loc[1] + 20)
+    tree.links.new(x_c.outputs[0], comb.inputs["X"])
+    tree.links.new(y_c.outputs[0], comb.inputs["Y"])
+    tree.links.new(z_c.outputs[0], comb.inputs["Z"])
+
+    noise = tree.nodes.new("ShaderNodeTexNoise")
+    noise.location = (loc[0] + 800, loc[1])
+    noise.noise_dimensions = '4D'
+    noise.inputs["Scale"].default_value = scale
+    noise.inputs["Detail"].default_value = detail
     try:
-        wash.inputs["Roughness"].default_value = 0.62
+        noise.inputs["Roughness"].default_value = roughness
     except Exception:
         pass
-    tree.links.new(coord.outputs["UV"], wash.inputs["Vector"])
+    tree.links.new(comb.outputs["Vector"], noise.inputs["Vector"])
+    tree.links.new(w_c.outputs[0], noise.inputs["W"])
+    return noise
+
+
+def _warm_painterly_pass(tree, coord, color_socket, loc_x=460, loc_y=-260,
+                         strength=0.16, scale=1.25):
+    """Add broad, warm brush-like color variation without photoreal speckling.
+    Uses torus-wrapped noise so it still tiles seamlessly once baked."""
+    wash = _tileable_noise(tree, coord, scale=scale, detail=2.0, roughness=0.62,
+                          loc=(loc_x, loc_y))
 
     wash_ramp = tree.nodes.new("ShaderNodeValToRGB")
     wash_ramp.location = (loc_x + 200, loc_y)
@@ -231,16 +300,10 @@ def _warm_painterly_pass(tree, coord, color_socket, loc_x=460, loc_y=-260,
 
 def _anti_repetition_wash(tree, coord, color_socket, loc_x=460, loc_y=-260,
                           strength=0.10, scale=0.25):
-    """Broad subtle painterly noise wash across large roof/wall spans to eliminate tiling repetition."""
-    wash = tree.nodes.new("ShaderNodeTexNoise")
-    wash.location = (loc_x, loc_y)
-    wash.inputs["Scale"].default_value = scale
-    wash.inputs["Detail"].default_value = 1.5
-    try:
-        wash.inputs["Roughness"].default_value = 0.50
-    except Exception:
-        pass
-    tree.links.new(coord.outputs["UV"], wash.inputs["Vector"])
+    """Broad subtle painterly wash across large spans to break up tiling repetition.
+    Torus-wrapped noise keeps the baked texture seamless."""
+    wash = _tileable_noise(tree, coord, scale=scale, detail=1.5, roughness=0.50,
+                          loc=(loc_x, loc_y))
 
     wash_ramp = tree.nodes.new("ShaderNodeValToRGB")
     wash_ramp.location = (loc_x + 200, loc_y)
@@ -2874,23 +2937,11 @@ def _procedural_painted_planks(name="M_Building_Painted_Planks", color=(0.62, 0.
     else:
         driftwood_col = None
 
-    # 2. Peeling / chipped paint mask via noise + high-contrast color ramp
-    noise = tree.nodes.new("ShaderNodeTexNoise")
-    noise.location = (-800, -100)
-    noise.inputs["Scale"].default_value = 4.5
-    noise.inputs["Detail"].default_value = 4.0
-    try:
-        noise.inputs["Roughness"].default_value = 0.65
-    except Exception:
-        pass
-    tree.links.new(c.outputs["UV"], noise.inputs["Vector"])
+    # 2. Peeling / chipped paint mask via (tileable) noise + high-contrast color ramp
+    noise = _tileable_noise(tree, c, scale=4.5, detail=4.0, roughness=0.65, loc=(-1200, -60))
 
     # 2b. Fine secondary grain so the chipped edges fray instead of reading as clean blobs
-    fine_noise = tree.nodes.new("ShaderNodeTexNoise")
-    fine_noise.location = (-800, -380)
-    fine_noise.inputs["Scale"].default_value = 22.0
-    fine_noise.inputs["Detail"].default_value = 3.0
-    tree.links.new(c.outputs["UV"], fine_noise.inputs["Vector"])
+    fine_noise = _tileable_noise(tree, c, scale=22.0, detail=3.0, roughness=0.50, loc=(-1200, -360))
 
     mix_noise = tree.nodes.new("ShaderNodeMix")
     mix_noise.data_type = 'FLOAT'
@@ -3648,12 +3699,14 @@ def setup_building_material_slots(obj, props):
                                or create_stylized_painted_planks(f"{mat_prefix}Painted_Planks_Blue",
                                                                   color=(0.30, 0.38, 0.50, 1.0),
                                                                   paint_coverage=0.72))
+    mat_salvaged_planks = (getattr(props, 'custom_salvaged_planks', None)
+                           or create_stylized_salvaged_planks(f"{mat_prefix}Salvaged_Planks"))
 
     if is_hajfin:
         if not getattr(props, 'custom_timber_frame', None):
             mat_timber = create_stylized_hajfin_timber(f"{mat_prefix}Hajfin_Timber", color=getattr(props, 'color_timber_frame', None))
         if not getattr(props, 'custom_timber', None):
-            mat_wood = create_stylized_salvaged_planks(f"{mat_prefix}Wood")
+            mat_wood = mat_timber
         # Salt-bleached lime plaster used as the infill between the half-timber
         # framing of the Hajfin fachwerk panels (pale, chalky, matches the
         # bone-white window and doorway casings).
@@ -3730,6 +3783,7 @@ def setup_building_material_slots(obj, props):
         mat_bone,           # 55 MAT_INDEX_BONE
         mat_painted_planks, # 56 MAT_INDEX_PAINTED_PLANKS
         mat_painted_planks_blue, # 57 MAT_INDEX_PAINTED_PLANKS_BLUE
+        mat_salvaged_planks, # 58 MAT_INDEX_SALVAGED_PLANKS
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -3800,6 +3854,7 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Bone",          # 55
     "M_Building_Painted_Planks", # 56
     "M_Building_Painted_Planks_Blue", # 57
+    "M_Building_Salvaged_Planks", # 58
 )
 
 
