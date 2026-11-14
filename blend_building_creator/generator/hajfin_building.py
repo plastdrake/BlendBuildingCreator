@@ -6532,6 +6532,36 @@ def _rescale_baked_atlas_uvs(bm):
             loop[uv_layer].uv = Vector((uv.x * su, uv.y * sv))
 
 
+def _cylindrical_round_hut_uvs(bm, u_scale=0.18, v_scale=0.18):
+    """Re-project every round-hut wall face as ONE continuous cylindrical unwrap.
+
+    The tapered facets used to be unwrapped as independent islands off their own
+    facet basis, so the boards slanted with the taper and the panels either side of
+    a window disagreed with their neighbours.  A single cylindrical projection puts
+    all vertical planking on one shared U axis and one V axis, so boards run
+    straight, stay parallel, and continue across facets and around windows.
+    """
+    import math as _m
+    uv_layer = bm.loops.layers.uv.verify()
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
+    bm.normal_update()
+    for f in bm.faces:
+        if f.material_index != MAT_INDEX_DRIFTWOOD:
+            continue
+        if prop_layer is not None and f[prop_layer]:
+            continue
+        if imported_layer is not None and f[imported_layer]:
+            continue
+        n = f.normal
+        if abs(n.z) > 0.45:
+            continue
+        for loop in f.loops:
+            co = loop.vert.co
+            ang = _m.atan2(co.y, co.x)
+            loop[uv_layer].uv = Vector((ang * 2.2 * u_scale, co.z * v_scale))
+
+
 def _attach_faction_banner(bm, props, style):
     """Hang the faction war banner on the front gable of every gabled Hajfin building.
 
@@ -6572,13 +6602,18 @@ def _attach_faction_banner(bm, props, style):
     # board, palisade...).  Structures that are open at that height (the bone
     # shrine rib dome) simply get no banner.
     tree = BVHTree.FromBMesh(bm)
-    z_mid = z_top - banner_h * 0.5
-    for probe_z in (z_mid, z_mid - banner_h * 0.35, z_mid + banner_h * 0.30):
-        hit, _nrm, _idx, _dst = tree.ray_cast(
+    for frac in (0.78, 0.68, 0.58, 0.48, 0.38):
+        probe_z = z_min + span * frac
+        hit, nrm, _idx, _dst = tree.ray_cast(
             Vector((cx, front_y - 2.5, probe_z)), Vector((0.0, 1.0, 0.0)))
         if hit is None:
             continue
-        _build_hajfin_hanging_banner(bm, cx, hit.y - 0.06, z_top,
+        # Only hang it off a roughly vertical surface (a wall).  Hitting a sloping
+        # roof deck leaves the banner stuck to the shingles at an angle, which is
+        # what happened on the conical net-mender roof.
+        if abs(nrm.z) > 0.45:
+            continue
+        _build_hajfin_hanging_banner(bm, cx, hit.y - 0.06, probe_z + banner_h * 0.5,
                                      width=banner_w, height=banner_h, facing_y=-1.0)
         return
 
@@ -6752,6 +6787,9 @@ def build_hajfin_building(obj, bm, props):
         # Standalone features bring their own unwrap - keep the box-UV pass off them.
         for _f in bm.faces:
             _f.tag = True
+
+    if style in ('ROUND_HUT',):
+        _cylindrical_round_hut_uvs(bm)
 
     _attach_faction_banner(bm, props, style)
 
