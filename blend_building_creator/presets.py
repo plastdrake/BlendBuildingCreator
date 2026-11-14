@@ -7052,7 +7052,7 @@ PRESETS = {
         'name': "The Beached Galleon",
         'plot': "30m x 30m",
         'description': "Beached galleon tavern: the huge upturned hull bottom forms the roof over the hall, with a rooftop walkway, salvaged mainmast, bolted-on lean-to shack, cantilevered balcony, rope bridge and bone portholes.",
-        'settings': _hajfin_settings(width=12.5, depth=16.0, num_floors=2, found_h=1.2, wonkiness=0.16, has_pillared=True, pillars=4, has_trade_sign=True, sign_icon='tavern_sign.png', roof_h=4.6, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.90, door_h=3.60, tier=1, hajfin_style='SHIP_TAVERN'),
+        'settings': _hajfin_settings(width=13.0, depth=19.0, num_floors=2, found_h=0.0, wonkiness=0.16, has_pillared=True, pillars=4, has_trade_sign=True, sign_icon='tavern_sign.png', roof_h=4.6, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.90, door_h=3.60, tier=1, hajfin_style='SHIP_TAVERN'),
     },
     'HAJFIN_NET_HUT_T1': {
         'category': 'SHANTIES',
