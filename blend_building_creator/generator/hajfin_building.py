@@ -2675,7 +2675,7 @@ def _build_hajfin_bone_shop_table(bm, x, y, z, width=3.8):
         )
 
     # Prized sea-monster beast skull prominently displayed on the shop table
-    _build_hajfin_skull(bm, x - 0.35, y, z + table_h + top_th * 0.5, yaw=0.45, scale=1.10, anchor='BASE')
+    # (no trophy skull on the counter - the barter table is kept clear for trade goods)
 
     # Handcrafted grog / oil barrel standing beside the trading table
     _build_hajfin_barrel(bm, x + width * 0.5 + 0.42, y, z_ground=z, ang=0.7, scale=0.55)
@@ -4241,10 +4241,22 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
     fl_roof_h = 2.25
     half_fl_w = (hw - width * 0.60 * 0.5) * 0.5
     fl_slope = fl_roof_h / max(0.5, half_fl_w)
-    col_top_z = z_mid - fl_slope * (col_size * 0.5) - 0.16
+    # The posts carry the side-roof eaves, so they run all the way up and are cut
+    # diagonally along the roof soffit instead of stopping short (which left a
+    # wedge gap) or spearing up through the shingles.
+    roof_cut_z = z_mid + 0.85
     for cx in (-hw, hw):
         for cy in (-hd, hd):
-            _build_chunky_corner_column(bm, cx, cy, z0, col_top_z, size=col_size, extend_top=0.0)
+            _build_chunky_corner_column(bm, cx, cy, z0, z_mid, size=col_size, extend_top=0.0)
+            n0 = len(bm.faces)
+            create_box(bm, (col_size, col_size, roof_cut_z - z_mid),
+                       (cx, cy, (z_mid + roof_cut_z) * 0.5), mat_index=MAT_INDEX_TIMBER)
+            for f in list(bm.faces)[n0:]:
+                for loop in f.loops:
+                    v = loop.vert
+                    soffit = z_mid - (abs(v.co.x) - hw) * fl_slope - 0.075
+                    if v.co.z > soffit:
+                        v.co.z = soffit
 
     # 4. Solid Timber Awning Canopy (Framed with rafters, ledger, front fascia, and bargeboards)
     awning_ledger_z = open_top_z + lintel_h + 0.18
@@ -4513,8 +4525,10 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
     build_cleaver(bm, -0.30, -hd + 3.2, z_ground=z0 + 0.14 + 1.02, ang=0.20, stuck=False)
     build_meat(bm, 0.20, -hd + 3.2, z_ground=z0 + 0.14 + 1.02, ang=-0.45, length=0.32, variant=0)
     # Leaning woodcutter axe and heavy mining pickaxe near the salvage and weapons area
-    build_axe(bm, -hw + 1.7, -0.55, z_ground=z0 + 0.14, ang=0.75, length=0.68)
-    build_pickaxe(bm, -hw + 1.7, 0.55, z_ground=z0 + 0.14, ang=-0.40, length=0.72)
+    # Salvage tools laid out on the trade table instead of lying on the floor
+    table_top_z = z0 + 0.14 + 1.02
+    build_axe(bm, -1.30, -hd + 3.30, z_ground=table_top_z, ang=1.30, length=0.62)
+    build_pickaxe(bm, -1.75, -hd + 3.10, z_ground=table_top_z, ang=1.05, length=0.66)
 
     # 11. Multi-Tier Bone Scale Roofs with Full Solid Gable Triangles
     # Lower flanking roofs (Eaves sit at z_mid meeting the ground floor walls, sealed by exterior timber flashing ledgers)
