@@ -1179,6 +1179,15 @@ def _hajfin_panel_poly(bm, pts, c_cross, thick, mat_index, along_y, outward=1.0)
             back.append(bm.verts.new(Vector((c_cross - half, u, z))))
 
     want = Vector((0.0, outward, 0.0)) if along_y else Vector((outward, 0.0, 0.0))
+    # Match the siding UV density of the panel this infill belongs to, otherwise the
+    # face samples a single texel and reads as a flat black patch above the doorway.
+    if mat_index in (MAT_INDEX_DRIFTWOOD, MAT_INDEX_PAINTED_PLANKS,
+                     MAT_INDEX_PAINTED_PLANKS_BLUE):
+        tex = 0.18
+    else:
+        tex = 0.50
+    uv_layer = bm.loops.layers.uv.verify()
+
     f_front = bm.faces.new(front)
     f_front.normal_update()
     if f_front.normal.dot(want) < 0.0:
@@ -1193,12 +1202,22 @@ def _hajfin_panel_poly(bm, pts, c_cross, thick, mat_index, along_y, outward=1.0)
     f_back.material_index = mat_index
     f_back.tag = True
 
+    for f in (f_front, f_back):
+        for loop in f.loops:
+            co = loop.vert.co
+            u = (co.x if along_y else co.y) * tex
+            loop[uv_layer].uv = Vector((u, co.z * tex))
+
     n = len(pts)
     for i in range(n):
         j = (i + 1) % n
         f_side = bm.faces.new([front[i], front[j], back[j], back[i]])
         f_side.material_index = mat_index
         f_side.tag = True
+        for loop in f_side.loops:
+            co = loop.vert.co
+            u = (co.x if along_y else co.y) * tex
+            loop[uv_layer].uv = Vector((u, co.z * tex))
 
 
 def _build_hajfin_wall_panel_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
