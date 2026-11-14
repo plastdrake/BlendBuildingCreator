@@ -6589,7 +6589,7 @@ _HAJFIN_BANNER_TWEAKS = {
     # tapered shell: stand it further off the wall so it does not clip in
     'HAJFIN_NET_HUT_T2': (0.0, 0.16, -0.55, 0.0),
     # clear of the watchtower ladder entrance
-    'HAJFIN_LOOKOUT_HUT_T1': (0.0, 0.0, 0.70, 0.06),
+    'HAJFIN_LOOKOUT_HUT_T1': (1.15, 0.0, 0.0, 0.0),
     # clear of the mezzanine / gallery beams
     'HAJFIN_CHIEFTAIN_HUT_T1': (0.0, 0.0, 0.45, 0.06),
     # hang it from the gable beam, nudged toward the gable centre
@@ -6600,11 +6600,12 @@ _HAJFIN_BANNER_TWEAKS = {
 
 
 def _attach_faction_banner(bm, props, style):
-    """Hang the faction war banner on the front gable of every gabled Hajfin building.
+    """Hang the faction war banner so every building shows its allegiance.
 
-    Reads the finished mesh bounds so it works for every archetype without each
-    builder having to know about banners: the banner hangs on the front facade at
-    the height of the gable, centred on the building's X.
+    Order of preference:
+      1. Round huts: a pole in the roof apex (they have no gable to hang from).
+      2. The clear front wall panel beside the door / windows.
+      3. Last resort: a pole planted at the FRONT EDGE of the roof.
     """
     skip = ('PIER_STRAIGHT', 'PIER_RAMP', 'PIER_BEND', 'PIER_TEE', 'PIER_LANDING',
             'PIER_PLATFORM', 'PIER_HIGH_RAMP', 'PIER_ROPE_BRIDGE', 'ROPE_BRIDGE',
@@ -6620,8 +6621,6 @@ def _attach_faction_banner(bm, props, style):
     zs = [v.co.z for v in bm.verts]
     if not xs:
         return
-    from mathutils.bvhtree import BVHTree
-
     cx = (min(xs) + max(xs)) * 0.5
     front_y = min(ys)
     # Measure from the floor up, not from the bottom of the stilts (which plunge
@@ -6631,20 +6630,26 @@ def _attach_faction_banner(bm, props, style):
     span = max(2.0, z_max - z_min)
     banner_h = max(1.3, min(2.3, span * 0.17))
     banner_w = banner_h * 0.92
-    z_top = z_min + span * 0.80
 
-    # The building's frontmost point is usually the roof overhang, so hanging the
-    # banner on min(y) left it floating in mid air.  Raycast inward at banner
-    # height and hang it off the first surface we actually hit (gable wall, eave
-    # board, palisade...).  Structures that are open at that height (the bone
-    # shrine rib dome) simply get no banner.
-    tree = BVHTree.FromBMesh(bm)
-    x_lo, x_hi = min(xs), max(xs)
+    # ------------------------------------------------------------------ 1. hut --
+    if style in ('ROUND_HUT',):
+        peak_z = z_max
+        pole_h = banner_h + 0.85
+        create_box(bm, (0.11, 0.11, pole_h), (0.0, 0.0, peak_z + pole_h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (0.0, 0.0, peak_z + pole_h * 0.42),
+                          major_radius=0.10, minor_radius=0.022, mat_index=MAT_INDEX_IRON)
+        _build_hajfin_hanging_banner(bm, 0.0, -0.055,
+                                     peak_z + pole_h - 0.50 - banner_h * 0.5,
+                                     width=banner_w, height=banner_h, facing_y=-1.0)
+        return
 
-    # 1. PREFERRED: hang it on the front facade.  Pick the largest front-facing
-    # vertical wall panel (door and window holes split the facade into panels, so
-    # this naturally lands on the clear wall either side of them), then centre the
-    # cloth on that panel.
+    tweak = _HAJFIN_BANNER_TWEAKS.get(getattr(props, 'preset_name', ''))
+    tdx, tdy, tdz, tfrac = tweak if tweak else (0.0, 0.0, 0.0, 0.0)
+
+    # ------------------------------------------------------ 2. front wall panel --
+    # Door and window holes split the facade into separate panels, so taking the
+    # largest front-facing panel naturally lands on the clear wall beside them.
     panels = []
     for f in bm.faces:
         n = f.normal
@@ -6656,24 +6661,25 @@ def _attach_faction_banner(bm, props, style):
         c = f.calc_center_median()
         if c.z < z_min + 1.4:
             continue
-        zs_f = [v.co.z for v in f.verts]
-        panels.append((c.y, -area, c.x, min(zs_f), max(zs_f)))
+        fz = [v.co.z for v in f.verts]
+        panels.append((c.y, -area, c.x, min(fz), max(fz)))
 
     if panels:
         panels.sort()
-        hy, neg_area, px, pz0, pz1 = panels[0]
+        hy, _neg_area, px, pz0, pz1 = panels[0]
         if pz1 - pz0 > banner_h * 1.05:
             pz = pz0 + (pz1 - pz0) * 0.58
-            _build_hajfin_hanging_banner(bm, px, hy - 0.06, pz,
+            _build_hajfin_hanging_banner(bm, px + tdx, hy - 0.06 + tdy, pz + tdz,
                                          width=banner_w, height=banner_h, facing_y=-1.0)
             return
 
-    # 2. FALLBACK: no usable wall panel.  Plant a pole at the FRONT EDGE of the
-    # roof (visible from the ground) by raycasting downward there.
-    best_roof = None
+    # -------------------------------------------------- 3. pole at the roof edge
+    from mathutils.bvhtree import BVHTree
+    tree = BVHTree.FromBMesh(bm)
     roof_front_y = front_y + max(0.8, (max(ys) - front_y) * 0.09)
+    best_roof = None
     for xi in (0.0, 0.18, -0.18, 0.34, -0.34, 0.48, -0.48):
-        px = x_lo + (x_hi - x_lo) * (0.5 + xi)
+        px = cx + (max(xs) - min(xs)) * xi * 0.5
         hit, nrm, _i, _d = tree.ray_cast(
             Vector((px, roof_front_y, z_max + 2.5)), Vector((0.0, 0.0, -1.0)))
         if hit is None or nrm.z < 0.30:
@@ -6692,39 +6698,6 @@ def _attach_faction_banner(bm, props, style):
     _build_hajfin_hanging_banner(bm, px, py - 0.075,
                                  base_z + pole_h - 0.48 - banner_h * 0.5,
                                  width=banner_w, height=banner_h, facing_y=-1.0)
-    top_z = max(c[2] for c in cols)
-    tall = [c for c in cols if c[2] > top_z - 0.45]
-    px = (min(c[0] for c in tall) + max(c[0] for c in tall)) * 0.5
-    hy = tall[len(tall) // 2][1]
-    pz = top_z
-    if style in ('ROUND_HUT',):
-        # Round huts have no gable to hang a banner on, so it flies from a short
-        # pole planted in the roof apex instead (both tiers).
-        peak_z = z_max
-        pole_h = banner_h + 0.85
-        create_box(bm, (0.11, 0.11, pole_h), (0.0, 0.0, peak_z + pole_h * 0.5),
-                   mat_index=MAT_INDEX_TIMBER)
-        create_torus_ring(bm, (0.0, 0.0, peak_z + pole_h * 0.42),
-                          major_radius=0.10, minor_radius=0.022, mat_index=MAT_INDEX_IRON)
-        # Hang the cloth 0.5m down the pole so the pole tip stands proud above it
-        _build_hajfin_hanging_banner(bm, 0.0, -0.055,
-                                     peak_z + pole_h - 0.50 - banner_h * 0.5,
-                                     width=banner_w, height=banner_h, facing_y=-1.0)
-        return
-
-    tweak = _HAJFIN_BANNER_TWEAKS.get(getattr(props, 'preset_name', ''))
-    if tweak:
-        dx, dy, dz, dfrac = tweak
-        px += dx
-        hy += dy
-        pz += dz + span * dfrac
-    # Never let the cloth ride up past the wall head into the roof volume.
-    pz = min(pz, top_z + 0.12)
-    # cz is the banner's CENTRE, so pass the probe height directly: adding half a
-    # banner height pushed the cloth up inside the wall/roof.
-    _build_hajfin_hanging_banner(bm, px, hy - 0.06, pz,
-                                 width=banner_w, height=banner_h, facing_y=-1.0)
-
 
 def _apply_hajfin_wall_uvs(bm, scale=0.18):
     """Normalize every Hajfin siding face after all archetypes and props build.
