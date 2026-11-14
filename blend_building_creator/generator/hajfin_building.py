@@ -3136,7 +3136,10 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
 
             # Heavy timber threshold sill beam centered at middle of wall thickness
             sill_p = mb - n_vec * (wall_th * 0.5)
-            create_box(bm, (door_w + 0.60, wall_th + 0.24, 0.16), (sill_p.x, sill_p.y, z0 + 0.08),
+            # Stand the threshold proud of the floor slab (the slab top is at
+            # z0 + 0.18).  Sitting it at z0 + 0.08 buried it inside the slab, which
+            # produced z-fighting along the doorway.
+            create_box(bm, (door_w + 0.60, wall_th + 0.24, 0.18), (sill_p.x, sill_p.y, z0 + 0.24),
                        mat_index=MAT_INDEX_TIMBER)
 
             # Continuous 3D Shark Jaw Bone Archway framing opening flush on tilted facet
@@ -6561,10 +6564,13 @@ def _cylindrical_round_hut_uvs(bm, u_scale=0.18, v_scale=0.18):
     imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
     bm.normal_update()
     for f in bm.faces:
+        # Wall siding only.  MAT_INDEX_FLOOR / WOOD must stay out: they are the
+        # deck and floor slabs, and projecting them cylindrically flattens their
+        # plank UVs into a grey smear (the floor is at constant height, so V is
+        # constant across the whole slab).
         if f.material_index not in (MAT_INDEX_DRIFTWOOD, MAT_INDEX_PAINTED_PLANKS,
                                     MAT_INDEX_PAINTED_PLANKS_BLUE,
-                                    MAT_INDEX_SALVAGED_PLANKS, MAT_INDEX_PLASTER,
-                                    MAT_INDEX_FLOOR, MAT_INDEX_WOOD):
+                                    MAT_INDEX_SALVAGED_PLANKS, MAT_INDEX_PLASTER):
             continue
         if prop_layer is not None and f[prop_layer]:
             continue
