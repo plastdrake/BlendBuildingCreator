@@ -1321,7 +1321,7 @@ def build_ship_mast_with_crows_nest(bm, x=0.0, y=0.0, z_base=0.0, height=9.5,
 def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
                                 plank_spacing=0.28, plank_width=0.22,
                                 plank_th=0.08, with_pylons=True,
-                                post_height=1.35, mat_planks=MAT_INDEX_FLOOR,
+                                post_height=1.35, mat_planks=MAT_INDEX_TIMBER,
                                 mat_rope=MAT_INDEX_ROPE, mat_pylons=MAT_INDEX_TIMBER):
     """
     World of Warcraft / Booty Bay style authentic suspended catenary rope bridge:
@@ -1397,25 +1397,27 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
         # excluded (they showed as black blobs across the boards) and the grain is
         # mapped ALONG the board's width - these are cross-planks, so that is the
         # direction the timber grain actually runs.
-        rows = 12.0
-        row_h = 1.0 / rows
-        v_base = (i % int(rows)) * row_h + row_h * 0.09
-        v_span = row_h * 0.82
-        u_off = ((i * 0.19) % 0.14)
-        u_len = 0.86
+        # Dark structural timber, and a generous slice of the beam atlas per board:
+        # grain runs along the board's width (these are cross-planks) so the grain
+        # gets 55% of the atlas width and the board's length takes 30% of its height.
+        # Each board slides to a different spot so no two are copies.
+        u_len = 0.55
+        v_len = 0.30
+        u_off = ((i * 0.211) % 0.42)
+        v_off = ((i * 0.137) % 0.65)
         for f in plank_faces:
             fn = f.normal
             for loop in f.loops:
                 lc = loop.vert.co
                 if abs(fn.z) > 0.5:
                     u = u_off + (lc.x / p_width + 0.5) * u_len
-                    v = v_base + (lc.y / p_len + 0.5) * v_span
+                    v = v_off + (lc.y / p_len + 0.5) * v_len
                 elif abs(fn.x) >= abs(fn.y):
                     u = u_off + (lc.z / plank_th + 0.5) * u_len
-                    v = v_base + (lc.y / p_len + 0.5) * v_span
+                    v = v_off + (lc.y / p_len + 0.5) * v_len
                 else:
                     u = u_off + (lc.y / p_len + 0.5) * u_len
-                    v = v_base + (lc.z / plank_th + 0.5) * v_span
+                    v = v_off + (lc.z / plank_th + 0.5) * v_len
                 loop[uv_layer_planks].uv = Vector((u, v))
         transform_faces(plank_faces, M_plank)
 

@@ -7123,7 +7123,7 @@ PRESETS = {
         'name': "Chieftain's Great Fin Hall (Tier 1)",
         'plot': "44m x 44m",
         'description': "Colossal elevated longhouse with projecting whale-rib cage entrance, soaring vaulted nave, and accessible mezzanine galleries.",
-        'settings': _hajfin_settings(width=14.0, depth=18.0, num_floors=2, found_h=1.4, wonkiness=0.18, has_pillared=True, pillars=4, has_banners=True, banner_count=2, roof_h=5.5, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=2.00, door_h=3.60, tier=1, hajfin_style='CHIEFTAIN_HALL'),
+        'settings': _hajfin_settings(width=16.5, depth=18.0, num_floors=2, found_h=1.4, wonkiness=0.18, has_pillared=True, pillars=5, has_banners=True, banner_count=2, roof_h=5.5, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=2.00, door_h=3.60, tier=1, hajfin_style='CHIEFTAIN_HALL'),
     },
     'HAJFIN_CHIEFTAIN_HUT_T2': {
         'category': 'CHIEFTAIN',

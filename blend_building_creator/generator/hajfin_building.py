@@ -4656,7 +4656,9 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
     z_gal = z0 + 4.2
     gal_w = 2.20
     gal_y0 = -hd + 3.0
-    gal_y1 = hd - 2.5
+    # Galleries now run all the way back to the rear wall instead of stopping 2.5m
+    # short of it and leaving an unsupported gap.
+    gal_y1 = hd - wall_th
     gal_walk_y0 = gal_y0 + 3.2
 
     # Left Mezzanine Gallery & Staircase
@@ -4824,7 +4826,7 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     create_box(bm, (wing_w - wall_th * 2, wall_th, story_h),
                (hw - wing_w * 0.5, hd - wall_th * 0.5, z0 + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
     create_box(bm, (wall_th, wing_d, story_h),
-               (hw - wall_th * 0.5, hd - wing_d * 0.5 - wall_th * 0.5, z0 + story_h * 0.5),
+               (hw - wall_th * 0.5, hd - wing_d * 0.5 - wall_th, z0 + story_h * 0.5),
                mat_index=MAT_INDEX_DRIFTWOOD)
     _build_wall_with_window_y(bm, hd - wing_d - wall_th * 0.5, hd - wall_th, hw - wing_w + wall_th * 0.5,
                               z0, z_mid, win_cy=hd - wing_d * 0.5, win_cz=z0 + story_h * 0.52,
@@ -4897,7 +4899,7 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     create_box(bm, (wing_w - wall_th * 2, wall_th, story_h),
                (hw - wing_w * 0.5, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
     create_box(bm, (wall_th, wing_d, story_h),
-               (hw - wall_th * 0.5, hd - wing_d * 0.5 - wall_th * 0.5, z_mid + story_h * 0.5),
+               (hw - wall_th * 0.5, hd - wing_d * 0.5 - wall_th, z_mid + story_h * 0.5),
                mat_index=MAT_INDEX_DRIFTWOOD)
     create_box(bm, (wall_th, wing_d, story_h),
                (hw - wing_w + wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
@@ -4907,9 +4909,9 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                                    wall_th=wall_th, sgn_y=1.0, variant='BRACED')
     _build_hajfin_wall_dressing_x(bm, hw - wing_w + wall_th, hw - wall_th, hd - wall_th * 0.5, z_mid, z1,
                                    wall_th=wall_th, sgn_y=1.0, variant='PAINTED_RED', top_clear=0.30)
-    _build_hajfin_wall_dressing_y(bm, hd - wing_d - wall_th * 0.5, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
+    _build_hajfin_wall_dressing_y(bm, hd - wing_d - wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
                                    wall_th=wall_th, sgn_x=1.0, variant='BRACED')
-    _build_hajfin_wall_dressing_y(bm, hd - wing_d - wall_th * 0.5, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
+    _build_hajfin_wall_dressing_y(bm, hd - wing_d - wall_th, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
                                    wall_th=wall_th, sgn_x=1.0, variant='PAINTED_RED', top_clear=0.30)
     _build_hajfin_wall_dressing_y(bm, hd - wing_d, hd, hw - wing_w + wall_th * 0.5, z0, z_mid,
                                    wall_th=wall_th, sgn_x=-1.0, variant='SALVAGED',
@@ -4934,6 +4936,9 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     _build_chunky_corner_column(bm, hw, hd, z0, z1, size=col_size, extend_top=0.0)
     _build_chunky_corner_column(bm, hw - wing_w, hd, z0, z1, size=col_size, extend_top=0.0)
     _build_chunky_corner_column(bm, hw - wing_w, hd - wing_d, z0, z1, size=col_size, extend_top=0.0)
+    # Corner post on the outside taproom/wing junction so the two wall runs read as
+    # a deliberate corner instead of a seam.
+    _build_chunky_corner_column(bm, hw, hd - wing_d - wall_th, z0, z1, size=col_size, extend_top=0.0)
 
     # Exterior SCAFFOLDED FACADE PATCHWORK along the flank side walls
     _build_hajfin_wall_dressing_y(bm, -hd + wall_th, -hd + m_d - wall_th, -hw + wall_th * 0.5, z0, z_mid,
