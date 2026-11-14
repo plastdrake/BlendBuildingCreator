@@ -131,6 +131,8 @@ MAT_INDEX_TERRACOTTA    = 52
 MAT_INDEX_DRIFTWOOD     = 53
 MAT_INDEX_ROUGH_STONE   = 54
 MAT_INDEX_BONE          = 55
+MAT_INDEX_PAINTED_PLANKS = 56
+MAT_INDEX_PAINTED_PLANKS_BLUE = 57
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +143,21 @@ def _set_bsdf_input(bsdf, name, value):
     s = bsdf.inputs.get(name)
     if s is not None:
         s.default_value = value
+
+
+def _mix_color(tree, blend_type='MULTIPLY', factor=1.0, loc=(0, 0)):
+    """Robust helper for ShaderNodeMix with RGBA data_type in Blender 3.4 / 4.x / 5.x."""
+    m = tree.nodes.new("ShaderNodeMix")
+    m.data_type = 'RGBA'
+    m.blend_type = blend_type
+    m.location = loc
+    fac_socket = next(i for i in m.inputs if i.identifier == 'Factor_Float')
+    a_socket = next(i for i in m.inputs if i.identifier == 'A_Color')
+    b_socket = next(i for i in m.inputs if i.identifier == 'B_Color')
+    res_socket = next(o for o in m.outputs if o.identifier == 'Result_Color')
+    if isinstance(factor, (int, float)):
+        fac_socket.default_value = float(factor)
+    return m, fac_socket, a_socket, b_socket, res_socket
 
 
 def _apply_ao(tree, bsdf, color_socket, strength=0.52, distance=0.18):
@@ -167,14 +184,10 @@ def _apply_ao(tree, bsdf, color_socket, strength=0.52, distance=0.18):
     ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
     tree.links.new(ao.outputs["AO"], ramp.inputs["Fac"])
 
-    mul = tree.nodes.new("ShaderNodeMix")
-    mul.data_type = 'RGBA'
-    mul.blend_type = 'MULTIPLY'
-    mul.location = (bx + 440, by)
-    mul.inputs["Factor"].default_value = 1.0
-    tree.links.new(color_socket, mul.inputs["A"])
-    tree.links.new(ramp.outputs["Color"], mul.inputs["B"])
-    tree.links.new(mul.outputs["Result"], bsdf.inputs["Base Color"])
+    mul, _, a_sock, b_sock, res_sock = _mix_color(tree, blend_type='MULTIPLY', factor=1.0, loc=(bx + 440, by))
+    tree.links.new(color_socket, a_sock)
+    tree.links.new(ramp.outputs["Color"], b_sock)
+    tree.links.new(res_sock, bsdf.inputs["Base Color"])
 
 
 def _setup_pbr(tree, bsdf, out, roughness=1.0, metallic=0.0):
@@ -2823,6 +2836,160 @@ def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
     return mat
 
 
+def create_stylized_painted_planks(name="M_Building_Painted_Planks", color=(0.62, 0.18, 0.13, 1.0),
+                                   paint_coverage=0.85):
+    """Weathered, chipped painted wood planks (dull crimson pirate red or sea blue)
+    with a procedural peeling mask revealing the raw aged driftwood planks underneath.
+
+    The base grain uses the very same ``pirate_timber_diffuse.jpg`` atlas as
+    :func:`create_stylized_driftwood` so the exposed wood under the flaked paint
+    matches the surrounding Hajfin plank siding exactly.
+    ``paint_coverage`` drives how much paint survives (0 = bare wood, 1 = solid paint).
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1400)
+    c = _coord(tree, loc_x=-1400)
+
+    # 1. Base aged driftwood diffuse texture (same atlas as the Hajfin plank siding)
+    tex_node = _load_image_texture(tree, "pirate_timber_diffuse.jpg", c, loc_x=-1050, loc_y=250, scale=(1.0, 1.0, 1.0))
+    if tex_node is None:
+        tex_node = _load_image_texture(tree, "facade_wood_planks_diffuse.jpg", c, loc_x=-1050, loc_y=250, scale=(1.0, 1.0, 1.0))
+
+    if tex_node is not None:
+        driftwood_col = tex_node.outputs["Color"]
+    else:
+        driftwood_col = None
+
+    # 2. Peeling / chipped paint mask via noise + high-contrast color ramp
+    noise = tree.nodes.new("ShaderNodeTexNoise")
+    noise.location = (-800, -100)
+    noise.inputs["Scale"].default_value = 4.5
+    noise.inputs["Detail"].default_value = 4.0
+    try:
+        noise.inputs["Roughness"].default_value = 0.65
+    except Exception:
+        pass
+    tree.links.new(c.outputs["UV"], noise.inputs["Vector"])
+
+    # 2b. Fine secondary grain so the chipped edges fray instead of reading as clean blobs
+    fine_noise = tree.nodes.new("ShaderNodeTexNoise")
+    fine_noise.location = (-800, -380)
+    fine_noise.inputs["Scale"].default_value = 22.0
+    fine_noise.inputs["Detail"].default_value = 3.0
+    tree.links.new(c.outputs["UV"], fine_noise.inputs["Vector"])
+
+    mix_noise = tree.nodes.new("ShaderNodeMix")
+    mix_noise.data_type = 'FLOAT'
+    mix_noise.blend_type = 'MIX'
+    mix_noise.location = (-640, -240)
+    mix_noise.inputs["Factor"].default_value = 0.35
+    tree.links.new(noise.outputs["Fac"], mix_noise.inputs[2])
+    tree.links.new(fine_noise.outputs["Fac"], mix_noise.inputs[3])
+
+    ramp = tree.nodes.new("ShaderNodeValToRGB")
+    ramp.location = (-450, -100)
+    ramp.color_ramp.interpolation = 'LINEAR'
+    # Weathered chipping: paint survives on the ridges, bare wood shows in the worn hollows
+    lo = max(0.02, min(0.95, 0.62 - paint_coverage * 0.42))
+    hi = min(0.98, lo + 0.13)
+    ramp.color_ramp.elements[0].position = lo
+    ramp.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
+    ramp.color_ramp.elements[1].position = hi
+    ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
+    tree.links.new(mix_noise.outputs[0], ramp.inputs["Fac"])
+    paint_mask = ramp.outputs["Color"]
+
+    # 3. Tinted paint color.  Multiplying the warm wood texture straight by a blue
+    #    paint colour just yields muddy brown, so the grain is first desaturated to
+    #    a luminance mask and only then tinted - giving a genuine painted board
+    #    whose colour still carries the wood grain underneath.
+    desat = tree.nodes.new("ShaderNodeHueSaturation")
+    desat.location = (-880, 420)
+    desat.inputs["Saturation"].default_value = 0.0
+    if driftwood_col is not None:
+        tree.links.new(driftwood_col, desat.inputs["Color"])
+
+    _, _, a_paint, b_paint, paint_out = _mix_color(tree, blend_type='MULTIPLY', factor=0.94, loc=(-250, 200))
+    if driftwood_col is not None:
+        tree.links.new(desat.outputs["Color"], a_paint)
+    else:
+        a_paint.default_value = (0.62, 0.60, 0.56, 1.0)
+    b_paint.default_value = color or (0.62, 0.18, 0.13, 1.0)
+
+    # 4. Final blend: where paint_mask == 1, show paint; where paint_mask == 0, show raw peeled wood!
+    _, fac_final, a_final, b_final, final_col = _mix_color(tree, blend_type='MIX', loc=(200, 100))
+    tree.links.new(paint_mask, fac_final)
+    if driftwood_col is not None:
+        tree.links.new(driftwood_col, a_final)
+    else:
+        a_final.default_value = (0.42, 0.32, 0.22, 1.0)
+    tree.links.new(paint_out, b_final)
+
+    painted_out = _warm_painterly_pass(tree, c, final_col, loc_x=450, loc_y=100, strength=0.06, scale=1.1)
+    _apply_ao(tree, bsdf, painted_out, strength=0.50, distance=0.20)
+    _setup_pbr(tree, bsdf, out, roughness=0.78, metallic=0.0)
+
+    # 5. Normal / Bump: chipped paint edge relief
+    bump = tree.nodes.new("ShaderNodeBump")
+    bump.location = (850, -100)
+    bump.inputs["Strength"].default_value = 0.25
+    bump.inputs["Distance"].default_value = 0.025
+    tree.links.new(paint_mask, bump.inputs["Height"])
+    tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+
+    return mat
+
+
+def create_stylized_salvaged_planks(name="M_Building_Wood", color=(0.62, 0.52, 0.38, 1.0)):
+    """Salt-bleached salvaged plank timber for Hajfin patchwork wall panels.
+
+    Uses the brighter ``facade_wood_planks_diffuse.jpg`` atlas, desaturated and
+    toned down, so the salvaged boards read as a clearly different, paler and
+    greyer timber species from the warm honey driftwood siding - giving the
+    "built from whatever they found" patchwork look.
+    """
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=1200)
+    c = _coord(tree, loc_x=-1200)
+    tex_node = _load_image_texture(tree, "facade_wood_planks_diffuse.jpg", c, loc_x=-850, loc_y=200, scale=(1.0, 1.0, 1.0))
+    if tex_node is None:
+        tex_node = _load_image_texture(tree, "pirate_timber_diffuse.jpg", c, loc_x=-850, loc_y=200, scale=(1.0, 1.0, 1.0))
+
+    if tex_node is not None:
+        base_col = tex_node.outputs["Color"]
+        # Wash the colour out so the warm orange atlas reads as pale weathered timber
+        desat = tree.nodes.new("ShaderNodeHueSaturation")
+        desat.location = (-620, 320)
+        desat.inputs["Saturation"].default_value = 0.45
+        tree.links.new(base_col, desat.inputs["Color"])
+
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type = 'RGBA'
+        tint.blend_type = 'MULTIPLY'
+        tint.location = (-350, 200)
+        tint.inputs["Factor"].default_value = 0.88
+        tree.links.new(desat.outputs["Color"], tint.inputs["A"])
+        tint.inputs["B"].default_value = color or (0.62, 0.52, 0.38, 1.0)
+        color_out = tint.outputs["Result"]
+
+        painted = _warm_painterly_pass(tree, c, color_out, loc_x=-80, loc_y=-210, strength=0.05, scale=1.0)
+        macro = _anti_repetition_wash(tree, c, painted, loc_x=160, loc_y=-210, strength=0.07, scale=0.30)
+        _apply_ao(tree, bsdf, macro, strength=0.52, distance=0.20)
+        _setup_pbr(tree, bsdf, out, roughness=0.84, metallic=0.0)
+
+        bump = tree.nodes.new("ShaderNodeBump")
+        bump.location = (680, -210)
+        bump.inputs["Strength"].default_value = 0.22
+        bump.inputs["Distance"].default_value = 0.035
+        tree.links.new(base_col, bump.inputs["Height"])
+        tree.links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+        return mat
+
+    _set_bsdf_input(bsdf, "Base Color", color or (0.62, 0.52, 0.38, 1.0))
+    _setup_pbr(tree, bsdf, out, roughness=0.84)
+    return mat
+
+
 def create_stylized_hajfin_timber(name="M_Building_Timber", color=None):
     """Heavy structural driftwood timber beam material for Hajfin posts, beams, rafters, and stilts.
     Uses the dark timber beam texture with deep rich dark espresso/chocolate tones,
@@ -3349,12 +3516,25 @@ def setup_building_material_slots(obj, props):
                        or create_stylized_rough_reef_stone(f"{mat_prefix}Rough_Stone", color=getattr(props, 'color_stone', None)))
     mat_bone = (getattr(props, 'custom_bone', None)
                 or create_stylized_bone(f"{mat_prefix}Bone"))
+    mat_painted_planks = (getattr(props, 'custom_painted_planks', None)
+                          or create_stylized_painted_planks(f"{mat_prefix}Painted_Planks"))
+    mat_painted_planks_blue = (getattr(props, 'custom_painted_planks_blue', None)
+                               or create_stylized_painted_planks(f"{mat_prefix}Painted_Planks_Blue",
+                                                                  color=(0.30, 0.38, 0.50, 1.0),
+                                                                  paint_coverage=0.72))
 
     if is_hajfin:
         if not getattr(props, 'custom_timber_frame', None):
             mat_timber = create_stylized_hajfin_timber(f"{mat_prefix}Hajfin_Timber", color=getattr(props, 'color_timber_frame', None))
         if not getattr(props, 'custom_timber', None):
-            mat_wood = mat_timber
+            mat_wood = create_stylized_salvaged_planks(f"{mat_prefix}Wood")
+        # Salt-bleached lime plaster used as the infill between the half-timber
+        # framing of the Hajfin fachwerk panels (pale, chalky, matches the
+        # bone-white window and doorway casings).
+        mat_plaster = (getattr(props, 'custom_wall_ext', None) or
+                       create_stylized_plaster(f"{mat_prefix}Plaster",
+                                              color=(0.80, 0.78, 0.71, 1.0),
+                                              is_interior=False, tier='TIER_2'))
         if not getattr(props, 'custom_log', None):
             mat_log = mat_timber
         if not getattr(props, 'custom_log_end', None):
@@ -3422,6 +3602,8 @@ def setup_building_material_slots(obj, props):
         mat_driftwood,      # 53 MAT_INDEX_DRIFTWOOD
         mat_rough_stone,    # 54 MAT_INDEX_ROUGH_STONE
         mat_bone,           # 55 MAT_INDEX_BONE
+        mat_painted_planks, # 56 MAT_INDEX_PAINTED_PLANKS
+        mat_painted_planks_blue, # 57 MAT_INDEX_PAINTED_PLANKS_BLUE
     ]
     obj.data.materials.clear()
     for m in required_mats:
@@ -3490,6 +3672,8 @@ CANONICAL_SLOT_NAMES = (
     "M_Building_Driftwood",     # 53
     "M_Building_Rough_Stone",   # 54
     "M_Building_Bone",          # 55
+    "M_Building_Painted_Planks", # 56
+    "M_Building_Painted_Planks_Blue", # 57
 )
 
 

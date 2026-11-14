@@ -151,8 +151,8 @@ def create_box(bm, size=(1.0, 1.0, 1.0), location=(0.0, 0.0, 0.0), rotation=(0.0
                 # repeats the atlas dozens of times and reads as stretched
                 # pinstripes.  Keep the wall density consistent with the
                 # dedicated Hajfin panel unwrap.
-                su = 0.18 if mat_index == 53 else 0.50
-                sv = 0.18 if mat_index == 53 else 0.50
+                su = 0.18 if mat_index in (53, 56, 57) else 0.50
+                sv = 0.18 if mat_index in (53, 56, 57) else 0.50
 
             has_rot = (abs(rotation[0]) > 0.001 or abs(rotation[1]) > 0.001 or abs(rotation[2]) > 0.001 or transform_matrix is not None)
             if has_rot:

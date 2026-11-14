@@ -40,6 +40,9 @@ from .materials import (
     MAT_INDEX_SILVER,
     MAT_INDEX_FISH,
     MAT_INDEX_MEAT,
+    MAT_INDEX_PAINTED_PLANKS,
+    MAT_INDEX_PAINTED_PLANKS_BLUE,
+    MAT_INDEX_PLASTER,
 )
 MAT_INDEX_STONE_BRICK = MAT_INDEX_STONE
 from .mesh_utils import (
@@ -634,19 +637,22 @@ def _build_wall_with_door_opening(bm, x0, x1, y, z0, z1, door_cx, door_w, door_h
         create_box(bm, (sx, sy, sz), (w_pos.x, w_pos.y, w_pos.z),
                    rotation=(0, 0, rot_z), mat_index=mat_idx, is_wall=is_wall)
 
-    # 1. Left Wall Panel (Solid continuous vertical plank siding from x0 to left door jamb)
-    local_x0 = x0 - door_cx
-    left_w = -d_half_w - local_x0
-    if left_w > 0.02:
-        _add_local_box(left_w, wall_th, z1 - z0, local_x0 + left_w * 0.5, z0 + (z1 - z0) * 0.5,
-                       MAT_INDEX_DRIFTWOOD, is_wall=True)
+    # 1. Left Wall Panel (Solid continuous vertical plank siding from x_min to left door jamb)
+    # Computed directly in wall coordinates so panels never mirror or leave corner gaps when rot_z != 0.
+    x_min = min(x0, x1)
+    x_max = max(x0, x1)
+    left_w = (door_cx - d_half_w) - x_min
+    if left_w > 0.01:
+        create_box(bm, (left_w, wall_th, z1 - z0),
+                   (x_min + left_w * 0.5, y, z0 + (z1 - z0) * 0.5),
+                   mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
 
-    # 2. Right Wall Panel (Solid continuous vertical plank siding from right door jamb to x1)
-    local_x1 = x1 - door_cx
-    right_w = local_x1 - d_half_w
-    if right_w > 0.02:
-        _add_local_box(right_w, wall_th, z1 - z0, d_half_w + right_w * 0.5, z0 + (z1 - z0) * 0.5,
-                       MAT_INDEX_DRIFTWOOD, is_wall=True)
+    # 2. Right Wall Panel (Solid continuous vertical plank siding from right door jamb to x_max)
+    right_w = x_max - (door_cx + d_half_w)
+    if right_w > 0.01:
+        create_box(bm, (right_w, wall_th, z1 - z0),
+                   (door_cx + d_half_w + right_w * 0.5, y, z0 + (z1 - z0) * 0.5),
+                   mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
 
     # 3. Header Wall Panel above arch with pointed bottom matching the shark jaw arch apex
     if z1 > z0 + door_h:
@@ -691,8 +697,19 @@ def _build_wall_with_door_opening(bm, x0, x1, y, z0, z1, door_cx, door_w, door_h
                 loop[uv_layer].uv = Vector((lx * 0.18, lz * 0.18))
 
     # 4. Heavy Structural Timber Threshold Sill Beam under Doorway
+    # Stands proud by +0.04m above floor slab to create an authentic raised weather curb
+    # with ZERO coplanar overlap / z-fighting with the floorboards.
     sill_w = door_w + 0.60
-    _add_local_box(sill_w, wall_th + 0.24, 0.16, 0.0, z0 + 0.08, MAT_INDEX_TIMBER)
+    sill_h = 0.22
+    sill_cz = z0 + sill_h * 0.5 - 0.02
+    create_beveled_box(
+        bm,
+        size=(sill_w, wall_th + 0.22, sill_h),
+        location=(door_cx, y, sill_cz),
+        rotation=(0.0, 0.0, rot_z),
+        mat_index=MAT_INDEX_TIMBER,
+        bevel_amount=0.02,
+    )
 
     # 4b. Square structural jambs behind the jaw.  The bone arch is decorative;
     # these continuous posts define the actual opening and keep the frame
@@ -834,9 +851,10 @@ def _build_bone_fin_emblem(bm, x, y, z, rot_z=0.0, scale=0.6):
                 rotation=(0, 0.32, rot_z), mat_index=MAT_INDEX_BONE)
 
 
-def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26, force=False):
+def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26, force=False, style='DRIFTWOOD'):
     """Builds a solid triangular timber gable wall with vertical wood planks
-    matching the lower wall siding orientation and continuous grain with zero stepped cuts."""
+    matching the lower wall siding orientation and continuous grain with zero stepped cuts.
+    Supports 'DRIFTWOOD', 'FACHWERK' (plaster + king-post struts), and 'PAINTED' (weathered crimson planks)."""
     if not force:
         roof_style = getattr(_HAJFIN_ROOF_PROPS, 'roof_style', 'SHINGLES') if _HAJFIN_ROOF_PROPS is not None else 'SHINGLES'
         # Sway roofs construct their own curved gable end walls matching the sway sag;
@@ -849,11 +867,27 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26, forc
     half_th = wall_th * 0.5
     uv_layer = bm.loops.layers.uv.verify()
 
-    # Tuck top sloped edges slightly (0.06m) below roof shingles into roof slab soffit
-    # to eliminate coplanar z-fighting with the roof shingles while ensuring zero gap.
-    tuck_z = 0.06
-    z_peak_w = z_peak - tuck_z
-    z_eave_w = z_eave - tuck_z
+    # The roof eaves extend outward past the walls by overhang_x (typically 0.45m - 0.60m)
+    # and rafters/bargeboards have thickness (~0.22m).
+    # To eliminate any gap between the wall and the roof bargeboards/soffit,
+    # the top of the wall triangle must penetrate slightly into the roof soffit volume.
+    half_span = (max_x - min_x) * 0.5
+    peak_h = max(0.8, z_peak - z_eave)
+    overhang = 0.50
+    slope = peak_h / max(0.5, half_span + overhang)
+    wall_eave_lift = slope * overhang + 0.12
+    wall_peak_lift = 0.20
+    z_peak_w = z_peak + wall_peak_lift
+    z_eave_w = z_eave + wall_eave_lift
+
+    # Pick face material
+    if style == 'FACHWERK':
+        face_mat = MAT_INDEX_PLASTER
+    elif style == 'PAINTED':
+        face_mat = MAT_INDEX_PAINTED_PLANKS
+    else:
+        face_mat = MAT_INDEX_DRIFTWOOD
+
     v_fl = bm.verts.new(Vector((min_x, y - half_th, z_eave_w)))
     v_fr = bm.verts.new(Vector((max_x, y - half_th, z_eave_w)))
     v_fp = bm.verts.new(Vector((mx, y - half_th, z_peak_w)))
@@ -863,23 +897,23 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26, forc
     v_bp = bm.verts.new(Vector((mx, y + half_th, z_peak_w)))
 
     f_front = bm.faces.new([v_fl, v_fr, v_fp])
-    f_front.material_index = MAT_INDEX_DRIFTWOOD
+    f_front.material_index = face_mat
     f_front.tag = True
 
     f_back = bm.faces.new([v_bp, v_br, v_bl])
-    f_back.material_index = MAT_INDEX_DRIFTWOOD
+    f_back.material_index = face_mat
     f_back.tag = True
 
     f_bot = bm.faces.new([v_fl, v_bl, v_br, v_fr])
-    f_bot.material_index = MAT_INDEX_DRIFTWOOD
+    f_bot.material_index = MAT_INDEX_TIMBER
     f_bot.tag = True
 
     f_sl = bm.faces.new([v_fl, v_fp, v_bp, v_bl])
-    f_sl.material_index = MAT_INDEX_DRIFTWOOD
+    f_sl.material_index = MAT_INDEX_TIMBER
     f_sl.tag = True
 
     f_sr = bm.faces.new([v_fr, v_br, v_bp, v_fp])
-    f_sr.material_index = MAT_INDEX_DRIFTWOOD
+    f_sr.material_index = MAT_INDEX_TIMBER
     f_sr.tag = True
 
     for f in (f_front, f_back):
@@ -890,6 +924,383 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26, forc
         for loop in f.loops:
             co = loop.vert.co
             loop[uv_layer].uv = Vector((co.y * 0.18, co.z * 0.18))
+
+    # Add decorative half-timber framing for FACHWERK or PAINTED styles
+    if style in ('FACHWERK', 'PAINTED'):
+        beam_w = 0.18
+        beam_d = 0.12
+        for sgn_y in (-1.0, 1.0):
+            fy = y + sgn_y * (half_th + 0.02)
+            # Base horizontal tie beam
+            create_box(bm, (max_x - min_x + 0.10, beam_d, beam_w), (mx, fy, z_eave + beam_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+            # Sloped verge timbers
+            _create_oriented_beam(bm, (min_x, fy, z_eave + beam_w), (mx, fy, z_peak - 0.05), width=beam_w, depth=beam_d, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (max_x, fy, z_eave + beam_w), (mx, fy, z_peak - 0.05), width=beam_w, depth=beam_d, mat_index=MAT_INDEX_TIMBER)
+            # Vertical king post
+            create_box(bm, (beam_w, beam_d, peak_h - beam_w), (mx, fy, z_eave + beam_w + (peak_h - beam_w) * 0.5), mat_index=MAT_INDEX_TIMBER)
+            # Diagonal struts
+            _create_oriented_beam(bm, (min_x + half_span * 0.45, fy, z_eave + beam_w), (mx, fy, z_eave + peak_h * 0.55), width=beam_w * 0.85, depth=beam_d, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (max_x - half_span * 0.45, fy, z_eave + beam_w), (mx, fy, z_eave + peak_h * 0.55), width=beam_w * 0.85, depth=beam_d, mat_index=MAT_INDEX_TIMBER)
+            # Center bolted iron bracket
+            create_box(bm, (0.24, 0.04, 0.24), (mx, fy + sgn_y * 0.04, z_eave + peak_h * 0.55), mat_index=MAT_INDEX_IRON)
+
+
+def _build_fachwerk_bracing_x(bm, x0, x1, y, z0, z1, wall_th=0.26, pattern='X_BRACE', sgn_y=1.0,
+                              infill_mat=None, timber_w=0.18, timber_d=0.08):
+    """Constructs exterior half-timber Fachwerk framing and optional infill on a wall running along the X axis.
+    sgn_y: +1.0 for framing on north face, -1.0 for framing on south face.
+    If infill_mat is provided, creates an inset wall panel (e.g. MAT_INDEX_PLASTER or MAT_INDEX_PAINTED_PLANKS).
+    Adds sill plate, top plate, vertical timber studs, and diagonal cross braces with iron strapping plates."""
+    min_x = min(x0, x1)
+    max_x = max(x0, x1)
+    span_x = max_x - min_x
+    span_z = z1 - z0
+    if span_x < 0.4 or span_z < 0.4:
+        return
+
+    fy = y + sgn_y * (wall_th * 0.5 + timber_d * 0.5)
+
+    if infill_mat is not None:
+        create_box(bm, (span_x, wall_th, span_z), ((min_x + max_x) * 0.5, y, z0 + span_z * 0.5),
+                   mat_index=infill_mat, is_wall=True)
+
+    # 1. Base sill timber & top plate beam
+    create_box(bm, (span_x + 0.04, timber_d, timber_w),
+               ((min_x + max_x) * 0.5, fy, z0 + timber_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (span_x + 0.04, timber_d, timber_w),
+               ((min_x + max_x) * 0.5, fy, z1 - timber_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # 2. Outer end studs
+    for sx in (min_x + timber_w * 0.5, max_x - timber_w * 0.5):
+        create_box(bm, (timber_w, timber_d, span_z - timber_w * 2),
+                   (sx, fy, z0 + span_z * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # 3. Intermediate bays & diagonal bracing
+    num_bays = max(1, int(round(span_x / 2.0)))
+    bay_w = span_x / num_bays
+    inner_z0 = z0 + timber_w
+    inner_z1 = z1 - timber_w
+
+    for b in range(num_bays):
+        bx0 = min_x + b * bay_w
+        bx1 = bx0 + bay_w
+        bcx = (bx0 + bx1) * 0.5
+        if b > 0:
+            create_box(bm, (timber_w, timber_d, span_z - timber_w * 2),
+                       (bx0, fy, z0 + span_z * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+        if pattern == 'X_BRACE':
+            _create_oriented_beam(bm, (bx0 + timber_w * 0.4, fy, inner_z0),
+                                  (bx1 - timber_w * 0.4, fy, inner_z1),
+                                  width=timber_w * 0.85, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (bx0 + timber_w * 0.4, fy, inner_z1),
+                                  (bx1 - timber_w * 0.4, fy, inner_z0),
+                                  width=timber_w * 0.85, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
+            create_box(bm, (0.22, timber_d + 0.02, 0.22),
+                       (bcx, fy + sgn_y * 0.01, (inner_z0 + inner_z1) * 0.5), mat_index=MAT_INDEX_IRON)
+        elif pattern == 'K_BRACE':
+            mid_z = (inner_z0 + inner_z1) * 0.5
+            _create_oriented_beam(bm, (bx0 + timber_w * 0.4, fy, inner_z0),
+                                  (bcx, fy, mid_z), width=timber_w * 0.85, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (bx0 + timber_w * 0.4, fy, inner_z1),
+                                  (bcx, fy, mid_z), width=timber_w * 0.85, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (bx1 - timber_w * 0.4, fy, inner_z0),
+                                  (bcx, fy, mid_z), width=timber_w * 0.85, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (bx1 - timber_w * 0.4, fy, inner_z1),
+                                  (bcx, fy, mid_z), width=timber_w * 0.85, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
+
+
+def _build_fachwerk_bracing_y(bm, y0, y1, x, z0, z1, wall_th=0.26, pattern='X_BRACE', sgn_x=1.0,
+                              infill_mat=None, timber_w=0.18, timber_d=0.08):
+    """Constructs exterior half-timber Fachwerk framing and optional infill on a wall running along the Y axis.
+    sgn_x: +1.0 for framing on east face, -1.0 for framing on west face."""
+    min_y = min(y0, y1)
+    max_y = max(y0, y1)
+    span_y = max_y - min_y
+    span_z = z1 - z0
+    if span_y < 0.4 or span_z < 0.4:
+        return
+
+    fx = x + sgn_x * (wall_th * 0.5 + timber_d * 0.5)
+
+    if infill_mat is not None:
+        create_box(bm, (wall_th, span_y, span_z), (x, (min_y + max_y) * 0.5, z0 + span_z * 0.5),
+                   mat_index=infill_mat, is_wall=True)
+
+    # 1. Base sill timber & top plate beam
+    create_box(bm, (timber_d, span_y + 0.04, timber_w),
+               (fx, (min_y + max_y) * 0.5, z0 + timber_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (timber_d, span_y + 0.04, timber_w),
+               (fx, (min_y + max_y) * 0.5, z1 - timber_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # 2. Outer end studs
+    for sy in (min_y + timber_w * 0.5, max_y - timber_w * 0.5):
+        create_box(bm, (timber_d, timber_w, span_z - timber_w * 2),
+                   (fx, sy, z0 + span_z * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # 3. Intermediate bays & diagonal bracing
+    num_bays = max(1, int(round(span_y / 2.0)))
+    bay_d = span_y / num_bays
+    inner_z0 = z0 + timber_w
+    inner_z1 = z1 - timber_w
+
+    for b in range(num_bays):
+        by0 = min_y + b * bay_d
+        by1 = by0 + bay_d
+        bcy = (by0 + by1) * 0.5
+        if b > 0:
+            create_box(bm, (timber_d, timber_w, span_z - timber_w * 2),
+                       (fx, by0, z0 + span_z * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+        if pattern == 'X_BRACE':
+            _create_oriented_beam(bm, (fx, by0 + timber_w * 0.4, inner_z0),
+                                  (fx, by1 - timber_w * 0.4, inner_z1),
+                                  width=timber_d * 0.9, depth=timber_w * 0.85, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (fx, by0 + timber_w * 0.4, inner_z1),
+                                  (fx, by1 - timber_w * 0.4, inner_z0),
+                                  width=timber_d * 0.9, depth=timber_w * 0.85, mat_index=MAT_INDEX_TIMBER)
+            create_box(bm, (timber_d + 0.02, 0.22, 0.22),
+                       (fx + sgn_x * 0.01, bcy, (inner_z0 + inner_z1) * 0.5), mat_index=MAT_INDEX_IRON)
+        elif pattern == 'K_BRACE':
+            mid_z = (inner_z0 + inner_z1) * 0.5
+            _create_oriented_beam(bm, (fx, by0 + timber_w * 0.4, inner_z0),
+                                  (fx, bcy, mid_z), width=timber_d * 0.9, depth=timber_w * 0.85, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (fx, by0 + timber_w * 0.4, inner_z1),
+                                  (fx, bcy, mid_z), width=timber_d * 0.9, depth=timber_w * 0.85, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (fx, by1 - timber_w * 0.4, inner_z0),
+                                  (fx, bcy, mid_z), width=timber_d * 0.9, depth=timber_w * 0.85, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (fx, by1 - timber_w * 0.4, inner_z1),
+                                  (fx, bcy, mid_z), width=timber_d * 0.9, depth=timber_w * 0.85, mat_index=MAT_INDEX_TIMBER)
+
+
+# ---------------------------------------------------------------------------
+# Hajfin facade dressing
+#
+# Hajfin shacks are patched together from whatever the pirates scavenged, so a
+# wall is never one uniform field of planks.  Every facade gets one of several
+# treatments: plain driftwood boarding broken up with timber bracing and
+# battens, a half-timber fachwerk panel, a patch of faded red or blue paint,
+# a panel of salt-grey deck planking torn off a wreck, or a wall of pale
+# salvaged timber.
+# ---------------------------------------------------------------------------
+
+# Facade treatments and the material their boarding panel uses.
+_HAJFIN_WALL_VARIANT_MATS = {
+    'PAINTED_RED': MAT_INDEX_PAINTED_PLANKS,
+    'PAINTED_BLUE': MAT_INDEX_PAINTED_PLANKS_BLUE,
+    'DECK': MAT_INDEX_FLOOR,
+    'SALVAGED': MAT_INDEX_WOOD,
+    'FACHWERK': MAT_INDEX_PLASTER,
+}
+
+
+def _hajfin_rect_subtract(base, holes):
+    """Split a 2D rectangle (x0, x1, z0, z1) into a list of rectangles
+    that together cover the base rectangle minus every hole rectangle."""
+    rects = [tuple(base)]
+    for hole in holes:
+        hx0, hx1, hz0, hz1 = hole
+        nxt = []
+        for (x0, x1, z0, z1) in rects:
+            if hx1 <= x0 + 1e-5 or hx0 >= x1 - 1e-5 or hz1 <= z0 + 1e-5 or hz0 >= z1 - 1e-5:
+                nxt.append((x0, x1, z0, z1))
+                continue
+            if hz0 > z0 + 1e-5:
+                nxt.append((x0, x1, z0, min(hz0, z1)))
+            if hz1 < z1 - 1e-5:
+                nxt.append((x0, x1, max(hz1, z0), z1))
+            zlo = max(z0, hz0)
+            zhi = min(z1, hz1)
+            if hx0 > x0 + 1e-5:
+                nxt.append((x0, min(hx0, x1), zlo, zhi))
+            if hx1 < x1 - 1e-5:
+                nxt.append((max(hx1, x0), x1, zlo, zhi))
+        rects = nxt
+    return rects
+
+
+def _build_hajfin_wall_panel_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
+                               mat_index=MAT_INDEX_DRIFTWOOD, openings=None, proud=0.055,
+                               top_clear=0.0):
+    """Lays a panel of alternate boarding over a wall running along the X axis.
+
+    The panel is applied slightly proud of the wall face (and sunk a couple of
+    centimetres into it) so it never z-fights with the driftwood siding below.
+    Openings are cut out of the panel so windows and doors stay usable.
+    ``top_clear`` drops the head of the panel below the wall head so the proud
+    panel edge cannot poke out through the roof eave that oversails the wall."""
+    face_y = y + sgn_y * (wall_th * 0.5)
+    panel_th = proud + 0.03
+    cy = face_y + sgn_y * (panel_th * 0.5 - 0.03)
+    panel_top = z1 - max(0.0, top_clear)
+    if panel_top - z0 < 0.4:
+        panel_top = z0 + 0.4
+    for (rx0, rx1, rz0, rz1) in _hajfin_rect_subtract((x0, x1, z0, panel_top), openings or []):
+        w = rx1 - rx0
+        h = rz1 - rz0
+        if w < 0.10 or h < 0.10:
+            continue
+        create_box(bm, (w, panel_th, h), ((rx0 + rx1) * 0.5, cy, (rz0 + rz1) * 0.5),
+                   mat_index=mat_index, is_wall=True)
+
+
+def _build_hajfin_wall_panel_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0,
+                               mat_index=MAT_INDEX_DRIFTWOOD, openings=None, proud=0.055,
+                               top_clear=0.0):
+    """Y-axis twin of :func:`_build_hajfin_wall_panel_x`."""
+    face_x = x + sgn_x * (wall_th * 0.5)
+    panel_th = proud + 0.03
+    cx = face_x + sgn_x * (panel_th * 0.5 - 0.03)
+    panel_top = z1 - max(0.0, top_clear)
+    if panel_top - z0 < 0.4:
+        panel_top = z0 + 0.4
+    for (ry0, ry1, rz0, rz1) in _hajfin_rect_subtract((y0, y1, z0, panel_top), openings or []):
+        w = ry1 - ry0
+        h = rz1 - rz0
+        if w < 0.10 or h < 0.10:
+            continue
+        create_box(bm, (panel_th, w, h), (cx, (ry0 + ry1) * 0.5, (rz0 + rz1) * 0.5),
+                   mat_index=mat_index, is_wall=True)
+
+
+def _build_hajfin_wall_frame_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
+                               braces=True, battens=True, top_clear=0.0):
+    """Timber frame applied to an X-running wall: sill rail, top plate, corner
+    posts, optional vertical battens and diagonal knee braces in the top corners.
+    This is what breaks up the endless field of big rough planks.
+
+    ``top_clear`` lowers the top of the frame below the wall head.  Hajfin eaves
+    overhang the walls and dip below the wall top, so a frame that reaches the
+    very top of the wall would punch straight through the roof soffit.
+    """
+    span = x1 - x0
+    height = z1 - z0
+    if span < 0.8 or height < 0.8:
+        return
+    rail_w = 0.20
+    rail_d = 0.09
+    # Seat the frame against the wall face, burying 2cm inside it so nothing floats.
+    fy = y + sgn_y * (wall_th * 0.5 + rail_d * 0.5 - 0.02)
+    mx = (x0 + x1) * 0.5
+    z_top = z1 - max(0.0, top_clear)
+    if z_top - z0 < 0.6:
+        z_top = z0 + 0.6
+
+    # Sill rail and top plate
+    create_box(bm, (span, rail_d, rail_w), (mx, fy, z0 + rail_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (span, rail_d, rail_w), (mx, fy, z_top - rail_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+    # Corner posts
+    for sx in (x0 + rail_w * 0.5, x1 - rail_w * 0.5):
+        create_box(bm, (rail_w, rail_d, z_top - z0), (sx, fy, (z0 + z_top) * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # Vertical battens splitting the big planks into narrower boards
+    if battens:
+        num_battens = max(1, int(round(span / 2.4)))
+        for i in range(1, num_battens):
+            bx = x0 + span * (i / float(num_battens))
+            create_box(bm, (0.11, rail_d * 0.85, z_top - z0 - rail_w * 2.0),
+                       (bx, fy, (z0 + z_top) * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # Diagonal knee braces in the top corners
+    if braces:
+        bl = min(1.55, span * 0.28, (z_top - z0) * 0.26)
+        for sx, dirx in ((x0, 1.0), (x1, -1.0)):
+            p_a = (sx + dirx * rail_w * 0.5, fy, z_top - rail_w - bl)
+            p_b = (sx + dirx * (rail_w * 0.5 + bl), fy, z_top - rail_w)
+            _create_oriented_beam(bm, p_a, p_b, width=0.16, depth=rail_d, mat_index=MAT_INDEX_TIMBER)
+
+
+def _build_hajfin_wall_frame_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0,
+                               braces=True, battens=True, top_clear=0.0):
+    """Y-axis twin of :func:`_build_hajfin_wall_frame_x`."""
+    span = y1 - y0
+    height = z1 - z0
+    if span < 0.8 or height < 0.8:
+        return
+    rail_w = 0.20
+    rail_d = 0.09
+    fx = x + sgn_x * (wall_th * 0.5 + rail_d * 0.5 - 0.02)
+    my = (y0 + y1) * 0.5
+    z_top = z1 - max(0.0, top_clear)
+    if z_top - z0 < 0.6:
+        z_top = z0 + 0.6
+
+    create_box(bm, (rail_d, span, rail_w), (fx, my, z0 + rail_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (rail_d, span, rail_w), (fx, my, z_top - rail_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+    for sy in (y0 + rail_w * 0.5, y1 - rail_w * 0.5):
+        create_box(bm, (rail_d, rail_w, z_top - z0), (fx, sy, (z0 + z_top) * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    if battens:
+        num_battens = max(1, int(round(span / 2.4)))
+        for i in range(1, num_battens):
+            by = y0 + span * (i / float(num_battens))
+            create_box(bm, (rail_d * 0.85, 0.11, z_top - z0 - rail_w * 2.0),
+                       (fx, by, (z0 + z1) * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    if braces:
+        bl = min(1.55, span * 0.28, (z_top - z0) * 0.26)
+        for sy, diry in ((y0, 1.0), (y1, -1.0)):
+            p_a = (fx, sy + diry * rail_w * 0.5, z_top - rail_w - bl)
+            p_b = (fx, sy + diry * (rail_w * 0.5 + bl), z_top - rail_w)
+            _create_oriented_beam(bm, p_a, p_b, width=rail_d, depth=0.16, mat_index=MAT_INDEX_TIMBER)
+
+
+def _hajfin_opening_x(cx, cz, w, h):
+    """Opening rectangle (x0, x1, z0, z1) for a window/door in an X-running wall."""
+    return (cx - w * 0.5, cx + w * 0.5, cz - h * 0.5, cz + h * 0.5)
+
+
+def _hajfin_opening_y(cy, cz, w, h):
+    """Opening rectangle (y0, y1, z0, z1) for a window/door in a Y-running wall."""
+    return (cy - w * 0.5, cy + w * 0.5, cz - h * 0.5, cz + h * 0.5)
+
+
+def _build_hajfin_wall_dressing_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
+                                   variant='BRACED', openings=None, top_clear=0.0):
+    """Dress an X-running Hajfin wall with patchwork boarding and timber framing."""
+    ax0, ax1 = min(x0, x1), max(x0, x1)
+    if ax1 - ax0 < 0.8 or z1 - z0 < 0.8:
+        return
+    holes = list(openings or [])
+
+    if variant == 'FACHWERK':
+        _build_hajfin_wall_panel_x(bm, ax0, ax1, y, z0, z1, wall_th=wall_th, sgn_y=sgn_y,
+                                   mat_index=MAT_INDEX_PLASTER, openings=holes, proud=0.045,
+                                   top_clear=top_clear)
+        _build_fachwerk_bracing_x(bm, ax0, ax1, y, z0, z1 - top_clear, wall_th=wall_th,
+                                  pattern='X_BRACE', sgn_y=sgn_y)
+        return
+
+    mat_index = _HAJFIN_WALL_VARIANT_MATS.get(variant)
+    if mat_index is not None:
+        _build_hajfin_wall_panel_x(bm, ax0, ax1, y, z0, z1, wall_th=wall_th, sgn_y=sgn_y,
+                                   mat_index=mat_index, openings=holes, top_clear=top_clear)
+    _build_hajfin_wall_frame_x(bm, ax0, ax1, y, z0, z1, wall_th=wall_th, sgn_y=sgn_y,
+                               top_clear=top_clear)
+
+
+def _build_hajfin_wall_dressing_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0,
+                                   variant='BRACED', openings=None, top_clear=0.0):
+    """Dress a Y-running Hajfin wall with patchwork boarding and timber framing."""
+    ay0, ay1 = min(y0, y1), max(y0, y1)
+    if ay1 - ay0 < 0.8 or z1 - z0 < 0.8:
+        return
+    holes = list(openings or [])
+
+    if variant == 'FACHWERK':
+        _build_hajfin_wall_panel_y(bm, ay0, ay1, x, z0, z1, wall_th=wall_th, sgn_x=sgn_x,
+                                   mat_index=MAT_INDEX_PLASTER, openings=holes, proud=0.045,
+                                   top_clear=top_clear)
+        _build_fachwerk_bracing_y(bm, ay0, ay1, x, z0, z1 - top_clear, wall_th=wall_th,
+                                  pattern='X_BRACE', sgn_x=sgn_x)
+        return
+
+    mat_index = _HAJFIN_WALL_VARIANT_MATS.get(variant)
+    if mat_index is not None:
+        _build_hajfin_wall_panel_y(bm, ay0, ay1, x, z0, z1, wall_th=wall_th, sgn_x=sgn_x,
+                                   mat_index=mat_index, openings=holes, top_clear=top_clear)
+    _build_hajfin_wall_frame_y(bm, ay0, ay1, x, z0, z1, wall_th=wall_th, sgn_x=sgn_x,
+                               top_clear=top_clear)
 
 def _build_wall_with_window_x(bm, x0, x1, y, z0, z1, win_cx, win_cz, win_w=0.75, win_h=0.75,
                               wall_th=0.26, facing_north=False):
@@ -1564,6 +1975,38 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
             p_eave_r = (x1 + ov_xr, gy, z_eave_r)
             _create_oriented_beam(bm, p_peak, p_eave_r, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
 
+    # 3b. Heavy Timber Eave Fascia Beams capping the exposed roof slab edges.
+    #     A board runs the full length of the roof along every outside eave so the
+    #     raw 0.14m slab cut edge is hidden behind a proper fascia beam instead of
+    #     showing as a bare driftwood strip.
+    for sgn_eave, ov_e, ex_e, ez_e in ((-1.0, ov_xl, x0 - ov_xl, z_eave_l),
+                                       (1.0, ov_xr, x1 + ov_xr, z_eave_r)):
+        if ov_e > 0.05:
+            create_box(bm, (0.26, span_y + 0.10, 0.30),
+                       (ex_e - sgn_eave * 0.02, my, ez_e - 0.11),
+                       mat_index=MAT_INDEX_TIMBER)
+
+    # 3c. Gable End Truss (tie beam + king post) for multi-tier side roofs.
+    #     Side roofs stop flush against the tall central wall on one side, so their
+    #     gable ends overhang the wall plane and the raw slab end edges are left
+    #     open.  A timber tie beam across the gable plus a king post up to the ridge
+    #     closes and frames that gable end the same way a barn truss would.
+    if overhang_x_left is not None or overhang_x_right is not None:
+        tie_x0 = x0 - ov_xl
+        tie_x1 = x1 + ov_xr
+        tie_span = max(0.2, tie_x1 - tie_x0)
+        for gy in (y0 - overhang_y, y1 + overhang_y):
+            p_tie_l = (tie_x0, gy, z_eave_l)
+            p_tie_r = (tie_x1, gy, z_eave_r)
+            # Tie beam spanning the whole gable at eave level
+            _create_oriented_beam(bm, p_tie_l, p_tie_r, width=0.20, depth=0.22,
+                                  mat_index=MAT_INDEX_TIMBER)
+            # Vertical king post from the tie beam up to the ridge beam
+            t = (mx - tie_x0) / tie_span
+            tie_z_at_mx = z_eave_l + (z_eave_r - z_eave_l) * t
+            _create_oriented_beam(bm, (mx, gy, tie_z_at_mx), (mx, gy, peak_z - 0.14),
+                                  width=0.20, depth=0.20, mat_index=MAT_INDEX_TIMBER)
+
     # 4. Ridge Dorsal Fin Bone & Jagged Teeth Crest
     _build_ridge_crest_fin_and_spines(bm, mx, y0 - overhang_y, y1 + overhang_y,
                                       peak_z + 0.18, fin_scale=fin_scale, num_teeth=num_ridge_teeth)
@@ -2118,6 +2561,35 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
         # Upper floor front-left corner (clear of stair landing exit at East)
         _build_hajfin_barrel(bm, -hw + wall_th + 0.75, -hd + wall_th + 0.75, z_ground=z_mid + 0.08, ang=1.1, scale=0.52)
         _build_hajfin_crate(bm, -hw + wall_th + 0.85, -hd + wall_th + 1.55, z_ground=z_mid + 0.08, yaw=-0.22, scale=0.55)
+
+        # 2B. SCAFFOLDED FACADE PATCHWORK
+        # Every elevation is boarded from a different salvage: braced plain planks,
+        # a half-timber fachwerk panel, a faded paint patch and a strip of wreck deck.
+        _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z_mid,
+                                       wall_th=wall_th, sgn_x=-1.0, variant='BRACED',
+                                       openings=[_hajfin_opening_y(0.0, z0 + story_h * 0.52, 0.85, 0.85)])
+        _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
+                                       wall_th=wall_th, sgn_x=1.0, variant='PAINTED_RED',
+                                       openings=[_hajfin_opening_y(hd * 0.35, z0 + story_h * 0.52, 0.85, 0.85)])
+        _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, hd - wall_th * 0.5, z0, z_mid,
+                                       wall_th=wall_th, sgn_y=1.0, variant='SALVAGED')
+        _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
+                                       wall_th=wall_th, sgn_y=-1.0, variant='FACHWERK',
+                                       openings=[_hajfin_opening_x(0.0, z0 + 0.0, door_w, door_h)])
+
+        # Upper storey gets its own patchwork so the tower never reads as one big slab.
+        _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
+                                       wall_th=wall_th, sgn_x=-1.0, variant='DECK', top_clear=0.30,
+                                       openings=[_hajfin_opening_y(0.0, z_mid + story_h * 0.52, 0.85, 0.85)])
+        _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
+                                       wall_th=wall_th, sgn_x=1.0, variant='BRACED', top_clear=0.30,
+                                       openings=[_hajfin_opening_y(-hd * 0.35, z_mid + story_h * 0.52, 0.85, 0.85)])
+        _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, hd - wall_th * 0.5, z_mid, z1,
+                                       wall_th=wall_th, sgn_y=1.0, variant='PAINTED_BLUE', top_clear=0.30,
+                                       openings=[_hajfin_opening_x(0.0, z_mid + story_h * 0.52, 0.85, 0.85)])
+        _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z_mid, z1,
+                                       wall_th=wall_th, sgn_y=-1.0, variant='BRACED', top_clear=0.30,
+                                       openings=[_hajfin_opening_x(0.0, z_mid + story_h * 0.52, 0.85, 0.85)])
     else:
         # SINGLE STORY VAULTED INTERIOR
         _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z1,
@@ -2142,9 +2614,22 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
         _build_hajfin_barrel(bm, -hw + wall_th + 1.65, hd - wall_th - 0.70, z_ground=z0 + 0.14, ang=0.4, scale=0.52)
         _build_hajfin_barrel(bm, hw - wall_th - 0.80, hd - wall_th - 0.75, z_ground=z0 + 0.14, ang=2.2, scale=0.55)
 
+        # 2B. SCAFFOLDED FACADE PATCHWORK (single storey shacks)
+        _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z1,
+                                       wall_th=wall_th, sgn_x=-1.0, variant='BRACED', top_clear=0.30,
+                                       openings=[_hajfin_opening_y(0.0, z0 + height * 0.52, 0.85, 0.85)])
+        _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z1,
+                                       wall_th=wall_th, sgn_x=1.0, variant='FACHWERK', top_clear=0.30,
+                                       openings=[_hajfin_opening_y(0.0, z0 + height * 0.52, 0.85, 0.85)])
+        _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, hd - wall_th * 0.5, z0, z1,
+                                       wall_th=wall_th, sgn_y=1.0, variant='PAINTED_RED', top_clear=0.30)
+        _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z0, z1,
+                                       wall_th=wall_th, sgn_y=-1.0, variant='DECK', top_clear=0.30,
+                                       openings=[_hajfin_opening_x(0.0, z0 + 0.0, door_w, door_h)])
+
     # 3. Solid Gable Triangle Walls (Front & Rear) - SEALS ROOF GAPS 100%
-    _build_gable_triangle_wall(bm, -hw, hw, -hd + wall_th * 0.5, z1, peak_z, wall_th=wall_th)
-    _build_gable_triangle_wall(bm, -hw, hw, hd - wall_th * 0.5, z1, peak_z, wall_th=wall_th)
+    _build_gable_triangle_wall(bm, -hw, hw, -hd + wall_th * 0.5, z1, peak_z, wall_th=wall_th, style='FACHWERK')
+    _build_gable_triangle_wall(bm, -hw, hw, hd - wall_th * 0.5, z1, peak_z, wall_th=wall_th, style='PAINTED')
 
     # 4. 4 Oversized Timber Corner Columns
     col_size = 0.46
@@ -2550,6 +3035,45 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
         p_eave1 = Vector((r_top * math.cos(thB), r_top * math.sin(thB), z1 - 0.10))
         _create_oriented_beam(bm, p_eave0, p_eave1, width=col_size * 0.70, depth=0.22, mat_index=MAT_INDEX_TIMBER)
 
+    # 3B. SCAFFOLDED FACADE PATCHWORK
+    # A timber belt course wraps the tapered shell and vertical battens split the
+    # big plank fields, so the round hut reads as boarded from salvaged timber
+    # instead of one continuous sweep of rough planks.
+    for i in range(num_facets):
+        th0 = theta_corners[i]
+        th1 = theta_corners[i + 1]
+        pb0 = Vector((r_base * math.cos(th0), r_base * math.sin(th0), z0))
+        pb1 = Vector((r_base * math.cos(th1), r_base * math.sin(th1), z0))
+        pt0 = Vector((r_top * math.cos(th0), r_top * math.sin(th0), z1))
+        pt1 = Vector((r_top * math.cos(th1), r_top * math.sin(th1), z1))
+        mb = (pb0 + pb1) * 0.5
+        mt = (pt0 + pt1) * 0.5
+        u_vec = (pb1 - pb0).normalized()
+        w_vec = (mt - mb).normalized()
+        n_vec = u_vec.cross(w_vec).normalized()
+        facet_len = (mt - mb).length
+        proud = n_vec * 0.045
+
+        # Belt course beam running around the shell just above the window band
+        t_belt = 0.74
+        belt_l = (pb0 + (pt0 - pb0) * t_belt) + proud
+        belt_r = (pb1 + (pt1 - pb1) * t_belt) + proud
+        _create_oriented_beam(bm, belt_l, belt_r, width=0.17, depth=0.10, mat_index=MAT_INDEX_TIMBER)
+
+        # Sill rail around the base of the shell
+        sill_l = pb0 + u_vec * 0.12 + proud
+        sill_r = pb1 - u_vec * 0.12 + proud
+        _create_oriented_beam(bm, sill_l, sill_r, width=0.17, depth=0.10, mat_index=MAT_INDEX_TIMBER)
+
+        # Vertical batten splitting the plank field (skipped on the door facet)
+        if i != 6:
+            bat_u = 0.30
+            bat_bot = (pb0 + (pb1 - pb0) * bat_u) + proud * 1.4
+            bat_top = (pt0 + (pt1 - pt0) * bat_u) + proud * 1.4
+            bat_bot = bat_bot - w_vec * 0.25
+            bat_top = bat_top - w_vec * 0.20
+            _create_oriented_beam(bm, bat_bot, bat_top, width=0.13, depth=0.09, mat_index=MAT_INDEX_TIMBER)
+
     # 4. Accessible Mezzanine Loft & Interior Staircase (if num_floors >= 2 or height >= 5.5)
     if num_fl >= 2 or height >= 5.5:
         z_mez = z0 + 3.8
@@ -2693,25 +3217,37 @@ def _build_carved_bone_lookout_frame(bm, cx, cy, cz, width=1.80, height=1.35):
                         rotation=(math.pi * 0.5, 0, 0), mat_index=MAT_INDEX_BONE)
 
 
-def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26):
+def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26, force=False, style='DRIFTWOOD'):
     """Builds a gable triangle wall on the West or East side with VERTICAL wood planks
-    matching the wall siding orientation and continuous grain with zero stepped cuts."""
-    roof_style = getattr(_HAJFIN_ROOF_PROPS, 'roof_style', 'SHINGLES') if _HAJFIN_ROOF_PROPS is not None else 'SHINGLES'
-    # Sway roofs construct their own curved gable end walls matching the sway sag;
-    # flat and tarp roofs do not have triangular timber gables.
-    if roof_style in ('SWAY', 'TARP', 'FLAT'):
-        return
+    matching the wall siding orientation and continuous grain with zero stepped cuts.
+    Supports 'DRIFTWOOD', 'FACHWERK' (plaster + king-post struts), and 'PAINTED' (weathered crimson planks)."""
+    if not force:
+        roof_style = getattr(_HAJFIN_ROOF_PROPS, 'roof_style', 'SHINGLES') if _HAJFIN_ROOF_PROPS is not None else 'SHINGLES'
+        if roof_style in ('SWAY', 'TARP', 'FLAT'):
+            return
     min_y = min(y0, y1)
     max_y = max(y0, y1)
     my = (min_y + max_y) * 0.5
     half_th = wall_th * 0.5
     uv_layer = bm.loops.layers.uv.verify()
 
-    # Tuck top sloped edges slightly (0.06m) below roof shingles into roof slab soffit
-    # to eliminate coplanar z-fighting with the roof shingles while ensuring zero gap.
-    tuck_z = 0.06
-    z_peak_w = z_peak - tuck_z
-    z_eave_w = z_eave - tuck_z
+    # Penetrate into roof soffit to seal bargeboard gap
+    half_span = (max_y - min_y) * 0.5
+    peak_h = max(0.8, z_peak - z_eave)
+    overhang = 0.50
+    slope = peak_h / max(0.5, half_span + overhang)
+    wall_eave_lift = slope * overhang + 0.12
+    wall_peak_lift = 0.20
+    z_peak_w = z_peak + wall_peak_lift
+    z_eave_w = z_eave + wall_eave_lift
+
+    if style == 'FACHWERK':
+        face_mat = MAT_INDEX_PLASTER
+    elif style == 'PAINTED':
+        face_mat = MAT_INDEX_PAINTED_PLANKS
+    else:
+        face_mat = MAT_INDEX_DRIFTWOOD
+
     v_fl = bm.verts.new(Vector((x - half_th, min_y, z_eave_w)))
     v_fr = bm.verts.new(Vector((x - half_th, max_y, z_eave_w)))
     v_fp = bm.verts.new(Vector((x - half_th, my, z_peak_w)))
@@ -2721,23 +3257,23 @@ def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26):
     v_bp = bm.verts.new(Vector((x + half_th, my, z_peak_w)))
 
     f_front = bm.faces.new([v_fl, v_fr, v_fp])
-    f_front.material_index = MAT_INDEX_DRIFTWOOD
+    f_front.material_index = face_mat
     f_front.tag = True
 
     f_back = bm.faces.new([v_bp, v_br, v_bl])
-    f_back.material_index = MAT_INDEX_DRIFTWOOD
+    f_back.material_index = face_mat
     f_back.tag = True
 
     f_bot = bm.faces.new([v_fl, v_bl, v_br, v_fr])
-    f_bot.material_index = MAT_INDEX_DRIFTWOOD
+    f_bot.material_index = MAT_INDEX_TIMBER
     f_bot.tag = True
 
     f_sl = bm.faces.new([v_fl, v_fp, v_bp, v_bl])
-    f_sl.material_index = MAT_INDEX_DRIFTWOOD
+    f_sl.material_index = MAT_INDEX_TIMBER
     f_sl.tag = True
 
     f_sr = bm.faces.new([v_fr, v_br, v_bp, v_fp])
-    f_sr.material_index = MAT_INDEX_DRIFTWOOD
+    f_sr.material_index = MAT_INDEX_TIMBER
     f_sr.tag = True
 
     for f in (f_front, f_back):
@@ -2748,6 +3284,25 @@ def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26):
         for loop in f.loops:
             co = loop.vert.co
             loop[uv_layer].uv = Vector((co.x * 0.18, co.z * 0.18))
+
+    # Add decorative half-timber framing for FACHWERK or PAINTED styles
+    if style in ('FACHWERK', 'PAINTED'):
+        beam_w = 0.18
+        beam_d = 0.12
+        for sgn_x in (-1.0, 1.0):
+            fx = x + sgn_x * (half_th + 0.02)
+            # Base horizontal tie beam
+            create_box(bm, (beam_d, max_y - min_y + 0.10, beam_w), (fx, my, z_eave + beam_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+            # Sloped verge timbers
+            _create_oriented_beam(bm, (fx, min_y, z_eave + beam_w), (fx, my, z_peak - 0.05), width=beam_d, depth=beam_w, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (fx, max_y, z_eave + beam_w), (fx, my, z_peak - 0.05), width=beam_d, depth=beam_w, mat_index=MAT_INDEX_TIMBER)
+            # Vertical king post
+            create_box(bm, (beam_d, beam_w, peak_h - beam_w), (fx, my, z_eave + beam_w + (peak_h - beam_w) * 0.5), mat_index=MAT_INDEX_TIMBER)
+            # Diagonal struts
+            _create_oriented_beam(bm, (fx, min_y + half_span * 0.45, z_eave + beam_w), (fx, my, z_eave + peak_h * 0.55), width=beam_d, depth=beam_w * 0.85, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(bm, (fx, max_y - half_span * 0.45, z_eave + beam_w), (fx, my, z_eave + peak_h * 0.55), width=beam_d, depth=beam_w * 0.85, mat_index=MAT_INDEX_TIMBER)
+            # Center bolted iron bracket
+            create_box(bm, (0.04, 0.24, 0.24), (fx + sgn_x * 0.04, my, z_eave + peak_h * 0.55), mat_index=MAT_INDEX_IRON)
 
 
 def _build_bone_scale_roof_gable_ew(bm, x0, x1, y0, y1, eave_z, peak_h,
@@ -3274,6 +3829,25 @@ def _build_hajfin_crate_blockhouse(bm, props, width=9.5, depth=9.5, height=8.4, 
     create_box(bm, (width - wall_th * 2, wall_th, story_h),
                (0.0, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
 
+    # SCAFFOLDED FACADE PATCHWORK - a blockhouse is still a patched-together hulk
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='BRACED',
+                                   openings=[_hajfin_opening_y(hd * 0.25, z0 + story_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=1.0, variant='FACHWERK',
+                                   openings=[_hajfin_opening_y(0.0, z0 + story_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, hd - wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_y=1.0, variant='DECK')
+    _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_y=-1.0, variant='PAINTED_RED',
+                                   openings=[_hajfin_opening_x(0.0, z0 + door_h * 0.5, door_w, door_h)])
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='PAINTED_BLUE', top_clear=0.30,
+                                   openings=[_hajfin_opening_y(hd * 0.25, z_mid + story_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
+                                   wall_th=wall_th, sgn_x=1.0, variant='SALVAGED', top_clear=0.30,
+                                   openings=[_hajfin_opening_y(0.0, z_mid + story_h * 0.52, 0.85, 0.85)])
+
     # Scarce upper floor furnishings (front-right corner, clear of west stairwell landing)
     _build_hajfin_barrel(bm, hw - wall_th - 0.80, -hd + wall_th + 0.80, z_ground=z_mid + 0.08, ang=0.6, scale=0.52)
     _build_hajfin_crate(bm, hw - wall_th - 1.55, -hd + wall_th + 0.85, z_ground=z_mid + 0.08, yaw=-0.25, scale=0.55)
@@ -3414,6 +3988,25 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
     _build_wall_with_window_x(bm, counter_w * 0.5, hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
                               win_cx=r_cx, win_cz=z0 + 2.1, win_w=0.85, win_h=0.85,
                               wall_th=wall_th, facing_north=False)
+
+    # 3D. SCAFFOLDED FACADE PATCHWORK
+    # The trading post is a patched-together hulk: plain braced planking, a
+    # half-timber fachwerk storehouse wall, a faded red paint panel and a strip
+    # of salt-grey deck planking torn off a wrecked hull.
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='BRACED', top_clear=0.45,
+                                   openings=[_hajfin_opening_y(0.0, z0 + 2.1, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=1.0, variant='PAINTED_BLUE', top_clear=0.45,
+                                   openings=[_hajfin_opening_y(0.0, z0 + 2.1, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, hd - wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_y=1.0, variant='FACHWERK', top_clear=0.45)
+    _build_hajfin_wall_dressing_x(bm, -hw + wall_th, -counter_w * 0.5, -hd + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_y=-1.0, variant='SALVAGED', top_clear=0.45,
+                                   openings=[_hajfin_opening_x(door_cx, z0 + door_h * 0.5, door_w, door_h)])
+    _build_hajfin_wall_dressing_x(bm, counter_w * 0.5, hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_y=-1.0, variant='DECK', top_clear=0.45,
+                                   openings=[_hajfin_opening_x(r_cx, z0 + 2.1, 0.85, 0.85)])
 
     # Massive Ground Floor Corner Columns
     # Flanking roof eaves drop below z_mid at the outer corners; columns must terminate
@@ -3659,6 +4252,22 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
         for cy in (u_y0, u_y1):
             _build_chunky_corner_column(bm, cx, cy, z_mid, z_top - 0.08, size=0.40, extend_top=0.0)
 
+    # SCAFFOLDED FACADE PATCHWORK on the upper lookout room
+    # Half-timber fachwerk on one flank, faded red paint on the other, plain
+    # braced boarding and a grey deck panel to finish the tower off.
+    _build_hajfin_wall_dressing_y(bm, u_y0 + wall_th, u_y1 - wall_th, -u_hw + wall_th * 0.5, z_mid, z_top,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='FACHWERK', top_clear=0.30,
+                                   openings=[_hajfin_opening_y(u_my, z_mid + u_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_y(bm, u_y0 + wall_th, u_y1 - wall_th, u_hw - wall_th * 0.5, z_mid, z_top,
+                                   wall_th=wall_th, sgn_x=1.0, variant='PAINTED_RED', top_clear=0.30,
+                                   openings=[_hajfin_opening_y(u_my, z_mid + u_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_x(bm, -u_hw + wall_th, u_hw - wall_th, u_y1 - wall_th * 0.5, z_mid, z_top,
+                                   wall_th=wall_th, sgn_y=1.0, variant='BRACED', top_clear=0.30)
+    _build_hajfin_wall_dressing_x(bm, -u_hw + wall_th, u_hw - wall_th, u_y0 + wall_th * 0.5, z_mid, z_top,
+                                   wall_th=wall_th, sgn_y=-1.0, variant='SALVAGED', top_clear=0.30,
+                                   openings=[_hajfin_opening_x(-u_hw * 0.45, z_mid + u_h * 0.52, 0.85, 0.85),
+                                             _hajfin_opening_x(u_hw * 0.45, z_mid + u_h * 0.52, 0.85, 0.85)])
+
     # 8. Interior Baseboard Skirting around upper room floor (seals wall-to-floor joints 100%)
     skirt_w = u_w - wall_th * 2.0
     skirt_d = u_d - wall_th * 2.0
@@ -3707,8 +4316,8 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
 
     # Upper Tower Main Roof with full gable triangles
     u_peak_z = z_top + 3.2
-    _build_gable_triangle_wall(bm, -u_hw, u_hw, u_y0, z_top, u_peak_z, wall_th=wall_th)
-    _build_gable_triangle_wall(bm, -u_hw, u_hw, u_y1, z_top, u_peak_z, wall_th=wall_th)
+    _build_gable_triangle_wall(bm, -u_hw, u_hw, u_y0, z_top, u_peak_z, wall_th=wall_th, style='PAINTED')
+    _build_gable_triangle_wall(bm, -u_hw, u_hw, u_y1, z_top, u_peak_z, wall_th=wall_th, style='FACHWERK')
     _build_bone_scale_roof_gable(bm, -u_hw, u_hw, u_y0, u_y1, z_top, 3.2,
                                  overhang_x=0.50, overhang_y=0.50, fin_scale=1.7, num_ridge_teeth=7)
 
@@ -3748,6 +4357,20 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
                                   wall_th=wall_th, rot_z=0.0,
                                   include_leaf=getattr(props, 'include_door_leaves', False))
 
+    # 2B. SCAFFOLDED FACADE PATCHWORK
+    # The great hall is a patched-together hulk: a half-timber fachwerk nave,
+    # faded red paint on one flank, braced plain boarding on the other and a
+    # strip of salt-grey deck planking on the aisle walls.
+    _build_hajfin_wall_dressing_x(bm, -nave_w * 0.5, nave_w * 0.5, hd - wall_th * 0.5, z0, z0 + nave_h,
+                                   wall_th=wall_th, sgn_y=1.0, variant='FACHWERK', top_clear=0.30)
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -nave_w * 0.5 + wall_th * 0.5, z0, z0 + nave_h,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='BRACED', top_clear=0.30)
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, nave_w * 0.5 - wall_th * 0.5, z0, z0 + nave_h,
+                                   wall_th=wall_th, sgn_x=1.0, variant='PAINTED_RED', top_clear=0.30)
+    _build_hajfin_wall_dressing_x(bm, -nave_w * 0.5 + wall_th, nave_w * 0.5 - wall_th, -hd + wall_th * 0.5, z0, z0 + nave_h,
+                                   wall_th=wall_th, sgn_y=-1.0, variant='SALVAGED', top_clear=0.30,
+                                   openings=[_hajfin_opening_x(0.0, z0 + door_h * 0.5, door_w, door_h)])
+
     # 3. Raised Chieftain Dais / Throne Platform at Rear with Megalodon Throne
     dais_w = 5.2
     dais_d = 4.0
@@ -3778,6 +4401,13 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
         sx = sgn_x * (nave_w * 0.5 + side_w * 0.5)
         create_box(bm, (side_w, depth * 0.85, side_h), (sx, 0.0, z0 + side_h * 0.5),
                    mat_index=MAT_INDEX_DRIFTWOOD)
+
+    # 4B. SCAFFOLDED FACADE PATCHWORK on the flanking aisle walls
+    for sgn_x in (-1.0, 1.0):
+        aisle_x = sgn_x * (hw - wall_th * 0.5)
+        _build_hajfin_wall_dressing_y(bm, -depth * 0.425, depth * 0.425, aisle_x, z0, z0 + side_h,
+                                       wall_th=wall_th, sgn_x=sgn_x, top_clear=0.40,
+                                       variant='DECK' if sgn_x < 0.0 else 'PAINTED_BLUE')
 
     # 5. Accessible 2nd-Level Mezzanine Galleries inside Nave
     # Walkway slabs begin right where the stairs top out, keeping the stair run completely open above!
@@ -3860,16 +4490,17 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
         _build_hajfin_hanging_banner(bm, ban_x, -hd - 0.12, ban_z, width=1.75, height=1.90, facing_y=-1.0)
 
     # 8. Solid Gable Triangle Walls (Zero gaps for standard gables; sway roofs build curved gables)
-    _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, -hd, z0 + nave_h, nave_peak_z, wall_th=wall_th)
-    _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, hd, z0 + nave_h, nave_peak_z, wall_th=wall_th)
+    _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, -hd, z0 + nave_h, nave_peak_z, wall_th=wall_th, style='FACHWERK')
+    _build_gable_triangle_wall(bm, -nave_w * 0.5, nave_w * 0.5, hd, z0 + nave_h, nave_peak_z, wall_th=wall_th, style='PAINTED')
 
     for sgn_x in (-1.0, 1.0):
         ax0 = sgn_x * (nave_w * 0.5)
         ax1 = sgn_x * hw
         fl_x0 = min(ax0, ax1)
         fl_x1 = max(ax0, ax1)
-        _build_gable_triangle_wall(bm, fl_x0, fl_x1, -hd * 0.85, z0 + side_h, side_peak_z, wall_th=wall_th, force=True)
-        _build_gable_triangle_wall(bm, fl_x0, fl_x1, hd * 0.85, z0 + side_h, side_peak_z, wall_th=wall_th, force=True)
+        aisle_gable_style = 'PAINTED' if sgn_x < 0.0 else 'FACHWERK'
+        _build_gable_triangle_wall(bm, fl_x0, fl_x1, -hd * 0.85, z0 + side_h, side_peak_z, wall_th=wall_th, force=True, style=aisle_gable_style)
+        _build_gable_triangle_wall(bm, fl_x0, fl_x1, hd * 0.85, z0 + side_h, side_peak_z, wall_th=wall_th, force=True, style=aisle_gable_style)
 
     # 9. Multi-Tier Dense Bone Scale Roofs
     for sgn_x in (-1.0, 1.0):
@@ -3931,6 +4562,8 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     tap_x1 = hw - wing_w + wall_th * 0.5
     door_w = float(getattr(props, 'door_width', 1.85))
     door_h = min(float(getattr(props, 'door_height', 3.50)), story_h * 0.85)
+    tap_door_w = door_w
+    tap_door_h = door_h
     _build_wall_with_door_opening(bm, tap_x0, tap_x1, -hd + m_d - wall_th * 0.5,
                                   z0, z_mid, door_cx=(tap_x0 + tap_x1) * 0.5, door_w=door_w, door_h=door_h,
                                   wall_th=wall_th, rot_z=math.pi,
@@ -4014,11 +4647,11 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                               win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=True)
 
     create_box(bm, (wing_w - wall_th * 2, wall_th, story_h),
-               (hw - wing_w * 0.5, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+               (hw - wing_w * 0.5, hd - wall_th * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_PAINTED_PLANKS, is_wall=True)
     create_box(bm, (wall_th, wing_d - wall_th * 2, story_h),
-               (hw - wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+               (hw - wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_PAINTED_PLANKS, is_wall=True)
     create_box(bm, (wall_th, wing_d, story_h),
-               (hw - wing_w + wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+               (hw - wing_w + wall_th * 0.5, hd - wing_d * 0.5, z_mid + story_h * 0.5), mat_index=MAT_INDEX_PAINTED_PLANKS, is_wall=True)
 
     # 7. Front Entrance Shark Jaw Doorway
     door_w = float(getattr(props, 'door_width', 1.90))
@@ -4028,21 +4661,47 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
                                   wall_th=wall_th, rot_z=0.0,
                                   include_leaf=getattr(props, 'include_door_leaves', False))
 
-    # 8. Corner Columns (supporting eaves cleanly without punching through shingles)
+    # 8. Corner Columns (all 6 corners of the L-shape supporting eaves cleanly)
     col_size = 0.46
-    for cx in (-hw, hw):
-        for cy in (-hd, my + m_d * 0.5):
-            _build_chunky_corner_column(bm, cx, cy, z0, z1, size=col_size, extend_top=0.0)
+    _build_chunky_corner_column(bm, -hw, -hd, z0, z1, size=col_size, extend_top=0.0)
+    _build_chunky_corner_column(bm, -hw, -hd + m_d, z0, z1, size=col_size, extend_top=0.0)
+    _build_chunky_corner_column(bm, hw, -hd, z0, z1, size=col_size, extend_top=0.0)
+    _build_chunky_corner_column(bm, hw, hd, z0, z1, size=col_size, extend_top=0.0)
+    _build_chunky_corner_column(bm, hw - wing_w, hd, z0, z1, size=col_size, extend_top=0.0)
+    _build_chunky_corner_column(bm, hw - wing_w, hd - wing_d, z0, z1, size=col_size, extend_top=0.0)
+
+    # Exterior SCAFFOLDED FACADE PATCHWORK along the flank side walls
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, -hd + m_d - wall_th, -hw + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='FACHWERK',
+                                   openings=[_hajfin_opening_y(my, z0 + story_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, -hd + m_d - wall_th, hw - wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=1.0, variant='BRACED',
+                                   openings=[_hajfin_opening_y(my, z0 + story_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, -hd + m_d - wall_th, -hw + wall_th * 0.5, z_mid, z1,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='BRACED', top_clear=0.30,
+                                   openings=[_hajfin_opening_y(my, z_mid + story_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, -hd + m_d - wall_th, hw - wall_th * 0.5, z_mid, z1,
+                                   wall_th=wall_th, sgn_x=1.0, variant='PAINTED_BLUE', top_clear=0.30,
+                                   openings=[_hajfin_opening_y(my, z_mid + story_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_y(bm, hd - wing_d - wall_th * 0.5, hd - wall_th, hw - wing_w + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='DECK',
+                                   openings=[_hajfin_opening_y(hd - wing_d * 0.5, z0 + story_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wing_w + wall_th * 0.5, -hd + m_d - wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_y=-1.0, variant='BRACED',
+                                   openings=[_hajfin_opening_x((tap_x0 + tap_x1) * 0.5, z0 + tap_door_h * 0.5, tap_door_w, tap_door_h)])
+    _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z_mid, z1,
+                                   wall_th=wall_th, sgn_y=-1.0, variant='FACHWERK', top_clear=0.30,
+                                   openings=[_hajfin_opening_x(-hw * 0.4, z_mid + story_h * 0.52, 0.85, 0.85)])
 
     # 9. Solid Gable Triangle Walls & Bone Scale Roofs (Zero sky gaps!)
     m_peak_z = z1 + 3.8
     w_peak_z = z1 + 3.0
-    _build_gable_triangle_wall(bm, -hw, hw, -hd, z1, m_peak_z, wall_th=wall_th)
-    _build_gable_triangle_wall(bm, -hw, hw, -hd + m_d, z1, m_peak_z, wall_th=wall_th)
+    _build_gable_triangle_wall(bm, -hw, hw, -hd, z1, m_peak_z, wall_th=wall_th, style='FACHWERK')
+    _build_gable_triangle_wall(bm, -hw, hw, -hd + m_d, z1, m_peak_z, wall_th=wall_th, style='FACHWERK')
 
     # Gable walls sealing both ends of the wing roof (solves open hole)
-    _build_gable_triangle_wall(bm, hw - wing_w, hw, hd - wing_d, z1, w_peak_z, wall_th=wall_th)
-    _build_gable_triangle_wall(bm, hw - wing_w, hw, hd, z1, w_peak_z, wall_th=wall_th)
+    _build_gable_triangle_wall(bm, hw - wing_w, hw, hd - wing_d, z1, w_peak_z, wall_th=wall_th, style='PAINTED')
+    _build_gable_triangle_wall(bm, hw - wing_w, hw, hd, z1, w_peak_z, wall_th=wall_th, style='PAINTED')
 
     _build_bone_scale_roof_gable(bm, -hw, hw, -hd, -hd + m_d, z1, 3.8,
                                  overhang_x=0.55, overhang_y=0.55, fin_scale=1.7, num_ridge_teeth=8)
@@ -4518,8 +5177,22 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
     _build_wall_with_window_x(bm, -c_hw + wall_th, c_hw - wall_th, c_y + c_hd - wall_th * 0.5, z_mid, z1,
                               win_cx=0.0, win_cz=z_mid + story_h * 0.52, win_w=0.85, win_h=0.85,
                               wall_th=wall_th, facing_north=True)
-    create_box(bm, (wall_th, cabin_d - wall_th * 2, story_h), (-c_hw + wall_th * 0.5, c_y, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    create_box(bm, (wall_th, cabin_d - wall_th * 2, story_h), (c_hw - wall_th * 0.5, c_y, z_mid + story_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    create_box(bm, (wall_th, cabin_d - wall_th * 2, story_h), (-c_hw + wall_th * 0.5, c_y, z_mid + story_h * 0.5), mat_index=MAT_INDEX_PAINTED_PLANKS, is_wall=True)
+    create_box(bm, (wall_th, cabin_d - wall_th * 2, story_h), (c_hw - wall_th * 0.5, c_y, z_mid + story_h * 0.5), mat_index=MAT_INDEX_PAINTED_PLANKS, is_wall=True)
+
+    # Side wall half-timber Fachwerk bracing + patchwork boarding
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, c_y + c_hd - wall_th, -c_hw + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=-1.0, variant='FACHWERK',
+                                   openings=[_hajfin_opening_y(c_y, z0 + story_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_y(bm, -hd + wall_th, c_y + c_hd - wall_th, c_hw - wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_x=1.0, variant='BRACED',
+                                   openings=[_hajfin_opening_y(c_y, z0 + story_h * 0.52, 0.85, 0.85)])
+    _build_hajfin_wall_dressing_x(bm, -c_hw + wall_th, c_hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
+                                   wall_th=wall_th, sgn_y=-1.0, variant='SALVAGED',
+                                   openings=[_hajfin_opening_x(0.0, z0 + door_h * 0.5, door_w, door_h)])
+    _build_hajfin_wall_dressing_x(bm, -c_hw + wall_th, c_hw - wall_th, -hd + wall_th * 0.5, z_mid, z1,
+                                   wall_th=wall_th, sgn_y=-1.0, variant='PAINTED_BLUE', top_clear=0.30,
+                                   openings=[_hajfin_opening_x(0.0, z_mid + story_h * 0.52, 0.85, 0.85)])
 
     # Cabin Corner Columns
     col_size = 0.44
@@ -4635,8 +5308,8 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
     build_ship_anchor(bm, x=c_hw + 1.6, y=hd - 1.2, z_ground=deck_top_z, yaw=-0.45, pitch=-0.28, scale=1.0)
 
     # 7. Bone Scale / Plank Gable Roof on Cabin with Solid Gables
-    _build_gable_triangle_wall(bm, -c_hw, c_hw, -hd, z1, peak_z, wall_th=wall_th)
-    _build_gable_triangle_wall(bm, -c_hw, c_hw, c_y + c_hd, z1, peak_z, wall_th=wall_th)
+    _build_gable_triangle_wall(bm, -c_hw, c_hw, -hd, z1, peak_z, wall_th=wall_th, style='PAINTED')
+    _build_gable_triangle_wall(bm, -c_hw, c_hw, c_y + c_hd, z1, peak_z, wall_th=wall_th, style='FACHWERK')
     if getattr(props, 'roof_style', 'PLANKS') == 'PLANKS':
         _build_hajfin_supported_plank_roof(bm, -c_hw, c_hw, -hd, c_y + c_hd, z1, roof_h,
                                            overhang_x=0.55, overhang_y=0.55)
