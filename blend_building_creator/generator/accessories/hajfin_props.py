@@ -1393,25 +1393,27 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
         plank_faces = create_box(bm, (p_width, p_len, plank_th), (0.0, 0.0, 0.0), mat_index=mat_planks)
         # Map each board to exactly ONE plank band of the deck atlas, and slide it
         # along the atlas per board so no two planks are carbon copies.
-        # Sample a small patch out of the middle of the deck atlas: each board gets
-        # a single plank face with the grain running along its length, and a
-        # per-board U slide keeps them from being carbon copies.
-        v_base = 0.44
-        v_span = 0.10
-        u_off = ((i * 0.37) % 0.72)
-        u_len = 0.15
+        # Sample one WHOLE plank row of the deck atlas, and slide along it per
+        # board.  A tiny UV patch (the old 0.15 x 0.10 window) sampled a flat
+        # gradient and read as blurry low-res; a full row keeps the grain crisp.
+        rows = 12.0
+        row_h = 1.0 / rows
+        v_base = (i % int(rows)) * row_h
+        v_span = row_h
+        u_off = ((i * 0.23) % 0.5)
+        u_len = 0.5
         for f in plank_faces:
             fn = f.normal
             for loop in f.loops:
                 lc = loop.vert.co
                 if abs(fn.z) > 0.5:
-                    u = 0.05 + u_off + (lc.y / p_len + 0.5) * u_len
+                    u = u_off + (lc.y / p_len + 0.5) * u_len
                     v = v_base + (lc.x / p_width + 0.5) * v_span
                 elif abs(fn.x) >= abs(fn.y):
-                    u = 0.05 + u_off + (lc.y / p_len + 0.5) * u_len
+                    u = u_off + (lc.y / p_len + 0.5) * u_len
                     v = v_base + (lc.z / plank_th + 0.5) * v_span
                 else:
-                    u = 0.05 + u_off + (lc.x / p_width + 0.5) * u_len
+                    u = u_off + (lc.x / p_width + 0.5) * u_len
                     v = v_base + (lc.z / plank_th + 0.5) * v_span
                 loop[uv_layer_planks].uv = Vector((u, v))
         transform_faces(plank_faces, M_plank)
@@ -1458,3 +1460,41 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
 
     return True
 
+
+# ---------------------------------------------------------------------------
+# 15. Standalone Feature Builders (Rope Bridge / Ship Anchor / Crow's Nest)
+#
+# Each of these is a self-contained, placeable piece so it can be dropped into
+# the world on its own instead of only existing as part of the pirate tavern.
+# They follow the prop-registry convention: build_*(bm, x, y, z_ground, ang, ...).
+# ---------------------------------------------------------------------------
+
+def build_rope_bridge_feature(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
+                              span=8.0, width=1.35, sag=0.45,
+                              post_height=1.35, with_pylons=True):
+    """Free-standing suspended rope bridge spanning ``span`` metres from (x, y)."""
+    p0 = Vector((x, y, z_ground))
+    p1 = Vector((x + math.cos(ang) * span, y + math.sin(ang) * span, z_ground))
+    return build_suspended_rope_bridge(
+        bm, p0, p1, width=width, sag=sag,
+        with_pylons=with_pylons, post_height=post_height,
+    )
+
+
+def build_ship_anchor_feature(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
+                              pitch=-0.20, scale=1.0):
+    """Single salvaged ship anchor standing on the ground, coiled hawser at its foot."""
+    return build_ship_anchor(bm, x=x, y=y, z_ground=z_ground,
+                             yaw=ang, pitch=pitch, scale=scale)
+
+
+def build_crows_nest_feature(bm, x=0.0, y=0.0, z_ground=0.0, ang=0.0,
+                             height=9.5, mast_radius=0.26,
+                             with_lantern=True, with_ratlines=True,
+                             with_yardarm=True):
+    """Salvaged mainmast with crow's nest basket, yardarm, furled sail and ratlines."""
+    return build_ship_mast_with_crows_nest(
+        bm, x=x, y=y, z_base=z_ground, height=height, mast_radius=mast_radius,
+        rot_z=ang, with_ratlines=with_ratlines, with_yardarm=with_yardarm,
+        with_lantern=with_lantern,
+    )

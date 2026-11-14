@@ -314,6 +314,19 @@ for _s in (
           'hajfin_props', 'build_skull_totem_post', 0.70, height=2.8),
     _spec('HAJFIN_CRATE', "Hajfin Cargo Crate", 'HAJFIN', "Artist Crate.fbx heavy weathered timber trade crate with iron banding",
           'hajfin_props', 'build_single_hajfin_crate', 0.85, scale=0.75),
+    _spec('ROPE_BRIDGE', "Rope Bridge", 'HAJFIN',
+          "Free-standing suspended rope bridge with plank walkway, handrails and pylons",
+          'hajfin_props', 'build_rope_bridge_feature', 1.20,
+          span=8.0, width=1.35, sag=0.45, post_height=1.35, with_pylons=True),
+    _spec('SHIP_ANCHOR', "Ship Anchor", 'HAJFIN',
+          "Salvaged iron ship anchor with a hawser spiralled up the shank and a rope coil at its foot",
+          'hajfin_props', 'build_ship_anchor_feature', 0.90,
+          pitch=-0.20, scale=1.0),
+    _spec('CROWS_NEST', "Crow's Nest Mast", 'HAJFIN',
+          "Salvaged mainmast with crow's nest basket, yardarm, furled white sail, ratlines and lantern",
+          'hajfin_props', 'build_crows_nest_feature', 1.30,
+          height=9.5, mast_radius=0.26, with_lantern=True,
+          with_ratlines=True, with_yardarm=True),
 ):
     PROP_REGISTRY[_s.key] = _s
 

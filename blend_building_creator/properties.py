@@ -2830,6 +2830,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('LIGHT', "Lighting", "Lanterns, chandeliers"),
             ('YARD', "Yard & Garden", "Barrels, crates, wells, planters"),
             ('SIGN', "Signs & Boards", "Hanging signs, notice boards, awnings"),
+            ('HAJFIN', "Hajfin Nautical", "Rope bridges, ship anchors, crow's nest masts"),
         ],
         default='ALL',
     )
@@ -2838,6 +2839,9 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         name="Prop",
         description="Individual furniture/prop piece to create (same builder as interior furnishing)",
         items=[
+            ('ROPE_BRIDGE', "Rope Bridge", "Free-standing suspended rope bridge with plank walkway, handrails and pylons"),
+            ('SHIP_ANCHOR', "Ship Anchor", "Salvaged iron ship anchor with rope hawser and coil"),
+            ('CROWS_NEST', "Crow's Nest Mast", "Salvaged mainmast with crow's nest, yardarm, furled sail and ratlines"),
             ('ROYAL_THRONE', "Royal Throne", "Carved royal throne chair on a stepped dais with heraldic crest and velvet cushion"),
             ('BED', "Bed", "Timber bed with straw mattress + blanket"),
             ('CHAIR', "Chair", "High-back tavern chair"),
