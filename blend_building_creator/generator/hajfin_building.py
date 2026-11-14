@@ -3686,8 +3686,10 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
         _create_oriented_beam(bm, p_deep, p0, width=0.42, depth=0.42, mat_index=MAT_INDEX_TIMBER)
 
     # 3. Intermediate Ring Tie-Beams & Iron Plates (Two bays)
+    # Brace two bays below ground as well (mirroring the above-ground rhythm), so
+    # the sunk portion of the tower is cross-braced like the rest of it.
     num_bays = 2
-    z_bays = [0.0, stilt_h * 0.48, stilt_h]
+    z_bays = [-6.0, -3.0, 0.0, stilt_h * 0.48, stilt_h]
 
     for b_idx in range(1, len(z_bays)):
         bz = z_bays[b_idx]
@@ -3708,7 +3710,7 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
             create_box(bm, (0.46, 0.46, 0.34), (sgn_x * c_hw, sgn_y * c_hd, bz), mat_index=MAT_INDEX_IRON)
 
     # 4. Diagonal X-Bracing Timbers in each bay (Front, Back, Left, Right)
-    for b_idx in range(num_bays):
+    for b_idx in range(len(z_bays) - 1):
         z_bot = z_bays[b_idx]
         z_top = z_bays[b_idx + 1]
         t_bot = z_bot / stilt_h
