@@ -884,6 +884,19 @@ def _build_rope_tube(bm, points, radius=0.03, sides=8, mat_index=None,
     pts = [Vector(p) for p in points]
     if len(pts) < 2:
         return
+    # Soft-curve the spine (two Chaikin passes).  Raw procedural paths have hard
+    # elbows where a straight run meets a helix, and a rope tube bends far too
+    # sharply at those corners.  End points are preserved.
+    for _it in range(2):
+        if len(pts) < 3:
+            break
+        smooth = [pts[0]]
+        for i in range(len(pts) - 1):
+            a, b = pts[i], pts[i + 1]
+            smooth.append(a * 0.75 + b * 0.25)
+            smooth.append(a * 0.25 + b * 0.75)
+        smooth.append(pts[-1])
+        pts = smooth
     uv_layer = bm.loops.layers.uv.verify()
     up_ref = Vector((0.0, 0.0, 1.0))
     rings = []
@@ -1138,7 +1151,9 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
 
     # 6. Natural Nautical Hawser Rope spiraling down the shank
     rope_rad = 0.032 * scale
-    rope_r = (shank_w * 0.75 + 0.062)
+    # Sit the wrap just clear of the shank's square corners (corner radius
+    # shank_w*0.707) so the rope hugs the timber without cutting into it.
+    rope_r = (shank_w * 0.707 + rope_rad * 0.85)
     spiral_top = stock_z - 0.20
     z_bot = 0.12
     turns = 4.2
@@ -1148,12 +1163,15 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
     # 1. Tuck the start inside the shackle ring, then lash straight down the side
     #    of the shank.  Offset to +x so it passes BESIDE the cross-stock instead of
     #    clipping straight through it.
-    lash_x = shank_w * 0.55 + rope_rad * 0.6
-    lash_y = -(shank_w * 0.55 + rope_rad * 0.6)
+    lash_x = shank_w * 0.55 + rope_rad * 0.75
+    lash_y = -(shank_w * 0.55 + rope_rad * 0.75)
     ring_z = eye_z + 0.14
-    for k in range(0, 8):
-        t = k / 7.0
-        pts.append(M @ Vector((lash_x, lash_y, ring_z + (spiral_top - ring_z) * t)))
+    # Gentle arc from inside the ring down to where the spiral starts, bowing out
+    # slightly so it reads as rope hanging rather than a rigid pole.
+    for k in range(0, 9):
+        t = k / 8.0
+        bow = math.sin(t * math.pi) * (0.05 * scale)
+        pts.append(M @ Vector((lash_x + bow, lash_y - bow, ring_z + (spiral_top - ring_z) * t)))
 
     # 2. Spiral down the shank
     ang0 = math.pi * 0.25
@@ -1177,8 +1195,8 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
 
     # 4. Flat coil on the deck, wound inward, with the final end dipping under the
     #    first turn so no loose rope end is left showing.
-    coil_turns = 2.6
-    coil_steps = 72
+    coil_turns = 2.4
+    coil_steps = 76
     r_out = 0.30 * scale
     r_in = 0.075 * scale
     ca0 = math.atan2(coil_c.y, coil_c.x)
@@ -1186,14 +1204,20 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
         t = i / float(coil_steps)
         r = r_out + (r_in - r_out) * t
         ang = ca0 + t * (math.pi * 2.0 * coil_turns)
+        # Ramp the coil up as it winds in so successive turns stack instead of
+        # intersecting each other at the same height.
+        rise = (1.0 - (r - r_in) / max(1e-4, (r_out - r_in))) * rope_rad * 0.55
         pts.append(Vector((coil_c.x + math.cos(ang) * r,
                            coil_c.y + math.sin(ang) * r,
-                           coil_z)))
-    hide = 0.16 * scale
-    for k in range(1, 5):
-        t = k / 4.0
-        pts.append(Vector((coil_c.x + (r_in * 0.35) * (1.0 - t),
-                           coil_c.y, coil_z - hide * t)))
+                           coil_z + rise)))
+    # Final end tucks down inside the coil's centre and stops (no crossing tail).
+    for k in range(1, 6):
+        t = k / 5.0
+        rr = r_in * (1.0 - 0.55 * t)
+        ang = ca0 + (coil_turns + 0.25 * t) * (math.pi * 2.0)
+        pts.append(Vector((coil_c.x + math.cos(ang) * rr,
+                           coil_c.y + math.sin(ang) * rr,
+                           coil_z + rope_rad * 0.55 - rope_rad * 1.2 * t)))
 
     # One welded tube for the whole hawser: identical fibre scale everywhere and
     # only two ends, both hidden (ring + under the coil).
