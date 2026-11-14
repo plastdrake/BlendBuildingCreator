@@ -6557,13 +6557,36 @@ def _cylindrical_round_hut_uvs(bm, u_scale=0.18, v_scale=0.18):
             continue
         if imported_layer is not None and f[imported_layer]:
             continue
-        n = f.normal
-        if abs(n.z) > 0.45:
-            continue
+        # No normal filter: any leftover driftwood sliver (window jamb liner,
+        # chamfer strip) would otherwise keep its old skewed facet UVs and show up
+        # as a small diagonal-boarded patch beside the openings.
         for loop in f.loops:
             co = loop.vert.co
             ang = _m.atan2(co.y, co.x)
             loop[uv_layer].uv = Vector((ang * 2.2 * u_scale, co.z * v_scale))
+
+
+# Per-preset banner nudges applied on top of the automatic placement.
+# (delta_x, delta_y, delta_z, delta_height_fraction) in metres / span fraction.
+# Only presets that need a hand nudge are listed; everything else uses the
+# automatic gable placement.
+_HAJFIN_BANNER_TWEAKS = {
+    # keep it clear of the shark-jaw doorway below
+    'HAJFIN_STILT_SHACK_T1': (0.0, 0.0, 0.42, 0.05),
+    'HAJFIN_STILT_SHACK_T2': (-0.55, 0.0, 0.20, 0.04),
+    # the round hut's raycast lands in the attic; drop it onto the wall band
+    'HAJFIN_NET_HUT_T1': (0.0, 0.0, -0.35, 0.0),
+    # tapered shell: stand it further off the wall so it does not clip in
+    'HAJFIN_NET_HUT_T2': (0.0, 0.16, -0.55, 0.0),
+    # clear of the watchtower ladder entrance
+    'HAJFIN_LOOKOUT_HUT_T1': (0.0, 0.0, 0.70, 0.06),
+    # clear of the mezzanine / gallery beams
+    'HAJFIN_CHIEFTAIN_HUT_T1': (0.0, 0.0, 0.45, 0.06),
+    # hang it from the gable beam, nudged toward the gable centre
+    'HAJFIN_PIRATE_TAVERN_T1': (-0.55, 0.0, -0.25, -0.03),
+    # clear of the upper-storey window
+    'HAJFIN_FISH_DEPOT_T1': (0.75, 0.0, 0.10, 0.0),
+}
 
 
 def _attach_faction_banner(bm, props, style):
@@ -6622,6 +6645,9 @@ def _attach_faction_banner(bm, props, style):
                 Vector((px, front_y - 2.5, probe_z)), Vector((0.0, 1.0, 0.0)))
             if hit is None or abs(nrm.z) > 0.45:
                 continue
+            # Reject hits that punched through a doorway onto an interior wall.
+            if (hit.y - front_y) > 2.2:
+                continue
             cols.append((px, hit.y, probe_z))
             break
     if not cols:
@@ -6631,6 +6657,12 @@ def _attach_faction_banner(bm, props, style):
     px = (min(c[0] for c in tall) + max(c[0] for c in tall)) * 0.5
     hy = tall[len(tall) // 2][1]
     pz = top_z
+    tweak = _HAJFIN_BANNER_TWEAKS.get(getattr(props, 'preset_name', ''))
+    if tweak:
+        dx, dy, dz, dfrac = tweak
+        px += dx
+        hy += dy
+        pz += dz + span * dfrac
     # cz is the banner's CENTRE, so pass the probe height directly: adding half a
     # banner height pushed the cloth up inside the wall/roof.
     _build_hajfin_hanging_banner(bm, px, hy - 0.06, pz,
