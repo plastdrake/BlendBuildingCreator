@@ -160,6 +160,7 @@ class VIEW3D_PT_fantasy_building_export(bpy.types.Panel):
         )
         box = layout.box()
         box.label(text="Selected Scope", icon='FILTER')
+        box.prop(props, "export_faction")
         box.prop(props, "export_category")
         box.prop(props, "export_family")
         if props.export_family != 'ALL':

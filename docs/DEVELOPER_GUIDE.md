@@ -176,3 +176,32 @@ print(f'Vertices: {len(mesh.vertices)}, Polys: {len(mesh.polygons)}')
 
 ### Automated Headless Rendering
 Refer to `scratch/render_castle_tiers.py` for headless camera tracking (`TRACK_TO`), sunlight configuration, EEVEE rendering, and artifact output.
+
+## 6. Faction-Scoped Batch Export
+
+Every preset family carries a `faction` key (`HUMAN`, `HAJFIN`, ...) in
+`BUILDING_FAMILIES`. The batch exporter filters on it, so you can export one
+faction or all of them.
+
+**In the UI** (`Exporting` panel):
+- *Faction Scope* (`export_faction`) - `All Factions`, `Human`, `Hajfin`, ...
+- *Selected Scope* then narrows by category -> preset family -> tier, and the
+  category/family lists only show the chosen faction's entries.
+- *Export All Presets & Tiers* has its own `Faction` selector in its dialog.
+
+**From Python / headless:**
+
+```python
+from blend_building_creator.batch_export import export_all, export_selected, _jobs_for_scope
+
+export_all("//fbx_exports", faction="HAJFIN")          # only Hajfin presets
+export_all("//fbx_exports", faction="ALL")             # every faction
+export_selected("//fbx_exports", faction="HAJFIN", category="SHANTIES")
+export_selected("//fbx_exports", faction="ALL", family_id="HAJFIN_PIER", tier="T2")
+
+print(len(_jobs_for_scope(faction="HAJFIN")))          # dry-run the job list
+```
+
+Adding a faction only needs one edit: append it to `_FACTION_ITEMS` in
+`properties.py` (the scene Faction enum and the export scope both read that list)
+and tag the new families with `'faction': '<ID>'`.

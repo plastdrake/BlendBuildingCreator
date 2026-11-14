@@ -400,6 +400,16 @@ class BUILDING_OT_export_all_preset_tiers_fbx(bpy.types.Operator):
         description="Keep generated buildings after the FBX batch completes",
         default=False
     )
+    faction: bpy.props.EnumProperty(
+        name="Faction",
+        description="Export every preset of one faction, or every faction",
+        items=[
+            ('ALL', "All Factions", "Export every faction", 'WORLD', 0),
+            ('HUMAN', "Human", "Classic medieval fantasy kingdom architecture", 'COMMUNITY', 1),
+            ('HAJFIN', "Hajfin", "Shark-humanoid pirate shanties, stilt huts, and bone trading posts", 'MOD_OCEAN', 2),
+        ],
+        default='ALL',
+    )
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self, width=520)
@@ -414,6 +424,7 @@ class BUILDING_OT_export_all_preset_tiers_fbx(bpy.types.Operator):
 
             if not _launch_background_export(
                     self, export_dir, "export_all",
+                    faction=self.faction,
                     keep_buildings=self.keep_buildings):
                 return {'CANCELLED'}
             self.report(
@@ -443,6 +454,7 @@ class BUILDING_OT_export_selected_preset_fbx(bpy.types.Operator):
             os.makedirs(export_dir, exist_ok=True)
             if not _launch_background_export(
                     self, export_dir, "export_selected",
+                    faction=getattr(props, 'export_faction', 'ALL'),
                     category=props.export_category,
                     family_id=props.export_family,
                     tier=props.export_tier,

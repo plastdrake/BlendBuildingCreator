@@ -107,6 +107,30 @@ def on_tier_updated(self, context):
     on_property_updated(self, context)
 
 
+# Canonical faction list.  Both the scene "Faction" setting and the batch-export
+# faction scope are built from this, so adding a faction only needs one edit.
+_FACTION_ITEMS = (
+    ('HUMAN', "Human", "Classic medieval fantasy kingdom architecture", 'COMMUNITY', 0),
+    ('HAJFIN', "Hajfin", "Shark-humanoid pirate shanties, stilt huts, and bone trading posts", 'MOD_OCEAN', 1),
+)
+
+
+def export_faction_items(self, _context):
+    """Faction scope for the batch export: one faction, or every faction."""
+    return [('ALL', "All Factions", "Export every faction's presets")] + [
+        (ident, label, description, icon, index)
+        for ident, label, description, icon, index in _FACTION_ITEMS
+    ]
+
+
+def _export_faction_of(self):
+    """Faction the export controls are scoped to (falls back to the scene faction)."""
+    scope = getattr(self, 'export_faction', 'ALL') if self else 'ALL'
+    if scope and scope != 'ALL':
+        return scope
+    return getattr(self, 'faction', 'HUMAN') if self else 'HUMAN'
+
+
 def _export_category_for_family(family):
     """Return the user-facing category used by the scoped export controls."""
     if family.get('id') == 'KNIGHTS_MANOR':
@@ -124,7 +148,7 @@ def _export_category_for_family(family):
 def export_category_items(self, _context):
     from .presets import BUILDING_FAMILIES
 
-    faction = getattr(self, 'faction', 'HUMAN') if self else 'HUMAN'
+    faction = _export_faction_of(self)
     categories = sorted({
         _export_category_for_family(family)
         for family in BUILDING_FAMILIES
@@ -149,7 +173,7 @@ def export_category_items(self, _context):
 def export_family_items(self, _context):
     from .presets import BUILDING_FAMILIES
 
-    faction = getattr(self, 'faction', 'HUMAN') if self else 'HUMAN'
+    faction = _export_faction_of(self)
     families = [
         family for family in BUILDING_FAMILIES
         if family.get('faction', 'HUMAN') == faction
@@ -175,6 +199,13 @@ def export_tier_items(self, _context):
         for tier_label, preset_key, description in family['tiers']
         if preset_key in PRESETS
     ]
+
+
+def on_export_faction_updated(self, _context):
+    """Reset the narrower scopes whenever the faction scope changes."""
+    self.export_category = 'ALL'
+    self.export_family = 'ALL'
+    self.export_tier = 'ALL'
 
 
 def on_export_category_updated(self, _context):
@@ -325,10 +356,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
     faction: EnumProperty(
         name="Faction",
         description="Select civilization / faction architecture and style",
-        items=[
-            ('HUMAN', "Human", "Classic medieval fantasy kingdom architecture", 'COMMUNITY', 0),
-            ('HAJFIN', "Hajfin", "Shark-humanoid pirate shanties, stilt huts, and bone trading posts", 'MOD_OCEAN', 1),
-        ],
+        items=_FACTION_ITEMS,
         default='HUMAN',
         update=on_faction_updated
     )
@@ -374,6 +402,13 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         description="Filter architectural presets by category",
         items=preset_category_items,
         default=None
+    )
+
+    export_faction: EnumProperty(
+        name="Faction Scope",
+        description="Restrict the batch export to one faction, or export every faction",
+        items=export_faction_items,
+        update=on_export_faction_updated,
     )
 
     export_category: EnumProperty(
