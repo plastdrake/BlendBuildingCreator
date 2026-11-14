@@ -6651,6 +6651,19 @@ def _attach_faction_banner(bm, props, style):
             cols.append((px, hit.y, probe_z))
             break
     if not cols:
+        # No usable wall at banner height (open-sided buildings, deep verandas,
+        # towers on stilts).  Plant a banner pole beside the entrance instead, so
+        # every building still shows its faction.
+        px = cx + max(1.35, banner_w * 1.15)
+        py = front_y + 0.45
+        pole_h = banner_h + 0.80
+        create_box(bm, (0.12, 0.12, pole_h), (px, py, z_min + pole_h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (px, py, z_min + pole_h * 0.35),
+                          major_radius=0.10, minor_radius=0.022, mat_index=MAT_INDEX_IRON)
+        _build_hajfin_hanging_banner(bm, px, py - 0.075,
+                                     z_min + pole_h - 0.48 - banner_h * 0.5,
+                                     width=banner_w, height=banner_h, facing_y=-1.0)
         return
     top_z = max(c[2] for c in cols)
     tall = [c for c in cols if c[2] > top_z - 0.45]
@@ -6661,12 +6674,14 @@ def _attach_faction_banner(bm, props, style):
         # Round huts have no gable to hang a banner on, so it flies from a short
         # pole planted in the roof apex instead (both tiers).
         peak_z = z_max
-        pole_h = 1.15
+        pole_h = banner_h + 0.85
         create_box(bm, (0.11, 0.11, pole_h), (0.0, 0.0, peak_z + pole_h * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-        create_torus_ring(bm, (0.0, 0.0, peak_z + pole_h * 0.55),
+        create_torus_ring(bm, (0.0, 0.0, peak_z + pole_h * 0.42),
                           major_radius=0.10, minor_radius=0.022, mat_index=MAT_INDEX_IRON)
-        _build_hajfin_hanging_banner(bm, 0.0, -0.055, peak_z + pole_h + banner_h * 0.5,
+        # Hang the cloth 0.5m down the pole so the pole tip stands proud above it
+        _build_hajfin_hanging_banner(bm, 0.0, -0.055,
+                                     peak_z + pole_h - 0.50 - banner_h * 0.5,
                                      width=banner_w, height=banner_h, facing_y=-1.0)
         return
 
