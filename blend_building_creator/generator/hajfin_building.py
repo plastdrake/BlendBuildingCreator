@@ -6831,49 +6831,51 @@ def _remove_duplicate_hajfin_faces(bm):
 # SALVAGED HULL STRUCTURES
 # =============================================================================
 
-def _build_hajfin_hull_shelter(bm, props, width=4.0, depth=7.0, height=2.8, found_h=0.0):
+def _build_hajfin_hull_shelter(bm, props, width=4.4, depth=7.5, height=2.7, found_h=0.0):
     """An upturned broken ship's boat used as a beach shelter.
 
-    Boat-shaped in plan (widest amidships, tapered and joined at the stern, torn at
-    the bow), with even planked strakes, a heavy keel beam along the crown and stem
-    and stern posts where the boards converge.  The hull carries real thickness.
+    A proper boat in plan: a pointy bow, full amidships beam and a rounded joined
+    stern.  The cross-section is a round-bilge V so the keel reads as a ridge rather
+    than a tube.  Longitudinal strakes run the length, converging at bow and stern,
+    carried on visible frames under a heavy keel beam with stem and stern posts.
     """
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
     uv_layer = bm.loops.layers.uv.verify()
-    arc_n = 14
-    stations = max(9, int(depth / 0.55))
-    thick = 0.11
-    rake = 0.6
-
-    wob = {}
-    for k in range(arc_n + 1):
-        h = math.sin(k * 78.233) * 43758.5453
-        wob[k] = ((h - math.floor(h)) - 0.5)
+    arc_n = 16
+    stations = max(11, int(depth / 0.5))
+    thick = 0.12
+    rake = 0.7
 
     def _plan(i):
-        t = min(1.0, max(0.0, i / float(stations)))
-        return 0.50 + 0.50 * (math.sin(math.pi * (0.5 + 0.5 * t)) ** 0.6)
+        t = i / float(stations)
+        if t < 0.5:
+            return 0.26 + 0.74 * ((t * 2.0) ** 1.15)
+        return 1.0 - 0.42 * (((t - 0.5) * 2.0) ** 1.7)
 
-    def _normal(k):
+    # torn bow jitter per column
+    torn = {}
+    for k in range(arc_n + 1):
+        h = math.sin(k * 12.9898) * 43758.5453
+        torn[k] = ((h - math.floor(h)) - 0.5)
+
+    def _pt(i, k, y, inflate=0.0):
         th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
-        return Vector((math.sin(th), 0.0, math.cos(th)))
-
-    def _fac(i, k, y, inflate=0.0):
-        d = _normal(k)
+        x = math.sin(th)
+        z = math.cos(th)
         ps = _plan(i)
-        jy = (wob[k] * 1.1) if i == 0 else 0.0
-        jz = (wob[k] * 0.35) if i == 0 else 0.0
-        return Vector((d.x * (hw * ps - inflate), y + jy - inflate * 0.5,
-                       z0 + d.z * (height * (0.55 + 0.45 * ps) - inflate) + jz))
+        jy = torn[k] * 1.1 if i == 0 else 0.0
+        jz = torn[k] * 0.4 if i == 0 else 0.0
+        return Vector((x * (hw * ps - inflate), y + jy - inflate * 0.5,
+                       z0 + z * (height * (0.55 + 0.45 * ps) - inflate) + jz))
 
-    # 1. Hull shell (outer + inner, torn bow, even strakes)
+    # 1. Planked shell, even strakes, torn bow, joined stern
     outer_prev = inner_prev = None
     for i in range(stations + 1):
         y = -hd + depth * (i / float(stations))
-        o = [_fac(i, k, y) for k in range(arc_n + 1)]
-        inn = [_fac(i, k, y, inflate=thick) for k in range(arc_n + 1)]
+        o = [_pt(i, k, y) for k in range(arc_n + 1)]
+        inn = [_pt(i, k, y, inflate=thick) for k in range(arc_n + 1)]
         if outer_prev is not None:
             for k in range(arc_n):
                 for (cur, prev, flip, ii) in ((o, outer_prev, False, i), (inn, inner_prev, True, i)):
@@ -6889,15 +6891,23 @@ def _build_hajfin_hull_shelter(bm, props, width=4.0, depth=7.0, height=2.8, foun
                     f.tag = True
                     for loop, (ku, vi) in zip(f.loops, ((k, ii - 1), (k, ii), (k + 1, ii), (k + 1, ii - 1))):
                         loop[uv_layer].uv = Vector((ku / float(arc_n) * 2.4,
-                                                    vi / float(stations) * depth * 0.34))
+                                                    vi / float(stations) * depth * 0.32))
         outer_prev, inner_prev = o, inn
 
-    # 2. Torn bow rim band
+    # 2. Frames (ribs) every station, clearly wrapping from keel to gunwale
+    for i in range(stations + 1):
+        y = -hd + depth * (i / float(stations))
+        pts = [_pt(i, k, y, inflate=-0.06) for k in range(arc_n + 1)]
+        for k in range(arc_n):
+            _create_oriented_beam(bm, pts[k], pts[k + 1], width=0.22, depth=0.18,
+                                  mat_index=MAT_INDEX_TIMBER)
+
+    # 3. Torn bow rim band
     for k in range(arc_n):
-        a0 = _fac(0, k, -hd)
-        a1 = _fac(0, k + 1, -hd)
-        b0 = _fac(0, k, -hd, inflate=thick)
-        b1 = _fac(0, k + 1, -hd, inflate=thick)
+        a0 = _pt(0, k, -hd)
+        a1 = _pt(0, k + 1, -hd)
+        b0 = _pt(0, k, -hd, inflate=thick)
+        b1 = _pt(0, k + 1, -hd, inflate=thick)
         try:
             f = bm.faces.new([bm.verts.new(a0), bm.verts.new(a1), bm.verts.new(b1), bm.verts.new(b0)])
             f.material_index = MAT_INDEX_TIMBER
@@ -6905,12 +6915,13 @@ def _build_hajfin_hull_shelter(bm, props, width=4.0, depth=7.0, height=2.8, foun
         except ValueError:
             pass
 
-    # 3. Joined stern transom
-    back_o = [_fac(stations, k, hd) for k in range(arc_n + 1)]
+    # 4. Joined, rounded stern transom
+    back_o = [_pt(stations, k, hd) for k in range(arc_n + 1)]
     sten = []
     for k in range(arc_n + 1):
-        d = _normal(k)
-        sten.append(bm.verts.new(Vector((d.x * hw * 0.22, hd + rake, z0 + d.z * height * 0.42))))
+        th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
+        sten.append(bm.verts.new(Vector((math.sin(th) * hw * 0.30, hd + rake,
+                                         z0 + math.cos(th) * height * 0.46))))
     bo = [bm.verts.new(p) for p in back_o]
     for k in range(arc_n):
         try:
@@ -6920,15 +6931,15 @@ def _build_hajfin_hull_shelter(bm, props, width=4.0, depth=7.0, height=2.8, foun
         except ValueError:
             pass
 
-    # 4. Heavy keel beam + stem/stern posts + ground gunwale rails
-    create_box(bm, (0.40, depth - 0.2, 0.34), (0.0, 0.12, z0 + height - 0.12),
+    # 5. Heavy keel beam, stem + stern posts, ground gunwale rails
+    create_box(bm, (0.48, depth - 0.25, 0.40), (0.0, 0.15, z0 + height - 0.16),
                mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (0.34, 0.44, height * 0.9), (0.0, -hd + 0.2, z0 + height * 0.55),
+    create_box(bm, (0.36, 0.46, height * 0.95), (0.0, -hd + 0.2, z0 + height * 0.52),
                mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (0.34, 0.44, height * 0.55), (0.0, hd + rake * 0.7, z0 + height * 0.40),
+    create_box(bm, (0.36, 0.46, height * 0.5), (0.0, hd + rake * 0.7, z0 + height * 0.34),
                mat_index=MAT_INDEX_TIMBER)
     for sgn in (-1.0, 1.0):
-        create_box(bm, (0.24, depth - 0.25, 0.24), (sgn * (hw - 0.10), -0.05, z0 + 0.12),
+        create_box(bm, (0.26, depth - 0.3, 0.26), (sgn * (hw - 0.11), -0.05, z0 + 0.13),
                    mat_index=MAT_INDEX_TIMBER)
 
 
