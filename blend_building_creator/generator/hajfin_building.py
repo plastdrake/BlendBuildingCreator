@@ -6854,7 +6854,7 @@ def _build_hajfin_hull_shelter(bm, props, width=3.8, depth=6.6, height=2.6, foun
     for i in range(stations + 1):
         for k in range(arc_n + 1):
             h = math.sin(i * 12.9898 + k * 78.233) * 43758.5453
-            wob[(i, k)] = ((h - math.floor(h)) - 0.5) * 0.055
+            wob[(i, k)] = ((h - math.floor(h)) - 0.5) * 0.016
 
     def _arc(y, k_jit=0.0):
         pts = []
@@ -6893,8 +6893,11 @@ def _build_hajfin_hull_shelter(bm, props, width=3.8, depth=6.6, height=2.6, foun
                         continue
                     f.material_index = MAT_INDEX_DRIFTWOOD
                     f.tag = True
-                    for loop, (u, v) in zip(f.loops, ((k, i - 1), (k, i), (k + 1, i), (k + 1, i - 1))):
-                        loop[uv_layer].uv = Vector((u * 0.30, v * 0.30))
+                    for loop, (ku, vi) in zip(f.loops, ((k, i - 1), (k, i), (k + 1, i), (k + 1, i - 1))):
+                        # one strake per board: U steps with the column, V runs with
+                        # the hull length so the planking keeps an even width
+                        loop[uv_layer].uv = Vector((ku / float(arc_n) * 2.6,
+                                                    (vi / float(stations)) * (depth * 0.40)))
         outer_prev, inner_prev = o_pts, i_pts
 
     # 2. Rim ring around the torn bow opening (outer to inner)
@@ -6941,8 +6944,13 @@ def _build_hajfin_hull_shelter(bm, props, width=3.8, depth=6.6, height=2.6, foun
         except ValueError:
             pass
 
-    # 4. Keel beam along the crown and gunwale rails on the ground
-    create_box(bm, (0.28, depth - 0.30, 0.24), (0.0, 0.10, z0 + height - 0.05),
+    # 4. Heavy keel beam along the crown (the boat's spine, now on top), plus a
+    # stem post at the bow and a stern post where the strakes converge.
+    create_box(bm, (0.40, depth - 0.10, 0.34), (0.0, 0.10, z0 + height - 0.10),
+               mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.34, 0.42, height * 0.80), (0.0, -hd + 0.18, z0 + height * 0.55),
+               mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.34, 0.42, height * 0.62), (0.0, hd + rake * 0.7, z0 + height * 0.42),
                mat_index=MAT_INDEX_TIMBER)
     for sgn in (-1.0, 1.0):
         create_box(bm, (0.22, depth - 0.20, 0.22), (sgn * (hw - 0.08), 0.05, z0 + 0.11),
