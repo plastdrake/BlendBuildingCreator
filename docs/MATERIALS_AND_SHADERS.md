@@ -107,3 +107,40 @@ Although the generator provides 43 canonical slots, individual buildings rarely 
 
 ### Separation by Material (`props.split_by_material`)
 When enabled, the generator executes `bpy.ops.mesh.separate(type='MATERIAL')` post-generation. This breaks the building into separate Blender objects (one for logs, one for stone, one for glass, etc.), allowing distinct collisions, physics, or modular material instances in game engines.
+
+## 6. Hajfin Baked Texture Set (engine-export clean)
+
+The Hajfin surface materials are authored with stylised node graphs (noise washes,
+anti-repetition passes, procedural flaking paint, contact AO). Those look great in
+Blender but do **not** survive an FBX / glTF export into Unreal or Unity, which only
+understand image textures.
+
+`tools/bake_hajfin_textures.py` renders every Hajfin surface shader once onto a flat
+0..1 UV plane and writes the result into `blend_building_creator/textures/`:
+
+| Baked key | Used for |
+| --- | --- |
+| `hajfin_driftwood` | plank wall siding (`MAT_INDEX_DRIFTWOOD`) |
+| `hajfin_timber` | structural beams, posts, stilts (`MAT_INDEX_TIMBER`) |
+| `hajfin_bone` | ribs, skulls, casings (`MAT_INDEX_BONE`) |
+| `hajfin_shingles_ivory` / `hajfin_shingles_coral` | bone-scale roofs (`MAT_INDEX_SHINGLES`) |
+| `hajfin_deck` | grey weathered deck/wall planking (`MAT_INDEX_FLOOR`) |
+| `hajfin_reef_stone` | reef-stone foundations (`MAT_INDEX_ROUGH_STONE`) |
+| `hajfin_painted_red` / `hajfin_painted_blue` | falen paint patches (`MAT_INDEX_PAINTED_PLANKS` / `_BLUE`) |
+| `hajfin_salvaged` | salt-bleached salvaged boards (`MAT_INDEX_WOOD`) |
+
+Each key ships as `<key>_diffuse.png` plus `<key>_normal.png`. The material
+functions in `generator/materials.py` (`create_stylized_driftwood`, …) detect the
+baked files and rebuild themselves as a plain `Image Texture → Base Color` graph
+with a `Normal Map` node — no procedural nodes remain, so what you see in Blender
+is exactly what exports.
+
+Re-bake any time a Hajfin shader is tweaked:
+
+```powershell
+blender --factory-startup --background --python tools/bake_hajfin_textures.py
+blender --factory-startup --background --python tools/bake_hajfin_textures.py -- --size 2048 --only hajfin_driftwood,hajfin_painted_red
+```
+
+The procedural originals are retained as `_procedural_*` functions and are used
+automatically if a baked texture is missing.

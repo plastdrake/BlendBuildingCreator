@@ -883,6 +883,24 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
     rot = Matrix.Rotation(yaw, 4, 'Z') @ Matrix.Rotation(pitch, 4, 'Y') @ Matrix.Rotation(roll, 4, 'X')
     trans = Matrix.Translation((x, y, z_ground))
     M = trans @ rot @ Matrix.Diagonal((scale, scale, scale, 1.0))
+    uv_layer = bm.loops.layers.uv.verify()
+
+    def _uv(faces, texel=0.75):
+        """Planar-projected UVs so the forged iron texture tiles correctly on the
+        anchor instead of collapsing to a single texel (which read as flat grey)."""
+        for f in faces:
+            f.normal_update()
+            n = f.normal
+            ax, ay, az = abs(n.x), abs(n.y), abs(n.z)
+            for loop in f.loops:
+                c = loop.vert.co
+                if az >= ax and az >= ay:
+                    u, v = c.x * texel, c.y * texel
+                elif ax >= ay:
+                    u, v = c.y * texel, c.z * texel
+                else:
+                    u, v = c.x * texel, c.z * texel
+                loop[uv_layer].uv = Vector((u, v))
 
     def _box(sx, sy, sz, lx, ly, lz, mat):
         v_min = (lx - sx * 0.5, ly - sy * 0.5, lz - sz * 0.5)
@@ -910,9 +928,10 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
         for f in faces:
             f.material_index = mat
             f.tag = True
+        _uv(faces)
         return faces
 
-    shank_h = 2.45
+    shank_h = 2.05
     shank_w = 0.18
     shank_d = 0.18
 
@@ -929,8 +948,8 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
                     rotation=(0.0, math.pi * 0.5, 0.0), mat_index=MAT_INDEX_IRON)
 
     # 3. Curved Arms & Flukes (continuous seamless bridged geometry)
-    arm_span = 1.05
-    arm_height = 1.05
+    arm_span = 0.86
+    arm_height = 0.92
     num_arm_segs = 8
     arm_r = 0.078
 
@@ -975,6 +994,7 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
                 f = bm.faces.new([r0[k], r1[k], r1[kn], r0[kn]])
                 f.material_index = MAT_INDEX_IRON
                 f.tag = True
+                _uv([f])
 
         tip_pt = pts[-1]
         tip_tangent = (pts[-1] - pts[-2]).normalized()
@@ -1005,12 +1025,13 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
                 f = bm.faces.new(tri)
                 f.material_index = MAT_INDEX_IRON
                 f.tag = True
+                _uv([f])
             except ValueError:
                 pass
 
     # 4. Cross-Stock
-    stock_z = shank_h - 0.42
-    stock_len = 2.05
+    stock_z = shank_h - 0.36
+    stock_len = 1.62
     stock_w = 0.13
     stock_d = 0.13
     p_st_a = M @ Vector((0.0, -stock_len * 0.5, stock_z))

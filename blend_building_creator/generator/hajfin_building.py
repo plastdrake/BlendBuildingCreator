@@ -867,22 +867,20 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26, forc
     half_th = wall_th * 0.5
     uv_layer = bm.loops.layers.uv.verify()
 
-    # The roof eaves extend outward past the walls by overhang_x (typically 0.45m - 0.60m)
-    # and rafters/bargeboards have thickness (~0.22m).
-    # To eliminate any gap between the wall and the roof bargeboards/soffit,
-    # the top of the wall triangle must penetrate slightly into the roof soffit volume.
+    # The gable triangle's top edge must follow the roof deck that sits on top of
+    # it.  The roof slab is ~0.14m thick, so the wall is tucked a little UNDER the
+    # deck surface: that seals the joint with zero sky gap while guaranteeing the
+    # wall can never poke up through the roof planks.
+    tuck_z = 0.08
+    z_peak_w = z_peak - tuck_z
+    z_eave_w = z_eave - tuck_z
+    # Dimensions used to lay out the exposed half-timber framing below
     half_span = (max_x - min_x) * 0.5
     peak_h = max(0.8, z_peak - z_eave)
-    overhang = 0.50
-    slope = peak_h / max(0.5, half_span + overhang)
-    wall_eave_lift = slope * overhang + 0.12
-    wall_peak_lift = 0.20
-    z_peak_w = z_peak + wall_peak_lift
-    z_eave_w = z_eave + wall_eave_lift
 
-    # Pick face material
+    # Pick face material. Never plaster / stucco: the Hajfin gables are boarded.
     if style == 'FACHWERK':
-        face_mat = MAT_INDEX_PLASTER
+        face_mat = MAT_INDEX_WOOD
     elif style == 'PAINTED':
         face_mat = MAT_INDEX_PAINTED_PLANKS
     else:
@@ -946,7 +944,7 @@ def _build_gable_triangle_wall(bm, x0, x1, y, z_eave, z_peak, wall_th=0.26, forc
 
 
 def _build_fachwerk_bracing_x(bm, x0, x1, y, z0, z1, wall_th=0.26, pattern='X_BRACE', sgn_y=1.0,
-                              infill_mat=None, timber_w=0.18, timber_d=0.08):
+                              infill_mat=None, timber_w=0.18, timber_d=0.08, openings=None):
     """Constructs exterior half-timber Fachwerk framing and optional infill on a wall running along the X axis.
     sgn_y: +1.0 for framing on north face, -1.0 for framing on south face.
     If infill_mat is provided, creates an inset wall panel (e.g. MAT_INDEX_PLASTER or MAT_INDEX_PAINTED_PLANKS).
@@ -959,6 +957,7 @@ def _build_fachwerk_bracing_x(bm, x0, x1, y, z0, z1, wall_th=0.26, pattern='X_BR
         return
 
     fy = y + sgn_y * (wall_th * 0.5 + timber_d * 0.5)
+    holes = list(openings or [])
 
     if infill_mat is not None:
         create_box(bm, (span_x, wall_th, span_z), ((min_x + max_x) * 0.5, y, z0 + span_z * 0.5),
@@ -985,17 +984,31 @@ def _build_fachwerk_bracing_x(bm, x0, x1, y, z0, z1, wall_th=0.26, pattern='X_BR
         bx0 = min_x + b * bay_w
         bx1 = bx0 + bay_w
         bcx = (bx0 + bx1) * 0.5
-        if b > 0:
+        # Never brace straight across a doorway or window
+        bay_blocked = _hajfin_hole_hits(bx0, bx1, z0, z1, holes)
+        if b > 0 and not bay_blocked:
             create_box(bm, (timber_w, timber_d, span_z - timber_w * 2),
                        (bx0, fy, z0 + span_z * 0.5), mat_index=MAT_INDEX_TIMBER)
+        if bay_blocked:
+            continue
 
         if pattern == 'X_BRACE':
-            _create_oriented_beam(bm, (bx0 + timber_w * 0.4, fy, inner_z0),
-                                  (bx1 - timber_w * 0.4, fy, inner_z1),
-                                  width=timber_w * 0.85, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
-            _create_oriented_beam(bm, (bx0 + timber_w * 0.4, fy, inner_z1),
-                                  (bx1 - timber_w * 0.4, fy, inner_z0),
-                                  width=timber_w * 0.85, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
+            # Only every other bay is braced; the rest stay as plain plastered panels
+            if b % 2 == 1:
+                mid_z = (inner_z0 + inner_z1) * 0.5
+                _create_oriented_beam(bm, (bx0 + timber_w * 0.4, fy, inner_z0),
+                                      (bcx, fy, mid_z),
+                                      width=timber_w * 0.8, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
+                _create_oriented_beam(bm, (bx1 - timber_w * 0.4, fy, inner_z1),
+                                      (bcx, fy, mid_z),
+                                      width=timber_w * 0.8, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
+            else:
+                _create_oriented_beam(bm, (bx0 + timber_w * 0.4, fy, inner_z0),
+                                      (bx1 - timber_w * 0.4, fy, inner_z1),
+                                      width=timber_w * 0.85, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
+                _create_oriented_beam(bm, (bx0 + timber_w * 0.4, fy, inner_z1),
+                                      (bx1 - timber_w * 0.4, fy, inner_z0),
+                                      width=timber_w * 0.85, depth=timber_d * 0.9, mat_index=MAT_INDEX_TIMBER)
             create_box(bm, (0.22, timber_d + 0.02, 0.22),
                        (bcx, fy + sgn_y * 0.01, (inner_z0 + inner_z1) * 0.5), mat_index=MAT_INDEX_IRON)
         elif pattern == 'K_BRACE':
@@ -1011,7 +1024,7 @@ def _build_fachwerk_bracing_x(bm, x0, x1, y, z0, z1, wall_th=0.26, pattern='X_BR
 
 
 def _build_fachwerk_bracing_y(bm, y0, y1, x, z0, z1, wall_th=0.26, pattern='X_BRACE', sgn_x=1.0,
-                              infill_mat=None, timber_w=0.18, timber_d=0.08):
+                              infill_mat=None, timber_w=0.18, timber_d=0.08, openings=None):
     """Constructs exterior half-timber Fachwerk framing and optional infill on a wall running along the Y axis.
     sgn_x: +1.0 for framing on east face, -1.0 for framing on west face."""
     min_y = min(y0, y1)
@@ -1022,6 +1035,7 @@ def _build_fachwerk_bracing_y(bm, y0, y1, x, z0, z1, wall_th=0.26, pattern='X_BR
         return
 
     fx = x + sgn_x * (wall_th * 0.5 + timber_d * 0.5)
+    holes = list(openings or [])
 
     if infill_mat is not None:
         create_box(bm, (wall_th, span_y, span_z), (x, (min_y + max_y) * 0.5, z0 + span_z * 0.5),
@@ -1048,17 +1062,30 @@ def _build_fachwerk_bracing_y(bm, y0, y1, x, z0, z1, wall_th=0.26, pattern='X_BR
         by0 = min_y + b * bay_d
         by1 = by0 + bay_d
         bcy = (by0 + by1) * 0.5
-        if b > 0:
+        bay_blocked = _hajfin_hole_hits(by0, by1, z0, z1, holes)
+        if b > 0 and not bay_blocked:
             create_box(bm, (timber_d, timber_w, span_z - timber_w * 2),
                        (fx, by0, z0 + span_z * 0.5), mat_index=MAT_INDEX_TIMBER)
+        if bay_blocked:
+            continue
 
         if pattern == 'X_BRACE':
-            _create_oriented_beam(bm, (fx, by0 + timber_w * 0.4, inner_z0),
-                                  (fx, by1 - timber_w * 0.4, inner_z1),
-                                  width=timber_d * 0.9, depth=timber_w * 0.85, mat_index=MAT_INDEX_TIMBER)
-            _create_oriented_beam(bm, (fx, by0 + timber_w * 0.4, inner_z1),
-                                  (fx, by1 - timber_w * 0.4, inner_z0),
-                                  width=timber_d * 0.9, depth=timber_w * 0.85, mat_index=MAT_INDEX_TIMBER)
+            # Only every other bay is braced; the rest stay as plain plastered panels
+            if b % 2 == 1:
+                mid_z = (inner_z0 + inner_z1) * 0.5
+                _create_oriented_beam(bm, (fx, by0 + timber_w * 0.4, inner_z0),
+                                      (fx, bcy, mid_z),
+                                      width=timber_d * 0.9, depth=timber_w * 0.8, mat_index=MAT_INDEX_TIMBER)
+                _create_oriented_beam(bm, (fx, by1 - timber_w * 0.4, inner_z1),
+                                      (fx, bcy, mid_z),
+                                      width=timber_d * 0.9, depth=timber_w * 0.8, mat_index=MAT_INDEX_TIMBER)
+            else:
+                _create_oriented_beam(bm, (fx, by0 + timber_w * 0.4, inner_z0),
+                                      (fx, by1 - timber_w * 0.4, inner_z1),
+                                      width=timber_d * 0.9, depth=timber_w * 0.85, mat_index=MAT_INDEX_TIMBER)
+                _create_oriented_beam(bm, (fx, by0 + timber_w * 0.4, inner_z1),
+                                      (fx, by1 - timber_w * 0.4, inner_z0),
+                                      width=timber_d * 0.9, depth=timber_w * 0.85, mat_index=MAT_INDEX_TIMBER)
             create_box(bm, (timber_d + 0.02, 0.22, 0.22),
                        (fx + sgn_x * 0.01, bcy, (inner_z0 + inner_z1) * 0.5), mat_index=MAT_INDEX_IRON)
         elif pattern == 'K_BRACE':
@@ -1090,7 +1117,7 @@ _HAJFIN_WALL_VARIANT_MATS = {
     'PAINTED_BLUE': MAT_INDEX_PAINTED_PLANKS_BLUE,
     'DECK': MAT_INDEX_FLOOR,
     'SALVAGED': MAT_INDEX_WOOD,
-    'FACHWERK': MAT_INDEX_PLASTER,
+    'FACHWERK': MAT_INDEX_FLOOR,
 }
 
 
@@ -1164,7 +1191,7 @@ def _build_hajfin_wall_panel_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0,
 
 
 def _build_hajfin_wall_frame_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
-                               braces=True, battens=True, top_clear=0.0):
+                               braces=True, battens=True, top_clear=0.0, openings=None):
     """Timber frame applied to an X-running wall: sill rail, top plate, corner
     posts, optional vertical battens and diagonal knee braces in the top corners.
     This is what breaks up the endless field of big rough planks.
@@ -1185,12 +1212,20 @@ def _build_hajfin_wall_frame_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
     z_top = z1 - max(0.0, top_clear)
     if z_top - z0 < 0.6:
         z_top = z0 + 0.6
+    holes = list(openings or [])
 
-    # Sill rail and top plate
-    create_box(bm, (span, rail_d, rail_w), (mx, fy, z0 + rail_w * 0.5), mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (span, rail_d, rail_w), (mx, fy, z_top - rail_w * 0.5), mat_index=MAT_INDEX_TIMBER)
-    # Corner posts
+    # Sill rail and top plate, split around door and window openings
+    for rz0, rz1 in ((z0, z0 + rail_w), (z_top - rail_w, z_top)):
+        for a0, a1 in _hajfin_spans_along_x(x0, x1, rz0, rz1, holes):
+            if a1 - a0 < 0.08:
+                continue
+            create_box(bm, (a1 - a0, rail_d, rz1 - rz0),
+                       ((a0 + a1) * 0.5, fy, (rz0 + rz1) * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # Corner posts, dropped when they land in an opening
     for sx in (x0 + rail_w * 0.5, x1 - rail_w * 0.5):
+        if _hajfin_hole_hits(sx - rail_w * 0.5, sx + rail_w * 0.5, z0, z_top, holes):
+            continue
         create_box(bm, (rail_w, rail_d, z_top - z0), (sx, fy, (z0 + z_top) * 0.5), mat_index=MAT_INDEX_TIMBER)
 
     # Vertical battens splitting the big planks into narrower boards
@@ -1198,20 +1233,28 @@ def _build_hajfin_wall_frame_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0,
         num_battens = max(1, int(round(span / 2.4)))
         for i in range(1, num_battens):
             bx = x0 + span * (i / float(num_battens))
-            create_box(bm, (0.11, rail_d * 0.85, z_top - z0 - rail_w * 2.0),
-                       (bx, fy, (z0 + z_top) * 0.5), mat_index=MAT_INDEX_TIMBER)
+            for bz0, bz1 in _hajfin_spans_along_z(bx - 0.055, bx + 0.055,
+                                                  z0 + rail_w, z_top - rail_w, holes):
+                if bz1 - bz0 < 0.10:
+                    continue
+                create_box(bm, (0.11, rail_d * 0.85, bz1 - bz0),
+                           (bx, fy, (bz0 + bz1) * 0.5), mat_index=MAT_INDEX_TIMBER)
 
     # Diagonal knee braces in the top corners
     if braces:
         bl = min(1.55, span * 0.28, (z_top - z0) * 0.26)
         for sx, dirx in ((x0, 1.0), (x1, -1.0)):
+            bx_lo = min(sx, sx + dirx * (rail_w * 0.5 + bl))
+            bx_hi = max(sx, sx + dirx * (rail_w * 0.5 + bl))
+            if _hajfin_hole_hits(bx_lo, bx_hi, z_top - rail_w - bl, z_top, holes):
+                continue
             p_a = (sx + dirx * rail_w * 0.5, fy, z_top - rail_w - bl)
             p_b = (sx + dirx * (rail_w * 0.5 + bl), fy, z_top - rail_w)
             _create_oriented_beam(bm, p_a, p_b, width=0.16, depth=rail_d, mat_index=MAT_INDEX_TIMBER)
 
 
 def _build_hajfin_wall_frame_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0,
-                               braces=True, battens=True, top_clear=0.0):
+                               braces=True, battens=True, top_clear=0.0, openings=None):
     """Y-axis twin of :func:`_build_hajfin_wall_frame_x`."""
     span = y1 - y0
     height = z1 - z0
@@ -1224,25 +1267,89 @@ def _build_hajfin_wall_frame_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0,
     z_top = z1 - max(0.0, top_clear)
     if z_top - z0 < 0.6:
         z_top = z0 + 0.6
+    holes = list(openings or [])
 
-    create_box(bm, (rail_d, span, rail_w), (fx, my, z0 + rail_w * 0.5), mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (rail_d, span, rail_w), (fx, my, z_top - rail_w * 0.5), mat_index=MAT_INDEX_TIMBER)
+    # Sill rail and top plate, split around door and window openings
+    for rz0, rz1 in ((z0, z0 + rail_w), (z_top - rail_w, z_top)):
+        for a0, a1 in _hajfin_spans_along_x(y0, y1, rz0, rz1, holes):
+            if a1 - a0 < 0.08:
+                continue
+            create_box(bm, (rail_d, a1 - a0, rz1 - rz0),
+                       (fx, (a0 + a1) * 0.5, (rz0 + rz1) * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # Corner posts, dropped when they land in an opening
     for sy in (y0 + rail_w * 0.5, y1 - rail_w * 0.5):
+        if _hajfin_hole_hits(sy - rail_w * 0.5, sy + rail_w * 0.5, z0, z_top, holes):
+            continue
         create_box(bm, (rail_d, rail_w, z_top - z0), (fx, sy, (z0 + z_top) * 0.5), mat_index=MAT_INDEX_TIMBER)
 
     if battens:
         num_battens = max(1, int(round(span / 2.4)))
         for i in range(1, num_battens):
             by = y0 + span * (i / float(num_battens))
-            create_box(bm, (rail_d * 0.85, 0.11, z_top - z0 - rail_w * 2.0),
-                       (fx, by, (z0 + z1) * 0.5), mat_index=MAT_INDEX_TIMBER)
+            for bz0, bz1 in _hajfin_spans_along_z(by - 0.055, by + 0.055,
+                                                  z0 + rail_w, z_top - rail_w, holes):
+                if bz1 - bz0 < 0.10:
+                    continue
+                create_box(bm, (rail_d * 0.85, 0.11, bz1 - bz0),
+                           (fx, by, (bz0 + bz1) * 0.5), mat_index=MAT_INDEX_TIMBER)
 
     if braces:
         bl = min(1.55, span * 0.28, (z_top - z0) * 0.26)
         for sy, diry in ((y0, 1.0), (y1, -1.0)):
+            by_lo = min(sy, sy + diry * (rail_w * 0.5 + bl))
+            by_hi = max(sy, sy + diry * (rail_w * 0.5 + bl))
+            if _hajfin_hole_hits(by_lo, by_hi, z_top - rail_w - bl, z_top, holes):
+                continue
             p_a = (fx, sy + diry * rail_w * 0.5, z_top - rail_w - bl)
             p_b = (fx, sy + diry * (rail_w * 0.5 + bl), z_top - rail_w)
             _create_oriented_beam(bm, p_a, p_b, width=rail_d, depth=0.16, mat_index=MAT_INDEX_TIMBER)
+
+
+def _hajfin_spans_along_x(a0, a1, z_lo, z_hi, holes):
+    """Sub-spans of [a0, a1] not covered by any opening that overlaps the z band."""
+    spans = [(a0, a1)]
+    for (hx0, hx1, hz0, hz1) in holes:
+        if hz1 <= z_lo + 1e-5 or hz0 >= z_hi - 1e-5:
+            continue
+        nxt = []
+        for (b0, b1) in spans:
+            if hx1 <= b0 + 1e-5 or hx0 >= b1 - 1e-5:
+                nxt.append((b0, b1))
+                continue
+            if hx0 > b0 + 1e-5:
+                nxt.append((b0, hx0))
+            if hx1 < b1 - 1e-5:
+                nxt.append((hx1, b1))
+        spans = nxt
+    return spans
+
+
+def _hajfin_spans_along_z(x_lo, x_hi, z0, z1, holes):
+    """Sub-spans of [z0, z1] not covered by any opening that overlaps the x band."""
+    spans = [(z0, z1)]
+    for (hx0, hx1, hz0, hz1) in holes:
+        if hx1 <= x_lo + 1e-5 or hx0 >= x_hi - 1e-5:
+            continue
+        nxt = []
+        for (b0, b1) in spans:
+            if hz1 <= b0 + 1e-5 or hz0 >= b1 - 1e-5:
+                nxt.append((b0, b1))
+                continue
+            if hz0 > b0 + 1e-5:
+                nxt.append((b0, hz0))
+            if hz1 < b1 - 1e-5:
+                nxt.append((hz1, b1))
+        spans = nxt
+    return spans
+
+
+def _hajfin_hole_hits(x_lo, x_hi, z_lo, z_hi, holes):
+    """True when any opening overlaps the given rectangle."""
+    for (hx0, hx1, hz0, hz1) in holes:
+        if hx1 > x_lo + 1e-5 and hx0 < x_hi - 1e-5 and hz1 > z_lo + 1e-5 and hz0 < z_hi - 1e-5:
+            return True
+    return False
 
 
 def _hajfin_opening_x(cx, cz, w, h):
@@ -1265,10 +1372,10 @@ def _build_hajfin_wall_dressing_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0
 
     if variant == 'FACHWERK':
         _build_hajfin_wall_panel_x(bm, ax0, ax1, y, z0, z1, wall_th=wall_th, sgn_y=sgn_y,
-                                   mat_index=MAT_INDEX_PLASTER, openings=holes, proud=0.045,
+                                   mat_index=MAT_INDEX_FLOOR, openings=holes, proud=0.045,
                                    top_clear=top_clear)
         _build_fachwerk_bracing_x(bm, ax0, ax1, y, z0, z1 - top_clear, wall_th=wall_th,
-                                  pattern='X_BRACE', sgn_y=sgn_y)
+                                  pattern='X_BRACE', sgn_y=sgn_y, openings=holes)
         return
 
     mat_index = _HAJFIN_WALL_VARIANT_MATS.get(variant)
@@ -1276,7 +1383,7 @@ def _build_hajfin_wall_dressing_x(bm, x0, x1, y, z0, z1, wall_th=0.26, sgn_y=1.0
         _build_hajfin_wall_panel_x(bm, ax0, ax1, y, z0, z1, wall_th=wall_th, sgn_y=sgn_y,
                                    mat_index=mat_index, openings=holes, top_clear=top_clear)
     _build_hajfin_wall_frame_x(bm, ax0, ax1, y, z0, z1, wall_th=wall_th, sgn_y=sgn_y,
-                               top_clear=top_clear)
+                               top_clear=top_clear, openings=holes)
 
 
 def _build_hajfin_wall_dressing_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0,
@@ -1289,10 +1396,10 @@ def _build_hajfin_wall_dressing_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0
 
     if variant == 'FACHWERK':
         _build_hajfin_wall_panel_y(bm, ay0, ay1, x, z0, z1, wall_th=wall_th, sgn_x=sgn_x,
-                                   mat_index=MAT_INDEX_PLASTER, openings=holes, proud=0.045,
+                                   mat_index=MAT_INDEX_FLOOR, openings=holes, proud=0.045,
                                    top_clear=top_clear)
         _build_fachwerk_bracing_y(bm, ay0, ay1, x, z0, z1 - top_clear, wall_th=wall_th,
-                                  pattern='X_BRACE', sgn_x=sgn_x)
+                                  pattern='X_BRACE', sgn_x=sgn_x, openings=holes)
         return
 
     mat_index = _HAJFIN_WALL_VARIANT_MATS.get(variant)
@@ -1300,7 +1407,7 @@ def _build_hajfin_wall_dressing_y(bm, y0, y1, x, z0, z1, wall_th=0.26, sgn_x=1.0
         _build_hajfin_wall_panel_y(bm, ay0, ay1, x, z0, z1, wall_th=wall_th, sgn_x=sgn_x,
                                    mat_index=mat_index, openings=holes, top_clear=top_clear)
     _build_hajfin_wall_frame_y(bm, ay0, ay1, x, z0, z1, wall_th=wall_th, sgn_x=sgn_x,
-                               top_clear=top_clear)
+                               top_clear=top_clear, openings=holes)
 
 def _build_wall_with_window_x(bm, x0, x1, y, z0, z1, win_cx, win_cz, win_w=0.75, win_h=0.75,
                               wall_th=0.26, facing_north=False):
@@ -1965,13 +2072,16 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
                            z_peak=peak_z, z_eave=z_eave_r, slab_th=0.14, u_scale=0.36, v_scale=0.36)
 
     # 3. Heavy Timber Verge Bargeboards on Front & Rear Gable Slopes
-    # Only place bargeboards on exposed verges (overhang > 0.05m), NOT against abutting walls!
+    # Multi-tier side roofs stop flush against the tall central wall on one side,
+    # so the rake of that abutting slope is still exposed at the gable end and
+    # needs its own board - otherwise that corner of the gable is a bare slab edge.
+    asymmetric = (overhang_x_left is not None or overhang_x_right is not None)
     for gy in (y0 - overhang_y, y1 + overhang_y):
         p_peak = (mx, gy, peak_z)
-        if ov_xl > 0.05:
+        if ov_xl > 0.05 or asymmetric:
             p_eave_l = (x0 - ov_xl, gy, z_eave_l)
             _create_oriented_beam(bm, p_peak, p_eave_l, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
-        if ov_xr > 0.05:
+        if ov_xr > 0.05 or asymmetric:
             p_eave_r = (x1 + ov_xr, gy, z_eave_r)
             _create_oriented_beam(bm, p_peak, p_eave_r, width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
 
@@ -1985,27 +2095,6 @@ def _build_bone_scale_roof_gable(bm, x0, x1, y0, y1, eave_z, peak_h,
             create_box(bm, (0.26, span_y + 0.10, 0.30),
                        (ex_e - sgn_eave * 0.02, my, ez_e - 0.11),
                        mat_index=MAT_INDEX_TIMBER)
-
-    # 3c. Gable End Truss (tie beam + king post) for multi-tier side roofs.
-    #     Side roofs stop flush against the tall central wall on one side, so their
-    #     gable ends overhang the wall plane and the raw slab end edges are left
-    #     open.  A timber tie beam across the gable plus a king post up to the ridge
-    #     closes and frames that gable end the same way a barn truss would.
-    if overhang_x_left is not None or overhang_x_right is not None:
-        tie_x0 = x0 - ov_xl
-        tie_x1 = x1 + ov_xr
-        tie_span = max(0.2, tie_x1 - tie_x0)
-        for gy in (y0 - overhang_y, y1 + overhang_y):
-            p_tie_l = (tie_x0, gy, z_eave_l)
-            p_tie_r = (tie_x1, gy, z_eave_r)
-            # Tie beam spanning the whole gable at eave level
-            _create_oriented_beam(bm, p_tie_l, p_tie_r, width=0.20, depth=0.22,
-                                  mat_index=MAT_INDEX_TIMBER)
-            # Vertical king post from the tie beam up to the ridge beam
-            t = (mx - tie_x0) / tie_span
-            tie_z_at_mx = z_eave_l + (z_eave_r - z_eave_l) * t
-            _create_oriented_beam(bm, (mx, gy, tie_z_at_mx), (mx, gy, peak_z - 0.14),
-                                  width=0.20, depth=0.20, mat_index=MAT_INDEX_TIMBER)
 
     # 4. Ridge Dorsal Fin Bone & Jagged Teeth Crest
     _build_ridge_crest_fin_and_spines(bm, mx, y0 - overhang_y, y1 + overhang_y,
@@ -2575,7 +2664,7 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
                                        wall_th=wall_th, sgn_y=1.0, variant='SALVAGED')
         _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z0, z_mid,
                                        wall_th=wall_th, sgn_y=-1.0, variant='FACHWERK',
-                                       openings=[_hajfin_opening_x(0.0, z0 + 0.0, door_w, door_h)])
+                                       openings=[_hajfin_opening_x(0.0, z0 + door_h * 0.5, door_w, door_h)])
 
         # Upper storey gets its own patchwork so the tower never reads as one big slab.
         _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
@@ -2625,7 +2714,7 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
                                        wall_th=wall_th, sgn_y=1.0, variant='PAINTED_RED', top_clear=0.30)
         _build_hajfin_wall_dressing_x(bm, -hw + wall_th, hw - wall_th, -hd + wall_th * 0.5, z0, z1,
                                        wall_th=wall_th, sgn_y=-1.0, variant='DECK', top_clear=0.30,
-                                       openings=[_hajfin_opening_x(0.0, z0 + 0.0, door_w, door_h)])
+                                       openings=[_hajfin_opening_x(0.0, z0 + door_h * 0.5, door_w, door_h)])
 
     # 3. Solid Gable Triangle Walls (Front & Rear) - SEALS ROOF GAPS 100%
     _build_gable_triangle_wall(bm, -hw, hw, -hd + wall_th * 0.5, z1, peak_z, wall_th=wall_th, style='FACHWERK')
@@ -3231,18 +3320,18 @@ def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26, f
     half_th = wall_th * 0.5
     uv_layer = bm.loops.layers.uv.verify()
 
-    # Penetrate into roof soffit to seal bargeboard gap
+    # Penetrate into roof soffit to seal bargeboard gap.
+    # The wall is tucked under the roof deck so the joint is airtight and the
+    # wall can never poke up through the roof planks.
+    tuck_z = 0.08
+    z_peak_w = z_peak - tuck_z
+    z_eave_w = z_eave - tuck_z
     half_span = (max_y - min_y) * 0.5
     peak_h = max(0.8, z_peak - z_eave)
-    overhang = 0.50
-    slope = peak_h / max(0.5, half_span + overhang)
-    wall_eave_lift = slope * overhang + 0.12
-    wall_peak_lift = 0.20
-    z_peak_w = z_peak + wall_peak_lift
-    z_eave_w = z_eave + wall_eave_lift
 
+    # Boarded gable faces only - never plaster / stucco on a Hajfin wall.
     if style == 'FACHWERK':
-        face_mat = MAT_INDEX_PLASTER
+        face_mat = MAT_INDEX_WOOD
     elif style == 'PAINTED':
         face_mat = MAT_INDEX_PAINTED_PLANKS
     else:
@@ -4306,8 +4395,10 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
             ov_r = 0.40
         _build_gable_triangle_wall(bm, fl_x0, fl_x1, -hd + wall_th * 0.5, fl_eave_z, fl_eave_z + 2.25, wall_th=wall_th, force=True)
         _build_gable_triangle_wall(bm, fl_x0, fl_x1, hd - wall_th * 0.5, fl_eave_z, fl_eave_z + 2.25, wall_th=wall_th, force=True)
-        _build_bone_scale_roof_gable(bm, fl_x0, fl_x1, -hd, hd, fl_eave_z, 2.25,
-                                     overhang_y=0.40, fin_scale=1.2, num_ridge_teeth=5,
+        # Gable ends terminate flush inside the facade walls (overhang_y=0): a gable
+        # overhang here would leave a deep open verge under the steep side roof.
+        _build_bone_scale_roof_gable(bm, fl_x0, fl_x1, -hd + 0.03, hd - 0.03, fl_eave_z, 2.25,
+                                     overhang_y=0.0, fin_scale=1.2, num_ridge_teeth=5,
                                      overhang_x_left=ov_l, overhang_x_right=ov_r)
 
         # Exterior timber flashing ledger beam sealing the roof-to-tower junction
@@ -4514,8 +4605,9 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
             fl_x1 = hw
             ov_l = 0.0  # Stops flush at nave exterior wall so ZERO shingles poke into interior
             ov_r = 0.40
-        _build_bone_scale_roof_gable(bm, fl_x0, fl_x1, -hd * 0.85, hd * 0.85, z0 + side_h, 2.2,
-                                     overhang_y=0.40, fin_scale=1.2, num_ridge_teeth=5,
+        _build_bone_scale_roof_gable(bm, fl_x0, fl_x1, -hd * 0.85 + 0.03, hd * 0.85 - 0.03,
+                                     z0 + side_h, 2.2,
+                                     overhang_y=0.0, fin_scale=1.2, num_ridge_teeth=5,
                                      overhang_x_left=ov_l, overhang_x_right=ov_r)
 
     # High Nave Central Roof with giant horn & continuous ridge spine
@@ -4768,8 +4860,10 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     bridge_p1 = (turret_cx + h_tw, deck_cy, turret_z + 0.10)
     build_suspended_rope_bridge(bm, bridge_p0, bridge_p1, width=1.30, sag=0.36, with_pylons=True)
 
-    # Heavy Forged Iron Ship Anchor leaning at front tavern pier entrance
-    build_ship_anchor(bm, x=-hw * 0.4 + 1.9, y=-hd - 0.40, z_ground=z0, yaw=-0.40, pitch=-0.28, scale=1.05)
+    # Heavy Forged Iron Ship Anchor leaning on the open drinking deck, kept well
+    # clear of the perimeter railing and the grog barrels.
+    build_ship_anchor(bm, x=deck_x0 + 1.35, y=deck_y0 + 1.55, z_ground=z0 + 0.16,
+                      yaw=0.55, pitch=-0.20, scale=1.0)
 
 
 
@@ -5305,7 +5399,8 @@ def _build_hajfin_fish_depot(bm, props, width=12.0, depth=14.0, height=7.8, foun
     # Woodcutter splitting axe resting by the barrel
     build_axe(bm, -hw + 1.2, hd - 2.4, z_ground=deck_top_z, ang=1.15, length=0.68)
     # Admiralty ship anchor leaning against outer pier stilt corner
-    build_ship_anchor(bm, x=c_hw + 1.6, y=hd - 1.2, z_ground=deck_top_z, yaw=-0.45, pitch=-0.28, scale=1.0)
+    build_ship_anchor(bm, x=-c_hw - 0.6, y=hd - 1.6, z_ground=deck_top_z,
+                      yaw=0.50, pitch=-0.22, scale=1.0)
 
     # 7. Bone Scale / Plank Gable Roof on Cabin with Solid Gables
     _build_gable_triangle_wall(bm, -c_hw, c_hw, -hd, z1, peak_z, wall_th=wall_th, style='PAINTED')
@@ -5707,7 +5802,8 @@ def _build_hajfin_pier_landing(bm, props, width=7.0, depth=10.0, found_h=1.6):
                             rotation=(math.pi * 0.5, 0.0, 0.0), mat_index=MAT_INDEX_TIMBER)
 
     _build_hajfin_cargo_stack(bm, -hw * 0.38, hd * 0.30, deck_z)
-    build_ship_anchor(bm, x=hw - 1.2, y=-hd + 1.8, z_ground=deck_z, yaw=-0.50, pitch=-0.28, scale=0.95)
+    build_ship_anchor(bm, x=hw - 1.75, y=-hd + 2.10, z_ground=deck_z,
+                      yaw=0.50, pitch=-0.22, scale=0.95)
 
     # 5. Heavy Timber Shipyard Davit Crane
     davit_x = -hw + 1.10
@@ -5971,7 +6067,8 @@ def _build_hajfin_pier_rope_bridge(bm, props, width=4.0, depth=16.0, found_h=1.6
     create_box(bm, (w, 0.18, 0.16), (0.0, -hd + 0.09, deck_z + 0.85), mat_index=MAT_INDEX_TIMBER)
 
     # South props: Admiralty Anchor & Grog barrels
-    build_ship_anchor(bm, x=hw - 0.9, y=-hd + 1.2, z_ground=deck_z, yaw=-0.4, pitch=-0.26, scale=1.0)
+    build_ship_anchor(bm, x=hw - 1.9, y=-hd + 2.05, z_ground=deck_z,
+                      yaw=0.45, pitch=-0.22, scale=1.0)
     _build_hajfin_barrel(bm, -hw + 0.9, -hd + 1.1, z_ground=deck_z, ang=0.3, scale=0.55)
     _build_hajfin_barrel(bm, -hw + 1.3, -hd + 1.6, z_ground=deck_z, ang=1.2, scale=0.50)
 

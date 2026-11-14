@@ -2797,6 +2797,13 @@ def create_stylized_water(name="M_Water", color=(0.16, 0.38, 0.50, 1.0)):
 
 
 def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
+    """Hajfin driftwood plank siding (baked texture - see tools/bake_hajfin_textures.py)."""
+    return _baked_surface(name, "hajfin_driftwood", 0.82,
+                          fallback_color=color or (0.58, 0.36, 0.20, 1.0),
+                          normal_strength=0.9)
+
+
+def _procedural_driftwood(name="M_Building_Driftwood", color=None):
     """Weathered, rich stylized pirate wood planks with warm amber/honey tones for Hajfin wall siding.
     Uses a crisp, single-sample diffuse map with painterly pass and subtle ambient occlusion."""
     mat, tree = _new_mat(name)
@@ -2837,7 +2844,14 @@ def create_stylized_driftwood(name="M_Building_Driftwood", color=None):
 
 
 def create_stylized_painted_planks(name="M_Building_Painted_Planks", color=(0.62, 0.18, 0.13, 1.0),
-                                   paint_coverage=0.85):
+                                   paint_coverage=0.72):
+    """Half worn-off painted planks (baked texture, dull red or sea blue)."""
+    key = "hajfin_painted_blue" if color[2] > color[0] else "hajfin_painted_red"
+    return _baked_surface(name, key, 0.78, fallback_color=color, normal_strength=0.9)
+
+
+def _procedural_painted_planks(name="M_Building_Painted_Planks", color=(0.62, 0.18, 0.13, 1.0),
+                               paint_coverage=0.74):
     """Weathered, chipped painted wood planks (dull crimson pirate red or sea blue)
     with a procedural peeling mask revealing the raw aged driftwood planks underneath.
 
@@ -2916,11 +2930,20 @@ def create_stylized_painted_planks(name="M_Building_Painted_Planks", color=(0.62
         a_paint.default_value = (0.62, 0.60, 0.56, 1.0)
     b_paint.default_value = color or (0.62, 0.18, 0.13, 1.0)
 
-    # 4. Final blend: where paint_mask == 1, show paint; where paint_mask == 0, show raw peeled wood!
+    # 4. Final blend: where paint_mask == 1, show paint; where paint_mask == 0, show the
+    #    weathered bare boards underneath.  The bare wood is pulled towards grey so the
+    #    flaked patches read as sun-bleached timber instead of bright orange camo.
+    bare = tree.nodes.new("ShaderNodeHueSaturation")
+    bare.location = (-620, -60)
+    bare.inputs["Saturation"].default_value = 0.55
+    bare.inputs["Value"].default_value = 0.92
+    if driftwood_col is not None:
+        tree.links.new(driftwood_col, bare.inputs["Color"])
+
     _, fac_final, a_final, b_final, final_col = _mix_color(tree, blend_type='MIX', loc=(200, 100))
     tree.links.new(paint_mask, fac_final)
     if driftwood_col is not None:
-        tree.links.new(driftwood_col, a_final)
+        tree.links.new(bare.outputs["Color"], a_final)
     else:
         a_final.default_value = (0.42, 0.32, 0.22, 1.0)
     tree.links.new(paint_out, b_final)
@@ -2941,6 +2964,12 @@ def create_stylized_painted_planks(name="M_Building_Painted_Planks", color=(0.62
 
 
 def create_stylized_salvaged_planks(name="M_Building_Wood", color=(0.62, 0.52, 0.38, 1.0)):
+    """Salt-bleached salvaged plank timber (baked texture)."""
+    return _baked_surface(name, "hajfin_salvaged", 0.84,
+                          fallback_color=color, normal_strength=0.9)
+
+
+def _procedural_salvaged_planks(name="M_Building_Wood", color=(0.62, 0.52, 0.38, 1.0)):
     """Salt-bleached salvaged plank timber for Hajfin patchwork wall panels.
 
     Uses the brighter ``facade_wood_planks_diffuse.jpg`` atlas, desaturated and
@@ -2990,7 +3019,76 @@ def create_stylized_salvaged_planks(name="M_Building_Wood", color=(0.62, 0.52, 0
     return mat
 
 
+
+# ---------------------------------------------------------------------------
+# Export-friendly baked surface material
+#
+# Every Hajfin surface material is rendered once into a plain image texture by
+# tools/bake_hajfin_textures.py and rebuilt here as a single Image Texture ->
+# Base Color (plus a baked normal map).  Nothing else is left in the graph, so
+# the material survives an FBX / glTF export into Unreal / Unity untouched
+# instead of losing its stylised noise, tint and flaking-paint passes.
+# ---------------------------------------------------------------------------
+
+def _load_baked_image(filename, non_color=False):
+    tex_path = _get_texture_path(filename)
+    if not tex_path:
+        return None
+    img = bpy.data.images.get(filename)
+    if img is None:
+        try:
+            img = bpy.data.images.load(tex_path)
+        except Exception:
+            return None
+    if non_color:
+        try:
+            img.colorspace_settings.name = 'Non-Color'
+        except Exception:
+            pass
+    return img
+
+
+def _baked_surface(name, key, roughness, fallback_color=(0.6, 0.6, 0.6, 1.0),
+                   normal_strength=1.0):
+    """Material built only from baked image textures (engine-export clean)."""
+    mat, tree = _new_mat(name)
+    out, bsdf = _out_bsdf(tree, loc_x=620)
+    tex = None
+    img = _load_baked_image(key + "_diffuse.png")
+    if img is None:
+        # Backwards compatible: bake missing, fall back to the source texture
+        img = _load_baked_image(key.replace("hajfin_", "") + "_diffuse.png")
+    if img is not None:
+        tex = tree.nodes.new("ShaderNodeTexImage")
+        tex.location = (-420, 220)
+        tex.image = img
+        tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    if tex is None:
+        _set_bsdf_input(bsdf, "Base Color", fallback_color)
+
+    nimg = _load_baked_image(key + "_normal.png", non_color=True)
+    if nimg is not None and tex is not None:
+        ntex = tree.nodes.new("ShaderNodeTexImage")
+        ntex.location = (-420, -280)
+        ntex.image = nimg
+        nmap = tree.nodes.new("ShaderNodeNormalMap")
+        nmap.location = (-120, -280)
+        nmap.inputs["Strength"].default_value = max(0.0, min(2.0, normal_strength))
+        tree.links.new(ntex.outputs["Color"], nmap.inputs["Color"])
+        tree.links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
+
+    _setup_pbr(tree, bsdf, out, roughness=roughness, metallic=0.0)
+    return mat
+
+
 def create_stylized_hajfin_timber(name="M_Building_Timber", color=None):
+    """Hajfin structural timber beams (baked texture)."""
+    return _baked_surface(name, "hajfin_timber", 0.80,
+                          fallback_color=color or (0.15, 0.09, 0.05, 1.0),
+                          normal_strength=0.8)
+
+
+def _procedural_hajfin_timber(name="M_Building_Timber", color=None):
     """Heavy structural driftwood timber beam material for Hajfin posts, beams, rafters, and stilts.
     Uses the dark timber beam texture with deep rich dark espresso/chocolate tones,
     flowing vertical wood grain, subtle chisel marks, and edge wear matching authentic fachwerk framing."""
@@ -3034,6 +3132,13 @@ def create_stylized_hajfin_timber(name="M_Building_Timber", color=None):
 
 
 def create_stylized_hajfin_deck(name="M_Building_Floor", color=None):
+    """Weathered grey Hajfin deck planks (baked texture)."""
+    return _baked_surface(name, "hajfin_deck", 0.82,
+                          fallback_color=color or (0.28, 0.28, 0.29, 1.0),
+                          normal_strength=1.0)
+
+
+def _procedural_hajfin_deck(name="M_Building_Floor", color=None):
     """Weathered, salt-washed greyish-brown timber deck planks unique to the Hajfin faction.
     Features authentic stylized handpainted grain, dark plank crevices, and iron fasteners."""
     mat, tree = _new_mat(name)
@@ -3071,6 +3176,13 @@ def create_stylized_hajfin_deck(name="M_Building_Floor", color=None):
 
 
 def create_stylized_rough_reef_stone(name="M_Building_Rough_Stone", color=None):
+    """Craggy coastal reef stone (baked texture)."""
+    return _baked_surface(name, "hajfin_reef_stone", 0.92,
+                          fallback_color=color or (0.28, 0.30, 0.32, 1.0),
+                          normal_strength=1.1)
+
+
+def _procedural_rough_reef_stone(name="M_Building_Rough_Stone", color=None):
     """Rough craggy coastal reef stone with barnacles and salt weathering for Hajfin foundations."""
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
@@ -3107,6 +3219,13 @@ def create_stylized_rough_reef_stone(name="M_Building_Rough_Stone", color=None):
 
 
 def create_stylized_bone(name="M_Building_Bone", color=None):
+    """Sun-bleached carved bone (baked texture)."""
+    return _baked_surface(name, "hajfin_bone", 0.68,
+                          fallback_color=(0.84, 0.82, 0.75, 1.0),
+                          normal_strength=0.7)
+
+
+def _procedural_bone(name="M_Building_Bone", color=None):
     """Sun-bleached ivory bone with organic marrow grain and scrimshaw engravings for Hajfin ribs and totems."""
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
@@ -3142,6 +3261,13 @@ def create_stylized_bone(name="M_Building_Bone", color=None):
 
 
 def create_stylized_bone_shingles(name="M_Building_Bone_Shingles", color=None):
+    """Bone / shark scale roof shingles (baked texture, ivory or coral)."""
+    c = color or (0.86, 0.82, 0.74, 1.0)
+    key = "hajfin_shingles_coral" if c[0] > c[1] * 1.35 else "hajfin_shingles_ivory"
+    return _baked_surface(name, key, 0.72, fallback_color=c, normal_strength=1.0)
+
+
+def _procedural_bone_shingles(name="M_Building_Bone_Shingles", color=None):
     """Hand-painted stylized bone-scale / shark-scale roof shingles with moss accents in seams."""
     mat, tree = _new_mat(name)
     out, bsdf = _out_bsdf(tree, loc_x=1200)
