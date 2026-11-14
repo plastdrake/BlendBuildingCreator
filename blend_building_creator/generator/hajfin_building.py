@@ -6592,12 +6592,18 @@ _HAJFIN_BANNER_TWEAKS = {
     # clear of the watchtower ladder entrance
     # clear of the mezzanine / gallery beams
     'HAJFIN_FORGE_T1': (0.0, 0.0, -0.50, 0.0),
-    'HAJFIN_LOOKOUT_HUT_T1': (0.0, 0.0, 0.50, 0.0),
+    'HAJFIN_LOOKOUT_HUT_T1': (0.0, 0.0, 1.25, 0.0),
     'HAJFIN_CHIEFTAIN_HUT_T1': (0.0, 0.0, 0.45, 0.06),
     # hang it from the gable beam, nudged toward the gable centre
     'HAJFIN_PIRATE_TAVERN_T1': (-0.55, 0.0, -0.25, -0.03),
     # clear of the upper-storey window
     'HAJFIN_FISH_DEPOT_T1': (0.0, 0.0, -1.25, 0.0),
+}
+
+
+# Per-preset banner cloth size multiplier (default 1.0).
+_HAJFIN_BANNER_SCALE = {
+    'HAJFIN_LOOKOUT_HUT_T1': 0.75,
 }
 
 
@@ -6647,7 +6653,12 @@ def _attach_faction_banner(bm, props, style):
                                      width=banner_w, height=banner_h, facing_y=-1.0)
         return
 
-    tweak = _HAJFIN_BANNER_TWEAKS.get(getattr(props, 'preset_name', ''))
+    _preset = getattr(props, 'preset_name', '')
+    _bs = _HAJFIN_BANNER_SCALE.get(_preset)
+    if _bs:
+        banner_w *= _bs
+        banner_h *= _bs
+    tweak = _HAJFIN_BANNER_TWEAKS.get(_preset)
     tdx, tdy, tdz, tfrac = tweak if tweak else (0.0, 0.0, 0.0, 0.0)
 
     # ------------------------------------------------------ 2. front wall mount --
