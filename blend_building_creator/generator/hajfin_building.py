@@ -3677,8 +3677,12 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
         p0 = (sgn_x * h_bw, sgn_y * h_bd, 0.0)
         p1 = (sgn_x * h_tw, sgn_y * h_td, stilt_h)
         _create_oriented_beam(bm, p0, p1, width=0.42, depth=0.42, mat_index=MAT_INDEX_TIMBER)
-        # Deep stilt pilings (extending 10m downwards) for placing tower in deep water / next to piers
-        p_deep = (sgn_x * h_bw, sgn_y * h_bd, -10.0)
+        # Deep stilt pilings continuing the SAME splay angle the leg has above
+        # ground, so a tower sunk into deep water reads as one continuous leg.
+        deep_drop = 10.0
+        flare_x = (p0[0] - p1[0]) / max(0.1, stilt_h) * deep_drop
+        flare_y = (p0[1] - p1[1]) / max(0.1, stilt_h) * deep_drop
+        p_deep = (p0[0] + flare_x, p0[1] + flare_y, -deep_drop)
         _create_oriented_beam(bm, p_deep, p0, width=0.42, depth=0.42, mat_index=MAT_INDEX_TIMBER)
 
     # 3. Intermediate Ring Tie-Beams & Iron Plates (Two bays)
@@ -3750,20 +3754,26 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
     slope_dy = (y_hatch_center - lad_y0) / max(0.1, stilt_h)
     lad_y1 = y_hatch_center + slope_dy * 1.10
 
+    # Ladder runs below ground too, on the same slope, so tall towers dropped into
+    # deep water or sunk into terrain still have a full climb from the waterline.
+    lad_bot_z = -6.0
+    dy_per_z = (lad_y1 - lad_y0) / max(0.1, (stilt_h + 1.10))
+    lad_y_bot = lad_y0 + dy_per_z * lad_bot_z
+
     # Two heavy timber ladder stringers extending above deck to form grab rails:
     for sgn_lad in (-1.0, 1.0):
         lx = lad_x + sgn_lad * (lad_w * 0.5)
-        _create_oriented_beam(bm, (lx, lad_y0, 0.0), (lx, lad_y1, stilt_h + 1.10),
+        _create_oriented_beam(bm, (lx, lad_y_bot, lad_bot_z), (lx, lad_y1, stilt_h + 1.10),
                               width=0.14, depth=0.16, mat_index=MAT_INDEX_TIMBER)
 
     # Ladder rungs spaced vertically up to floor level (none above floor to trip climbers)
-    num_rungs = max(6, int(stilt_h / 0.35))
+    ladder_span = stilt_h - lad_bot_z
+    num_rungs = max(6, int(ladder_span / 0.35))
     for i in range(1, num_rungs):
-        rz = i * (stilt_h / num_rungs)
+        rz = lad_bot_z + i * (ladder_span / num_rungs)
         if rz > stilt_h - 0.10:
             continue
-        t_lad = rz / (stilt_h + 1.10)
-        ry = lad_y0 * (1.0 - t_lad) + lad_y1 * t_lad
+        ry = lad_y0 + dy_per_z * rz
         _create_oriented_beam(bm, (lad_x - lad_w * 0.46, ry, rz), (lad_x + lad_w * 0.46, ry, rz),
                               width=0.10, depth=0.12, mat_index=MAT_INDEX_TIMBER)
 
@@ -3856,10 +3866,8 @@ def _build_hajfin_watchtower(bm, props, width=5.5, depth=5.5, height=10.5, found
     # 9. Grounded Sentry Cabin Roof & Gable Truss
     _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_z - eave_z)
 
-    # 10. Ground Perimeter Fortifications & Watchtower Provisions
-    # Placed with clean clearance from corner stilt pillars, X-braces, and the central access ladder
-    _build_hajfin_cargo_stack(bm, -h_bw * 0.55, -h_bd - 1.25, 0.0)
-    _build_tribal_totem_post(bm, h_bw * 0.55, -h_bd - 1.25, 0.0, height=2.8, with_skull=True)
+    # (ground clutter removed - the tower is meant to drop into water or terrain
+    # without crates and totems floating around its legs)
 
 
 def _build_hajfin_watchtower_roof(bm, props, h_tw, h_td, eave_z, peak_h):
