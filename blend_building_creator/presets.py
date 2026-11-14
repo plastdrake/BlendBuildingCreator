@@ -7036,22 +7036,13 @@ PRESETS = {
         'description': "Two-storey stilt shack with interior stairs, upper deck, copper nails, and extended roof overhang.",
         'settings': _hajfin_settings(width=9.5, depth=11.0, num_floors=2, found_h=1.4, wonkiness=0.22, roof_h=4.0, roof_mat='WOOD_SHINGLES', tier=2, hajfin_style='SHANTY'),
     },
-    'HAJFIN_HULL_SHELTER_T1': {
-        'category': 'SHANTIES',
-        'family': 'HAJFIN_HULL_SHELTER',
-        'tier': 1,
-        'name': "Upturned Bow Half-Shelter",
-        'plot': "14m x 14m",
-        'description': "The bow half of a ship's boat, sawn across the middle, flipped keel-up and scaled up into a roomy beach shelter with a boarded door wall, repair frames and a raised bunk inside.",
-        'settings': _hajfin_settings(width=7.2, depth=8.4, num_floors=1, found_h=0.0, wonkiness=0.10, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=1, hajfin_style='HULL_SHELTER'),
-    },
     'HAJFIN_SHIP_TAVERN_T1': {
         'category': 'HOSPITALITY',
         'family': 'HAJFIN_SHIP_TAVERN',
         'tier': 1,
         'name': "The Beached Galleon",
         'plot': "34m x 34m",
-        'description': "A pirate pub rebuilt from three sawn pieces of a beached galleon: the midship hull is the taproom roof, the bow forms the entrance porch complete with bowsprit, and the stern covers an open kitchen deck. Rope lashings, iron straps, a salvaged mast and a shark-skull pub sign bolt the wreck together.",
+        'description': "A pirate pub rebuilt from three sawn pieces of a beached galleon: the midship hull is the taproom roof, the bow forms the entrance porch complete with bowsprit, and the stern covers an open kitchen deck. Rope lashings, iron straps, a salvaged mast and a painted name board bolt the wreck together.",
         'settings': _hajfin_settings(width=15.0, depth=21.0, num_floors=1, found_h=0.0, wonkiness=0.20, has_pillared=True, pillars=4, has_trade_sign=True, sign_icon='tavern_sign.png', roof_h=4.6, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=2.60, door_h=3.60, tier=1, hajfin_style='SHIP_TAVERN'),
     },
     'HAJFIN_NET_HUT_T1': {
@@ -7886,19 +7877,6 @@ BUILDING_FAMILIES = [
         ],
     },
     {
-        'id': 'HAJFIN_HULL_SHELTER',
-        'faction': 'HAJFIN',
-        'name': "Upturned Bow Half-Shelter",
-        'category': 'SHANTIES',
-        'plot': "14m x 14m",
-        'shape': "Inverted Half Hull",
-        'icon': 'MOD_OCEAN',
-        'description': "The bow half of a rowboat sawn across the middle, flipped keel-up and enlarged into a roomy beach shelter.",
-        'tiers': [
-            ("Standalone", 'HAJFIN_HULL_SHELTER_T1', "Keel-up bow shelter with sawn door wall, repair frames and bunk"),
-        ],
-    },
-    {
         'id': 'HAJFIN_SHIP_TAVERN',
         'faction': 'HAJFIN',
         'name': "The Beached Galleon",
@@ -7906,7 +7884,7 @@ BUILDING_FAMILIES = [
         'plot': "34m x 34m",
         'shape': "Salvaged Hull Pub",
         'icon': 'COMMUNITY',
-        'description': "A pirate pub pieced back together from three sawn sections of a beached galleon, with a bow porch, stern kitchen deck, mast and shark-skull sign.",
+        'description': "A pirate pub pieced back together from three sawn sections of a beached galleon, with a bow porch, stern kitchen deck, mast and painted name board.",
         'tiers': [
             ("Standalone", 'HAJFIN_SHIP_TAVERN_T1', "Three-piece hull tavern with bow porch, side kitchen and salvaged mast"),
         ],

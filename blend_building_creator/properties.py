@@ -394,7 +394,6 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('FEATURE_ROPE_BRIDGE', "Rope Bridge Feature", "Standalone suspended rope bridge with cross-plank walkway, handrail ropes and lashed pylons", 'MOD_OCEAN', 20),
             ('FEATURE_CROWS_NEST', "Crow's Nest Mast Feature", "Standalone ship mainmast with crow's nest lookout, yardarm, furled sail and ratline ladder", 'OUTLINER_OB_LIGHTPROBE', 21),
             ('FEATURE_SHIP_ANCHOR', "Ship Anchor Feature", "Standalone salvaged anchor with spiralled hawser and rope coil", 'SNAP_FACE', 22),
-            ('HULL_SHELTER', "Upturned Bow Half-Shelter", "Sawn bow half of a rowboat flipped keel-up into a roomy beach shelter", 'MOD_OCEAN', 23),
             ('SHIP_TAVERN', "Beached Galleon Pub", "Pirate pub rebuilt from sawn sections of a beached galleon, with bow porch and stern kitchen", 'COMMUNITY', 24),
         ],
         default='SHANTY',

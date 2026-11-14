@@ -728,7 +728,8 @@ def build_desk(bm, x, y, z_ground=0.0, ang=0.0, width=1.85):
 
 
 def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.8, return_length=0.0,
-                  return_side=-1.0, back_bar_offset=None, back_bar=True):
+                  return_side=-1.0, back_bar_offset=None, back_bar=True,
+                  height=1.18, body_mat=None, top_mat=None, trim_mat=None):
     """Tavern bar counter with plank front, top slab and a back bar.
 
     ``return_length`` adds an L-shaped return arm running along one end
@@ -736,23 +737,30 @@ def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.8, return_length=0.0
     customers just like a real pub bar.  Bottles, tankards and glasses are
     stacked on the return and on the back-bar shelf, so the counter never
     reads as an empty plinth.
+
+    ``height`` and the three ``*_mat`` overrides let faction builders reuse the
+    same bar desk with their own proportions and materials (the Hajfin pub uses
+    a dark structural body, a deck-plank top and driftwood seam strips).
     """
     from ..materials import MAT_INDEX_BOTTLE_GLASS, MAT_INDEX_IRON
+    body_mat = MAT_INDEX_WOOD if body_mat is None else body_mat
+    top_mat = MAT_INDEX_TIMBER if top_mat is None else top_mat
+    trim_mat = MAT_INDEX_TIMBER if trim_mat is None else trim_mat
     faces = []
-    h, d = 1.18, 0.78
+    h, d = float(height), 0.78
     faces += create_beveled_box(bm, size=(length, d, h),
                                 location=(0.0, 0.0, h / 2),
-                                mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
+                                mat_index=body_mat, bevel_amount=0.010)
     faces += create_beveled_box(bm, size=(length + 0.12, d + 0.14, 0.07),
                                 location=(0.0, 0.0, h - 0.015 + 0.035),
-                                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+                                mat_index=top_mat, bevel_amount=0.010)
     # Vertical plank seams on the front face
     n = max(3, int(length / 0.4))
     for i in range(n):
         px = -length / 2 + length * (i + 0.5) / n
         faces += create_beveled_box(bm, size=(0.025, 0.02, h - 0.14),
                                     location=(px, -d / 2 - 0.005, h / 2),
-                                    mat_index=MAT_INDEX_TIMBER, bevel_amount=0.002)
+                                    mat_index=trim_mat, bevel_amount=0.002)
     top_z = h + 0.02
 
     # L-shaped return arm along one end of the counter.
@@ -763,11 +771,11 @@ def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.8, return_length=0.0
         faces += create_beveled_box(
             bm, size=(d, arm_len, h),
             location=(ax, ay, h / 2),
-            mat_index=MAT_INDEX_WOOD, bevel_amount=0.010)
+            mat_index=body_mat, bevel_amount=0.010)
         faces += create_beveled_box(
             bm, size=(d + 0.14, arm_len + 0.06, 0.07),
             location=(ax, ay - 0.03, top_z - 0.015),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.010)
+            mat_index=top_mat, bevel_amount=0.010)
         # Bottles + tankards on the return so the L reads as a working bar.
         for _i in range(max(2, int(arm_len / 0.42))):
             _ty = ay - arm_len * 0.5 + 0.26 + _i * 0.42
@@ -790,11 +798,11 @@ def build_counter(bm, x, y, z_ground=0.0, ang=0.0, length=2.8, return_length=0.0
     # counter's standing gap.
     _bb_y = (d * 0.5 if back_bar_offset is None else float(back_bar_offset)) - 0.18
     if back_bar:
-        for _shelf_z in (1.25, 1.70, 2.15):
+        for _shelf_z in (h * 1.06, h * 1.44, h * 1.82):
             faces += create_beveled_box(
                 bm, size=(length + 0.16, 0.42, 0.05),
                 location=(0.0, _bb_y - 0.05, _shelf_z),
-                mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+                mat_index=trim_mat, bevel_amount=0.006)
             _nb = max(3, int(length / 0.34))
             for _k in range(_nb):
                 _bx = -length * 0.5 + 0.16 + _k * (length - 0.32) / max(1, _nb - 1)
