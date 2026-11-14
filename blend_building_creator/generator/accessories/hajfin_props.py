@@ -930,12 +930,16 @@ def _build_rope_tube(bm, points, radius=0.03, sides=8, mat_index=None,
             f.loops[2][uv_layer].uv = Vector((u1, v1))
             f.loops[3][uv_layer].uv = Vector((u1, v0))
 
-    # Simple end caps
+    # End caps: give them UVs from inside the rope so they read as cut rope
+    # instead of black discs (which looked like 4 stray rope ends on the anchor).
+    v_end = max(0.02, v_per_metre * 0.02)
     for ring, flip in ((rings[0], True), (rings[-1], False)):
         try:
             f = bm.faces.new(list(reversed(ring)) if flip else list(ring))
             f.material_index = mat_index
             f.tag = True
+            for k, loop in enumerate(f.loops):
+                loop[uv_layer].uv = Vector((0.35 + 0.30 * (k / float(len(f.loops))), v_end))
         except ValueError:
             pass
 
@@ -1133,50 +1137,68 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
                       transform_matrix=M)
 
     # 6. Natural Nautical Hawser Rope spiraling down the shank
-    num_rope_turns = 5.5
-    # Run the hawser from the deck coil all the way up the shank and tuck its end
-    # inside the shackle ring at the top, so no loose end is visible.
-    rope_z_top = eye_z + 0.16
-    rope_z_bot = 0.10
-    rope_pts_count = 120
-    rope_r = (shank_w * 0.75 + 0.030)
     rope_rad = 0.032 * scale
+    rope_r = (shank_w * 0.75 + 0.062)
+    spiral_top = stock_z - 0.20
+    z_bot = 0.12
+    turns = 4.2
+    steps = 96
+    pts = []
 
-    spiral_pts = []
-    for i in range(rope_pts_count + 1):
-        t = i / float(rope_pts_count)
-        rz = rope_z_top * (1.0 - t) + rope_z_bot * t
-        ang = t * (math.pi * 2.0 * num_rope_turns) + math.pi * 0.5
-        rx = math.cos(ang) * rope_r
-        ry = math.sin(ang) * rope_r
-        spiral_pts.append(M @ Vector((rx, ry, rz)))
+    # 1. Tuck the start inside the shackle ring, then lash straight down the side
+    #    of the shank.  Offset to +x so it passes BESIDE the cross-stock instead of
+    #    clipping straight through it.
+    lash_x = shank_w * 0.55 + rope_rad * 0.6
+    lash_y = -(shank_w * 0.55 + rope_rad * 0.6)
+    ring_z = eye_z + 0.14
+    for k in range(0, 8):
+        t = k / 7.0
+        pts.append(M @ Vector((lash_x, lash_y, ring_z + (spiral_top - ring_z) * t)))
 
-    # Tail curving off the bottom of the shank into the coil so the two read as
-    # one continuous hawser instead of a spiral plus a separate rope donut.
-    coil_off = Vector((0.34 * scale, 0.30 * scale, 0.0))
-    coil_centre = M @ coil_off
-    coil_start = Vector((coil_centre.x, coil_centre.y, z_ground + rope_rad + 0.012))
-    last = spiral_pts[-1]
-    control = Vector(((last.x + coil_start.x) * 0.5, (last.y + coil_start.y) * 0.5,
-                      z_ground + rope_rad + 0.055))
-    for si in range(1, 9):
-        t = si / 8.0
-        a = last.lerp(control, t)
-        b = control.lerp(coil_start, t)
-        spiral_pts.append(a.lerp(b, t))
+    # 2. Spiral down the shank
+    ang0 = math.pi * 0.25
+    for i in range(steps + 1):
+        t = i / float(steps)
+        rz = spiral_top * (1.0 - t) + z_bot * t
+        ang = ang0 + t * (math.pi * 2.0 * turns)
+        pts.append(M @ Vector((math.cos(ang) * rope_r, math.sin(ang) * rope_r, rz)))
 
-    _build_rope_tube(bm, spiral_pts, radius=rope_rad, sides=8,
+    # 3. Tail off the foot of the shank onto the deck
+    coil_c = M @ Vector((0.30 * scale, 0.32 * scale, 0.0))
+    coil_z = z_ground + rope_rad
+    last = pts[-1]
+    ctrl = Vector(((last.x + coil_c.x) * 0.5, (last.y + coil_c.y) * 0.5,
+                   z_ground + rope_rad * 2.2))
+    for k in range(1, 9):
+        t = k / 8.0
+        a = last.lerp(ctrl, t)
+        b = ctrl.lerp(Vector((coil_c.x, coil_c.y, coil_z)), t)
+        pts.append(a.lerp(b, t))
+
+    # 4. Flat coil on the deck, wound inward, with the final end dipping under the
+    #    first turn so no loose rope end is left showing.
+    coil_turns = 2.6
+    coil_steps = 72
+    r_out = 0.30 * scale
+    r_in = 0.075 * scale
+    ca0 = math.atan2(coil_c.y, coil_c.x)
+    for i in range(coil_steps + 1):
+        t = i / float(coil_steps)
+        r = r_out + (r_in - r_out) * t
+        ang = ca0 + t * (math.pi * 2.0 * coil_turns)
+        pts.append(Vector((coil_c.x + math.cos(ang) * r,
+                           coil_c.y + math.sin(ang) * r,
+                           coil_z)))
+    hide = 0.16 * scale
+    for k in range(1, 5):
+        t = k / 4.0
+        pts.append(Vector((coil_c.x + (r_in * 0.35) * (1.0 - t),
+                           coil_c.y, coil_z - hide * t)))
+
+    # One welded tube for the whole hawser: identical fibre scale everywhere and
+    # only two ends, both hidden (ring + under the coil).
+    _build_rope_tube(bm, pts, radius=rope_rad, sides=8,
                      mat_index=MAT_INDEX_ROPE, u_tiles=1.0, v_per_metre=9.0)
-
-    # Loose hawser coiled on the deck at the foot of the anchor (matched to the
-    # same rope thickness as the wrap up the shank)
-    create_spiral_rope_coil(
-        bm, location=(coil_start.x, coil_start.y, z_ground + 0.012),
-        inner_radius=0.085 * scale, outer_radius=0.34 * scale,
-        rope_radius=rope_rad * 1.05, turns=2.8, num_steps=80, tube_segments=8,
-        mat_index=MAT_INDEX_ROPE,
-    )
-
     return True
 
 
