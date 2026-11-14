@@ -6847,6 +6847,8 @@ def _build_hajfin_hull_shelter(bm, props, width=4.4, depth=7.5, height=2.7, foun
     stations = max(11, int(depth / 0.5))
     thick = 0.12
     rake = 0.7
+    break_start = int(stations * 0.43)
+    break_end = int(stations * 0.58)
 
     def _plan(i):
         t = i / float(stations)
@@ -6878,6 +6880,8 @@ def _build_hajfin_hull_shelter(bm, props, width=4.4, depth=7.5, height=2.7, foun
         inn = [_pt(i, k, y, inflate=thick) for k in range(arc_n + 1)]
         if outer_prev is not None:
             for k in range(arc_n):
+                if i > break_start and i <= break_end:
+                    continue
                 for (cur, prev, flip, ii) in ((o, outer_prev, False, i), (inn, inner_prev, True, i)):
                     q = [bm.verts.new(prev[k]), bm.verts.new(cur[k]),
                          bm.verts.new(cur[k + 1]), bm.verts.new(prev[k + 1])]
@@ -6896,11 +6900,23 @@ def _build_hajfin_hull_shelter(bm, props, width=4.4, depth=7.5, height=2.7, foun
 
     # 2. Frames (ribs) every station, clearly wrapping from keel to gunwale
     for i in range(stations + 1):
+        if break_start < i < break_end:
+            continue
         y = -hd + depth * (i / float(stations))
         pts = [_pt(i, k, y, inflate=-0.06) for k in range(arc_n + 1)]
         for k in range(arc_n):
             _create_oriented_beam(bm, pts[k], pts[k + 1], width=0.22, depth=0.18,
                                   mat_index=MAT_INDEX_TIMBER)
+
+    # Jagged frame ends make the midships break read as a real wreck, not a
+    # clean boolean cut.  They also keep the two surviving hull halves rigid.
+    for i in (break_start, break_end):
+        y = -hd + depth * (i / float(stations))
+        pts = [_pt(i, k, y, inflate=-0.08) for k in range(arc_n + 1)]
+        for k in range(0, arc_n, 2):
+            _create_oriented_beam(
+                bm, pts[k], pts[min(k + 1, arc_n)], width=0.24, depth=0.20,
+                mat_index=MAT_INDEX_TIMBER)
 
     # 3. Torn bow rim band
     for k in range(arc_n):
@@ -7024,15 +7040,18 @@ def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, fou
         create_torus_ring(bm, location=(0.0, 0.0, 0.0), major_radius=0.38, minor_radius=0.07,
                           major_segments=14, minor_segments=6, mat_index=MAT_INDEX_IRON,
                           transform_matrix=Matrix.Translation(pos) @ orient)
-        create_box(bm, (0.80, 0.80, 0.05), (pos.x - d.x * 0.10, pos.y, pos.z - d.z * 0.10),
-                   mat_index=MAT_INDEX_GLASS)
+        glass_rot = math.atan2(d.x, d.z)
+        create_cylinder(
+            bm, radius=0.29, height=0.06, segments=14,
+            location=(pos.x - d.x * 0.12, pos.y, pos.z - d.z * 0.12),
+            rotation=(0.0, glass_rot, 0.0), mat_index=MAT_INDEX_GLASS)
 
     # --- 3. Wrapping ribs (they rise over the hull and tie into the keel)
     for i in range(0, stations + 1, 2):
         y = -hd + depth * (i / float(stations))
-        pts = [_fac(i, k, y, inflate=-0.10) for k in range(arc_n + 1)]
+        pts = [_fac(i, k, y, inflate=-0.04) for k in range(arc_n + 1)]
         for k in range(arc_n):
-            _create_oriented_beam(bm, pts[k], pts[k + 1], width=0.24, depth=0.20,
+            _create_oriented_beam(bm, pts[k], pts[k + 1], width=0.18, depth=0.16,
                                   mat_index=MAT_INDEX_TIMBER)
 
     # --- 4. Closed stern transom
@@ -7062,11 +7081,23 @@ def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, fou
                    mat_index=MAT_INDEX_TIMBER)
 
     # --- 6. Interior: boarded floor, upper gallery and stair
-    create_box(bm, (width * 0.72, depth - 1.4, 0.16), (0.0, 0.2, z0 + 0.14),
+    floor_w = width * 0.76
+    floor_d = depth - 1.6
+    create_box(bm, (floor_w, floor_d, 0.16), (0.0, 0.2, z0 + 0.14),
                mat_index=MAT_INDEX_FLOOR)
+    for y in (-floor_d * 0.5 + 0.35, 0.2, floor_d * 0.5 + 0.2):
+        create_box(bm, (floor_w + 0.20, 0.22, 0.24), (0.0, y, z0 + 0.02),
+                   mat_index=MAT_INDEX_TIMBER)
     gal_z = z0 + 2.7
     create_box(bm, (width * 0.62, depth * 0.55, 0.16), (0.0, -2.0, gal_z),
                mat_index=MAT_INDEX_FLOOR)
+    gallery_x = width * 0.29
+    gallery_y0 = -2.0 - depth * 0.275
+    gallery_y1 = -2.0 + depth * 0.275
+    for gx in (-gallery_x, gallery_x):
+        for gy in (gallery_y0, gallery_y1):
+            create_box(bm, (0.24, 0.24, gal_z - z0), (gx, gy, z0 + (gal_z - z0) * 0.5),
+                       mat_index=MAT_INDEX_TIMBER)
     for sgn in (-1.0, 1.0):
         _build_timber_deck_railing(bm, sgn * width * 0.31, sgn * width * 0.31,
                                    -2.0 - depth * 0.275, -2.0 + depth * 0.275, gal_z + 0.06)
@@ -7080,9 +7111,15 @@ def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, fou
     deck_y1 = hd - 1.4
     create_box(bm, (width * 0.58, deck_y1 - deck_y0, 0.16),
                (0.0, (deck_y0 + deck_y1) * 0.5, z0 + height + 0.12), mat_index=MAT_INDEX_FLOOR)
-    for sgn in (-1.0, 1.0):
-        _build_timber_deck_railing(bm, sgn * width * 0.29, sgn * width * 0.29,
-                                   deck_y0, deck_y1, z0 + height + 0.20)
+    _build_timber_deck_railing(
+        bm, -width * 0.29, width * 0.29, deck_y0, deck_y1,
+        z0 + height + 0.20)
+    for gx in (-width * 0.27, width * 0.27):
+        for gy in (deck_y0 + 0.35, deck_y1 - 0.35):
+            create_box(
+                bm, (0.24, 0.24, 1.20),
+                (gx, gy, z0 + height - 0.48),
+                mat_index=MAT_INDEX_TIMBER)
     # a small windowed cabin on the upper deck
     create_box(bm, (width * 0.42, 3.6, 2.6), (0.0, hd - 3.6, z0 + height + 1.5),
                mat_index=MAT_INDEX_DRIFTWOOD)
@@ -7106,6 +7143,7 @@ def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, fou
         sh_y = -4.0 if side > 0 else 1.5
         for (px, py) in ((sx - 1.1, sh_y), (sx - 1.1, sh_y + 2.8), (sx + 1.1, sh_y), (sx + 1.1, sh_y + 2.8)):
             create_box(bm, (0.22, 0.22, 2.9), (px, py, z0 + 1.45), mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (2.2, 2.8, 0.14), (sx, sh_y + 1.4, z0 + 0.14), mat_index=MAT_INDEX_FLOOR)
         create_box(bm, (2.2, 2.8, 2.0), (sx, sh_y + 1.4, z0 + 1.4), mat_index=MAT_INDEX_DRIFTWOOD)
         _build_hajfin_supported_plank_roof(bm, sx - 1.2, sx + 1.2, sh_y, sh_y + 2.8,
                                            z0 + 2.6, 0.9, overhang_x=0.25, overhang_y=0.25)
@@ -7117,6 +7155,7 @@ def _build_hajfin_ship_tavern(bm, props, width=14.0, depth=20.0, height=5.6, fou
     # --- 11. Rope bridge from the bow balcony to a ground mooring post
     moor_x = -hw - 8.5
     create_box(bm, (1.1, 1.1, 0.30), (moor_x, -hd - 1.0, z0 + 0.15), mat_index=MAT_INDEX_ROUGH_STONE)
+    create_box(bm, (1.8, 1.8, 0.16), (moor_x, -hd - 1.0, z0 + 0.32), mat_index=MAT_INDEX_FLOOR)
     create_box(bm, (0.34, 0.34, bow_z + 1.2), (moor_x, -hd - 1.0, z0 + (bow_z + 1.2) * 0.5),
                mat_index=MAT_INDEX_TIMBER)
     build_suspended_rope_bridge(bm, (0.0, -hd - 2.4, bow_z + 0.12),

@@ -7043,7 +7043,7 @@ PRESETS = {
         'name': "Upturned Hull Shelter",
         'plot': "8m x 8m",
         'description': "A broken ship's boat turned keel-up on the beach: heavy inside ribs, torn plank edge and an open arched shelter.",
-        'settings': _hajfin_settings(width=8.0, depth=9.0, num_floors=1, found_h=0.0, wonkiness=0.10, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=1, hajfin_style='HULL_SHELTER'),
+        'settings': _hajfin_settings(width=9.0, depth=10.0, num_floors=1, found_h=0.0, wonkiness=0.14, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=1, hajfin_style='HULL_SHELTER'),
     },
     'HAJFIN_SHIP_TAVERN_T1': {
         'category': 'HOSPITALITY',
@@ -7052,7 +7052,7 @@ PRESETS = {
         'name': "The Beached Galleon",
         'plot': "30m x 30m",
         'description': "Beached galleon tavern: the huge upturned hull bottom forms the roof over the hall, with a rooftop walkway, salvaged mainmast, bolted-on lean-to shack, cantilevered balcony, rope bridge and bone portholes.",
-        'settings': _hajfin_settings(width=13.0, depth=19.0, num_floors=2, found_h=0.0, wonkiness=0.16, has_pillared=True, pillars=4, has_trade_sign=True, sign_icon='tavern_sign.png', roof_h=4.6, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.90, door_h=3.60, tier=1, hajfin_style='SHIP_TAVERN'),
+        'settings': _hajfin_settings(width=15.0, depth=21.0, num_floors=2, found_h=0.0, wonkiness=0.22, has_pillared=True, pillars=4, has_trade_sign=True, sign_icon='tavern_sign.png', roof_h=4.6, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.90, door_h=3.60, tier=1, hajfin_style='SHIP_TAVERN'),
     },
     'HAJFIN_NET_HUT_T1': {
         'category': 'SHANTIES',
