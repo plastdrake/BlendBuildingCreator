@@ -703,28 +703,47 @@ def build_fish_hanging_rack(bm, x, y, z_ground=0.0, ang=0.0, width=1.8, height=1
             mat_index=MAT_INDEX_ROPE
         )
 
-    # 4. Hung fish strings (4 hung fish along crossbar)
+    # 4. Hung fish strings (artist fish mesh when available, pale fallback).
     fish_xs = [-0.55, -0.20, 0.20, 0.55]
-    for fx in fish_xs:
-        # Hanging string
+    try:
+        from .artisan_props import (_stamp_baked_local, _fish_scale,
+                                    _fish_yaw, _hang_mat)
+    except Exception:
+        _stamp_baked_local = None
+        _fish_scale = None
+        _fish_yaw = None
+        _hang_mat = None
+    for i, fx in enumerate(fish_xs):
+        fl = 0.40 * (_fish_scale(i) if _fish_scale is not None else 1.5)
+        rope_len = 0.16 + 0.85 * fl
         faces += create_cylinder(
-            bm, radius=0.012, height=0.35, segments=6,
-            location=(fx, 0.0, height - 0.25),
+            bm, radius=0.010, height=rope_len, segments=6,
+            location=(fx, 0.0, height - 0.08 - rope_len * 0.5),
             mat_index=MAT_INDEX_ROPE
         )
-        # Stylized fish body
-        faces += create_cylinder(
-            bm, radius=0.07, height=0.38, segments=8,
-            location=(fx, 0.0, height - 0.55),
-            rotation=(0.0, 0.0, 0.1),
-            mat_index=MAT_INDEX_FISH
-        )
-        # Fish tail fin
-        faces += create_cone(
-            bm, radius1=0.08, radius2=0.01, height=0.14, segments=4,
-            location=(fx, 0.0, height - 0.78),
-            mat_index=MAT_INDEX_FISH
-        )
+        stamped = False
+        if _stamp_baked_local is not None:
+            try:
+                stamped = _stamp_baked_local(
+                    bm, faces, 'fish.fbx', fx, 0.0,
+                    height - 0.08 - rope_len + fl * 0.25,
+                    _fish_yaw(i), fl, MAT_INDEX_FISH,
+                    long_axis='X', pre_mat=_hang_mat(), thick=1.5,
+                    anchor='CENTER')
+            except Exception:
+                stamped = False
+        if not stamped:
+            # Pale stylized dried fish fallback: body plus tail fin.
+            faces += create_cylinder(
+                bm, radius=0.060, height=0.32, segments=8,
+                location=(fx, 0.0, height - 0.08 - rope_len - 0.16),
+                mat_index=MAT_INDEX_BONE, smooth=True
+            )
+            faces += create_cone(
+                bm, radius1=0.075, radius2=0.010, height=0.13, segments=4,
+                location=(fx, 0.0, height - 0.08 - rope_len - 0.38),
+                mat_index=MAT_INDEX_BONE
+            )
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces

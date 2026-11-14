@@ -7407,6 +7407,93 @@ def _place_hajfin_hull_furniture(bm, z_floor, width, depth, ceiling_z=8.25,
         build_prop(bm, 'CHAIN_LANTERN', lx, ly, lz)
 
 
+def _build_hajfin_painted_breach_wall(bm, x, y0, y1, z0, z1, wall_th=0.30,
+                                      windows=(), breach=(-1.8, 2.4, 0.9, 0.6),
+                                      mat_index=MAT_INDEX_PAINTED_PLANKS,
+                                      strips=56):
+    """One continuous painted plank wall with real window holes and a jagged breach.
+
+    The wall is assembled from vertical plank strips.  Window openings and a
+    per-strip irregular breach profile are subtracted from the strip intervals,
+    so the breach is a real see-through hole with a torn, stepped outline.
+    Sparse salvage planks are then nailed across the outside of the breach.
+    """
+    span = y1 - y0
+    strip_w = span / float(strips)
+    hole_y0, hole_y1, hole_z0_off, hole_z1_off = breach
+
+    for i in range(strips):
+        yc = y0 + (i + 0.5) * strip_w
+        intervals = [(z0, z1)]
+
+        def subtract(lo, hi):
+            nonlocal intervals
+            result = []
+            for (a, b) in intervals:
+                if b <= lo or a >= hi:
+                    result.append((a, b))
+                else:
+                    if a < lo:
+                        result.append((a, lo))
+                    if hi < b:
+                        result.append((hi, b))
+            intervals = result
+
+        for (cy, cz, w, h) in windows:
+            if abs(yc - cy) < w * 0.5 + strip_w * 0.16:
+                subtract(cz - h * 0.5, cz + h * 0.5)
+
+        if hole_y0 <= yc <= hole_y1:
+            u = (yc - hole_y0) / max(1e-6, hole_y1 - hole_y0)
+            h1 = math.sin(yc * 12.9898 + 78.233) * 43758.5453
+            j1 = (h1 - math.floor(h1)) - 0.5
+            h2 = math.sin(yc * 7.123 + 31.77) * 24634.6345
+            j2 = (h2 - math.floor(h2)) - 0.5
+            env = max(0.0, math.sin(math.pi * min(1.0, max(0.0, u))))
+            hb = z0 + hole_z0_off + 0.18 * math.sin(u * 9.0 + 1.2) + j1 * 0.22
+            ht = z1 - hole_z1_off + 0.20 * math.sin(u * 6.0 + 0.4) + j2 * 0.24
+            mid = (hb + ht) * 0.5
+            half = (ht - hb) * 0.5 * env + 0.10
+            hb = max(z0 + 0.35, mid - half)
+            ht = min(z1 - 0.25, mid + half)
+            if ht - hb > 0.30:
+                subtract(hb, ht)
+
+        for (a, b) in intervals:
+            height = b - a
+            if height < 0.06:
+                continue
+            create_box(bm, (wall_th, strip_w + 0.012, height),
+                       (x, yc, (a + b) * 0.5),
+                       mat_index=mat_index, is_wall=True)
+
+    frame_x = x - wall_th * 0.5
+    for (cy, cz, w, h) in windows:
+        _build_bone_window(bm, frame_x, cy, cz, rot_z=-math.pi * 0.5,
+                           w=w, h=h, wall_th=wall_th)
+
+    # Sparse planks nailed over the breach, with deliberate gaps.
+    px = x - wall_th * 0.5 - 0.06
+    plank_specs = (
+        (0.30, z0 + 1.45, 4.00, 0.18, 4.0, MAT_INDEX_SALVAGED_PLANKS),
+        (0.30, z0 + 2.05, 3.90, 0.16, -8.0, MAT_INDEX_DRIFTWOOD),
+        (0.30, z0 + 2.60, 3.70, 0.17, 5.0, MAT_INDEX_SALVAGED_PLANKS),
+        (0.30, z0 + 2.30, 3.80, 0.15, -10.0, MAT_INDEX_DRIFTWOOD),
+    )
+    for (py, pz, plen, pth, tilt, pmat) in plank_specs:
+        create_box(bm, (0.08, plen, pth), (px, py, pz),
+                   rotation=(math.radians(tilt), 0.0, 0.0),
+                   mat_index=pmat)
+    create_box(bm, (0.08, 0.18, 1.20), (px, -1.55, z0 + 2.00),
+               rotation=(math.radians(15.0), 0.0, 0.0),
+               mat_index=MAT_INDEX_DRIFTWOOD)
+    for (ny, nz) in ((-1.55, z0 + 1.45), (2.15, z0 + 1.45),
+                     (-1.55, z0 + 2.05), (2.15, z0 + 2.05),
+                     (-1.50, z0 + 2.60), (2.10, z0 + 2.60)):
+        create_box(bm, (0.05, 0.05, 0.05), (px - 0.06, ny, nz),
+                   mat_index=MAT_INDEX_IRON)
+
+
 def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                               height=5.6, found_h=0.0):
     """The Beached Galleon: a pirate pub built from pieces of the Nasher hull.
@@ -7481,10 +7568,11 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         bm, -hw, hw, hd, floor_z, wall_top, -3.5, 3.5,
         floor_z + 2.35, win_w=1.0, win_h=1.05, wall_th=wall_th,
         facing_north=True)
-    _build_hajfin_wall_with_2_windows_y(
-        bm, -hd, hd, -hw, floor_z, wall_top, -2.6, 3.1,
-        floor_z + 2.35, win_w=1.0, win_h=1.05, wall_th=wall_th,
-        facing_east=False)
+    _build_hajfin_painted_breach_wall(
+        bm, -hw, -hd, hd, floor_z, wall_top, wall_th=wall_th,
+        windows=((-2.6, floor_z + 2.35, 1.0, 1.05),
+                 (3.1, floor_z + 2.35, 1.0, 1.05)),
+        breach=(-1.35, 1.95, 0.75, 0.45))
 
     # East wall is mostly open to the side kitchen annex.
     opening_y0 = 0.40
@@ -7525,14 +7613,9 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
             _build_chunky_corner_column(bm, sx * hw, sy * hd, floor_z,
                                         wall_top, size=0.52)
     belt_z = floor_z + 2.55
-    for sy in (-1.0, 1.0):
-        create_box(bm, (hall_w + 0.62, 0.20, 0.24),
-                   (0.0, sy * (hd + 0.10), belt_z),
-                   mat_index=MAT_INDEX_TIMBER)
-    for sx in (-1.0, 1.0):
-        create_box(bm, (0.20, hall_d + 0.62, 0.24),
-                   (sx * (hw + 0.10), 0.0, belt_z),
-                   mat_index=MAT_INDEX_TIMBER)
+    # No continuous belt beam: at this height it would cut straight through
+    # the window openings and the front doorway.  The top plates, corner
+    # columns and corner braces provide the visible timber framing instead.
     brace_pairs = (
         ((-hw + 0.50, -hd - 0.10, belt_z), (-hw + 2.10, -hd - 0.10, wall_top)),
         ((hw - 0.50, -hd - 0.10, belt_z), (hw - 2.10, -hd - 0.10, wall_top)),
@@ -7546,91 +7629,9 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         _create_oriented_beam(bm, p0, p1, width=0.18, depth=0.18,
                               mat_index=MAT_INDEX_TIMBER)
 
-    # 4. Large salvage / paint panels in the actual wall bays, with varied
-    #    heights and widths.  None of these overlap a window or the doorway.
-    fz = floor_z
-
-    def _panel_x(cx, width, y, mat, z0, z1):
-        create_box(bm, (width, 0.08, z1 - z0), (cx, y, (z0 + z1) * 0.5),
-                   mat_index=mat, is_wall=True)
-
-    def _panel_y(cy, width, x, mat, z0, z1):
-        create_box(bm, (0.08, width, z1 - z0), (x, cy, (z0 + z1) * 0.5),
-                   mat_index=mat, is_wall=True)
-
-    # Front wall (door in the middle): no pink here.
-    _panel_x(-4.55, 2.35, -(hd + 0.14), MAT_INDEX_SALVAGED_PLANKS,
-             fz + 0.55, fz + 3.35)
-    _panel_x(4.55, 2.55, -(hd + 0.14), MAT_INDEX_PAINTED_PLANKS_BLUE,
-             fz + 0.85, fz + 3.55)
-    # Rear wall: the bottle shelves sit in front of the two centre panels.
-    _panel_x(-5.30, 1.55, hd + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE,
-             fz + 0.50, fz + 3.20)
-    _panel_x(-0.70, 1.45, hd + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE,
-             fz + 0.60, fz + 3.35)
-    _panel_x(0.95, 1.45, hd + 0.14, MAT_INDEX_SALVAGED_PLANKS,
-             fz + 1.00, fz + 3.15)
-    _panel_x(5.30, 1.55, hd + 0.14, MAT_INDEX_SALVAGED_PLANKS,
-             fz + 0.75, fz + 3.45)
-    # West wall: the centre bay is deliberately left as a damaged, patched
-    # opening (built below); the flanking bays get different sized panels.
-    _panel_y(-5.30, 1.65, -(hw + 0.14), MAT_INDEX_PAINTED_PLANKS_BLUE,
-             fz + 0.65, fz + 3.25)
-    _panel_y(5.25, 1.75, -(hw + 0.14), MAT_INDEX_PAINTED_PLANKS,
-             fz + 0.85, fz + 3.50)
-
-    # Interior bays: varied too, but no pink visible from the entrance.
-    _panel_x(-4.50, 2.45, -hd + 0.14, MAT_INDEX_SALVAGED_PLANKS,
-             fz + 0.50, fz + 3.30)
-    _panel_x(4.50, 2.35, -hd + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE,
-             fz + 0.70, fz + 3.15)
-    _panel_x(0.0, 3.15, hd - 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE,
-             fz + 0.55, fz + 3.35)
-    _panel_y(0.0, 3.15, -hw + 0.14, MAT_INDEX_SALVAGED_PLANKS,
-             fz + 0.50, fz + 3.30)
-    _panel_y(-5.20, 1.60, -hw + 0.14, MAT_INDEX_PAINTED_PLANKS_BLUE,
-             fz + 0.65, fz + 3.20)
-    _panel_y(5.20, 1.70, -hw + 0.14, MAT_INDEX_SALVAGED_PLANKS,
-             fz + 0.85, fz + 3.50)
-
-    # A couple of iron straps, each kept inside its own panel.
-    create_box(bm, (1.70, 0.045, 0.09),
-               (-4.55, -(hd + 0.20), fz + 2.15), mat_index=MAT_INDEX_IRON)
-    create_box(bm, (1.70, 0.045, 0.09),
-               (5.30, hd + 0.20, fz + 2.35), mat_index=MAT_INDEX_IRON)
-
-    # 4b. Damaged breach in the west wall centre bay, boarded over with a few
-    #     uneven salvage planks.  The dark recess shows through the gaps.
-    breach_x = -(hw + 0.155)
-    create_box(bm, (0.05, 2.40, 1.80), (breach_x, 0.0, fz + 2.15),
-               mat_index=MAT_INDEX_TIMBER)
-    # Rough frame around the opening.
-    for (fy, fz0, fw, fh) in ((0.0, fz + 1.22, 2.64, 0.13),
-                              (0.0, fz + 3.08, 2.64, 0.13)):
-        create_box(bm, (0.10, fw, fh), (-(hw + 0.19), fy, fz0),
-                   mat_index=MAT_INDEX_TIMBER)
-    for fy in (-1.27, 1.27):
-        create_box(bm, (0.10, 0.13, 1.99), (-(hw + 0.19), fy, fz + 2.15),
-                   mat_index=MAT_INDEX_TIMBER)
-    # Sparse planks, each slightly crooked and a different length, with gaps
-    # wide enough to show the dark hole behind.
-    plank_specs = (
-        (-0.10, fz + 1.54, 2.25, 0.17, 4.0, MAT_INDEX_SALVAGED_PLANKS),
-        (0.25, fz + 2.08, 1.45, 0.15, -7.0, MAT_INDEX_DRIFTWOOD),
-        (-0.05, fz + 2.64, 2.10, 0.16, 3.0, MAT_INDEX_SALVAGED_PLANKS),
-        (-0.78, fz + 2.42, 0.85, 0.14, -12.0, MAT_INDEX_DRIFTWOOD),
-    )
-    for py, pz, plen, pth, tilt, pmat in plank_specs:
-        create_box(bm, (0.08, plen, pth), (-(hw + 0.23), py, pz),
-                   rotation=(math.radians(tilt), 0.0, 0.0),
-                   mat_index=pmat)
-    create_box(bm, (0.08, 0.16, 1.70), (-(hw + 0.23), 0.68, fz + 2.10),
-               rotation=(math.radians(18.0), 0.0, 0.0),
-               mat_index=MAT_INDEX_DRIFTWOOD)
-    for (nx, nz) in ((-0.90, fz + 1.54), (0.95, fz + 1.54),
-                     (-0.60, fz + 2.64), (0.60, fz + 2.64)):
-        create_box(bm, (0.05, 0.05, 0.05), (-(hw + 0.27), nx, nz),
-                   mat_index=MAT_INDEX_IRON)
+    # 4. The west wall is built as one continuous red-painted plank wall
+    #    with a real jagged breach (see the wall builder below).  No small
+    #    coloured patch panels are used anywhere else.
 
     # 5. Slice the artist's galleon into three reusable hull pieces.
     bm_src, mat_names = _load_hajfin_fbx_bmesh('Nasher_Ship_Hull.fbx')
@@ -7724,28 +7725,56 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                        base_z=porch_base)
     _build_hajfin_rope_lashings(bm, bow_piece, -hd - 0.10,
                                 -porch_w * 0.5, porch_w * 0.5, radius=0.055)
+    porch_post_y = porch_center_y - porch_d * 0.34
+    porch_points = []
+    for sx in (-1.0, 1.0):
+        fx = sx * porch_w * 0.35
+        rx = sx * porch_w * 0.47
+        porch_points.extend(((fx, porch_post_y),
+                             (fx * 0.78, porch_post_y),
+                             (rx, -hd - 0.20),
+                             (rx * 0.85, -hd - 0.20)))
+    porch_roof_z = {}
+    for px, py in porch_points:
+        height = _hajfin_hull_height_at(bow_piece, px, py, tol=1.4)
+        if height is not None:
+            porch_roof_z[(round(px, 4), round(py, 4))] = height
+
+    def _porch_z(px, py, fallback):
+        return porch_roof_z.get((round(px, 4), round(py, 4)), fallback)
+
     _stamp_hajfin_hull(bm, bow_piece, mat_names, add_lining=True,
                        lining_mat=MAT_INDEX_TIMBER,
                        lining_point=(0.0, porch_center_y, floor_z + 0.8),
                        planar_uv=(0.22, 0.50))
     bow_piece.free()
 
-    # Porch posts, braces and railings.
-    porch_post_y = porch_center_y - porch_d * 0.34
+    # Porch posts with knee braces that land on the actual canopy underside.
     for sx in (-1.0, 1.0):
-        create_box(bm, (0.30, 0.30, 4.55 - floor_z),
-                   (sx * porch_w * 0.35, porch_post_y,
-                    (floor_z + 4.55) * 0.5),
+        fx = sx * porch_w * 0.35
+        fy = porch_post_y
+        f_top = max(floor_z + 1.8, _porch_z(fx, fy, 4.55) - 0.08)
+        create_box(bm, (0.30, 0.30, f_top - floor_z),
+                   (fx, fy, (floor_z + f_top) * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (0.28, 0.28, 4.70 - floor_z),
-                   (sx * porch_w * 0.47, -hd - 0.20,
-                    (floor_z + 4.70) * 0.5),
-                   mat_index=MAT_INDEX_TIMBER)
+        f_bx = fx * 0.78
+        f_bz = max(f_top, _porch_z(f_bx, fy, f_top + 0.2) - 0.12)
         _create_oriented_beam(
-            bm, (sx * porch_w * 0.35, porch_post_y, 2.75),
-            (sx * porch_w * 0.46, -hd - 0.20, 4.25),
+            bm, (fx, fy, floor_z + 2.35), (f_bx, fy, f_bz),
             width=0.16, depth=0.16, mat_index=MAT_INDEX_TIMBER)
-        create_torus_ring(bm, (sx * porch_w * 0.35, porch_post_y, floor_z + 0.65),
+
+        rx = sx * porch_w * 0.47
+        ry = -hd - 0.20
+        r_top = max(floor_z + 1.8, _porch_z(rx, ry, 4.70) - 0.08)
+        create_box(bm, (0.28, 0.28, r_top - floor_z),
+                   (rx, ry, (floor_z + r_top) * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+        r_bx = rx * 0.85
+        r_bz = max(r_top, _porch_z(r_bx, ry, r_top + 0.2) - 0.12)
+        _create_oriented_beam(
+            bm, (rx, ry, floor_z + 2.45), (r_bx, ry, r_bz),
+            width=0.15, depth=0.15, mat_index=MAT_INDEX_TIMBER)
+        create_torus_ring(bm, (fx, fy, floor_z + 0.65),
                           major_radius=0.20, minor_radius=0.030,
                           mat_index=MAT_INDEX_ROPE)
     build_railing(bm, (-porch_w * 0.47, -hd - porch_d + 0.12),
