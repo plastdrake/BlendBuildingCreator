@@ -2995,6 +2995,10 @@ def _build_hajfin_round_hut(bm, props, diameter=10.5, height=4.8, found_h=0.8):
     # 1. Stilt Pier Foundation & Floor Framing (Zero 10m stone cylinder)
     col_size = 0.44
     for i in range(num_facets):
+        if i == 6:
+            # The doorway facet has its own raised threshold sill; a perimeter beam
+            # here as well doubled up into one thick block across the entrance.
+            continue
         thA = theta_corners[i]
         thB = theta_corners[i + 1]
         p_sill0 = Vector((r_base * math.cos(thA), r_base * math.sin(thA), z0 + 0.10))

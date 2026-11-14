@@ -7864,6 +7864,7 @@ BUILDING_FAMILIES = [
         'description': "Elevated single-room driftwood shanty on crooked pier stilts with gangplank.",
         'tiers': [
             ("T1", 'HAJFIN_STILT_SHACK_T1', "Ramshackle drift shanty with crooked lean-to roof"),
+            ("T2", 'HAJFIN_STILT_SHACK_T2', "Reinforced stilt shack with patched sailcloth"),
         ],
     },
     {
@@ -7877,6 +7878,7 @@ BUILDING_FAMILIES = [
         'description': "Squat fisherman shack with open porch for hanging nets and drying frames.",
         'tiers': [
             ("T1", 'HAJFIN_NET_HUT_T1', "Low squat hut with open drying deck"),
+            ("T2", 'HAJFIN_NET_HUT_T2', "Master fisher's stilt hut with deep sheltered porch"),
         ],
     },
     {
