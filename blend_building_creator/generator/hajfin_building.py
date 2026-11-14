@@ -6974,13 +6974,20 @@ def _build_hajfin_ship_tavern(bm, props, width=12.0, depth=18.0, height=5.2, fou
             h = math.sin(i * 12.9898 + k * 78.233) * 43758.5453
             wob[(i, k)] = ((h - math.floor(h)) - 0.5) * 0.11
 
+    def _plan(i):
+        """Hull plan shape: widest amidships, tapering towards the bow and stern."""
+        t = min(1.0, max(0.0, i / float(stations)))
+        return 0.58 + 0.42 * math.sin(math.pi * (t ** 0.88))
+
     def _fac(i, k, y, inflate):
         th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
         d = Vector((math.sin(th), 0.0, math.cos(th)))
         j = wob[(i, k)]
-        jy = (wob[(i, k)] * 3.0) if i == 0 else 0.0
-        return Vector((d.x * (hw + j - inflate), y + jy - inflate * 0.5,
-                       z0 + d.z * (height + j - inflate)))
+        ps = _plan(i)
+        # violent torn edge at the bow: neighbouring columns wander in and out
+        jy = (wob[(i, k)] * 9.0) if i == 0 else 0.0
+        return Vector((d.x * (hw * ps + j - inflate), y + jy - inflate * 0.5,
+                       z0 + d.z * (height * (0.62 + 0.38 * ps) + j - inflate)))
 
     # 1. Hull shell with real thickness
     outer_prev = inner_prev = None
@@ -7033,8 +7040,8 @@ def _build_hajfin_ship_tavern(bm, props, width=12.0, depth=18.0, height=5.2, fou
     for k in range(arc_n + 1):
         th = -math.pi * 0.5 + math.pi * (k / float(arc_n))
         d = Vector((math.sin(th), 0.0, math.cos(th)))
-        sten_o.append(bm.verts.new(Vector((d.x * hw * 0.86, hd + rake, z0 + d.z * height * 0.94))))
-        sten_i.append(bm.verts.new(Vector((d.x * hw * 0.86, hd + rake, z0 + d.z * (height * 0.94 - thick)))))
+        sten_o.append(bm.verts.new(Vector((d.x * hw * 0.30, hd + rake, z0 + d.z * height * 0.60))))
+        sten_i.append(bm.verts.new(Vector((d.x * hw * 0.30, hd + rake, z0 + d.z * (height * 0.60 - thick)))))
     bo = [bm.verts.new(p) for p in back_o]
     for k in range(arc_n):
         try:
@@ -7075,8 +7082,6 @@ def _build_hajfin_ship_tavern(bm, props, width=12.0, depth=18.0, height=5.2, fou
     lean_x = hw + 1.3
     lean_y = 1.2
     lean_z = z0 + 1.5
-    for (px, py) in ((-hw - 0.2, 1.0), (-hw - 0.2, 4.4)):
-        pass
     for (px, py) in ((hw + 0.1, -0.6), (hw + 0.1, 3.0), (lean_x + 0.7, -0.6), (lean_x + 0.7, 3.0)):
         create_box(bm, (0.22, 0.22, 2.6), (px, py, z0 + 1.3), mat_index=MAT_INDEX_TIMBER)
     create_box(bm, (2.0, 3.6, 0.16), (lean_x - 0.3, 1.2, z0 + 2.62), mat_index=MAT_INDEX_FLOOR)
