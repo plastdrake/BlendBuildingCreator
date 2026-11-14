@@ -6597,7 +6597,7 @@ _HAJFIN_BANNER_TWEAKS = {
     # hang it from the gable beam, nudged toward the gable centre
     'HAJFIN_PIRATE_TAVERN_T1': (-0.55, 0.0, -0.25, -0.03),
     # clear of the upper-storey window
-    'HAJFIN_FISH_DEPOT_T1': (0.75, 0.0, 0.10, 0.0),
+    'HAJFIN_FISH_DEPOT_T1': (0.0, 0.0, -1.25, 0.0),
 }
 
 
