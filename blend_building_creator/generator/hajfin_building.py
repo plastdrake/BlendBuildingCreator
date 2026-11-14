@@ -7484,17 +7484,38 @@ def _build_hajfin_painted_breach_wall(bm, x, y0, y1, z0, z1, wall_th=0.30,
                                  rotation=(math.radians(tilt), 0.0, 0.0),
                                  mat_index=pmat)
         bm.normal_update()
+        z_lo = pz - pheight * 0.5
+        y_lo = py - plen * 0.5
+        x_lo = px - pth * 0.5
         for face in (plank_faces or []):
             face.tag = True
             n = face.normal
+            front = abs(n.x) >= abs(n.y) and abs(n.x) >= abs(n.z)
+            top = abs(n.z) >= abs(n.x) and abs(n.z) >= abs(n.y)
             for loop in face.loops:
                 co = loop.vert.co
-                if abs(n.x) >= abs(n.y) and abs(n.x) >= abs(n.z):
-                    u, v = co.z * 0.30, co.y * 0.30
-                elif abs(n.z) >= abs(n.x) and abs(n.z) >= abs(n.y):
-                    u, v = co.x * 0.30, co.y * 0.30
+                along = max(0.0, min(1.0, (co.y - y_lo) / plen))
+                across = (max(0.0, min(1.0, (co.z - z_lo) / pheight))
+                          if front else
+                          max(0.0, min(1.0, (co.x - x_lo) / pth)))
+                if pmat == MAT_INDEX_SALVAGED_PLANKS:
+                    # This atlas has horizontal planks: grain runs along U.
+                    u = along
+                    v = 0.30 + across * 0.055
                 else:
-                    u, v = co.x * 0.30, co.z * 0.30
+                    # The driftwood atlas has vertical planks: grain runs
+                    # along V, so sample one vertical board and a short run of
+                    # its length between the cross-joints.
+                    v = 0.02 + along * 0.24
+                    u = 0.40 + across * 0.07
+                if not (front or top):
+                    # End-grain faces: show a small cross-section.
+                    if pmat == MAT_INDEX_SALVAGED_PLANKS:
+                        u = along
+                        v = 0.30 + max(0.0, min(1.0, (co.z - z_lo) / pheight)) * 0.055
+                    else:
+                        v = 0.02 + along * 0.24
+                        u = 0.40 + max(0.0, min(1.0, (co.x - x_lo) / pth)) * 0.07
                 loop[uv_layer].uv = Vector((u, v))
         for dy in (-(plen * 0.5 - 0.22), plen * 0.5 - 0.22):
             ny = py + dy
