@@ -6640,60 +6640,58 @@ def _attach_faction_banner(bm, props, style):
     # shrine rib dome) simply get no banner.
     tree = BVHTree.FromBMesh(bm)
     x_lo, x_hi = min(xs), max(xs)
-    # Probe a few columns across the facade and keep the one whose wall reaches
-    # highest: that centres the banner under the tallest gable (the tower on the
-    # trading post, the main block on the L-shaped tavern) instead of under the
-    # building's bounding-box centre.
-    # Probe columns across the facade; remember the best wall hit per column so we
-    # can centre the banner on the wall span that actually reaches gable height.
-    cols = []
-    for xi in range(9):
-        px = x_lo + (x_hi - x_lo) * (xi + 0.5) / 9.0
-        for frac in (0.60, 0.52, 0.44, 0.36, 0.28):
-            probe_z = z_min + span * frac
-            hit, nrm, _fidx, _dst = tree.ray_cast(
-                Vector((px, front_y - 2.5, probe_z)), Vector((0.0, 1.0, 0.0)))
-            if hit is None or abs(nrm.z) > 0.45:
-                continue
-            # Reject hits that punched through a doorway onto an interior wall.
-            if (hit.y - front_y) > 2.2:
-                continue
-            cols.append((px, hit.y, probe_z))
-            break
-    if not cols:
-        # No usable wall at banner height (open-sided buildings, deep verandas,
-        # towers on stilts).  Plant a pole ON the roof instead of beside the door:
-        # many of these buildings stand over open water, so a ground-mounted pole
-        # would hang in mid air.  A downward ray finds the roof deck the pole will
-        # actually stand on.
-        best_roof = None
-        for xi, yf in ((0.0, 0.50), (0.0, 0.38), (0.15, 0.50), (-0.15, 0.50),
-                       (0.30, 0.50), (-0.30, 0.50), (0.0, 0.62), (0.0, 0.26)):
-            px = x_lo + (x_hi - x_lo) * (0.5 + xi)
-            py = front_y + (max(ys) - front_y) * yf
-            hit, nrm, _i, _d = tree.ray_cast(
-                Vector((px, py, z_max + 2.5)), Vector((0.0, 0.0, -1.0)))
-            if hit is None or nrm.z < 0.30:
-                continue
-            if best_roof is None or hit.z > best_roof[2]:
-                best_roof = (px, py, hit.z)
-        if best_roof is None:
+
+    # 1. PREFERRED: hang it on the front facade.  Pick the largest front-facing
+    # vertical wall panel (door and window holes split the facade into panels, so
+    # this naturally lands on the clear wall either side of them), then centre the
+    # cloth on that panel.
+    panels = []
+    for f in bm.faces:
+        n = f.normal
+        if n.y > -0.7 or abs(n.z) > 0.35:
+            continue
+        area = f.calc_area()
+        if area < 1.2:
+            continue
+        c = f.calc_center_median()
+        if c.z < z_min + 1.4:
+            continue
+        zs_f = [v.co.z for v in f.verts]
+        panels.append((c.y, -area, c.x, min(zs_f), max(zs_f)))
+
+    if panels:
+        panels.sort()
+        hy, neg_area, px, pz0, pz1 = panels[0]
+        if pz1 - pz0 > banner_h * 1.05:
+            pz = pz0 + (pz1 - pz0) * 0.58
+            _build_hajfin_hanging_banner(bm, px, hy - 0.06, pz,
+                                         width=banner_w, height=banner_h, facing_y=-1.0)
             return
-        px, py, base_z = best_roof
-        pole_h = banner_h + 0.85
-        # Pole stands on the roof surface and runs all the way down to it.
-        create_box(bm, (0.12, 0.12, pole_h + 0.10),
-                   (px, py, base_z + (pole_h - 0.10) * 0.5),
-                   mat_index=MAT_INDEX_TIMBER)
-        # Base plate so it reads as bolted to the roof rather than skewered into it
-        create_box(bm, (0.30, 0.30, 0.06), (px, py, base_z + 0.03),
-                   mat_index=MAT_INDEX_TIMBER)
-        create_torus_ring(bm, (px, py, base_z + pole_h * 0.45),
-                          major_radius=0.10, minor_radius=0.022, mat_index=MAT_INDEX_IRON)
-        _build_hajfin_hanging_banner(bm, px, py - 0.075,
-                                     base_z + pole_h - 0.48 - banner_h * 0.5,
-                                     width=banner_w, height=banner_h, facing_y=-1.0)
+
+    # 2. FALLBACK: no usable wall panel.  Plant a pole at the FRONT EDGE of the
+    # roof (visible from the ground) by raycasting downward there.
+    best_roof = None
+    roof_front_y = front_y + max(0.8, (max(ys) - front_y) * 0.09)
+    for xi in (0.0, 0.18, -0.18, 0.34, -0.34, 0.48, -0.48):
+        px = x_lo + (x_hi - x_lo) * (0.5 + xi)
+        hit, nrm, _i, _d = tree.ray_cast(
+            Vector((px, roof_front_y, z_max + 2.5)), Vector((0.0, 0.0, -1.0)))
+        if hit is None or nrm.z < 0.30:
+            continue
+        if best_roof is None or hit.z > best_roof[2]:
+            best_roof = (px, roof_front_y, hit.z)
+    if best_roof is None:
         return
+    px, py, base_z = best_roof
+    pole_h = banner_h + 0.85
+    create_box(bm, (0.12, 0.12, pole_h + 0.10),
+               (px, py, base_z + (pole_h - 0.10) * 0.5), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.30, 0.30, 0.06), (px, py, base_z + 0.03), mat_index=MAT_INDEX_TIMBER)
+    create_torus_ring(bm, (px, py, base_z + pole_h * 0.45),
+                      major_radius=0.10, minor_radius=0.022, mat_index=MAT_INDEX_IRON)
+    _build_hajfin_hanging_banner(bm, px, py - 0.075,
+                                 base_z + pole_h - 0.48 - banner_h * 0.5,
+                                 width=banner_w, height=banner_h, facing_y=-1.0)
     top_z = max(c[2] for c in cols)
     tall = [c for c in cols if c[2] > top_z - 0.45]
     px = (min(c[0] for c in tall) + max(c[0] for c in tall)) * 0.5
