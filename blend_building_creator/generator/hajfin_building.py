@@ -6953,9 +6953,23 @@ def _build_hajfin_rowboat(bm, props, width=4.2, depth=8.0, height=2.2, found_h=0
     _create_oriented_beam(
         bm, (0.0, -hd - 0.12, bottom_z), (0.0, -hd + 0.18, gunwale_z + 0.22),
         width=0.24, depth=0.24, mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (0.24, 0.24, gunwale_z - bottom_z + 0.18),
+    transom_h = gunwale_z - bottom_z
+    create_box(bm, (width * 0.86, 0.18, transom_h),
                (0.0, hd + 0.03, (bottom_z + gunwale_z) * 0.5),
                mat_index=MAT_INDEX_TIMBER)
+    for side in (-1.0, 1.0):
+        create_box(bm, (0.22, 0.24, transom_h + 0.12),
+                   (side * width * 0.43, hd + 0.03,
+                    (bottom_z + gunwale_z) * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # A narrow run of floorboards makes the complete inner hull readable.
+    floor_z = bottom_z + 0.24
+    for i in range(1, stations - 1):
+        y = -hd + depth * i / float(stations)
+        floor_w = max(0.42, _plan(i) * width * 0.34)
+        create_box(bm, (floor_w, depth / float(stations) * 0.82, 0.12),
+                   (0.0, y, floor_z), mat_index=MAT_INDEX_TIMBER)
 
     # Two plain benches span the open interior.
     for y in (-depth * 0.18, depth * 0.20):
