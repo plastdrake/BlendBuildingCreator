@@ -813,8 +813,8 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
     for si in range(len(rings) - 1):
         for j in range(num_segs):
             j_next = (j + 1) % num_segs
-            face = bm.faces.new((rings[si][j], rings[si][j_next],
-                                 rings[si + 1][j_next], rings[si + 1][j]))
+            face = bm.faces.new((rings[si][j], rings[si + 1][j],
+                                 rings[si + 1][j_next], rings[si][j_next]))
             face.material_index = MAT_INDEX_BONE
             face.tag = True
             u0 = si / max(1, len(rings) - 1)
@@ -830,8 +830,9 @@ def _build_shark_jaw_arch(bm, cx, cy, cz, rot_z=0.0, width=2.40, height=3.80, wa
                     loop[uv_layer].uv = Vector((u1, v1))
                 else:
                     loop[uv_layer].uv = Vector((u1, v0))
-    for ring in (rings[0], rings[-1]):
-        face = bm.faces.new(list(reversed(ring)))
+    for cap_index, ring in enumerate((rings[0], rings[-1])):
+        cap_verts = list(ring) if cap_index == 0 else list(reversed(ring))
+        face = bm.faces.new(cap_verts)
         face.material_index = MAT_INDEX_BONE
         face.tag = True
         for j, loop in enumerate(face.loops):
@@ -6853,6 +6854,41 @@ def _remove_duplicate_hajfin_faces(bm):
             bm.faces.remove(face)
 
 
+def _jitter_hajfin_timber(bm, amount=0.004):
+    """Nudge every non-imported timber vertex by a sub-millimetre amount.
+
+    Timber beams, posts, rails and frames are frequently built flush with a
+    wall, floor or another beam.  In Blender's double-sided materials that is
+    harmless, but in engine exports the coincident faces z-fight.  A tiny,
+    deterministic vertex jitter breaks exact coplanarity everywhere without
+    producing a visible gap or moving the silhouette.
+    """
+    prop_layer = bm.faces.layers.int.get('bbc_is_prop')
+    imported_layer = bm.faces.layers.int.get('bbc_imported_asset')
+    timber_verts = set()
+    for face in bm.faces:
+        if face.material_index != MAT_INDEX_TIMBER:
+            continue
+        if imported_layer is not None and face[imported_layer]:
+            continue
+        if prop_layer is not None and face[prop_layer]:
+            continue
+        timber_verts.update(face.verts)
+    for vert in timber_verts:
+        if not vert.is_valid:
+            continue
+        h1 = math.sin(vert.co.x * 12.9898 + vert.co.y * 78.233
+                      + vert.co.z * 37.719) * 43758.5453
+        h2 = math.sin(vert.co.x * 39.346 + vert.co.y * 11.135
+                      + vert.co.z * 83.155) * 24634.6345
+        h3 = math.sin(vert.co.x * 73.156 + vert.co.y * 52.235
+                      + vert.co.z * 9.151) * 33719.3141
+        vert.co.x += ((h1 - math.floor(h1)) - 0.5) * amount
+        vert.co.y += ((h2 - math.floor(h2)) - 0.5) * amount
+        vert.co.z += ((h3 - math.floor(h3)) - 0.5) * amount
+    bm.normal_update()
+
+
 # =============================================================================
 # MAIN HAJFIN ENTRY POINT
 # =============================================================================
@@ -8097,6 +8133,7 @@ def build_hajfin_building(obj, bm, props):
     if style in ('ROUND_HUT',):
         _cylindrical_round_hut_uvs(bm)
     _remove_duplicate_hajfin_faces(bm)
+    _jitter_hajfin_timber(bm)
 
     # Write bmesh to obj
     bm.to_mesh(obj.data)
