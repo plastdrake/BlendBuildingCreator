@@ -381,6 +381,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('PALISADE_GATE', "Shark-Bone Palisade Gate", "Sharpened timber palisade with curved whale ribs and teeth garlands (Image 1)", 'SELECT_SET', 7),
             ('PALISADE_WALL', "Shark-Bone Palisade Wall", "Continuous timber and bone palisade barrier fortified with outward-splaying curved whale ribs", 'SNAP_FACE', 11),
             ('FORGE', "Harpoon Smithy & Bone Forge", "Open-sided timber workshop with stone chimney, iron anvil, and weapon tool racks", 'MOD_BUILD', 8),
+            ('RUM_STILL', "Moonshiner's Rum Still", "Compact stilt still-shack with copper pot still, worm-tub condenser, mash tuns, keg racks and a tiny tasting table", 'COMMUNITY', 29),
             ('FISH_DEPOT', "Fisher's Stilt Pier & Depot", "Tidal dock house with hanging net drying frames, fish curing racks, and cargo crane", 'HOOK', 9),
             ('SHRINE', "Leviathan Bone Shrine", "Sacred ceremonial ring with towering whale-rib arches, sacrificial bone altar, and smoking brazier", 'LIGHT_SUN', 10),
             ('PIER_STRAIGHT', "Straight Pier Walkway", "Modular straight timber dock on stilt pilings with mooring bollards", 'SNAP_INCREMENT', 12),

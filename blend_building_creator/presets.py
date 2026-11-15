@@ -7229,6 +7229,19 @@ PRESETS = {
     },
 
     # =========================================================================
+    # HAJFIN: MOONSHINER'S RUM STILL
+    # =========================================================================
+    'HAJFIN_RUM_STILL_T1': {
+        'category': 'ARTISAN',
+        'family': 'HAJFIN_RUM_STILL',
+        'tier': 1,
+        'name': "Moonshiner's Rum Still",
+        'plot': "14m x 14m",
+        'description': "Compact stilt still-shack with a copper pot still, stone firebox and chimney, worm-tub condenser, mash tuns, keg racks and a tiny tasting table.",
+        'settings': _hajfin_settings(width=8.0, depth=8.0, num_floors=1, found_h=1.4, wonkiness=0.20, has_trade_sign=True, sign_icon='tavern_sign.png', roof_h=2.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=2.20, door_h=3.40, tier=1, hajfin_style='RUM_STILL'),
+    },
+
+    # =========================================================================
     # HAJFIN: FISH DEPOT & PIER
     # =========================================================================
     'HAJFIN_FISH_DEPOT_T1': {
@@ -8062,6 +8075,19 @@ BUILDING_FAMILIES = [
         ],
     },
     {
+        'id': 'HAJFIN_RUM_STILL',
+        'faction': 'HAJFIN',
+        'name': "Moonshiner's Rum Still",
+        'category': 'ARTISAN',
+        'plot': "14m x 14m",
+        'shape': "Stilt Still Shack",
+        'icon': 'COMMUNITY',
+        'description': "A small, cluttered moonshiner's shack on stilts with a copper pot still, stone chimney, worm-tub condenser, mash tuns, keg racks and a tasting table.",
+        'tiers': [
+            ("T1", 'HAJFIN_RUM_STILL_T1', "Compact stilt still-shack with copper pot still and barrel clutter"),
+        ],
+    },
+    {
         'id': 'HAJFIN_FISH_DEPOT',
         'faction': 'HAJFIN',
         'name': "Fisher's Stilt Pier & Depot",
@@ -8263,6 +8289,7 @@ ARCHETYPE_MAP = {
     'HAJFIN_PALISADE_WALL_T2': 'NONE',
     'HAJFIN_FORGE_T1': 'BLACKSMITH',
     'HAJFIN_FORGE_T2': 'BLACKSMITH',
+    'HAJFIN_RUM_STILL_T1': 'NONE',
     'HAJFIN_FISH_DEPOT_T1': 'WAREHOUSE',
     'HAJFIN_FISH_DEPOT_T2': 'WAREHOUSE',
     'HAJFIN_SHAMAN_SHRINE_T1': 'CHAPEL',

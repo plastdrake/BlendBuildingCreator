@@ -24,6 +24,7 @@ from .materials import (
     MAT_INDEX_DRIFTWOOD,
     MAT_INDEX_ROUGH_STONE,
     MAT_INDEX_BONE,
+    MAT_INDEX_GOLD,
     MAT_INDEX_IRON,
     MAT_INDEX_ROPE,
     MAT_INDEX_FLOOR,
@@ -6779,7 +6780,7 @@ def _attach_faction_banner(bm, props, style):
             'FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
             'FEATURE_ROPE_BRIDGE_WIDE', 'FEATURE_ROPE_BRIDGE_SLOPE',
             'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR',
-            'SHIP_TAVERN')
+            'RUM_STILL', 'SHIP_TAVERN')
     if style in skip:
         return
     if not bm.verts:
@@ -8180,6 +8181,10 @@ def build_hajfin_building(obj, bm, props):
         _build_hajfin_palisade_wall(bm, props, width=max(10.0, width), depth=max(4.0, depth), height=max(4.5, height), found_h=0.0)
     elif style in ('FORGE', 'SMITHY') or arch in ('SMITHY', 'FORGE', 'BLACKSMITH'):
         _build_hajfin_forge(bm, props, width=max(9.0, width), depth=max(8.0, depth), height=height, found_h=found_h)
+    elif style == 'RUM_STILL':
+        _build_hajfin_rum_still(bm, props, width=max(7.0, width),
+                                depth=max(7.0, depth), height=height,
+                                found_h=found_h)
     elif style == 'PIER_STRAIGHT':
         _build_hajfin_pier_straight(bm, props, width=width, depth=depth, found_h=found_h)
     elif style == 'PIER_RAMP':
@@ -8272,3 +8277,220 @@ def build_hajfin_building(obj, bm, props):
     bm.free()
     obj.data.update()
     apply_organic_shading(obj, angle_deg=70.0)
+
+
+def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
+                            found_h=1.4):
+    """A small, cluttered moonshiner's rum still on a stilt deck.
+
+    The shack is deliberately compact: three low walls, an open front, a shabby
+    gable roof with a tarp patch, a copper pot still over a stone firebox, a
+    worm-tub condenser, mash tuns, keg racks and a tiny tasting table.
+    """
+    from .accessories.prop_registry import build_prop
+
+    z0 = float(found_h)
+    w = max(7.0, float(width))
+    d = max(7.0, float(depth))
+    hw = w * 0.5
+    hd = d * 0.5
+    wall_th = 0.26
+    wall_h = 2.70
+    eave_z = z0 + wall_h
+    peak_h = 1.50
+
+    # 1. Stilt deck and front landing/steps.
+    _build_stilt_substructure(bm, -hw, hw, -hd, hd, z0, door_cx=0.0)
+    create_box(bm, (w, d, 0.16), (0.0, 0.0, z0 - 0.08),
+               mat_index=MAT_INDEX_FLOOR)
+
+    # 2. Three low walls: boarded rear/west, open east serving counter, open front.
+    _build_wall_with_window_x(
+        bm, -hw, hw, hd, z0, eave_z, win_cx=-1.40,
+        win_cz=z0 + 1.60, win_w=0.75, win_h=0.80,
+        wall_th=wall_th, facing_north=True)
+    _build_wall_with_window_y(
+        bm, -hd, hd, -hw, z0, eave_z, win_cy=0.55,
+        win_cz=z0 + 1.60, win_w=0.70, win_h=0.75,
+        wall_th=wall_th, facing_east=False)
+
+    create_box(bm, (wall_th, d - 0.30, 1.05), (hw, 0.0, z0 + 0.525),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    create_box(bm, (0.40, d - 0.10, 0.14), (hw - 0.04, 0.0, z0 + 1.12),
+               mat_index=MAT_INDEX_FLOOR)
+    create_box(bm, (0.24, 0.24, eave_z - z0),
+               (hw, 0.0, (z0 + eave_z) * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    entry_half = 1.45
+    side_w = hw - entry_half
+    for sx in (-1.0, 1.0):
+        cx = sx * (entry_half + side_w * 0.5)
+        create_box(bm, (side_w, wall_th, 0.85),
+                   (cx, -hd, z0 + 0.425),
+                   mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+        create_box(bm, (side_w + 0.08, 0.26, 0.12),
+                   (cx, -hd, z0 + 0.90), mat_index=MAT_INDEX_TIMBER)
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            _build_chunky_corner_column(bm, sx * hw, sy * hd, z0,
+                                        eave_z, size=0.44)
+    create_box(bm, (w + 0.35, 0.30, 0.30),
+               (0.0, -hd, eave_z - 0.15), mat_index=MAT_INDEX_TIMBER)
+
+    _build_gable_triangle_wall(bm, -hw, hw, hd, eave_z,
+                               eave_z + peak_h, wall_th=wall_th,
+                               force=True, style='DRIFTWOOD')
+    _build_hajfin_supported_plank_roof(
+        bm, -hw, hw, -hd, hd, eave_z, peak_h,
+        overhang_x=0.50, overhang_y=0.45)
+
+    # Tarp patch on the east roof slope and a tarp curtain on the east bay.
+    roof_pitch = math.atan2(peak_h, hw + 0.50)
+    tarp_x = 2.05
+    tarp_z = eave_z + peak_h * (1.0 - tarp_x / (hw + 0.50)) + 0.10
+    create_box(bm, (1.55, 2.20, 0.05),
+               (tarp_x, -0.65, tarp_z),
+               rotation=(0.0, roof_pitch, 0.0),
+               mat_index=MAT_INDEX_TARP)
+    create_box(bm, (0.05, 1.85, 0.90),
+               (hw + 0.03, -2.05, z0 + 1.60),
+               mat_index=MAT_INDEX_TARP)
+    for tie_y in (-1.55, 0.20):
+        _create_rope_cable(bm, (hw + 0.04, tie_y, z0 + 2.05),
+                           (hw + 0.04, tie_y, z0 + 1.65), radius=0.02)
+
+    # 3. Little skull sign over the open doorway.
+    create_box(bm, (1.55, 0.10, 0.55),
+               (0.0, -hd - 0.08, z0 + 2.42), mat_index=MAT_INDEX_SIGN)
+    for (px, pz, sw, sh) in ((0.0, z0 + 2.72, 1.70, 0.07),
+                             (0.0, z0 + 2.12, 1.70, 0.07),
+                             (-0.82, z0 + 2.42, 0.07, 0.66),
+                             (0.82, z0 + 2.42, 0.07, 0.66)):
+        create_box(bm, (sw, 0.07, sh), (px, -hd - 0.10, pz),
+                   mat_index=MAT_INDEX_IRON)
+    create_box(bm, (0.46, 0.28, 0.12),
+               (0.0, -hd - 0.12, z0 + 2.71),
+               mat_index=MAT_INDEX_TIMBER)
+    build_prop(bm, 'HAJFIN_BEAST_SKULL', 0.0, -hd - 0.12,
+               z0 + 2.78, ang=-math.pi * 0.5, scale=0.65)
+
+    # 4. Stone firebox, copper pot still and masonry chimney.
+    hearth_x = -1.65
+    hearth_y = 1.95
+    hearth_w, hearth_d, hearth_h = 2.20, 1.75, 0.55
+    create_box(bm, (hearth_w, hearth_d, hearth_h),
+               (hearth_x, hearth_y, z0 + hearth_h * 0.5),
+               mat_index=MAT_INDEX_ROUGH_STONE)
+    create_box(bm, (1.05, 0.10, 0.36),
+               (hearth_x, hearth_y - hearth_d * 0.5 - 0.02, z0 + 0.26),
+               mat_index=MAT_INDEX_IRON)
+    create_box(bm, (0.85, 0.08, 0.24),
+               (hearth_x, hearth_y - hearth_d * 0.5 - 0.07, z0 + 0.24),
+               mat_index=MAT_INDEX_LANTERN)
+    for bx in (-0.35, 0.0, 0.35):
+        create_box(bm, (0.05, 0.05, 0.32),
+                   (hearth_x + bx, hearth_y - hearth_d * 0.5 - 0.09,
+                    z0 + 0.20), mat_index=MAT_INDEX_IRON)
+
+    pot_z = z0 + hearth_h + 0.02
+    create_cone(bm, radius1=0.68, radius2=0.50, height=0.90, segments=12,
+                location=(hearth_x, hearth_y, pot_z + 0.45),
+                mat_index=MAT_INDEX_GOLD)
+    create_cone(bm, radius1=0.52, radius2=0.13, height=0.42, segments=12,
+                location=(hearth_x, hearth_y, pot_z + 1.11),
+                mat_index=MAT_INDEX_GOLD)
+    create_cylinder(bm, radius=0.12, height=0.18, segments=10,
+                    location=(hearth_x, hearth_y, pot_z + 1.37),
+                    mat_index=MAT_INDEX_GOLD)
+    for bz, br in ((pot_z + 0.10, 0.64), (pot_z + 0.82, 0.60),
+                   (pot_z + 1.16, 0.34)):
+        create_torus_ring(bm, (hearth_x, hearth_y, bz),
+                          major_radius=br, minor_radius=0.035,
+                          mat_index=MAT_INDEX_IRON)
+    create_box(bm, (0.30, 0.22, 0.06),
+               (hearth_x + 0.35, hearth_y - 0.35, pot_z + 0.62),
+               rotation=(0.0, 0.0, 0.5), mat_index=MAT_INDEX_IRON)
+
+    chim_x = hearth_x
+    chim_y = hearth_y + 0.72
+    chim_top = z0 + 4.05
+    create_box(bm, (0.95, 0.85, chim_top - (z0 + 0.25)),
+               (chim_x, chim_y, (z0 + 0.25 + chim_top) * 0.5),
+               mat_index=MAT_INDEX_ROUGH_STONE)
+    create_box(bm, (1.15, 1.05, 0.16),
+               (chim_x, chim_y, chim_top + 0.08),
+               mat_index=MAT_INDEX_CUT_STONE)
+    build_prop(bm, 'HAJFIN_DORSAL_FIN_CREST', chim_x, chim_y,
+               chim_top + 0.16, ang=0.0, scale=0.60)
+
+    # 5. Swan-neck copper pipe to the worm-tub condenser.
+    neck_pts = [
+        (hearth_x, hearth_y, pot_z + 1.40),
+        (hearth_x, hearth_y, z0 + 2.45),
+        (hearth_x + 0.65, hearth_y, z0 + 2.62),
+        (hearth_x + 1.35, hearth_y, z0 + 2.52),
+        (hearth_x + 2.00, hearth_y, z0 + 2.18),
+        (hearth_x + 2.55, hearth_y, z0 + 1.75),
+    ]
+    _build_continuous_timber_arc(bm, [Vector(p) for p in neck_pts],
+                                 radius=0.10, mat_index=MAT_INDEX_GOLD,
+                                 sides=8)
+    for p in neck_pts[1:-1]:
+        create_torus_ring(bm, (p[0], p[1], p[2]),
+                          major_radius=0.13, minor_radius=0.02,
+                          mat_index=MAT_INDEX_IRON)
+
+    cond_x = hearth_x + 2.55
+    cond_y = hearth_y
+    cond_z0 = z0 + 0.10
+    create_cylinder(bm, radius=0.66, height=1.10, segments=12,
+                    location=(cond_x, cond_y, cond_z0 + 0.55),
+                    mat_index=MAT_INDEX_DRIFTWOOD)
+    for bz in (cond_z0 + 0.16, cond_z0 + 0.94):
+        create_torus_ring(bm, (cond_x, cond_y, bz),
+                          major_radius=0.68, minor_radius=0.035,
+                          mat_index=MAT_INDEX_IRON)
+    create_cylinder(bm, radius=0.58, height=0.05, segments=12,
+                    location=(cond_x, cond_y, cond_z0 + 1.02),
+                    mat_index=MAT_INDEX_WATER)
+    for i in range(3):
+        create_torus_ring(bm, (cond_x, cond_y, cond_z0 + 0.78 + i * 0.10),
+                          major_radius=0.42 - i * 0.03,
+                          minor_radius=0.045, mat_index=MAT_INDEX_GOLD)
+    create_cylinder(bm, radius=0.05, height=0.52, segments=6,
+                    location=(cond_x + 0.62, cond_y, cond_z0 + 0.45),
+                    rotation=(0.0, math.pi * 0.5, 0.0),
+                    mat_index=MAT_INDEX_GOLD)
+    build_prop(bm, 'HAJFIN_BARREL', cond_x + 0.75, cond_y - 0.35,
+               z0, ang=0.3, scale=0.45)
+
+    # 6. Moonshiner clutter. Keep the central floor clear for walking.
+    build_log_pile(bm, -3.25, 3.15, z0, ang=0.25,
+                   length=1.35, radius=0.14, rows=2)
+    build_prop(bm, 'MASH_TUN', -2.95, -1.20, z0, ang=0.2,
+               radius=0.55, height=1.00)
+    build_prop(bm, 'MASH_TUN', -2.95, -2.85, z0, ang=-0.3,
+               radius=0.55, height=1.00)
+    build_prop(bm, 'KEG_RACK', 2.95, 0.80, z0,
+               ang=math.pi * 0.5, length=1.30)
+    build_prop(bm, 'BOTTLE_CRATE', 2.75, -0.65, z0, ang=0.2)
+    build_prop(bm, 'HAJFIN_GROG_BARRELS', 2.85, 2.95, z0,
+               ang=0.5, scale=0.95)
+    build_prop(bm, 'HAJFIN_BARREL', -3.10, 0.35, z0, ang=0.6)
+    build_prop(bm, 'HAJFIN_BARREL', -3.15, -0.25, z0, ang=1.4)
+    build_prop(bm, 'HAJFIN_CRATE', -3.05, -3.35, z0, ang=0.3)
+    build_prop(bm, 'SACK', -2.25, -3.45, z0, ang=0.5)
+    build_prop(bm, 'BOTTLE_CRATE', 3.05, -3.15, z0, ang=-0.2)
+
+    build_prop(bm, 'INDOOR_TABLE', 1.35, -2.35, z0,
+               ang=0.15, length=1.50, width=0.80)
+    build_prop(bm, 'STOOL', 0.55, -2.70, z0)
+    build_prop(bm, 'STOOL', 1.90, -3.10, z0)
+    build_prop(bm, 'BOTTLE_CLUSTER', 1.20, -2.30, z0 + 0.78, ang=0.2)
+    build_prop(bm, 'PEWTER_TANKARD', 1.80, -2.50, z0 + 0.78, ang=0.5)
+    build_prop(bm, 'SCATTER_TABLEWARE', 1.45, -2.25, z0 + 0.78, ang=0.0)
+
+    build_prop(bm, 'CHAIN_LANTERN', 0.20, -0.80, z0 + 3.55)
+    build_prop(bm, 'CHAIN_LANTERN', 1.50, 0.90, z0 + 3.25)
+    build_prop(bm, 'POST_LANTERN', -1.00, -hd - 0.95, z0,
+               ang=math.pi * 0.5, scale=1.15)
