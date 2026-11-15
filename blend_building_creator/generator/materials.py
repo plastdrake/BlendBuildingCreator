@@ -135,6 +135,7 @@ MAT_INDEX_BONE          = 55
 MAT_INDEX_PAINTED_PLANKS = 56
 MAT_INDEX_PAINTED_PLANKS_BLUE = 57
 MAT_INDEX_SALVAGED_PLANKS = 58
+MAT_INDEX_COPPER = 59
 
 
 # ---------------------------------------------------------------------------

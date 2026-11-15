@@ -48,6 +48,7 @@ from .materials import (
     MAT_INDEX_SALVAGED_PLANKS,
     MAT_INDEX_PLASTER,
     MAT_INDEX_TARP,
+    MAT_INDEX_COPPER,
 )
 MAT_INDEX_STONE_BRICK = MAT_INDEX_STONE
 from .mesh_utils import (
@@ -8147,6 +8148,70 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                                  lantern_heights=lantern_heights)
 
 
+def _ensure_hajfin_copper_material(obj):
+    """Append the dedicated hand-hammered copper slot used by the rum still."""
+    name = "M_Building_Hajfin_Copper"
+    mat = bpy.data.materials.get(name)
+    if mat is None:
+        mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    nodes.clear()
+
+    out = nodes.new("ShaderNodeOutputMaterial")
+    out.location = (420.0, 0.0)
+    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (140.0, 0.0)
+    texco = nodes.new("ShaderNodeTexCoord")
+    texco.location = (-840.0, 80.0)
+    noise = nodes.new("ShaderNodeTexNoise")
+    noise.location = (-620.0, 80.0)
+    noise.inputs["Scale"].default_value = 9.0
+    noise.inputs["Detail"].default_value = 4.0
+    noise.inputs["Roughness"].default_value = 0.62
+    ramp = nodes.new("ShaderNodeValToRGB")
+    ramp.location = (-360.0, 80.0)
+    ramp.color_ramp.elements[0].position = 0.18
+    ramp.color_ramp.elements[0].color = (0.22, 0.045, 0.008, 1.0)
+    ramp.color_ramp.elements[1].position = 0.76
+    ramp.color_ramp.elements[1].color = (0.82, 0.29, 0.070, 1.0)
+    bump = nodes.new("ShaderNodeBump")
+    bump.location = (-120.0, -180.0)
+    bump.inputs["Strength"].default_value = 0.16
+    bump.inputs["Distance"].default_value = 0.045
+
+    bsdf.inputs["Metallic"].default_value = 0.70
+    bsdf.inputs["Roughness"].default_value = 0.32
+    # Fallback flat colour for exporters that cannot bake the procedural noise.
+    bsdf.inputs["Base Color"].default_value = (0.62, 0.22, 0.06, 1.0)
+    links.new(texco.outputs["Object"], noise.inputs["Vector"])
+    links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
+    links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    links.new(noise.outputs["Fac"], bump.inputs["Height"])
+    links.new(bump.outputs["Normal"], bsdf.inputs["Normal"])
+    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+
+    mat.diffuse_color = (0.55, 0.17, 0.04, 1.0)
+    mat.metallic = 0.55
+    mat.roughness = 0.36
+    if len(obj.data.materials) <= MAT_INDEX_COPPER:
+        obj.data.materials.append(mat)
+    else:
+        obj.data.materials[MAT_INDEX_COPPER] = mat
+
+
+def _rotate_top_face_uvs_90(bm, faces):
+    """Turn the top-face grain of a box 90 degrees without moving the mesh."""
+    uv_layer = bm.loops.layers.uv.verify()
+    for f in faces:
+        f.normal_update()
+        if abs(f.normal.z) > 0.6:
+            for loop in f.loops:
+                uv = loop[uv_layer].uv
+                loop[uv_layer].uv = Vector((uv.y, uv.x))
+
+
 def build_hajfin_building(obj, bm, props):
     """Primary entry point for generating authentic Hajfin pirate architecture.
     Completely replaces human half-timber/stone construction with 100% dedicated
@@ -8167,6 +8232,9 @@ def build_hajfin_building(obj, bm, props):
     style = getattr(props, 'hajfin_style', 'SHANTY')
     arch = getattr(props, 'building_archetype', 'NONE')
     shape = getattr(props, 'building_shape', 'RECTANGLE')
+
+    if style == 'RUM_STILL':
+        _ensure_hajfin_copper_material(obj)
 
     if style == 'ROUND_HUT' or shape in ('ROUND_TOWER', 'CIRCLE'):
         _build_hajfin_round_hut(bm, props, diameter=max(width, depth), height=height, found_h=found_h)
@@ -8319,8 +8387,10 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
 
     create_box(bm, (wall_th, d - 0.30, 1.05), (hw, 0.0, z0 + 0.525),
                mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
-    create_box(bm, (0.40, d - 0.10, 0.14), (hw - 0.04, 0.0, z0 + 1.12),
-               mat_index=MAT_INDEX_FLOOR)
+    _east_counter_top = create_box(
+        bm, (0.40, d - 0.10, 0.14), (hw - 0.04, 0.0, z0 + 1.12),
+        mat_index=MAT_INDEX_FLOOR)
+    _rotate_top_face_uvs_90(bm, _east_counter_top)
     create_box(bm, (0.24, 0.24, eave_z - z0),
                (hw, 0.0, (z0 + eave_z) * 0.5), mat_index=MAT_INDEX_TIMBER)
 
@@ -8355,12 +8425,6 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
                (tarp_x, -0.65, tarp_z),
                rotation=(0.0, roof_pitch, 0.0),
                mat_index=MAT_INDEX_TARP)
-    create_box(bm, (0.05, 1.85, 0.90),
-               (hw + 0.03, -2.05, z0 + 1.60),
-               mat_index=MAT_INDEX_TARP)
-    for tie_y in (-1.55, 0.20):
-        _create_rope_cable(bm, (hw + 0.04, tie_y, z0 + 2.05),
-                           (hw + 0.04, tie_y, z0 + 1.65), radius=0.02)
 
     # 3. Stone firebox, copper pot still and masonry chimney.
     hearth_x = -1.65
@@ -8381,23 +8445,28 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
                     z0 + 0.20), mat_index=MAT_INDEX_IRON)
 
     pot_z = z0 + hearth_h + 0.02
-    create_cone(bm, radius1=0.68, radius2=0.50, height=0.90, segments=12,
-                location=(hearth_x, hearth_y, pot_z + 0.45),
-                mat_index=MAT_INDEX_GOLD)
-    create_cone(bm, radius1=0.52, radius2=0.13, height=0.42, segments=12,
-                location=(hearth_x, hearth_y, pot_z + 1.11),
-                mat_index=MAT_INDEX_GOLD)
-    create_cylinder(bm, radius=0.12, height=0.18, segments=10,
-                    location=(hearth_x, hearth_y, pot_z + 1.37),
-                    mat_index=MAT_INDEX_GOLD)
-    for bz, br in ((pot_z + 0.10, 0.64), (pot_z + 0.82, 0.60),
-                   (pot_z + 1.16, 0.34)):
-        create_torus_ring(bm, (hearth_x, hearth_y, bz),
-                          major_radius=br, minor_radius=0.035,
-                          mat_index=MAT_INDEX_IRON)
-    create_box(bm, (0.30, 0.22, 0.06),
-               (hearth_x + 0.35, hearth_y - 0.35, pot_z + 0.62),
-               rotation=(0.0, 0.0, 0.5), mat_index=MAT_INDEX_IRON)
+    # Hand-hammered copper onion still.  The belly is built from stacked
+    # truncated cones so the silhouette swells and tapers naturally; every
+    # section uses the same copper material, with no detached iron hoops.
+    pot_profile = (
+        (0.00, 0.54), (0.08, 0.63), (0.20, 0.70), (0.38, 0.73),
+        (0.58, 0.70), (0.76, 0.62), (0.92, 0.48), (1.04, 0.32),
+        (1.10, 0.20),
+    )
+    for i in range(len(pot_profile) - 1):
+        za, ra = pot_profile[i]
+        zb, rb = pot_profile[i + 1]
+        create_cone(bm, radius1=ra, radius2=rb, height=zb - za,
+                    segments=24,
+                    location=(hearth_x, hearth_y, pot_z + (za + zb) * 0.5),
+                    mat_index=MAT_INDEX_COPPER)
+    # Neck and copper collar feeding the swan neck.
+    create_cylinder(bm, radius=0.145, height=0.30, segments=16,
+                    location=(hearth_x, hearth_y, pot_z + 1.20),
+                    mat_index=MAT_INDEX_COPPER)
+    create_cylinder(bm, radius=0.18, height=0.06, segments=16,
+                    location=(hearth_x, hearth_y, pot_z + 1.36),
+                    mat_index=MAT_INDEX_COPPER)
 
     chim_x = hearth_x
     chim_y = hearth_y + 0.72
@@ -8420,46 +8489,62 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
                (chim_x, chim_y, chim_top - 0.25),
                mat_index=MAT_INDEX_IRON)
 
-    # 5. Swan-neck copper pipe to the worm-tub condenser.
+    # 5. Swan-neck copper pipe into the open worm-tub condenser.
+    cond_x = hearth_x + 2.55
+    cond_y = hearth_y
     neck_pts = [
         (hearth_x, hearth_y, pot_z + 1.40),
         (hearth_x, hearth_y, z0 + 2.45),
         (hearth_x + 0.65, hearth_y, z0 + 2.62),
         (hearth_x + 1.35, hearth_y, z0 + 2.52),
         (hearth_x + 2.00, hearth_y, z0 + 2.18),
-        (hearth_x + 2.55, hearth_y, z0 + 1.75),
+        (cond_x, cond_y, z0 + 1.80),
+        (cond_x, cond_y, z0 + 0.98),
     ]
     _build_continuous_timber_arc(bm, [Vector(p) for p in neck_pts],
-                                 radius=0.10, mat_index=MAT_INDEX_GOLD,
-                                 sides=8)
-    for p in neck_pts[1:-1]:
-        create_torus_ring(bm, (p[0], p[1], p[2]),
-                          major_radius=0.13, minor_radius=0.02,
-                          mat_index=MAT_INDEX_IRON)
+                                 radius=0.10, mat_index=MAT_INDEX_COPPER,
+                                 sides=10)
+    create_cylinder(bm, radius=0.13, height=0.10, segments=12,
+                    location=(hearth_x, hearth_y, pot_z + 1.42),
+                    mat_index=MAT_INDEX_COPPER)
 
-    cond_x = hearth_x + 2.55
-    cond_y = hearth_y
-    cond_z0 = z0 + 0.10
-    create_cylinder(bm, radius=0.66, height=1.10, segments=12,
-                    location=(cond_x, cond_y, cond_z0 + 0.55),
-                    mat_index=MAT_INDEX_DRIFTWOOD)
-    for bz in (cond_z0 + 0.16, cond_z0 + 0.94):
+    # Open-topped worm tub sitting flush on the deck, with visible water and a
+    # copper outlet that actually discharges into the collection keg below.
+    cond_z0 = z0
+    vat_h = 1.10
+    vat_r = 0.66
+    create_hollow_cylinder(
+        bm, radius=vat_r, inner_radius=0.58, height=vat_h,
+        inner_depth=vat_h - 0.06, segments=24,
+        location=(cond_x, cond_y, z0 + vat_h * 0.5),
+        mat_index=MAT_INDEX_DRIFTWOOD,
+        inner_mat_index=MAT_INDEX_DRIFTWOOD,
+        liquid_height=0.80, liquid_mat_index=MAT_INDEX_WATER)
+    for bz in (z0 + 0.18, z0 + 0.95):
         create_torus_ring(bm, (cond_x, cond_y, bz),
-                          major_radius=0.68, minor_radius=0.035,
+                          major_radius=vat_r + 0.01, minor_radius=0.035,
                           mat_index=MAT_INDEX_IRON)
-    create_cylinder(bm, radius=0.58, height=0.05, segments=12,
-                    location=(cond_x, cond_y, cond_z0 + 1.02),
-                    mat_index=MAT_INDEX_WATER)
-    for i in range(3):
-        create_torus_ring(bm, (cond_x, cond_y, cond_z0 + 0.78 + i * 0.10),
-                          major_radius=0.42 - i * 0.03,
-                          minor_radius=0.045, mat_index=MAT_INDEX_GOLD)
-    create_cylinder(bm, radius=0.05, height=0.52, segments=6,
-                    location=(cond_x + 0.62, cond_y, cond_z0 + 0.45),
+    create_cylinder(bm, radius=0.045, height=0.42, segments=8,
+                    location=(cond_x + 0.86, cond_y, z0 + 0.92),
                     rotation=(0.0, math.pi * 0.5, 0.0),
-                    mat_index=MAT_INDEX_GOLD)
-    build_prop(bm, 'HAJFIN_BARREL', cond_x + 1.05, cond_y - 0.25,
-               z0, ang=0.3, scale=0.45)
+                    mat_index=MAT_INDEX_COPPER)
+    create_cylinder(bm, radius=0.04, height=0.40, segments=8,
+                    location=(cond_x + 1.06, cond_y, z0 + 0.72),
+                    mat_index=MAT_INDEX_COPPER)
+    # Open collection tub directly under the copper outlet (no lid to block it).
+    collect_r = 0.28
+    collect_h = 0.46
+    create_hollow_cylinder(
+        bm, radius=collect_r, inner_radius=collect_r - 0.04,
+        height=collect_h, inner_depth=collect_h - 0.05, segments=18,
+        location=(cond_x + 1.06, cond_y, z0 + collect_h * 0.5),
+        mat_index=MAT_INDEX_DRIFTWOOD,
+        inner_mat_index=MAT_INDEX_DRIFTWOOD,
+        liquid_height=0.24, liquid_mat_index=MAT_INDEX_WATER)
+    for bz in (z0 + 0.12, z0 + 0.34):
+        create_torus_ring(bm, (cond_x + 1.06, cond_y, bz),
+                          major_radius=collect_r + 0.01,
+                          minor_radius=0.022, mat_index=MAT_INDEX_IRON)
 
     # 6. Moonshiner clutter. Keep the central floor clear for walking.
     build_log_pile(bm, -3.25, 3.15, z0, ang=0.25,
@@ -8475,7 +8560,7 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
                ang=0.5, scale=0.95)
     build_prop(bm, 'HAJFIN_BARREL', -3.10, 0.35, z0, ang=0.6)
     build_prop(bm, 'HAJFIN_BARREL', -3.15, -0.25, z0, ang=1.4)
-    build_prop(bm, 'HAJFIN_CRATE', -3.20, -3.35, z0, ang=0.3)
+    build_prop(bm, 'HAJFIN_CRATE', 3.05, -1.75, z0, ang=0.4, scale=0.68)
     build_prop(bm, 'SACK', -1.95, -3.55, z0, ang=0.5)
     build_prop(bm, 'BOTTLE_CRATE', 3.05, -3.15, z0, ang=-0.2)
 
