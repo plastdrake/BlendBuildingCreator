@@ -6550,8 +6550,9 @@ def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_dept
     nx = max(2, int((x1 - x0) / post_spacing) + 1)
     ny = max(2, int((y1 - y0) / post_spacing) + 1)
 
-    total_post_h = height + post_depth
-    cz = height - total_post_h * 0.5  # Extends from z = -post_depth down to z = height
+    total_post_h = height + post_depth - 0.10
+    post_top = height - 0.10
+    cz = post_top - total_post_h * 0.5  # post top tucks just under the floor slab
 
     for ix in range(nx):
         x = x0 + ix * ((x1 - x0) / (nx - 1))
@@ -6560,14 +6561,15 @@ def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_dept
             create_cylinder(bm, radius=0.20, height=total_post_h, segments=7,
                             location=(x, y, cz), mat_index=MAT_INDEX_TIMBER)
 
-    # Heavy timber perimeter sill beams
+    # Heavy timber perimeter sill beams, tucked just below the floor top so
+    # neither the stilts nor these beams can poke through the deck planks.
     for sgn_y in (-1.0, 1.0):
         sy = y0 if sgn_y < 0 else y1
-        create_box(bm, ((x1 - x0) + 0.3, 0.28, 0.28), ((x0 + x1) * 0.5, sy, height - 0.14),
+        create_box(bm, ((x1 - x0) + 0.3, 0.28, 0.28), ((x0 + x1) * 0.5, sy, height - 0.20),
                    mat_index=MAT_INDEX_TIMBER)
     for sgn_x in (-1.0, 1.0):
         sx = x0 if sgn_x < 0 else x1
-        create_box(bm, (0.28, (y1 - y0) + 0.3, 0.28), (sx, (y0 + y1) * 0.5, height - 0.14),
+        create_box(bm, (0.28, (y1 - y0) + 0.3, 0.28), (sx, (y0 + y1) * 0.5, height - 0.20),
                    mat_index=MAT_INDEX_TIMBER)
 
     # Walkable timber porch landing in front of door threshold
@@ -8399,13 +8401,24 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
 
     chim_x = hearth_x
     chim_y = hearth_y + 0.72
-    chim_top = z0 + 4.05
-    create_box(bm, (0.95, 0.85, chim_top - (z0 + 0.25)),
-               (chim_x, chim_y, (z0 + 0.25 + chim_top) * 0.5),
+    chim_base = z0 + 0.25
+    chim_shoulder = z0 + 3.70
+    chim_top = z0 + 5.40
+    create_box(bm, (0.95, 0.85, chim_shoulder - chim_base),
+               (chim_x, chim_y, (chim_base + chim_shoulder) * 0.5),
                mat_index=MAT_INDEX_ROUGH_STONE)
-    create_box(bm, (1.15, 1.05, 0.16),
+    create_box(bm, (1.15, 1.05, 0.18),
+               (chim_x, chim_y, chim_shoulder + 0.09),
+               mat_index=MAT_INDEX_CUT_STONE)
+    create_box(bm, (0.72, 0.64, chim_top - chim_shoulder),
+               (chim_x, chim_y, (chim_shoulder + chim_top) * 0.5),
+               mat_index=MAT_INDEX_ROUGH_STONE)
+    create_box(bm, (0.95, 0.85, 0.16),
                (chim_x, chim_y, chim_top + 0.08),
                mat_index=MAT_INDEX_CUT_STONE)
+    create_box(bm, (0.80, 0.72, 0.06),
+               (chim_x, chim_y, chim_top - 0.25),
+               mat_index=MAT_INDEX_IRON)
 
     # 5. Swan-neck copper pipe to the worm-tub condenser.
     neck_pts = [
