@@ -7474,13 +7474,14 @@ def _build_hajfin_sign_text(bm, text, location, size=0.36,
 
 
 def _build_hajfin_pub_table(bm, x, y, z_floor, ang=0.0,
-                            length=2.20, width=1.05, height=1.24):
+                            length=2.20, width=1.05, height=1.24,
+                            top_mat=MAT_INDEX_FLOOR):
     """Heavy Hajfin taproom table built only from driftwood/deck/timber slots."""
     rot = Matrix.Rotation(ang, 4, 'Z')
     top_t = 0.10
     create_box(bm, (length, width, top_t),
                (x, y, z_floor + height - top_t * 0.5),
-               rotation=(0.0, 0.0, ang), mat_index=MAT_INDEX_FLOOR)
+               rotation=(0.0, 0.0, ang), mat_index=top_mat)
     leg_h = height - top_t
     for sx in (-1.0, 1.0):
         for sy in (-1.0, 1.0):
@@ -8359,22 +8360,7 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
         _create_rope_cable(bm, (hw + 0.04, tie_y, z0 + 2.05),
                            (hw + 0.04, tie_y, z0 + 1.65), radius=0.02)
 
-    # 3. Little skull sign over the open doorway.
-    create_box(bm, (1.55, 0.10, 0.55),
-               (0.0, -hd - 0.08, z0 + 2.42), mat_index=MAT_INDEX_SIGN)
-    for (px, pz, sw, sh) in ((0.0, z0 + 2.72, 1.70, 0.07),
-                             (0.0, z0 + 2.12, 1.70, 0.07),
-                             (-0.82, z0 + 2.42, 0.07, 0.66),
-                             (0.82, z0 + 2.42, 0.07, 0.66)):
-        create_box(bm, (sw, 0.07, sh), (px, -hd - 0.10, pz),
-                   mat_index=MAT_INDEX_IRON)
-    create_box(bm, (0.46, 0.28, 0.12),
-               (0.0, -hd - 0.12, z0 + 2.71),
-               mat_index=MAT_INDEX_TIMBER)
-    build_prop(bm, 'HAJFIN_BEAST_SKULL', 0.0, -hd - 0.12,
-               z0 + 2.78, ang=-math.pi * 0.5, scale=0.65)
-
-    # 4. Stone firebox, copper pot still and masonry chimney.
+    # 3. Stone firebox, copper pot still and masonry chimney.
     hearth_x = -1.65
     hearth_y = 1.95
     hearth_w, hearth_d, hearth_h = 2.20, 1.75, 0.55
@@ -8420,8 +8406,6 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
     create_box(bm, (1.15, 1.05, 0.16),
                (chim_x, chim_y, chim_top + 0.08),
                mat_index=MAT_INDEX_CUT_STONE)
-    build_prop(bm, 'HAJFIN_DORSAL_FIN_CREST', chim_x, chim_y,
-               chim_top + 0.16, ang=0.0, scale=0.60)
 
     # 5. Swan-neck copper pipe to the worm-tub condenser.
     neck_pts = [
@@ -8461,7 +8445,7 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
                     location=(cond_x + 0.62, cond_y, cond_z0 + 0.45),
                     rotation=(0.0, math.pi * 0.5, 0.0),
                     mat_index=MAT_INDEX_GOLD)
-    build_prop(bm, 'HAJFIN_BARREL', cond_x + 0.75, cond_y - 0.35,
+    build_prop(bm, 'HAJFIN_BARREL', cond_x + 1.05, cond_y - 0.25,
                z0, ang=0.3, scale=0.45)
 
     # 6. Moonshiner clutter. Keep the central floor clear for walking.
@@ -8478,19 +8462,23 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
                ang=0.5, scale=0.95)
     build_prop(bm, 'HAJFIN_BARREL', -3.10, 0.35, z0, ang=0.6)
     build_prop(bm, 'HAJFIN_BARREL', -3.15, -0.25, z0, ang=1.4)
-    build_prop(bm, 'HAJFIN_CRATE', -3.05, -3.35, z0, ang=0.3)
-    build_prop(bm, 'SACK', -2.25, -3.45, z0, ang=0.5)
+    build_prop(bm, 'HAJFIN_CRATE', -3.20, -3.35, z0, ang=0.3)
+    build_prop(bm, 'SACK', -1.95, -3.55, z0, ang=0.5)
     build_prop(bm, 'BOTTLE_CRATE', 3.05, -3.15, z0, ang=-0.2)
 
-    build_prop(bm, 'INDOOR_TABLE', 1.35, -2.35, z0,
-               ang=0.15, length=1.50, width=0.80)
-    build_prop(bm, 'STOOL', 0.55, -2.70, z0)
-    build_prop(bm, 'STOOL', 1.90, -3.10, z0)
-    build_prop(bm, 'BOTTLE_CLUSTER', 1.20, -2.30, z0 + 0.78, ang=0.2)
-    build_prop(bm, 'PEWTER_TANKARD', 1.80, -2.50, z0 + 0.78, ang=0.5)
-    build_prop(bm, 'SCATTER_TABLEWARE', 1.45, -2.25, z0 + 0.78, ang=0.0)
+    _build_hajfin_pub_table(bm, 1.35, -2.35, z0, ang=0.15,
+                            length=1.50, width=0.80, height=0.95,
+                            top_mat=MAT_INDEX_DRIFTWOOD)
+    _build_hajfin_pub_stool(bm, 0.45, -2.35, z0, ang=0.15, seat_h=0.72)
+    _build_hajfin_pub_stool(bm, 2.25, -2.35, z0, ang=0.15, seat_h=0.72)
+    build_prop(bm, 'BOTTLE_CLUSTER', 1.20, -2.30, z0 + 0.95, ang=0.2)
+    build_prop(bm, 'PEWTER_TANKARD', 1.80, -2.50, z0 + 0.95, ang=0.5)
+    build_prop(bm, 'SCATTER_TABLEWARE', 1.45, -2.25, z0 + 0.95, ang=0.0)
 
-    build_prop(bm, 'CHAIN_LANTERN', 0.20, -0.80, z0 + 3.55)
-    build_prop(bm, 'CHAIN_LANTERN', 1.50, 0.90, z0 + 3.25)
-    build_prop(bm, 'POST_LANTERN', -1.00, -hd - 0.95, z0,
-               ang=math.pi * 0.5, scale=1.15)
+    def _roof_surface_z(x):
+        return eave_z + peak_h * max(0.0, 1.0 - abs(x) / (hw + 0.50))
+
+    build_prop(bm, 'CHAIN_LANTERN', 0.20, -0.80,
+               _roof_surface_z(0.20) - 0.12)
+    build_prop(bm, 'CHAIN_LANTERN', 1.50, 0.90,
+               _roof_surface_z(1.50) - 0.12)
