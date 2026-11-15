@@ -7407,8 +7407,8 @@ PRESETS = {
         'family': 'HAJFIN_ROPE_BRIDGE',
         'tier': 2,
         'name': "Sloped Suspended Rope Bridge",
-        'plot': "18m x 8m",
-        'description': "14m rope bridge climbing from a low landing to a raised lookout platform, still drooping on its sloping catenary.",
+        'plot': "16m x 6m",
+        'description': "14m rope bridge ramp rising from a low anchorage to a higher one, still drooping on its sloping catenary. No platform - ready to meet a ledge or terrace.",
         'settings': _hajfin_settings(width=14.0, depth=6.5, num_floors=1, found_h=0.0, wonkiness=0.0, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=2, hajfin_style='FEATURE_ROPE_BRIDGE_SLOPE'),
     },
     'HAJFIN_CROWS_NEST_T1': {
@@ -8102,7 +8102,7 @@ BUILDING_FAMILIES = [
             ("Long (14m)", 'HAJFIN_ROPE_BRIDGE_T2', "14m long-span catenary rope bridge"),
             ("Extra Long (24m)", 'HAJFIN_ROPE_BRIDGE_LONG', "24m catenary bridge for broad channels and chasms"),
             ("Wide (14m)", 'HAJFIN_ROPE_BRIDGE_WIDE', "14m bridge with a broad 2.3m walkway"),
-            ("Sloped (14m)", 'HAJFIN_ROPE_BRIDGE_SLOPE', "14m bridge climbing from a low landing to a raised lookout platform"),
+            ("Sloped (14m)", 'HAJFIN_ROPE_BRIDGE_SLOPE', "14m rope bridge ramp rising from a low anchorage to a higher one"),
         ],
     },
     {
