@@ -8613,12 +8613,9 @@ def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,
     door_h = min(wall_h - 0.22,
                  max(3.00, float(getattr(props, 'door_height', 3.00))))
 
-    # Low solid stone pad and ground-level plank floor (no stair or stilt deck).
-    # The pad top is tucked 2 cm below the floor so the interior always reads as
-    # planks and the two coplanar surfaces cannot z-fight.
-    create_box(bm, (w + 0.16, d + 0.16, 0.14),
-               (0.0, 0.0, z0 - 0.09), mat_index=MAT_INDEX_ROUGH_STONE)
-    create_box(bm, (w, d, 0.12), (0.0, 0.0, z0 - 0.06),
+    # Ground-level timber plank floor.  No stone pad and no stilt deck: the
+    # exposed edge of the wooden floor slab is the only foundation needed.
+    create_box(bm, (w, d, 0.14), (0.0, 0.0, z0 - 0.07),
                mat_index=MAT_INDEX_FLOOR)
 
     # Rear and side walls.
@@ -8659,9 +8656,9 @@ def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,
     create_box(bm, (door_w + 0.26, wall_th + 0.06, 0.14),
                (0.0, front_y, z0 + door_h + 0.07),
                mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (door_w + 0.28, 0.30, 0.06),
-               (0.0, -hd - 0.03, z0 + 0.01),
-               mat_index=MAT_INDEX_CUT_STONE)
+    create_box(bm, (door_w + 0.28, 0.30, 0.14),
+               (0.0, -hd - 0.03, z0 - 0.07),
+               mat_index=MAT_INDEX_TIMBER)
 
     # Solid gable ends and a plank roof.  The taller front gable gives the tiny
     # interior enough headroom without adding a second floor.
