@@ -71,6 +71,7 @@ from .accessories.hajfin_props import (
     build_ship_anchor,
     build_ship_mast_with_crows_nest,
     build_suspended_rope_bridge,
+    build_sloped_rope_bridge,
 )
 from .uv_utils import timber_box
 
@@ -5677,7 +5678,7 @@ def _build_hajfin_pier_straight(bm, props, width=4.0, depth=12.0, found_h=1.6):
     w = max(3.0, width)
     d = max(6.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 18.0
+    water_depth = 23.0
     post_r = 0.20
     deck_th = 0.14
 
@@ -5742,7 +5743,7 @@ def _build_hajfin_pier_ramp(bm, props, width=4.0, depth=14.0, found_h=1.6):
     w = max(3.0, width)
     d = max(8.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 16.0
+    water_depth = 21.0
     post_r = 0.20
     deck_th = 0.14
 
@@ -5826,7 +5827,7 @@ def _build_hajfin_pier_bend(bm, props, width=10.0, depth=10.0, found_h=1.6):
     mitered joists, grey deck planks, and mooring bollards."""
     size = max(8.0, min(width, depth))
     deck_z = max(0.8, found_h)
-    water_depth = 18.0
+    water_depth = 23.0
     walk_w = 4.0
     post_r = 0.20
     deck_th = 0.14
@@ -5902,7 +5903,7 @@ def _build_hajfin_pier_tee(bm, props, width=10.0, depth=14.0, found_h=1.6):
     w = max(8.0, width)
     d = max(10.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 18.0
+    water_depth = 23.0
     walk_w = 4.0
     post_r = 0.20
     deck_th = 0.14
@@ -5986,7 +5987,7 @@ def _build_hajfin_pier_cross(bm, props, width=14.0, depth=14.0, found_h=1.6):
     w = max(10.0, width)
     d = max(10.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 18.0
+    water_depth = 23.0
     walk_w = 4.0
     post_r = 0.20
     deck_th = 0.14
@@ -6098,7 +6099,7 @@ def _build_hajfin_pier_landing(bm, props, width=7.0, depth=10.0, found_h=1.6):
     w = max(5.0, width)
     d = max(7.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 18.0
+    water_depth = 23.0
     post_r = 0.22
     deck_th = 0.16
 
@@ -6256,7 +6257,7 @@ def _build_hajfin_pier_platform(bm, props, width=16.0, depth=16.0, found_h=1.6):
     w = max(10.0, width)
     d = max(10.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 18.0
+    water_depth = 23.0
     post_r = 0.22
     deck_th = 0.16
 
@@ -6318,7 +6319,7 @@ def _build_hajfin_pier_high_ramp(bm, props, width=6.0, depth=18.0, found_h=1.6,
     d = max(low_landing + upper_deck + 4.0, depth)
     z_low = max(0.8, found_h)
     z_high = z_low + rise
-    water_depth = 18.0
+    water_depth = 23.0
     post_r = 0.20
     deck_th = 0.16
 
@@ -6415,7 +6416,7 @@ def _build_hajfin_pier_rope_bridge(bm, props, width=4.0, depth=16.0, found_h=1.6
     hd = d * 0.5
     deck_z = max(0.8, found_h)
     abut_len = 3.6
-    water_depth = 18.0
+    water_depth = 23.0
     post_r = 0.22
     deck_th = 0.16
 
@@ -6541,7 +6542,7 @@ def _build_hajfin_shaman_shrine(bm, props, diameter=11.0, height=7.5, found_h=0.
 # HELPER SUBSTRUCTURES
 # =============================================================================
 
-def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_depth=20.0):
+def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_depth=25.0):
     """Crooked pier pilings underneath building with sill beams and wooden access steps.
     Posts extend 10 meters downwards so buildings can be placed over water, piers, cliffs."""
     post_spacing = 2.4
@@ -6776,6 +6777,7 @@ def _attach_faction_banner(bm, props, style):
             'PIER_PLATFORM', 'PIER_HIGH_RAMP', 'PIER_HIGH_RAMP_TALL', 'PIER_ROPE_BRIDGE', 'ROPE_BRIDGE',
             'PALISADE_WALL', 'WALL', 'FENCE', 'SHRINE', 'TEMPLE',
             'FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
+            'FEATURE_ROPE_BRIDGE_WIDE', 'FEATURE_ROPE_BRIDGE_SLOPE',
             'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR',
             'SHIP_TAVERN')
     if style in skip:
@@ -8209,6 +8211,17 @@ def build_hajfin_building(obj, bm, props):
         build_suspended_rope_bridge(
             bm, (0.0, -span * 0.5, 0.0), (0.0, span * 0.5, 0.0),
             width=1.35, sag=max(0.30, span * 0.06), with_pylons=True, post_height=1.35)
+    elif style == 'FEATURE_ROPE_BRIDGE_WIDE':
+        span = max(6.0, min(width, 26.0))
+        build_suspended_rope_bridge(
+            bm, (0.0, -span * 0.5, 0.0), (0.0, span * 0.5, 0.0),
+            width=2.30, sag=max(0.32, span * 0.055),
+            with_pylons=True, post_height=1.35)
+    elif style == 'FEATURE_ROPE_BRIDGE_SLOPE':
+        span = max(6.0, min(width, 24.0))
+        rise = max(1.5, min(4.5, span * 0.24))
+        build_sloped_rope_bridge(
+            bm, span=span, width=1.55, rise=rise, post_height=1.35)
     elif style in ('FEATURE_CROWS_NEST', 'FEATURE_NEST'):
         build_ship_mast_with_crows_nest(
             bm, 0.0, 0.0, 0.0, height=9.5, mast_radius=0.26, rot_z=0.0,
@@ -8230,6 +8243,7 @@ def build_hajfin_building(obj, bm, props):
     # Final material-scoped pass prevents any archetype-specific wall builder
     # from reintroducing a different siding density.
     if style in ('FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
+                 'FEATURE_ROPE_BRIDGE_WIDE', 'FEATURE_ROPE_BRIDGE_SLOPE',
                  'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR'):
         # Standalone features bring their own unwrap - keep the box-UV pass off them.
         for _f in bm.faces:

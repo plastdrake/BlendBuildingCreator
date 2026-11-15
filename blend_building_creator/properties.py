@@ -394,6 +394,8 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('PIER_HIGH_RAMP_TALL', "Compact High Ramp", "Short, steep 4m-wide pier ramp climbing to a 5.8m lookout deck", 'EMPTY_SINGLE_ARROW', 26),
             ('PIER_ROPE_BRIDGE', "Suspended Rope Bridge", "16m suspended catenary rope bridge spanning two stilted pier abutments with ship mast and anchor", 'MOD_OCEAN', 19),
             ('FEATURE_ROPE_BRIDGE', "Rope Bridge Feature", "Standalone suspended rope bridge with cross-plank walkway, handrail ropes and lashed pylons", 'MOD_OCEAN', 20),
+            ('FEATURE_ROPE_BRIDGE_WIDE', "Wide Rope Bridge Feature", "Wide-walkway suspended rope bridge with broad cross-planks", 'MOD_OCEAN', 27),
+            ('FEATURE_ROPE_BRIDGE_SLOPE', "Sloped Rope Bridge Feature", "Suspended rope bridge climbing to a raised lookout platform while still drooping", 'MOD_OCEAN', 28),
             ('FEATURE_CROWS_NEST', "Crow's Nest Mast Feature", "Standalone ship mainmast with crow's nest lookout, yardarm, furled sail and ratline ladder", 'OUTLINER_OB_LIGHTPROBE', 21),
             ('FEATURE_SHIP_ANCHOR', "Ship Anchor Feature", "Standalone salvaged anchor with spiralled hawser and rope coil", 'SNAP_FACE', 22),
             ('SHIP_TAVERN', "Beached Galleon Pub", "Pirate pub rebuilt from sawn sections of a beached galleon, with bow porch and stern kitchen", 'COMMUNITY', 24),

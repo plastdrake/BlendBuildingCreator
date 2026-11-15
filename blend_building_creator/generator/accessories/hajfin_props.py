@@ -1562,8 +1562,78 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
     return True
 
 
-# ---------------------------------------------------------------------------
-# 15. Standalone Feature Builders (Rope Bridge / Ship Anchor / Crow's Nest)
+def build_sloped_rope_bridge(bm, span, width=1.55, rise=3.2,
+                             post_height=1.35, with_high_platform=True):
+    """Suspended rope bridge climbing from a low landing up to a raised lookout platform.
+
+    The span still uses the normal catenary sag relative to the sloping chord, so
+    it droops between the two levels rather than becoming a straight stair.
+    """
+    span = max(5.0, float(span))
+    rise = max(1.2, float(rise))
+    p0 = Vector((0.0, -span * 0.5, 0.0))
+    p1 = Vector((0.0, span * 0.5, rise))
+    sag = max(0.35, span * 0.06)
+    build_suspended_rope_bridge(
+        bm, p0, p1, width=width, sag=sag,
+        with_pylons=True, post_height=post_height,
+    )
+
+    if not with_high_platform:
+        return True
+
+    # Raised timber landing under the high bridgehead pylons.
+    plat_w = max(3.2, width * 2.15)
+    plat_d = 2.70
+    deck_th = 0.16
+    plat_cy = span * 0.5 + plat_d * 0.5 - 0.05
+    create_box(bm, (plat_w, plat_d, deck_th),
+               (0.0, plat_cy, rise - deck_th * 0.5),
+               mat_index=MAT_INDEX_FLOOR)
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            px = sx * (plat_w * 0.5 - 0.22)
+            py = plat_cy + sy * (plat_d * 0.5 - 0.22)
+            create_box(bm, (0.24, 0.24, rise),
+                       (px, py, rise * 0.5), mat_index=MAT_INDEX_TIMBER)
+            create_torus_ring(bm, (px, py, rise * 0.55),
+                              major_radius=0.15, minor_radius=0.025,
+                              mat_index=MAT_INDEX_ROPE)
+    create_box(bm, (plat_w - 0.20, 0.24, 0.24),
+               (0.0, plat_cy, rise - 0.28), mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.24, plat_d - 0.20, 0.24),
+               (0.0, plat_cy, rise - 0.28), mat_index=MAT_INDEX_TIMBER)
+
+    # Railing on the far and side edges, leaving the bridge-side edge open.
+    rail_h = 1.00
+    rail_y_far = plat_cy + plat_d * 0.5 - 0.12
+    side_x = plat_w * 0.5 - 0.12
+    for sx in (-1.0, 1.0):
+        create_box(bm, (0.12, 0.12, rail_h),
+                   (sx * side_x, rail_y_far, rise + rail_h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.10, 0.10, rail_h),
+                   (sx * side_x, plat_cy, rise + rail_h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.10, plat_d - 0.24, 0.10),
+                   (sx * side_x, plat_cy, rise + rail_h),
+                   mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (plat_w - 0.24, 0.10, 0.10),
+               (0.0, rail_y_far, rise + rail_h), mat_index=MAT_INDEX_TIMBER)
+
+    # Ladder down the far face.
+    ladder_x = 0.38
+    ladder_y = plat_cy + plat_d * 0.5 + 0.12
+    for sx in (-1.0, 1.0):
+        create_box(bm, (0.09, 0.09, rise + 0.20),
+                   (sx * ladder_x, ladder_y, (rise + 0.20) * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+    rung_count = max(3, int(rise / 0.30))
+    for i in range(1, rung_count):
+        create_box(bm, (ladder_x * 2.0, 0.08, 0.06),
+                   (0.0, ladder_y, i * (rise / rung_count)),
+                   mat_index=MAT_INDEX_TIMBER)
+    return True
 #
 # Each of these is a self-contained, placeable piece so it can be dropped into
 # the world on its own instead of only existing as part of the pirate tavern.

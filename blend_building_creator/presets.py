@@ -7357,6 +7357,15 @@ PRESETS = {
         'settings': _hajfin_settings(width=4.0, depth=12.0, num_floors=1, found_h=1.6, wonkiness=0.06, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_HIGH_RAMP_TALL'),
     },
     # HAJFIN: STANDALONE NAUTICAL FEATURES (no pier attached)
+    'HAJFIN_ROPE_BRIDGE_SHORT': {
+        'category': 'CONSTRUCTION',
+        'family': 'HAJFIN_ROPE_BRIDGE',
+        'tier': 1,
+        'name': "Short Suspended Rope Bridge",
+        'plot': "7m x 4m",
+        'description': "Compact 5m catenary rope bridge for short gaps between rocks, docks and rooftops.",
+        'settings': _hajfin_settings(width=5.0, depth=4.0, num_floors=1, found_h=0.0, wonkiness=0.0, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=1, hajfin_style='FEATURE_ROPE_BRIDGE'),
+    },
     'HAJFIN_ROPE_BRIDGE_T1': {
         'category': 'CONSTRUCTION',
         'family': 'HAJFIN_ROPE_BRIDGE',
@@ -7374,6 +7383,33 @@ PRESETS = {
         'plot': "16m x 4m",
         'description': "Long-span version of the pirate rope bridge for spanning creeks, streets and gaps between rooftops.",
         'settings': _hajfin_settings(width=14.0, depth=4.0, num_floors=1, found_h=0.0, wonkiness=0.0, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=2, hajfin_style='FEATURE_ROPE_BRIDGE'),
+    },
+    'HAJFIN_ROPE_BRIDGE_LONG': {
+        'category': 'CONSTRUCTION',
+        'family': 'HAJFIN_ROPE_BRIDGE',
+        'tier': 2,
+        'name': "Extra-Long Suspended Rope Bridge",
+        'plot': "26m x 4m",
+        'description': "24m catenary rope bridge for spanning broad channels, chasms and harbor gaps.",
+        'settings': _hajfin_settings(width=24.0, depth=4.0, num_floors=1, found_h=0.0, wonkiness=0.0, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=2, hajfin_style='FEATURE_ROPE_BRIDGE'),
+    },
+    'HAJFIN_ROPE_BRIDGE_WIDE': {
+        'category': 'CONSTRUCTION',
+        'family': 'HAJFIN_ROPE_BRIDGE',
+        'tier': 2,
+        'name': "Wide Suspended Rope Bridge",
+        'plot': "16m x 7m",
+        'description': "Wide 14m rope bridge with a 2.3m walkway, built for carts, crowds and broad plank decks.",
+        'settings': _hajfin_settings(width=14.0, depth=6.5, num_floors=1, found_h=0.0, wonkiness=0.0, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=2, hajfin_style='FEATURE_ROPE_BRIDGE_WIDE'),
+    },
+    'HAJFIN_ROPE_BRIDGE_SLOPE': {
+        'category': 'CONSTRUCTION',
+        'family': 'HAJFIN_ROPE_BRIDGE',
+        'tier': 2,
+        'name': "Sloped Suspended Rope Bridge",
+        'plot': "18m x 8m",
+        'description': "14m rope bridge climbing from a low landing to a raised lookout platform, still drooping on its sloping catenary.",
+        'settings': _hajfin_settings(width=14.0, depth=6.5, num_floors=1, found_h=0.0, wonkiness=0.0, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=2, hajfin_style='FEATURE_ROPE_BRIDGE_SLOPE'),
     },
     'HAJFIN_CROWS_NEST_T1': {
         'category': 'CONSTRUCTION',
@@ -8061,7 +8097,12 @@ BUILDING_FAMILIES = [
         'icon': 'MOD_OCEAN',
         'description': "Free-standing rope bridge with cross-plank walkway, handrail ropes and lashed pylons - drop it into any gap in the world.",
         'tiers': [
+            ("Short (5m)", 'HAJFIN_ROPE_BRIDGE_SHORT', "Compact 5m catenary bridge for short gaps"),
             ("Short (8m)", 'HAJFIN_ROPE_BRIDGE_T1', "8m catenary rope bridge with four pylons"),
+            ("Long (14m)", 'HAJFIN_ROPE_BRIDGE_T2', "14m long-span catenary rope bridge"),
+            ("Extra Long (24m)", 'HAJFIN_ROPE_BRIDGE_LONG', "24m catenary bridge for broad channels and chasms"),
+            ("Wide (14m)", 'HAJFIN_ROPE_BRIDGE_WIDE', "14m bridge with a broad 2.3m walkway"),
+            ("Sloped (14m)", 'HAJFIN_ROPE_BRIDGE_SLOPE', "14m bridge climbing from a low landing to a raised lookout platform"),
         ],
     },
     {
@@ -8235,6 +8276,8 @@ ARCHETYPE_MAP = {
     'HAJFIN_PIER_PLATFORM': 'HARBOR',
     'HAJFIN_PIER_HIGH_RAMP': 'HARBOR',
     'HAJFIN_PIER_HIGH_RAMP_TALL': 'HARBOR',
+    'HAJFIN_ROPE_BRIDGE_WIDE': 'HARBOR',
+    'HAJFIN_ROPE_BRIDGE_SLOPE': 'HARBOR',
     'HAJFIN_PIER_ROPE_BRIDGE': 'HARBOR',
 }
 
