@@ -5676,7 +5676,7 @@ def _build_hajfin_pier_straight(bm, props, width=4.0, depth=12.0, found_h=1.6):
     w = max(3.0, width)
     d = max(6.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 8.0
+    water_depth = 18.0
     post_r = 0.20
     deck_th = 0.14
 
@@ -5741,7 +5741,7 @@ def _build_hajfin_pier_ramp(bm, props, width=4.0, depth=14.0, found_h=1.6):
     w = max(3.0, width)
     d = max(8.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 6.0
+    water_depth = 16.0
     post_r = 0.20
     deck_th = 0.14
 
@@ -5825,7 +5825,7 @@ def _build_hajfin_pier_bend(bm, props, width=10.0, depth=10.0, found_h=1.6):
     mitered joists, grey deck planks, and mooring bollards."""
     size = max(8.0, min(width, depth))
     deck_z = max(0.8, found_h)
-    water_depth = 8.0
+    water_depth = 18.0
     walk_w = 4.0
     post_r = 0.20
     deck_th = 0.14
@@ -5901,7 +5901,7 @@ def _build_hajfin_pier_tee(bm, props, width=10.0, depth=14.0, found_h=1.6):
     w = max(8.0, width)
     d = max(10.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 8.0
+    water_depth = 18.0
     walk_w = 4.0
     post_r = 0.20
     deck_th = 0.14
@@ -5979,13 +5979,125 @@ def _build_hajfin_pier_tee(bm, props, width=10.0, depth=14.0, found_h=1.6):
     create_box(bm, (flank_w, fend_th, fend_h), (branch_cx, walk_w * 0.5 - fend_th * 0.5, fend_cz), mat_index=MAT_INDEX_TIMBER)
 
 
+def _build_hajfin_pier_cross(bm, props, width=14.0, depth=14.0, found_h=1.6):
+    """4-way dock cross junction: four 4 m walkway arms around an open central deck,
+    with mirrored stilt bents, corner dolphin posts, separation beams and side fenders."""
+    w = max(10.0, width)
+    d = max(10.0, depth)
+    deck_z = max(0.8, found_h)
+    water_depth = 18.0
+    walk_w = 4.0
+    post_r = 0.20
+    deck_th = 0.14
+
+    hw = w * 0.5
+    hd = d * 0.5
+
+    fend_th = 0.24
+    fend_h = 0.38
+    fend_cz = deck_z - 0.08
+    sep_th = 0.30
+    sep_h = 0.44
+    sep_cz = deck_z - 0.16
+    deck_w = walk_w - 2.0 * fend_th
+    deck_d = d - 2.0 * sep_th
+    flank_w = hw - walk_w * 0.5
+
+    # Main north-south through-walkway deck slab.
+    create_box(bm, (deck_w, deck_d, deck_th),
+               (0.0, 0.0, deck_z - deck_th * 0.5), mat_index=MAT_INDEX_FLOOR)
+
+    # East and west branch decks, meeting the main deck at the fender line.
+    branch_deck_len = flank_w - sep_th + fend_th
+    branch_deck_cx = (walk_w * 0.5 - fend_th + hw - sep_th) * 0.5
+    for sx in (-1.0, 1.0):
+        create_box(bm, (branch_deck_len, deck_w, deck_th),
+                   (sx * branch_deck_cx, 0.0, deck_z - deck_th * 0.5),
+                   mat_index=MAT_INDEX_FLOOR)
+
+    # End separation beams capping all four modular arm ends.
+    for sy in (-1.0, 1.0):
+        create_box(bm, (deck_w, sep_th, sep_h),
+                   (0.0, sy * (hd - sep_th * 0.5), sep_cz),
+                   mat_index=MAT_INDEX_TIMBER)
+    for sx in (-1.0, 1.0):
+        create_box(bm, (sep_th, deck_w, sep_h),
+                   (sx * (hw - sep_th * 0.5), 0.0, sep_cz),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    num_bents = max(3, int(round(d / 3.5)) + 1)
+    dy = d / (num_bents - 1)
+    y_bents = [-hd + i * dy for i in range(num_bents)]
+
+    post_h = deck_z + water_depth + 0.55
+    cz_p = (deck_z + 0.55) - post_h * 0.5
+
+    for y in y_bents:
+        create_box(bm, (walk_w - 0.20, 0.26, 0.26),
+                   (0.0, y, deck_z - deck_th - 0.13),
+                   mat_index=MAT_INDEX_TIMBER)
+        if abs(y) <= walk_w * 0.45:
+            continue
+        for sx in (-1.0, 1.0):
+            px = sx * (walk_w * 0.5 - 0.28)
+            create_cylinder(bm, radius=post_r, height=post_h, segments=8,
+                            location=(px, y, cz_p), mat_index=MAT_INDEX_TIMBER)
+            create_torus_ring(bm, (px, y, deck_z + 0.38),
+                              major_radius=post_r + 0.02,
+                              minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+
+    # Four junction posts at the inner corners of the cross.
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            px = sx * walk_w * 0.5
+            py = sy * walk_w * 0.5
+            create_cylinder(bm, radius=post_r * 1.1, height=post_h + 0.10,
+                            segments=8, location=(px, py, cz_p + 0.05),
+                            mat_index=MAT_INDEX_TIMBER)
+            create_torus_ring(bm, (px, py, deck_z + 0.45),
+                              major_radius=post_r * 1.2,
+                              minor_radius=0.028, mat_index=MAT_INDEX_IRON)
+
+    # Branch bents and posts, mirrored east and west.
+    bx_steps = [walk_w * 0.5 + flank_w * 0.5, hw]
+    for sx in (-1.0, 1.0):
+        for bx in bx_steps:
+            create_box(bm, (0.26, walk_w - 0.20, 0.26),
+                       (sx * bx, 0.0, deck_z - deck_th - 0.13),
+                       mat_index=MAT_INDEX_TIMBER)
+            for sy in (-1.0, 1.0):
+                px = sx * (bx - 0.20)
+                py = sy * (walk_w * 0.5 - 0.28)
+                create_cylinder(bm, radius=post_r, height=post_h, segments=8,
+                                location=(px, py, cz_p),
+                                mat_index=MAT_INDEX_TIMBER)
+                create_torus_ring(bm, (px, py, deck_z + 0.38),
+                                  major_radius=post_r + 0.02,
+                                  minor_radius=0.025, mat_index=MAT_INDEX_IRON)
+
+    # Continuous side fascia around all four arms.
+    flank_y_len = hd - walk_w * 0.5
+    flank_s_cy = (-hd - walk_w * 0.5) * 0.5
+    flank_n_cy = (walk_w * 0.5 + hd) * 0.5
+    for sx in (-1.0, 1.0):
+        for cy in (flank_s_cy, flank_n_cy):
+            create_box(bm, (fend_th, flank_y_len, fend_h),
+                       (sx * (walk_w * 0.5 - fend_th * 0.5), cy, fend_cz),
+                       mat_index=MAT_INDEX_TIMBER)
+        for sy in (-1.0, 1.0):
+            create_box(bm, (flank_w, fend_th, fend_h),
+                       (sx * (walk_w * 0.5 + flank_w * 0.5),
+                        sy * (walk_w * 0.5 - fend_th * 0.5), fend_cz),
+                       mat_index=MAT_INDEX_TIMBER)
+
+
 def _build_hajfin_pier_landing(bm, props, width=7.0, depth=10.0, found_h=1.6):
     """Terminal dock landing head and boat berth with boat access ladder down to water,
     heavy mooring dolphin bollards, perimeter bumper timbers, cargo crate stack, and hoist davit."""
     w = max(5.0, width)
     d = max(7.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 8.0
+    water_depth = 18.0
     post_r = 0.22
     deck_th = 0.16
 
@@ -6143,7 +6255,7 @@ def _build_hajfin_pier_platform(bm, props, width=16.0, depth=16.0, found_h=1.6):
     w = max(10.0, width)
     d = max(10.0, depth)
     deck_z = max(0.8, found_h)
-    water_depth = 8.0
+    water_depth = 18.0
     post_r = 0.22
     deck_th = 0.16
 
@@ -6197,26 +6309,24 @@ def _build_hajfin_pier_platform(bm, props, width=16.0, depth=16.0, found_h=1.6):
         create_box(bm, (deck_w, fend_th, fend_h), (0.0, sgn_y * (hd - fend_th * 0.5), fend_cz), mat_index=MAT_INDEX_TIMBER)
 
 
-def _build_hajfin_pier_high_ramp(bm, props, width=6.0, depth=18.0, found_h=1.6):
+def _build_hajfin_pier_high_ramp(bm, props, width=6.0, depth=18.0, found_h=1.6,
+                                 low_landing=3.0, upper_deck=6.0, rise=2.40):
     """Two-tier elevated harbor dock with inclined ramp connecting standard 1.6m elevation
-    up to a 4.0m high observation overlook with timber safety balustrades and deep stilts."""
+    up to an observation overlook with timber safety balustrades and deep stilts."""
     w = max(4.0, width)
-    d = max(14.0, depth)
+    d = max(low_landing + upper_deck + 4.0, depth)
     z_low = max(0.8, found_h)
-    z_high = z_low + 2.40  # 4.0m elevated deck
-    water_depth = 8.0
+    z_high = z_low + rise
+    water_depth = 18.0
     post_r = 0.20
     deck_th = 0.16
 
     hw = w * 0.5
     hd = d * 0.5
 
-    # Layout in Y:
-    # -hd to -hd + 3.0: Lower landing at z_low (connects to standard 1.6m pier network)
-    # -hd + 3.0 to hd - 6.0: Inclined ramp rising from z_low to z_high
-    # hd - 6.0 to hd: Upper observation deck at z_high (6m long x width)
-    y_low_end = -hd + 3.0
-    y_ramp_end = hd - 6.0
+    # Layout in Y: lower landing, inclined ramp, upper observation deck.
+    y_low_end = -hd + low_landing
+    y_ramp_end = hd - upper_deck
 
     # 1. Lower Landing Deck (zero coplanar overlap)
     fend_th = 0.24
@@ -6304,7 +6414,7 @@ def _build_hajfin_pier_rope_bridge(bm, props, width=4.0, depth=16.0, found_h=1.6
     hd = d * 0.5
     deck_z = max(0.8, found_h)
     abut_len = 3.6
-    water_depth = 8.0
+    water_depth = 18.0
     post_r = 0.22
     deck_th = 0.16
 
@@ -6430,7 +6540,7 @@ def _build_hajfin_shaman_shrine(bm, props, diameter=11.0, height=7.5, found_h=0.
 # HELPER SUBSTRUCTURES
 # =============================================================================
 
-def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_depth=10.0):
+def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_depth=20.0):
     """Crooked pier pilings underneath building with sill beams and wooden access steps.
     Posts extend 10 meters downwards so buildings can be placed over water, piers, cliffs."""
     post_spacing = 2.4
@@ -6660,8 +6770,9 @@ def _attach_faction_banner(bm, props, style):
       2. The clear front wall panel beside the door / windows.
       3. Last resort: a pole planted at the FRONT EDGE of the roof.
     """
-    skip = ('PIER_STRAIGHT', 'PIER_RAMP', 'PIER_BEND', 'PIER_TEE', 'PIER_LANDING',
-            'PIER_PLATFORM', 'PIER_HIGH_RAMP', 'PIER_ROPE_BRIDGE', 'ROPE_BRIDGE',
+    skip = ('PIER_STRAIGHT', 'PIER_RAMP', 'PIER_BEND', 'PIER_TEE',
+            'PIER_CROSS', 'PIER_LANDING',
+            'PIER_PLATFORM', 'PIER_HIGH_RAMP', 'PIER_HIGH_RAMP_TALL', 'PIER_ROPE_BRIDGE', 'ROPE_BRIDGE',
             'PALISADE_WALL', 'WALL', 'FENCE', 'SHRINE', 'TEMPLE',
             'FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
             'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR',
@@ -8074,12 +8185,18 @@ def build_hajfin_building(obj, bm, props):
         _build_hajfin_pier_bend(bm, props, width=width, depth=depth, found_h=found_h)
     elif style == 'PIER_TEE':
         _build_hajfin_pier_tee(bm, props, width=width, depth=depth, found_h=found_h)
+    elif style == 'PIER_CROSS':
+        _build_hajfin_pier_cross(bm, props, width=width, depth=depth, found_h=found_h)
     elif style == 'PIER_LANDING':
         _build_hajfin_pier_landing(bm, props, width=width, depth=depth, found_h=found_h)
     elif style == 'PIER_PLATFORM':
         _build_hajfin_pier_platform(bm, props, width=width, depth=depth, found_h=found_h)
     elif style == 'PIER_HIGH_RAMP':
         _build_hajfin_pier_high_ramp(bm, props, width=width, depth=depth, found_h=found_h)
+    elif style == 'PIER_HIGH_RAMP_TALL':
+        _build_hajfin_pier_high_ramp(
+            bm, props, width=max(4.0, width), depth=max(10.0, depth),
+            found_h=found_h, low_landing=2.0, upper_deck=4.0, rise=4.20)
     elif style in ('SHIP_TAVERN', 'SHIP_HOUSE'):
         _build_hajfin_ship_tavern(bm, props, width=max(13.0, width),
                                   depth=max(18.0, depth), found_h=found_h,

@@ -7311,6 +7311,15 @@ PRESETS = {
         'description': "3-way dock intersection connecting a main thoroughfare to a perpendicular branching finger pier.",
         'settings': _hajfin_settings(width=10.0, depth=14.0, num_floors=1, found_h=1.6, wonkiness=0.08, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_TEE'),
     },
+    'HAJFIN_PIER_CROSS': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "4-Way Dock Cross",
+        'plot': "16m x 16m",
+        'description': "4-way dock intersection connecting four 4m walkway arms around an open central deck.",
+        'settings': _hajfin_settings(width=14.0, depth=14.0, num_floors=1, found_h=1.6, wonkiness=0.08, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_CROSS'),
+    },
     'HAJFIN_PIER_LANDING': {
         'category': 'COMMERCE',
         'family': 'HAJFIN_PIER',
@@ -7337,6 +7346,15 @@ PRESETS = {
         'plot': "6m x 18m",
         'description': "Two-tier harbor dock connecting standard 1.6m elevation up to a 4.0m high observation overlook with non-slip incline ramp and railings.",
         'settings': _hajfin_settings(width=6.0, depth=18.0, num_floors=1, found_h=1.6, wonkiness=0.06, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_HIGH_RAMP'),
+    },
+    'HAJFIN_PIER_HIGH_RAMP_TALL': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "Compact High Ramp",
+        'plot': "8m x 14m",
+        'description': "Short, steep 4m-wide pier ramp climbing to a 5.8m lookout deck.",
+        'settings': _hajfin_settings(width=4.0, depth=12.0, num_floors=1, found_h=1.6, wonkiness=0.06, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_HIGH_RAMP_TALL'),
     },
     # HAJFIN: STANDALONE NAUTICAL FEATURES (no pier attached)
     'HAJFIN_ROPE_BRIDGE_T1': {
@@ -8086,9 +8104,11 @@ BUILDING_FAMILIES = [
             ("Ramp", 'HAJFIN_PIER_RAMP', "Sloped ramp dock descending from pier deck to ground level with grip battens"),
             ("Corner 90°", 'HAJFIN_PIER_BEND', "90-degree corner elbow pier with reinforced corner dolphin post"),
             ("T-Junction", 'HAJFIN_PIER_TEE', "3-way dock intersection connecting main walkway to a branching finger pier"),
+            ("Cross 4-Way", 'HAJFIN_PIER_CROSS', "4-way dock junction connecting four walkway arms around an open central deck"),
             ("Pier Head", 'HAJFIN_PIER_LANDING', "Wide boat berth landing with boat ladder, cargo stack, and mooring cleats"),
             ("Wharf (16m)", 'HAJFIN_PIER_PLATFORM', "Expansive 16x16m open timber wharf platform with zero obstacles for building placement"),
             ("Elevated Ramp", 'HAJFIN_PIER_HIGH_RAMP', "Two-tier dock with inclined ramp ascending to a 4m high observation deck"),
+            ("Compact High Ramp", 'HAJFIN_PIER_HIGH_RAMP_TALL', "Short, steep 4m-wide ramp climbing to a 5.8m lookout deck"),
         ],
     },
 ]
@@ -8210,9 +8230,11 @@ ARCHETYPE_MAP = {
     'HAJFIN_PIER_RAMP': 'HARBOR',
     'HAJFIN_PIER_BEND': 'HARBOR',
     'HAJFIN_PIER_TEE': 'HARBOR',
+    'HAJFIN_PIER_CROSS': 'HARBOR',
     'HAJFIN_PIER_LANDING': 'HARBOR',
     'HAJFIN_PIER_PLATFORM': 'HARBOR',
     'HAJFIN_PIER_HIGH_RAMP': 'HARBOR',
+    'HAJFIN_PIER_HIGH_RAMP_TALL': 'HARBOR',
     'HAJFIN_PIER_ROPE_BRIDGE': 'HARBOR',
 }
 
