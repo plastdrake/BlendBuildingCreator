@@ -7242,6 +7242,28 @@ PRESETS = {
     },
 
     # =========================================================================
+    # HAJFIN: TINY STORAGE SHACKS
+    # =========================================================================
+    'HAJFIN_TINY_STORAGE_T1': {
+        'category': 'SHANTIES',
+        'family': 'HAJFIN_TINY_STORAGE',
+        'tier': 1,
+        'name': "Tiny Driftwood Storage Shack",
+        'plot': "6m x 6m",
+        'description': "Tiny ground-level driftwood storehouse packed with two crates, two barrels and a grain sack. No stairs, no upper floor.",
+        'settings': _hajfin_settings(width=3.8, depth=4.4, num_floors=1, found_h=0.0, wonkiness=0.16, roof_h=2.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.80, door_h=3.00, tier=1, hajfin_style='TINY_STORAGE'),
+    },
+    'HAJFIN_TINY_STORAGE_T2': {
+        'category': 'SHANTIES',
+        'family': 'HAJFIN_TINY_STORAGE',
+        'tier': 2,
+        'name': "Tiny Salvage Storage Shack",
+        'plot': "6m x 6m",
+        'description': "Slightly larger salvaged-plank storehouse with a braced gable, crate stack, three grog barrels and a rope coil. No stairs, no upper floor.",
+        'settings': _hajfin_settings(width=4.2, depth=4.8, num_floors=1, found_h=0.0, wonkiness=0.12, roof_h=2.2, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_BONE', door_w=1.80, door_h=3.00, tier=2, hajfin_style='TINY_STORAGE'),
+    },
+
+    # =========================================================================
     # HAJFIN: FISH DEPOT & PIER
     # =========================================================================
     'HAJFIN_FISH_DEPOT_T1': {
@@ -7296,6 +7318,15 @@ PRESETS = {
         'plot': "4m x 12m",
         'description': "12m straight timber dock walkway on deep stilt pilings with mooring bollards, X-bracing, and grey deck planks.",
         'settings': _hajfin_settings(width=4.0, depth=12.0, num_floors=1, found_h=1.6, wonkiness=0.08, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_STRAIGHT'),
+    },
+    'HAJFIN_PIER_SQUARE': {
+        'category': 'COMMERCE',
+        'family': 'HAJFIN_PIER',
+        'tier': 1,
+        'name': "Square Pier Platform",
+        'plot': "4m x 4m",
+        'description': "4m x 4m square timber pier module matching the straight pier width, with four corner mooring bollards, cross-braced stilts and a full plank deck.",
+        'settings': _hajfin_settings(width=4.0, depth=4.0, num_floors=1, found_h=1.6, wonkiness=0.08, roof_h=1.0, color_palette='HAJFIN_DRIFTWOOD', hajfin_style='PIER_SQUARE'),
     },
     'HAJFIN_PIER_RAMP': {
         'category': 'COMMERCE',
@@ -8088,6 +8119,20 @@ BUILDING_FAMILIES = [
         ],
     },
     {
+        'id': 'HAJFIN_TINY_STORAGE',
+        'faction': 'HAJFIN',
+        'name': "Tiny Storage Shack",
+        'category': 'SHANTIES',
+        'plot': "6m x 6m",
+        'shape': "Tiny Shed",
+        'icon': 'ASSET_MANAGER',
+        'description': "Two compact ground-level storage shacks packed with crates, grog barrels and sacks. No stairs, no upper floors.",
+        'tiers': [
+            ("T1", 'HAJFIN_TINY_STORAGE_T1', "Small driftwood shed with crates, barrels and a grain sack"),
+            ("T2", 'HAJFIN_TINY_STORAGE_T2', "Larger salvage-plank shed with crate stack, three barrels and a rope coil"),
+        ],
+    },
+    {
         'id': 'HAJFIN_FISH_DEPOT',
         'faction': 'HAJFIN',
         'name': "Fisher's Stilt Pier & Depot",
@@ -8168,6 +8213,7 @@ BUILDING_FAMILIES = [
         'description': "Modular pirate harbor piers, bridges, and dock segments with dark timber stilts, grey deck planks, and mooring posts.",
         'tiers': [
             ("Straight", 'HAJFIN_PIER_STRAIGHT', "12m straight pier walkway with stilt pilings and mooring bollards"),
+            ("Square (4x4)", 'HAJFIN_PIER_SQUARE', "4m x 4m square pier module matching the straight pier width"),
             ("Ramp", 'HAJFIN_PIER_RAMP', "Sloped ramp dock descending from pier deck to ground level with grip battens"),
             ("Corner 90°", 'HAJFIN_PIER_BEND', "90-degree corner elbow pier with reinforced corner dolphin post"),
             ("T-Junction", 'HAJFIN_PIER_TEE', "3-way dock intersection connecting main walkway to a branching finger pier"),
@@ -8290,11 +8336,14 @@ ARCHETYPE_MAP = {
     'HAJFIN_FORGE_T1': 'BLACKSMITH',
     'HAJFIN_FORGE_T2': 'BLACKSMITH',
     'HAJFIN_RUM_STILL_T1': 'NONE',
+    'HAJFIN_TINY_STORAGE_T1': 'NONE',
+    'HAJFIN_TINY_STORAGE_T2': 'NONE',
     'HAJFIN_FISH_DEPOT_T1': 'WAREHOUSE',
     'HAJFIN_FISH_DEPOT_T2': 'WAREHOUSE',
     'HAJFIN_SHAMAN_SHRINE_T1': 'CHAPEL',
     'HAJFIN_SHAMAN_SHRINE_T2': 'CHAPEL',
     'HAJFIN_PIER_STRAIGHT': 'HARBOR',
+    'HAJFIN_PIER_SQUARE': 'HARBOR',
     'HAJFIN_PIER_RAMP': 'HARBOR',
     'HAJFIN_PIER_BEND': 'HARBOR',
     'HAJFIN_PIER_TEE': 'HARBOR',

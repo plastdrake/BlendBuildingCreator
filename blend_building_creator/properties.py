@@ -372,6 +372,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
         description="Architectural style and archetype for the Hajfin pirate faction",
         items=[
             ('SHANTY', "Shanty Shack", "Chunky gable timber shanty with oversized corner posts and bone-scale roof (Image 6)", 'HOME', 0),
+            ('TINY_STORAGE', "Tiny Storage Shack", "Compact ground-level storage shed packed with crates and barrels; no stairs or upper floor", 'ASSET_MANAGER', 30),
             ('ROUND_HUT', "Round Conical Hut", "Tapered round hut with conical scale roof, dorsal fin spear crown, and whale spine buttress (Image 2)", 'MATCLOTH', 1),
             ('BONE_SHOP', "Bone Trading Post", "Two-storey barter shop with open counter, flip-up awning, and ladder (Image 3)", 'ASSET_MANAGER', 2),
             ('CHIEFTAIN_HALL', "Chieftain Great Hall", "Grand multi-tier staggered longhouse with whale rib tunnel entrance and continuous spine crest (Image 4)", 'COMMUNITY', 3),
@@ -385,6 +386,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('FISH_DEPOT', "Fisher's Stilt Pier & Depot", "Tidal dock house with hanging net drying frames, fish curing racks, and cargo crane", 'HOOK', 9),
             ('SHRINE', "Leviathan Bone Shrine", "Sacred ceremonial ring with towering whale-rib arches, sacrificial bone altar, and smoking brazier", 'LIGHT_SUN', 10),
             ('PIER_STRAIGHT', "Straight Pier Walkway", "Modular straight timber dock on stilt pilings with mooring bollards", 'SNAP_INCREMENT', 12),
+            ('PIER_SQUARE', "Square Pier Platform", "4m x 4m square timber pier module matching the straight pier width, with corner mooring bollards", 'SNAP_FACE', 31),
             ('PIER_RAMP', "Pier Beach Ramp", "Sloped timber ramp dock descending from pier elevation to ground level with grip battens", 'STYLUS_PRESSURE', 13),
             ('PIER_BEND', "90° Corner Pier Elbow", "90-degree corner elbow pier with reinforced dolphin pile", 'DRIVER_ROTATIONAL_DIFFERENCE', 14),
             ('PIER_TEE', "T-Junction Dock Hub", "3-way dock intersection connecting walkway to branching finger pier", 'ORIENTATION_GIMBAL', 15),

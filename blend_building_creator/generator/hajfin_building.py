@@ -5678,7 +5678,7 @@ def _build_hajfin_pier_straight(bm, props, width=4.0, depth=12.0, found_h=1.6):
     """Modular straight timber dock on deep stilt pilings with mooring bollards,
     transverse bearers, X-bracing, grey deck planks, and harbor props."""
     w = max(3.0, width)
-    d = max(6.0, depth)
+    d = max(3.0, depth)
     deck_z = max(0.8, found_h)
     water_depth = 23.0
     post_r = 0.20
@@ -5719,7 +5719,7 @@ def _build_hajfin_pier_straight(bm, props, width=4.0, depth=12.0, found_h=1.6):
     fend_th = 0.24
     fend_h = 0.38
     fend_cz = deck_z - 0.08
-    sep_th = 0.30
+    sep_th = fend_th if abs(d - w) < 0.05 else 0.30
     sep_h = 0.44
     sep_cz = deck_z - 0.16
     deck_w = w - 2.0 * fend_th
@@ -6776,14 +6776,14 @@ def _attach_faction_banner(bm, props, style):
       2. The clear front wall panel beside the door / windows.
       3. Last resort: a pole planted at the FRONT EDGE of the roof.
     """
-    skip = ('PIER_STRAIGHT', 'PIER_RAMP', 'PIER_BEND', 'PIER_TEE',
+    skip = ('PIER_STRAIGHT', 'PIER_SQUARE', 'PIER_RAMP', 'PIER_BEND', 'PIER_TEE',
             'PIER_CROSS', 'PIER_LANDING',
             'PIER_PLATFORM', 'PIER_HIGH_RAMP', 'PIER_HIGH_RAMP_TALL', 'PIER_ROPE_BRIDGE', 'ROPE_BRIDGE',
             'PALISADE_WALL', 'WALL', 'FENCE', 'SHRINE', 'TEMPLE',
             'FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
             'FEATURE_ROPE_BRIDGE_WIDE', 'FEATURE_ROPE_BRIDGE_SLOPE',
             'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR',
-            'RUM_STILL', 'SHIP_TAVERN')
+            'RUM_STILL', 'TINY_STORAGE', 'SHIP_TAVERN')
     if style in skip:
         return
     if not bm.verts:
@@ -8256,7 +8256,13 @@ def build_hajfin_building(obj, bm, props):
         _build_hajfin_rum_still(bm, props, width=max(7.0, width),
                                 depth=max(7.0, depth), height=height,
                                 found_h=found_h)
+    elif style == 'TINY_STORAGE':
+        _build_hajfin_tiny_storage_shack(
+            bm, props, width=width, depth=depth, height=height,
+            found_h=found_h)
     elif style == 'PIER_STRAIGHT':
+        _build_hajfin_pier_straight(bm, props, width=width, depth=depth, found_h=found_h)
+    elif style == 'PIER_SQUARE':
         _build_hajfin_pier_straight(bm, props, width=width, depth=depth, found_h=found_h)
     elif style == 'PIER_RAMP':
         _build_hajfin_pier_ramp(bm, props, width=width, depth=depth, found_h=found_h)
@@ -8580,3 +8586,134 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
                _roof_surface_z(0.20) - 0.12)
     build_prop(bm, 'CHAIN_LANTERN', 1.50, 0.90,
                _roof_surface_z(1.50) - 0.12)
+
+
+def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,
+                                    height=3.2, found_h=0.0):
+    """Compact ground-level storage shed with a single open doorway.
+
+    Deliberately no stairs, no mezzanine and no veranda helpers: just one small
+    lockup room with enough floor space for a few crates and barrels.
+    """
+    from .accessories.prop_registry import build_prop
+
+    w = max(3.4, float(width))
+    d = max(3.8, float(depth))
+    z0 = 0.0  # keep the shed at grade; no stair or raised walkway is built
+    hw = w * 0.5
+    hd = d * 0.5
+    wall_th = 0.22
+    wall_h = 3.25
+    eave_z = z0 + wall_h
+    peak_h = 1.12 if w >= 4.0 else 1.00
+    tier2 = getattr(props, 'material_tier', 'TIER_1') == 'TIER_2'
+    wall_mat = MAT_INDEX_SALVAGED_PLANKS if tier2 else MAT_INDEX_DRIFTWOOD
+
+    door_w = min(w - 1.10, max(1.75, float(getattr(props, 'door_width', 1.80))))
+    door_h = min(wall_h - 0.22,
+                 max(3.00, float(getattr(props, 'door_height', 3.00))))
+
+    # Low solid stone pad and ground-level plank floor (no stair or stilt deck).
+    # The pad top is tucked 2 cm below the floor so the interior always reads as
+    # planks and the two coplanar surfaces cannot z-fight.
+    create_box(bm, (w + 0.16, d + 0.16, 0.14),
+               (0.0, 0.0, z0 - 0.09), mat_index=MAT_INDEX_ROUGH_STONE)
+    create_box(bm, (w, d, 0.12), (0.0, 0.0, z0 - 0.06),
+               mat_index=MAT_INDEX_FLOOR)
+
+    # Rear and side walls.
+    create_box(bm, (w, wall_th, wall_h),
+               (0.0, hd - wall_th * 0.5, z0 + wall_h * 0.5),
+               mat_index=wall_mat, is_wall=True)
+    side_d = max(0.5, d - wall_th * 2.0)
+    for sx in (-1.0, 1.0):
+        create_box(bm, (wall_th, side_d, wall_h),
+                   (sx * (hw - wall_th * 0.5), 0.0, z0 + wall_h * 0.5),
+                   mat_index=wall_mat, is_wall=True)
+
+    # Front wall with a plain open doorway.
+    front_y = -hd + wall_th * 0.5
+    side_w = max(0.2, (w - door_w) * 0.5)
+    for sx in (-1.0, 1.0):
+        create_box(bm, (side_w, wall_th, wall_h),
+                   (sx * (door_w * 0.5 + side_w * 0.5), front_y,
+                    z0 + wall_h * 0.5),
+                   mat_index=wall_mat, is_wall=True)
+    header_h = max(0.08, wall_h - door_h)
+    create_box(bm, (door_w, wall_th, header_h),
+               (0.0, front_y, z0 + door_h + header_h * 0.5),
+               mat_index=wall_mat, is_wall=True)
+
+    # Heavy corner posts and a simple doorway frame.
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            create_box(bm, (0.24, 0.24, wall_h),
+                       (sx * (hw - 0.12), sy * (hd - 0.12),
+                        z0 + wall_h * 0.5),
+                       mat_index=MAT_INDEX_TIMBER)
+    for sx in (-1.0, 1.0):
+        create_box(bm, (0.12, wall_th + 0.06, door_h + 0.08),
+                   (sx * (door_w * 0.5 + 0.06), front_y,
+                    z0 + door_h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (door_w + 0.26, wall_th + 0.06, 0.14),
+               (0.0, front_y, z0 + door_h + 0.07),
+               mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (door_w + 0.28, 0.30, 0.06),
+               (0.0, -hd - 0.03, z0 + 0.01),
+               mat_index=MAT_INDEX_CUT_STONE)
+
+    # Solid gable ends and a plank roof.  The taller front gable gives the tiny
+    # interior enough headroom without adding a second floor.
+    gable_style = 'FACHWERK' if tier2 else 'DRIFTWOOD'
+    _build_gable_triangle_wall(
+        bm, -hw, hw, hd, eave_z, eave_z + peak_h,
+        wall_th=wall_th, force=True, style=gable_style)
+    _build_gable_triangle_wall(
+        bm, -hw, hw, -hd, eave_z, eave_z + peak_h,
+        wall_th=wall_th, force=True, style=gable_style)
+    _build_hajfin_supported_plank_roof(
+        bm, -hw, hw, -hd, hd, eave_z, peak_h,
+        overhang_x=0.38, overhang_y=0.38)
+
+    # Close the plank gaps from below so the stored goods stay dry: a thin dark
+    # underlay sits just beneath each roof slope, leaving the board texture and
+    # shadow gaps readable from above without opening the shed to the sky.
+    roof_ox = 0.38
+    roof_oy = 0.38
+    ridge_z = eave_z + peak_h
+    left_eave = -hw - roof_ox
+    right_eave = hw + roof_ox
+    slope_len = math.hypot(hw + roof_ox, peak_h)
+    pitch = math.atan2(peak_h, hw + roof_ox)
+    for side, eave_x in ((-1.0, left_eave), (1.0, right_eave)):
+        create_box(bm, (slope_len + 0.10, d + roof_oy * 2.0, 0.04),
+                   (eave_x * 0.5, 0.0,
+                    (ridge_z + eave_z) * 0.5 + 0.005),
+                   rotation=(0.0, side * pitch, 0.0),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # Storage clutter.  Keep the doorway and central walking line clear.
+    if tier2:
+        build_prop(bm, 'HAJFIN_CRATE', -1.35, 1.55, z0,
+                   ang=0.18, scale=0.68)
+        build_prop(bm, 'HAJFIN_CRATE', 0.15, 1.62, z0,
+                   ang=-0.12, scale=0.58)
+        build_prop(bm, 'HAJFIN_BARREL', 1.52, 1.55, z0,
+                   ang=0.45, scale=0.55)
+        build_prop(bm, 'HAJFIN_BARREL', 1.50, 0.65, z0,
+                   ang=1.15, scale=0.52)
+        build_prop(bm, 'HAJFIN_BARREL', -1.52, 0.35, z0,
+                   ang=0.85, scale=0.50)
+        build_prop(bm, 'SACK', 0.80, 0.75, z0, ang=0.35)
+        build_prop(bm, 'ROPE_COIL', -0.45, 0.70, z0, ang=0.40)
+    else:
+        build_prop(bm, 'HAJFIN_CRATE', -1.18, 1.42, z0,
+                   ang=0.16, scale=0.62)
+        build_prop(bm, 'HAJFIN_CRATE', -0.28, 1.58, z0,
+                   ang=-0.15, scale=0.54)
+        build_prop(bm, 'HAJFIN_BARREL', 1.28, 1.40, z0,
+                   ang=0.55, scale=0.54)
+        build_prop(bm, 'HAJFIN_BARREL', 1.32, 0.55, z0,
+                   ang=1.05, scale=0.50)
+        build_prop(bm, 'SACK', -1.40, 0.35, z0, ang=0.35)
