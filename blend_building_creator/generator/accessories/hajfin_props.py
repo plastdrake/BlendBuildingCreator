@@ -956,6 +956,7 @@ def _build_rope_tube(bm, points, radius=0.03, sides=8, mat_index=None,
                               rings[i + 1][kn], rings[i + 1][k]])
             f.material_index = mat_index
             f.tag = True
+            f.smooth = True
             u0 = (k / float(sides)) * u_tiles
             u1 = ((k + 1) / float(sides)) * u_tiles
             f.loops[0][uv_layer].uv = Vector((u0, v0))
@@ -1494,7 +1495,12 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
         # gets 55% of the atlas width and the board's length takes 30% of its height.
         # Each board slides to a different spot so no two are copies.
         u_len = 0.55
-        v_len = 0.30
+        # Match the texture density along the board's long axis to the width
+        # density.  These are wide cross-planks, so the old 0.30 V span made
+        # the grain run metres long; this repeats it at the same physical
+        # scale as the width.
+        v_len = u_len * (p_width / max(p_len, 0.05))
+        u_thick = u_len * (plank_th / max(p_len, 0.05))
         u_off = ((i * 0.211) % 0.42)
         v_off = ((i * 0.137) % 0.65)
         for f in plank_faces:
@@ -1504,12 +1510,12 @@ def build_suspended_rope_bridge(bm, p0, p1, width=1.35, sag=0.45,
                 if abs(fn.z) > 0.5:
                     u = u_off + (lc.y / p_len + 0.5) * u_len
                     v = v_off + (lc.x / p_width + 0.5) * v_len
-                elif abs(fn.x) >= abs(fn.y):
-                    u = u_off + (lc.y / p_len + 0.5) * u_len
-                    v = v_off + (lc.z / plank_th + 0.5) * v_len
+                elif abs(fn.y) >= abs(fn.x):
+                    u = u_off + (lc.z / plank_th + 0.5) * u_thick
+                    v = v_off + (lc.x / p_width + 0.5) * v_len
                 else:
-                    u = u_off + (lc.x / p_width + 0.5) * u_len
-                    v = v_off + (lc.z / plank_th + 0.5) * v_len
+                    u = u_off + (lc.y / p_len + 0.5) * u_len
+                    v = v_off + (lc.z / plank_th + 0.5) * u_thick
                 loop[uv_layer_planks].uv = Vector((u, v))
         transform_faces(plank_faces, M_plank)
 

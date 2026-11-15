@@ -60,6 +60,7 @@ from .mesh_utils import (
     apply_box_uvs,
     transform_faces,
     create_oriented_beam,
+    apply_organic_shading,
 )
 from .interior import build_straight_staircase
 from .railing import build_railing
@@ -8256,3 +8257,4 @@ def build_hajfin_building(obj, bm, props):
     bm.to_mesh(obj.data)
     bm.free()
     obj.data.update()
+    apply_organic_shading(obj, angle_deg=70.0)
