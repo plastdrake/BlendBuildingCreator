@@ -8641,20 +8641,23 @@ def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,
                (0.0, front_y, z0 + door_h + header_h * 0.5),
                mat_index=wall_mat, is_wall=True)
 
-    # Heavy corner posts and a simple doorway frame.
+    # Heavy corner posts sit proud of the wall corners.  Centring them exactly
+    # on the corners keeps every face clear of the wall planes (the old inset
+    # posts were buried flush inside the siding and coplanar with it).
     for sx in (-1.0, 1.0):
         for sy in (-1.0, 1.0):
             create_box(bm, (0.24, 0.24, wall_h),
-                       (sx * (hw - 0.12), sy * (hd - 0.12),
-                        z0 + wall_h * 0.5),
+                       (sx * hw, sy * hd, z0 + wall_h * 0.5),
                        mat_index=MAT_INDEX_TIMBER)
+    # Doorway trim is likewise nudged proud so its faces are not coplanar with
+    # the wall header or door reveals.
     for sx in (-1.0, 1.0):
         create_box(bm, (0.12, wall_th + 0.06, door_h + 0.08),
-                   (sx * (door_w * 0.5 + 0.06), front_y,
+                   (sx * (door_w * 0.5 + 0.07), front_y,
                     z0 + door_h * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (door_w + 0.26, wall_th + 0.06, 0.14),
-               (0.0, front_y, z0 + door_h + 0.07),
+    create_box(bm, (door_w + 0.28, wall_th + 0.06, 0.14),
+               (0.0, front_y, z0 + door_h + 0.08),
                mat_index=MAT_INDEX_TIMBER)
     create_box(bm, (door_w + 0.28, 0.30, 0.14),
                (0.0, -hd - 0.03, z0 - 0.07),
