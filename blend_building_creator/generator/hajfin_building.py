@@ -2522,16 +2522,20 @@ def _build_hajfin_throne(bm, x, y, z, rot_z=0.0):
         v1 = (i + 1) / (num_arch_rings - 1)
         for j in range(ring_segs):
             nxt = (j + 1) % ring_segs
-            f = bm.faces.new([arch_rings[i][j], arch_rings[i + 1][j], arch_rings[i + 1][nxt], arch_rings[i][nxt]])
+            # Wind each quad so the bone tube's normals point outward.  The old
+            # order wrapped the backrest arch inside-out, which made the whole
+            # jaw backrest render as reversed/black faces.
+            f = bm.faces.new([arch_rings[i][j], arch_rings[i][nxt],
+                              arch_rings[i + 1][nxt], arch_rings[i + 1][j]])
             f.material_index = MAT_INDEX_BONE
             f.smooth = True
             f.tag = True
             u0 = j / ring_segs
             u1 = (j + 1) / ring_segs
             f.loops[0][uv_layer].uv = Vector((u0, v0))
-            f.loops[1][uv_layer].uv = Vector((u0, v1))
+            f.loops[1][uv_layer].uv = Vector((u1, v0))
             f.loops[2][uv_layer].uv = Vector((u1, v1))
-            f.loops[3][uv_layer].uv = Vector((u1, v0))
+            f.loops[3][uv_layer].uv = Vector((u0, v1))
 
     # Solid end caps on dais
     f_start = bm.faces.new(list(reversed(arch_rings[0])))
