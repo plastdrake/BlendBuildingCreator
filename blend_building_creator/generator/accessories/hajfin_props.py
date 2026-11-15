@@ -952,15 +952,16 @@ def _build_rope_tube(bm, points, radius=0.03, sides=8, mat_index=None,
         v1 = ((i + 1) * seg_len) * (v_per_metre * (pts[-1] - pts[0]).length)
         for k in range(sides):
             kn = (k + 1) % sides
-            f = bm.faces.new([rings[i][k], rings[i + 1][k], rings[i + 1][kn], rings[i][kn]])
+            f = bm.faces.new([rings[i][k], rings[i][kn],
+                              rings[i + 1][kn], rings[i + 1][k]])
             f.material_index = mat_index
             f.tag = True
             u0 = (k / float(sides)) * u_tiles
             u1 = ((k + 1) / float(sides)) * u_tiles
             f.loops[0][uv_layer].uv = Vector((u0, v0))
-            f.loops[1][uv_layer].uv = Vector((u0, v1))
+            f.loops[1][uv_layer].uv = Vector((u1, v0))
             f.loops[2][uv_layer].uv = Vector((u1, v1))
-            f.loops[3][uv_layer].uv = Vector((u1, v0))
+            f.loops[3][uv_layer].uv = Vector((u0, v1))
 
     # End caps: give them UVs from inside the rope so they read as cut rope
     # instead of black discs (which looked like 4 stray rope ends on the anchor).
