@@ -2896,8 +2896,8 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
         _build_hajfin_crate(bm, -hw + wall_th + 0.85, hd - wall_th - 0.85, z_ground=z0 + 0.14, yaw=0.18, scale=0.68)
         _build_hajfin_barrel(bm, -hw + wall_th + 1.65, hd - wall_th - 0.70, z_ground=z0 + 0.14, ang=0.4, scale=0.52)
         _build_hajfin_barrel(bm, hw - wall_th - 0.80, hd - wall_th - 0.75, z_ground=z0 + 0.14, ang=2.2, scale=0.55)
-        build_prop(bm, 'HAJFIN_BED', -hw + wall_th + 0.55, 0.80,
-                   z0 + 0.14, ang=math.pi * 0.5, length=1.95, width=0.88)
+        build_prop(bm, 'HAJFIN_BED', -hw + wall_th + 0.58, 0.80,
+                   z0 + 0.14, ang=math.pi * 0.5, length=1.95, width=1.10)
 
         # 2B. SCAFFOLDED FACADE PATCHWORK (single storey shacks)
         _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z1,
@@ -8812,7 +8812,7 @@ def _build_hajfin_pirate_cottage(bm, props, x=0.0, y=0.0,
 
     # Cosy single-room interior.
     bed_len = 1.95
-    bed_dep = 0.88
+    bed_dep = 1.10  # artist Bed.fbx is 1.28 m wide natively; scaled length fit
     bed_x = x - (hw - wall_th - bed_len * 0.5 - 0.05)
     bed_y = y + hd - wall_th - bed_dep * 0.5 - 0.05
     build_prop(bm, 'HAJFIN_BED', bed_x, bed_y, z0, ang=0.0,
@@ -9111,7 +9111,7 @@ def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
 
     # Tower top-room interior: one pirate cot and a barrel, door path clear.
     build_prop(bm, 'HAJFIN_BED', tower_cx - 0.45, tower_cy - 0.90,
-               z_second, ang=0.0, length=1.95, width=0.88)
+               z_second, ang=0.0, length=1.95, width=1.10)
     build_prop(bm, 'HAJFIN_BARREL', tower_cx - 1.00, tower_cy + 1.05,
                z_second, ang=0.4, scale=0.45)
 

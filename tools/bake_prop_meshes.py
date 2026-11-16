@@ -12,6 +12,11 @@ property-update/depsgraph contexts and silently fell back before).
 import bpy
 import os
 
+# Start from a truly empty scene.  The default startup light can make the FBX
+# importer hit Cycles light properties that Blender 5.2 no longer exposes,
+# aborting the bake midway through the prop list.
+bpy.ops.wm.read_factory_settings(use_empty=True)
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROPS_DIR = os.path.join(ROOT, 'blend_building_creator', 'props')
 OUT_PATH = os.path.join(ROOT, 'blend_building_creator', 'generator',
@@ -31,6 +36,7 @@ FBX_PROPS = {
     'hajfin_barrel': os.path.join('hajfin', 'Barrel.fbx'),
     'hajfin_skull': os.path.join('hajfin', 'Skull.fbx'),
     'hajfin_crate': os.path.join('hajfin', 'Crate.fbx'),
+    'hajfin_bed': os.path.join('hajfin', 'Bed.fbx'),
 }
 
 # Canonical material slot indices (mirrors generator/materials.py). The artist
@@ -62,6 +68,9 @@ MAT_BY_NAME = {
     'M_Building_Driftwood': 53,
     'M_Building_Rough_Stone': 54,
     'M_Building_Bone': 55,
+    'M_Building_Thatch': 15,
+    'M_Building_Hajfin_Tarp': 20,
+    'M_Building_Hajfin_Deck': 3,
 }
 
 
@@ -114,18 +123,37 @@ def bake_one(path):
             'poly_mats': poly_mats if has_mats else None}
 
 
+# Preserve previously baked entries when an individual FBX cannot be imported
+# (some legacy crate files trip a Blender 5.2 light-property import bug).
+existing = {}
+if os.path.exists(OUT_PATH):
+    try:
+        _ns = {}
+        with open(OUT_PATH, 'r', encoding='utf-8') as _f:
+            exec(_f.read(), _ns)
+        existing = _ns.get('PROP_MESHES', {})
+    except Exception as exc:
+        print('WARN could not read existing meshdata:', exc)
+
 all_data = {}
 for key, fname in FBX_PROPS.items():
     p = os.path.join(PROPS_DIR, fname)
     if not os.path.exists(p):
         print('MISSING', p)
         continue
-    item = bake_one(p)
+    try:
+        item = bake_one(p)
+    except Exception as exc:
+        item = None
+        print('FAILED', key, exc)
     if item:
         all_data[key] = item
         print(f'BAKED {key}: {len(item["verts"])} verts '
               f'{len(item["polys"])} polys '
               f'mats={"yes" if item["poly_mats"] else "no"}')
+    elif key in existing:
+        all_data[key] = existing[key]
+        print(f'PRESERVED {key}')
     else:
         print('EMPTY', key)
 
@@ -179,6 +207,11 @@ lines.append('    PROP_MESHES["skull.fbx"] = PROP_MESHES["hajfin_skull"]')
 lines.append('    PROP_MESHES["Skull"] = PROP_MESHES["hajfin_skull"]')
 lines.append('    PROP_MESHES["skull"] = PROP_MESHES["hajfin_skull"]')
 lines.append('    PROP_MESHES["hajfin_skull.fbx"] = PROP_MESHES["hajfin_skull"]')
+lines.append('if "hajfin_bed" in PROP_MESHES:')
+lines.append('    PROP_MESHES["Bed.fbx"] = PROP_MESHES["hajfin_bed"]')
+lines.append('    PROP_MESHES["bed.fbx"] = PROP_MESHES["hajfin_bed"]')
+lines.append('    PROP_MESHES["Bed"] = PROP_MESHES["hajfin_bed"]')
+lines.append('    PROP_MESHES["bed"] = PROP_MESHES["hajfin_bed"]')
 lines.append('')
 
 os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)

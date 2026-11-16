@@ -816,6 +816,22 @@ def build_hajfin_bed(bm, x, y, z_ground=0.0, ang=0.0,
     Deliberately narrower and lower than the civilised bed so it hugs a wall and
     leaves the fighting floor open.
     """
+    # Prefer the artist's Bed.fbx.  Its length runs along native Y, so rotate it
+    # 90 degrees to match this prop's length-along-X convention.
+    from .artisan_meshdata import PROP_MESHES
+    _bed = PROP_MESHES.get('hajfin_bed')
+    if _bed:
+        _ys = [v[1] for v in _bed['verts']]
+        _native_len = max(1e-4, max(_ys) - min(_ys))
+        _scale = max(1.60, float(length)) / _native_len
+        _faces = _stamp_meshdata(
+            bm, 'hajfin_bed', x, y, z_ground,
+            scale=_scale, yaw=ang + math.pi * 0.5,
+            anchor='BASE', default_mat=MAT_INDEX_DRIFTWOOD)
+        if _faces:
+            return _faces
+
+    # Procedural straw-bed fallback used only if the baked artist mesh is absent.
     L = max(1.55, float(length))
     W = max(0.72, float(width))
     z0 = 0.0  # local build; z_ground is applied by the final transform
