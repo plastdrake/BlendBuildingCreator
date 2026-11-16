@@ -6743,16 +6743,23 @@ def _build_hajfin_shaman_shrine(bm, props, diameter=11.0, height=7.5, found_h=0.
 # HELPER SUBSTRUCTURES
 # =============================================================================
 
-def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_depth=25.0):
+def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0,
+                              post_depth=25.0, top_inset=0.0):
     """Crooked pier pilings underneath building with sill beams and wooden access steps.
-    Posts extend 10 meters downwards so buildings can be placed over water, piers, cliffs."""
+    Posts extend 10 meters downwards so buildings can be placed over water, piers, cliffs.
+
+    ``top_inset`` is the distance from the nominal floor-top plane down to the
+    floor underside for unusual builders.  Posts and sill beams deliberately
+    overlap the floor underside by a few centimetres so no gap can open up after
+    timber jitter; the overlap stays hidden inside the slab.
+    """
     post_spacing = 2.4
     nx = max(2, int((x1 - x0) / post_spacing) + 1)
     ny = max(2, int((y1 - y0) / post_spacing) + 1)
 
-    total_post_h = height + post_depth - 0.10
-    post_top = height - 0.10
-    cz = post_top - total_post_h * 0.5  # post top tucks just under the floor slab
+    post_top = height - top_inset + 0.03
+    total_post_h = post_top + post_depth
+    cz = post_top - total_post_h * 0.5
 
     for ix in range(nx):
         x = x0 + ix * ((x1 - x0) / (nx - 1))
@@ -6763,13 +6770,14 @@ def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_dept
 
     # Heavy timber perimeter sill beams, tucked just below the floor top so
     # neither the stilts nor these beams can poke through the deck planks.
+    sill_cz = post_top - 0.14
     for sgn_y in (-1.0, 1.0):
         sy = y0 if sgn_y < 0 else y1
-        create_box(bm, ((x1 - x0) + 0.3, 0.28, 0.28), ((x0 + x1) * 0.5, sy, height - 0.20),
+        create_box(bm, ((x1 - x0) + 0.3, 0.28, 0.28), ((x0 + x1) * 0.5, sy, sill_cz),
                    mat_index=MAT_INDEX_TIMBER)
     for sgn_x in (-1.0, 1.0):
         sx = x0 if sgn_x < 0 else x1
-        create_box(bm, (0.28, (y1 - y0) + 0.3, 0.28), (sx, (y0 + y1) * 0.5, height - 0.20),
+        create_box(bm, (0.28, (y1 - y0) + 0.3, 0.28), (sx, (y0 + y1) * 0.5, sill_cz),
                    mat_index=MAT_INDEX_TIMBER)
 
     # Walkable timber porch landing in front of door threshold
@@ -6800,8 +6808,8 @@ def _build_stilt_substructure(bm, x0, x1, y0, y1, height, door_cx=0.0, post_dept
             (door_cx + sgn_lp * (landing_w * 0.5 - 0.11), flank_cy, landing_beam_z),
             mat_index=MAT_INDEX_TIMBER, bevel_amount=0.012, long_axis=1,
         )
-        # 2 sturdy stilt posts extending 10m downwards under landing outer corners (capped cleanly under joists)
-        landing_post_top = height - 0.38
+        # 2 sturdy stilt posts extending 10m downwards under landing outer corners (overlap the joist slightly)
+        landing_post_top = height - 0.34
         landing_post_h = landing_post_top + post_depth
         landing_post_cz = landing_post_top - landing_post_h * 0.5
         create_cylinder(bm, radius=0.18, height=landing_post_h, segments=7,
@@ -8829,7 +8837,8 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
     peak_h = 1.50
 
     # 1. Stilt deck and front landing/steps.
-    _build_stilt_substructure(bm, -hw, hw, -hd, hd, z0, door_cx=0.0)
+    _build_stilt_substructure(bm, -hw, hw, -hd, hd, z0,
+                              door_cx=0.0, top_inset=0.16)
     create_box(bm, (w, d, 0.16), (0.0, 0.0, z0 - 0.08),
                mat_index=MAT_INDEX_FLOOR)
 
