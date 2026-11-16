@@ -2698,7 +2698,7 @@ def _build_hajfin_bone_shop_table(bm, x, y, z, width=3.8):
     top_th = 0.16
     create_box(
         bm, (width, table_d, top_th),
-        (x, y, z + table_h),
+        (x, y, z + table_h - top_th * 0.5),
         mat_index=MAT_INDEX_TIMBER,
     )
     for lx in (x - width * 0.40, x + width * 0.40):
@@ -4568,19 +4568,26 @@ def _build_hajfin_bone_shop(bm, props, width=12.0, depth=11.0, height=8.8, found
         create_box(bm, (skirt_w, 0.10, 0.18),
                    (0.0, skirt_my + sgn_sk * (skirt_d * 0.5 - 0.05), z_mid + 0.09), mat_index=MAT_INDEX_TIMBER)
 
-    # 10. Interior Trade Room Furniture & Props (Safely cleared from stairwell path, floor top is z0 + 0.14)
-    _build_hajfin_bone_shop_table(bm, -0.60, -hd + 3.2, z0 + 0.14, width=2.8)
+    # 10. Interior Trade Room Furniture & Props.  The trade table is pushed
+    # against the rear wall so it no longer blocks the central walking route to
+    # the staircase, and every tool sits fully on the tabletop.
+    table_x = -0.60
+    table_y = hd - wall_th - 0.55
+    table_z = z0 + 0.14
+    _build_hajfin_bone_shop_table(bm, table_x, table_y, table_z, width=2.8)
     _build_hajfin_weapon_rack(bm, -hw + 1.2, 0.0, z0 + 0.14, rot_z=-math.pi * 0.5)
 
     from .accessories.artisan_props import build_cleaver, build_meat, build_axe, build_pickaxe
-    # Trade table goods: butcher cleaver and cured beast meat cuts
-    build_cleaver(bm, -0.30, -hd + 3.2, z_ground=z0 + 0.14 + 1.02, ang=0.20, stuck=False)
-    build_meat(bm, 0.20, -hd + 3.2, z_ground=z0 + 0.14 + 1.02, ang=-0.45, length=0.32, variant=0)
-    # Leaning woodcutter axe and heavy mining pickaxe near the salvage and weapons area
-    # Salvage tools laid out on the trade table instead of lying on the floor
-    table_top_z = z0 + 0.14 + 1.02
-    build_axe(bm, -1.30, -hd + 3.30, z_ground=table_top_z, ang=1.30, length=0.62)
-    build_pickaxe(bm, -1.75, -hd + 3.10, z_ground=table_top_z, ang=1.05, length=0.66)
+    # Trade table goods laid out on the actual tabletop surface (z + table_h).
+    table_top_z = table_z + 1.02
+    build_axe(bm, table_x - 0.75, table_y - 0.12, z_ground=table_top_z,
+              ang=0.12, length=0.62)
+    build_pickaxe(bm, table_x - 0.05, table_y + 0.14, z_ground=table_top_z,
+                  ang=-0.10, length=0.66)
+    build_cleaver(bm, table_x + 0.75, table_y - 0.10, z_ground=table_top_z,
+                  ang=0.25, stuck=False)
+    build_meat(bm, table_x + 1.15, table_y + 0.10, z_ground=table_top_z,
+               ang=-0.35, length=0.32, variant=0)
 
     # 11. Multi-Tier Bone Scale Roofs with Full Solid Gable Triangles
     # Lower flanking roofs (Eaves sit at z_mid meeting the ground floor walls, sealed by exterior timber flashing ledgers)
@@ -6786,6 +6793,7 @@ def _attach_faction_banner(bm, props, style):
             'PALISADE_WALL', 'WALL', 'FENCE', 'SHRINE', 'TEMPLE',
             'FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
             'FEATURE_ROPE_BRIDGE_WIDE', 'FEATURE_ROPE_BRIDGE_SLOPE',
+            'FEATURE_ROPE_BRIDGE_STEEP',
             'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR',
             'RUM_STILL', 'TINY_STORAGE', 'SHIP_TAVERN')
     if style in skip:
@@ -8308,6 +8316,11 @@ def build_hajfin_building(obj, bm, props):
         rise = max(1.5, min(4.5, span * 0.24))
         build_sloped_rope_bridge(
             bm, span=span, width=1.55, rise=rise, post_height=1.35)
+    elif style == 'FEATURE_ROPE_BRIDGE_STEEP':
+        span = max(6.0, min(width, 20.0))
+        rise = max(3.0, min(6.0, span * 0.42))
+        build_sloped_rope_bridge(
+            bm, span=span, width=1.55, rise=rise, post_height=1.55)
     elif style in ('FEATURE_CROWS_NEST', 'FEATURE_NEST'):
         build_ship_mast_with_crows_nest(
             bm, 0.0, 0.0, 0.0, height=9.5, mast_radius=0.26, rot_z=0.0,
@@ -8330,6 +8343,7 @@ def build_hajfin_building(obj, bm, props):
     # from reintroducing a different siding density.
     if style in ('FEATURE_ROPE_BRIDGE', 'FEATURE_BRIDGE', 'FEATURE_CROWS_NEST',
                  'FEATURE_ROPE_BRIDGE_WIDE', 'FEATURE_ROPE_BRIDGE_SLOPE',
+                 'FEATURE_ROPE_BRIDGE_STEEP',
                  'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR'):
         # Standalone features bring their own unwrap - keep the box-UV pass off them.
         for _f in bm.faces:
@@ -8603,7 +8617,8 @@ def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,
 
     w = max(3.4, float(width))
     d = max(3.8, float(depth))
-    z0 = 0.0  # keep the shed at grade; no stair or raised walkway is built
+    floor_th = 0.20
+    z0 = floor_th  # thick floor top; the floor itself reaches down to grade
     hw = w * 0.5
     hd = d * 0.5
     wall_th = 0.22
@@ -8617,10 +8632,24 @@ def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,
     door_h = min(wall_h - 0.22,
                  max(3.00, float(getattr(props, 'door_height', 3.00))))
 
-    # Ground-level timber plank floor.  No stone pad and no stilt deck: the
-    # exposed edge of the wooden floor slab is the only foundation needed.
-    create_box(bm, (w, d, 0.14), (0.0, 0.0, z0 - 0.07),
+    # Thick ground-level timber plank floor: the extra depth is added upwards
+    # so the floor top (and every wall/prop that sits on it) is raised, while
+    # the underside still rests on grade.
+    create_box(bm, (w, d, floor_th), (0.0, 0.0, z0 - floor_th * 0.5),
                mat_index=MAT_INDEX_FLOOR)
+
+    # Heavy timber base frame wrapping the bottom of the shed.  Each sill beam
+    # overlaps the wall by 2 cm so no face is coplanar with the siding.
+    frame_t = 0.18
+    frame_z = z0 - floor_th * 0.5
+    for sx in (-1.0, 1.0):
+        create_box(bm, (frame_t, d + frame_t, floor_th),
+                   (sx * (hw + frame_t * 0.5 - 0.02), 0.0, frame_z),
+                   mat_index=MAT_INDEX_TIMBER)
+    for sy in (-1.0, 1.0):
+        create_box(bm, (w + frame_t, frame_t, floor_th),
+                   (0.0, sy * (hd + frame_t * 0.5 - 0.02), frame_z),
+                   mat_index=MAT_INDEX_TIMBER)
 
     # Rear and side walls.
     create_box(bm, (w, wall_th, wall_h),

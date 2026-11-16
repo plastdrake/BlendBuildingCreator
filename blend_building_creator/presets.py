@@ -7455,6 +7455,15 @@ PRESETS = {
         'description': "14m rope bridge ramp rising from a low anchorage to a higher one, still drooping on its sloping catenary. No platform - ready to meet a ledge or terrace.",
         'settings': _hajfin_settings(width=14.0, depth=6.5, num_floors=1, found_h=0.0, wonkiness=0.0, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=2, hajfin_style='FEATURE_ROPE_BRIDGE_SLOPE'),
     },
+    'HAJFIN_ROPE_BRIDGE_STEEP': {
+        'category': 'CONSTRUCTION',
+        'family': 'HAJFIN_ROPE_BRIDGE',
+        'tier': 2,
+        'name': "Steep Suspended Rope Bridge",
+        'plot': "14m x 7m",
+        'description': "12m suspended rope bridge ramp climbing roughly 5m at a steep 42% grade from a low anchorage to a high one. No platform - ready to meet a ledge or terrace.",
+        'settings': _hajfin_settings(width=12.0, depth=6.5, num_floors=1, found_h=0.0, wonkiness=0.0, roof_h=1.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', tier=2, hajfin_style='FEATURE_ROPE_BRIDGE_STEEP'),
+    },
     'HAJFIN_CROWS_NEST_T1': {
         'category': 'CONSTRUCTION',
         'family': 'HAJFIN_CROWS_NEST',
@@ -8174,6 +8183,7 @@ BUILDING_FAMILIES = [
             ("Extra Long (24m)", 'HAJFIN_ROPE_BRIDGE_LONG', "24m catenary bridge for broad channels and chasms"),
             ("Wide (14m)", 'HAJFIN_ROPE_BRIDGE_WIDE', "14m bridge with a broad 2.3m walkway"),
             ("Sloped (14m)", 'HAJFIN_ROPE_BRIDGE_SLOPE', "14m rope bridge ramp rising from a low anchorage to a higher one"),
+            ("Steep (12m)", 'HAJFIN_ROPE_BRIDGE_STEEP', "12m steep rope bridge ramp climbing about 5m at a 42% grade"),
         ],
     },
     {
@@ -8354,6 +8364,7 @@ ARCHETYPE_MAP = {
     'HAJFIN_PIER_HIGH_RAMP_TALL': 'HARBOR',
     'HAJFIN_ROPE_BRIDGE_WIDE': 'HARBOR',
     'HAJFIN_ROPE_BRIDGE_SLOPE': 'HARBOR',
+    'HAJFIN_ROPE_BRIDGE_STEEP': 'HARBOR',
     'HAJFIN_PIER_ROPE_BRIDGE': 'HARBOR',
 }
 
