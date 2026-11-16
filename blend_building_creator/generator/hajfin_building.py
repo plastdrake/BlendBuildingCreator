@@ -2724,7 +2724,9 @@ def _build_hajfin_bone_shop_table(bm, x, y, z, width=3.8):
 # DEDICATED HAJFIN PRESET ARCHETYPE ASSEMBLERS
 # =============================================================================
 
-def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.2):
+def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.2,
+                         upper_west_door=False, upper_door_cy=0.0,
+                         upper_door_w=1.0, upper_door_h=2.0):
     """The Quintessential Hajfin Pirate Shanty (Image 6):
     Scaled for 2-3m tall Hajfin characters with accessible hollow interior.
     Supports single-story vaulted interiors or two full stories with internal timber staircase,
@@ -2783,10 +2785,45 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
                                          x1=(stair_x0 + stair_x1) * 0.5, y1=stair_y1, z1=z_mid,
                                          width=stair_w)
 
-        # UPPER FLOOR WALLS
-        _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
-                                  win_cy=0.0, win_cz=z_mid + story_h * 0.52,
-                                  win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=False)
+        # UPPER FLOOR WALLS.  The west wall can be built as a real doorway
+        # wall for homes whose balcony opens through it.
+        if upper_west_door:
+            wy0 = -hd + wall_th
+            wy1 = hd - wall_th
+            dw = max(0.85, min(upper_door_w, (wy1 - wy0) - 0.4))
+            dh = max(1.6, min(upper_door_h, story_h - 0.3))
+            dcy = max(wy0 + dw * 0.5 + 0.25,
+                      min(wy1 - dw * 0.5 - 0.25, upper_door_cy))
+            x_wall = -hw + wall_th * 0.5
+            south_w = max(0.10, (dcy - dw * 0.5) - wy0)
+            north_w = max(0.10, wy1 - (dcy + dw * 0.5))
+            create_box(bm, (wall_th, south_w, story_h),
+                       (x_wall, wy0 + south_w * 0.5,
+                        z_mid + story_h * 0.5),
+                       mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+            create_box(bm, (wall_th, north_w, story_h),
+                       (x_wall, wy1 - north_w * 0.5,
+                        z_mid + story_h * 0.5),
+                       mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+            hh = max(0.10, story_h - dh)
+            create_box(bm, (wall_th, dw, hh),
+                       (x_wall, dcy, z_mid + dh + hh * 0.5),
+                       mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+            # Heavy doorway trim.
+            for sy in (-1.0, 1.0):
+                create_box(bm, (0.12, 0.12, dh + 0.12),
+                           (x_wall - wall_th * 0.5 - 0.01,
+                            dcy + sy * (dw * 0.5 + 0.05),
+                            z_mid + dh * 0.5),
+                           mat_index=MAT_INDEX_TIMBER)
+            create_box(bm, (0.14, dw + 0.30, 0.16),
+                       (x_wall - wall_th * 0.5 - 0.02, dcy,
+                        z_mid + dh + 0.08),
+                       mat_index=MAT_INDEX_TIMBER)
+        else:
+            _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
+                                      win_cy=0.0, win_cz=z_mid + story_h * 0.52,
+                                      win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=False)
         _build_wall_with_window_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
                                   win_cy=-hd * 0.35, win_cz=z_mid + story_h * 0.52,
                                   win_w=0.85, win_h=0.85, wall_th=wall_th, facing_east=True)
@@ -2821,9 +2858,10 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
                                        door_openings=[(0.0, door_w, door_h)])
 
         # Upper storey gets its own patchwork so the tower never reads as one big slab.
-        _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
-                                       wall_th=wall_th, sgn_x=-1.0, variant='DECK', top_clear=0.30,
-                                       openings=[_hajfin_opening_y(0.0, z_mid + story_h * 0.52, 0.85, 0.85)])
+        if not upper_west_door:
+            _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z_mid, z1,
+                                           wall_th=wall_th, sgn_x=-1.0, variant='DECK', top_clear=0.30,
+                                           openings=[_hajfin_opening_y(0.0, z_mid + story_h * 0.52, 0.85, 0.85)])
         _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, hw - wall_th * 0.5, z_mid, z1,
                                        wall_th=wall_th, sgn_x=1.0, variant='BRACED', top_clear=0.30,
                                        openings=[_hajfin_opening_y(-hd * 0.35, z_mid + story_h * 0.52, 0.85, 0.85)])
@@ -8723,32 +8761,53 @@ def _build_hajfin_pirate_cottage(bm, props, x=0.0, y=0.0,
                    rotation=(0.0, side * pitch, 0.0),
                    mat_index=MAT_INDEX_TIMBER)
 
-    # A small patched canvas porch on the front.
+    # A proper timber lean-to porch on the front.  The roof springs from just
+    # under the main eave and only drops to door-head height at the outer edge,
+    # so it never cuts across the doorway or leaves a gap above it.
     if with_porch:
-        porch_w = min(3.6, w - 0.6)
-        porch_d = 1.10
+        porch_w = min(3.8, w - 0.5)
+        porch_d = 1.25
         porch_y = y - hd - porch_d * 0.5
+        roof_back_z = z0 + 3.20
+        roof_front_z = z0 + 3.00
+        roof_pitch = math.atan2(roof_back_z - roof_front_z, porch_d)
+        roof_cz = (roof_back_z + roof_front_z) * 0.5
         # Porch deck sits 3 cm below the interior floor, so its top cannot
         # z-fight the floor or the base frame.  The threshold bridges the lip.
         create_box(bm, (porch_w, porch_d, 0.12),
                    (x, porch_y, z0 - 0.09), mat_index=MAT_INDEX_FLOOR)
+
+        # Rafters, front fascia and four overlapping timber roof boards.
+        for sx in (-1.0, 1.0):
+            px = x + sx * (porch_w * 0.5 - 0.16)
+            _create_oriented_beam(
+                bm, (px, y - hd + 0.02, roof_back_z),
+                (px, y - hd - porch_d + 0.06, roof_front_z),
+                width=0.10, depth=0.13, mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (porch_w + 0.30, 0.12, 0.17),
+                   (x, y - hd - porch_d + 0.03, roof_front_z - 0.06),
+                   mat_index=MAT_INDEX_TIMBER)
+        board_n = 4
+        board_d = porch_d / board_n
+        for bi in range(board_n):
+            ly = -porch_d * 0.5 + (bi + 0.5) * board_d
+            bz = roof_cz + ly * math.tan(roof_pitch)
+            create_box(bm, (porch_w + 0.34, board_d - 0.018, 0.055),
+                       (x, porch_y + ly, bz),
+                       rotation=(roof_pitch, 0.0, 0.0),
+                       mat_index=MAT_INDEX_TIMBER)
+
+        # Front posts now reach the new high fascia beam.
+        post_h = roof_front_z - (z0 - 0.03)
         for sx in (-1.0, 1.0):
             px = x + sx * (porch_w * 0.5 - 0.20)
-            create_box(bm, (0.13, 0.13, 2.58),
-                       (px, y - hd - porch_d + 0.16, z0 + 1.26),
+            create_box(bm, (0.13, 0.13, post_h),
+                       (px, y - hd - porch_d + 0.16,
+                        z0 - 0.03 + post_h * 0.5),
                        mat_index=MAT_INDEX_TIMBER)
-        # Positive X rotation drops the outer/front edge so the awning sheds
-        # rain away from the door (the old negative angle tilted it uphill).
-        create_box(bm, (porch_w + 0.18, porch_d + 0.22, 0.06),
-                   (x, porch_y - 0.02, z0 + 2.56),
-                   rotation=(math.radians(7.0), 0.0, 0.0),
-                   mat_index=MAT_INDEX_TARP)
-        for sx in (-1.0, 1.0):
             _create_rope_cable(
-                bm, (x + sx * (porch_w * 0.5 - 0.20),
-                     y - hd - porch_d + 0.16, z0 + 2.53),
-                (x + sx * (porch_w * 0.5 - 0.20),
-                 y - hd - 0.04, z0 + 2.70),
+                bm, (px, y - hd - porch_d + 0.16, roof_front_z),
+                (px, y - hd - 0.04, roof_back_z),
                 radius=0.018)
 
     # Cosy single-room interior.
@@ -8800,7 +8859,9 @@ def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
         props.num_floors = 2
         _build_hajfin_shanty(
             bm, props, width=main_w, depth=main_d,
-            height=main_h, found_h=z_deck)
+            height=main_h, found_h=z_deck,
+            upper_west_door=True, upper_door_cy=1.00,
+            upper_door_w=1.00, upper_door_h=2.00)
     finally:
         props.num_floors = old_num
     main_faces = [f for f in bm.faces if f not in before]
@@ -8842,24 +8903,39 @@ def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
         _create_rope_cable(
             bm, (px, py, z_second + 0.92),
             (px, rail_end, z_second + 0.92), radius=0.022)
-    # A patch canvas awning above the balcony, sloping away from the wall.
-    create_box(bm, (balcony_w + 0.40, balcony_d + 0.30, 0.06),
-               (balcony_cx + 0.03, balcony_cy, z_second + 2.22),
-               rotation=(0.0, math.radians(-10.0), 0.0),
-               mat_index=MAT_INDEX_TARP)
-
-    # Balcony door on the main upper west wall, clear of the upper window.
-    create_box(bm, (0.08, 1.00, 2.00),
-               (main_west + 0.01, balcony_cy, z_second + 1.00),
-               mat_index=MAT_INDEX_TIMBER)
+    # A framed timber lean-to over the balcony, sloping away from the wall.
+    aw_back_z = z_second + 2.45
+    aw_front_z = z_second + 2.15
+    aw_outer_x = balcony_cx - balcony_w * 0.5
+    aw_pitch = math.atan2(aw_back_z - aw_front_z, balcony_w + 0.2)
+    aw_len = math.hypot(balcony_w + 0.20, aw_back_z - aw_front_z)
     for sy in (-1.0, 1.0):
-        create_box(bm, (0.12, 0.10, 2.12),
-                   (main_west - 0.02, balcony_cy + sy * 0.55,
-                    z_second + 1.03),
+        py = balcony_cy + sy * (balcony_d * 0.5 - 0.20)
+        _create_oriented_beam(
+            bm, (main_west, py, aw_back_z),
+            (aw_outer_x, py, aw_front_z),
+            width=0.10, depth=0.13, mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.14, balcony_d + 0.20, 0.16),
+               (aw_outer_x, balcony_cy, aw_front_z - 0.05),
+               mat_index=MAT_INDEX_TIMBER)
+    board_n = 3
+    board_w = balcony_d / board_n
+    for bi in range(board_n):
+        by = balcony_cy - balcony_d * 0.5 + (bi + 0.5) * board_w
+        create_box(bm, (aw_len + 0.18, board_w - 0.018, 0.055),
+                   ((main_west + aw_outer_x) * 0.5, by,
+                    (aw_back_z + aw_front_z) * 0.5 + 0.015),
+                   rotation=(0.0, -aw_pitch, 0.0),
                    mat_index=MAT_INDEX_TIMBER)
 
+    # The balcony doorway is a real opening built into the upper west wall;
+    # add only a proud timber sill at the threshold.
+    create_box(bm, (0.24, 1.18, 0.08),
+               (main_west - 0.06, balcony_cy, z_second + 0.04),
+               mat_index=MAT_INDEX_TIMBER)
+
     # 3. Square tower carried on four long stilts; no bottom floor.
-    tower_cx = -3.20
+    tower_cx = -4.30
     tower_cy = main_cy
     tower_half = 1.70
     cabin_h = 2.80
@@ -8879,27 +8955,28 @@ def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
             bm, (tower_cx + ox, tower_cy + oy, z_second - 1.20),
             major_radius=0.215, minor_radius=0.025,
             mat_index=MAT_INDEX_IRON)
-    # X-bracing across all four open stilt faces.
+    # One clean X per open stilt face between the four corner pillars.
     for i in range(4):
         ax, ay = post_offsets[i]
         bx, by = post_offsets[(i + 1) % 4]
-        for z_lo, z_hi in ((0.4, z_second * 0.55),
-                           (z_second * 0.55, z_second - 0.20)):
-            _create_oriented_beam(
-                bm, (tower_cx + ax, tower_cy + ay, z_lo),
-                (tower_cx + bx, tower_cy + by, z_hi),
-                width=0.13, depth=0.13, mat_index=MAT_INDEX_TIMBER)
-            _create_oriented_beam(
-                bm, (tower_cx + ax, tower_cy + ay, z_hi),
-                (tower_cx + bx, tower_cy + by, z_lo),
-                width=0.13, depth=0.13, mat_index=MAT_INDEX_TIMBER)
+        z_lo = 0.55
+        z_hi = z_second - 0.35
+        _create_oriented_beam(
+            bm, (tower_cx + ax, tower_cy + ay, z_lo),
+            (tower_cx + bx, tower_cy + by, z_hi),
+            width=0.13, depth=0.13, mat_index=MAT_INDEX_TIMBER)
+        _create_oriented_beam(
+            bm, (tower_cx + ax, tower_cy + ay, z_hi),
+            (tower_cx + bx, tower_cy + by, z_lo),
+            width=0.13, depth=0.13, mat_index=MAT_INDEX_TIMBER)
 
     # Top cabin floor.
     create_box(bm, (tower_half * 2.0, tower_half * 2.0, 0.18),
                (tower_cx, tower_cy, z_second - 0.09),
                mat_index=MAT_INDEX_FLOOR)
 
-    # Cabin walls; east wall is left open for the bridge door.
+    # Cabin walls: proper framed box with a west window opening and an east
+    # bridge-door opening.  The framing is deliberately proud of the siding.
     wall_th = 0.20
     cw = tower_half * 2.0
     wall_z = z_second + cabin_h * 0.5
@@ -8909,9 +8986,55 @@ def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
     create_box(bm, (cw, wall_th, cabin_h),
                (tower_cx, tower_cy - tower_half + wall_th * 0.5, wall_z),
                mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
-    create_box(bm, (wall_th, cw - wall_th * 2.0, cabin_h),
-               (tower_cx - tower_half + wall_th * 0.5, tower_cy, wall_z),
+
+    # West wall with a real window opening.
+    win_w = 0.90
+    win_h = 0.90
+    win_cy = tower_cy
+    win_bot = z_second + 1.20
+    win_top = win_bot + win_h
+    x_west = tower_cx - tower_half + wall_th * 0.5
+    wy0 = tower_cy - tower_half + wall_th
+    wy1 = tower_cy + tower_half - wall_th
+    west_span = wy1 - wy0
+    side_w = max(0.10, (west_span - win_w) * 0.5)
+    create_box(bm, (wall_th, west_span, win_bot - z_second),
+               (x_west, tower_cy, z_second + (win_bot - z_second) * 0.5),
                mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    create_box(bm, (wall_th, west_span, cabin_top - win_top),
+               (x_west, tower_cy, win_top + (cabin_top - win_top) * 0.5),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    create_box(bm, (wall_th, side_w, win_h),
+               (x_west, wy0 + side_w * 0.5, win_bot + win_h * 0.5),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    create_box(bm, (wall_th, side_w, win_h),
+               (x_west, wy1 - side_w * 0.5, win_bot + win_h * 0.5),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    create_box(bm, (0.05, win_w, win_h),
+               (tower_cx - tower_half + 0.03, win_cy,
+                win_bot + win_h * 0.5),
+               mat_index=MAT_INDEX_GLASS)
+    for i in range(3):
+        bx = tower_cx - tower_half - 0.015
+        by = win_cy - 0.28 + i * 0.28
+        create_box(bm, (0.04, 0.04, win_h),
+                   (bx, by, win_bot + win_h * 0.5),
+                   mat_index=MAT_INDEX_IRON)
+    # Window frame / sill / lintel.
+    for sy in (-1.0, 1.0):
+        create_box(bm, (0.12, 0.10, win_h + 0.20),
+                   (tower_cx - tower_half - 0.02,
+                    win_cy + sy * (win_w * 0.5 + 0.05),
+                    win_bot + win_h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.14, win_w + 0.30, 0.12),
+               (tower_cx - tower_half - 0.02, win_cy, win_bot - 0.06),
+               mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.14, win_w + 0.30, 0.12),
+               (tower_cx - tower_half - 0.02, win_cy, win_top + 0.06),
+               mat_index=MAT_INDEX_TIMBER)
+
+    # East wall with the bridge-door opening.
     door_w = 1.10
     door_h = 2.20
     door_cy = balcony_cy
@@ -8930,44 +9053,64 @@ def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
     create_box(bm, (wall_th, door_w, header_h),
                (east_x, door_cy, z_second + door_h + header_h * 0.5),
                mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    # Complete door frame: jambs, lintel and timber threshold.
     for sy in (-1.0, 1.0):
-        create_box(bm, (0.10, 0.10, door_h + 0.10),
+        create_box(bm, (0.13, 0.12, door_h + 0.10),
                    (tower_cx + tower_half + 0.02,
                     door_cy + sy * (door_w * 0.5 + 0.05),
                     z_second + door_h * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-
-    # A simple square window in the west wall.
-    wx = tower_cx - tower_half - 0.01
-    create_box(bm, (0.06, 0.80, 0.75),
-               (wx, tower_cy, z_second + 1.45),
-               mat_index=MAT_INDEX_GLASS)
-    for sy in (-1.0, 1.0):
-        create_box(bm, (0.09, 0.10, 0.90),
-                   (wx - 0.02, tower_cy + sy * 0.43,
-                    z_second + 1.45),
-                   mat_index=MAT_INDEX_TIMBER)
-    for sz in (-1.0, 1.0):
-        create_box(bm, (0.09, 0.86, 0.10),
-                   (wx - 0.02, tower_cy,
-                    z_second + 1.45 + sz * 0.415),
-                   mat_index=MAT_INDEX_TIMBER)
-
-    # Eave band and square pyramid roof.
-    create_box(bm, (cw + 0.30, cw + 0.30, 0.14),
-               (tower_cx, tower_cy, cabin_top + 0.07),
+    create_box(bm, (0.18, door_w + 0.30, 0.16),
+               (tower_cx + tower_half + 0.01, door_cy,
+                z_second + door_h + 0.04),
                mat_index=MAT_INDEX_TIMBER)
-    create_cone(bm, radius1=cw * 0.78, radius2=0.04, height=1.50,
-                segments=4,
-                location=(tower_cx, tower_cy, cabin_top + 0.75),
-                rotation=(0.0, 0.0, math.pi * 0.25),
-                mat_index=MAT_INDEX_SHINGLES)
-    create_cylinder(bm, radius=0.07, height=0.35, segments=8,
-                    location=(tower_cx, tower_cy, cabin_top + 1.65),
-                    mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (0.22, door_w + 0.20, 0.10),
+               (tower_cx + tower_half + 0.01, door_cy, z_second + 0.05),
+               mat_index=MAT_INDEX_TIMBER)
+
+    # Corner pillars, sill/top girts and mid studs: a proper framed cabin.
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            create_box(bm, (0.20, 0.20, cabin_h),
+                       (tower_cx + sx * tower_half,
+                        tower_cy + sy * tower_half,
+                        z_second + cabin_h * 0.5),
+                       mat_index=MAT_INDEX_TIMBER)
+    for bz in (z_second + 0.10, cabin_top - 0.10):
+        for sy in (-1.0, 1.0):
+            create_box(bm, (cw + 0.16, 0.14, 0.16),
+                       (tower_cx, tower_cy + sy * tower_half, bz),
+                       mat_index=MAT_INDEX_TIMBER)
+        for sx in (-1.0, 1.0):
+            create_box(bm, (0.14, cw + 0.16, 0.16),
+                       (tower_cx + sx * tower_half, tower_cy, bz),
+                       mat_index=MAT_INDEX_TIMBER)
+    for sy in (-1.0, 1.0):
+        create_box(bm, (0.11, 0.11, cabin_h - 0.20),
+                   (tower_cx, tower_cy + sy * tower_half,
+                    z_second + cabin_h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # Gable roof: bone-scale shingles, timber bargeboards and a ridge crest,
+    # matching the rest of the Hajfin architecture.
+    roof_peak = 1.55
+    _build_gable_triangle_wall(
+        bm, tower_cx - tower_half, tower_cx + tower_half,
+        tower_cy - tower_half, cabin_top, cabin_top + roof_peak,
+        wall_th=wall_th, force=True, style='DRIFTWOOD')
+    _build_gable_triangle_wall(
+        bm, tower_cx - tower_half, tower_cx + tower_half,
+        tower_cy + tower_half, cabin_top, cabin_top + roof_peak,
+        wall_th=wall_th, force=True, style='DRIFTWOOD')
+    _build_bone_scale_roof_gable(
+        bm, tower_cx - tower_half, tower_cx + tower_half,
+        tower_cy - tower_half, tower_cy + tower_half,
+        cabin_top, roof_peak,
+        overhang_x=0.55, overhang_y=0.55,
+        fin_scale=0.95, num_ridge_teeth=3)
 
     # Tower top-room interior: one pirate cot and a barrel, door path clear.
-    build_prop(bm, 'HAJFIN_BED', tower_cx - 0.55, tower_cy - 0.90,
+    build_prop(bm, 'HAJFIN_BED', tower_cx - 0.45, tower_cy - 0.90,
                z_second, ang=0.0, length=1.95, width=0.88)
     build_prop(bm, 'HAJFIN_BARREL', tower_cx - 1.00, tower_cy + 1.05,
                z_second, ang=0.4, scale=0.45)
@@ -8978,7 +9121,7 @@ def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
         bm,
         Vector((balcony_cx - balcony_w * 0.5, balcony_cy, bridge_z)),
         Vector((tower_cx + tower_half, door_cy, bridge_z)),
-        width=1.00, sag=0.16, with_pylons=False, post_height=1.10)
+        width=1.30, sag=0.20, with_pylons=True, post_height=1.25)
 
 
 def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,

@@ -25,7 +25,8 @@ from ..materials import (
     MAT_INDEX_ROPE, MAT_INDEX_FISH,
     MAT_INDEX_BONE, MAT_INDEX_DRIFTWOOD, MAT_INDEX_ROUGH_STONE,
     MAT_INDEX_SILVER, MAT_INDEX_FLOOR, MAT_INDEX_LEATHER, MAT_INDEX_FABRIC_WHITE,
-    MAT_INDEX_FABRIC_STITCHED, MAT_INDEX_FABRIC_RED, MAT_INDEX_LANTERN
+    MAT_INDEX_FABRIC_STITCHED, MAT_INDEX_FABRIC_RED, MAT_INDEX_HAY,
+    MAT_INDEX_LANTERN
 )
 
 
@@ -818,55 +819,135 @@ def build_hajfin_bed(bm, x, y, z_ground=0.0, ang=0.0,
     L = max(1.55, float(length))
     W = max(0.72, float(width))
     z0 = 0.0  # local build; z_ground is applied by the final transform
-    leg_h = 0.28
+    leg_h = 0.30
     rail_z = z0 + leg_h + 0.05
+    mattress_z = z0 + leg_h + 0.20
     faces = []
 
-    # Short legs, side rails and end rails.
+    # Chunky sawn legs with rope lashings, side rails, end rails and cross slats.
     for sx in (-1.0, 1.0):
         for sy in (-1.0, 1.0):
+            lx = sx * (L * 0.5 - 0.10)
+            ly = sy * (W * 0.5 - 0.07)
             faces += create_beveled_box(
-                bm, size=(0.085, 0.085, leg_h),
-                location=(sx * (L * 0.5 - 0.10), sy * (W * 0.5 - 0.07),
-                          z0 + leg_h * 0.5),
-                mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008)
+                bm, size=(0.095, 0.095, leg_h),
+                location=(lx, ly, z0 + leg_h * 0.5),
+                mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.010,
+                bevel_segments=2)
+            faces += create_torus_ring(
+                bm, location=(lx, ly, z0 + 0.16),
+                major_radius=0.068, minor_radius=0.013,
+                major_segments=10, minor_segments=5,
+                mat_index=MAT_INDEX_ROPE)
     for sy in (-1.0, 1.0):
         faces += create_beveled_box(
-            bm, size=(L, 0.085, 0.10),
+            bm, size=(L, 0.09, 0.11),
             location=(0.0, sy * (W * 0.5 - 0.04), rail_z),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.007,
+            bevel_segments=2)
     for sx in (-1.0, 1.0):
         faces += create_beveled_box(
-            bm, size=(0.085, W, 0.10),
+            bm, size=(0.09, W, 0.11),
             location=(sx * (L * 0.5 - 0.04), 0.0, rail_z),
-            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.007,
+            bevel_segments=2)
+    for i in range(5):
+        sx = -L * 0.5 + 0.24 + i * ((L - 0.48) / 4.0)
+        faces += create_box(
+            bm, (0.10, W - 0.10, 0.045),
+            (sx, 0.0, z0 + leg_h + 0.02),
+            mat_index=MAT_INDEX_TIMBER)
 
-    # Straw tick and a rough blanket pulled up over the foot end.
-    mattress_z = z0 + leg_h + 0.17
+    # Lumpy straw tick.  The golden straw sides and tufts stay visible under the
+    # rough blanket so this reads as a pirate's straw bed, not a civilised cot.
     faces += create_beveled_box(
-        bm, size=(L - 0.12, W - 0.12, 0.14),
-        location=(0.0, 0.0, mattress_z),
-        mat_index=MAT_INDEX_FABRIC_STITCHED, bevel_amount=0.012)
+        bm, size=(L - 0.12, W - 0.12, 0.07),
+        location=(0.0, 0.0, mattress_z - 0.045),
+        mat_index=MAT_INDEX_FABRIC_STITCHED, bevel_amount=0.014,
+        bevel_segments=2)
     faces += create_beveled_box(
-        bm, size=(L * 0.58, W - 0.10, 0.055),
-        location=(L * 0.13, 0.0, mattress_z + 0.0975),
-        mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.008)
-    faces += create_beveled_box(
-        bm, size=(0.32, W * 0.58, 0.10),
-        location=(-L * 0.5 + 0.26, 0.0, mattress_z + 0.095),
-        mat_index=MAT_INDEX_FABRIC_WHITE, bevel_amount=0.010)
+        bm, size=(L - 0.14, W - 0.14, 0.15),
+        location=(0.0, 0.0, mattress_z + 0.015),
+        mat_index=MAT_INDEX_HAY, bevel_amount=0.030,
+        bevel_segments=3)
+    for sy in (-1.0, 1.0):
+        faces += create_cylinder(
+            bm, radius=0.058, height=L - 0.20, segments=10,
+            location=(0.0, sy * (W * 0.5 - 0.055), mattress_z + 0.04),
+            rotation=(0.0, math.pi * 0.5, 0.0),
+            mat_index=MAT_INDEX_HAY)
+    # Rope ties holding the straw tick to the frame.
+    for bx in (-L * 0.24, L * 0.24):
+        for sy in (-1.0, 1.0):
+            faces += create_box(
+                bm, (0.032, 0.022, 0.13),
+                (bx, sy * (W * 0.5 - 0.055), mattress_z + 0.02),
+                mat_index=MAT_INDEX_ROPE)
+    for i in range(6):
+        sx = -L * 0.5 + 0.22 + i * ((L - 0.44) / 5.0)
+        for sy in (-1.0, 1.0):
+            faces += create_cone(
+                bm, radius1=0.026, radius2=0.004, height=0.11, segments=5,
+                location=(sx, sy * (W * 0.5 - 0.015),
+                          mattress_z + 0.05),
+                rotation=(sy * 1.1, 0.0, 0.25),
+                mat_index=MAT_INDEX_HAY)
 
-    # Low lash-up headboard at the pillow end.
+    # Rumpled red blanket in overlapping folds, with a stitched salvage patch.
+    faces += create_beveled_box(
+        bm, size=(L * 0.56, W - 0.10, 0.055),
+        location=(L * 0.12, 0.0, mattress_z + 0.105),
+        rotation=(0.0, 0.0, 0.018),
+        mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.010,
+        bevel_segments=2)
+    faces += create_beveled_box(
+        bm, size=(L * 0.24, W - 0.06, 0.060),
+        location=(-L * 0.18, 0.0, mattress_z + 0.122),
+        rotation=(0.0, 0.0, -0.055),
+        mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.010,
+        bevel_segments=2)
+    faces += create_beveled_box(
+        bm, size=(0.24, 0.30, 0.012),
+        location=(L * 0.16, W * 0.16, mattress_z + 0.140),
+        mat_index=MAT_INDEX_FABRIC_STITCHED, bevel_amount=0.004)
+
+    # Straw-stuffed pillow with a pulled linen case.
+    faces += create_beveled_box(
+        bm, size=(0.38, W * 0.62, 0.13),
+        location=(-L * 0.5 + 0.27, 0.0, mattress_z + 0.12),
+        rotation=(0.0, 0.0, 0.07),
+        mat_index=MAT_INDEX_FABRIC_WHITE, bevel_amount=0.025,
+        bevel_segments=3)
+    faces += create_beveled_box(
+        bm, size=(0.10, W * 0.40, 0.04),
+        location=(-L * 0.5 + 0.47, -W * 0.16,
+                  mattress_z + 0.18),
+        rotation=(0.0, 0.0, 0.30),
+        mat_index=MAT_INDEX_FABRIC_STITCHED, bevel_amount=0.006)
+
+    # Slatted, lash-up headboard and low foot rail.
     for sy in (-1.0, 1.0):
         faces += create_beveled_box(
-            bm, size=(0.09, 0.09, 0.66),
+            bm, size=(0.10, 0.10, 0.86),
             location=(-L * 0.5 + 0.07, sy * (W * 0.5 - 0.08),
-                      z0 + 0.53),
-            mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008)
+                      z0 + 0.42),
+            mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.010)
+    for hz in (0.40, 0.62, 0.83):
+        faces += create_beveled_box(
+            bm, size=(0.065, W, 0.13),
+            location=(-L * 0.5 + 0.035, 0.0, z0 + hz),
+            mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008,
+            bevel_segments=2)
     faces += create_beveled_box(
-        bm, size=(0.07, W, 0.17),
-        location=(-L * 0.5 + 0.035, 0.0, z0 + 0.79),
-        mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.010)
+        bm, size=(0.07, W, 0.16),
+        location=(L * 0.5 - 0.035, 0.0, z0 + 0.40),
+        mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008)
+    for sy in (-1.0, 1.0):
+        faces += create_cylinder(
+            bm, radius=0.014, height=0.60, segments=6,
+            location=(-L * 0.5 + 0.055, sy * (W * 0.28), z0 + 0.62),
+            rotation=(0.0, math.pi * 0.24, 0.0),
+            mat_index=MAT_INDEX_ROPE)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces
