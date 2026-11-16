@@ -8010,57 +8010,55 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     # Upper-storey window bands, built as their own walls above the first-floor
     # openings so the second floor is not a blank box.
     # The front-gable windows were hidden behind the bow hull canopy, so the
-    # upper front wall is kept solid apart from its new balcony door; the
-    # visible upper windows are on the back and flank walls only.
+    # upper front wall is kept solid; the visible upper windows are on the back
+    # and flank walls only.
+    create_box(bm, (hall_w, wall_th, wall_top - z_upper),
+               (0.0, -hd + wall_th * 0.5,
+                (z_upper + wall_top) * 0.5),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
     _build_wall_with_2_windows_x(
         bm, -hw, hw, hd, z_upper, wall_top, -3.5, 3.5,
         z_upper + 1.75, win_w=0.95, win_h=1.00, wall_th=wall_th,
         facing_north=True)
 
-    # Front-facing upper balcony doorway (right-hand bay, clear of the bow hull).
-    front_balcony_cx = 5.60
+    # Upper west wall with a real balcony doorway.
+    wy0 = -hd + wall_th
+    wy1 = hd - wall_th
+    balcony_door_cy = 1.20
     balcony_door_w = 1.70
     balcony_door_h = 2.25
-    door_x0 = front_balcony_cx - balcony_door_w * 0.5
-    door_x1 = front_balcony_cx + balcony_door_w * 0.5
-    front_wall_y = -hd + wall_th * 0.5
-    upper_h = wall_top - z_upper
-    for seg0, seg1 in ((-hw, door_x0), (door_x1, hw)):
-        create_box(bm, (seg1 - seg0, wall_th, upper_h),
-                   ((seg0 + seg1) * 0.5, front_wall_y,
-                    z_upper + upper_h * 0.5),
-                   mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
-    create_box(bm, (balcony_door_w, wall_th, upper_h - balcony_door_h),
-               (front_balcony_cx, front_wall_y,
-                z_upper + balcony_door_h + (upper_h - balcony_door_h) * 0.5),
-               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
-    for sx in (-1.0, 1.0):
-        create_box(bm, (0.14, wall_th + 0.16, balcony_door_h + 0.14),
-                   (front_balcony_cx + sx * (balcony_door_w * 0.5 + 0.07),
-                    front_wall_y, z_upper + balcony_door_h * 0.5),
-                   mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (balcony_door_w + 0.36, wall_th + 0.16, 0.18),
-               (front_balcony_cx, front_wall_y,
-                z_upper + balcony_door_h + 0.09),
-               mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (balcony_door_w + 0.24, wall_th + 0.18, 0.10),
-               (front_balcony_cx, front_wall_y, z_upper + 0.05),
-               mat_index=MAT_INDEX_TIMBER)
-    for fy in (-hd - 0.07, -hd + wall_th + 0.07):
-        for sx in (-1.0, 1.0):
-            create_box(bm, (0.16, 0.06, balcony_door_h + 0.30),
-                       (front_balcony_cx + sx * (balcony_door_w * 0.5 + 0.11),
-                        fy, z_upper + balcony_door_h * 0.5 + 0.03),
-                       mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (balcony_door_w + 0.46, 0.06, 0.16),
-                   (front_balcony_cx, fy, z_upper + balcony_door_h + 0.13),
-                   mat_index=MAT_INDEX_TIMBER)
-
-    # Upper west wall is now solid; the old west access has moved to the front.
-    create_box(bm, (wall_th, hall_d - wall_th * 2.0, upper_h),
-               (-hw + wall_th * 0.5, 0.0,
-                z_upper + upper_h * 0.5),
+    west_p0 = balcony_door_cy - balcony_door_w * 0.5
+    west_p1 = balcony_door_cy + balcony_door_w * 0.5
+    for seg0, seg1 in ((wy0, west_p0), (west_p1, wy1)):
+        if seg1 - seg0 > 0.05:
+            create_box(bm, (wall_th, seg1 - seg0, wall_top - z_upper),
+                       (-hw + wall_th * 0.5, (seg0 + seg1) * 0.5,
+                        (z_upper + wall_top) * 0.5),
+                       mat_index=MAT_INDEX_PAINTED_PLANKS, is_wall=True)
+    create_box(bm, (wall_th, balcony_door_w, wall_top - z_upper - balcony_door_h),
+               (-hw + wall_th * 0.5, balcony_door_cy,
+                z_upper + balcony_door_h + (wall_top - z_upper - balcony_door_h) * 0.5),
                mat_index=MAT_INDEX_PAINTED_PLANKS, is_wall=True)
+    for sy in (-1.0, 1.0):
+        create_box(bm, (wall_th + 0.16, 0.14, balcony_door_h + 0.14),
+                   (-hw, balcony_door_cy + sy * (balcony_door_w * 0.5 + 0.07),
+                    z_upper + balcony_door_h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (wall_th + 0.16, balcony_door_w + 0.36, 0.18),
+               (-hw, balcony_door_cy, z_upper + balcony_door_h + 0.09),
+               mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (wall_th + 0.18, balcony_door_w + 0.24, 0.10),
+               (-hw, balcony_door_cy, z_upper + 0.05),
+               mat_index=MAT_INDEX_TIMBER)
+    for fx in (-hw - 0.07, -hw + wall_th + 0.07):
+        for sy in (-1.0, 1.0):
+            create_box(bm, (0.06, 0.16, balcony_door_h + 0.30),
+                       (fx, balcony_door_cy + sy * (balcony_door_w * 0.5 + 0.11),
+                        z_upper + balcony_door_h * 0.5 + 0.03),
+                       mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (0.06, balcony_door_w + 0.46, 0.16),
+                   (fx, balcony_door_cy, z_upper + balcony_door_h + 0.13),
+                   mat_index=MAT_INDEX_TIMBER)
 
     # East wall is mostly open to the side kitchen annex.
     opening_y0 = 0.40
@@ -8120,50 +8118,53 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         build_prop(bm, 'HAJFIN_BARREL', bx, by, z_upper,
                    ang=0.55, scale=0.52)
 
-    # 2C. Front-facing upper balcony, reached by an outside middle-tier pier.
+    # 2C. West balcony, reachable only by the outside rope ramp.
     balcony_w = 2.00
-    balcony_d = 1.80
-    balcony_x = front_balcony_cx
-    balcony_y = -hd - balcony_d * 0.5
+    balcony_d = 3.60
+    balcony_x = -hw - balcony_w * 0.5
+    balcony_y = balcony_door_cy
     create_box(bm, (balcony_w, balcony_d, 0.16),
                (balcony_x, balcony_y, z_upper - 0.08),
                mat_index=MAT_INDEX_FLOOR)
-    for sx in (-1.0, 1.0):
-        px = balcony_x + sx * (balcony_w * 0.5 - 0.12)
-        py = balcony_y - balcony_d * 0.5 + 0.12
+    for sy in (-1.0, 1.0):
+        py = balcony_y + sy * (balcony_d * 0.5 - 0.15)
         create_box(bm, (0.12, 0.12, 1.05),
-                   (px, py, z_upper + 0.525),
+                   (balcony_x - balcony_w * 0.5 + 0.12, py,
+                    z_upper + 0.525),
                    mat_index=MAT_INDEX_TIMBER)
         _create_oriented_beam(
-            bm, (px, -hd, z_upper - 0.85),
-            (px, py, z_upper - 0.10),
+            bm, (-hw, py, z_upper - 0.85),
+            (balcony_x + 0.10, py, z_upper - 0.10),
             width=0.10, depth=0.10, mat_index=MAT_INDEX_TIMBER)
-    bridge_half = 0.90
-    balcony_sy = balcony_y - balcony_d * 0.5 + 0.12
+    bridge_y = balcony_y
     balcony_wx = balcony_x - balcony_w * 0.5 + 0.12
-    balcony_ex = balcony_x + balcony_w * 0.5 - 0.12
+    balcony_ex = balcony_x + balcony_w * 0.5 - 0.10
+    balcony_sy = balcony_y - balcony_d * 0.5 + 0.12
+    balcony_ny = balcony_y + balcony_d * 0.5 - 0.12
+    bridge_half = 0.90
     build_railing(bm, (balcony_wx, balcony_sy),
-                  (balcony_x - bridge_half, balcony_sy),
+                  (balcony_wx, bridge_y - bridge_half),
                   z_upper, height=1.0, jankiness=0.10)
-    build_railing(bm, (balcony_x + bridge_half, balcony_sy),
-                  (balcony_ex, balcony_sy),
+    build_railing(bm, (balcony_wx, bridge_y + bridge_half),
+                  (balcony_wx, balcony_ny),
                   z_upper, height=1.0, jankiness=0.10)
-    build_railing(bm, (balcony_wx, -hd + 0.12),
+    build_railing(bm, (balcony_ex, balcony_sy),
                   (balcony_wx, balcony_sy),
-                  z_upper, height=1.0, jankiness=0.10)
-    build_railing(bm, (balcony_ex, -hd + 0.12),
-                  (balcony_ex, balcony_sy),
-                  z_upper, height=1.0, jankiness=0.10)
-    create_box(bm, (balcony_door_w + 0.24, 0.22, 0.10),
-               (front_balcony_cx, -hd + 0.06, z_upper + 0.05),
+                  z_upper, height=1.0, jankiness=0.12)
+    build_railing(bm, (balcony_ex, balcony_ny),
+                  (balcony_wx, balcony_ny),
+                  z_upper, height=1.0, jankiness=0.12)
+    create_box(bm, (0.24, balcony_door_w + 0.24, 0.10),
+               (-hw + 0.06, balcony_door_cy, z_upper + 0.05),
                mat_index=MAT_INDEX_TIMBER)
 
-    # 2D. Middle-tier pier in front of the property, reached by a broad ground ramp.
+    # 2D. Middle-tier pier outside the west balcony, reached by a broad walkable
+    # ground ramp (no ladder climbing required).
     pier_top_z = z0 + 2.40
     pier_w = 4.00
     pier_d = 4.00
-    pier_cx = front_balcony_cx
-    pier_cy = -hd - balcony_d - 5.50 - pier_d * 0.5
+    pier_cx = -hw - 9.50
+    pier_cy = balcony_door_cy
     create_box(bm, (pier_w, pier_d, 0.16),
                (pier_cx, pier_cy, pier_top_z - 0.08),
                mat_index=MAT_INDEX_FLOOR)
@@ -8178,30 +8179,32 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                               major_radius=0.19, minor_radius=0.03,
                               mat_index=MAT_INDEX_ROPE)
 
-    # East-facing ground ramp up to the pier.
     ramp_w = 1.80
-    ramp_run = 7.40
-    ramp_top_x = pier_cx + pier_w * 0.5
-    ramp_bottom_x = ramp_top_x + ramp_run
+    ramp_run = 6.50
+    # The ground ramp now descends toward the FRONT of the property instead of
+    # running back behind the tavern.
+    ramp_top_y = pier_cy - pier_d * 0.5
+    ramp_bottom_y = ramp_top_y - ramp_run
     ramp_slope = math.atan2(pier_top_z - z0, ramp_run)
     ramp_len = math.hypot(ramp_run, pier_top_z - z0)
     ramp_mid_z = (z0 + pier_top_z) * 0.5
-    create_box(bm, (ramp_len, ramp_w, 0.16),
-               (ramp_bottom_x - ramp_run * 0.5, pier_cy, ramp_mid_z),
-               rotation=(0.0, ramp_slope, 0.0),
+    create_box(bm, (ramp_w, ramp_len, 0.16),
+               (pier_cx, (ramp_top_y + ramp_bottom_y) * 0.5, ramp_mid_z),
+               rotation=(ramp_slope, 0.0, 0.0),
                mat_index=MAT_INDEX_FLOOR)
-    create_box(bm, (0.80, ramp_w + 0.30, 0.12),
-               (ramp_bottom_x + 0.30, pier_cy, z0 + 0.06),
+    create_box(bm, (ramp_w + 0.30, 0.80, 0.12),
+               (pier_cx, ramp_bottom_y - 0.30, z0 + 0.06),
                mat_index=MAT_INDEX_FLOOR)
-    for sy in (-1.0, 1.0):
-        ry = pier_cy + sy * (ramp_w * 0.5 - 0.10)
+    # Broad ramp side rails and support trestles.
+    for sx in (-1.0, 1.0):
+        rx = pier_cx + sx * (ramp_w * 0.5 - 0.10)
         _create_oriented_beam(
-            bm, (ramp_bottom_x, ry, z0 + 1.00),
-            (ramp_top_x, ry, pier_top_z + 1.00),
+            bm, (rx, ramp_bottom_y, z0 + 1.00),
+            (rx, ramp_top_y, pier_top_z + 1.00),
             width=0.10, depth=0.12, mat_index=MAT_INDEX_TIMBER)
         for ti in range(7):
             t = ti / 6.0
-            rx = ramp_bottom_x + (ramp_top_x - ramp_bottom_x) * t
+            ry = ramp_bottom_y + (ramp_top_y - ramp_bottom_y) * t
             rz = z0 + (pier_top_z - z0) * t
             create_box(bm, (0.10, 0.10, 1.00),
                        (rx, ry, rz + 0.50), mat_index=MAT_INDEX_TIMBER)
@@ -8209,40 +8212,32 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                 create_box(bm, (0.14, 0.14, max(0.2, rz)),
                            (rx, ry, rz * 0.5), mat_index=MAT_INDEX_TIMBER)
 
-    # Pier railings: south/west solid, north split for the bridge, east split
-    # for the ramp.
+    # Railings on the west and north sides; the south side is split around the
+    # front ramp landing and the east side is open for the bridge.
+    north_y = pier_cy + pier_d * 0.5 - 0.10
+    south_y = pier_cy - pier_d * 0.5 + 0.10
     build_railing(bm,
                   (pier_cx - pier_w * 0.5 + 0.10, pier_cy - pier_d * 0.5 + 0.10),
                   (pier_cx - pier_w * 0.5 + 0.10, pier_cy + pier_d * 0.5 - 0.10),
                   pier_top_z, height=1.0, jankiness=0.14)
     build_railing(bm,
-                  (pier_cx - pier_w * 0.5 + 0.10, pier_cy - pier_d * 0.5 + 0.10),
-                  (pier_cx + pier_w * 0.5 - 0.10, pier_cy - pier_d * 0.5 + 0.10),
-                  pier_top_z, height=1.0, jankiness=0.14)
-    north_y = pier_cy + pier_d * 0.5 - 0.10
-    build_railing(bm,
                   (pier_cx - pier_w * 0.5 + 0.10, north_y),
-                  (pier_cx - bridge_half, north_y),
-                  pier_top_z, height=1.0, jankiness=0.12)
-    build_railing(bm,
-                  (pier_cx + bridge_half, north_y),
                   (pier_cx + pier_w * 0.5 - 0.10, north_y),
-                  pier_top_z, height=1.0, jankiness=0.12)
-    east_x = pier_cx + pier_w * 0.5 - 0.10
+                  pier_top_z, height=1.0, jankiness=0.14)
     build_railing(bm,
-                  (east_x, pier_cy + 0.90),
-                  (east_x, pier_cy + pier_d * 0.5 - 0.10),
+                  (pier_cx - pier_w * 0.5 + 0.10, south_y),
+                  (pier_cx - ramp_w * 0.5, south_y),
                   pier_top_z, height=1.0, jankiness=0.12)
     build_railing(bm,
-                  (east_x, pier_cy - pier_d * 0.5 + 0.10),
-                  (east_x, pier_cy - 0.90),
+                  (pier_cx + ramp_w * 0.5, south_y),
+                  (pier_cx + pier_w * 0.5 - 0.10, south_y),
                   pier_top_z, height=1.0, jankiness=0.12)
 
-    # Wide, shallow rope-bridge ramp from the front pier to the balcony.
+    # Wide, shallow rope-bridge ramp from the middle pier to the balcony.
     build_suspended_rope_bridge(
         bm,
-        Vector((pier_cx, north_y, pier_top_z + 0.02)),
-        Vector((front_balcony_cx, balcony_sy, z_upper + 0.02)),
+        Vector((pier_cx + pier_w * 0.5 - 0.08, pier_cy, pier_top_z + 0.02)),
+        Vector((balcony_x - balcony_w * 0.5, bridge_y, z_upper + 0.02)),
         width=1.70, sag=0.14, with_pylons=True, post_height=1.20)
 
     # 3. Top plates, corner columns, belt beams and long diagonal braces.
