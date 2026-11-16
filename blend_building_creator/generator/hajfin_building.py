@@ -8539,28 +8539,34 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
 
     # 9. Salvaged mast, anchor, porch fish rack and outdoor clutter.
     build_ship_mast_with_crows_nest(
-        bm, -hw - 2.75, -hd + 1.10, z0, height=10.5,
-        mast_radius=0.28, rot_z=0.35, with_ratlines=True,
-        with_yardarm=True, with_lantern=True, nest_scale=1.30)
+        bm, -hw - 3.90, -hd + 0.90, z0, height=12.0,
+        mast_radius=0.30, rot_z=0.35, with_ratlines=True,
+        with_yardarm=True, with_lantern=True, nest_scale=1.35)
 
     # A second, deliberately askew crow's-nest mast bolted onto the main roof.
+    # Its base is sunk into the hull so it visibly touches the roof, and it
+    # leans outward over the eastern roof slope.
+    fun_nest_base_z -= 0.15
     fun_pivot = Vector((2.60, 2.00, fun_nest_base_z))
     fun_tilt = (Matrix.Translation(fun_pivot)
-                @ Matrix.Rotation(0.24, 4, 'X')
-                @ Matrix.Rotation(-0.28, 4, 'Y')
+                @ Matrix.Rotation(-0.18, 4, 'X')
+                @ Matrix.Rotation(0.30, 4, 'Y')
                 @ Matrix.Translation(-fun_pivot))
+    create_box(bm, (1.10, 0.90, 0.16),
+               (fun_pivot.x, fun_pivot.y, fun_pivot.z + 0.04),
+               mat_index=MAT_INDEX_TIMBER)
     _before_fun = set(bm.faces)
     build_ship_mast_with_crows_nest(
-        bm, 2.60, 2.00, fun_nest_base_z, height=4.8,
-        mast_radius=0.18, rot_z=0.80, with_ratlines=False,
-        with_yardarm=True, with_lantern=True, nest_scale=1.10)
+        bm, 2.60, 2.00, fun_nest_base_z, height=6.2,
+        mast_radius=0.20, rot_z=0.80, with_ratlines=False,
+        with_yardarm=True, with_lantern=True, nest_scale=1.15)
     _fun_faces = [f for f in bm.faces if f not in _before_fun]
     transform_faces(_fun_faces, fun_tilt)
-    _fun_rot = Matrix.Rotation(0.24, 4, 'X') @ Matrix.Rotation(-0.28, 4, 'Y')
-    _fun_mid = fun_pivot + (_fun_rot @ Vector((0.0, 0.0, 1.80)))
+    _fun_rot = Matrix.Rotation(-0.18, 4, 'X') @ Matrix.Rotation(0.30, 4, 'Y')
+    _fun_mid = fun_pivot + (_fun_rot @ Vector((0.0, 0.0, 2.10)))
     for sx in (-1.0, 1.0):
         _create_oriented_beam(
-            bm, (2.60 + sx * 0.95, 2.00, fun_nest_base_z + 0.04),
+            bm, (2.60 + sx * 0.95, 2.00, fun_nest_base_z + 0.05),
             (_fun_mid.x, _fun_mid.y, _fun_mid.z),
             width=0.10, depth=0.10, mat_index=MAT_INDEX_TIMBER)
 
