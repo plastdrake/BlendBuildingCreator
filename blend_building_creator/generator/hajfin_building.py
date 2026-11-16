@@ -2896,8 +2896,8 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
         _build_hajfin_crate(bm, -hw + wall_th + 0.85, hd - wall_th - 0.85, z_ground=z0 + 0.14, yaw=0.18, scale=0.68)
         _build_hajfin_barrel(bm, -hw + wall_th + 1.65, hd - wall_th - 0.70, z_ground=z0 + 0.14, ang=0.4, scale=0.52)
         _build_hajfin_barrel(bm, hw - wall_th - 0.80, hd - wall_th - 0.75, z_ground=z0 + 0.14, ang=2.2, scale=0.55)
-        build_prop(bm, 'HAJFIN_BED', -hw + wall_th + 0.975 + 0.06, 0.80,
-                   z0 + 0.14, ang=0.0, length=1.95, width=1.10)
+        build_prop(bm, 'HAJFIN_BED', -hw + wall_th + 2.25 * 0.5 + 0.06, 0.80,
+                   z0 + 0.14, ang=0.0, length=2.25, width=1.26)
 
         # 2B. SCAFFOLDED FACADE PATCHWORK (single storey shacks)
         _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z1,
@@ -4680,8 +4680,8 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
     nave_h = height
     nave_peak_z = z0 + nave_h + 4.8
     portal_cy = 1.40
-    portal_w = 1.60
-    portal_h = 2.80
+    portal_w = 2.00
+    portal_h = 3.00
 
     # 1. Elevated Reef Stone Foundation
     create_box(bm, (width + 0.5, depth + 0.5, found_h + 0.1), (0.0, 0.0, found_h * 0.5),
@@ -4790,31 +4790,42 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
                        (room_cx, by, z0 + side_h - 0.15),
                        mat_index=MAT_INDEX_TIMBER)
 
-        # Complete portal frame in the nave wall + a lantern in each room.
+        # Deep portal frame, plus face casings on both sides, so every cut wall
+        # edge is covered by timber instead of showing raw siding ends.
+        portal_x = sgn_x * (nave_w * 0.5 - wall_th * 0.5)
+        frame_depth = wall_th + 0.34
         for sy in (-1.0, 1.0):
-            create_box(bm, (wall_th + 0.14, 0.12, portal_h + 0.12),
-                       (sgn_x * (nave_w * 0.5 - wall_th * 0.5),
-                        portal_cy + sy * (portal_w * 0.5 + 0.06),
+            create_box(bm, (frame_depth, 0.20, portal_h + 0.20),
+                       (portal_x,
+                        portal_cy + sy * (portal_w * 0.5 + 0.08),
                         z0 + portal_h * 0.5),
                        mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (wall_th + 0.14, portal_w + 0.30, 0.16),
-                   (sgn_x * (nave_w * 0.5 - wall_th * 0.5), portal_cy,
-                    z0 + portal_h + 0.06),
+        create_box(bm, (frame_depth, portal_w + 0.44, 0.20),
+                   (portal_x, portal_cy, z0 + portal_h + 0.08),
                    mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (wall_th + 0.14, portal_w + 0.20, 0.10),
-                   (sgn_x * (nave_w * 0.5 - wall_th * 0.5), portal_cy,
-                    z0 + 0.21),
+        create_box(bm, (frame_depth, portal_w + 0.30, 0.12),
+                   (portal_x, portal_cy, z0 + 0.23),
                    mat_index=MAT_INDEX_TIMBER)
+        for face_sgn in (-1.0, 1.0):
+            fx = portal_x + face_sgn * (wall_th * 0.5 + 0.07)
+            for sy in (-1.0, 1.0):
+                create_box(bm, (0.06, 0.16, portal_h + 0.24),
+                           (fx, portal_cy + sy * (portal_w * 0.5 + 0.12),
+                            z0 + portal_h * 0.5 + 0.02),
+                           mat_index=MAT_INDEX_TIMBER)
+            create_box(bm, (0.06, portal_w + 0.56, 0.16),
+                       (fx, portal_cy, z0 + portal_h + 0.14),
+                       mat_index=MAT_INDEX_TIMBER)
         build_prop(bm, 'CHAIN_LANTERN', room_cx, 0.0,
                    z0 + side_h - 0.12)
 
         if sgn_x < 0.0:
             # Left side room: a quiet little bedroom.  The bed head sits against
             # the outer wall, with the foot pointing into the room.
-            bed_len = 1.95
+            bed_len = 2.55
             bed_x = -hw + wall_th + bed_len * 0.5 + 0.05
             build_prop(bm, 'HAJFIN_BED', bed_x, 4.20, room_floor_z,
-                       ang=0.0, length=bed_len, width=1.10)
+                       ang=0.0, length=bed_len, width=1.43)
             build_prop(bm, 'HAJFIN_CRATE', room_cx - 0.55, 6.15,
                        room_floor_z, ang=0.18, scale=0.55)
         else:
@@ -8897,8 +8908,8 @@ def _build_hajfin_pirate_cottage(bm, props, x=0.0, y=0.0,
                 radius=0.018)
 
     # Cosy single-room interior.
-    bed_len = 1.95
-    bed_dep = 1.10  # artist Bed.fbx is 1.28 m wide natively; scaled length fit
+    bed_len = 2.10
+    bed_dep = 1.18  # artist Bed.fbx is 1.28 m wide natively; length-fitted
     bed_x = x - (hw - wall_th - bed_len * 0.5 - 0.05)
     bed_y = y + hd - wall_th - bed_dep * 0.5 - 0.05
     build_prop(bm, 'HAJFIN_BED', bed_x, bed_y, z0, ang=0.0,
@@ -9198,8 +9209,8 @@ def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
         fin_scale=0.95, num_ridge_teeth=3)
 
     # Tower top-room interior: one pirate cot and a barrel, door path clear.
-    build_prop(bm, 'HAJFIN_BED', tower_cx - 0.45, tower_cy - 0.90,
-               z_second, ang=0.0, length=1.95, width=1.10)
+    build_prop(bm, 'HAJFIN_BED', tower_cx - 0.40, tower_cy - 0.90,
+               z_second, ang=0.0, length=2.10, width=1.18)
     build_prop(bm, 'HAJFIN_BARREL', tower_cx - 1.00, tower_cy + 1.05,
                z_second, ang=0.4, scale=0.45)
 
