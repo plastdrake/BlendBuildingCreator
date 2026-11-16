@@ -826,7 +826,7 @@ def build_hajfin_bed(bm, x, y, z_ground=0.0, ang=0.0,
         _scale = max(1.60, float(length)) / _native_len
         _faces = _stamp_meshdata(
             bm, 'hajfin_bed', x, y, z_ground,
-            scale=_scale, yaw=ang + math.pi * 0.5,
+            scale=_scale, yaw=ang - math.pi * 0.5,
             anchor='BASE', default_mat=MAT_INDEX_DRIFTWOOD)
         if _faces:
             return _faces

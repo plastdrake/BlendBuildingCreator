@@ -2896,8 +2896,8 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
         _build_hajfin_crate(bm, -hw + wall_th + 0.85, hd - wall_th - 0.85, z_ground=z0 + 0.14, yaw=0.18, scale=0.68)
         _build_hajfin_barrel(bm, -hw + wall_th + 1.65, hd - wall_th - 0.70, z_ground=z0 + 0.14, ang=0.4, scale=0.52)
         _build_hajfin_barrel(bm, hw - wall_th - 0.80, hd - wall_th - 0.75, z_ground=z0 + 0.14, ang=2.2, scale=0.55)
-        build_prop(bm, 'HAJFIN_BED', -hw + wall_th + 0.58, 0.80,
-                   z0 + 0.14, ang=math.pi * 0.5, length=1.95, width=1.10)
+        build_prop(bm, 'HAJFIN_BED', -hw + wall_th + 0.975 + 0.06, 0.80,
+                   z0 + 0.14, ang=0.0, length=1.95, width=1.10)
 
         # 2B. SCAFFOLDED FACADE PATCHWORK (single storey shacks)
         _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z1,
@@ -4671,13 +4671,17 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
     raised Chieftain throne dais with steps, accessible 2nd-level mezzanine galleries along side walls
     with twin internal timber stairs, continuous ridge spine of giant curved bone horns leading to
     a soaring forward-curving horn/tusk, solid gable triangle walls, and flanking tribal totem posts."""
+    width = max(10.0, float(width) + 1.2)
     hw = width * 0.5
     hd = depth * 0.5
     z0 = found_h
     wall_th = 0.28
-    nave_w = width * 0.60
+    nave_w = width * 0.58
     nave_h = height
     nave_peak_z = z0 + nave_h + 4.8
+    portal_cy = 1.40
+    portal_w = 1.60
+    portal_h = 2.80
 
     # 1. Elevated Reef Stone Foundation
     create_box(bm, (width + 0.5, depth + 0.5, found_h + 0.1), (0.0, 0.0, found_h * 0.5),
@@ -4687,10 +4691,28 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
     create_box(bm, (width - wall_th * 2, depth - wall_th * 2, 0.16),
                (0.0, 0.0, z0 + 0.08), mat_index=MAT_INDEX_FLOOR)
 
-    # 2. Central High Nave Walls
+    # 2. Central High Nave Walls.  Both side walls carry a real ground-floor
+    # portal into the flanking side rooms.
     create_box(bm, (nave_w, wall_th, nave_h), (0.0, hd - wall_th * 0.5, z0 + nave_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    create_box(bm, (wall_th, depth - wall_th * 2, nave_h), (-nave_w * 0.5 + wall_th * 0.5, 0.0, z0 + nave_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
-    create_box(bm, (wall_th, depth - wall_th * 2, nave_h), (nave_w * 0.5 - wall_th * 0.5, 0.0, z0 + nave_h * 0.5), mat_index=MAT_INDEX_DRIFTWOOD)
+    wy0 = -hd + wall_th
+    wy1 = hd - wall_th
+    portal_from = portal_cy - portal_w * 0.5
+    portal_to = portal_cy + portal_w * 0.5
+    south_w = portal_from - wy0
+    north_w = wy1 - portal_to
+    portal_header_h = max(0.10, nave_h - portal_h)
+    for sgn_x in (-1.0, 1.0):
+        side_wall_x = sgn_x * (nave_w * 0.5 - wall_th * 0.5)
+        create_box(bm, (wall_th, south_w, nave_h),
+                   (side_wall_x, wy0 + south_w * 0.5, z0 + nave_h * 0.5),
+                   mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (wall_th, north_w, nave_h),
+                   (side_wall_x, wy1 - north_w * 0.5, z0 + nave_h * 0.5),
+                   mat_index=MAT_INDEX_DRIFTWOOD)
+        create_box(bm, (wall_th, portal_w, portal_header_h),
+                   (side_wall_x, portal_cy,
+                    z0 + portal_h + portal_header_h * 0.5),
+                   mat_index=MAT_INDEX_DRIFTWOOD)
 
     # Front wall with real cut door opening inside rib tunnel
     door_w = float(getattr(props, 'door_width', 2.20))
@@ -4707,9 +4729,11 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
     _build_hajfin_wall_dressing_x(bm, -nave_w * 0.5, nave_w * 0.5, hd - wall_th * 0.5, z0, z0 + nave_h,
                                    wall_th=wall_th, sgn_y=1.0, variant='FACHWERK', top_clear=0.30)
     _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -nave_w * 0.5 + wall_th * 0.5, z0, z0 + nave_h,
-                                   wall_th=wall_th, sgn_x=-1.0, variant='BRACED', top_clear=0.30)
+                                   wall_th=wall_th, sgn_x=-1.0, variant='BRACED', top_clear=0.30,
+                                   openings=[_hajfin_opening_y(portal_cy, z0 + portal_h * 0.5, portal_w, portal_h)])
     _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, nave_w * 0.5 - wall_th * 0.5, z0, z0 + nave_h,
-                                   wall_th=wall_th, sgn_x=1.0, variant='PAINTED_RED', top_clear=0.30)
+                                   wall_th=wall_th, sgn_x=1.0, variant='PAINTED_RED', top_clear=0.30,
+                                   openings=[_hajfin_opening_y(portal_cy, z0 + portal_h * 0.5, portal_w, portal_h)])
     _build_hajfin_wall_dressing_x(bm, -nave_w * 0.5 + wall_th, nave_w * 0.5 - wall_th, -hd + wall_th * 0.5, z0, z0 + nave_h,
                                    wall_th=wall_th, sgn_y=-1.0, variant='SALVAGED', top_clear=0.30,
                                    door_openings=[(0.0, door_w, door_h)])
@@ -4736,14 +4760,76 @@ def _build_hajfin_chieftain_hall(bm, props, width=15.0, depth=20.0, height=8.8, 
     # Chieftain Megalodon Throne mounted on dais facing forward toward the entrance
     _build_hajfin_throne(bm, 0.0, dais_y + 0.2, z0 + dais_h, rot_z=0.0)
 
-    # 4. Flanking Lower Side Aisles
+    # 4. Flanking Lower Side Aisles: two real rooms rather than solid blocks.
+    from .accessories.prop_registry import build_prop
     side_w = (width - nave_w) * 0.5
     side_h = height * 0.62
     side_peak_z = z0 + side_h + 2.2
+    side_len = depth * 0.85
+    room_floor_z = z0 + 0.16
     for sgn_x in (-1.0, 1.0):
-        sx = sgn_x * (nave_w * 0.5 + side_w * 0.5)
-        create_box(bm, (side_w, depth * 0.85, side_h), (sx, 0.0, z0 + side_h * 0.5),
-                   mat_index=MAT_INDEX_DRIFTWOOD)
+        aisle_cx = sgn_x * (nave_w * 0.5 + side_w * 0.5)
+        room_cx = sgn_x * (nave_w * 0.5 + hw - wall_th) * 0.5
+        # Outer aisle wall and front/back end walls.
+        create_box(bm, (wall_th, side_len, side_h),
+                   (sgn_x * (hw - wall_th * 0.5), 0.0, z0 + side_h * 0.5),
+                   mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+        for sgn_y in (-1.0, 1.0):
+            create_box(bm, (side_w, wall_th, side_h),
+                       (aisle_cx, sgn_y * (side_len * 0.5 - wall_th * 0.5),
+                        z0 + side_h * 0.5),
+                       mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+        # Flat timber ceiling closes the room under the lower side roof.
+        room_w = max(1.0, side_w - wall_th)
+        room_len = max(1.0, side_len - wall_th * 2.0)
+        create_box(bm, (room_w, room_len, 0.12),
+                   (room_cx, 0.0, z0 + side_h - 0.06),
+                   mat_index=MAT_INDEX_FLOOR)
+        for by in (-side_len * 0.30, 0.0, side_len * 0.30):
+            create_box(bm, (room_w, 0.16, 0.18),
+                       (room_cx, by, z0 + side_h - 0.15),
+                       mat_index=MAT_INDEX_TIMBER)
+
+        # Complete portal frame in the nave wall + a lantern in each room.
+        for sy in (-1.0, 1.0):
+            create_box(bm, (wall_th + 0.14, 0.12, portal_h + 0.12),
+                       (sgn_x * (nave_w * 0.5 - wall_th * 0.5),
+                        portal_cy + sy * (portal_w * 0.5 + 0.06),
+                        z0 + portal_h * 0.5),
+                       mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (wall_th + 0.14, portal_w + 0.30, 0.16),
+                   (sgn_x * (nave_w * 0.5 - wall_th * 0.5), portal_cy,
+                    z0 + portal_h + 0.06),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (wall_th + 0.14, portal_w + 0.20, 0.10),
+                   (sgn_x * (nave_w * 0.5 - wall_th * 0.5), portal_cy,
+                    z0 + 0.21),
+                   mat_index=MAT_INDEX_TIMBER)
+        build_prop(bm, 'CHAIN_LANTERN', room_cx, 0.0,
+                   z0 + side_h - 0.12)
+
+        if sgn_x < 0.0:
+            # Left side room: a quiet little bedroom.  The bed head sits against
+            # the outer wall, with the foot pointing into the room.
+            bed_len = 1.95
+            bed_x = -hw + wall_th + bed_len * 0.5 + 0.05
+            build_prop(bm, 'HAJFIN_BED', bed_x, 4.20, room_floor_z,
+                       ang=0.0, length=bed_len, width=1.10)
+            build_prop(bm, 'HAJFIN_CRATE', room_cx - 0.55, 6.15,
+                       room_floor_z, ang=0.18, scale=0.55)
+        else:
+            # Right side room: dry storage, kept tight to the outer wall.
+            store_x = hw - wall_th - 0.48
+            build_prop(bm, 'HAJFIN_CRATE', store_x, -4.20,
+                       room_floor_z, ang=0.14, scale=0.64)
+            build_prop(bm, 'HAJFIN_BARREL', store_x, -2.10,
+                       room_floor_z, ang=0.55, scale=0.54)
+            build_prop(bm, 'HAJFIN_CRATE', store_x, 1.80,
+                       room_floor_z, ang=-0.12, scale=0.58)
+            build_prop(bm, 'HAJFIN_BARREL', store_x, 3.80,
+                       room_floor_z, ang=1.15, scale=0.52)
+            build_prop(bm, 'SACK', room_cx + 0.65, 5.30,
+                       room_floor_z, ang=0.35)
 
     # 4B. SCAFFOLDED FACADE PATCHWORK on the flanking aisle walls
     for sgn_x in (-1.0, 1.0):
@@ -9076,7 +9162,7 @@ def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
                         tower_cy + sy * tower_half,
                         z_second + cabin_h * 0.5),
                        mat_index=MAT_INDEX_TIMBER)
-    for bz in (z_second + 0.10, cabin_top - 0.10):
+    for bz in (z_second + 0.10, cabin_top - 0.18):
         for sy in (-1.0, 1.0):
             create_box(bm, (cw + 0.16, 0.14, 0.16),
                        (tower_cx, tower_cy + sy * tower_half, bz),
@@ -9086,21 +9172,23 @@ def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
                        (tower_cx + sx * tower_half, tower_cy, bz),
                        mat_index=MAT_INDEX_TIMBER)
     for sy in (-1.0, 1.0):
-        create_box(bm, (0.11, 0.11, cabin_h - 0.20),
+        create_box(bm, (0.11, 0.11, cabin_h - 0.40),
                    (tower_cx, tower_cy + sy * tower_half,
                     z_second + cabin_h * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
 
     # Gable roof: bone-scale shingles, timber bargeboards and a ridge crest,
-    # matching the rest of the Hajfin architecture.
+    # matching the rest of the Hajfin architecture.  The gable triangles are
+    # sunk into the roof, not merely tucked, so no wall board can poke through
+    # the shingles.
     roof_peak = 1.55
     _build_gable_triangle_wall(
         bm, tower_cx - tower_half, tower_cx + tower_half,
-        tower_cy - tower_half, cabin_top, cabin_top + roof_peak,
+        tower_cy - tower_half, cabin_top - 0.10, cabin_top + roof_peak - 0.20,
         wall_th=wall_th, force=True, style='DRIFTWOOD')
     _build_gable_triangle_wall(
         bm, tower_cx - tower_half, tower_cx + tower_half,
-        tower_cy + tower_half, cabin_top, cabin_top + roof_peak,
+        tower_cy + tower_half, cabin_top - 0.10, cabin_top + roof_peak - 0.20,
         wall_th=wall_th, force=True, style='DRIFTWOOD')
     _build_bone_scale_roof_gable(
         bm, tower_cx - tower_half, tower_cx + tower_half,
