@@ -7747,12 +7747,13 @@ def _place_hajfin_hull_furniture(bm, z_floor, width, depth, ceiling_z=8.25,
             _build_hajfin_pub_stool(bm, tx + off.x, ty + off.y, z_floor,
                                     ang=tang)
 
-    for bx, by in ((-5.55, 4.70), (-4.95, 5.45),
-                   (5.55, 4.70), (4.95, 5.45)):
+    # Keep the loose barrels/crates clear of the four interior hull posts.
+    for bx, by in ((-4.55, 6.10), (-3.85, 5.55),
+                   (4.55, 6.10), (3.85, 5.55)):
         build_prop(bm, 'HAJFIN_BARREL', bx, by, z_floor,
                    ang=random.uniform(0.0, 3.14))
-    for cx, cy, ca in ((-5.60, -5.20, 0.25),
-                       (5.60, -5.20, -0.3)):
+    for cx, cy, ca in ((-4.85, -6.10, 0.25),
+                       (4.85, -6.10, -0.3)):
         build_prop(bm, 'HAJFIN_CRATE', cx, cy, z_floor, ang=ca)
     for index, (lx, ly) in enumerate(((-2.2, 0.0), (2.6, 3.2),
                                       (-1.0, -4.2))):
@@ -8113,11 +8114,11 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     build_prop(bm, 'HAJFIN_BED', -2.80,
                -hd + wall_th + bed_len * 0.5 + 0.05, z_upper,
                ang=math.pi * 0.5, length=bed_len, width=bed_w)
-    for bx, by, ba, bs in ((5.80, -5.80, 0.15, 0.68),
-                           (-5.80, 5.75, -0.20, 0.62)):
+    for bx, by, ba, bs in ((4.80, -6.10, 0.15, 0.68),
+                           (-4.80, 6.10, -0.20, 0.62)):
         build_prop(bm, 'HAJFIN_CRATE', bx, by, z_upper,
                    ang=ba, scale=bs)
-    for bx, by in ((5.75, 5.75), (-5.75, -1.10)):
+    for bx, by in ((4.80, 6.10), (-4.80, -1.00)):
         build_prop(bm, 'HAJFIN_BARREL', bx, by, z_upper,
                    ang=0.55, scale=0.52)
 
@@ -8452,7 +8453,8 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     # Hang the banners directly on the two inner dark porch posts, with the
     # bone hanger centred on each post and the cloth pushed forward so it is
     # not embedded in the timber.
-    for bx in (-2.88, 2.88):
+    for sgn_ban in (-1.0, 1.0):
+        bx = sgn_ban * porch_w * 0.35
         post_top = _porch_z(bx, porch_post_y, 4.55) - 0.08
         bar_z = max(floor_z + 2.60, post_top - 0.12)
         bz = bar_z - 0.675
