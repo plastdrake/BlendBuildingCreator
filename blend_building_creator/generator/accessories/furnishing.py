@@ -5307,11 +5307,28 @@ def _furnish_hajfin_shack(bm, rm, tracker: RoomOccupancyTracker, z_floor: float,
         build_prop(bm, 'CLEAVER', px + 0.25, py, z_floor + 0.86, -0.18, length=0.34, stuck=True)
         tracker.occupy(px - 0.55, px + 0.55, py - 0.35, py + 0.35)
 
-    # 4. Simple bunk/cot on rear wall
-    by2 = ry1 - 0.9
-    if tracker.is_free(rcx - 0.6, rcx + 0.6, by2 - 0.5, by2 + 0.5):
-        build_prop(bm, 'BED_POOR', rcx, by2, z_floor, 0.0)
-        tracker.occupy(rcx - 0.6, rcx + 0.6, by2 - 0.5, by2 + 0.5)
+    # 4. Pirate bed, head against the rear wall.  Hajfin rooms never use the
+    # generic human BED/BED_POOR prop.
+    bed_len = 2.05
+    bed_w = 1.15
+    bed_cy = ry1 - bed_len * 0.5 - 0.06
+    if tracker.is_free(rcx - bed_w * 0.5, rcx + bed_w * 0.5,
+                       bed_cy - bed_len * 0.5, bed_cy + bed_len * 0.5):
+        build_prop(bm, 'HAJFIN_BED', rcx, bed_cy, z_floor,
+                   -math.pi * 0.5, length=bed_len, width=bed_w)
+        tracker.occupy(rcx - bed_w * 0.5, rcx + bed_w * 0.5,
+                       bed_cy - bed_len * 0.5, bed_cy + bed_len * 0.5)
+    else:
+        # Smaller fallback for cramped Hajfin cabins; still the pirate bed.
+        bed_len = 1.85
+        bed_w = 1.02
+        bed_cy = ry1 - bed_len * 0.5 - 0.06
+        if tracker.is_free(rcx - bed_w * 0.5, rcx + bed_w * 0.5,
+                           bed_cy - bed_len * 0.5, bed_cy + bed_len * 0.5):
+            build_prop(bm, 'HAJFIN_BED', rcx, bed_cy, z_floor,
+                       -math.pi * 0.5, length=bed_len, width=bed_w)
+            tracker.occupy(rcx - bed_w * 0.5, rcx + bed_w * 0.5,
+                           bed_cy - bed_len * 0.5, bed_cy + bed_len * 0.5)
 
     _place_ceiling_light(bm, tracker, rcx, rcy, z_ceil)
 
