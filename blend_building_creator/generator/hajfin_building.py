@@ -7755,12 +7755,8 @@ def _place_hajfin_hull_furniture(bm, z_floor, width, depth, ceiling_z=8.25,
     for cx, cy, ca in ((-4.85, -6.10, 0.25),
                        (4.85, -6.10, -0.3)):
         build_prop(bm, 'HAJFIN_CRATE', cx, cy, z_floor, ang=ca)
-    for index, (lx, ly) in enumerate(((-2.2, 0.0), (2.6, 3.2),
-                                      (-1.0, -4.2))):
-        lz = ceiling_z
-        if lantern_heights and index < len(lantern_heights):
-            lz = lantern_heights[index]
-        build_prop(bm, 'CHAIN_LANTERN', lx, ly, lz)
+    # The galleon's raised hull leaves the old chain-lantern anchors up in the
+    # unreachable attic, so no ceiling lanterns are added to this furnishing set.
 
 
 def _build_hajfin_painted_breach_wall(bm, x, y0, y1, z0, z1, wall_th=0.30,
@@ -8316,9 +8312,9 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         h = _hajfin_hull_height_at(main_piece, lx, ly, tol=1.2)
         lantern_heights.append((h - 0.15) if h is not None else floor_z + 3.6)
     fun_nest_base_z = _hajfin_hull_height_at(
-        main_piece, 2.60, 2.00, tol=1.40)
+        main_piece, 2.60, 2.00, tol=0.50)
     if fun_nest_base_z is None:
-        fun_nest_base_z = wall_top + 0.80
+        fun_nest_base_z = wall_top + 0.40
     _stamp_hajfin_hull(bm, main_piece, mat_names, add_lining=True,
                        lining_mat=MAT_INDEX_TIMBER,
                        lining_point=(0.0, 0.0, floor_z + 1.2))
@@ -8545,21 +8541,19 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         mast_radius=0.30, rot_z=0.35, with_ratlines=True,
         with_yardarm=True, with_lantern=True, nest_scale=1.35)
 
-    # A second, deliberately askew crow's-nest mast bolted onto the main roof.
-    # Its base is sunk into the hull so it visibly touches the roof, and it
-    # leans outward over the eastern roof slope.
-    fun_nest_base_z -= 0.15
-    fun_pivot = Vector((2.60, 2.00, fun_nest_base_z))
+    # A second, deliberately askew crow's-nest mast bolted through the main
+    # roof.  Its foot continues down into the unreachable attic, while the
+    # visible mast leans outward over the eastern roof slope.
+    fun_roof_z = fun_nest_base_z
+    fun_mast_base_z = fun_roof_z - 2.40
+    fun_pivot = Vector((2.60, 2.00, fun_roof_z))
     fun_tilt = (Matrix.Translation(fun_pivot)
                 @ Matrix.Rotation(-0.18, 4, 'X')
                 @ Matrix.Rotation(0.30, 4, 'Y')
                 @ Matrix.Translation(-fun_pivot))
-    create_box(bm, (1.10, 0.90, 0.16),
-               (fun_pivot.x, fun_pivot.y, fun_pivot.z + 0.04),
-               mat_index=MAT_INDEX_TIMBER)
     _before_fun = set(bm.faces)
     build_ship_mast_with_crows_nest(
-        bm, 2.60, 2.00, fun_nest_base_z, height=6.2,
+        bm, 2.60, 2.00, fun_mast_base_z, height=10.0,
         mast_radius=0.20, rot_z=0.80, with_ratlines=False,
         with_yardarm=True, with_lantern=True, nest_scale=1.15)
     _fun_faces = [f for f in bm.faces if f not in _before_fun]
@@ -8568,7 +8562,7 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     _fun_mid = fun_pivot + (_fun_rot @ Vector((0.0, 0.0, 2.10)))
     for sx in (-1.0, 1.0):
         _create_oriented_beam(
-            bm, (2.60 + sx * 0.95, 2.00, fun_nest_base_z + 0.05),
+            bm, (2.60 + sx * 0.95, 2.00, fun_roof_z - 0.55),
             (_fun_mid.x, _fun_mid.y, _fun_mid.z),
             width=0.10, depth=0.10, mat_index=MAT_INDEX_TIMBER)
 
