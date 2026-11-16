@@ -8822,19 +8822,31 @@ def _build_hajfin_pirate_cottage(bm, props, x=0.0, y=0.0,
             create_box(bm, (0.24, 0.24, wall_h),
                        (x + sx * hw, y + sy * hd, z0 + wall_h * 0.5),
                        mat_index=MAT_INDEX_TIMBER)
+    # Deep doorway frame and face casings that cover the cut wall on both the
+    # outside and inside instead of leaving raw plank ends.
+    frame_depth = wall_th + 0.26
     for sx in (-1.0, 1.0):
-        create_box(bm, (0.12, wall_th + 0.06, door_h + 0.08),
-                   (x + sx * (door_w * 0.5 + 0.07), front_y,
+        create_box(bm, (0.20, frame_depth, door_h + 0.18),
+                   (x + sx * (door_w * 0.5 + 0.08), front_y,
                     z0 + door_h * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (door_w + 0.28, wall_th + 0.06, 0.14),
-               (x, front_y, z0 + door_h + 0.08),
+    create_box(bm, (door_w + 0.46, frame_depth, 0.18),
+               (x, front_y, z0 + door_h + 0.09),
                mat_index=MAT_INDEX_TIMBER)
     # Threshold stands slightly proud of both the floor and porch deck so no
     # horizontal faces are coplanar.
-    create_box(bm, (door_w + 0.28, 0.30, 0.20),
+    create_box(bm, (door_w + 0.40, 0.32, 0.20),
                (x, y - hd - 0.03, z0 - 0.06),
                mat_index=MAT_INDEX_TIMBER)
+    for face_y in (y - hd - 0.04, y - hd + wall_th + 0.04):
+        for sx in (-1.0, 1.0):
+            create_box(bm, (0.16, 0.06, door_h + 0.28),
+                       (x + sx * (door_w * 0.5 + 0.10), face_y,
+                        z0 + door_h * 0.5 + 0.04),
+                       mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (door_w + 0.44, 0.06, 0.16),
+                   (x, face_y, z0 + door_h + 0.12),
+                   mat_index=MAT_INDEX_TIMBER)
 
     # Solid gable ends, plank roof and a closed underlay.
     for sy in (-1.0, 1.0):
@@ -9299,20 +9311,29 @@ def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,
             create_box(bm, (0.24, 0.24, wall_h),
                        (sx * hw, sy * hd, z0 + wall_h * 0.5),
                        mat_index=MAT_INDEX_TIMBER)
-    # Doorway trim is likewise nudged proud so its faces are not coplanar with
-    # the wall header or door reveals.
+    # Deep doorway frame and face casings covering the cut wall on both faces.
+    frame_depth = wall_th + 0.26
     for sx in (-1.0, 1.0):
-        create_box(bm, (0.12, wall_th + 0.06, door_h + 0.08),
-                   (sx * (door_w * 0.5 + 0.07), front_y,
+        create_box(bm, (0.20, frame_depth, door_h + 0.18),
+                   (sx * (door_w * 0.5 + 0.08), front_y,
                     z0 + door_h * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (door_w + 0.28, wall_th + 0.06, 0.14),
-               (0.0, front_y, z0 + door_h + 0.08),
+    create_box(bm, (door_w + 0.46, frame_depth, 0.18),
+               (0.0, front_y, z0 + door_h + 0.09),
                mat_index=MAT_INDEX_TIMBER)
     # Proud timber threshold: avoids z-fighting with the floor/frame top.
-    create_box(bm, (door_w + 0.28, 0.30, 0.20),
+    create_box(bm, (door_w + 0.40, 0.32, 0.20),
                (0.0, -hd - 0.03, z0 - 0.06),
                mat_index=MAT_INDEX_TIMBER)
+    for face_y in (-hd - 0.04, -hd + wall_th + 0.04):
+        for sx in (-1.0, 1.0):
+            create_box(bm, (0.16, 0.06, door_h + 0.28),
+                       (sx * (door_w * 0.5 + 0.10), face_y,
+                        z0 + door_h * 0.5 + 0.04),
+                       mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (door_w + 0.44, 0.06, 0.16),
+                   (0.0, face_y, z0 + door_h + 0.12),
+                   mat_index=MAT_INDEX_TIMBER)
 
     # Solid gable ends and a plank roof.  The taller front gable gives the tiny
     # interior enough headroom without adding a second floor.
