@@ -2852,10 +2852,14 @@ def _build_hajfin_shanty(bm, props, width=8.5, depth=9.5, height=4.2, found_h=1.
         for ty in (-hd * 0.5, 0.0, hd * 0.5):
             create_box(bm, (width - wall_th * 2, 0.22, 0.26), (0.0, ty, z1 - 0.15), mat_index=MAT_INDEX_TIMBER)
 
-        # Scarce single-story interior furnishings (rear-left corner and rear-right corner)
+        # Scarce single-story interior furnishings (pushed to the perimeter so
+        # the centre of the floor stays clear for fighting).
+        from .accessories.prop_registry import build_prop
         _build_hajfin_crate(bm, -hw + wall_th + 0.85, hd - wall_th - 0.85, z_ground=z0 + 0.14, yaw=0.18, scale=0.68)
         _build_hajfin_barrel(bm, -hw + wall_th + 1.65, hd - wall_th - 0.70, z_ground=z0 + 0.14, ang=0.4, scale=0.52)
         _build_hajfin_barrel(bm, hw - wall_th - 0.80, hd - wall_th - 0.75, z_ground=z0 + 0.14, ang=2.2, scale=0.55)
+        build_prop(bm, 'HAJFIN_BED', -hw + wall_th + 0.55, 0.80,
+                   z0 + 0.14, ang=math.pi * 0.5, length=1.95, width=0.88)
 
         # 2B. SCAFFOLDED FACADE PATCHWORK (single storey shacks)
         _build_hajfin_wall_dressing_y(bm, -hd + wall_th, hd - wall_th, -hw + wall_th * 0.5, z0, z1,
@@ -8617,7 +8621,8 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
 
 def _build_hajfin_pirate_cottage(bm, props, x=0.0, y=0.0,
                                  width=5.2, depth=5.8,
-                                 z_floor=0.20, with_porch=True):
+                                 z_floor=0.20, with_porch=True,
+                                 light_furnishing=False):
     """Small single-room pirate cottage for a quiet corner of the harbor.
 
     Ground-level driftwood shell with a gable roof, a canvas porch, and a
@@ -8690,8 +8695,10 @@ def _build_hajfin_pirate_cottage(bm, props, x=0.0, y=0.0,
     create_box(bm, (door_w + 0.28, wall_th + 0.06, 0.14),
                (x, front_y, z0 + door_h + 0.08),
                mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (door_w + 0.28, 0.30, 0.14),
-               (x, y - hd - 0.03, z0 - 0.07),
+    # Threshold stands slightly proud of both the floor and porch deck so no
+    # horizontal faces are coplanar.
+    create_box(bm, (door_w + 0.28, 0.30, 0.20),
+               (x, y - hd - 0.03, z0 - 0.06),
                mat_index=MAT_INDEX_TIMBER)
 
     # Solid gable ends, plank roof and a closed underlay.
@@ -8721,16 +8728,20 @@ def _build_hajfin_pirate_cottage(bm, props, x=0.0, y=0.0,
         porch_w = min(3.6, w - 0.6)
         porch_d = 1.10
         porch_y = y - hd - porch_d * 0.5
+        # Porch deck sits 3 cm below the interior floor, so its top cannot
+        # z-fight the floor or the base frame.  The threshold bridges the lip.
         create_box(bm, (porch_w, porch_d, 0.12),
-                   (x, porch_y, z0 - 0.06), mat_index=MAT_INDEX_FLOOR)
+                   (x, porch_y, z0 - 0.09), mat_index=MAT_INDEX_FLOOR)
         for sx in (-1.0, 1.0):
             px = x + sx * (porch_w * 0.5 - 0.20)
-            create_box(bm, (0.13, 0.13, 2.55),
-                       (px, y - hd - porch_d + 0.16, z0 + 1.275),
+            create_box(bm, (0.13, 0.13, 2.58),
+                       (px, y - hd - porch_d + 0.16, z0 + 1.26),
                        mat_index=MAT_INDEX_TIMBER)
+        # Positive X rotation drops the outer/front edge so the awning sheds
+        # rain away from the door (the old negative angle tilted it uphill).
         create_box(bm, (porch_w + 0.18, porch_d + 0.22, 0.06),
                    (x, porch_y - 0.02, z0 + 2.56),
-                   rotation=(math.radians(-7.0), 0.0, 0.0),
+                   rotation=(math.radians(7.0), 0.0, 0.0),
                    mat_index=MAT_INDEX_TARP)
         for sx in (-1.0, 1.0):
             _create_rope_cable(
@@ -8741,11 +8752,11 @@ def _build_hajfin_pirate_cottage(bm, props, x=0.0, y=0.0,
                 radius=0.018)
 
     # Cosy single-room interior.
-    bed_len = 2.35
-    bed_dep = 1.45
+    bed_len = 1.95
+    bed_dep = 0.88
     bed_x = x - (hw - wall_th - bed_len * 0.5 - 0.05)
     bed_y = y + hd - wall_th - bed_dep * 0.5 - 0.05
-    build_prop(bm, 'BED', bed_x, bed_y, z0, ang=0.0,
+    build_prop(bm, 'HAJFIN_BED', bed_x, bed_y, z0, ang=0.0,
                length=bed_len, width=bed_dep)
     table_x = x + w * 0.23
     table_y = y + 0.20
@@ -8762,108 +8773,212 @@ def _build_hajfin_pirate_cottage(bm, props, x=0.0, y=0.0,
 
 
 def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
-                             height=6.0, found_h=0.0):
-    """Quirky pirate tower home: a shabby cylindrical watch tower with a little
-    attached cottage and a steep rope-bridge ramp climbing to its door platform.
+                             height=8.4, found_h=1.6):
+    """Two-storey pirate home with a square stilt tower and a short bridge.
+
+    The main cottage is a full two-storey shanty on long pier stilts.  A small
+    balcony/porch opens from its upper floor, and a short level rope bridge
+    crosses to the square tower.  The tower itself has no ground floor: four
+    long stilts carry a single top cabin with a walkable interior.
     """
     from .accessories.prop_registry import build_prop
 
-    tower_cx = 0.0
-    tower_cy = 6.60
-    tower_r = 2.15
-    tower_h = 6.0
-    z_upper = 3.60
+    z_deck = max(1.2, float(found_h))
+    main_h = 8.4
+    main_w = 5.2
+    main_d = 5.8
+    main_cx = 3.60
+    main_cy = 5.60
+    z_second = z_deck + main_h * 0.5
 
-    # 1. Hollow faceted timber tower shell, grounded directly on the deck.
-    create_hollow_cylinder(
-        bm, radius=tower_r, inner_radius=tower_r - 0.22,
-        height=tower_h, inner_depth=tower_h - 0.08, segments=20,
-        location=(tower_cx, tower_cy, tower_h * 0.5),
-        mat_index=MAT_INDEX_DRIFTWOOD,
-        inner_mat_index=MAT_INDEX_DRIFTWOOD)
-    # Vertical timber ribs and horizontal iron bands make it read as a stave
-    # tower instead of a smooth barrel.
-    for i in range(10):
-        ang = i * (2.0 * math.pi / 10.0)
-        rx = math.cos(ang) * (tower_r + 0.01)
-        ry = math.sin(ang) * (tower_r + 0.01)
-        create_box(bm, (0.10, 0.12, tower_h),
-                   (tower_cx + rx, tower_cy + ry, tower_h * 0.5),
-                   rotation=(0.0, 0.0, ang),
+    # 1. Two-storey main cottage on the standard long stilt substructure.
+    # Build the familiar shanty at the origin, then translate only its fresh
+    # faces so all of its stairs, walls and furniture stay intact.
+    old_num = int(getattr(props, 'num_floors', 1))
+    before = set(bm.faces)
+    try:
+        props.num_floors = 2
+        _build_hajfin_shanty(
+            bm, props, width=main_w, depth=main_d,
+            height=main_h, found_h=z_deck)
+    finally:
+        props.num_floors = old_num
+    main_faces = [f for f in bm.faces if f not in before]
+    transform_faces(main_faces, Matrix.Translation((main_cx, main_cy, 0.0)))
+
+    main_west = main_cx - main_w * 0.5
+
+    # 2. Upper-floor balcony/porch opening toward the tower.  It is centred
+    # north of the upper window so the balcony door does not sit on top of it.
+    balcony_w = 1.50
+    balcony_d = 3.00
+    balcony_cy = main_cy + 1.00
+    balcony_cx = main_west - balcony_w * 0.5
+    create_box(bm, (balcony_w, balcony_d, 0.16),
+               (balcony_cx, balcony_cy, z_second - 0.08),
+               mat_index=MAT_INDEX_FLOOR)
+    for sy in (-1.0, 1.0):
+        px = balcony_cx - balcony_w * 0.5 + 0.14
+        py = balcony_cy + sy * (balcony_d * 0.5 - 0.16)
+        create_box(bm, (0.13, 0.13, 2.25),
+                   (px, py, z_second + 1.125),
                    mat_index=MAT_INDEX_TIMBER)
-    for bz in (0.18, 1.25, 3.10, 5.20):
+        _create_rope_cable(
+            bm, (px, py, z_second + 0.92),
+            (main_west, py, z_second + 0.92),
+            radius=0.024)
+        # Timber brackets visually carry the cantilevered balcony.
+        _create_oriented_beam(
+            bm, (main_west, py, z_second - 0.95),
+            (px, py, z_second - 0.12),
+            width=0.10, depth=0.10, mat_index=MAT_INDEX_TIMBER)
+    # Short west-edge rail sections leave a clear gap for the bridge.
+    for sy, rail_end in ((-1.0, balcony_cy - 0.62), (1.0, balcony_cy + 0.62)):
+        px = balcony_cx - balcony_w * 0.5 + 0.14
+        py = balcony_cy + sy * (balcony_d * 0.5 - 0.16)
+        create_box(bm, (0.10, 0.10, 1.00),
+                   (px, rail_end, z_second + 0.50),
+                   mat_index=MAT_INDEX_TIMBER)
+        _create_rope_cable(
+            bm, (px, py, z_second + 0.92),
+            (px, rail_end, z_second + 0.92), radius=0.022)
+    # A patch canvas awning above the balcony, sloping away from the wall.
+    create_box(bm, (balcony_w + 0.40, balcony_d + 0.30, 0.06),
+               (balcony_cx + 0.03, balcony_cy, z_second + 2.22),
+               rotation=(0.0, math.radians(-10.0), 0.0),
+               mat_index=MAT_INDEX_TARP)
+
+    # Balcony door on the main upper west wall, clear of the upper window.
+    create_box(bm, (0.08, 1.00, 2.00),
+               (main_west + 0.01, balcony_cy, z_second + 1.00),
+               mat_index=MAT_INDEX_TIMBER)
+    for sy in (-1.0, 1.0):
+        create_box(bm, (0.12, 0.10, 2.12),
+                   (main_west - 0.02, balcony_cy + sy * 0.55,
+                    z_second + 1.03),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # 3. Square tower carried on four long stilts; no bottom floor.
+    tower_cx = -3.20
+    tower_cy = main_cy
+    tower_half = 1.70
+    cabin_h = 2.80
+    stilt_depth = 25.0
+    cabin_top = z_second + cabin_h
+    post_offsets = ((tower_half - 0.15, tower_half - 0.15),
+                    (tower_half - 0.15, -tower_half + 0.15),
+                    (-tower_half + 0.15, tower_half - 0.15),
+                    (-tower_half + 0.15, -tower_half + 0.15))
+    post_h = z_second + stilt_depth
+    post_cz = z_second - post_h * 0.5
+    for ox, oy in post_offsets:
+        create_cylinder(bm, radius=0.19, height=post_h, segments=8,
+                        location=(tower_cx + ox, tower_cy + oy, post_cz),
+                        mat_index=MAT_INDEX_TIMBER)
         create_torus_ring(
-            bm, (tower_cx, tower_cy, bz),
-            major_radius=tower_r + 0.015, minor_radius=0.035,
+            bm, (tower_cx + ox, tower_cy + oy, z_second - 1.20),
+            major_radius=0.215, minor_radius=0.025,
             mat_index=MAT_INDEX_IRON)
+    # X-bracing across all four open stilt faces.
+    for i in range(4):
+        ax, ay = post_offsets[i]
+        bx, by = post_offsets[(i + 1) % 4]
+        for z_lo, z_hi in ((0.4, z_second * 0.55),
+                           (z_second * 0.55, z_second - 0.20)):
+            _create_oriented_beam(
+                bm, (tower_cx + ax, tower_cy + ay, z_lo),
+                (tower_cx + bx, tower_cy + by, z_hi),
+                width=0.13, depth=0.13, mat_index=MAT_INDEX_TIMBER)
+            _create_oriented_beam(
+                bm, (tower_cx + ax, tower_cy + ay, z_hi),
+                (tower_cx + bx, tower_cy + by, z_lo),
+                width=0.13, depth=0.13, mat_index=MAT_INDEX_TIMBER)
 
-    # Ground and upper door panels on the south face.
-    for dz, dh, dw in ((1.15, 2.15, 1.00), (4.62, 1.90, 1.10)):
-        create_box(bm, (dw, 0.08, dh),
-                   (tower_cx, tower_cy - tower_r - 0.01, dz),
+    # Top cabin floor.
+    create_box(bm, (tower_half * 2.0, tower_half * 2.0, 0.18),
+               (tower_cx, tower_cy, z_second - 0.09),
+               mat_index=MAT_INDEX_FLOOR)
+
+    # Cabin walls; east wall is left open for the bridge door.
+    wall_th = 0.20
+    cw = tower_half * 2.0
+    wall_z = z_second + cabin_h * 0.5
+    create_box(bm, (cw, wall_th, cabin_h),
+               (tower_cx, tower_cy + tower_half - wall_th * 0.5, wall_z),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    create_box(bm, (cw, wall_th, cabin_h),
+               (tower_cx, tower_cy - tower_half + wall_th * 0.5, wall_z),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    create_box(bm, (wall_th, cw - wall_th * 2.0, cabin_h),
+               (tower_cx - tower_half + wall_th * 0.5, tower_cy, wall_z),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    door_w = 1.10
+    door_h = 2.20
+    door_cy = balcony_cy
+    east_x = tower_cx + tower_half - wall_th * 0.5
+    y_south = tower_cy - tower_half + 0.05
+    y_north = tower_cy + tower_half - 0.05
+    south_w = max(0.10, (door_cy - door_w * 0.5) - y_south)
+    north_w = max(0.10, y_north - (door_cy + door_w * 0.5))
+    create_box(bm, (wall_th, south_w, cabin_h),
+               (east_x, y_south + south_w * 0.5, wall_z),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    create_box(bm, (wall_th, north_w, cabin_h),
+               (east_x, y_north - north_w * 0.5, wall_z),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    header_h = max(0.08, cabin_h - door_h)
+    create_box(bm, (wall_th, door_w, header_h),
+               (east_x, door_cy, z_second + door_h + header_h * 0.5),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
+    for sy in (-1.0, 1.0):
+        create_box(bm, (0.10, 0.10, door_h + 0.10),
+                   (tower_cx + tower_half + 0.02,
+                    door_cy + sy * (door_w * 0.5 + 0.05),
+                    z_second + door_h * 0.5),
                    mat_index=MAT_INDEX_TIMBER)
-        create_box(bm, (dw + 0.18, 0.06, 0.10),
-                   (tower_cx, tower_cy - tower_r - 0.05, dz + dh * 0.5),
+
+    # A simple square window in the west wall.
+    wx = tower_cx - tower_half - 0.01
+    create_box(bm, (0.06, 0.80, 0.75),
+               (wx, tower_cy, z_second + 1.45),
+               mat_index=MAT_INDEX_GLASS)
+    for sy in (-1.0, 1.0):
+        create_box(bm, (0.09, 0.10, 0.90),
+                   (wx - 0.02, tower_cy + sy * 0.43,
+                    z_second + 1.45),
+                   mat_index=MAT_INDEX_TIMBER)
+    for sz in (-1.0, 1.0):
+        create_box(bm, (0.09, 0.86, 0.10),
+                   (wx - 0.02, tower_cy,
+                    z_second + 1.45 + sz * 0.415),
                    mat_index=MAT_INDEX_TIMBER)
 
-    # Round porthole windows with bone rims (east and west).
-    for ang in (0.0, math.pi):
-        wx = tower_cx + math.cos(ang) * (tower_r + 0.035)
-        wy = tower_cy + math.sin(ang) * (tower_r + 0.035)
-        create_cylinder(bm, radius=0.33, height=0.06, segments=12,
-                        location=(wx, wy, 4.78),
-                        rotation=(0.0, math.pi * 0.5, ang),
-                        mat_index=MAT_INDEX_GLASS)
-        create_torus_ring(
-            bm, (wx, wy, 4.78),
-            rotation=(0.0, math.pi * 0.5, ang),
-            major_radius=0.34, minor_radius=0.045,
-            mat_index=MAT_INDEX_BONE)
-
-    # 2. Conical shingle roof with a timber eave ring and finial.
-    create_cone(bm, radius1=2.65, radius2=0.12, height=1.90, segments=20,
-                location=(tower_cx, tower_cy, tower_h + 0.95),
+    # Eave band and square pyramid roof.
+    create_box(bm, (cw + 0.30, cw + 0.30, 0.14),
+               (tower_cx, tower_cy, cabin_top + 0.07),
+               mat_index=MAT_INDEX_TIMBER)
+    create_cone(bm, radius1=cw * 0.78, radius2=0.04, height=1.50,
+                segments=4,
+                location=(tower_cx, tower_cy, cabin_top + 0.75),
+                rotation=(0.0, 0.0, math.pi * 0.25),
                 mat_index=MAT_INDEX_SHINGLES)
-    create_torus_ring(bm, (tower_cx, tower_cy, tower_h + 0.03),
-                      major_radius=2.45, minor_radius=0.060,
-                      mat_index=MAT_INDEX_TIMBER)
-    create_cylinder(bm, radius=0.075, height=0.42, segments=8,
-                    location=(tower_cx, tower_cy, tower_h + 2.06),
+    create_cylinder(bm, radius=0.07, height=0.35, segments=8,
+                    location=(tower_cx, tower_cy, cabin_top + 1.65),
                     mat_index=MAT_INDEX_TIMBER)
 
-    # 3. Upper door platform reached by the rope-bridge ramp.
-    platform_y = tower_cy - tower_r + 0.10
-    create_box(bm, (3.20, 1.45, 0.16),
-               (tower_cx, platform_y, z_upper - 0.08),
-               mat_index=MAT_INDEX_FLOOR)
-    for sx in (-1.0, 1.0):
-        px = tower_cx + sx * 1.44
-        create_box(bm, (0.12, 0.12, 1.00),
-                   (px, platform_y - 0.62, z_upper + 0.50),
-                   mat_index=MAT_INDEX_TIMBER)
-    _create_rope_cable(
-        bm, (tower_cx - 1.44, platform_y - 0.62, z_upper + 0.96),
-        (tower_cx + 1.44, platform_y - 0.62, z_upper + 0.96),
-        radius=0.024)
-    for sy in (-0.62, 0.42):
-        _create_rope_cable(
-            bm, (tower_cx - 1.44, platform_y + sy, z_upper + 0.96),
-            (tower_cx - 1.44, platform_y + sy - 0.20, z_upper + 0.55),
-            radius=0.020)
-        _create_rope_cable(
-            bm, (tower_cx + 1.44, platform_y + sy, z_upper + 0.96),
-            (tower_cx + 1.44, platform_y + sy + 0.20, z_upper + 0.55),
-            radius=0.020)
+    # Tower top-room interior: one pirate cot and a barrel, door path clear.
+    build_prop(bm, 'HAJFIN_BED', tower_cx - 0.55, tower_cy - 0.90,
+               z_second, ang=0.0, length=1.95, width=0.88)
+    build_prop(bm, 'HAJFIN_BARREL', tower_cx - 1.00, tower_cy + 1.05,
+               z_second, ang=0.4, scale=0.45)
 
-    # 4. Little cottage main building attached at the tower's east side.
-    _build_hajfin_pirate_cottage(
-        bm, props, x=4.20, y=5.80, width=4.20, depth=4.60,
-        z_floor=0.20, with_porch=True)
-
-    # 5. Steep rope-bridge ramp climbing from grade to the tower platform.
-    # The builder lays the bridge along Y from -span/2 (low) to +span/2 (high).
-    build_sloped_rope_bridge(
-        bm, span=9.0, width=1.50, rise=z_upper, post_height=1.50)
+    # 4. Short level rope bridge from the balcony into the tower cabin.
+    bridge_z = z_second + 0.02
+    build_suspended_rope_bridge(
+        bm,
+        Vector((balcony_cx - balcony_w * 0.5, balcony_cy, bridge_z)),
+        Vector((tower_cx + tower_half, door_cy, bridge_z)),
+        width=1.00, sag=0.16, with_pylons=False, post_height=1.10)
 
 
 def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,
@@ -8952,8 +9067,9 @@ def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,
     create_box(bm, (door_w + 0.28, wall_th + 0.06, 0.14),
                (0.0, front_y, z0 + door_h + 0.08),
                mat_index=MAT_INDEX_TIMBER)
-    create_box(bm, (door_w + 0.28, 0.30, 0.14),
-               (0.0, -hd - 0.03, z0 - 0.07),
+    # Proud timber threshold: avoids z-fighting with the floor/frame top.
+    create_box(bm, (door_w + 0.28, 0.30, 0.20),
+               (0.0, -hd - 0.03, z0 - 0.06),
                mat_index=MAT_INDEX_TIMBER)
 
     # Solid gable ends and a plank roof.  The taller front gable gives the tiny

@@ -25,7 +25,7 @@ from ..materials import (
     MAT_INDEX_ROPE, MAT_INDEX_FISH,
     MAT_INDEX_BONE, MAT_INDEX_DRIFTWOOD, MAT_INDEX_ROUGH_STONE,
     MAT_INDEX_SILVER, MAT_INDEX_FLOOR, MAT_INDEX_LEATHER, MAT_INDEX_FABRIC_WHITE,
-    MAT_INDEX_LANTERN
+    MAT_INDEX_FABRIC_STITCHED, MAT_INDEX_FABRIC_RED, MAT_INDEX_LANTERN
 )
 
 
@@ -803,6 +803,70 @@ def build_dorsal_fin_crest(bm, x, y, z_ground=0.0, ang=0.0, scale=1.0):
         location=(0.0, 0.0, 0.14 * scale),
         mat_index=MAT_INDEX_IRON, bevel_amount=0.005 * scale
     )
+
+    transform_faces(faces, _place(x, y, z_ground, ang))
+    return faces
+
+
+def build_hajfin_bed(bm, x, y, z_ground=0.0, ang=0.0,
+                     length=1.95, width=0.88):
+    """Low, rough pirate cot: driftwood frame, straw tick, blanket and pillow.
+
+    Deliberately narrower and lower than the civilised bed so it hugs a wall and
+    leaves the fighting floor open.
+    """
+    L = max(1.55, float(length))
+    W = max(0.72, float(width))
+    z0 = 0.0  # local build; z_ground is applied by the final transform
+    leg_h = 0.28
+    rail_z = z0 + leg_h + 0.05
+    faces = []
+
+    # Short legs, side rails and end rails.
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            faces += create_beveled_box(
+                bm, size=(0.085, 0.085, leg_h),
+                location=(sx * (L * 0.5 - 0.10), sy * (W * 0.5 - 0.07),
+                          z0 + leg_h * 0.5),
+                mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008)
+    for sy in (-1.0, 1.0):
+        faces += create_beveled_box(
+            bm, size=(L, 0.085, 0.10),
+            location=(0.0, sy * (W * 0.5 - 0.04), rail_z),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+    for sx in (-1.0, 1.0):
+        faces += create_beveled_box(
+            bm, size=(0.085, W, 0.10),
+            location=(sx * (L * 0.5 - 0.04), 0.0, rail_z),
+            mat_index=MAT_INDEX_TIMBER, bevel_amount=0.006)
+
+    # Straw tick and a rough blanket pulled up over the foot end.
+    mattress_z = z0 + leg_h + 0.17
+    faces += create_beveled_box(
+        bm, size=(L - 0.12, W - 0.12, 0.14),
+        location=(0.0, 0.0, mattress_z),
+        mat_index=MAT_INDEX_FABRIC_STITCHED, bevel_amount=0.012)
+    faces += create_beveled_box(
+        bm, size=(L * 0.58, W - 0.10, 0.055),
+        location=(L * 0.13, 0.0, mattress_z + 0.0975),
+        mat_index=MAT_INDEX_FABRIC_RED, bevel_amount=0.008)
+    faces += create_beveled_box(
+        bm, size=(0.32, W * 0.58, 0.10),
+        location=(-L * 0.5 + 0.26, 0.0, mattress_z + 0.095),
+        mat_index=MAT_INDEX_FABRIC_WHITE, bevel_amount=0.010)
+
+    # Low lash-up headboard at the pillow end.
+    for sy in (-1.0, 1.0):
+        faces += create_beveled_box(
+            bm, size=(0.09, 0.09, 0.66),
+            location=(-L * 0.5 + 0.07, sy * (W * 0.5 - 0.08),
+                      z0 + 0.53),
+            mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.008)
+    faces += create_beveled_box(
+        bm, size=(0.07, W, 0.17),
+        location=(-L * 0.5 + 0.035, 0.0, z0 + 0.79),
+        mat_index=MAT_INDEX_DRIFTWOOD, bevel_amount=0.010)
 
     transform_faces(faces, _place(x, y, z_ground, ang))
     return faces

@@ -7281,8 +7281,8 @@ PRESETS = {
         'tier': 1,
         'name': "Tidewatch Tower Home",
         'plot': "16m x 16m",
-        'description': "Quirky shabby cylindrical driftwood tower with an attached little cottage main building and a steep suspended rope-bridge ramp climbing to its upper door platform.",
-        'settings': _hajfin_settings(width=10.0, depth=14.0, num_floors=1, found_h=0.0, wonkiness=0.18, roof_h=2.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.80, door_h=3.00, tier=1, hajfin_style='TOWER_HOME'),
+        'description': "Quirky two-storey pirate home on long pier stilts: a full cottage with an upper balcony/porch, a short rope bridge into a square tower cabin, and an open stilt base beneath the tower.",
+        'settings': _hajfin_settings(width=12.0, depth=14.0, num_floors=2, found_h=1.6, wonkiness=0.18, roof_h=2.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.80, door_h=3.00, tier=1, hajfin_style='TOWER_HOME'),
     },
 
     # =========================================================================
@@ -8182,11 +8182,11 @@ BUILDING_FAMILIES = [
         'name': "Tidewatch Tower Home",
         'category': 'SHANTIES',
         'plot': "16m x 16m",
-        'shape': "Round Tower + Cottage",
+        'shape': "Square Tower + Two-Storey Cottage",
         'icon': 'COMMUNITY',
-        'description': "Quirky cylindrical driftwood tower with a little cottage main building and a steep rope-bridge ramp leading to the upper door platform.",
+        'description': "Two-storey pirate home on long pier stilts with an upper balcony/porch, a short rope bridge into a square tower cabin, and an open stilt base beneath the tower.",
         'tiers': [
-            ("T1", 'HAJFIN_TOWER_HOME_T1', "Shabby stave tower, attached cottage and steep bridge ramp"),
+            ("T1", 'HAJFIN_TOWER_HOME_T1', "Two-storey cottage, upper balcony, short bridge and square tower cabin"),
         ],
     },
     {

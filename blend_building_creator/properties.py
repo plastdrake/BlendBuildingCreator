@@ -404,7 +404,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('FEATURE_SHIP_ANCHOR', "Ship Anchor Feature", "Standalone salvaged anchor with spiralled hawser and rope coil", 'SNAP_FACE', 22),
             ('SHIP_TAVERN', "Beached Galleon Pub", "Pirate pub rebuilt from sawn sections of a beached galleon, with bow porch and stern kitchen", 'COMMUNITY', 24),
             ('PIRATE_COTTAGE', "Little Pirate Cottage", "Small ground-level driftwood cottage with a canvas porch, bed, table and barrel", 'HOME', 33),
-            ('TOWER_HOME', "Tidewatch Tower Home", "Shabby cylindrical tower with an attached little cottage and a steep rope-bridge ramp to the upper door platform", 'COMMUNITY', 34),
+            ('TOWER_HOME', "Tidewatch Tower Home", "Two-storey pirate cottage on long stilts with an upper balcony, short bridge and square tower cabin", 'COMMUNITY', 34),
         ],
         default='SHANTY',
         update=on_property_updated

@@ -290,6 +290,7 @@ for _s in (
     _spec('WINE_RACK', "Wine Rack", 'WORK', "Cellar rack of lying wine bottles",
           'artisan_props', 'build_wine_rack', 0.80, width=1.10),
     # --- Hajfin & Pirate props ---
+    _spec('HAJFIN_BED', "Pirate Cot", 'HAJFIN', "Low rough driftwood cot with a straw tick, rough blanket and pillow", 'hajfin_props', 'build_hajfin_bed', 0.95, length=1.95, width=0.88),
     _spec('HAJFIN_WHALE_RIB_ARCH', "Whale Rib Arch", 'HAJFIN', "Curved whale rib archway bound with hemp rope",
           'hajfin_props', 'build_whale_rib_arch', 1.40, width=2.4, height=3.2),
     _spec('HAJFIN_SHARK_JAW_TOTEM', "Shark Jaw Totem", 'HAJFIN', "Driftwood totem post crowned with gaping shark jaw",
