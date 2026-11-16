@@ -5118,6 +5118,55 @@ def _build_hajfin_pirate_tavern(bm, props, width=14.0, depth=14.0, height=8.4, f
     _build_hajfin_wall_dressing_y(bm, hd - wing_d, hd, hw - wing_w + wall_th * 0.5, z_mid, z1,
                                    wall_th=wall_th, sgn_x=-1.0, variant='SALVAGED', top_clear=0.30)
 
+    # 6B. Furnish the Barnacle: taproom bar + table below, crew beds above.
+    from .accessories.prop_registry import build_prop
+    tap_floor_z = z0 + 0.14
+    bar_x = -hw + wall_th + 0.50
+    bar_y = -3.10
+    build_prop(bm, 'COUNTER', bar_x, bar_y, tap_floor_z,
+               ang=-math.pi * 0.5, length=3.40, height=1.15,
+               back_bar=False,
+               body_mat=MAT_INDEX_TIMBER,
+               top_mat=MAT_INDEX_FLOOR,
+               trim_mat=MAT_INDEX_DRIFTWOOD)
+    bar_top_z = tap_floor_z + 1.17
+    for by in (bar_y - 1.15, bar_y, bar_y + 1.15):
+        _build_hajfin_pub_stool(bm, bar_x + 0.78, by, tap_floor_z,
+                                seat_h=0.86)
+    build_prop(bm, 'BOTTLE_CLUSTER', bar_x, bar_y - 0.80, bar_top_z, ang=0.2)
+    build_prop(bm, 'PEWTER_TANKARD', bar_x, bar_y + 0.70, bar_top_z, ang=0.5)
+
+    table_x = 0.80
+    table_y = -3.20
+    _build_hajfin_pub_table(bm, table_x, table_y, tap_floor_z,
+                            ang=0.0, length=2.20, width=1.05,
+                            height=0.95, top_mat=MAT_INDEX_DRIFTWOOD)
+    _build_hajfin_pub_stool(bm, table_x - 0.70, table_y - 0.92, tap_floor_z,
+                            seat_h=0.78)
+    _build_hajfin_pub_stool(bm, table_x + 0.70, table_y - 0.92, tap_floor_z,
+                            seat_h=0.78)
+    _build_hajfin_pub_stool(bm, table_x - 0.70, table_y + 0.92, tap_floor_z,
+                            seat_h=0.78)
+    _build_hajfin_pub_stool(bm, table_x + 0.70, table_y + 0.92, tap_floor_z,
+                            seat_h=0.78)
+    build_prop(bm, 'SCATTER_TABLEWARE', table_x, table_y,
+               tap_floor_z + 0.95, ang=0.0)
+    build_prop(bm, 'CHAIN_LANTERN', table_x, table_y, z_mid - 0.18)
+
+    # Upper-floor crew beds: one on the west wall, one on the front wall,
+    # one in the wing room.  All headboard ends face their nearest wall.
+    bed_len = 2.25
+    bed_w = 1.20
+    bedwest_x = -hw + wall_th + bed_len * 0.5 + 0.05
+    build_prop(bm, 'HAJFIN_BED', bedwest_x, -3.00, z_mid,
+               ang=0.0, length=bed_len, width=bed_w)
+    bdefront_y = -hd + wall_th + bed_len * 0.5 + 0.05
+    build_prop(bm, 'HAJFIN_BED', 2.20, bdefront_y, z_mid,
+               ang=math.pi * 0.5, length=bed_len, width=bed_w)
+    bedwing_x = hw - wall_th - bed_len * 0.5 - 0.05
+    build_prop(bm, 'HAJFIN_BED', bedwing_x, 3.20, z_mid,
+               ang=math.pi, length=bed_len, width=bed_w)
+
     # 7. Front Entrance Shark Jaw Doorway
     door_w = float(getattr(props, 'door_width', 1.90))
     door_h = min(float(getattr(props, 'door_height', 3.60)), story_h * 0.85)
