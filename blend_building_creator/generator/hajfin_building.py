@@ -6795,7 +6795,8 @@ def _attach_faction_banner(bm, props, style):
             'FEATURE_ROPE_BRIDGE_WIDE', 'FEATURE_ROPE_BRIDGE_SLOPE',
             'FEATURE_ROPE_BRIDGE_STEEP',
             'FEATURE_NEST', 'FEATURE_SHIP_ANCHOR', 'FEATURE_ANCHOR',
-            'RUM_STILL', 'TINY_STORAGE', 'SHIP_TAVERN')
+            'RUM_STILL', 'TINY_STORAGE', 'PIRATE_COTTAGE', 'TOWER_HOME',
+            'SHIP_TAVERN')
     if style in skip:
         return
     if not bm.verts:
@@ -8272,6 +8273,14 @@ def build_hajfin_building(obj, bm, props):
         _build_hajfin_tiny_storage_shack(
             bm, props, width=width, depth=depth, height=height,
             found_h=found_h)
+    elif style == 'PIRATE_COTTAGE':
+        _build_hajfin_pirate_cottage(
+            bm, props, width=width, depth=depth,
+            z_floor=0.20, with_porch=True)
+    elif style == 'TOWER_HOME':
+        _build_hajfin_tower_home(
+            bm, props, width=width, depth=depth,
+            height=height, found_h=found_h)
     elif style == 'PIER_STRAIGHT':
         _build_hajfin_pier_straight(bm, props, width=width, depth=depth, found_h=found_h)
     elif style == 'PIER_SQUARE':
@@ -8604,6 +8613,257 @@ def _build_hajfin_rum_still(bm, props, width=8.0, depth=8.0, height=4.0,
                _roof_surface_z(0.20) - 0.12)
     build_prop(bm, 'CHAIN_LANTERN', 1.50, 0.90,
                _roof_surface_z(1.50) - 0.12)
+
+
+def _build_hajfin_pirate_cottage(bm, props, x=0.0, y=0.0,
+                                 width=5.2, depth=5.8,
+                                 z_floor=0.20, with_porch=True):
+    """Small single-room pirate cottage for a quiet corner of the harbor.
+
+    Ground-level driftwood shell with a gable roof, a canvas porch, and a
+    lived-in interior (bed, table, stool, barrel).  No stair or upper floor.
+    """
+    from .accessories.prop_registry import build_prop
+
+    w = max(4.4, float(width))
+    d = max(4.8, float(depth))
+    hw = w * 0.5
+    hd = d * 0.5
+    wall_th = 0.22
+    wall_h = 3.25
+    eave_z = z_floor + wall_h
+    peak_h = 1.10
+    z0 = z_floor
+
+    door_w = min(w - 1.20, max(1.75, float(getattr(props, 'door_width', 1.80))))
+    door_h = min(wall_h - 0.22,
+                 max(3.00, float(getattr(props, 'door_height', 3.00))))
+
+    # Thick wooden floor and a heavy perimeter sill frame (no stone).
+    create_box(bm, (w, d, 0.20), (x, y, z0 - 0.10),
+               mat_index=MAT_INDEX_FLOOR)
+    frame_t = 0.18
+    frame_z = z0 - 0.10
+    for sx in (-1.0, 1.0):
+        create_box(bm, (frame_t, d + frame_t, 0.20),
+                   (x + sx * (hw + frame_t * 0.5 - 0.02), y, frame_z),
+                   mat_index=MAT_INDEX_TIMBER)
+    for sy in (-1.0, 1.0):
+        create_box(bm, (w + frame_t, frame_t, 0.20),
+                   (x, y + sy * (hd + frame_t * 0.5 - 0.02), frame_z),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # Driftwood walls with a plain open front doorway.
+    wall_mat = MAT_INDEX_DRIFTWOOD
+    create_box(bm, (w, wall_th, wall_h),
+               (x, y + hd - wall_th * 0.5, z0 + wall_h * 0.5),
+               mat_index=wall_mat, is_wall=True)
+    side_d = max(0.5, d - wall_th * 2.0)
+    for sx in (-1.0, 1.0):
+        create_box(bm, (wall_th, side_d, wall_h),
+                   (x + sx * (hw - wall_th * 0.5), y, z0 + wall_h * 0.5),
+                   mat_index=wall_mat, is_wall=True)
+
+    front_y = y - hd + wall_th * 0.5
+    side_w = max(0.2, (w - door_w) * 0.5)
+    for sx in (-1.0, 1.0):
+        create_box(bm, (side_w, wall_th, wall_h),
+                   (x + sx * (door_w * 0.5 + side_w * 0.5), front_y,
+                    z0 + wall_h * 0.5),
+                   mat_index=wall_mat, is_wall=True)
+    header_h = max(0.08, wall_h - door_h)
+    create_box(bm, (door_w, wall_th, header_h),
+               (x, front_y, z0 + door_h + header_h * 0.5),
+               mat_index=wall_mat, is_wall=True)
+
+    # Proud corner posts and a simple doorway frame.
+    for sx in (-1.0, 1.0):
+        for sy in (-1.0, 1.0):
+            create_box(bm, (0.24, 0.24, wall_h),
+                       (x + sx * hw, y + sy * hd, z0 + wall_h * 0.5),
+                       mat_index=MAT_INDEX_TIMBER)
+    for sx in (-1.0, 1.0):
+        create_box(bm, (0.12, wall_th + 0.06, door_h + 0.08),
+                   (x + sx * (door_w * 0.5 + 0.07), front_y,
+                    z0 + door_h * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (door_w + 0.28, wall_th + 0.06, 0.14),
+               (x, front_y, z0 + door_h + 0.08),
+               mat_index=MAT_INDEX_TIMBER)
+    create_box(bm, (door_w + 0.28, 0.30, 0.14),
+               (x, y - hd - 0.03, z0 - 0.07),
+               mat_index=MAT_INDEX_TIMBER)
+
+    # Solid gable ends, plank roof and a closed underlay.
+    for sy in (-1.0, 1.0):
+        _build_gable_triangle_wall(
+            bm, x - hw, x + hw, y + sy * hd,
+            eave_z, eave_z + peak_h,
+            wall_th=wall_th, force=True, style='DRIFTWOOD')
+    _build_hajfin_supported_plank_roof(
+        bm, x - hw, x + hw, y - hd, y + hd, eave_z, peak_h,
+        overhang_x=0.38, overhang_y=0.38)
+    roof_ox = 0.38
+    ridge_z = eave_z + peak_h
+    left_eave = x - hw - roof_ox
+    right_eave = x + hw + roof_ox
+    slope_len = math.hypot(hw + roof_ox, peak_h)
+    pitch = math.atan2(peak_h, hw + roof_ox)
+    for side, eave_x in ((-1.0, left_eave), (1.0, right_eave)):
+        create_box(bm, (slope_len + 0.10, d + 0.76, 0.04),
+                   ((eave_x + x) * 0.5, y,
+                    (ridge_z + eave_z) * 0.5 + 0.005),
+                   rotation=(0.0, side * pitch, 0.0),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # A small patched canvas porch on the front.
+    if with_porch:
+        porch_w = min(3.6, w - 0.6)
+        porch_d = 1.10
+        porch_y = y - hd - porch_d * 0.5
+        create_box(bm, (porch_w, porch_d, 0.12),
+                   (x, porch_y, z0 - 0.06), mat_index=MAT_INDEX_FLOOR)
+        for sx in (-1.0, 1.0):
+            px = x + sx * (porch_w * 0.5 - 0.20)
+            create_box(bm, (0.13, 0.13, 2.55),
+                       (px, y - hd - porch_d + 0.16, z0 + 1.275),
+                       mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (porch_w + 0.18, porch_d + 0.22, 0.06),
+                   (x, porch_y - 0.02, z0 + 2.56),
+                   rotation=(math.radians(-7.0), 0.0, 0.0),
+                   mat_index=MAT_INDEX_TARP)
+        for sx in (-1.0, 1.0):
+            _create_rope_cable(
+                bm, (x + sx * (porch_w * 0.5 - 0.20),
+                     y - hd - porch_d + 0.16, z0 + 2.53),
+                (x + sx * (porch_w * 0.5 - 0.20),
+                 y - hd - 0.04, z0 + 2.70),
+                radius=0.018)
+
+    # Cosy single-room interior.
+    bed_len = 2.35
+    bed_dep = 1.45
+    bed_x = x - (hw - wall_th - bed_len * 0.5 - 0.05)
+    bed_y = y + hd - wall_th - bed_dep * 0.5 - 0.05
+    build_prop(bm, 'BED', bed_x, bed_y, z0, ang=0.0,
+               length=bed_len, width=bed_dep)
+    table_x = x + w * 0.23
+    table_y = y + 0.20
+    _build_hajfin_pub_table(
+        bm, table_x, table_y, z0, ang=0.0,
+        length=1.15, width=0.65, height=0.95,
+        top_mat=MAT_INDEX_DRIFTWOOD)
+    build_prop(bm, 'PEWTER_TANKARD', table_x, table_y, z0 + 0.95,
+               ang=0.4)
+    _build_hajfin_pub_stool(bm, table_x, table_y - 0.55, z0,
+                            ang=0.0, seat_h=0.72)
+    build_prop(bm, 'HAJFIN_BARREL', x + w * 0.30, y + hd - 0.58, z0,
+               ang=0.5, scale=0.48)
+
+
+def _build_hajfin_tower_home(bm, props, width=10.0, depth=14.0,
+                             height=6.0, found_h=0.0):
+    """Quirky pirate tower home: a shabby cylindrical watch tower with a little
+    attached cottage and a steep rope-bridge ramp climbing to its door platform.
+    """
+    from .accessories.prop_registry import build_prop
+
+    tower_cx = 0.0
+    tower_cy = 6.60
+    tower_r = 2.15
+    tower_h = 6.0
+    z_upper = 3.60
+
+    # 1. Hollow faceted timber tower shell, grounded directly on the deck.
+    create_hollow_cylinder(
+        bm, radius=tower_r, inner_radius=tower_r - 0.22,
+        height=tower_h, inner_depth=tower_h - 0.08, segments=20,
+        location=(tower_cx, tower_cy, tower_h * 0.5),
+        mat_index=MAT_INDEX_DRIFTWOOD,
+        inner_mat_index=MAT_INDEX_DRIFTWOOD)
+    # Vertical timber ribs and horizontal iron bands make it read as a stave
+    # tower instead of a smooth barrel.
+    for i in range(10):
+        ang = i * (2.0 * math.pi / 10.0)
+        rx = math.cos(ang) * (tower_r + 0.01)
+        ry = math.sin(ang) * (tower_r + 0.01)
+        create_box(bm, (0.10, 0.12, tower_h),
+                   (tower_cx + rx, tower_cy + ry, tower_h * 0.5),
+                   rotation=(0.0, 0.0, ang),
+                   mat_index=MAT_INDEX_TIMBER)
+    for bz in (0.18, 1.25, 3.10, 5.20):
+        create_torus_ring(
+            bm, (tower_cx, tower_cy, bz),
+            major_radius=tower_r + 0.015, minor_radius=0.035,
+            mat_index=MAT_INDEX_IRON)
+
+    # Ground and upper door panels on the south face.
+    for dz, dh, dw in ((1.15, 2.15, 1.00), (4.62, 1.90, 1.10)):
+        create_box(bm, (dw, 0.08, dh),
+                   (tower_cx, tower_cy - tower_r - 0.01, dz),
+                   mat_index=MAT_INDEX_TIMBER)
+        create_box(bm, (dw + 0.18, 0.06, 0.10),
+                   (tower_cx, tower_cy - tower_r - 0.05, dz + dh * 0.5),
+                   mat_index=MAT_INDEX_TIMBER)
+
+    # Round porthole windows with bone rims (east and west).
+    for ang in (0.0, math.pi):
+        wx = tower_cx + math.cos(ang) * (tower_r + 0.035)
+        wy = tower_cy + math.sin(ang) * (tower_r + 0.035)
+        create_cylinder(bm, radius=0.33, height=0.06, segments=12,
+                        location=(wx, wy, 4.78),
+                        rotation=(0.0, math.pi * 0.5, ang),
+                        mat_index=MAT_INDEX_GLASS)
+        create_torus_ring(
+            bm, (wx, wy, 4.78),
+            rotation=(0.0, math.pi * 0.5, ang),
+            major_radius=0.34, minor_radius=0.045,
+            mat_index=MAT_INDEX_BONE)
+
+    # 2. Conical shingle roof with a timber eave ring and finial.
+    create_cone(bm, radius1=2.65, radius2=0.12, height=1.90, segments=20,
+                location=(tower_cx, tower_cy, tower_h + 0.95),
+                mat_index=MAT_INDEX_SHINGLES)
+    create_torus_ring(bm, (tower_cx, tower_cy, tower_h + 0.03),
+                      major_radius=2.45, minor_radius=0.060,
+                      mat_index=MAT_INDEX_TIMBER)
+    create_cylinder(bm, radius=0.075, height=0.42, segments=8,
+                    location=(tower_cx, tower_cy, tower_h + 2.06),
+                    mat_index=MAT_INDEX_TIMBER)
+
+    # 3. Upper door platform reached by the rope-bridge ramp.
+    platform_y = tower_cy - tower_r + 0.10
+    create_box(bm, (3.20, 1.45, 0.16),
+               (tower_cx, platform_y, z_upper - 0.08),
+               mat_index=MAT_INDEX_FLOOR)
+    for sx in (-1.0, 1.0):
+        px = tower_cx + sx * 1.44
+        create_box(bm, (0.12, 0.12, 1.00),
+                   (px, platform_y - 0.62, z_upper + 0.50),
+                   mat_index=MAT_INDEX_TIMBER)
+    _create_rope_cable(
+        bm, (tower_cx - 1.44, platform_y - 0.62, z_upper + 0.96),
+        (tower_cx + 1.44, platform_y - 0.62, z_upper + 0.96),
+        radius=0.024)
+    for sy in (-0.62, 0.42):
+        _create_rope_cable(
+            bm, (tower_cx - 1.44, platform_y + sy, z_upper + 0.96),
+            (tower_cx - 1.44, platform_y + sy - 0.20, z_upper + 0.55),
+            radius=0.020)
+        _create_rope_cable(
+            bm, (tower_cx + 1.44, platform_y + sy, z_upper + 0.96),
+            (tower_cx + 1.44, platform_y + sy + 0.20, z_upper + 0.55),
+            radius=0.020)
+
+    # 4. Little cottage main building attached at the tower's east side.
+    _build_hajfin_pirate_cottage(
+        bm, props, x=4.20, y=5.80, width=4.20, depth=4.60,
+        z_floor=0.20, with_porch=True)
+
+    # 5. Steep rope-bridge ramp climbing from grade to the tower platform.
+    # The builder lays the bridge along Y from -span/2 (low) to +span/2 (high).
+    build_sloped_rope_bridge(
+        bm, span=9.0, width=1.50, rise=z_upper, post_height=1.50)
 
 
 def _build_hajfin_tiny_storage_shack(bm, props, width=3.8, depth=4.4,

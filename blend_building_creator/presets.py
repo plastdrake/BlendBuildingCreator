@@ -7264,6 +7264,28 @@ PRESETS = {
     },
 
     # =========================================================================
+    # HAJFIN: LITTLE PIRATE COTTAGE & TOWER HOME
+    # =========================================================================
+    'HAJFIN_PIRATE_COTTAGE_T1': {
+        'category': 'SHANTIES',
+        'family': 'HAJFIN_PIRATE_COTTAGE',
+        'tier': 1,
+        'name': "Little Pirate Cottage",
+        'plot': "12m x 12m",
+        'description': "Small ground-level driftwood cottage with a patched canvas porch, a proper bed, a little table and a corner barrel. A quiet single-room pirate home.",
+        'settings': _hajfin_settings(width=5.2, depth=5.8, num_floors=1, found_h=0.0, wonkiness=0.20, roof_h=2.4, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_CORAL', door_w=1.80, door_h=3.00, tier=1, hajfin_style='PIRATE_COTTAGE'),
+    },
+    'HAJFIN_TOWER_HOME_T1': {
+        'category': 'SHANTIES',
+        'family': 'HAJFIN_TOWER_HOME',
+        'tier': 1,
+        'name': "Tidewatch Tower Home",
+        'plot': "16m x 16m",
+        'description': "Quirky shabby cylindrical driftwood tower with an attached little cottage main building and a steep suspended rope-bridge ramp climbing to its upper door platform.",
+        'settings': _hajfin_settings(width=10.0, depth=14.0, num_floors=1, found_h=0.0, wonkiness=0.18, roof_h=2.0, roof_mat='WOOD_SHINGLES', color_palette='HAJFIN_DRIFTWOOD', door_w=1.80, door_h=3.00, tier=1, hajfin_style='TOWER_HOME'),
+    },
+
+    # =========================================================================
     # HAJFIN: FISH DEPOT & PIER
     # =========================================================================
     'HAJFIN_FISH_DEPOT_T1': {
@@ -8142,6 +8164,32 @@ BUILDING_FAMILIES = [
         ],
     },
     {
+        'id': 'HAJFIN_PIRATE_COTTAGE',
+        'faction': 'HAJFIN',
+        'name': "Little Pirate Cottage",
+        'category': 'SHANTIES',
+        'plot': "12m x 12m",
+        'shape': "Cottage",
+        'icon': 'HOME',
+        'description': "Small ground-level driftwood cottage with a canvas porch, bed, table, stool and barrel. A cosy single-room pirate home.",
+        'tiers': [
+            ("T1", 'HAJFIN_PIRATE_COTTAGE_T1', "Little driftwood cottage with porch and lived-in interior"),
+        ],
+    },
+    {
+        'id': 'HAJFIN_TOWER_HOME',
+        'faction': 'HAJFIN',
+        'name': "Tidewatch Tower Home",
+        'category': 'SHANTIES',
+        'plot': "16m x 16m",
+        'shape': "Round Tower + Cottage",
+        'icon': 'COMMUNITY',
+        'description': "Quirky cylindrical driftwood tower with a little cottage main building and a steep rope-bridge ramp leading to the upper door platform.",
+        'tiers': [
+            ("T1", 'HAJFIN_TOWER_HOME_T1', "Shabby stave tower, attached cottage and steep bridge ramp"),
+        ],
+    },
+    {
         'id': 'HAJFIN_FISH_DEPOT',
         'faction': 'HAJFIN',
         'name': "Fisher's Stilt Pier & Depot",
@@ -8348,6 +8396,8 @@ ARCHETYPE_MAP = {
     'HAJFIN_RUM_STILL_T1': 'NONE',
     'HAJFIN_TINY_STORAGE_T1': 'NONE',
     'HAJFIN_TINY_STORAGE_T2': 'NONE',
+    'HAJFIN_PIRATE_COTTAGE_T1': 'NONE',
+    'HAJFIN_TOWER_HOME_T1': 'NONE',
     'HAJFIN_FISH_DEPOT_T1': 'WAREHOUSE',
     'HAJFIN_FISH_DEPOT_T2': 'WAREHOUSE',
     'HAJFIN_SHAMAN_SHRINE_T1': 'CHAPEL',

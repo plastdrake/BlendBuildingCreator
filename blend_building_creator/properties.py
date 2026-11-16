@@ -403,6 +403,8 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('FEATURE_CROWS_NEST', "Crow's Nest Mast Feature", "Standalone ship mainmast with crow's nest lookout, yardarm, furled sail and ratline ladder", 'OUTLINER_OB_LIGHTPROBE', 21),
             ('FEATURE_SHIP_ANCHOR', "Ship Anchor Feature", "Standalone salvaged anchor with spiralled hawser and rope coil", 'SNAP_FACE', 22),
             ('SHIP_TAVERN', "Beached Galleon Pub", "Pirate pub rebuilt from sawn sections of a beached galleon, with bow porch and stern kitchen", 'COMMUNITY', 24),
+            ('PIRATE_COTTAGE', "Little Pirate Cottage", "Small ground-level driftwood cottage with a canvas porch, bed, table and barrel", 'HOME', 33),
+            ('TOWER_HOME', "Tidewatch Tower Home", "Shabby cylindrical tower with an attached little cottage and a steep rope-bridge ramp to the upper door platform", 'COMMUNITY', 34),
         ],
         default='SHANTY',
         update=on_property_updated
