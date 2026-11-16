@@ -8012,10 +8012,13 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
 
     # Upper-storey window bands, built as their own walls above the first-floor
     # openings so the second floor is not a blank box.
-    _build_wall_with_2_windows_x(
-        bm, -hw, hw, -hd, z_upper, wall_top, -3.5, 3.5,
-        z_upper + 1.75, win_w=0.95, win_h=1.00, wall_th=wall_th,
-        facing_north=False)
+    # The front-gable windows were hidden behind the bow hull canopy, so the
+    # upper front wall is kept solid; the visible upper windows are on the back
+    # and flank walls only.
+    create_box(bm, (hall_w, wall_th, wall_top - z_upper),
+               (0.0, -hd + wall_th * 0.5,
+                (z_upper + wall_top) * 0.5),
+               mat_index=MAT_INDEX_DRIFTWOOD, is_wall=True)
     _build_wall_with_2_windows_x(
         bm, -hw, hw, hd, z_upper, wall_top, -3.5, 3.5,
         z_upper + 1.75, win_w=0.95, win_h=1.00, wall_th=wall_th,
@@ -8025,7 +8028,7 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     wy0 = -hd + wall_th
     wy1 = hd - wall_th
     balcony_door_cy = 1.20
-    balcony_door_w = 1.45
+    balcony_door_w = 1.70
     balcony_door_h = 2.25
     west_p0 = balcony_door_cy - balcony_door_w * 0.5
     west_p1 = balcony_door_cy + balcony_door_w * 0.5
@@ -8098,9 +8101,29 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
         create_box(bm, (hall_w - wall_th * 2, 0.20, 0.24),
                    (0.0, by, z_upper - 0.24), mat_index=MAT_INDEX_TIMBER)
 
+    # Upper-floor crew space: three beds with heads on the walls plus storage.
+    bed_len = 2.35
+    bed_w = 1.28
+    build_prop(bm, 'HAJFIN_BED',
+               -hw + wall_th + bed_len * 0.5 + 0.05, -3.20, z_upper,
+               ang=0.0, length=bed_len, width=bed_w)
+    build_prop(bm, 'HAJFIN_BED', 2.80,
+               hd - wall_th - bed_len * 0.5 - 0.05, z_upper,
+               ang=-math.pi * 0.5, length=bed_len, width=bed_w)
+    build_prop(bm, 'HAJFIN_BED', -2.80,
+               -hd + wall_th + bed_len * 0.5 + 0.05, z_upper,
+               ang=math.pi * 0.5, length=bed_len, width=bed_w)
+    for bx, by, ba, bs in ((5.80, -5.80, 0.15, 0.68),
+                           (-5.80, 5.75, -0.20, 0.62)):
+        build_prop(bm, 'HAJFIN_CRATE', bx, by, z_upper,
+                   ang=ba, scale=bs)
+    for bx, by in ((5.75, 5.75), (-5.75, -1.10)):
+        build_prop(bm, 'HAJFIN_BARREL', bx, by, z_upper,
+                   ang=0.55, scale=0.52)
+
     # 2C. West balcony, reachable only by the outside rope ramp.
-    balcony_w = 1.60
-    balcony_d = 3.30
+    balcony_w = 2.00
+    balcony_d = 3.60
     balcony_x = -hw - balcony_w * 0.5
     balcony_y = balcony_door_cy
     create_box(bm, (balcony_w, balcony_d, 0.16),
@@ -8121,7 +8144,7 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     balcony_ex = balcony_x + balcony_w * 0.5 - 0.10
     balcony_sy = balcony_y - balcony_d * 0.5 + 0.12
     balcony_ny = balcony_y + balcony_d * 0.5 - 0.12
-    bridge_half = 0.65
+    bridge_half = 0.90
     build_railing(bm, (balcony_wx, balcony_sy),
                   (balcony_wx, bridge_y - bridge_half),
                   z_upper, height=1.0, jankiness=0.10)
@@ -8138,11 +8161,12 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
                (-hw + 0.06, balcony_door_cy, z_upper + 0.05),
                mat_index=MAT_INDEX_TIMBER)
 
-    # 2D. Middle-tier pier outside the west balcony.
+    # 2D. Middle-tier pier outside the west balcony, reached by a broad walkable
+    # ground ramp (no ladder climbing required).
     pier_top_z = z0 + 2.40
-    pier_w = 3.60
-    pier_d = 3.80
-    pier_cx = -hw - 5.20
+    pier_w = 4.00
+    pier_d = 4.00
+    pier_cx = -hw - 9.50
     pier_cy = balcony_door_cy
     create_box(bm, (pier_w, pier_d, 0.16),
                (pier_cx, pier_cy, pier_top_z - 0.08),
@@ -8157,36 +8181,64 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
             create_torus_ring(bm, (px, py, z0 + 0.65),
                               major_radius=0.19, minor_radius=0.03,
                               mat_index=MAT_INDEX_ROPE)
-    # Railings on north, south and west; east stays open for the bridge.
+
+    ramp_w = 1.80
+    ramp_run = 6.50
+    ramp_top_y = pier_cy + pier_d * 0.5
+    ramp_bottom_y = ramp_top_y + ramp_run
+    ramp_slope = math.atan2(pier_top_z - z0, ramp_run)
+    ramp_len = math.hypot(ramp_run, pier_top_z - z0)
+    ramp_mid_z = (z0 + pier_top_z) * 0.5
+    create_box(bm, (ramp_w, ramp_len, 0.16),
+               (pier_cx, (ramp_top_y + ramp_bottom_y) * 0.5, ramp_mid_z),
+               rotation=(-ramp_slope, 0.0, 0.0),
+               mat_index=MAT_INDEX_FLOOR)
+    create_box(bm, (ramp_w + 0.30, 0.80, 0.12),
+               (pier_cx, ramp_bottom_y + 0.30, z0 + 0.06),
+               mat_index=MAT_INDEX_FLOOR)
+    # Broad ramp side rails and support trestles.
+    for sx in (-1.0, 1.0):
+        rx = pier_cx + sx * (ramp_w * 0.5 - 0.10)
+        _create_oriented_beam(
+            bm, (rx, ramp_bottom_y, z0 + 1.00),
+            (rx, ramp_top_y, pier_top_z + 1.00),
+            width=0.10, depth=0.12, mat_index=MAT_INDEX_TIMBER)
+        for ti in range(7):
+            t = ti / 6.0
+            ry = ramp_bottom_y + (ramp_top_y - ramp_bottom_y) * t
+            rz = z0 + (pier_top_z - z0) * t
+            create_box(bm, (0.10, 0.10, 1.00),
+                       (rx, ry, rz + 0.50), mat_index=MAT_INDEX_TIMBER)
+            if ti in (2, 4):
+                create_box(bm, (0.14, 0.14, max(0.2, rz)),
+                           (rx, ry, rz * 0.5), mat_index=MAT_INDEX_TIMBER)
+
+    # Railings on west/south; north is split around the ramp landing, east is
+    # open for the bridge.
     build_railing(bm,
                   (pier_cx - pier_w * 0.5 + 0.10, pier_cy - pier_d * 0.5 + 0.10),
                   (pier_cx - pier_w * 0.5 + 0.10, pier_cy + pier_d * 0.5 - 0.10),
                   pier_top_z, height=1.0, jankiness=0.14)
-    for sy in (-1.0, 1.0):
-        build_railing(bm,
-                      (pier_cx - pier_w * 0.5 + 0.10,
-                       pier_cy + sy * (pier_d * 0.5 - 0.10)),
-                      (pier_cx + pier_w * 0.5 - 0.10,
-                       pier_cy + sy * (pier_d * 0.5 - 0.10)),
-                      pier_top_z, height=1.0, jankiness=0.14)
-    # Ladder from the sand to the middle pier.
-    ladder_x = pier_cx - pier_w * 0.5 - 0.12
-    for sy in (-1.0, 1.0):
-        create_box(bm, (0.10, 0.10, pier_top_z + 0.55),
-                   (ladder_x, pier_cy + sy * 0.28, (pier_top_z + 0.55) * 0.5),
-                   mat_index=MAT_INDEX_TIMBER)
-    for rz in (0.35, 0.75, 1.15, 1.55, 1.95, 2.30):
-        create_cylinder(bm, radius=0.035, height=0.62, segments=8,
-                        location=(ladder_x, pier_cy, rz),
-                        rotation=(math.pi * 0.5, 0.0, 0.0),
-                        mat_index=MAT_INDEX_TIMBER)
+    build_railing(bm,
+                  (pier_cx - pier_w * 0.5 + 0.10, pier_cy - pier_d * 0.5 + 0.10),
+                  (pier_cx + pier_w * 0.5 - 0.10, pier_cy - pier_d * 0.5 + 0.10),
+                  pier_top_z, height=1.0, jankiness=0.14)
+    north_y = pier_cy + pier_d * 0.5 - 0.10
+    build_railing(bm,
+                  (pier_cx - pier_w * 0.5 + 0.10, north_y),
+                  (pier_cx - ramp_w * 0.5, north_y),
+                  pier_top_z, height=1.0, jankiness=0.12)
+    build_railing(bm,
+                  (pier_cx + ramp_w * 0.5, north_y),
+                  (pier_cx + pier_w * 0.5 - 0.10, north_y),
+                  pier_top_z, height=1.0, jankiness=0.12)
 
-    # Steep rope-bridge ramp from the middle pier to the balcony.
+    # Wide, shallow rope-bridge ramp from the middle pier to the balcony.
     build_suspended_rope_bridge(
         bm,
         Vector((pier_cx + pier_w * 0.5 - 0.08, pier_cy, pier_top_z + 0.02)),
         Vector((balcony_x - balcony_w * 0.5, bridge_y, z_upper + 0.02)),
-        width=1.20, sag=0.14, with_pylons=True, post_height=1.15)
+        width=1.70, sag=0.14, with_pylons=True, post_height=1.20)
 
     # 3. Top plates, corner columns, belt beams and long diagonal braces.
     for sy in (-1.0, 1.0):
@@ -8262,6 +8314,10 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     for lx, ly in lantern_positions:
         h = _hajfin_hull_height_at(main_piece, lx, ly, tol=1.2)
         lantern_heights.append((h - 0.15) if h is not None else floor_z + 3.6)
+    fun_nest_base_z = _hajfin_hull_height_at(
+        main_piece, 2.60, 2.00, tol=1.40)
+    if fun_nest_base_z is None:
+        fun_nest_base_z = wall_top + 0.80
     _stamp_hajfin_hull(bm, main_piece, mat_names, add_lining=True,
                        lining_mat=MAT_INDEX_TIMBER,
                        lining_point=(0.0, 0.0, floor_z + 1.2))
@@ -8485,7 +8541,29 @@ def _build_hajfin_ship_tavern(bm, props, width=15.0, depth=21.0,
     build_ship_mast_with_crows_nest(
         bm, -hw - 2.75, -hd + 1.10, z0, height=10.5,
         mast_radius=0.28, rot_z=0.35, with_ratlines=True,
-        with_yardarm=True, with_lantern=True)
+        with_yardarm=True, with_lantern=True, nest_scale=1.30)
+
+    # A second, deliberately askew crow's-nest mast bolted onto the main roof.
+    fun_pivot = Vector((2.60, 2.00, fun_nest_base_z))
+    fun_tilt = (Matrix.Translation(fun_pivot)
+                @ Matrix.Rotation(0.24, 4, 'X')
+                @ Matrix.Rotation(-0.28, 4, 'Y')
+                @ Matrix.Translation(-fun_pivot))
+    _before_fun = set(bm.faces)
+    build_ship_mast_with_crows_nest(
+        bm, 2.60, 2.00, fun_nest_base_z, height=4.8,
+        mast_radius=0.18, rot_z=0.80, with_ratlines=False,
+        with_yardarm=True, with_lantern=True, nest_scale=1.10)
+    _fun_faces = [f for f in bm.faces if f not in _before_fun]
+    transform_faces(_fun_faces, fun_tilt)
+    _fun_rot = Matrix.Rotation(0.24, 4, 'X') @ Matrix.Rotation(-0.28, 4, 'Y')
+    _fun_mid = fun_pivot + (_fun_rot @ Vector((0.0, 0.0, 1.80)))
+    for sx in (-1.0, 1.0):
+        _create_oriented_beam(
+            bm, (2.60 + sx * 0.95, 2.00, fun_nest_base_z + 0.04),
+            (_fun_mid.x, _fun_mid.y, _fun_mid.z),
+            width=0.10, depth=0.10, mat_index=MAT_INDEX_TIMBER)
+
     build_ship_anchor(bm, -hw - 1.30, -hd - 4.60, z0, yaw=0.45,
                       pitch=-0.18, scale=1.10)
     build_prop(bm, 'HAJFIN_FISH_DRYING_RACK',

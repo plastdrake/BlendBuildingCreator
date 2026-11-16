@@ -1415,7 +1415,8 @@ def build_ship_anchor(bm, x=0.0, y=0.0, z_ground=0.0, yaw=0.0, pitch=0.0, roll=0
 def build_ship_mast_with_crows_nest(bm, x=0.0, y=0.0, z_base=0.0, height=9.5,
                                      mast_radius=0.28, rot_z=0.0,
                                      with_ratlines=True, with_yardarm=True,
-                                     with_lantern=True, scale=1.0):
+                                     with_lantern=True, scale=1.0,
+                                     nest_scale=1.0):
     """
     Salvaged pirate ship mainmast with circular/octagonal crow's nest lookout basket,
     yardarm cross-spar with furled sail canvas bundle, standing rigging shrouds & ratlines,
@@ -1439,8 +1440,8 @@ def build_ship_mast_with_crows_nest(bm, x=0.0, y=0.0, z_base=0.0, height=9.5,
 
     # 2. Topmast Trestletrees & Crow's Nest Platform
     nest_z = h * 0.76
-    nest_r = 1.15 * scale  # outer radius of crow's nest (~2.3m diameter)
-    nest_h = 1.05 * scale  # basket height
+    nest_r = 1.15 * scale * nest_scale
+    nest_h = 1.05 * scale * nest_scale
 
     # Under-floor heavy cross timbers (trestletrees)
     t_len = nest_r * 2.15

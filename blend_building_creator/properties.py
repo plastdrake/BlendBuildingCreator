@@ -402,7 +402,7 @@ class FantasyBuildingSettings(bpy.types.PropertyGroup):
             ('FEATURE_ROPE_BRIDGE_STEEP', "Steep Rope Bridge Ramp", "Short, steep suspended rope bridge ramp climbing at roughly a 42% grade to a high anchorage", 'MOD_OCEAN', 32),
             ('FEATURE_CROWS_NEST', "Crow's Nest Mast Feature", "Standalone ship mainmast with crow's nest lookout, yardarm, furled sail and ratline ladder", 'OUTLINER_OB_LIGHTPROBE', 21),
             ('FEATURE_SHIP_ANCHOR', "Ship Anchor Feature", "Standalone salvaged anchor with spiralled hawser and rope coil", 'SNAP_FACE', 22),
-            ('SHIP_TAVERN', "Beached Galleon Pub", "Two-storey pirate pub rebuilt from sawn sections of a beached galleon, with bow porch, kitchen, upper lookout loft and outside pier ramp", 'COMMUNITY', 24),
+            ('SHIP_TAVERN', "Beached Galleon Pub", "Two-storey pirate pub rebuilt from sawn sections of a beached galleon, with bow porch, kitchen, furnished crew loft, angled crow's nest and walkable outside pier ramp", 'COMMUNITY', 24),
             ('PIRATE_COTTAGE', "Little Pirate Cottage", "Small ground-level driftwood cottage with a canvas porch, bed, table and barrel", 'HOME', 33),
             ('TOWER_HOME', "Tidewatch Tower Home", "Two-storey pirate cottage on long stilts with an upper balcony, short bridge and square tower cabin", 'COMMUNITY', 34),
         ],
