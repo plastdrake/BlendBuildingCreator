@@ -1392,7 +1392,7 @@ def create_spiral_rope_coil(bm, location=(0.0, 0.0, 0.0), inner_radius=0.07, out
     start_center = bm.verts.new(tr_mat @ (path_pts[0] - (path_pts[1] - path_pts[0]).normalized() * (rope_radius * 0.4)))
     for j in range(tube_segments):
         nj = (j + 1) % tube_segments
-        f = bm.faces.new([start_center, rings[0][nj], rings[0][j]])
+        f = bm.faces.new([start_center, rings[0][j], rings[0][nj]])
         f.material_index = mat_index
         f.smooth = True
         f.tag = True
@@ -1401,7 +1401,7 @@ def create_spiral_rope_coil(bm, location=(0.0, 0.0, 0.0), inner_radius=0.07, out
     end_center = bm.verts.new(tr_mat @ (path_pts[-1] + (path_pts[-1] - path_pts[-2]).normalized() * (rope_radius * 0.4)))
     for j in range(tube_segments):
         nj = (j + 1) % tube_segments
-        f = bm.faces.new([end_center, rings[-1][j], rings[-1][nj]])
+        f = bm.faces.new([end_center, rings[-1][nj], rings[-1][j]])
         f.material_index = mat_index
         f.smooth = True
         f.tag = True

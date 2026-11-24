@@ -54,7 +54,7 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
                     sway_amount=0.25, segments_y=6, wall_thickness=0.28, gable_ends=('FRONT', 'BACK'),
                     abut_back=False, abut_front=False, tier='TIER_3', plank_direction='VERTICAL', roof_flare=0.35,
                     dormer_apertures=None, eave_exclusions=None, valley_notch=None, loft_hatch=None,
-                    is_wattle=False, roof_mat=None):
+                    is_wattle=False, roof_mat=None, shingle_uv_scale=None):
     """
     Builds a whimsical fairytale curved/saddle roof with flared eaves, saggy ridge,
     solid 0.16m thick timber roof decking, thick volumetric gable walls, and full eave closures.
@@ -217,7 +217,10 @@ def build_sway_roof(bm, x_min, x_max, y_min, y_max, z_base, roof_height=2.8, ove
                         
                 f_top.material_index = MAT_INDEX_SHINGLES
                 f_bot.material_index = MAT_INDEX_TIMBER
-                uv_sc = 0.18 if roof_mat in ('WOOD_SHINGLES', 'SHINGLES') else 0.32
+                if shingle_uv_scale is not None:
+                    uv_sc = float(shingle_uv_scale)
+                else:
+                    uv_sc = 0.18 if roof_mat in ('WOOD_SHINGLES', 'SHINGLES') else 0.32
                 for loop in f_top.loops:
                     co = loop.vert.co
                     u_uv = (co.y - ry_min) * uv_sc

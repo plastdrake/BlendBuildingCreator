@@ -96,6 +96,7 @@ def _build_hajfin_roof_variant(bm, x0, x1, y0, y1, eave_z, peak_h,
             sway_amount=float(getattr(props, 'roof_sway', 0.28)),
             wall_thickness=0.26, tier='TIER_2', roof_mat='WOOD_SHINGLES',
             gable_ends=('FRONT', 'BACK'), roof_flare=0.42,
+            shingle_uv_scale=0.36,
         )
         return True
 
@@ -1789,7 +1790,7 @@ def _build_continuous_timber_arc(bm, points, radius=0.22, mat_index=MAT_INDEX_TI
     for i, point in enumerate(points):
         tangent = (points[min(i + 1, len(points) - 1)] -
                    points[max(0, i - 1)]).normalized()
-        normal = side_axis.cross(tangent).normalized()
+        normal = tangent.cross(side_axis).normalized()
         rings.append([
             bm.verts.new(
                 point + side_axis * (math.cos(a) * radius) +
@@ -2121,7 +2122,7 @@ def _build_tribal_totem_post(bm, x, y, z0, height=2.4, with_skull=True, facing_d
 # =============================================================================
 
 def _build_roof_slope_slab(bm, x_peak, x_eave, y0, y1, z_peak, z_eave, slab_th=0.14,
-                           u_scale=1.4, v_scale=1.4):
+                           u_scale=0.36, v_scale=0.36):
     """Builds a solid roof slope deck with authentic UV-unwrapped bone scale shingles pointing downward."""
     uv_layer = bm.loops.layers.uv.verify()
     span_y = y1 - y0
@@ -2277,10 +2278,10 @@ def _build_shark_dorsal_fin(bm, cx, cy, cz, height=1.8, length=1.3, thickness=0.
         v_left.append(bm.verts.new(pt_l))
         v_right.append(bm.verts.new(pt_r))
 
-    f_l = bm.faces.new(v_left)
+    f_l = bm.faces.new(list(reversed(v_left)))
     f_l.material_index = MAT_INDEX_BONE
     f_l.tag = True
-    f_r = bm.faces.new(list(reversed(v_right)))
+    f_r = bm.faces.new(v_right)
     f_r.material_index = MAT_INDEX_BONE
     f_r.tag = True
 
@@ -2342,8 +2343,8 @@ def _build_bone_scale_roof_conical(bm, cx, cy, eave_z, radius, height,
 
     # Sloped triangular faces
     slope_len = math.hypot(radius, height)
-    v_tiles = max(0.85, slope_len * 0.14)
-    u_repeat = max(2.5, (2.0 * math.pi * radius) * 0.14)
+    v_tiles = max(0.85, slope_len * 0.36)
+    u_repeat = max(2.5, (2.0 * math.pi * radius) * 0.36)
 
     for i in range(num_segs):
         i_next = (i + 1) % num_segs
@@ -2974,11 +2975,11 @@ def _build_tapered_facet_panel(bm, pb0, pb1, pt0, pt1, n_vec, wall_th,
 
     # 4. Side Jamb Caps
     if build_left_cap:
-        f_left = bm.faces.new([v_ipt0, v_pt0, v_pb0, v_ipb0])
+        f_left = bm.faces.new([v_ipb0, v_pb0, v_pt0, v_ipt0])
         f_left.material_index = mat_index
         f_left.tag = True
     if build_right_cap:
-        f_right = bm.faces.new([v_pt1, v_ipt1, v_ipb1, v_pb1])
+        f_right = bm.faces.new([v_pb1, v_ipb1, v_ipt1, v_pt1])
         f_right.material_index = mat_index
         f_right.tag = True
 
@@ -3566,23 +3567,23 @@ def _build_gable_triangle_wall_ew(bm, y0, y1, x, z_eave, z_peak, wall_th=0.26, f
     v_br = bm.verts.new(Vector((x + half_th, max_y, z_eave_w)))
     v_bp = bm.verts.new(Vector((x + half_th, my, z_peak_w)))
 
-    f_front = bm.faces.new([v_fl, v_fr, v_fp])
+    f_front = bm.faces.new(list(reversed([v_fl, v_fr, v_fp])))
     f_front.material_index = face_mat
     f_front.tag = True
 
-    f_back = bm.faces.new([v_bp, v_br, v_bl])
+    f_back = bm.faces.new(list(reversed([v_bp, v_br, v_bl])))
     f_back.material_index = face_mat
     f_back.tag = True
 
-    f_bot = bm.faces.new([v_fl, v_bl, v_br, v_fr])
+    f_bot = bm.faces.new(list(reversed([v_fl, v_bl, v_br, v_fr])))
     f_bot.material_index = MAT_INDEX_TIMBER
     f_bot.tag = True
 
-    f_sl = bm.faces.new([v_fl, v_fp, v_bp, v_bl])
+    f_sl = bm.faces.new(list(reversed([v_fl, v_fp, v_bp, v_bl])))
     f_sl.material_index = MAT_INDEX_TIMBER
     f_sl.tag = True
 
-    f_sr = bm.faces.new([v_fr, v_br, v_bp, v_fp])
+    f_sr = bm.faces.new(list(reversed([v_fr, v_br, v_bp, v_fp])))
     f_sr.material_index = MAT_INDEX_TIMBER
     f_sr.tag = True
 
@@ -3645,11 +3646,11 @@ def _build_bone_scale_roof_gable_ew(bm, x0, x1, y0, y1, eave_z, peak_h,
     v_ef = bm.verts.new(Vector((x0 - overhang_x, my - half_span_y, eave_z)))
     v_eb = bm.verts.new(Vector((x1 + overhang_x, my - half_span_y, eave_z)))
 
-    f_front = bm.faces.new([v_rf, v_rb, v_eb, v_ef])
+    f_front = bm.faces.new(list(reversed([v_rf, v_rb, v_eb, v_ef])))
     f_front.material_index = MAT_INDEX_SHINGLES
     
-    u_repeat = max(1.0, span_x * 0.35)
-    v_repeat = max(0.85, slope_len * 0.35)
+    u_repeat = max(1.0, span_x * 0.36)
+    v_repeat = max(0.85, slope_len * 0.36)
     for loop in f_front.loops:
         v_co = loop.vert.co
         u = ((v_co.x - (x0 - overhang_x)) / span_x) * u_repeat
@@ -3662,7 +3663,7 @@ def _build_bone_scale_roof_gable_ew(bm, x0, x1, y0, y1, eave_z, peak_h,
     v_bef = bm.verts.new(Vector((x0 - overhang_x, my + half_span_y, eave_z)))
     v_beb = bm.verts.new(Vector((x1 + overhang_x, my + half_span_y, eave_z)))
 
-    f_back = bm.faces.new([v_brf, v_bef, v_beb, v_brb])
+    f_back = bm.faces.new(list(reversed([v_brf, v_bef, v_beb, v_brb])))
     f_back.material_index = MAT_INDEX_SHINGLES
     for loop in f_back.loops:
         v_co = loop.vert.co
